@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bloomly_db
+    restart: always
+    environment:
+      POSTGRES_USER: bloomly_admin
+      POSTGRES_PASSWORD: bloomly_pass_2026
+      POSTGRES_DB: bloomly_main
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
