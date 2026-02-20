@@ -19,6 +19,32 @@ model User {
   deleted_at   DateTime?
 
   wallet Wallet?
+  posts  Post[]
+  votes  Vote[]
+}
+
+model Post {
+  id         String   @id @default(uuid()) @db.Uuid
+  content    String
+  author_id  String   @db.Uuid
+  rating     Int      @default(0)
+  is_nsfw    Boolean  @default(false)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  author User   @relation(fields: [author_id], references: [id])
+  votes  Vote[]
+}
+
+model Vote {
+  user_id String @db.Uuid
+  post_id String @db.Uuid
+  value   Int    // 1 или -1
+
+  user User @relation(fields: [user_id], references: [id])
+  post Post @relation(fields: [post_id], references: [id])
+
+  @@id([user_id, post_id])
 }
 
 model Wallet {

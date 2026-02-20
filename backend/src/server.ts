@@ -4,6 +4,7 @@ import jwt from '@fastify/jwt';
 import rateLimit from '@fastify/rate-limit';
 import * as dotenv from 'dotenv';
 import { authRoutes } from './modules/auth/routes.js'; 
+import { postsRoutes } from './modules/posts/routes.js';
 
 dotenv.config();
 
@@ -38,6 +39,7 @@ fastify.setErrorHandler((error, request, reply) => {
 
 // Регистрируем роуты
 fastify.register(authRoutes, { prefix: '/api/auth' });
+fastify.register(postsRoutes, { prefix: '/api/posts' });
 
 fastify.get('/health', async () => {
   return { success: true, message: 'Bloomly Backend is running' };
