@@ -21,6 +21,18 @@ fastify.decorate("authenticate", async (request: any, reply: any) => {
   }
 });
 
+// Централизованный обработчик ошибок
+fastify.setErrorHandler((error, request, reply) => {
+  const statusCode = error.statusCode ?? 500;
+  reply.code(statusCode).send({
+    success: false,
+    error: {
+      code: error.code || 'SERVER_ERROR',
+      message: error.message,
+    },
+  });
+});
+
 // Регистрируем роуты
 fastify.register(authRoutes, { prefix: '/api/auth' });
 
