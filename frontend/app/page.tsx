@@ -18,7 +18,7 @@ export default function Home() {
     setStatus(null);
 
     try {
-      const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+      const endpoint = mode === 'login' ? '/auth/login' : '/auth/register';
       const body = mode === 'login'
         ? { email, password }
         : { email, username, password };
@@ -37,8 +37,7 @@ export default function Home() {
       }
 
       if (mode === 'login') {
-        localStorage.setItem('access_token', data.data.tokens.access);
-        localStorage.setItem('refresh_token', data.data.tokens.refresh);
+        localStorage.setItem('access_token', data.data.token);
         setStatus({ type: 'success', message: `Добро пожаловать, ${data.data.user.username}!` });
       } else {
         setStatus({ type: 'success', message: 'Регистрация прошла успешно! Теперь войдите в аккаунт.' });
