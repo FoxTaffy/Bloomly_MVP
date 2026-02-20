@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
+import rateLimit from '@fastify/rate-limit';
 import * as dotenv from 'dotenv';
 import { authRoutes } from './modules/auth/routes.js'; 
 
@@ -12,6 +13,8 @@ const fastify = Fastify({
 
 fastify.register(cors, { origin: true });
 fastify.register(jwt, { secret: process.env.JWT_SECRET || 'bloomly_secret_2026' });
+// Глобальный rate-limit: не более 100 запросов в минуту с одного IP
+fastify.register(rateLimit, { max: 100, timeWindow: '1 minute' });
 
 fastify.decorate("authenticate", async (request: any, reply: any) => {
   try {

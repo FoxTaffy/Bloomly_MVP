@@ -16,13 +16,13 @@ export const registerHandler = async (request: FastifyRequest, reply: FastifyRep
   }
 };
 
-// Хендлер логина (ТО, ЧЕГО НЕ ХВАТАЛО)
+// Хендлер логина
 export const loginHandler = async (request: FastifyRequest, reply: FastifyReply) => {
   try {
     const { email, password } = request.body as any;
-    
-    // 1. Проверяем пользователя через сервис
-    const user = await authService.validateUser(email, password);
+
+    // 1. Проверяем пользователя через сервис (email + пароль)
+    const user = await authService.loginUser(email, password);
 
     if (!user) {
       return reply.code(401).send({
@@ -31,27 +31,24 @@ export const loginHandler = async (request: FastifyRequest, reply: FastifyReply)
       });
     }
 
-    // 2. Генерируем токены (используем встроенный в fastify плагин jwt)
-    const accessToken = request.server.jwt.sign(
-      { id: user.id, email: user.email }, 
+    // 2. Генерируем JWT-токен с id и ролью пользователя
+    const token = request.server.jwt.sign(
+      { id: user.id, role: user.role },
       { expiresIn: '15m' }
-    );
-    
-    const refreshToken = request.server.jwt.sign(
-      { id: user.id }, 
-      { expiresIn: '7d' }
     );
 
     return reply.send({
       success: true,
       data: {
-        user,
-        tokens: {
-          access: accessToken,
-          refresh: refreshToken
-        }
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+        },
       },
-      error: null
+      error: null,
     });
   } catch (error: any) {
     return reply.code(500).send({

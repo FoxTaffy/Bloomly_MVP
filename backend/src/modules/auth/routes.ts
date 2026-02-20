@@ -21,9 +21,22 @@ const registerSchema = {
   },
 };
 
+// Схема валидации для POST /login
+const loginSchema = {
+  body: {
+    type: 'object',
+    required: ['email', 'password'],
+    properties: {
+      email: { type: 'string', format: 'email' },
+      password: { type: 'string', minLength: 1 },
+    },
+  },
+};
+
 export async function authRoutes(fastify: FastifyInstance) {
   fastify.post('/register', { schema: registerSchema }, registerHandler);
-  fastify.post('/login', loginHandler);
+  // Строгий rate-limit для логина: не более 10 попыток в минуту с одного IP (защита от брутфорса)
+  fastify.post('/login', { schema: loginSchema, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, loginHandler);
 
   // Добавляем этот роут
   fastify.get('/me', { onRequest: [fastify.authenticate] }, async (request: any) => {

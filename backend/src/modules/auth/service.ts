@@ -59,15 +59,22 @@ export class AuthService {
     });
   }
 
-  async validateUser(email: string, pass: string) {
+  // Проверяет email и пароль, возвращает пользователя без пароля или null
+  async loginUser(email: string, password: string) {
+    // Ищем пользователя по email
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return null;
 
-    const isMatch = await bcrypt.compare(pass, user.password);
+    // Сравниваем хеш пароля
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return null;
 
-    // Возвращаем пользователя без пароля
-    const { password, ...userWithoutPassword } = user;
+    // Возвращаем пользователя без поля пароля
+    const { password: _password, ...userWithoutPassword } = user;
     return userWithoutPassword;
+  }
+
+  async validateUser(email: string, pass: string) {
+    return this.loginUser(email, pass);
   }
 }
