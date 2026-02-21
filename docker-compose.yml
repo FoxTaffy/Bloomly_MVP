@@ -12,11 +12,12 @@ services:
       - "5432:5432"
 
   api:
-    build: .
+    build: ./backend
     restart: always
     ports:
       - "8080:8080"
     env_file: .env
+    command: npx tsx src/server.ts
     depends_on:
       - db
   frontend:

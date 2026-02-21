@@ -38,8 +38,8 @@ fastify.setErrorHandler((error, request, reply) => {
 });
 
 // Регистрируем роуты
-fastify.register(authRoutes, { prefix: 'auth' });
-fastify.register(postsRoutes, { prefix: 'posts' });
+fastify.register(authRoutes, { prefix: '/api/auth' });
+fastify.register(postsRoutes, { prefix: '/api/posts' });
 
 fastify.get('/health', async () => {
   return { success: true, message: 'Bloomly Backend is running' };

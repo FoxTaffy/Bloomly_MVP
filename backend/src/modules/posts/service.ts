@@ -1,4 +1,4 @@
-import { prisma } from '../../lib/prisma.js';
+import { prisma } from '../../lib/prisma.ts';
 
 export const postService = {
   async toggleVote(userId: string, postId: string, voteType: 'UP' | 'DOWN') {
