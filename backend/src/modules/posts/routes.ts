@@ -1,61 +1,77 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { createPostHandler, votePostHandler, getPostsHandler } from './controller.js';
+import {
+  createPostHandler,
+  getPostsHandler,
+  getPostHandler,
+  updatePostHandler,
+  deletePostHandler,
+  votePostHandler,
+  repostHandler,
+  savePostHandler,
+  getSavedPostsHandler,
+} from './controller.js';
 
-// Переиспользуем тип кастомного декоратора authenticate
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
-// Схема валидации для POST /api/posts
-const createPostSchema = {
-  body: {
-    type: 'object',
-    required: ['content'],
-    properties: {
-      content: { type: 'string', minLength: 1 },
-      isNsfw: { type: 'boolean' },
-    },
-  },
-};
-
-// Схема валидации для POST /api/posts/:id/vote
-const voteSchema = {
-  params: {
-    type: 'object',
-    required: ['id'],
-    properties: {
-      id: { type: 'string' },
-    },
-  },
-  body: {
-    type: 'object',
-    required: ['value'],
-    properties: {
-      // Допустимы только значения 1 и -1
-      value: { type: 'integer', enum: [1, -1] },
-    },
-  },
-};
-
-// Схема валидации для GET /api/posts
-const getPostsSchema = {
-  querystring: {
-    type: 'object',
-    properties: {
-      sortBy: { type: 'string', enum: ['date', 'rating'] },
-    },
-  },
-};
-
 export async function postsRoutes(fastify: FastifyInstance) {
-  // Создать пост — только для авторизованных пользователей
-  fastify.post('/', { schema: createPostSchema, onRequest: [fastify.authenticate] }, createPostHandler);
+  fastify.get('/', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          sortBy: { type: 'string', enum: ['date', 'rating'] },
+          page: { type: 'string' },
+          limit: { type: 'string' },
+          userId: { type: 'string' },
+          groupId: { type: 'string' },
+          hashtag: { type: 'string' },
+        },
+      },
+    },
+  }, getPostsHandler);
 
-  // Проголосовать за пост — только для авторизованных пользователей
-  fastify.post('/:id/vote', { schema: voteSchema, onRequest: [fastify.authenticate] }, votePostHandler);
+  fastify.get('/saved', { onRequest: [fastify.authenticate] }, getSavedPostsHandler);
 
-  // Получить ленту постов — публичный эндпоинт
-  fastify.get('/', { schema: getPostsSchema }, getPostsHandler);
+  fastify.get('/:id', {
+    schema: { params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
+  }, getPostHandler);
+
+  fastify.post('/', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['content'],
+        properties: {
+          content: { type: 'string', minLength: 1 },
+          isNsfw: { type: 'boolean' },
+          groupId: { type: 'string' },
+        },
+      },
+    },
+    onRequest: [fastify.authenticate],
+  }, createPostHandler);
+
+  fastify.put('/:id', {
+    schema: {
+      body: { type: 'object', properties: { content: { type: 'string', minLength: 1 } } },
+    },
+    onRequest: [fastify.authenticate],
+  }, updatePostHandler);
+
+  fastify.delete('/:id', { onRequest: [fastify.authenticate] }, deletePostHandler);
+
+  fastify.post('/:id/vote', {
+    schema: {
+      body: { type: 'object', required: ['value'], properties: { value: { type: 'integer', enum: [1, -1] } } },
+    },
+    onRequest: [fastify.authenticate],
+  }, votePostHandler);
+
+  fastify.post('/:id/repost', { onRequest: [fastify.authenticate] }, repostHandler);
+
+  fastify.post('/:id/save', { onRequest: [fastify.authenticate] }, savePostHandler);
 }
