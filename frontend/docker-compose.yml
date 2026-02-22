@@ -1,6 +1,0 @@
-services:
-  frontend:
-    build: ./frontend
-    restart: always
-    ports:
-      - "3001:80"
