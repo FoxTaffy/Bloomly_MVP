@@ -1,14 +1,14 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createPostHandler, votePostHandler, getPostsHandler } from './controller.js';
 
-// Переиспользуем тип кастомного декоратора authenticate
+// The authenticate decorator is declared in auth/routes.ts; this re-declaration
+// merges into the same global FastifyInstance augmentation via TypeScript.
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
-// Схема валидации для POST /api/posts
 const createPostSchema = {
   body: {
     type: 'object',
@@ -20,7 +20,6 @@ const createPostSchema = {
   },
 };
 
-// Схема валидации для POST /api/posts/:id/vote
 const voteSchema = {
   params: {
     type: 'object',
@@ -33,13 +32,11 @@ const voteSchema = {
     type: 'object',
     required: ['value'],
     properties: {
-      // Допустимы только значения 1 и -1
       value: { type: 'integer', enum: [1, -1] },
     },
   },
 };
 
-// Схема валидации для GET /api/posts
 const getPostsSchema = {
   querystring: {
     type: 'object',
@@ -50,12 +47,7 @@ const getPostsSchema = {
 };
 
 export async function postsRoutes(fastify: FastifyInstance) {
-  // Создать пост — только для авторизованных пользователей
   fastify.post('/', { schema: createPostSchema, onRequest: [fastify.authenticate] }, createPostHandler);
-
-  // Проголосовать за пост — только для авторизованных пользователей
   fastify.post('/:id/vote', { schema: voteSchema, onRequest: [fastify.authenticate] }, votePostHandler);
-
-  // Получить ленту постов — публичный эндпоинт
   fastify.get('/', { schema: getPostsSchema }, getPostsHandler);
 }

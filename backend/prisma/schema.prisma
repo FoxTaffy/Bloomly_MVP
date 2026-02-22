@@ -24,35 +24,44 @@ model User {
 }
 
 model Post {
-  id         String   @id @default(uuid()) @db.Uuid
+  id         String    @id @default(uuid()) @db.Uuid
   content    String
-  author_id  String   @db.Uuid
-  rating     Int      @default(0)
-  is_nsfw    Boolean  @default(false)
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  author_id  String    @db.Uuid
+  rating     Int       @default(0)
+  is_nsfw    Boolean   @default(false)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
 
   author User   @relation(fields: [author_id], references: [id])
   votes  Vote[]
 }
 
+// One record per user+post pair (enforced by @@unique).
+// Soft-delete (deleted_at != null) means the vote is retracted;
+// restoring (deleted_at = null) reactivates it without changing the rating history.
 model Vote {
-  user_id String @db.Uuid
-  post_id String @db.Uuid
-  value   Int    // 1 или -1
+  id         String    @id @default(uuid()) @db.Uuid
+  user_id    String    @db.Uuid
+  post_id    String    @db.Uuid
+  value      Int       // 1 (upvote) or -1 (downvote)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
 
   user User @relation(fields: [user_id], references: [id])
   post Post @relation(fields: [post_id], references: [id])
 
-  @@id([user_id, post_id])
+  @@unique([user_id, post_id])
 }
 
 model Wallet {
-  id         String   @id @default(uuid()) @db.Uuid
-  user_id    String   @unique @db.Uuid
-  balance    Decimal  @default(0.00) @db.Decimal(18, 2)
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
+  id         String    @id @default(uuid()) @db.Uuid
+  user_id    String    @unique @db.Uuid
+  balance    Decimal   @default(0.00) @db.Decimal(18, 2)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
 
   user User @relation(fields: [user_id], references: [id])
 }
