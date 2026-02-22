@@ -406,7 +406,7 @@ function toggleSave() {
               </div>
               <textarea
                 v-model="postContent"
-                placeholder="OWO what is this?"
+                placeholder="Поделитесь чем-нибудь интересным..."
                 rows="2"
                 class="flex-1 resize-none rounded-xl border border-[#2A2D45]
                        bg-[#16192F] px-4 py-2.5 text-sm text-white

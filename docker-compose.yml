@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-bloomly}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -20,15 +20,22 @@ services:
     command: npx tsx src/server.ts
     depends_on:
       - db
+
   frontend:
     build:
-      context: .
-      dockerfile: ./frontend/Dockerfile
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: build-stage  # <--- ДОБАВЬ ЭТУ СТРОКУ
     restart: always
     ports:
-      - "3000:3000"
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    working_dir: /app
+    command: npm run dev -- --host
     environment:
-      - NEXT_PUBLIC_API_URL=https://bloomly.fun
+      - VITE_API_URL=https://bloomly.fun
 
 volumes:
   postgres_data:
