@@ -1,60 +1,61 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-// Импортируем именно postService (с маленькой буквы) и без .js для tsx
-import { postService } from './service';
+import { postService } from './service.js';
+import type { CreatePostInput, JwtUser, PostSortBy } from './types.js';
 
-// Тип JWT-пэйлоада
-interface JwtUser {
-  id: string;
-  role: string;
-}
-
-type AuthenticatedRequest = FastifyRequest & { user: JwtUser };
-
-export const createPostHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+export const createPostHandler = async (
+  request: FastifyRequest<{ Body: { content: string; isNsfw?: boolean } }>,
+  reply: FastifyReply,
+) => {
   try {
-    const { id: authorId } = (request as AuthenticatedRequest).user;
-    const { content, isNsfw } = request.body as { content: string; isNsfw?: boolean };
-
-    // У нас теперь нет метода createPost в новом сервисе (мы фиксили только toggleVote), 
-    // но если он там есть, вызываем через postService. Иначе проверьте имена методов.
-    const post = await (postService as any).createPost({ content, authorId, isNsfw });
+    const { id: authorId } = request.user as JwtUser;
+    const { content, isNsfw } = request.body;
+    const input: CreatePostInput = { content, authorId, isNsfw };
+    const post = await postService.createPost(input);
     return reply.code(201).send({ success: true, data: { post }, error: null });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to create post';
     return reply.code(400).send({
       success: false,
-      error: { code: 'CREATE_POST_ERROR', message: error.message },
+      data: null,
+      error: { code: 'CREATE_POST_ERROR', message },
     });
   }
 };
 
-export const votePostHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+export const votePostHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Body: { value: 1 | -1 } }>,
+  reply: FastifyReply,
+) => {
   try {
-    const { id: userId } = (request as AuthenticatedRequest).user;
-    const { id: postId } = request.params as { id: string };
-    const { value } = request.body as { value: 1 | -1 };
-
-    // ВАЖНО: Мы переименовали метод в toggleVote!
-    const voteType = value === 1 ? 'UP' : 'DOWN';
-    const result = await postService.toggleVote(userId, postId, voteType);
-    
+    const { id: userId } = request.user as JwtUser;
+    const { id: postId } = request.params;
+    const { value } = request.body;
+    const result = await postService.toggleVote(userId, postId, value);
     return reply.send({ success: true, data: result, error: null });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to register vote';
     return reply.code(400).send({
       success: false,
-      error: { code: 'VOTE_ERROR', message: error.message },
+      data: null,
+      error: { code: 'VOTE_ERROR', message },
     });
   }
 };
 
-export const getPostsHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+export const getPostsHandler = async (
+  request: FastifyRequest<{ Querystring: { sortBy?: PostSortBy } }>,
+  reply: FastifyReply,
+) => {
   try {
-    const { sortBy } = request.query as { sortBy?: string };
-    const posts = await (postService as any).getPosts(sortBy === 'rating' ? 'rating' : 'date');
+    const { sortBy } = request.query;
+    const posts = await postService.getPosts(sortBy === 'rating' ? 'rating' : 'date');
     return reply.send({ success: true, data: { posts }, error: null });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch posts';
     return reply.code(500).send({
       success: false,
-      error: { code: 'GET_POSTS_ERROR', message: error.message },
+      data: null,
+      error: { code: 'GET_POSTS_ERROR', message },
     });
   }
 };
