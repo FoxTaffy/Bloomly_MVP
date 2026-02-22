@@ -21,6 +21,18 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/components/MainLayout.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/profile/:id',
+    name: 'profile',
+    component: () => import('@/views/ProfileView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/settings/profile',
+    name: 'settings-profile',
+    component: () => import('@/views/SettingsProfileView.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({
