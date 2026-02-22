@@ -13,7 +13,15 @@ model User {
   username     String    @unique
   password     String
   role         String    @default("user")
-  display_name String?
+  display_name String?   @db.VarChar(50)
+  bio          String?   @db.VarChar(300)
+  avatar_url   String?
+  banner_url   String?
+  status       String?   @db.VarChar(100)
+  persona      String?
+  likes        String[]
+  dislikes     String[]
+  accent_color String?
   created_at   DateTime  @default(now())
   updated_at   DateTime  @updatedAt
   deleted_at   DateTime?

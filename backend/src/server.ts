@@ -5,6 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import * as dotenv from 'dotenv';
 import { authRoutes } from './modules/auth/routes.js';
 import { postsRoutes } from './modules/posts/routes.js';
+import { usersRoutes } from './modules/users/routes.js';
 
 dotenv.config();
 
@@ -39,6 +40,7 @@ fastify.setErrorHandler((error, _request, reply) => {
 
 fastify.register(authRoutes, { prefix: '/api/auth' });
 fastify.register(postsRoutes, { prefix: '/api/posts' });
+fastify.register(usersRoutes, { prefix: '/api/users' });
 
 fastify.get('/health', async () => ({
   success: true,
