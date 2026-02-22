@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { Component } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import {
   /* Header */
-  Search, Bell, MessageCircle,
+  Search, Bell, MessageCircle, LogOut,
   /* Navigation */
   Home, Compass, User, Settings,
   /* Create Post */
@@ -13,6 +15,14 @@ import {
   /* Right sidebar */
   TrendingUp, Hash, ChevronRight, Users,
 } from 'lucide-vue-next'
+
+const router = useRouter()
+const auth   = useAuthStore()
+
+function handleLogout() {
+  auth.logout()
+  router.push({ name: 'login' })
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -196,17 +206,28 @@ function toggleSave() {
           <MessageCircle class="h-5 w-5 text-[#F9FAFD]" />
         </button>
 
-        <!-- Аватар пользователя -->
-        <button
-          class="h-9 w-9 overflow-hidden rounded-xl ring-2 ring-[#4C67CF]
-                 ring-offset-2 ring-offset-[#1F223C] transition-all hover:ring-[#7B5EA7]"
-        >
-          <img
-            src="https://i.pravatar.cc/80?img=10"
-            alt="Мой профиль"
-            class="h-full w-full object-cover"
-          />
-        </button>
+        <!-- Аватар пользователя + выход -->
+        <div class="flex items-center gap-1">
+          <button
+            class="h-9 w-9 overflow-hidden rounded-xl ring-2 ring-[#4C67CF]
+                   ring-offset-2 ring-offset-[#1F223C] transition-all hover:ring-[#7B5EA7]"
+            :title="auth.displayName"
+          >
+            <img
+              :src="auth.avatarUrl"
+              :alt="auth.displayName"
+              class="h-full w-full object-cover"
+            />
+          </button>
+          <button
+            @click="handleLogout"
+            title="Выйти"
+            class="rounded-xl border border-[#2A2D45] bg-[#16192F] p-2 text-[#6B7280]
+                   transition-colors hover:border-red-500/50 hover:text-red-400"
+          >
+            <LogOut class="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </header>
 
@@ -231,13 +252,13 @@ function toggleSave() {
                      ring-2 ring-[#4C67CF] ring-offset-2 ring-offset-[#1F223C]"
             >
               <img
-                src="https://i.pravatar.cc/80?img=10"
-                alt="Профиль"
+                :src="auth.avatarUrl"
+                :alt="auth.displayName"
                 class="h-full w-full object-cover"
               />
             </div>
-            <p class="text-sm font-bold text-white">Alex Johnson</p>
-            <p class="mb-4 text-xs text-[#6B7280]">@alex_johnson</p>
+            <p class="text-sm font-bold text-white">{{ auth.displayName }}</p>
+            <p class="mb-4 text-xs text-[#6B7280]">@{{ auth.user?.username ?? '...' }}</p>
 
             <!-- Статистика -->
             <div class="flex w-full items-center justify-center gap-3">
@@ -378,8 +399,8 @@ function toggleSave() {
                        ring-2 ring-[#4C67CF]/40"
               >
                 <img
-                  src="https://i.pravatar.cc/80?img=10"
-                  alt="Аватар"
+                  :src="auth.avatarUrl"
+                  :alt="auth.displayName"
                   class="h-full w-full object-cover"
                 />
               </div>
