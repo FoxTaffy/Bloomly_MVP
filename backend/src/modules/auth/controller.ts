@@ -1,40 +1,45 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { AuthService } from './service.js';
+import type { RegisterInput, LoginInput } from './types.js';
 
 const authService = new AuthService();
 
-// Хендлер регистрации
-export const registerHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+export const registerHandler = async (
+  request: FastifyRequest<{ Body: RegisterInput }>,
+  reply: FastifyReply,
+) => {
   try {
-    const user = await authService.createUser(request.body as any);
+    const user = await authService.createUser(request.body);
     return reply.code(201).send({ success: true, data: { user }, error: null });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Registration failed';
     return reply.code(400).send({
       success: false,
-      error: { code: 'REGISTRATION_ERROR', message: error.message }
+      data: null,
+      error: { code: 'REGISTRATION_ERROR', message },
     });
   }
 };
 
-// Хендлер логина
-export const loginHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+export const loginHandler = async (
+  request: FastifyRequest<{ Body: LoginInput }>,
+  reply: FastifyReply,
+) => {
   try {
-    const { email, password } = request.body as any;
-
-    // 1. Проверяем пользователя через сервис (email + пароль)
+    const { email, password } = request.body;
     const user = await authService.loginUser(email, password);
 
     if (!user) {
       return reply.code(401).send({
         success: false,
-        error: { code: 'AUTH_FAILED', message: 'Неверный email или пароль' }
+        data: null,
+        error: { code: 'AUTH_FAILED', message: 'Invalid email or password' },
       });
     }
 
-    // 2. Генерируем JWT-токен с id и ролью пользователя
     const token = request.server.jwt.sign(
       { id: user.id, role: user.role },
-      { expiresIn: '15m' }
+      { expiresIn: '15m' },
     );
 
     return reply.send({
@@ -50,10 +55,12 @@ export const loginHandler = async (request: FastifyRequest, reply: FastifyReply)
       },
       error: null,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
     return reply.code(500).send({
       success: false,
-      error: { message: 'Внутренняя ошибка сервера при входе' }
+      data: null,
+      error: { code: 'INTERNAL_ERROR', message },
     });
   }
 };

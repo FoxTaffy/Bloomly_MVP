@@ -1,14 +1,13 @@
-import { registerHandler, loginHandler } from './controller.js';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { registerHandler, loginHandler } from './controller.js';
+import type { JwtPayload } from './types.js';
 
-// Объявляем тип для кастомного декоратора authenticate
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
-// Схема валидации для POST /register
 const registerSchema = {
   body: {
     type: 'object',
@@ -21,7 +20,6 @@ const registerSchema = {
   },
 };
 
-// Схема валидации для POST /login
 const loginSchema = {
   body: {
     type: 'object',
@@ -35,14 +33,24 @@ const loginSchema = {
 
 export async function authRoutes(fastify: FastifyInstance) {
   fastify.post('/register', { schema: registerSchema }, registerHandler);
-  // Строгий rate-limit для логина: не более 10 попыток в минуту с одного IP (защита от брутфорса)
-  fastify.post('/login', { schema: loginSchema, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, loginHandler);
 
-  // Добавляем этот роут
-  fastify.get('/me', { onRequest: [fastify.authenticate] }, async (request: any) => {
-    return {
-      success: true,
-      user: request.user, // Здесь будут данные из JWT (id, email)
-    };
-  });
+  // Strict rate-limit for login: max 10 attempts per minute per IP (brute-force protection)
+  fastify.post(
+    '/login',
+    { schema: loginSchema, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    loginHandler,
+  );
+
+  fastify.get(
+    '/me',
+    { onRequest: [fastify.authenticate] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const payload = request.user as JwtPayload;
+      return reply.send({
+        success: true,
+        data: { user: { id: payload.id, role: payload.role } },
+        error: null,
+      });
+    },
+  );
 }
