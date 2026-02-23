@@ -8,6 +8,16 @@ export const getUserParamsSchema = {
   },
 };
 
+export const getUserByUsernameSchema = {
+  params: {
+    type: 'object',
+    required: ['username'],
+    properties: {
+      username: { type: 'string', minLength: 3 },
+    },
+  },
+};
+
 export const updateUserSchema = {
   body: {
     type: 'object',
@@ -21,6 +31,7 @@ export const updateUserSchema = {
       likes:        { type: 'array', items: { type: 'string' } },
       dislikes:     { type: 'array', items: { type: 'string' } },
       accent_color: { type: 'string', pattern: '^#[0-9A-Fa-f]{6}$' },
+      telegram:     { type: 'string', maxLength: 100 },
     },
     additionalProperties: false,
   },

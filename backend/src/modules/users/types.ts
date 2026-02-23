@@ -10,6 +10,7 @@ export interface UserPublicProfile {
   likes: string[];
   dislikes: string[];
   accent_color: string | null;
+  telegram: string | null;
   created_at: Date;
 }
 
@@ -23,6 +24,7 @@ export interface UpdateUserInput {
   likes?: string[];
   dislikes?: string[];
   accent_color?: string;
+  telegram?: string;
 }
 
 export interface JwtPayload {

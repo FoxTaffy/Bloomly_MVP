@@ -81,6 +81,22 @@
           />
         </div>
 
+        <!-- Telegram -->
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-1">Telegram</label>
+          <div class="relative">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm select-none">@</span>
+            <input
+              v-model="form.telegram"
+              type="text"
+              maxlength="100"
+              placeholder="username"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg pl-7 pr-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+          <p class="text-xs text-gray-500 mt-1">Your Telegram username (without @)</p>
+        </div>
+
         <!-- Avatar URL -->
         <div>
           <label class="block text-sm font-medium text-gray-300 mb-1">Avatar URL</label>
@@ -227,6 +243,7 @@ const form = reactive({
   bio:          '',
   status:       '',
   persona:      '',
+  telegram:     '',
   avatar_url:   '',
   banner_url:   '',
   accent_color: '#4C67CF',
@@ -242,6 +259,7 @@ onMounted(async () => {
   form.bio          = p.bio          ?? ''
   form.status       = p.status       ?? ''
   form.persona      = p.persona      ?? ''
+  form.telegram     = p.telegram     ?? ''
   form.avatar_url   = p.avatar_url   ?? ''
   form.banner_url   = p.banner_url   ?? ''
   form.accent_color = p.accent_color ?? '#4C67CF'
@@ -270,6 +288,7 @@ async function handleSubmit() {
   if (form.bio)          payload.bio           = form.bio
   if (form.status)       payload.status        = form.status
   if (form.persona)      payload.persona       = form.persona
+  if (form.telegram)     payload.telegram      = form.telegram
   if (form.avatar_url)   payload.avatar_url    = form.avatar_url
   if (form.banner_url)   payload.banner_url    = form.banner_url
   if (/^#[0-9A-Fa-f]{6}$/.test(form.accent_color)) payload.accent_color = form.accent_color

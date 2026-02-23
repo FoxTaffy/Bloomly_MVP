@@ -2,6 +2,23 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { usersService } from './service.js';
 import type { UpdateUserInput, JwtPayload } from './types.js';
 
+export async function getUserByUsernameHandler(
+  request: FastifyRequest<{ Params: { username: string } }>,
+  reply: FastifyReply,
+) {
+  const user = await usersService.getUserByUsername(request.params.username);
+
+  if (!user) {
+    return reply.code(404).send({
+      success: false,
+      data: null,
+      error: { code: 'USER_NOT_FOUND', message: 'User not found' },
+    });
+  }
+
+  return reply.send({ success: true, data: { user }, error: null });
+}
+
 export async function getUserHandler(
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
