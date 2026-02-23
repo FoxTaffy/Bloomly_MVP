@@ -15,6 +15,7 @@ export interface UserProfile {
   likes: string[]
   dislikes: string[]
   accent_color: string | null
+  telegram: string | null
   created_at: string
 }
 
@@ -28,6 +29,7 @@ export interface UpdateProfileInput {
   likes?: string[]
   dislikes?: string[]
   accent_color?: string
+  telegram?: string
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────

@@ -14,10 +14,18 @@ const PUBLIC_SELECT = {
   likes:        true,
   dislikes:     true,
   accent_color: true,
+  telegram:     true,
   created_at:   true,
 } as const;
 
 export const usersService = {
+  async getUserByUsername(username: string) {
+    return prisma.user.findFirst({
+      where: { username, deleted_at: null },
+      select: PUBLIC_SELECT,
+    });
+  },
+
   async getUserById(id: string) {
     return prisma.user.findUnique({
       where: { id, deleted_at: null },

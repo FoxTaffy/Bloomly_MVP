@@ -46,6 +46,17 @@
           <p v-if="viewedProfile.status" class="mt-1 text-indigo-300 text-sm italic">
             {{ viewedProfile.status }}
           </p>
+          <a
+            v-if="viewedProfile.telegram"
+            :href="`https://t.me/${viewedProfile.telegram}`"
+            target="_blank"
+            rel="noopener noreferrer"
+            :aria-label="`Telegram: @${viewedProfile.telegram}`"
+            class="mt-1 inline-flex items-center gap-1 text-sm text-sky-400 hover:text-sky-300 transition-colors"
+          >
+            <span>✈</span>
+            <span>@{{ viewedProfile.telegram }}</span>
+          </a>
         </div>
 
         <!-- Persona block -->
