@@ -1,19 +1,19 @@
 <template>
-  <div class="min-h-screen bg-gray-950 text-gray-100">
+  <div class="min-h-screen bg-brand-bg text-brand-offwhite font-nunito">
 
     <!-- Loading state -->
     <div v-if="isLoading" class="flex items-center justify-center min-h-screen">
-      <div class="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+      <div class="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
     </div>
 
     <!-- Error state -->
     <div v-else-if="error" class="flex flex-col items-center justify-center min-h-screen gap-4">
-      <p class="text-red-400 text-lg">{{ error }}</p>
+      <p class="text-brand-error text-lg">{{ error }}</p>
       <button
-        class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm transition-colors"
+        class="px-5 py-2.5 bg-brand-accent hover:bg-brand-accent-plus rounded-xl text-sm font-bold transition-colors"
         @click="loadProfile"
       >
-        Retry
+        Повторить
       </button>
     </div>
 
@@ -22,36 +22,49 @@
 
       <!-- Banner -->
       <div
-        class="relative w-full h-48 md:h-64 bg-gradient-to-br from-indigo-900 to-gray-800 overflow-hidden"
-        :style="viewedProfile.banner_url ? `background-image: url('${viewedProfile.banner_url}'); background-size: cover; background-position: center;` : (viewedProfile.accent_color ? `background-color: ${viewedProfile.accent_color}` : '')"
-      ></div>
+        class="relative w-full h-48 md:h-64 bg-gradient-to-br from-[#1F223C] to-[#2A2D45] overflow-hidden"
+        :style="viewedProfile.banner_url
+          ? `background-image: url('${viewedProfile.banner_url}'); background-size: cover; background-position: center;`
+          : (viewedProfile.accent_color ? `background-color: ${viewedProfile.accent_color}22` : '')"
+      >
+        <div class="absolute inset-0 bg-gradient-to-t from-[#16192F]/60 to-transparent"></div>
+      </div>
 
       <!-- Profile card -->
-      <div class="max-w-2xl mx-auto px-4">
-        <div class="relative -mt-16 mb-4">
+      <div class="max-w-2xl mx-auto px-4 pb-12">
+        <div class="relative -mt-16 mb-4 flex items-end justify-between">
           <!-- Avatar -->
           <img
             :src="avatarSrc"
             :alt="viewedProfile.display_name ?? viewedProfile.username"
-            class="w-32 h-32 rounded-full border-4 border-gray-950 object-cover bg-gray-800"
+            class="w-32 h-32 rounded-2xl border-4 border-brand-bg object-cover bg-brand-card shadow-xl"
           />
+          <!-- Edit button aligned to right on mobile -->
+          <div v-if="isOwnProfile" class="mb-2">
+            <router-link
+              to="/settings/profile"
+              class="inline-flex items-center gap-2 px-4 py-2 border border-brand-accent text-brand-accent hover:bg-brand-accent hover:text-white rounded-xl text-sm font-bold transition-all"
+            >
+              Редактировать
+            </router-link>
+          </div>
         </div>
 
         <!-- Names & status -->
-        <div class="mb-4">
-          <h1 class="text-2xl font-bold leading-tight">
+        <div class="mb-5">
+          <h1 class="text-2xl font-extrabold leading-tight text-brand-offwhite">
             {{ viewedProfile.display_name ?? viewedProfile.username }}
           </h1>
-          <p class="text-gray-400 text-sm">@{{ viewedProfile.username }}</p>
-          <p v-if="viewedProfile.status" class="mt-1 text-indigo-300 text-sm italic">
+          <p class="text-brand-accent-minus text-sm mt-0.5">@{{ viewedProfile.username }}</p>
+          <p v-if="viewedProfile.status" class="mt-1.5 text-brand-accent-minus text-sm italic">
             {{ viewedProfile.status }}
           </p>
         </div>
 
-        <!-- Persona block -->
+        <!-- Persona tag -->
         <div
           v-if="viewedProfile.persona"
-          class="inline-flex items-center gap-2 px-3 py-1.5 mb-4 rounded-full text-sm font-medium"
+          class="inline-flex items-center gap-2 px-3 py-1.5 mb-5 rounded-full text-sm font-semibold border"
           :style="accentStyle"
         >
           <span>🐾</span>
@@ -59,7 +72,7 @@
         </div>
 
         <!-- Bio -->
-        <p v-if="viewedProfile.bio" class="text-gray-300 leading-relaxed mb-6 whitespace-pre-wrap">
+        <p v-if="viewedProfile.bio" class="text-brand-offwhite/80 leading-relaxed mb-6 whitespace-pre-wrap text-sm">
           {{ viewedProfile.bio }}
         </p>
 
@@ -67,12 +80,12 @@
         <div v-if="viewedProfile.likes.length || viewedProfile.dislikes.length" class="flex flex-col gap-4 mb-6">
 
           <div v-if="viewedProfile.likes.length">
-            <h3 class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">Loves</h3>
+            <h3 class="text-xs font-bold uppercase tracking-widest text-brand-muted mb-2">Нравится</h3>
             <div class="flex flex-wrap gap-2">
               <span
                 v-for="item in viewedProfile.likes"
                 :key="item"
-                class="px-3 py-1 bg-emerald-900/50 border border-emerald-700/50 text-emerald-300 text-sm rounded-full"
+                class="px-3 py-1 bg-brand-success/10 border border-brand-success/25 text-brand-success text-sm rounded-full font-medium"
               >
                 {{ item }}
               </span>
@@ -80,12 +93,12 @@
           </div>
 
           <div v-if="viewedProfile.dislikes.length">
-            <h3 class="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">Dislikes</h3>
+            <h3 class="text-xs font-bold uppercase tracking-widest text-brand-muted mb-2">Не нравится</h3>
             <div class="flex flex-wrap gap-2">
               <span
                 v-for="item in viewedProfile.dislikes"
                 :key="item"
-                class="px-3 py-1 bg-rose-900/50 border border-rose-700/50 text-rose-300 text-sm rounded-full"
+                class="px-3 py-1 bg-brand-error/10 border border-brand-error/25 text-brand-error text-sm rounded-full font-medium"
               >
                 {{ item }}
               </span>
@@ -94,24 +107,14 @@
 
         </div>
 
-        <!-- Edit profile button (only for own profile) -->
-        <div v-if="isOwnProfile" class="mb-6">
-          <router-link
-            to="/settings/profile"
-            class="inline-block px-4 py-2 border border-indigo-500 text-indigo-400 hover:bg-indigo-500 hover:text-white rounded-lg text-sm transition-colors"
-          >
-            Edit Profile
-          </router-link>
-        </div>
-
       </div>
     </div>
 
     <!-- Not found -->
-    <div v-else class="flex flex-col items-center justify-center min-h-screen gap-2">
-      <p class="text-gray-400 text-lg">User not found</p>
-      <router-link to="/" class="text-indigo-400 hover:text-indigo-300 text-sm transition-colors">
-        ← Back to home
+    <div v-else class="flex flex-col items-center justify-center min-h-screen gap-3">
+      <p class="text-brand-muted text-lg font-semibold">Пользователь не найден</p>
+      <router-link to="/" class="text-brand-accent hover:text-brand-accent-minus text-sm font-semibold transition-colors">
+        ← На главную
       </router-link>
     </div>
 
@@ -141,11 +144,11 @@ const avatarSrc = computed(() => {
   const name = encodeURIComponent(
     viewedProfile.value?.display_name ?? viewedProfile.value?.username ?? 'U',
   )
-  return `https://ui-avatars.com/api/?name=${name}&background=4C67CF&color=fff&bold=true&rounded=true&size=256`
+  return `https://ui-avatars.com/api/?name=${name}&background=4067CF&color=fff&bold=true&rounded=true&size=256`
 })
 
 const accentStyle = computed(() => {
-  const color = viewedProfile.value?.accent_color ?? '#4C67CF'
+  const color = viewedProfile.value?.accent_color ?? '#4C97CF'
   return {
     backgroundColor: `${color}22`,
     borderColor: `${color}66`,

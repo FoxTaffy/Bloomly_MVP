@@ -22,27 +22,101 @@ model User {
   likes        String[]
   dislikes     String[]
   accent_color String?
+  website      String?
+  location     String?
+  pronouns     String?
+  badge_type   String?   // admin | moderator | creator | verified
   created_at   DateTime  @default(now())
   updated_at   DateTime  @updatedAt
   deleted_at   DateTime?
 
-  wallet Wallet?
-  posts  Post[]
-  votes  Vote[]
+  wallet     Wallet?
+  posts      Post[]
+  votes      Vote[]
+  stories    Story[]
+  activities UserActivity[]
+  repaws        Repaw[]
+  favourites    Favourite[]
+  comments      Comment[]
+  commentVotes  CommentVote[]
+  followers     Follow[]       @relation("UserFollowers")
+  following     Follow[]       @relation("UserFollowing")
+  notifications Notification[] @relation("NotificationReceiver")
+  sentNotifications Notification[] @relation("NotificationSender")
+  reports       Report[]       @relation("ReportReporter")
+  resolvedReports Report[]     @relation("ReportResolver")
+  adRequests    Advertisement[] @relation("AdRequester")
+  adReviews     Advertisement[] @relation("AdReviewer")
 }
 
 model Post {
   id         String    @id @default(uuid()) @db.Uuid
   content    String
+  category   String?
   author_id  String    @db.Uuid
   rating     Int       @default(0)
   is_nsfw    Boolean   @default(false)
+  media_urls String[]  @default([])
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt
   deleted_at DateTime?
 
-  author User   @relation(fields: [author_id], references: [id])
-  votes  Vote[]
+  author     User          @relation(fields: [author_id], references: [id])
+  votes      Vote[]
+  tags       PostTag[]
+  activities UserActivity[]
+  repaws     Repaw[]
+  favourites Favourite[]
+  comments   Comment[]
+}
+
+model Repaw {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  post_id    String   @db.Uuid
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+  post Post @relation(fields: [post_id], references: [id])
+
+  @@unique([user_id, post_id])
+}
+
+model Favourite {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  post_id    String   @db.Uuid
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+  post Post @relation(fields: [post_id], references: [id])
+
+  @@unique([user_id, post_id])
+}
+
+model Tag {
+  id    String    @id @default(uuid()) @db.Uuid
+  name  String    @unique
+  posts PostTag[]
+}
+
+model PostTag {
+  post_id String @db.Uuid
+  tag_id  String @db.Uuid
+  post    Post   @relation(fields: [post_id], references: [id])
+  tag     Tag    @relation(fields: [tag_id], references: [id])
+
+  @@id([post_id, tag_id])
+}
+
+model Story {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  image_url  String?
+  created_at DateTime @default(now())
+  expires_at DateTime
+
+  user User @relation(fields: [user_id], references: [id])
 }
 
 // One record per user+post pair (enforced by @@unique).
@@ -72,4 +146,118 @@ model Wallet {
   deleted_at DateTime?
 
   user User @relation(fields: [user_id], references: [id])
+}
+
+model UserActivity {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  post_id    String   @db.Uuid
+  type       String   // VIEW, LIKE, CLICK
+  duration   Int?
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+  post Post @relation(fields: [post_id], references: [id])
+}
+
+model Comment {
+  id         String    @id @default(uuid()) @db.Uuid
+  post_id    String    @db.Uuid
+  author_id  String    @db.Uuid
+  parent_id  String?   @db.Uuid
+  content    String
+  rating     Int       @default(0)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  post     Post          @relation(fields: [post_id], references: [id])
+  author   User          @relation(fields: [author_id], references: [id])
+  parent   Comment?      @relation("CommentReplies", fields: [parent_id], references: [id])
+  replies  Comment[]     @relation("CommentReplies")
+  votes    CommentVote[]
+}
+
+model CommentVote {
+  id         String    @id @default(uuid()) @db.Uuid
+  user_id    String    @db.Uuid
+  comment_id String    @db.Uuid
+  value      Int       // 1 or -1
+  created_at DateTime  @default(now())
+  deleted_at DateTime?
+
+  user    User    @relation(fields: [user_id], references: [id])
+  comment Comment @relation(fields: [comment_id], references: [id])
+
+  @@unique([user_id, comment_id])
+}
+
+model Follow {
+  id           String   @id @default(uuid()) @db.Uuid
+  follower_id  String   @db.Uuid
+  following_id String   @db.Uuid
+  created_at   DateTime @default(now())
+
+  follower  User @relation("UserFollowers", fields: [follower_id],  references: [id])
+  following User @relation("UserFollowing", fields: [following_id], references: [id])
+
+  @@unique([follower_id, following_id])
+  @@index([follower_id])
+  @@index([following_id])
+}
+
+model Notification {
+  id          String   @id @default(uuid()) @db.Uuid
+  receiver_id String   @db.Uuid
+  sender_id   String?  @db.Uuid
+  type        String   // FOLLOW | LIKE | COMMENT | REPAW | MENTION
+  post_id     String?  @db.Uuid
+  comment_id  String?  @db.Uuid
+  read        Boolean  @default(false)
+  created_at  DateTime @default(now())
+
+  receiver User  @relation("NotificationReceiver", fields: [receiver_id], references: [id], onDelete: Cascade)
+  sender   User? @relation("NotificationSender",   fields: [sender_id],   references: [id], onDelete: SetNull)
+
+  @@index([receiver_id])
+  @@index([receiver_id, read])
+}
+
+model Advertisement {
+  id           String    @id @default(uuid()) @db.Uuid
+  title        String
+  description  String?
+  image_url    String?
+  link_url     String
+  contact_info String?
+  status       String    @default("pending") // pending | active | rejected
+  requester_id String?   @db.Uuid
+  reviewed_by  String?   @db.Uuid
+  impressions  Int       @default(0)
+  clicks       Int       @default(0)
+  starts_at    DateTime?
+  ends_at      DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  requester User? @relation("AdRequester", fields: [requester_id], references: [id], onDelete: SetNull)
+  reviewer  User? @relation("AdReviewer",  fields: [reviewed_by],  references: [id], onDelete: SetNull)
+}
+
+model Report {
+  id          String   @id @default(uuid()) @db.Uuid
+  reporter_id String   @db.Uuid
+  target_type String   // post | comment | user
+  target_id   String   @db.Uuid
+  reason      String
+  status      String   @default("pending") // pending | reviewed | dismissed
+  resolved_by String?  @db.Uuid
+  note        String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  reporter User  @relation("ReportReporter", fields: [reporter_id], references: [id])
+  resolver User? @relation("ReportResolver", fields: [resolved_by], references: [id], onDelete: SetNull)
+
+  @@index([status])
 }

@@ -39,7 +39,7 @@ export const loginHandler = async (
 
     const token = request.server.jwt.sign(
       { id: user.id, role: user.role },
-      { expiresIn: '15m' },
+      { expiresIn: '7d' },
     );
 
     return reply.send({

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import api from '../api'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface User {
@@ -7,11 +8,13 @@ export interface User {
   username: string
   email: string
   role: string
+  display_name?: string | null
+  avatar_url?: string | null
+  bio?: string | null
+  status?: string | null
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-// Tokens are kept in sessionStorage (cleared on tab/window close) rather than
-// localStorage to reduce the XSS token-theft attack surface per AUTH RULES.
 function loadUser(): User | null {
   try {
     return JSON.parse(sessionStorage.getItem('auth_user') ?? 'null')
@@ -31,10 +34,11 @@ export const useAuthStore = defineStore('auth', () => {
   // ── Getters ──────────────────────────────────────────────────────────────
   const isAuthenticated = computed(() => !!token.value && !!user.value)
 
-  const displayName = computed(() => user.value?.username ?? 'User')
+  const displayName = computed(() => user.value?.display_name || user.value?.username || 'User')
 
   const avatarUrl = computed(() => {
-    const name = encodeURIComponent(user.value?.username ?? 'U')
+    if (user.value?.avatar_url) return user.value.avatar_url
+    const name = encodeURIComponent(user.value?.display_name || user.value?.username || 'U')
     return `https://ui-avatars.com/api/?name=${name}&background=4C67CF&color=fff&bold=true&rounded=true&size=128`
   })
 
@@ -44,25 +48,20 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
     error.value = null
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
-      const data = await res.json()
+      const res = await api.post('/auth/login', { email, password })
+      const data = res.data
 
-      if (!res.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.error?.message ?? 'Invalid email or password')
       }
 
       token.value = data.data.token
       user.value  = data.data.user
 
-      // sessionStorage: scoped to this browser tab/session only
       sessionStorage.setItem('access_token', data.data.token)
       sessionStorage.setItem('auth_user', JSON.stringify(data.data.user))
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Connection error'
+    } catch (e: any) {
+      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
       throw e
     } finally {
       isLoading.value = false
@@ -73,20 +72,16 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
     error.value = null
     try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, username, password }),
-      })
-      const data = await res.json()
+      const res = await api.post('/auth/register', { email, username, password })
+      const data = res.data
 
-      if (!res.ok || !data.success) {
+      if (!data.success) {
         throw new Error(data.error?.message ?? 'Registration failed')
       }
 
       await login(email, password)
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Connection error'
+    } catch (e: any) {
+      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
       isLoading.value = false
       throw e
     }
@@ -95,18 +90,24 @@ export const useAuthStore = defineStore('auth', () => {
   async function fetchMe(): Promise<void> {
     if (!token.value) return
     try {
-      const res = await fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token.value}` },
-      })
-      if (!res.ok) logout()
-    } catch {
-      logout()
+      const res = await api.get('/auth/me')
+      const data = res.data
+      if (data.success) {
+        user.value = data.data.user
+        sessionStorage.setItem('auth_user', JSON.stringify(data.data.user))
+      }
+    } catch (e: any) {
+      // Only hard-logout on 401 (token invalid/expired).
+      // Ignore 429, 5xx, network errors — they must not wipe the session.
+      if (e?.response?.status === 401) {
+        logout()
+      }
     }
   }
 
-  function logout(): void {
+  function logout() {
     token.value = null
-    user.value  = null
+    user.value = null
     sessionStorage.removeItem('access_token')
     sessionStorage.removeItem('auth_user')
   }
@@ -117,8 +118,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   return {
-    user,
     token,
+    user,
     isLoading,
     error,
     isAuthenticated,
@@ -126,7 +127,7 @@ export const useAuthStore = defineStore('auth', () => {
     avatarUrl,
     login,
     register,
-    logout,
     fetchMe,
+    logout,
   }
 })

@@ -1,0 +1,1 @@
+ALTER TABLE "Post" ADD COLUMN "media_urls" TEXT[] NOT NULL DEFAULT '{}';

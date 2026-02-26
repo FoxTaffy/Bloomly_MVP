@@ -11,7 +11,7 @@ export class AuthService {
     try {
       return await prisma.$transaction(async (tx) => {
         const newUser = await tx.user.create({
-          data: { email, username, password: hashedPassword },
+          data: { email, username, password: hashedPassword, likes: [], dislikes: [] },
           select: {
             id: true,
             email: true,

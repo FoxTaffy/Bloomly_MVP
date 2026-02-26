@@ -1,141 +1,141 @@
 <template>
-  <div class="min-h-screen bg-gray-950 text-gray-100">
-    <div class="max-w-2xl mx-auto px-4 py-8">
+  <div class="min-h-screen bg-brand-bg text-brand-offwhite font-nunito">
+    <div class="max-w-2xl mx-auto px-4 py-8 pb-16">
 
       <!-- Header -->
       <div class="flex items-center gap-3 mb-8">
         <router-link
           to="/"
-          class="text-gray-400 hover:text-gray-200 transition-colors"
+          class="w-9 h-9 flex items-center justify-center rounded-xl bg-brand-card border border-brand-border text-brand-accent-minus hover:text-brand-offwhite hover:border-brand-accent transition-all"
           aria-label="Back"
         >
           ←
         </router-link>
-        <h1 class="text-xl font-bold">Edit Profile</h1>
+        <h1 class="text-xl font-extrabold text-brand-offwhite">Редактировать профиль</h1>
       </div>
 
       <!-- Success banner -->
       <div
         v-if="saved"
-        class="mb-6 px-4 py-3 bg-emerald-900/50 border border-emerald-700 text-emerald-300 rounded-lg text-sm"
+        class="mb-6 px-4 py-3 bg-brand-success/10 border border-brand-success/30 text-brand-success rounded-2xl text-sm font-semibold"
       >
-        Profile saved successfully.
+        ✓ Профиль сохранён.
       </div>
 
       <!-- Error banner -->
       <div
         v-if="userStore.error"
-        class="mb-6 px-4 py-3 bg-rose-900/50 border border-rose-700 text-rose-300 rounded-lg text-sm"
+        class="mb-6 px-4 py-3 bg-brand-error/10 border border-brand-error/30 text-brand-error rounded-2xl text-sm font-semibold"
       >
         {{ userStore.error }}
       </div>
 
-      <form @submit.prevent="handleSubmit" class="flex flex-col gap-6">
+      <form @submit.prevent="handleSubmit" class="flex flex-col gap-5">
 
         <!-- Display name -->
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Display Name</label>
+          <label class="block text-sm font-semibold text-brand-accent-minus mb-1.5">Отображаемое имя</label>
           <input
             v-model="form.display_name"
             type="text"
             maxlength="50"
-            placeholder="Your display name"
-            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+            placeholder="Ваше имя"
+            class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-3 text-sm text-brand-offwhite placeholder-brand-muted focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all"
           />
-          <p class="text-xs text-gray-500 mt-1">{{ form.display_name?.length ?? 0 }} / 50</p>
+          <p class="text-xs text-brand-muted mt-1">{{ form.display_name?.length ?? 0 }} / 50</p>
         </div>
 
         <!-- Bio -->
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Bio</label>
+          <label class="block text-sm font-semibold text-brand-accent-minus mb-1.5">О себе</label>
           <textarea
             v-model="form.bio"
             rows="4"
             maxlength="300"
-            placeholder="Tell something about yourself…"
-            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+            placeholder="Расскажите о себе…"
+            class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-3 text-sm text-brand-offwhite placeholder-brand-muted focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all resize-none"
           ></textarea>
-          <p class="text-xs text-gray-500 mt-1">{{ form.bio?.length ?? 0 }} / 300</p>
+          <p class="text-xs text-brand-muted mt-1">{{ form.bio?.length ?? 0 }} / 300</p>
         </div>
 
         <!-- Status -->
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Status</label>
+          <label class="block text-sm font-semibold text-brand-accent-minus mb-1.5">Статус</label>
           <input
             v-model="form.status"
             type="text"
             maxlength="100"
-            placeholder="What are you up to?"
-            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+            placeholder="Чем вы занимаетесь?"
+            class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-3 text-sm text-brand-offwhite placeholder-brand-muted focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all"
           />
         </div>
 
         <!-- Persona -->
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Persona</label>
+          <label class="block text-sm font-semibold text-brand-accent-minus mb-1.5">Персонаж</label>
           <input
             v-model="form.persona"
             type="text"
-            placeholder="e.g. Wolf, Cat, Fox…"
-            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+            placeholder="Напр. Волк, Кот, Лиса…"
+            class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-3 text-sm text-brand-offwhite placeholder-brand-muted focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all"
           />
         </div>
 
         <!-- Avatar URL -->
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Avatar URL</label>
+          <label class="block text-sm font-semibold text-brand-accent-minus mb-1.5">URL аватара</label>
           <input
             v-model="form.avatar_url"
             type="url"
             placeholder="https://…"
-            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+            class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-3 text-sm text-brand-offwhite placeholder-brand-muted focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all"
           />
         </div>
 
         <!-- Banner URL -->
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Banner URL</label>
+          <label class="block text-sm font-semibold text-brand-accent-minus mb-1.5">URL баннера</label>
           <input
             v-model="form.banner_url"
             type="url"
             placeholder="https://…"
-            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+            class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-3 text-sm text-brand-offwhite placeholder-brand-muted focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all"
           />
         </div>
 
         <!-- Accent color -->
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Accent Color</label>
+          <label class="block text-sm font-semibold text-brand-accent-minus mb-1.5">Акцентный цвет</label>
           <div class="flex items-center gap-3">
             <input
               v-model="form.accent_color"
               type="color"
-              class="h-9 w-14 rounded cursor-pointer bg-transparent border-0 p-0"
+              class="h-10 w-14 rounded-xl cursor-pointer bg-transparent border border-brand-border p-1"
             />
             <input
               v-model="form.accent_color"
               type="text"
               maxlength="7"
-              placeholder="#4C67CF"
-              class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-indigo-500 transition-colors"
+              placeholder="#4C97CF"
+              class="flex-1 bg-brand-card border border-brand-border rounded-xl px-4 py-3 text-sm font-mono text-brand-offwhite placeholder-brand-muted focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all"
             />
           </div>
-          <p class="text-xs text-gray-500 mt-1">HEX format: #RRGGBB</p>
+          <p class="text-xs text-brand-muted mt-1">HEX формат: #RRGGBB</p>
         </div>
 
         <!-- Likes -->
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Loves</label>
+          <label class="block text-sm font-semibold text-brand-accent-minus mb-1.5">Нравится</label>
           <div class="flex flex-wrap gap-2 mb-2">
             <span
               v-for="(item, idx) in form.likes"
               :key="idx"
-              class="flex items-center gap-1 px-3 py-1 bg-emerald-900/50 border border-emerald-700/50 text-emerald-300 text-sm rounded-full"
+              class="flex items-center gap-1 px-3 py-1 bg-brand-success/10 border border-brand-success/25 text-brand-success text-sm rounded-full font-medium"
             >
               {{ item }}
               <button
                 type="button"
-                class="ml-1 text-emerald-500 hover:text-emerald-200 leading-none"
+                class="ml-1 text-brand-success/60 hover:text-brand-success leading-none"
                 @click="removeTag('likes', idx)"
               >×</button>
             </span>
@@ -144,33 +144,33 @@
             <input
               v-model="newLike"
               type="text"
-              placeholder="Add something you love…"
-              class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+              placeholder="Добавить интерес…"
+              class="flex-1 bg-brand-card border border-brand-border rounded-xl px-4 py-3 text-sm text-brand-offwhite placeholder-brand-muted focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all"
               @keydown.enter.prevent="addTag('likes')"
             />
             <button
               type="button"
-              class="px-3 py-2 bg-emerald-700 hover:bg-emerald-600 rounded-lg text-sm transition-colors"
+              class="px-4 py-3 bg-brand-success/15 border border-brand-success/30 text-brand-success hover:bg-brand-success/25 rounded-xl text-sm font-bold transition-colors"
               @click="addTag('likes')"
             >
-              Add
+              +
             </button>
           </div>
         </div>
 
         <!-- Dislikes -->
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1">Dislikes</label>
+          <label class="block text-sm font-semibold text-brand-accent-minus mb-1.5">Не нравится</label>
           <div class="flex flex-wrap gap-2 mb-2">
             <span
               v-for="(item, idx) in form.dislikes"
               :key="idx"
-              class="flex items-center gap-1 px-3 py-1 bg-rose-900/50 border border-rose-700/50 text-rose-300 text-sm rounded-full"
+              class="flex items-center gap-1 px-3 py-1 bg-brand-error/10 border border-brand-error/25 text-brand-error text-sm rounded-full font-medium"
             >
               {{ item }}
               <button
                 type="button"
-                class="ml-1 text-rose-500 hover:text-rose-200 leading-none"
+                class="ml-1 text-brand-error/60 hover:text-brand-error leading-none"
                 @click="removeTag('dislikes', idx)"
               >×</button>
             </span>
@@ -179,16 +179,16 @@
             <input
               v-model="newDislike"
               type="text"
-              placeholder="Add something you dislike…"
-              class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+              placeholder="Добавить антипатию…"
+              class="flex-1 bg-brand-card border border-brand-border rounded-xl px-4 py-3 text-sm text-brand-offwhite placeholder-brand-muted focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all"
               @keydown.enter.prevent="addTag('dislikes')"
             />
             <button
               type="button"
-              class="px-3 py-2 bg-rose-700 hover:bg-rose-600 rounded-lg text-sm transition-colors"
+              class="px-4 py-3 bg-brand-error/10 border border-brand-error/25 text-brand-error hover:bg-brand-error/20 rounded-xl text-sm font-bold transition-colors"
               @click="addTag('dislikes')"
             >
-              Add
+              +
             </button>
           </div>
         </div>
@@ -198,10 +198,10 @@
           <button
             type="submit"
             :disabled="userStore.isLoading"
-            class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-semibold transition-colors"
+            class="w-full py-3 bg-brand-accent hover:bg-brand-accent-plus disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-bold text-white transition-colors shadow-lg shadow-brand-accent/25"
           >
-            <span v-if="userStore.isLoading">Saving…</span>
-            <span v-else>Save Profile</span>
+            <span v-if="userStore.isLoading">Сохранение…</span>
+            <span v-else>Сохранить профиль</span>
           </button>
         </div>
 
@@ -229,7 +229,7 @@ const form = reactive({
   persona:      '',
   avatar_url:   '',
   banner_url:   '',
-  accent_color: '#4C67CF',
+  accent_color: '#4C97CF',
   likes:        [] as string[],
   dislikes:     [] as string[],
 })
@@ -244,7 +244,7 @@ onMounted(async () => {
   form.persona      = p.persona      ?? ''
   form.avatar_url   = p.avatar_url   ?? ''
   form.banner_url   = p.banner_url   ?? ''
-  form.accent_color = p.accent_color ?? '#4C67CF'
+  form.accent_color = p.accent_color ?? '#4C97CF'
   form.likes        = [...p.likes]
   form.dislikes     = [...p.dislikes]
 })

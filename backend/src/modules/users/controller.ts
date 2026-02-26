@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { usersService } from './service.js';
 import type { UpdateUserInput, JwtPayload } from './types.js';
 
+
 export async function getUserHandler(
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
@@ -27,4 +28,22 @@ export async function updateMeHandler(
   const user = await usersService.updateUser(payload.id, request.body);
 
   return reply.send({ success: true, data: { user }, error: null });
+}
+
+export async function searchUsersHandler(
+  request: FastifyRequest<{ Querystring: { q?: string } }>,
+  reply: FastifyReply,
+) {
+  const q = (request.query as any).q ?? '';
+  const users = await usersService.searchUsers(q);
+  return reply.send({ success: true, data: { users }, error: null });
+}
+
+export async function getRecommendedUsersHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const payload = request.user as JwtPayload;
+  const users = await usersService.getRecommendedUsers(payload.id);
+  return reply.send({ success: true, data: { users }, error: null });
 }

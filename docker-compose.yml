@@ -22,26 +22,46 @@ services:
     ports:
       - "8080:8080"
     env_file: .env
+    environment:
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: "9000"
+      MINIO_USE_SSL: "false"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-bloomly_secret_123}
+      MINIO_BUCKET: bloomly
+      MINIO_PUBLIC_URL: https://bloomly.fun/s3
     command: sh -c "npx prisma migrate deploy && npx tsx src/server.ts"
     depends_on:
       db:
         condition: service_healthy
+      minio:
+        condition: service_started
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: build-stage  # <--- ДОБАВЬ ЭТУ СТРОКУ
     restart: always
     ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    working_dir: /app
-    command: npm run dev -- --host
+      - "5173:3000"
     environment:
       - VITE_API_URL=https://bloomly.fun
 
+  minio:
+    image: minio/minio
+    container_name: bloomly-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-bloomly_secret_123}
+      MINIO_BROWSER_REDIRECT_URL: https://bloomly.fun/minio-console
+    command: server /data --console-address ":9001"
+    restart: always
+
 volumes:
   postgres_data:
+  minio_data:

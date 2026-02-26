@@ -46,11 +46,25 @@ export async function authRoutes(fastify: FastifyInstance) {
     { onRequest: [fastify.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const payload = request.user as JwtPayload;
-      return reply.send({
-        success: true,
-        data: { user: { id: payload.id, role: payload.role } },
-        error: null,
+      // Fetch full user record so the client always gets username, display_name, avatar_url, etc.
+      const prisma = (await import('../../config/prisma.js')).default;
+      const user = await prisma.user.findUnique({
+        where: { id: payload.id },
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          role: true,
+          display_name: true,
+          avatar_url: true,
+          bio: true,
+          status: true,
+        },
       });
+      if (!user) {
+        return reply.code(401).send({ success: false, data: null, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+      }
+      return reply.send({ success: true, data: { user }, error: null });
     },
   );
 }
