@@ -284,6 +284,30 @@ export const postService = {
     }
   },
 
+  async getUserPosts(userId: string) {
+    return prisma.post.findMany({
+      where: { author_id: userId, deleted_at: null },
+      orderBy: { created_at: 'desc' },
+      include: {
+        author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        tags: { include: { tag: true } },
+        _count: { select: { votes: true, repaws: true, comments: true } },
+      },
+    });
+  },
+
+  async getUserMediaPosts(userId: string) {
+    return prisma.post.findMany({
+      where: { author_id: userId, deleted_at: null, media_urls: { isEmpty: false } },
+      orderBy: { created_at: 'desc' },
+      include: {
+        author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        tags: { include: { tag: true } },
+        _count: { select: { votes: true, repaws: true, comments: true } },
+      },
+    });
+  },
+
   async getUserRepawedPosts(userId: string) {
     const repaws = await prisma.repaw.findMany({
       where: { user_id: userId },

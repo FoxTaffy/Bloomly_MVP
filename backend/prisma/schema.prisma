@@ -25,10 +25,14 @@ model User {
   website      String?
   location     String?
   pronouns     String?
-  badge_type   String?   // admin | moderator | creator | verified
-  created_at   DateTime  @default(now())
-  updated_at   DateTime  @updatedAt
-  deleted_at   DateTime?
+  badge_type      String?   // admin | moderator | creator | verified
+  job_title            String?   @db.VarChar(80)
+  relationship_status  String?   @db.VarChar(50)
+  country              String?   @db.VarChar(80)
+  pinned_post_id       String?   @db.Uuid
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  deleted_at      DateTime?
 
   wallet     Wallet?
   posts      Post[]
@@ -41,6 +45,7 @@ model User {
   commentVotes  CommentVote[]
   followers     Follow[]       @relation("UserFollowers")
   following     Follow[]       @relation("UserFollowing")
+  pinnedPost    Post?          @relation("UserPinnedPost", fields: [pinned_post_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
   notifications Notification[] @relation("NotificationReceiver")
   sentNotifications Notification[] @relation("NotificationSender")
   reports       Report[]       @relation("ReportReporter")
@@ -68,6 +73,7 @@ model Post {
   repaws     Repaw[]
   favourites Favourite[]
   comments   Comment[]
+  pinnedBy   User[]        @relation("UserPinnedPost")
 }
 
 model Repaw {

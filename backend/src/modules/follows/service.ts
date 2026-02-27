@@ -77,6 +77,31 @@ export const followsService = {
     return { followers, following };
   },
 
+  /** Mutual follows: people who follow userId AND whom userId follows */
+  async getFriends(userId: string) {
+    const [followerRows, followingRows] = await Promise.all([
+      prisma.follow.findMany({ where: { following_id: userId }, select: { follower_id: true } }),
+      prisma.follow.findMany({ where: { follower_id: userId }, select: { following_id: true } }),
+    ]);
+    const followersSet = new Set(followerRows.map((r) => r.follower_id));
+    const mutualIds = followingRows.map((r) => r.following_id).filter((id) => followersSet.has(id));
+    if (!mutualIds.length) return [];
+    const users = await prisma.user.findMany({
+      where: { id: { in: mutualIds }, deleted_at: null },
+      select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true },
+    });
+    return users;
+  },
+
+  /** Check mutual follow status between two users */
+  async isFriends(userA: string, userB: string) {
+    const [aFollowsB, bFollowsA] = await Promise.all([
+      prisma.follow.findUnique({ where: { follower_id_following_id: { follower_id: userA, following_id: userB } } }),
+      prisma.follow.findUnique({ where: { follower_id_following_id: { follower_id: userB, following_id: userA } } }),
+    ]);
+    return { aFollowsB: !!aFollowsB, bFollowsA: !!bFollowsA, friends: !!aFollowsB && !!bFollowsA };
+  },
+
   async getSubscriptionFeed(userId: string, safeMode = false) {
     const followingRows = await prisma.follow.findMany({
       where: { follower_id: userId },

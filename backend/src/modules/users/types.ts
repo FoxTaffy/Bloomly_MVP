@@ -10,6 +10,14 @@ export interface UserPublicProfile {
   likes: string[];
   dislikes: string[];
   accent_color: string | null;
+  website: string | null;
+  location: string | null;
+  pronouns: string | null;
+  badge_type: string | null;
+  job_title: string | null;
+  relationship_status: string | null;
+  country: string | null;
+  pinned_post_id: string | null;
   created_at: Date;
 }
 
@@ -23,6 +31,13 @@ export interface UpdateUserInput {
   likes?: string[];
   dislikes?: string[];
   accent_color?: string;
+  website?: string;
+  location?: string;
+  pronouns?: string;
+  job_title?: string;
+  relationship_status?: string;
+  country?: string;
+  role?: string;
 }
 
 export interface JwtPayload {

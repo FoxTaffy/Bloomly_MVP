@@ -294,8 +294,9 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
         <div v-else class="space-y-2">
           <div v-for="user in users" :key="user.id"
             class="bg-brand-card border border-brand-border rounded-2xl px-4 py-3 flex items-center gap-3 hover:border-brand-accent/30 transition-all">
-            <img :src="user.avatar_url || `https://ui-avatars.com/api/?name=${user.username}&background=random`"
+            <img v-if="user.avatar_url" :src="user.avatar_url"
               class="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-brand-border" />
+            <div v-else class="w-9 h-9 rounded-full flex-shrink-0 border border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (user.display_name || user.username || '?')[0].toUpperCase() }}</div>
             <div class="flex-1 min-w-0">
               <p class="font-bold text-sm text-white truncate">{{ user.display_name || user.username }}</p>
               <p class="text-xs text-brand-muted">@{{ user.username }} · {{ user._count?.posts ?? 0 }} постов · {{ formatDate(user.created_at) }}</p>
@@ -346,8 +347,9 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
         <div v-else class="space-y-2">
           <div v-for="post in posts" :key="post.id"
             class="bg-brand-card border border-brand-border rounded-2xl px-4 py-3 flex items-start gap-3 hover:border-brand-accent/30 transition-all">
-            <img :src="post.author?.avatar_url || `https://ui-avatars.com/api/?name=${post.author?.username}&background=random`"
+            <img v-if="post.author?.avatar_url" :src="post.author.avatar_url"
               class="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-brand-border mt-0.5" />
+            <div v-else class="w-9 h-9 rounded-full flex-shrink-0 border border-brand-border mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (post.author?.display_name || post.author?.username || '?')[0].toUpperCase() }}</div>
             <div class="flex-1 min-w-0">
               <p class="text-xs text-brand-muted mb-0.5">@{{ post.author?.username }} · {{ formatDate(post.created_at) }}</p>
               <p class="text-sm text-white line-clamp-2">{{ post.content }}</p>

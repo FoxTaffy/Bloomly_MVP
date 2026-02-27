@@ -118,7 +118,8 @@ const deleteComment = async (commentId: string) => {
   <div class="mt-4 space-y-3">
     <!-- Comment input -->
     <div class="flex gap-3 items-start">
-      <img :src="auth.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5" />
+      <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5" />
+      <div v-else class="w-8 h-8 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
       <div class="flex-1 flex gap-2">
         <input
           v-model="commentText"
@@ -151,10 +152,11 @@ const deleteComment = async (commentId: string) => {
       <div v-for="comment in comments" :key="comment.id" class="space-y-2">
         <!-- Top-level comment -->
         <div class="flex gap-3">
-          <img
-            :src="comment.author.avatar_url || `https://ui-avatars.com/api/?name=${comment.author.username}&background=random`"
+          <img v-if="comment.author.avatar_url"
+            :src="comment.author.avatar_url"
             class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5"
           />
+          <div v-else class="w-8 h-8 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs">{{ (comment.author.display_name || comment.author.username || '?')[0].toUpperCase() }}</div>
           <div class="flex-1 min-w-0">
             <div class="bg-brand-bg/50 rounded-2xl px-4 py-3 border border-brand-border/50">
               <div class="flex items-center gap-2 mb-1.5">
@@ -198,7 +200,8 @@ const deleteComment = async (commentId: string) => {
 
             <!-- Reply input for this comment -->
             <div v-if="replyingTo?.id === comment.id" class="mt-2 flex gap-2 items-center pl-1">
-              <img :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover border border-brand-border flex-shrink-0" />
+              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover border border-brand-border flex-shrink-0" />
+              <div v-else class="w-7 h-7 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px]">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
               <input
                 v-model="replyText"
                 @keydown.enter.prevent="submitReply"
@@ -218,10 +221,11 @@ const deleteComment = async (commentId: string) => {
             <!-- Nested replies -->
             <div v-if="expandedReplies.has(comment.id) && comment.replies?.length" class="mt-2 space-y-2 pl-4 border-l-2 border-brand-border">
               <div v-for="reply in comment.replies" :key="reply.id" class="flex gap-3">
-                <img
-                  :src="reply.author.avatar_url || `https://ui-avatars.com/api/?name=${reply.author.username}&background=random`"
+                <img v-if="reply.author.avatar_url"
+                  :src="reply.author.avatar_url"
                   class="w-7 h-7 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5"
                 />
+                <div v-else class="w-7 h-7 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px]">{{ (reply.author.display_name || reply.author.username || '?')[0].toUpperCase() }}</div>
                 <div class="flex-1 min-w-0">
                   <div class="bg-brand-bg/50 rounded-2xl px-4 py-2.5 border border-brand-border/50">
                     <div class="flex items-center gap-2 mb-1">

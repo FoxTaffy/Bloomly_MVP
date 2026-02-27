@@ -102,10 +102,11 @@ const closeDropdown = () => { showDropdown.value = false }
           class="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
           :class="i === dropdownActive ? 'bg-brand-accent/20 text-white' : 'text-brand-muted hover:bg-brand-border hover:text-white'"
         >
-          <img
-            :src="user.avatar_url || `https://ui-avatars.com/api/?name=${user.username}&background=random`"
+          <img v-if="user.avatar_url"
+            :src="user.avatar_url"
             class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0"
           />
+          <div v-else class="w-8 h-8 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs">{{ (user.display_name || user.username || '?')[0].toUpperCase() }}</div>
           <div class="min-w-0">
             <div class="font-bold text-sm truncate">{{ user.display_name || user.username }}</div>
             <div class="text-xs text-brand-muted truncate">@{{ user.username }}</div>

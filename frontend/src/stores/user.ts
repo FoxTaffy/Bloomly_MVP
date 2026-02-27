@@ -15,7 +15,18 @@ export interface UserProfile {
   likes: string[]
   dislikes: string[]
   accent_color: string | null
+  website: string | null
+  location: string | null
+  pronouns: string | null
+  badge_type: string | null
+  job_title: string | null
+  relationship_status: string | null
+  country: string | null
+  pinned_post_id: string | null
+  role: string
   created_at: string
+  _count?: { followers: number; following: number; posts: number }
+  pinnedPost?: any | null
 }
 
 export interface UpdateProfileInput {
@@ -28,6 +39,12 @@ export interface UpdateProfileInput {
   likes?: string[]
   dislikes?: string[]
   accent_color?: string
+  website?: string
+  location?: string
+  pronouns?: string
+  job_title?: string
+  relationship_status?: string
+  country?: string
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────

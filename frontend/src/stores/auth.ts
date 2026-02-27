@@ -36,11 +36,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const displayName = computed(() => user.value?.display_name || user.value?.username || 'User')
 
-  const avatarUrl = computed(() => {
-    if (user.value?.avatar_url) return user.value.avatar_url
-    const name = encodeURIComponent(user.value?.display_name || user.value?.username || 'U')
-    return `https://ui-avatars.com/api/?name=${name}&background=4C67CF&color=fff&bold=true&rounded=true&size=128`
-  })
+  const avatarUrl = computed(() => user.value?.avatar_url ?? '')
 
   // ── Actions ──────────────────────────────────────────────────────────────
 

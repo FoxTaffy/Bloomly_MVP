@@ -5,10 +5,13 @@ import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
 import api from '@/api'
 import BIcon from './BIcon.vue'
+import AppHeader from './AppHeader.vue'
+import AppSidebar from './AppSidebar.vue'
 import MediaUpload from './MediaUpload.vue'
 import SkeletonPost from './SkeletonPost.vue'
 import PostLightbox from './PostLightbox.vue'
 import PostComments from './PostComments.vue'
+import PostCard from './PostCard.vue'
 import MentionTextarea from './MentionTextarea.vue'
 import { useAnalytics } from '@/composables/useAnalytics'
 
@@ -92,56 +95,7 @@ const mobileActiveTab = ref<'home' | 'friends' | 'search' | 'profile'>('home')
 const closeMobileSearch = () => { mobileSearchOpen.value = false }
 const openMobileSearch = () => { mobileSearchOpen.value = true; mobileActiveTab.value = 'search' }
 
-// ── Search Modal ────────────────────────────────────────────────────────────
-const showSearchModal = ref(false)
-const searchModalQuery = ref('')
-const searchModalTab = ref<'posts' | 'accounts'>('posts')
-const searchModalPosts = ref<any[]>([])
-const searchModalUsers = ref<any[]>([])
-const searchModalLoading = ref(false)
-
-const openSearchModal = () => {
-  showSearchModal.value = true
-  searchModalQuery.value = ''
-  searchModalPosts.value = []
-  searchModalUsers.value = []
-  nextTick(() => {
-    const el = document.getElementById('search-modal-input')
-    if (el) el.focus()
-  })
-}
-const closeSearchModal = () => { showSearchModal.value = false }
-
-let searchModalDebounce: ReturnType<typeof setTimeout>
-const onSearchModalInput = () => {
-  clearTimeout(searchModalDebounce)
-  if (!searchModalQuery.value.trim()) {
-    searchModalPosts.value = []
-    searchModalUsers.value = []
-    return
-  }
-  searchModalDebounce = setTimeout(async () => {
-    searchModalLoading.value = true
-    try {
-      const [postsRes, usersRes] = await Promise.all([
-        api.get(`/posts?search=${encodeURIComponent(searchModalQuery.value)}&limit=10`),
-        api.get(`/users/search?q=${encodeURIComponent(searchModalQuery.value)}&limit=8`),
-      ])
-      searchModalPosts.value = postsRes.data.success ? postsRes.data.data.posts ?? [] : []
-      searchModalUsers.value = usersRes.data.success ? usersRes.data.data.users ?? [] : []
-    } catch {}
-    finally { searchModalLoading.value = false }
-  }, 320)
-}
-
-const searchGoToPost = (postId: string) => {
-  closeSearchModal()
-  // scroll feed to post (just close for now)
-}
-const searchGoToUser = (userId: string) => {
-  closeSearchModal()
-  router.push(`/profile/${userId}`)
-}
+// Search handled by AppHeader component
 
 // ── Three-dot post menu ────────────────────────────────────────────────────
 const openMenuId = ref<string | null>(null)
@@ -149,7 +103,7 @@ const openPostMenu = (postId: string, event: MouseEvent) => {
   event.stopPropagation()
   openMenuId.value = openMenuId.value === postId ? null : postId
 }
-const closeMenu = () => { openMenuId.value = null; showNotifications.value = false }
+const closeMenu = () => { openMenuId.value = null }
 
 // ── Post edit ──────────────────────────────────────────────────────────────
 const editingPostId = ref<string | null>(null)
@@ -223,7 +177,7 @@ const setPostRef = (el: any, postId: string) => {
 }
 const cleanupObservers = () => { postObservers.forEach(u => u()); postObservers.clear() }
 
-onUnmounted(() => { cleanupObservers(); disconnectWebSocket(); closeStory(); notifEventSource?.close(); window.removeEventListener('keydown', onGlobalKeydown) })
+onUnmounted(() => { cleanupObservers(); disconnectWebSocket(); closeStory() })
 
 const newPost = ref({ content: '', category: '', tags: [] as string[], isNsfw: false })
 const tagInput = ref('')
@@ -362,69 +316,7 @@ const fetchPosts = async () => {
 const selectedTag = ref('')
 watch([selectedCategory, sortBy, nsfwMode, feedMode, selectedTag], () => { fetchPosts() })
 
-// ── Notifications ───────────────────────────────────────────────────────────
-const unreadCount = ref(0)
-const showNotifications = ref(false)
-const notifications = ref<any[]>([])
-let notifEventSource: EventSource | null = null
-
-const fetchUnreadCount = async () => {
-  try {
-    const res = await api.get('/notifications/count')
-    if (res.data.success) unreadCount.value = res.data.data.count
-  } catch {}
-}
-
-const fetchNotifications = async () => {
-  try {
-    const res = await api.get('/notifications')
-    if (res.data.success) {
-      notifications.value = res.data.data.notifications
-      unreadCount.value = notifications.value.filter((n: any) => !n.is_read).length
-    }
-  } catch {}
-}
-
-const toggleNotifications = () => {
-  showNotifications.value = !showNotifications.value
-  if (showNotifications.value) fetchNotifications()
-}
-
-const markAllRead = async () => {
-  try {
-    await api.post('/notifications/read', {})
-    notifications.value.forEach((n: any) => { n.is_read = true })
-    unreadCount.value = 0
-  } catch {}
-}
-
-const connectNotifSSE = () => {
-  if (!auth.token) return
-  try {
-    notifEventSource = new EventSource(`/api/notifications/stream?token=${encodeURIComponent(auth.token as string)}`)
-    notifEventSource.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data)
-        if (data.type && data.type !== 'heartbeat') {
-          notifications.value.unshift(data)
-          unreadCount.value++
-        }
-      } catch {}
-    }
-    notifEventSource.onerror = () => { notifEventSource?.close(); notifEventSource = null }
-  } catch {}
-}
-
-const notifTypeLabel = (type: string) => {
-  const map: Record<string, string> = {
-    LIKE: 'лайкнул(а) вашу публикацию',
-    COMMENT: 'прокомментировал(а) вашу публикацию',
-    REPAW: 'репостнул(а) вашу публикацию',
-    FOLLOW: 'подписался(ась) на вас',
-    MENTION: 'упомянул(а) вас',
-  }
-  return map[type] ?? type
-}
+// Notifications handled by AppHeader component
 
 // ── Follow status on post authors ────────────────────────────────────────────
 const followStatus = reactive<Record<string, boolean>>({})
@@ -681,11 +573,7 @@ const connectWebSocket = () => {
 watch(showPostForm, (v) => { if (!v) { dragCounter = 0; formDragging.value = false } })
 watch(nsfwMode, () => { fetchTrendingTags() })
 
-const onGlobalKeydown = (e: KeyboardEvent) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); openSearchModal() }
-  if (e.key === 'Escape' && showSearchModal.value) closeSearchModal()
-}
-onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebSocket(); fetchRecommendedUsers(); fetchTrendingEvents(); fetchTrendingTags(); fetchUnreadCount(); connectNotifSSE(); fetchActiveAds(); window.addEventListener('keydown', onGlobalKeydown) })
+onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebSocket(); fetchRecommendedUsers(); fetchTrendingEvents(); fetchTrendingTags(); fetchActiveAds() })
 </script>
 
 <template>
@@ -697,170 +585,29 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
     </div>
 
     <!-- Header -->
-    <header class="fixed top-0 inset-x-0 h-14 md:h-16 bg-brand-bg/95 backdrop-blur-md border-b border-brand-border flex items-center justify-between px-4 md:px-6 z-40">
-      <div class="flex items-center gap-2.5 cursor-pointer" @click="router.push({ name: 'home' })">
-        <div class="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M16 2C16 2 18 6 22 6C26 6 28 10 28 14C28 18 24 20 24 20C24 20 28 22 28 26C28 30 24 30 20 30C16 30 16 26 16 26C16 26 16 30 12 30C8 30 4 30 4 26C4 22 8 20 8 20C8 20 4 18 4 14C4 10 6 6 10 6C14 6 16 2 16 2Z" fill="#D5DDFF" stroke="#4C67CF" stroke-width="2" stroke-linejoin="round"/>
-            <circle cx="16" cy="16" r="4" fill="#D5DDFF" stroke="#4C67CF" stroke-width="2"/>
-          </svg>
-        </div>
-        <span class="text-xl md:text-2xl font-extrabold tracking-tight text-white">Bloomly</span>
-      </div>
-
-      <!-- Desktop search trigger -->
-      <button @click="openSearchModal"
-        class="flex-1 max-w-xl mx-8 hidden md:flex items-center gap-3 bg-brand-card border border-brand-border rounded-full py-2.5 pl-4 pr-5 text-sm text-brand-muted hover:border-brand-accent/50 hover:text-white transition-colors cursor-text">
-        <BIcon name="Search" class="h-4 w-4 flex-shrink-0" />
-        <span class="truncate">{{ langStore.t.search }}</span>
-        <span class="ml-auto flex items-center gap-1 text-xs text-brand-muted/60 bg-brand-bg px-2 py-0.5 rounded-md border border-brand-border/60 hidden xl:flex">Ctrl K</span>
-      </button>
-
-      <div class="flex items-center gap-1.5 md:gap-3">
-        <!-- Language selector (desktop only) -->
-        <select v-model="langStore.currentLang" @change="langStore.setLang(langStore.currentLang)"
-          class="hidden md:block bg-brand-card border border-brand-border rounded-lg px-2 py-1 text-sm text-white outline-none focus:border-brand-accent">
-          <option value="RU">RU</option>
-          <option value="EN">EN</option>
-          <option value="JP">JP</option>
-          <option value="CN">CN</option>
-        </select>
-        <!-- Notifications -->
-        <div class="relative">
-          <button @click.stop="toggleNotifications" class="p-2 md:p-2.5 text-brand-muted hover:text-white hover:bg-white/5 rounded-full relative">
-            <BIcon name="Bell" class="h-5 w-5" />
-            <span v-if="unreadCount > 0" class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-brand-error rounded-full text-[10px] font-bold text-white border-2 border-brand-bg">{{ unreadCount > 9 ? '9+' : unreadCount }}</span>
-          </button>
-          <!-- Notification panel -->
-          <Transition name="filter-expand">
-            <div v-if="showNotifications" @click.stop
-              class="absolute right-0 top-12 z-50 w-80 bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden">
-              <div class="flex items-center justify-between px-4 py-3 border-b border-brand-border">
-                <span class="font-bold text-sm">Уведомления</span>
-                <button v-if="unreadCount > 0" @click="markAllRead" class="text-xs text-brand-accent hover:text-white font-semibold">Всё прочитано</button>
-              </div>
-              <div class="max-h-80 overflow-y-auto">
-                <div v-if="notifications.length === 0" class="py-8 text-center text-brand-muted text-sm">Нет уведомлений</div>
-                <div v-for="n in notifications" :key="n.id"
-                  class="flex items-start gap-3 px-4 py-3 border-b border-brand-border/50 transition hover:bg-brand-border/30"
-                  :class="!n.is_read ? 'bg-brand-accent/5' : ''">
-                  <img :src="n.sender?.avatar_url || `https://ui-avatars.com/api/?name=${n.sender?.username ?? 'U'}&background=random`"
-                    class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5" />
-                  <div class="min-w-0">
-                    <p class="text-sm text-white leading-snug">
-                      <span class="font-bold">{{ n.sender?.display_name || n.sender?.username }}</span>
-                      {{ ' ' }}{{ notifTypeLabel(n.type) }}
-                    </p>
-                    <p class="text-xs text-brand-muted mt-0.5">{{ formatDate(n.created_at) }}</p>
-                  </div>
-                  <div v-if="!n.is_read" class="w-2 h-2 bg-brand-accent rounded-full flex-shrink-0 mt-1.5"></div>
-                </div>
-              </div>
-            </div>
-          </Transition>
-        </div>
-        <!-- NSFW toggle -->
-        <button @click="nsfwMode = !nsfwMode"
-          class="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 rounded-full border transition-all duration-200"
-          :class="nsfwMode ? 'bg-brand-error/15 border-brand-error/40 text-brand-error shadow-sm shadow-brand-error/20' : 'bg-brand-card border-brand-border text-brand-muted hover:text-white'">
-          <BIcon :name="nsfwMode ? 'Eye' : 'EyeOff'" class="h-4 w-4" />
-          <span class="text-xs font-bold hidden sm:block">NSFW</span>
-          <div class="relative w-7 h-3.5 flex-shrink-0 hidden sm:block">
-            <div class="w-7 h-3.5 rounded-full transition-colors" :class="nsfwMode ? 'bg-rose-500' : 'bg-white/20'"></div>
-            <div class="absolute top-0.5 h-2.5 w-2.5 bg-white rounded-full shadow transition-all" :class="nsfwMode ? 'left-[calc(100%-11px)]' : 'left-0.5'"></div>
-          </div>
-        </button>
-        <!-- Logout (desktop) -->
-        <button @click="handleLogout" class="hidden md:flex p-2.5 text-brand-muted hover:text-rose-400 hover:bg-rose-500/10 rounded-full">
-          <BIcon name="LogOut" class="h-5 w-5" />
-        </button>
-      </div>
-    </header>
+    <AppHeader v-model:nsfwMode="nsfwMode" />
 
     <div class="max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-8">
       <!-- Left Sidebar -->
-      <aside class="w-64 hidden lg:block sticky top-24 self-start space-y-6">
-        <!-- User Profile Block -->
-        <div class="flex items-center gap-3 cursor-pointer group" @click="router.push(`/profile/${auth.user?.id}`)">
-          <img :src="auth.avatarUrl" class="w-12 h-12 rounded-full object-cover border-2 border-brand-border group-hover:border-brand-accent transition-colors" />
-          <div>
-            <h3 class="font-bold text-white text-sm group-hover:text-brand-accent transition-colors">{{ auth.displayName }}</h3>
-            <p class="text-xs text-brand-muted">Перейти в профиль</p>
-          </div>
-        </div>
-
-        <nav class="space-y-1">
-          <button @click="activeNav = 'home'; router.push({ name: 'home' })"
-            class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
-            :class="activeNav === 'home' ? 'bg-brand-card text-white' : 'text-brand-muted hover:bg-brand-card/50 hover:text-white'">
-            <BIcon name="Home" class="w-5 h-5" /><span>Главная</span>
-          </button>
-          <button @click="activeNav = 'explore'"
-            class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
-            :class="activeNav === 'explore' ? 'bg-brand-card text-white' : 'text-brand-muted hover:bg-brand-card/50 hover:text-white'">
-            <BIcon name="Compass" class="w-5 h-5" /><span>Исследовать</span>
-          </button>
-          <button @click="activeNav = 'messages'"
-            class="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
-            :class="activeNav === 'messages' ? 'bg-brand-card text-white' : 'text-brand-muted hover:bg-brand-card/50 hover:text-white'">
-            <div class="flex items-center gap-3">
-              <BIcon name="MessageCircle" class="w-5 h-5" /><span>Сообщения</span>
-            </div>
-            <span class="text-[10px] font-bold bg-brand-bg px-2 py-0.5 rounded-full text-white">1192</span>
-          </button>
-          <button @click="activeNav = 'friends'"
-            class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
-            :class="activeNav === 'friends' ? 'bg-brand-card text-white' : 'text-brand-muted hover:bg-brand-card/50 hover:text-white'">
-            <BIcon name="Users" class="w-5 h-5" /><span>Друзья</span>
-          </button>
-          <button @click="activeNav = 'groups'"
-            class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
-            :class="activeNav === 'groups' ? 'bg-brand-card text-white' : 'text-brand-muted hover:bg-brand-card/50 hover:text-white'">
-            <BIcon name="Grid" class="w-5 h-5" /><span>Группы</span>
-          </button>
-          <button @click="activeNav = 'bookmarks'"
-            class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
-            :class="activeNav === 'bookmarks' ? 'bg-brand-card text-white' : 'text-brand-muted hover:bg-brand-card/50 hover:text-white'">
-            <BIcon name="Bookmark" class="w-5 h-5" /><span>Закладки</span>
-          </button>
-        </nav>
-
-        <!-- Categories -->
-        <div>
-          <h4 class="px-4 text-xs font-bold text-brand-muted mb-2 uppercase tracking-wider">Категории</h4>
-          <nav class="space-y-1">
-            <button class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-brand-muted hover:bg-brand-card/50 hover:text-white">
-              <BIcon name="Sticker" class="w-5 h-5" /><span>Стикеры</span>
-            </button>
-            <button class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-brand-muted hover:bg-brand-card/50 hover:text-white">
-              <BIcon name="Gift" class="w-5 h-5" /><span>Подарки</span>
-            </button>
-            <button class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-brand-muted hover:bg-brand-card/50 hover:text-white">
-              <BIcon name="ShoppingBag" class="w-5 h-5" /><span>Dealers' Den</span>
-            </button>
-            <button class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-brand-muted hover:bg-brand-card/50 hover:text-white">
-              <BIcon name="HelpCircle" class="w-5 h-5" /><span>Помощь</span>
-            </button>
-          </nav>
-        </div>
-
-        <!-- Active Ad Banners (left sidebar) -->
-        <template v-if="activeAds.length">
-          <a v-for="ad in activeAds" :key="ad.id"
-            :href="ad.link_url" target="_blank" rel="noopener noreferrer"
-            @click="trackAdClick(ad.id)"
-            class="block bg-brand-card border border-brand-accent/25 rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/50 transition-all group">
-            <img v-if="ad.image_url" :src="ad.image_url" class="w-full object-cover max-h-28" />
-            <div class="px-3 py-2.5">
-              <div class="flex items-center gap-1.5 mb-1">
-                <span class="text-[9px] font-bold uppercase tracking-wider text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Реклама</span>
+      <AppSidebar v-model:activeNav="activeNav">
+        <template #bottom>
+          <template v-if="activeAds.length">
+            <a v-for="ad in activeAds" :key="ad.id"
+              :href="ad.link_url" target="_blank" rel="noopener noreferrer"
+              @click="trackAdClick(ad.id)"
+              class="block bg-brand-card border border-brand-accent/25 rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/50 transition-all group">
+              <img v-if="ad.image_url" :src="ad.image_url" class="w-full object-cover max-h-28" />
+              <div class="px-3 py-2.5">
+                <div class="flex items-center gap-1.5 mb-1">
+                  <span class="text-[9px] font-bold uppercase tracking-wider text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Реклама</span>
+                </div>
+                <p class="text-xs font-bold text-white group-hover:text-brand-accent transition-colors leading-snug">{{ ad.title }}</p>
+                <p v-if="ad.description" class="text-[11px] text-brand-muted mt-0.5 line-clamp-2">{{ ad.description }}</p>
               </div>
-              <p class="text-xs font-bold text-white group-hover:text-brand-accent transition-colors leading-snug">{{ ad.title }}</p>
-              <p v-if="ad.description" class="text-[11px] text-brand-muted mt-0.5 line-clamp-2">{{ ad.description }}</p>
-            </div>
-          </a>
+            </a>
+          </template>
         </template>
-      </aside>
+      </AppSidebar>
 
       <!-- Main Content -->
       <main class="flex-1 min-w-0 space-y-4 md:space-y-5 pb-28 md:pb-20 max-w-2xl w-full">
@@ -882,48 +629,13 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
             <p class="text-brand-muted">{{ langStore.t.saveToBookmarks }}</p>
           </div>
           <div v-else class="space-y-4">
-            <div v-for="post in bookmarkedPosts" :key="post.id"
-              class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all">
-              <div class="p-6">
-                <div class="flex items-center gap-3 cursor-pointer mb-4" @click="router.push(`/profile/${post.author.id}`)">
-                  <img :src="post.author.avatar_url || `https://ui-avatars.com/api/?name=${post.author.username}&background=random`" class="w-11 h-11 rounded-full object-cover border border-brand-border" />
-                  <div>
-                    <h4 class="font-bold text-white hover:text-brand-accent">{{ post.author.display_name || post.author.username }}</h4>
-                    <p class="text-xs text-brand-muted">@{{ post.author.username }} · {{ formatDate(post.created_at) }}</p>
-                  </div>
-                </div>
-                <p class="text-white/90 text-[16px] leading-relaxed mb-4 whitespace-pre-wrap">
-                  <template v-for="seg in parseMentions(post.content)" :key="seg.key">
-                    <span v-if="seg.type === 'text'">{{ seg.text }}</span>
-                    <span v-else
-                      class="inline-flex items-center gap-0.5 px-2 py-0.5 bg-brand-accent/15 border border-brand-accent/30 rounded-full text-brand-accent text-sm font-semibold cursor-pointer hover:bg-brand-accent/25 transition-all group relative align-baseline"
-                      @click.stop="goToMention(seg.username!)">
-                      @{{ seg.username }}
-                      <span class="absolute bottom-full left-0 mb-2 z-50 w-40 bg-brand-card border border-brand-border rounded-xl p-2.5 shadow-2xl opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 transition-all duration-150 pointer-events-none whitespace-normal">
-                        <span class="font-bold text-white text-xs block">@{{ seg.username }}</span>
-                        <span class="text-[10px] text-brand-muted mt-0.5 block">Нажми, чтобы открыть</span>
-                      </span>
-                    </span>
-                  </template>
-                </p>
-                <div v-if="post.media_urls && post.media_urls.length" class="grid gap-2 mb-4"
-                  :class="post.media_urls.length === 1 ? 'grid-cols-1' : post.media_urls.length === 2 ? 'grid-cols-2' : 'grid-cols-3'">
-                  <img v-for="(url, i) in post.media_urls" :key="i" :src="url"
-                    class="w-full rounded-2xl object-cover max-h-[400px] border border-brand-border cursor-pointer hover:opacity-90"
-                    @click="openLightbox(post.media_urls, i)" />
-                </div>
-                <!-- Tags below images in bookmarks -->
-                <div v-if="post.category || (post.tags && post.tags.length)" class="flex flex-wrap gap-1.5 mt-3">
-                  <span v-if="post.category" class="px-3 py-1 bg-brand-accent/20 text-brand-accent text-xs font-bold rounded-full border border-brand-accent/30">
-                    {{ langStore.t[post.category as keyof typeof langStore.t] || post.category }}
-                  </span>
-                  <span v-for="tag in post.tags" :key="tag.tag?.id ?? tag"
-                    class="px-3 py-1 bg-brand-bg text-brand-muted text-xs font-medium rounded-full border border-brand-border">
-                    #{{ tag.tag?.name ?? tag }}
-                  </span>
-                </div>
-              </div>
-            </div>
+            <PostCard
+              v-for="post in bookmarkedPosts"
+              :key="post.id"
+              :post="post"
+              @deleted="(id: string) => { bookmarkedPosts = bookmarkedPosts.filter((p: any) => p.id !== id) }"
+              @updated="(p: any) => { const idx = bookmarkedPosts.findIndex((x: any) => x.id === p.id); if (idx !== -1) bookmarkedPosts[idx] = p }"
+            />
           </div>
         </div>
 
@@ -945,7 +657,8 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
             <div v-for="story in stories" :key="story.id" class="flex flex-col items-center gap-1.5 cursor-pointer" @click="openStory(story)">
               <div class="relative">
                 <div class="w-16 h-16 rounded-2xl p-[2px] bg-gradient-to-tr from-brand-accent to-brand-purple">
-                  <img :src="story.user.avatar_url || `https://ui-avatars.com/api/?name=${story.user.username}&background=random`" class="w-full h-full rounded-xl border-2 border-brand-card object-cover" />
+                  <img v-if="story.user.avatar_url" :src="story.user.avatar_url" class="w-full h-full rounded-xl border-2 border-brand-card object-cover" />
+                  <div v-else class="w-full h-full rounded-xl border-2 border-brand-card bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-lg">{{ (story.user.username ?? '?')[0].toUpperCase() }}</div>
                 </div>
               </div>
               <span class="text-[10px] font-semibold text-brand-muted max-w-[64px] truncate">{{ story.user.username }}</span>
@@ -968,7 +681,8 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
             @click="showPostForm = true"
             class="w-full flex items-center gap-3 px-5 py-4 text-left group"
           >
-            <img :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" />
+            <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" />
+            <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
             <span class="flex-1 text-sm text-brand-muted bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">Что нового?</span>
             <div class="flex items-center gap-2 text-brand-muted group-hover:text-white transition-colors ml-1">
               <BIcon name="ImagePlus" class="w-4.5 h-4.5" />
@@ -980,7 +694,8 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
           <div v-else class="p-5 space-y-4">
             <!-- Author + textarea + send -->
             <div class="flex items-start gap-3">
-              <img :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 mt-0.5" />
+              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 mt-0.5" />
+              <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
               <div class="flex-1 min-w-0">
                 <MentionTextarea
                   v-model="newPost.content"
@@ -1181,181 +896,16 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
         </div>
 
         <div v-else class="space-y-4">
-          <div v-for="post in posts" :key="post.id"
-            :ref="(el) => setPostRef(el, post.id)"
-            class="post-card bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all">
-
-            <div class="p-5 md:p-6">
-              <!-- Header -->
-              <div class="flex items-start justify-between gap-3 mb-4">
-                <div class="flex items-center gap-3 min-w-0 cursor-pointer" @click="router.push(`/profile/${post.author.id}`)">
-                  <div class="relative flex-shrink-0">
-                    <img
-                      :src="post.author.avatar_url || `https://ui-avatars.com/api/?name=${post.author.username}&background=random`"
-                      class="w-11 h-11 rounded-full object-cover border border-brand-border"
-                    />
-                    <button
-                      v-if="auth.user && post.author.id !== auth.user?.id && followStatus[post.author.id] === false"
-                      @click.stop="toggleFollow(post.author.id)"
-                      class="absolute -bottom-1 -right-1 w-5 h-5 bg-brand-accent rounded-full flex items-center justify-center border-2 border-brand-card hover:bg-brand-accent-plus transition-colors"
-                      title="Подписаться"
-                    >
-                      <BIcon name="Plus" class="w-3 h-3 text-white" />
-                    </button>
-                  </div>
-                  <div class="min-w-0">
-                    <h4 class="font-bold text-white truncate hover:text-brand-accent">{{ post.author.display_name || post.author.username }}</h4>
-                    <p class="text-xs text-brand-muted truncate">@{{ post.author.username }} · {{ formatDate(post.created_at) }}</p>
-                  </div>
-                </div>
-
-                <div class="flex items-center gap-2 flex-shrink-0">
-                  <span
-                    v-if="post.is_nsfw"
-                    class="px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide bg-brand-error/15 text-brand-error border border-brand-error/30"
-                  >
-                    NSFW
-                  </span>
-                  <div class="relative">
-                    <button @click="openPostMenu(post.id, $event)" class="text-brand-muted hover:text-white p-2 rounded-full hover:bg-white/5">
-                      <BIcon name="MoreHorizontal" class="w-5 h-5" />
-                    </button>
-                    <div v-if="openMenuId === post.id"
-                      class="absolute right-0 top-10 z-30 w-48 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1">
-                      <button v-if="post.author.id === auth.user?.id" @click="startEditPost(post)"
-                        class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5">
-                        <BIcon name="Pencil" class="w-4 h-4 text-brand-accent" />{{ langStore.t.editPost }}
-                      </button>
-                      <button v-if="post.author.id === auth.user?.id" @click="deletePostAction(post.id)"
-                        class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10">
-                        <BIcon name="Trash2" class="w-4 h-4" />{{ langStore.t.deletePost }}
-                      </button>
-                      <button @click="reportPost(post.id)"
-                        class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-muted hover:bg-white/5 hover:text-white">
-                        <BIcon name="Flag" class="w-4 h-4" />{{ langStore.t.report }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Content -->
-              <div class="space-y-3">
-                <div :class="{'blur-md hover:blur-none cursor-pointer': post.is_nsfw}">
-                  <div v-if="editingPostId === post.id" class="mb-1">
-                    <textarea v-model="editContent" autofocus
-                      class="w-full bg-brand-bg border border-brand-accent/50 rounded-2xl px-4 py-3 text-white text-[15px] leading-relaxed resize-none outline-none min-h-[90px] focus:border-brand-accent"></textarea>
-                    <div class="flex gap-2 mt-2 justify-end">
-                      <button @click="cancelEdit" class="px-4 py-1.5 text-sm text-brand-muted hover:text-white hover:bg-white/5 rounded-xl">{{ langStore.t.cancel }}</button>
-                      <button @click="saveEditPost(post.id)" class="px-4 py-1.5 text-sm bg-brand-accent text-white font-bold rounded-xl hover:bg-brand-accent-plus">Сохранить</button>
-                    </div>
-                  </div>
-
-                  <p v-else class="text-white/95 text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap">
-                    <template v-for="seg in parseMentions(post.content)" :key="seg.key">
-                      <span v-if="seg.type === 'text'">{{ seg.text }}</span>
-                      <span v-else
-                        class="inline-flex items-center gap-0.5 px-2 py-0.5 bg-brand-accent/15 border border-brand-accent/30 rounded-full text-brand-accent text-sm font-semibold cursor-pointer hover:bg-brand-accent/25 transition-all group relative align-baseline"
-                        @click.stop="goToMention(seg.username!)">
-                        @{{ seg.username }}
-                        <span class="absolute bottom-full left-0 mb-2 z-50 w-40 bg-brand-card border border-brand-border rounded-xl p-2.5 shadow-2xl opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 transition-all duration-150 pointer-events-none whitespace-normal">
-                          <span class="font-bold text-white text-xs block">@{{ seg.username }}</span>
-                          <span class="text-[10px] text-brand-muted mt-0.5 block">Нажми, чтобы открыть</span>
-                        </span>
-                      </span>
-                    </template>
-                  </p>
-                </div>
-
-                <div v-if="post.media_urls && post.media_urls.length" class="grid gap-2"
-                  :class="post.media_urls.length === 1 ? 'grid-cols-1' : post.media_urls.length === 2 ? 'grid-cols-2' : 'grid-cols-3'">
-                  <img
-                    v-for="(url, i) in post.media_urls"
-                    :key="i"
-                    :src="url"
-                    class="w-full rounded-2xl object-cover max-h-[520px] border border-brand-border cursor-pointer hover:opacity-90"
-                    @click="openLightbox(post.media_urls, i)"
-                  />
-                </div>
-              </div>
-
-              <!-- Meta -->
-              <div class="flex flex-wrap items-center gap-1.5 mt-4 mb-3">
-                <span v-if="post.category" class="px-3 py-1 bg-brand-accent/20 text-brand-accent text-xs font-bold rounded-full border border-brand-accent/30">
-                  {{ langStore.t[post.category as keyof typeof langStore.t] || post.category }}
-                </span>
-                <span v-for="tag in post.tags" :key="tag.tag.id"
-                  class="px-3 py-1 bg-brand-bg text-brand-muted text-xs font-medium rounded-full border border-brand-border hover:bg-brand-border hover:text-white cursor-pointer">
-                  #{{ tag.tag.name }}
-                </span>
-              </div>
-
-              <!-- Actions -->
-              <div class="flex items-center justify-between pt-4 border-t border-brand-border">
-                <div class="flex items-center gap-2">
-                  <div class="flex items-center gap-1 bg-brand-bg rounded-full p-1 border border-brand-border">
-                    <button @click="votePost(post.id, 1)"
-                      class="p-1 rounded-full transition-all duration-150"
-                      :class="postStatus[post.id]?.userVote === 1
-                        ? 'bg-brand-success/25 text-brand-success shadow-[0_0_8px_0px] shadow-brand-success/40'
-                        : 'text-brand-muted hover:bg-brand-success/20 hover:text-brand-success'">
-                      <BIcon name="ArrowUp" class="w-4 h-4" />
-                    </button>
-                    <span class="font-bold text-sm min-w-[28px] text-center"
-                      :class="postStatus[post.id]?.userVote === 1 ? 'text-emerald-400' : postStatus[post.id]?.userVote === -1 ? 'text-rose-400' : post.rating > 0 ? 'text-emerald-400' : post.rating < 0 ? 'text-rose-400' : 'text-white'">
-                      {{ post.rating }}
-                    </span>
-                    <button @click="votePost(post.id, -1)"
-                      class="p-1 rounded-full transition-all duration-150"
-                      :class="postStatus[post.id]?.userVote === -1
-                        ? 'bg-rose-500/25 text-rose-400 shadow-[0_0_8px_0px] shadow-rose-500/40'
-                        : 'text-brand-muted hover:bg-rose-500/20 hover:text-rose-400'">
-                      <BIcon name="ArrowDown" class="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <button @click="toggleRepaw(post.id)"
-                    class="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-semibold border"
-                    :class="postStatus[post.id]?.repawed
-                      ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
-                      : 'bg-brand-bg border-brand-border text-brand-muted hover:text-brand-accent hover:border-brand-accent/30'"
-                    :title="langStore.t.repaw">
-                    <BIcon name="Repeat2" class="w-4 h-4" />
-                    <span class="text-sm">{{ postStatus[post.id]?.repawCount ?? post._count?.repaws ?? 0 }}</span>
-                  </button>
-
-                  <button @click="toggleComments(post.id)"
-                    class="flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-xs"
-                    :class="expandedComments.has(post.id)
-                      ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
-                      : 'bg-brand-bg border-brand-border text-brand-muted hover:text-white'">
-                    <BIcon name="MessageSquare" class="w-4 h-4" />
-                    <span>{{ post._count?.comments ?? 0 }}</span>
-                  </button>
-                </div>
-
-                <div class="flex items-center gap-1">
-                  <button @click="toggleFavourite(post.id)"
-                    class="p-2 rounded-full border"
-                    :class="postStatus[post.id]?.favourited
-                      ? 'bg-brand-yellow/15 border-brand-yellow/40 text-brand-yellow'
-                      : 'bg-brand-bg border-brand-border text-brand-muted hover:text-brand-yellow hover:border-brand-yellow/30'"
-                    :title="langStore.t.favourite">
-                    <BIcon :name="postStatus[post.id]?.favourited ? 'BookmarkCheck' : 'Bookmark'" class="w-4.5 h-4.5" />
-                  </button>
-                  <button @click="sharePost(post.id)"
-                    class="p-2 rounded-full bg-brand-bg border border-brand-border text-brand-muted hover:text-brand-accent hover:border-brand-accent/30"
-                    :title="langStore.t.share">
-                    <BIcon name="Share2" class="w-4.5 h-4.5" />
-                  </button>
-                </div>
-              </div>
-
-              <div v-if="expandedComments.has(post.id)" class="mt-4 pt-4 border-t border-brand-border px-0">
-                <PostComments :post-id="post.id" />
-              </div>
-            </div>
-          </div>
+          <PostCard
+            v-for="post in posts"
+            :key="post.id"
+            :ref="(el: any) => setPostRef(el?.$el ?? el, post.id)"
+            :post="post"
+            :show-follow-button="true"
+            :initial-following="followStatus[post.author.id] ?? null"
+            @deleted="(id: string) => { posts = posts.filter(p => p.id !== id) }"
+            @updated="(p: any) => { const idx = posts.findIndex((x: any) => x.id === p.id); if (idx !== -1) posts[idx] = p }"
+          />
         </div>
 
         </template><!-- /v-else main feed -->
@@ -1418,9 +968,14 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
               <!-- Avatar -->
               <div class="relative flex-shrink-0">
                 <img
-                  :src="user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`"
+                  v-if="user.avatar_url"
+                  :src="user.avatar_url"
                   class="w-10 h-10 rounded-full object-cover border-2 border-brand-border group-hover:border-brand-accent/40 transition-colors"
                 />
+                <div v-else
+                  class="w-10 h-10 rounded-full border-2 border-brand-border group-hover:border-brand-accent/40 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm transition-colors">
+                  {{ (user.display_name || user.username || '?')[0].toUpperCase() }}
+                </div>
               </div>
 
               <!-- Name + username -->
@@ -1508,128 +1063,6 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
     </Teleport>
 
     <!-- ═══════════════════════════════════════════════════════════════════
-         SEARCH MODAL
-    ═══════════════════════════════════════════════════════════════════ -->
-    <Teleport to="body">
-      <Transition name="modal-fade">
-        <div v-if="showSearchModal" class="fixed inset-0 z-[500] flex items-start justify-center pt-[10vh] px-4" @click.self="closeSearchModal">
-          <!-- Backdrop -->
-          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="closeSearchModal"></div>
-
-          <!-- Panel -->
-          <div class="relative w-full max-w-2xl bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden flex flex-col" style="max-height: 78vh">
-            <!-- Search input row -->
-            <div class="flex items-center gap-3 px-5 py-4 border-b border-brand-border flex-shrink-0">
-              <BIcon name="Search" class="h-5 w-5 text-brand-muted flex-shrink-0" />
-              <input
-                id="search-modal-input"
-                type="text"
-                v-model="searchModalQuery"
-                @input="onSearchModalInput"
-                @keydown.esc="closeSearchModal"
-                :placeholder="langStore.t.search"
-                class="flex-1 bg-transparent text-white placeholder-brand-muted text-base outline-none"
-              />
-              <button @click="closeSearchModal" class="p-1 text-brand-muted hover:text-white transition-colors">
-                <BIcon name="X" class="h-5 w-5" />
-              </button>
-            </div>
-
-            <!-- Tabs -->
-            <div class="flex items-center gap-1 px-5 pt-3 pb-2 border-b border-brand-border flex-shrink-0">
-              <button
-                v-for="tab in ([{ id: 'posts', icon: 'FileText', label: 'Посты' }, { id: 'accounts', icon: 'Users', label: 'Аккаунты' }] as const)"
-                :key="tab.id"
-                @click="searchModalTab = tab.id"
-                :class="[
-                  'flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-semibold transition-all',
-                  searchModalTab === tab.id ? 'bg-brand-accent text-white shadow-sm' : 'text-brand-muted hover:text-white hover:bg-white/5'
-                ]"
-              >
-                <BIcon :name="tab.icon" class="h-4 w-4" />
-                {{ tab.label }}
-              </button>
-            </div>
-
-            <!-- Results -->
-            <div class="flex-1 overflow-y-auto">
-              <!-- Empty state -->
-              <div v-if="!searchModalQuery.trim()" class="flex flex-col items-center justify-center py-16 text-brand-muted">
-                <BIcon name="Search" class="h-10 w-10 mb-3 opacity-30" />
-                <p class="text-sm">Начните вводить запрос...</p>
-              </div>
-
-              <!-- Loading -->
-              <div v-else-if="searchModalLoading" class="flex items-center justify-center py-12">
-                <BIcon name="Loader2" class="h-6 w-6 text-brand-accent animate-spin" />
-              </div>
-
-              <!-- Posts tab -->
-              <template v-else-if="searchModalTab === 'posts'">
-                <div v-if="searchModalPosts.length === 0" class="flex flex-col items-center justify-center py-14 text-brand-muted">
-                  <BIcon name="FileSearch" class="h-8 w-8 mb-2 opacity-30" />
-                  <p class="text-sm">Постов не найдено</p>
-                </div>
-                <div v-else>
-                  <button
-                    v-for="post in searchModalPosts"
-                    :key="post.id"
-                    @click="searchGoToPost(post.id)"
-                    class="w-full flex items-start gap-3 px-5 py-3.5 hover:bg-white/5 transition-colors text-left border-b border-brand-border/50 last:border-0"
-                  >
-                    <img :src="post.author?.avatar_url || `https://ui-avatars.com/api/?name=${post.author?.username ?? 'U'}&background=random`"
-                      class="w-9 h-9 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5" />
-                    <div class="min-w-0 flex-1">
-                      <div class="flex items-center gap-2 mb-0.5">
-                        <span class="text-sm font-semibold text-white">{{ post.author?.display_name || post.author?.username }}</span>
-                        <span class="text-xs text-brand-muted">@{{ post.author?.username }}</span>
-                        <span v-if="post.is_nsfw" class="text-[10px] font-bold bg-brand-error/20 text-brand-error px-1.5 py-0.5 rounded-full">NSFW</span>
-                      </div>
-                      <p class="text-sm text-brand-muted line-clamp-2 leading-snug">{{ post.content }}</p>
-                      <div v-if="post.tags?.length" class="flex flex-wrap gap-1 mt-1.5">
-                        <span v-for="tag in post.tags.slice(0,4)" :key="tag" class="text-[11px] text-brand-accent">#{{ tag }}</span>
-                      </div>
-                    </div>
-                    <div v-if="post.media_urls?.length" class="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 border border-brand-border">
-                      <img :src="post.media_urls[0]" class="w-full h-full object-cover" />
-                    </div>
-                  </button>
-                </div>
-              </template>
-
-              <!-- Accounts tab -->
-              <template v-else-if="searchModalTab === 'accounts'">
-                <div v-if="searchModalUsers.length === 0" class="flex flex-col items-center justify-center py-14 text-brand-muted">
-                  <BIcon name="UserSearch" class="h-8 w-8 mb-2 opacity-30" />
-                  <p class="text-sm">Аккаунты не найдены</p>
-                </div>
-                <div v-else>
-                  <button
-                    v-for="user in searchModalUsers"
-                    :key="user.id"
-                    @click="searchGoToUser(user.id)"
-                    class="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-white/5 transition-colors text-left border-b border-brand-border/50 last:border-0"
-                  >
-                    <img :src="user.avatar_url || `https://ui-avatars.com/api/?name=${user.username ?? 'U'}&background=random`"
-                      class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0" />
-                    <div class="min-w-0 flex-1">
-                      <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
-                      <p class="text-xs text-brand-muted">@{{ user.username }}</p>
-                      <p v-if="user.bio" class="text-xs text-brand-muted/70 mt-0.5 line-clamp-1">{{ user.bio }}</p>
-                    </div>
-                    <div class="flex-shrink-0 text-xs text-brand-muted">
-                      <span class="font-bold text-white">{{ user._count?.followers ?? 0 }}</span> подписчиков
-                    </div>
-                  </button>
-                </div>
-              </template>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- ═══════════════════════════════════════════════════════════════════
          MOBILE SEARCH / MENU PANEL (slide-up)
     ═══════════════════════════════════════════════════════════════════ -->
     <Teleport to="body">
@@ -1706,8 +1139,9 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
                   <div v-for="user in recommendedUsers" :key="user.id"
                     class="flex items-center gap-3 p-3 rounded-2xl bg-brand-bg border border-brand-border hover:bg-brand-border cursor-pointer"
                     @click="closeMobileSearch(); router.push(`/profile/${user.id}`)">
-                    <img :src="user.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`"
+                    <img v-if="user.avatar_url" :src="user.avatar_url"
                       class="w-9 h-9 rounded-full object-cover border border-brand-border flex-shrink-0" />
+                    <div v-else class="w-9 h-9 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (user.display_name || user.username || '?')[0].toUpperCase() }}</div>
                     <div class="flex-1 min-w-0">
                       <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
                       <p class="text-xs text-brand-muted">@{{ user.username }}</p>
@@ -1830,7 +1264,8 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
             <div class="h-1 bg-brand-accent rounded-full" :style="{ width: storyProgress + '%' }"></div>
           </div>
           <div class="flex items-center gap-3 mb-4 px-1">
-            <img :src="activeStory.user?.avatar_url || `https://ui-avatars.com/api/?name=${activeStory.user?.username}&background=random`" class="w-10 h-10 rounded-full border-2 border-purple-500 object-cover" />
+            <img v-if="activeStory.user?.avatar_url" :src="activeStory.user.avatar_url" class="w-10 h-10 rounded-full border-2 border-purple-500 object-cover" />
+            <div v-else class="w-10 h-10 rounded-full border-2 border-purple-500 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (activeStory.user?.username ?? '?')[0].toUpperCase() }}</div>
             <span class="font-bold text-white text-sm">{{ activeStory.user?.username }}</span>
             <span class="text-xs text-white/50 ml-auto">{{ formatDate(activeStory.created_at) }}</span>
           </div>

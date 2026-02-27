@@ -80,3 +80,28 @@ export const getSubscriptionFeedHandler = async (
     return reply.code(500).send({ success: false, data: null, error: { code: 'FEED_ERROR', message: e.message } });
   }
 };
+
+export const getFriendsHandler = async (
+  req: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const users = await followsService.getFriends(req.params.id);
+    return reply.send({ success: true, data: { users }, error: null });
+  } catch (e: any) {
+    return reply.code(500).send({ success: false, data: null, error: { code: 'FRIENDS_ERROR', message: e.message } });
+  }
+};
+
+export const getRelationStatusHandler = async (
+  req: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: viewerId } = req.user as JwtUser;
+    const result = await followsService.isFriends(viewerId, req.params.id);
+    return reply.send({ success: true, data: result, error: null });
+  } catch (e: any) {
+    return reply.code(500).send({ success: false, data: null, error: { code: 'RELATION_ERROR', message: e.message } });
+  }
+};

@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { createPostHandler, votePostHandler, getPostsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler } from './controller.js';
+import { createPostHandler, votePostHandler, getPostsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler } from './controller.js';
 
 // The authenticate decorator is declared in auth/routes.ts; this re-declaration
 // merges into the same global FastifyInstance augmentation via TypeScript.
@@ -62,6 +62,11 @@ export async function postsRoutes(fastify: FastifyInstance) {
   fastify.patch('/:id', { onRequest: [fastify.authenticate] }, editPostHandler);
   fastify.get('/trending-tags', getTrendingTagsHandler);
   fastify.get('/status', { onRequest: [fastify.authenticate] }, getUserPostStatusHandler);
+  // User-specific endpoints (must come before /:id)
+  fastify.get('/user/:userId', getUserPostsHandler);
+  fastify.get('/user/:userId/media', getUserMediaPostsHandler);
+  fastify.get('/user/:userId/repaws', getUserRepawsHandler);
+  fastify.get('/user/:userId/likes', getUserFavouritesHandler);
   fastify.get('/', { schema: getPostsSchema }, getPostsHandler);
   fastify.get('/personalized', { onRequest: [fastify.authenticate] }, getPersonalizedPostsHandler);
 }

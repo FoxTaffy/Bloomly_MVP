@@ -239,3 +239,55 @@ export const deleteCommentHandler = async (
     return reply.code(code).send({ success: false, data: null, error: { code: 'DELETE_COMMENT_ERROR', message } });
   }
 };
+
+export const getUserPostsHandler = async (
+  request: FastifyRequest<{ Params: { userId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const posts = await postService.getUserPosts(request.params.userId);
+    return reply.send({ success: true, data: { posts }, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch user posts';
+    return reply.code(500).send({ success: false, data: null, error: { code: 'USER_POSTS_ERROR', message } });
+  }
+};
+
+export const getUserMediaPostsHandler = async (
+  request: FastifyRequest<{ Params: { userId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const posts = await postService.getUserMediaPosts(request.params.userId);
+    return reply.send({ success: true, data: { posts }, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch user media posts';
+    return reply.code(500).send({ success: false, data: null, error: { code: 'USER_MEDIA_ERROR', message } });
+  }
+};
+
+export const getUserRepawsHandler = async (
+  request: FastifyRequest<{ Params: { userId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const posts = await postService.getUserRepawedPosts(request.params.userId);
+    return reply.send({ success: true, data: { posts }, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch user repaws';
+    return reply.code(500).send({ success: false, data: null, error: { code: 'USER_REPAWS_ERROR', message } });
+  }
+};
+
+export const getUserFavouritesHandler = async (
+  request: FastifyRequest<{ Params: { userId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const posts = await postService.getUserFavouritePosts(request.params.userId);
+    return reply.send({ success: true, data: { posts }, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch user likes';
+    return reply.code(500).send({ success: false, data: null, error: { code: 'USER_LIKES_ERROR', message } });
+  }
+};
