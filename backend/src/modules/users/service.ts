@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma.js';
+import { deleteFileByUrl } from '../media/service.js';
 import type { UpdateUserInput } from './types.js';
 
 // Fields exposed in public profile responses (never email, password, role)
@@ -21,9 +22,17 @@ const PUBLIC_SELECT = {
   pronouns:        true,
   job_title:            true,
   relationship_status:  true,
+  relationship_with:    true,
   country:              true,
+  fursona_name:         true,
+  fursona_color:        true,
+  fursona_photo_url:    true,
+  birth_date:           true,
+  relationship_since:   true,
   pinned_post_id:       true,
   role:                 true,
+  social_links:         true,
+  interests:            true,
 } as const;
 
 export const usersService = {
@@ -47,10 +56,48 @@ export const usersService = {
   },
 
   async updateUser(id: string, data: UpdateUserInput) {
+    // ── Fetch current media URLs before overwriting ─────────────────────
+    const current = await prisma.user.findUnique({
+      where: { id, deleted_at: null },
+      select: { avatar_url: true, banner_url: true },
+    });
+
+    if (current) {
+      const historyEntries: { user_id: string; type: string; url: string }[] = [];
+
+      // If avatar is actually changing (new non-empty value, different from current)
+      const newAvatar = (data as any).avatar_url;
+      if (typeof newAvatar === 'string' && newAvatar && newAvatar !== current.avatar_url && current.avatar_url) {
+        historyEntries.push({ user_id: id, type: 'avatar', url: current.avatar_url });
+        // Delete old file from MinIO (best-effort, non-blocking)
+        deleteFileByUrl(current.avatar_url).catch(() => {});
+      }
+
+      // If banner is actually changing
+      const newBanner = (data as any).banner_url;
+      if (typeof newBanner === 'string' && newBanner && newBanner !== current.banner_url && current.banner_url) {
+        historyEntries.push({ user_id: id, type: 'banner', url: current.banner_url });
+        deleteFileByUrl(current.banner_url).catch(() => {});
+      }
+
+      if (historyEntries.length > 0) {
+        await prisma.mediaHistory.createMany({ data: historyEntries });
+      }
+    }
+
     return prisma.user.update({
       where: { id, deleted_at: null },
       data,
       select: PUBLIC_SELECT,
+    });
+  },
+
+  async getMediaHistory(userId: string, type?: 'avatar' | 'banner', limit = 20) {
+    return prisma.mediaHistory.findMany({
+      where: { user_id: userId, ...(type ? { type } : {}) },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      select: { id: true, type: true, url: true, created_at: true },
     });
   },
 
@@ -103,9 +150,17 @@ export const usersService = {
   },
 
   async getRecommendedUsers(currentUserId: string, limit = 4) {
-    // Grab users who have posted recently, excluding self
+    // Exclude current user + everyone they already follow
+    const followingRows = await prisma.follow.findMany({
+      where: { follower_id: currentUserId },
+      select: { following_id: true },
+    });
+    const excludeIds = new Set(followingRows.map((r) => r.following_id));
+    excludeIds.add(currentUserId);
+
+    // Grab users who have posted recently, excluding self and already-followed
     const active = await prisma.post.findMany({
-      where: { deleted_at: null, author_id: { not: currentUserId } },
+      where: { deleted_at: null, author_id: { notIn: Array.from(excludeIds) } },
       orderBy: { created_at: 'desc' },
       select: { author: { select: PUBLIC_SELECT } },
       distinct: ['author_id'],
@@ -113,9 +168,9 @@ export const usersService = {
     });
     const authors = active.map((p) => p.author);
     if (authors.length >= limit) return authors;
-    // Fill remainder with newest users
+    // Fill remainder with newest users not yet in the list
     const existingIds = new Set(authors.map((u) => u.id));
-    existingIds.add(currentUserId);
+    excludeIds.forEach((id) => existingIds.add(id));
     const extras = await prisma.user.findMany({
       where: { id: { notIn: Array.from(existingIds) }, deleted_at: null },
       select: PUBLIC_SELECT,

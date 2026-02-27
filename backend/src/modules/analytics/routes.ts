@@ -1,6 +1,7 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, RouteShorthandOptions } from 'fastify';
 import { trackActivityHandler } from './controller.js';
 
 export default async function analyticsRoutes(fastify: FastifyInstance) {
-  fastify.post('/track', { onRequest: [fastify.authenticate] }, trackActivityHandler);
+  const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
+  fastify.post('/track', auth, trackActivityHandler as any);
 }

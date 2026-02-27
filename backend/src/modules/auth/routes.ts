@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { registerHandler, loginHandler } from './controller.js';
 import type { JwtPayload } from './types.js';
+import prisma from '../../config/prisma.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -47,7 +48,6 @@ export async function authRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const payload = request.user as JwtPayload;
       // Fetch full user record so the client always gets username, display_name, avatar_url, etc.
-      const prisma = (await import('../../config/prisma.js')).default;
       const user = await prisma.user.findUnique({
         where: { id: payload.id },
         select: {

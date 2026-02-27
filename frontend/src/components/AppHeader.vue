@@ -82,6 +82,8 @@ const notifTypeLabel = (type: string) => {
     REPAW: 'репостнул(а) вашу публикацию',
     FOLLOW: 'подписался(ась) на вас',
     MENTION: 'упомянул(а) вас',
+    RELATIONSHIP_REQUEST:  'хочет быть вашим партнёром 💕',
+    RELATIONSHIP_ACCEPTED: 'принял(а) ваш запрос в отношения ❤️',
     like: 'лайкнул(а) вашу публикацию',
     comment: 'прокомментировал(а) вашу публикацию',
     repaw: 'репостнул(а) вашу публикацию',
@@ -89,6 +91,46 @@ const notifTypeLabel = (type: string) => {
     mention: 'упомянул(а) вас',
   }
   return map[type] ?? type
+}
+
+// ── Relationship request actions ──────────────────────────────────────────────
+const relActionLoading = ref<Record<string, boolean>>({})
+
+const acceptRelationship = async (n: any) => {
+  const reqId = n.ref_id
+  if (!reqId) return
+  relActionLoading.value[n.id] = true
+  try {
+    await api.post(`/relationships/${reqId}/accept`)
+    n._relDone = 'accepted'
+    unreadCount.value = Math.max(0, unreadCount.value - 1)
+  } catch (e: any) {
+    alert(e?.response?.data?.error?.message ?? 'Ошибка')
+  } finally { relActionLoading.value[n.id] = false }
+}
+
+const declineRelationship = async (n: any) => {
+  const reqId = n.ref_id
+  if (!reqId) return
+  relActionLoading.value[n.id] = true
+  try {
+    await api.post(`/relationships/${reqId}/decline`)
+    n._relDone = 'declined'
+  } catch (e: any) {
+    alert(e?.response?.data?.error?.message ?? 'Ошибка')
+  } finally { relActionLoading.value[n.id] = false }
+}
+
+const onNotifClick = async (n: any) => {
+  if (n.type === 'RELATIONSHIP_REQUEST') return
+  showNotifications.value = false
+  if (!n.is_read) {
+    n.is_read = true
+    unreadCount.value = Math.max(0, unreadCount.value - 1)
+    try { await api.post('/notifications/read', {}) } catch {}
+  }
+  if (n.post_id) { router.push(`/post/${n.post_id}`); return }
+  if (n.sender?.id) router.push(`/profile/${n.sender.id}`)
 }
 
 // ── Search modal ──────────────────────────────────────────────────────────────
@@ -222,8 +264,9 @@ onUnmounted(() => {
             <div class="max-h-80 overflow-y-auto">
               <div v-if="notifications.length === 0" class="py-8 text-center text-brand-muted text-sm">Нет уведомлений</div>
               <div v-for="n in notifications" :key="n.id"
-                class="flex items-start gap-3 px-4 py-3 border-b border-brand-border/50 transition hover:bg-brand-border/30"
-                :class="!n.is_read ? 'bg-brand-accent/5' : ''">
+                class="flex items-start gap-3 px-4 py-3 border-b border-brand-border/50 transition hover:bg-brand-border/30 cursor-pointer"
+                :class="!n.is_read ? 'bg-brand-accent/5' : ''"
+                @click="onNotifClick(n)">
                 <img v-if="n.sender?.avatar_url" :src="n.sender.avatar_url"
                   class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5" />
                 <div v-else class="w-8 h-8 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs">{{ (n.sender?.display_name || n.sender?.username || '?')[0].toUpperCase() }}</div>
@@ -233,6 +276,19 @@ onUnmounted(() => {
                     {{ ' ' }}{{ notifTypeLabel(n.type) }}
                   </p>
                   <p class="text-xs text-brand-muted mt-0.5">{{ formatDate(n.created_at) }}</p>
+                  <!-- Relationship request accept / decline -->
+                  <div v-if="n.type === 'RELATIONSHIP_REQUEST' && !n._relDone" class="flex gap-2 mt-2">
+                    <button @click.stop="acceptRelationship(n)" :disabled="relActionLoading[n.id]"
+                      class="flex-1 py-1 rounded-lg bg-pink-500 hover:bg-pink-400 disabled:opacity-50 text-white text-xs font-bold transition-colors">
+                      Принять
+                    </button>
+                    <button @click.stop="declineRelationship(n)" :disabled="relActionLoading[n.id]"
+                      class="flex-1 py-1 rounded-lg bg-brand-bg border border-brand-border hover:border-brand-muted disabled:opacity-50 text-brand-muted hover:text-white text-xs font-semibold transition-colors">
+                      Отклонить
+                    </button>
+                  </div>
+                  <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'accepted'" class="text-xs text-pink-400 mt-1 font-semibold">❤️ Вы приняли запрос</p>
+                  <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'declined'" class="text-xs text-brand-muted mt-1">❌ Запрос отклонён</p>
                 </div>
                 <div v-if="!n.is_read" class="w-2 h-2 bg-brand-accent rounded-full flex-shrink-0 mt-1.5"></div>
               </div>

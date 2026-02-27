@@ -31,20 +31,22 @@ export const postService = {
       });
 
       if (tags.length > 0) {
-        for (const tagName of tags) {
-          const tag = await tx.tag.upsert({
-            where: { name: tagName },
-            update: {},
-            create: { name: tagName },
-          });
-          
-          await tx.postTag.create({
-            data: {
-              post_id: post.id,
-              tag_id: tag.id,
-            }
-          });
-        }
+        // Upsert all tags in parallel, then link them in parallel
+        const tagRecords = await Promise.all(
+          tags.map((tagName) =>
+            tx.tag.upsert({
+              where: { name: tagName },
+              update: {},
+              create: { name: tagName },
+            })
+          ),
+        );
+
+        await Promise.all(
+          tagRecords.map((tag) =>
+            tx.postTag.create({ data: { post_id: post.id, tag_id: tag.id } })
+          ),
+        );
       }
 
       return tx.post.findUnique({
@@ -56,6 +58,18 @@ export const postService = {
         },
       });
     });
+  },
+
+  async getPostById(postId: string) {
+    const post = await prisma.post.findUnique({
+      where: { id: postId, deleted_at: null },
+      include: {
+        author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        tags: { include: { tag: true } },
+        _count: { select: { votes: true, repaws: true, comments: true } },
+      },
+    });
+    return post;
   },
 
   async getPosts(query: GetPostsQuery = {}) {
@@ -86,6 +100,7 @@ export const postService = {
     return prisma.post.findMany({
       where,
       orderBy: sort === 'hot' ? { rating: 'desc' } : { created_at: 'desc' },
+      take: 50,
       include: {
         author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
@@ -224,11 +239,9 @@ export const postService = {
         },
       });
 
-      // Fire LIKE notification when a net new upvote is cast (not a retraction / flip-to-down)
+      // Fire LIKE notification when a net new upvote is cast (not a retraction)
       const isNewUpvote = value === 1 && updated.author_id !== userId;
       if (isNewUpvote) {
-        const wasPreviousRetraction = existingVote && existingVote.deleted_at !== null && existingVote.value !== 1;
-        const isFlipFromDown = existingVote && existingVote.deleted_at === null && existingVote.value === -1;
         const isRetraction = existingVote && existingVote.deleted_at === null && existingVote.value === value;
         if (!isRetraction) {
           notificationService.create({
@@ -245,29 +258,32 @@ export const postService = {
   },
 
   async toggleRepaw(userId: string, postId: string) {
-    const existing = await prisma.repaw.findUnique({
-      where: { user_id_post_id: { user_id: userId, post_id: postId } },
-    });
+    return prisma.$transaction(async (tx) => {
+      const existing = await tx.repaw.findUnique({
+        where: { user_id_post_id: { user_id: userId, post_id: postId } },
+      });
 
-    if (existing) {
-      await prisma.repaw.delete({ where: { user_id_post_id: { user_id: userId, post_id: postId } } });
-      const count = await prisma.repaw.count({ where: { post_id: postId } });
-      return { repawed: false, repaw_count: count };
-    } else {
-      await prisma.repaw.create({ data: { user_id: userId, post_id: postId } });
-      const count = await prisma.repaw.count({ where: { post_id: postId } });
-      // Notify post author
-      const post = await prisma.post.findUnique({ where: { id: postId }, select: { author_id: true } });
-      if (post && post.author_id !== userId) {
-        notificationService.create({
-          receiverId: post.author_id,
-          senderId: userId,
-          type: 'REPAW',
-          postId,
-        }).catch(() => {});
+      if (existing) {
+        await tx.repaw.delete({ where: { user_id_post_id: { user_id: userId, post_id: postId } } });
+        const count = await tx.repaw.count({ where: { post_id: postId } });
+        return { repawed: false, repaw_count: count };
+      } else {
+        await tx.repaw.create({ data: { user_id: userId, post_id: postId } });
+        const [count, post] = await Promise.all([
+          tx.repaw.count({ where: { post_id: postId } }),
+          tx.post.findUnique({ where: { id: postId }, select: { author_id: true } }),
+        ]);
+        if (post && post.author_id !== userId) {
+          notificationService.create({
+            receiverId: post.author_id,
+            senderId: userId,
+            type: 'REPAW',
+            postId,
+          }).catch(() => {});
+        }
+        return { repawed: true, repaw_count: count };
       }
-      return { repawed: true, repaw_count: count };
-    }
+    });
   },
 
   async toggleFavourite(userId: string, postId: string) {
@@ -284,10 +300,11 @@ export const postService = {
     }
   },
 
-  async getUserPosts(userId: string) {
+  async getUserPosts(userId: string, take = 50) {
     return prisma.post.findMany({
       where: { author_id: userId, deleted_at: null },
       orderBy: { created_at: 'desc' },
+      take,
       include: {
         author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
@@ -296,10 +313,11 @@ export const postService = {
     });
   },
 
-  async getUserMediaPosts(userId: string) {
+  async getUserMediaPosts(userId: string, take = 50) {
     return prisma.post.findMany({
       where: { author_id: userId, deleted_at: null, media_urls: { isEmpty: false } },
       orderBy: { created_at: 'desc' },
+      take,
       include: {
         author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
@@ -308,10 +326,11 @@ export const postService = {
     });
   },
 
-  async getUserRepawedPosts(userId: string) {
+  async getUserRepawedPosts(userId: string, take = 50) {
     const repaws = await prisma.repaw.findMany({
       where: { user_id: userId },
       orderBy: { created_at: 'desc' },
+      take,
       include: {
         post: {
           include: {
@@ -325,10 +344,11 @@ export const postService = {
     return repaws.map((r) => ({ ...r.post, repawed_at: r.created_at }));
   },
 
-  async getUserFavouritePosts(userId: string) {
+  async getUserFavouritePosts(userId: string, take = 50) {
     const favs = await prisma.favourite.findMany({
       where: { user_id: userId },
       orderBy: { created_at: 'desc' },
+      take,
       include: {
         post: {
           include: {
@@ -385,22 +405,24 @@ export const postService = {
       }).catch(() => {});
     }
 
-    // Notify @mentioned users
+    // Notify @mentioned users in parallel
     const mentions = content.match(/@(\w+)/g);
     if (mentions) {
-      for (const mention of mentions) {
-        const username = mention.slice(1);
-        const mentioned = await prisma.user.findFirst({ where: { username, deleted_at: null }, select: { id: true } });
-        if (mentioned && mentioned.id !== userId) {
-          notificationService.create({
-            receiverId: mentioned.id,
-            senderId: userId,
-            type: 'MENTION',
-            postId,
-            commentId: comment.id,
-          }).catch(() => {});
-        }
-      }
+      const uniqueUsernames = [...new Set(mentions.map((m) => m.slice(1)))];
+      await Promise.all(
+        uniqueUsernames.map(async (username) => {
+          const mentioned = await prisma.user.findFirst({ where: { username, deleted_at: null }, select: { id: true } });
+          if (mentioned && mentioned.id !== userId) {
+            notificationService.create({
+              receiverId: mentioned.id,
+              senderId: userId,
+              type: 'MENTION',
+              postId,
+              commentId: comment.id,
+            }).catch(() => {});
+          }
+        }),
+      );
     }
 
     return comment;

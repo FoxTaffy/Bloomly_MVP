@@ -21,7 +21,13 @@ export interface UserProfile {
   badge_type: string | null
   job_title: string | null
   relationship_status: string | null
+  relationship_with: string | null
   country: string | null
+  fursona_name: string | null
+  fursona_color: string | null
+  fursona_photo_url: string | null
+  birth_date: string | null
+  relationship_since: string | null
   pinned_post_id: string | null
   role: string
   created_at: string
@@ -36,6 +42,7 @@ export interface UpdateProfileInput {
   banner_url?: string
   status?: string
   persona?: string
+  fursona_name?: string
   likes?: string[]
   dislikes?: string[]
   accent_color?: string
@@ -44,7 +51,11 @@ export interface UpdateProfileInput {
   pronouns?: string
   job_title?: string
   relationship_status?: string
+  relationship_with?: string | null
   country?: string
+  fursona_color?: string
+  fursona_photo_url?: string
+  birth_date?: string | null
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -102,6 +113,13 @@ export const useUserStore = defineStore('user', () => {
         throw new Error(data.error?.message ?? 'Update failed')
       }
       profile.value = data.data.user as UserProfile
+      // Sync key fields back to auth store so sidebar / AppHeader update immediately
+      const updated = data.data.user as UserProfile
+      if (auth.user) {
+        if (updated.avatar_url !== undefined) auth.user.avatar_url = updated.avatar_url
+        if (updated.display_name !== undefined) auth.user.display_name = updated.display_name
+        sessionStorage.setItem('auth_user', JSON.stringify(auth.user))
+      }
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Connection error'
       throw e

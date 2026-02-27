@@ -36,6 +36,20 @@ export const createPostHandler = async (
   }
 };
 
+export const getPostByIdHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const post = await postService.getPostById(request.params.id);
+    if (!post) return reply.code(404).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Post not found' } });
+    return reply.send({ success: true, data: { post }, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch post';
+    return reply.code(500).send({ success: false, data: null, error: { code: 'FETCH_POST_ERROR', message } });
+  }
+};
+
 export const votePostHandler = async (
   request: FastifyRequest<{ Params: { id: string }; Body: { value: 1 | -1 } }>,
   reply: FastifyReply,

@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import {
   toggleFollowHandler, checkFollowingHandler, checkBulkHandler,
   getFollowersHandler, getFollowingHandler, getFollowCountsHandler,
@@ -12,13 +12,14 @@ declare module 'fastify' {
 }
 
 export async function followsRoutes(fastify: FastifyInstance) {
-  fastify.post('/:id/toggle',    { onRequest: [fastify.authenticate] }, toggleFollowHandler);
-  fastify.get('/:id/check',      { onRequest: [fastify.authenticate] }, checkFollowingHandler);
-  fastify.get('/check-bulk',     { onRequest: [fastify.authenticate] }, checkBulkHandler);
-  fastify.get('/:id/followers',  getFollowersHandler);
-  fastify.get('/:id/following',  getFollowingHandler);
-  fastify.get('/:id/counts',     getFollowCountsHandler);
-  fastify.get('/:id/friends',    getFriendsHandler);
-  fastify.get('/:id/relation',   { onRequest: [fastify.authenticate] }, getRelationStatusHandler);
-  fastify.get('/feed',           { onRequest: [fastify.authenticate] }, getSubscriptionFeedHandler);
+  const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
+  fastify.post('/:id/toggle',    auth, toggleFollowHandler as any);
+  fastify.get('/:id/check',      auth, checkFollowingHandler as any);
+  fastify.get('/check-bulk',     auth, checkBulkHandler as any);
+  fastify.get('/:id/followers',  getFollowersHandler as any);
+  fastify.get('/:id/following',  getFollowingHandler as any);
+  fastify.get('/:id/counts',     getFollowCountsHandler as any);
+  fastify.get('/:id/friends',    getFriendsHandler as any);
+  fastify.get('/:id/relation',   auth, getRelationStatusHandler as any);
+  fastify.get('/feed',           auth, getSubscriptionFeedHandler as any);
 }

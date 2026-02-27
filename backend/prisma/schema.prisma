@@ -28,8 +28,16 @@ model User {
   badge_type      String?   // admin | moderator | creator | verified
   job_title            String?   @db.VarChar(80)
   relationship_status  String?   @db.VarChar(50)
+  relationship_with    String?   @db.Uuid
   country              String?   @db.VarChar(80)
+  fursona_name         String?   @db.VarChar(80)
+  fursona_color        String?   @db.VarChar(50)
+  fursona_photo_url    String?
+  birth_date           DateTime?
+  relationship_since   DateTime?
   pinned_post_id       String?   @db.Uuid
+  social_links         Json?     @default("{}")
+  interests            String[]  @default([])
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
   deleted_at      DateTime?
@@ -52,6 +60,9 @@ model User {
   resolvedReports Report[]     @relation("ReportResolver")
   adRequests    Advertisement[] @relation("AdRequester")
   adReviews     Advertisement[] @relation("AdReviewer")
+  mediaHistory  MediaHistory[]
+  sentRelationshipRequests     RelationshipRequest[] @relation("SentRelationshipRequests")
+  receivedRelationshipRequests RelationshipRequest[] @relation("ReceivedRelationshipRequests")
 }
 
 model Post {
@@ -219,6 +230,7 @@ model Notification {
   type        String   // FOLLOW | LIKE | COMMENT | REPAW | MENTION
   post_id     String?  @db.Uuid
   comment_id  String?  @db.Uuid
+  ref_id      String?  @db.Uuid
   read        Boolean  @default(false)
   created_at  DateTime @default(now())
 
@@ -250,6 +262,18 @@ model Advertisement {
   reviewer  User? @relation("AdReviewer",  fields: [reviewed_by],  references: [id], onDelete: SetNull)
 }
 
+model MediaHistory {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @db.Uuid
+  type       String   // "avatar" | "banner"
+  url        String
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
 model Report {
   id          String   @id @default(uuid()) @db.Uuid
   reporter_id String   @db.Uuid
@@ -266,4 +290,18 @@ model Report {
   resolver User? @relation("ReportResolver", fields: [resolved_by], references: [id], onDelete: SetNull)
 
   @@index([status])
+}
+
+model RelationshipRequest {
+  id         String   @id @default(uuid()) @db.Uuid
+  from_id    String   @db.Uuid
+  to_id      String   @db.Uuid
+  status     String   @db.VarChar(20) @default("pending") // pending | accepted | declined
+  created_at DateTime @default(now())
+
+  from User @relation("SentRelationshipRequests",     fields: [from_id], references: [id], onDelete: Cascade)
+  to   User @relation("ReceivedRelationshipRequests", fields: [to_id],   references: [id], onDelete: Cascade)
+
+  @@unique([from_id, to_id])
+  @@index([to_id, status])
 }

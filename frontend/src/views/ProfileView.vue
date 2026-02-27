@@ -313,7 +313,7 @@
               <span v-if="viewedProfile.persona"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm border"
                 :style="accentStyleSubtle">
-                <BIcon name="Footprints" class="w-3 h-3" />{{ viewedProfile.persona }}
+                <BIcon name="PawPrint" class="w-3 h-3" />{{ viewedProfile.persona }}
               </span>
             </div>
           </div>
@@ -340,8 +340,8 @@
                       class="w-20 h-20 md:w-[104px] md:h-[104px] rounded-full shadow-2xl bg-brand-accent/20 border border-brand-border flex items-center justify-center text-brand-accent font-bold text-4xl">
                       {{ (viewedProfile.display_name || viewedProfile.username || '?')[0].toUpperCase() }}
                     </div>
-                    <!-- Online dot -->
-                    <span class="absolute bottom-1.5 right-1.5 w-4 h-4 rounded-full bg-brand-success border-[3px] border-brand-card shadow-sm"></span>
+                    <!-- Online dot (shown only when user is online) -->
+                    <span v-if="isProfileOnline" class="absolute bottom-1.5 right-1.5 w-4 h-4 rounded-full bg-brand-success border-[3px] border-brand-card shadow-sm" title="Онлайн"></span>
                     <!-- Own profile: avatar upload button (pointer-events-none so click-to-view works when not hovering) -->
                     <button v-if="isOwnProfile" @click.stop="avatarFileInput?.click()" :disabled="isUploadingAvatar"
                       class="absolute inset-0 rounded-full bg-black/0 hover:bg-black/40 transition-all flex items-center justify-center pointer-events-none hover:pointer-events-auto opacity-0 hover:opacity-100">
@@ -374,6 +374,7 @@
                         <span v-if="isTogglingFollow" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         <component v-else :is="followBtnIcon" class="w-4 h-4" />
                         {{ followBtnLabel }}
+                        <span v-if="isMutual && !isTogglingFollow" class="text-[10px] font-bold ml-0.5 opacity-60">· Взаимно</span>
                       </button>
                       <button class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg hover:border-brand-border/80 rounded-xl text-brand-muted hover:text-white transition-all">
                         <BIcon name="MoreHorizontal" class="w-4 h-4" />
@@ -398,8 +399,8 @@
                     <span v-if="viewedProfile.job_title" class="flex items-center gap-1 text-brand-muted text-xs">
                       <BIcon name="Briefcase" class="w-3.5 h-3.5" />{{ viewedProfile.job_title }}
                     </span>
-                    <span v-if="viewedProfile.location" class="flex items-center gap-1 text-brand-muted text-xs">
-                      <BIcon name="MapPin" class="w-3.5 h-3.5" />{{ viewedProfile.location }}
+                    <span v-if="viewedProfile.location || (viewedProfile as any).country" class="flex items-center gap-1 text-brand-muted text-xs">
+                      <BIcon name="MapPin" class="w-3.5 h-3.5" />{{ placeStr }}
                     </span>
                     <span class="flex items-center gap-1 text-brand-muted text-xs">
                       <BIcon name="Calendar" class="w-3.5 h-3.5" />{{ joinDate }}
@@ -485,7 +486,12 @@
                         <BIcon name="Heart" class="w-3.5 h-3.5 text-pink-400 flex-shrink-0" />
                         <div class="min-w-0">
                           <p class="text-[10px] text-brand-muted uppercase tracking-wide">Отношения</p>
-                          <p class="text-xs text-white font-semibold truncate">{{ { single: 'Свободен/а', in_relationship: 'В отношениях', married: 'В браке', complicated: 'Всё сложно', open: 'Открытые', looking: 'В поиске' }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}</p>
+                          <p class="text-xs text-white font-semibold truncate">{{ { single: 'Свободен/а', in_relationship: 'В отношениях', relationship: 'В отношениях', married: 'В браке', complicated: 'Всё сложно', open: 'Открытые', open_relationship: 'Открытые отношения', looking: 'В поиске', secret: 'Секрет' }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}</p>
+                          <div v-if="partnerProfile" class="flex items-center gap-1.5 mt-1">
+                            <img v-if="partnerProfile.avatar_url" :src="partnerProfile.avatar_url" class="w-4 h-4 rounded-full object-cover flex-shrink-0" />
+                            <span class="text-[10px] text-pink-300 truncate">с {{ partnerProfile.display_name ?? partnerProfile.username }}</span>
+                          </div>
+                          <p v-if="togetherSince" class="text-[10px] text-brand-muted mt-0.5">вместе {{ togetherSince }}</p>
                         </div>
                       </div>
                       <div v-if="viewedProfile.persona"
@@ -496,20 +502,12 @@
                           <p class="text-xs text-white font-semibold truncate">{{ viewedProfile.persona }}</p>
                         </div>
                       </div>
-                      <div v-if="viewedProfile.location"
+                      <div v-if="viewedProfile.location || (viewedProfile as any).country"
                         class="flex items-center gap-2 px-3 py-2.5 bg-brand-bg border border-brand-border rounded-2xl">
                         <BIcon name="MapPin" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
                         <div class="min-w-0">
-                          <p class="text-[10px] text-brand-muted uppercase tracking-wide">Город</p>
-                          <p class="text-xs text-white font-semibold truncate">{{ viewedProfile.location }}</p>
-                        </div>
-                      </div>
-                      <div v-if="(viewedProfile as any).country"
-                        class="flex items-center gap-2 px-3 py-2.5 bg-brand-bg border border-brand-border rounded-2xl">
-                        <BIcon name="Globe" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
-                        <div class="min-w-0">
-                          <p class="text-[10px] text-brand-muted uppercase tracking-wide">Страна</p>
-                          <p class="text-xs text-white font-semibold truncate">{{ (viewedProfile as any).country }}</p>
+                          <p class="text-[10px] text-brand-muted uppercase tracking-wide">Место</p>
+                          <p class="text-xs text-white font-semibold truncate">{{ placeStr }}</p>
                         </div>
                       </div>
                       <a v-if="viewedProfile.website" :href="viewedProfile.website" target="_blank" rel="noopener noreferrer"
@@ -774,17 +772,6 @@
                   </div>
                   <!-- Media previews -->
                   <MediaUpload ref="profileMediaUploadRef" type="posts" :multiple="true" @uploaded="onProfileMediaUploaded" />
-                  <!-- Media URL thumbnails -->
-                  <div v-if="newPostMediaUrls.length" class="flex flex-wrap gap-2">
-                    <div v-for="(url, idx) in newPostMediaUrls" :key="idx" class="relative w-16 h-16 rounded-xl overflow-hidden border border-brand-border group">
-                      <img v-if="isImage(url)" :src="url" class="w-full h-full object-cover" />
-                      <video v-else :src="url" class="w-full h-full object-cover" muted />
-                      <button @click="newPostMediaUrls.splice(idx, 1)"
-                        class="absolute top-0.5 right-0.5 w-4 h-4 bg-black/70 rounded-full text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                        <BIcon name="X" class="w-2.5 h-2.5" />
-                      </button>
-                    </div>
-                  </div>
                   <div class="border-t border-brand-border" />
                   <div class="flex items-center gap-2 flex-wrap">
                     <button @click="profileMediaUploadRef?.openPicker()"
@@ -792,8 +779,10 @@
                       <BIcon name="ImagePlus" class="w-4 h-4" /> Медиа
                     </button>
                     <button @click="newPostIsNsfw = !newPostIsNsfw"
+                      :disabled="!isNsfwAllowed"
+                      :title="!isNsfwAllowed ? 'Недоступно до 18 лет' : ''"
                       class="px-3 py-2 rounded-xl text-xs font-bold border transition-all"
-                      :class="newPostIsNsfw ? 'border-brand-error/60 text-brand-error bg-brand-error/10' : 'border-transparent text-brand-muted hover:border-brand-border hover:bg-brand-bg hover:text-white'">
+                      :class="!isNsfwAllowed ? 'opacity-30 cursor-not-allowed border-transparent text-brand-muted' : newPostIsNsfw ? 'border-brand-error/60 text-brand-error bg-brand-error/10' : 'border-transparent text-brand-muted hover:border-brand-border hover:bg-brand-bg hover:text-white'">
                       NSFW
                     </button>
                     <div class="flex-1" />
@@ -992,28 +981,26 @@
                     <BIcon name="Heart" class="w-4 h-4 text-pink-400 flex-shrink-0" />
                     <div class="min-w-0">
                       <p class="text-[10px] text-brand-muted uppercase tracking-wide">Отношения</p>
-                      <p class="text-xs text-brand-offwhite font-medium truncate">{{ { single: 'Свободен/а', in_relationship: 'В отношениях', married: 'В браке', complicated: 'Всё сложно', open: 'Открытые отношения', looking: 'В поиске' }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}</p>
+                      <p class="text-xs text-brand-offwhite font-medium truncate">{{ { single: 'Свободен/а', in_relationship: 'В отношениях', relationship: 'В отношениях', married: 'В браке', complicated: 'Всё сложно', open: 'Открытые отношения', open_relationship: 'Открытые отношения', looking: 'В поиске', secret: 'Секрет' }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}</p>
+                      <div v-if="partnerProfile" class="flex items-center gap-1.5 mt-1">
+                        <img v-if="partnerProfile.avatar_url" :src="partnerProfile.avatar_url" class="w-4 h-4 rounded-full object-cover flex-shrink-0" />
+                        <span class="text-[10px] text-pink-300 truncate">с {{ partnerProfile.display_name ?? partnerProfile.username }}</span>
+                      </div>
+                      <p v-if="togetherSince" class="text-[10px] text-brand-muted mt-0.5">вместе {{ togetherSince }}</p>
                     </div>
                   </div>
                   <div v-if="viewedProfile.persona" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
-                    <BIcon name="Footprints" class="w-4 h-4 text-brand-muted flex-shrink-0" />
+                    <BIcon name="PawPrint" class="w-4 h-4 text-brand-muted flex-shrink-0" />
                     <div class="min-w-0">
                       <p class="text-[10px] text-brand-muted uppercase tracking-wide">Фурсона</p>
                       <p class="text-xs text-brand-offwhite font-semibold truncate">{{ viewedProfile.persona }}</p>
                     </div>
                   </div>
-                  <div v-if="viewedProfile.location" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
+                  <div v-if="viewedProfile.location || (viewedProfile as any).country" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
                     <BIcon name="MapPin" class="w-4 h-4 text-brand-accent flex-shrink-0" />
                     <div class="min-w-0">
-                      <p class="text-[10px] text-brand-muted uppercase tracking-wide">Город</p>
-                      <p class="text-xs text-brand-offwhite truncate">{{ viewedProfile.location }}</p>
-                    </div>
-                  </div>
-                  <div v-if="(viewedProfile as any).country" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
-                    <BIcon name="Globe" class="w-4 h-4 text-brand-accent flex-shrink-0" />
-                    <div class="min-w-0">
-                      <p class="text-[10px] text-brand-muted uppercase tracking-wide">Страна</p>
-                      <p class="text-xs text-brand-offwhite truncate">{{ (viewedProfile as any).country }}</p>
+                      <p class="text-[10px] text-brand-muted uppercase tracking-wide">Место</p>
+                      <p class="text-xs text-brand-offwhite truncate">{{ placeStr }}</p>
                     </div>
                   </div>
                   <div class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
@@ -1159,7 +1146,7 @@ import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import api from '@/api'
 import {
-  User, Users, UserPlus, UserMinus, UserCheck, UserX,
+  User, Users, UserPlus, UserMinus, UserX,
   Bell, MessageSquare, Pencil, Pin, Trash2, MoreHorizontal,
   ChevronUp, ChevronDown, Repeat2, MessageCircle, Heart, HeartOff,
   Image, Hash, Search, MapPin, Calendar, Link, Briefcase,
@@ -1167,7 +1154,7 @@ import {
   Crown, Shield, Star, BadgeCheck, Flame, Sparkles, Award,
   Footprints, Smile, SmilePlus, AlertCircle,
   LogOut, Camera, Eye, EyeOff, Info, Globe,
-  PawPrint, Plus, Check, Twitter, Instagram, Youtube, Twitch, Github, Quote,
+  Rabbit, PawPrint, Plus, Check, Twitter, Instagram, Youtube, Twitch, Github, Quote,
   Wallet, ChevronRight, AtSign, ArrowUpRight
 } from 'lucide-vue-next'
 
@@ -1206,6 +1193,17 @@ const newPostMediaUrls = ref<string[]>([])
 const newPostIsNsfw = ref(false)
 const isCreatingPost = ref(false)
 const profileMediaUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
+
+const partnerProfile = ref<{ id: string; username: string; display_name: string | null; avatar_url: string | null } | null>(null)
+
+// ── Online status ─────────────────────────────────────────────────────────────
+const isProfileOnline = ref(false)
+async function fetchOnlineStatus(userId: string) {
+  try {
+    const res = await api.get(`/users/online?ids=${userId}`)
+    if (res.data.success) isProfileOnline.value = !!res.data.data[userId]
+  } catch {}
+}
 
 // ── NSFW (shared with AppHeader via v-model) ──────────────────────────────────
 const nsfwMode = ref(false)
@@ -1386,20 +1384,17 @@ const badgePillIcon = computed(() => {
 })
 
 // Follow button
+const isMutual = computed(() => relation.aFollowsB && relation.bFollowsA)
 const followBtnLabel = computed(() => {
-  if (relation.friends || (relation.aFollowsB && relation.bFollowsA)) return 'Друзья'
   if (relation.aFollowsB) return 'Отписаться'
   if (relation.bFollowsA) return 'Подписаться в ответ'
   return 'Подписаться'
 })
 const followBtnIcon = computed(() => {
-  if (relation.friends || (relation.aFollowsB && relation.bFollowsA)) return UserCheck
   if (relation.aFollowsB) return UserMinus
   return UserPlus
 })
 const followBtnClass = computed(() => {
-  if (relation.friends || (relation.aFollowsB && relation.bFollowsA))
-    return 'bg-brand-success/15 border border-brand-success/40 text-brand-success hover:bg-brand-error/10 hover:border-brand-error/40 hover:text-brand-error'
   if (relation.aFollowsB)
     return 'bg-brand-card border border-brand-border text-brand-muted hover:text-brand-error hover:border-brand-error/40'
   if (relation.bFollowsA)
@@ -1410,7 +1405,7 @@ const followBtnClass = computed(() => {
 // About nav Items
 const aboutNavs = [
   { key: 'about' as AboutTab,     label: 'О себе',    icon: User },
-  { key: 'fursona' as AboutTab,   label: 'Фурсона',   icon: PawPrint },
+  { key: 'fursona' as AboutTab,   label: 'Фурсона',   icon: Rabbit },
   { key: 'interests' as AboutTab, label: 'Интересы',  icon: Sparkles },
 ]
 
@@ -1480,6 +1475,46 @@ function socialUrl(key: string, val: string) {
   return (map[key] ?? '') + val
 }
 
+// ── NSFW age check ──────────────────────────────────────────────────────────
+const isNsfwAllowed = computed(() => {
+  const bd = (viewedProfile.value as any)?.birth_date
+    ?? (authStore.user as any)?.birth_date
+  if (!bd) return true // unknown age → allow (server-side guard is separate)
+  const birthYear = new Date(bd)
+  const now = new Date()
+  let age = now.getFullYear() - birthYear.getFullYear()
+  const m = now.getMonth() - birthYear.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < birthYear.getDate())) age--
+  return age >= 18
+})
+
+// ── Place string helper ───────────────────────────────────────────────────
+const placeStr = computed(() => {
+  const loc = viewedProfile.value?.location
+  const ctr = (viewedProfile.value as any)?.country
+  if (loc && ctr) return `${loc}, ${ctr}`
+  return loc ?? ctr ?? ''
+})
+
+// ── Together-since duration ───────────────────────────────────────────────
+const togetherSince = computed((): string | null => {
+  const since = (viewedProfile.value as any)?.relationship_since
+  if (!since) return null
+  const start = new Date(since)
+  const now   = new Date()
+  let years  = now.getFullYear() - start.getFullYear()
+  let months = now.getMonth() - start.getMonth()
+  let days   = now.getDate() - start.getDate()
+  if (days < 0) { months--; days += new Date(now.getFullYear(), now.getMonth(), 0).getDate() }
+  if (months < 0) { years--; months += 12 }
+  const parts: string[] = []
+  if (years  > 0) parts.push(`${years} ${years  === 1 ? 'год' : years  < 5 ? 'года' : 'лет'}`)
+  if (months > 0) parts.push(`${months} ${months === 1 ? 'месяц' : months < 5 ? 'месяца' : 'месяцев'}`)
+  if (parts.length === 0) parts.push(`${Math.max(days, 1)} ${days === 1 ? 'день' : days < 5 ? 'дня' : 'дней'}`)
+  return parts.join(' ')
+})
+
+
 // ── Fursona steps ─────────────────────────────────────────────────────────────
 const fursonaSteps = computed(() => {
   const p = viewedProfile.value
@@ -1517,7 +1552,7 @@ function isImage(url: string) {
 }
 
 function onProfileMediaUploaded(urls: string[]) {
-  newPostMediaUrls.value.push(...urls)
+  newPostMediaUrls.value = urls
 }
 
 // ── Load profile ──────────────────────────────────────────────────────────────
@@ -1529,6 +1564,7 @@ async function loadProfile() {
   friends.value = []
   tabPosts.value = []
   pinnedPost.value = null
+  partnerProfile.value = null
   Object.assign(relation, { aFollowsB: false, bFollowsA: false, friends: false })
 
   try {
@@ -1538,6 +1574,8 @@ async function loadProfile() {
       await Promise.all([
         loadFriends(id),
         authStore.isAuthenticated && !isOwnProfile.value ? loadRelation(id) : Promise.resolve(),
+        fetchOnlineStatus(id),
+        (result as any).relationship_with ? loadPartnerProfile((result as any).relationship_with) : Promise.resolve(),
       ])
       if (result.pinnedPost) pinnedPost.value = result.pinnedPost
       await loadTabData('posts')
@@ -1554,6 +1592,14 @@ async function loadFriends(userId: string) {
     const res = await api.get(`/follows/${userId}/friends`)
     if (res.data.success) friends.value = res.data.data.users
   } catch {}
+}
+
+async function loadPartnerProfile(partnerId: string) {
+  try {
+    const res = await api.get(`/users/${partnerId}`)
+    if (res.data.success) partnerProfile.value = res.data.data.user
+    else partnerProfile.value = null
+  } catch { partnerProfile.value = null }
 }
 
 async function loadRelation(userId: string) {

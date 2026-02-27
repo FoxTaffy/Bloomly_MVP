@@ -1,379 +1,1926 @@
 <template>
   <div class="min-h-screen bg-brand-bg text-brand-offwhite font-nunito">
 
-    <!-- ─── Header ─────────────────────────────────────────────────────── -->
-    <header class="fixed top-0 inset-x-0 h-14 md:h-16 bg-brand-bg/95 backdrop-blur-md border-b border-brand-border flex items-center justify-between px-4 md:px-6 z-40">
-      <div class="flex items-center gap-2.5 cursor-pointer" @click="router.push({ name: 'home' })">
-        <div class="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M16 2C16 2 18 6 22 6C26 6 28 10 28 14C28 18 24 20 24 20C24 20 28 22 28 26C28 30 24 30 20 30C16 30 16 26 16 26C16 26 16 30 12 30C8 30 4 30 4 26C4 22 8 20 8 20C8 20 4 18 4 14C4 10 6 6 10 6C14 6 16 2 16 2Z" fill="#D5DDFF" stroke="#4C67CF" stroke-width="2" stroke-linejoin="round"/>
-            <circle cx="16" cy="16" r="4" fill="#D5DDFF" stroke="#4C67CF" stroke-width="2"/>
-          </svg>
-        </div>
-        <span class="text-xl md:text-2xl font-extrabold tracking-tight text-white">Bloomly</span>
+    <!-- ─── Toast notification ──────────────────────────────────────── -->
+    <Transition name="toast">
+      <div
+        v-if="toast.show"
+        class="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold border backdrop-blur-lg pointer-events-none"
+        :class="toast.type === 'success'
+          ? 'bg-brand-success/10 border-brand-success/30 text-brand-success'
+          : 'bg-brand-error/10 border-brand-error/30 text-brand-error'"
+      >
+        <svg v-if="toast.type === 'success'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+        <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+        {{ toast.message }}
       </div>
-      <div class="flex items-center gap-2">
-        <router-link :to="`/profile/${authStore.user?.id}`" class="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-brand-card border border-brand-border text-sm font-semibold text-brand-muted hover:text-white hover:border-brand-accent/50 transition-all">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-          Профиль
-        </router-link>
-      </div>
-    </header>
+    </Transition>
 
-    <div class="max-w-5xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-6 pb-16">
-
-      <!-- ─── Settings Left Sidebar ──────────────────────────────────── -->
-      <aside class="w-56 hidden lg:flex flex-col gap-5 sticky top-24 self-start flex-shrink-0">
-
-        <!-- User block -->
-        <div class="flex items-center gap-3 cursor-pointer group" @click="router.push(`/profile/${authStore.user?.id}`)">
-          <img v-if="authStore.user?.avatar_url" :src="authStore.user.avatar_url"
-            class="w-11 h-11 rounded-full object-cover border-2 border-brand-border group-hover:border-brand-accent transition-colors" />
-          <div v-else class="w-11 h-11 rounded-full border-2 border-brand-border group-hover:border-brand-accent bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">{{ (authStore.user?.display_name || authStore.user?.username || '?')[0].toUpperCase() }}</div>
-          <div class="min-w-0">
-            <p class="font-bold text-white text-sm truncate group-hover:text-brand-accent transition-colors">{{ authStore.user?.display_name ?? authStore.user?.username }}</p>
-            <p class="text-xs text-brand-muted truncate">@{{ authStore.user?.username }}</p>
-          </div>
+    <!-- ─── Floating save/reset bar (dirty) ──────────────────────────── -->
+    <Transition name="floatbar">
+      <div
+        v-if="isDirty"
+        class="fixed bottom-6 right-6 z-50 flex items-center gap-2 p-1.5 rounded-2xl shadow-2xl border transition-all"
+        :class="[
+          shaking ? 'animate-shake' : '',
+          unsavedWarning
+            ? 'bg-brand-error/15 border-brand-error/40 shadow-brand-error/20'
+            : 'bg-brand-card/90 border-brand-border backdrop-blur-xl'
+        ]"
+      >
+        <!-- Unsaved badge -->
+        <div class="px-3 py-1.5 flex items-center gap-2"
+          :class="unsavedWarning ? 'text-brand-error' : 'text-brand-muted'">
+          <div class="w-2 h-2 rounded-full animate-pulse"
+            :class="unsavedWarning ? 'bg-brand-error' : 'bg-amber-400'"></div>
+          <span class="text-xs font-bold">{{ unsavedWarning ? 'Не сохранено!' : 'Есть изменения' }}</span>
         </div>
-
-        <!-- Settings nav -->
-        <nav class="space-y-1">
-          <div class="px-4 text-[11px] font-bold text-brand-muted uppercase tracking-wider mb-2">Настройки</div>
-          <button class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all bg-brand-accent/15 text-brand-accent">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-            <span>Профиль</span>
-          </button>
-          <button class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-brand-muted hover:bg-brand-card/50 hover:text-white opacity-50 cursor-not-allowed">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-            <span>Уведомления</span>
-          </button>
-          <button class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-brand-muted hover:bg-brand-card/50 hover:text-white opacity-50 cursor-not-allowed">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-            <span>Безопасность</span>
-          </button>
-          <button class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-brand-muted hover:bg-brand-card/50 hover:text-white opacity-50 cursor-not-allowed">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
-            <span>Внешний вид</span>
-          </button>
-          <button class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-brand-muted hover:bg-brand-card/50 hover:text-white opacity-50 cursor-not-allowed">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
-            <span>Подписка</span>
-          </button>
-        </nav>
-
-        <!-- Back to feed -->
-        <button @click="router.push({ name: 'home' })" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-brand-muted hover:bg-brand-card/50 hover:text-white border border-brand-border/50 mt-2">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-          <span>Лента</span>
+        <!-- Reset -->
+        <button type="button" @click="resetForm"
+          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all text-brand-muted hover:text-white hover:bg-white/10 border border-transparent hover:border-brand-border">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Сбросить
         </button>
-      </aside>
+        <!-- Save -->
+        <button type="button" @click="handleSubmit" :disabled="userStore.isLoading"
+          class="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all disabled:opacity-50 shadow-lg"
+          :style="unsavedWarning
+            ? 'background:#ef4444;box-shadow:0 4px 20px rgba(239,68,68,0.4)'
+            : `background:${form.accent_color};box-shadow:0 4px 20px ${form.accent_color}44`">
+          <span v-if="userStore.isLoading" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+          <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+          {{ userStore.isLoading ? 'Сохранение…' : 'Сохранить' }}
+        </button>
+      </div>
+    </Transition>
 
-      <!-- ─── Settings Content ────────────────────────────────────────── -->
-      <main class="flex-1 min-w-0 space-y-5">
-
-        <!-- Page title -->
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-2xl font-extrabold text-white">Настройки профиля</h1>
-            <p class="text-sm text-brand-muted mt-0.5">Управляйте внешним видом и информацией своего профиля</p>
-          </div>
-          <!-- Success / Error inline badges -->
-          <div v-if="saved" class="flex items-center gap-2 px-4 py-2 bg-brand-success/10 border border-brand-success/30 text-brand-success rounded-2xl text-sm font-semibold">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-            Сохранено
-          </div>
-          <div v-else-if="userStore.error" class="flex items-center gap-2 px-4 py-2 bg-brand-error/10 border border-brand-error/30 text-brand-error rounded-2xl text-sm font-semibold">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            {{ userStore.error }}
+    <!-- ─── Crop modal ──────────────────────────────────────────────── -->
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <div v-if="cropModal.show"
+          class="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          @mousemove="onCropMouseMove" @mouseup="onCropMouseUp"
+          @touchmove.prevent="onCropTouchMove" @touchend.prevent="onCropMouseUp">
+          <!-- backdrop -->
+          <div class="absolute inset-0 bg-black/85 backdrop-blur-sm" @click="cancelCrop"></div>
+          <!-- modal card -->
+          <div class="relative z-10 bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full overflow-hidden select-none"
+            :style="`max-width:${CROP_CONTAINER_W + 48}px`">
+            <!-- header -->
+            <div class="px-6 py-4 border-b border-brand-border flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background:rgba(76,151,207,0.18)">
+                  <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 class="font-bold text-white text-sm">
+                    {{ cropModal.type === 'avatar' ? 'Обрезать аватар' : 'Обрезать баннер' }}
+                  </h3>
+                  <p class="text-[11px] text-brand-muted">
+                    {{ cropModal.type === 'avatar' ? 'Квадрат 1:1 · Перемещайте и масштабируйте' : 'Прямоугольник · Перемещайте и масштабируйте' }}
+                  </p>
+                </div>
+              </div>
+              <button @click="cancelCrop"
+                class="w-8 h-8 rounded-xl flex items-center justify-center text-brand-muted hover:text-white hover:bg-white/10 transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <!-- crop area -->
+            <div class="p-4 flex justify-center">
+              <div id="crop-container"
+                class="relative overflow-hidden rounded-2xl bg-black cursor-crosshair"
+                :style="`width:${CROP_CONTAINER_W}px;height:${CROP_CONTAINER_H}px;max-width:100%`"
+                @mousedown="onCropMouseDown"
+                @touchstart.prevent="onCropTouchStart">
+                <!-- source image -->
+                <img :src="cropModal.src"
+                  class="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                  @load="onCropImageLoad" crossorigin="anonymous"/>
+                <!-- dark overlay strips -->
+                <template v-if="cropModal.imgW > 0">
+                  <div class="absolute bg-black/65 pointer-events-none" :style="`left:0;top:0;right:0;height:${cropModal.cy}px`"></div>
+                  <div class="absolute bg-black/65 pointer-events-none" :style="`left:0;bottom:0;right:0;top:${cropModal.cy+cropModal.ch}px`"></div>
+                  <div class="absolute bg-black/65 pointer-events-none" :style="`left:0;top:${cropModal.cy}px;width:${cropModal.cx}px;height:${cropModal.ch}px`"></div>
+                  <div class="absolute bg-black/65 pointer-events-none" :style="`right:0;top:${cropModal.cy}px;left:${cropModal.cx+cropModal.cw}px;height:${cropModal.ch}px`"></div>
+                  <!-- crop border -->
+                  <div class="absolute border-2 border-white/90 pointer-events-none"
+                    :style="`left:${cropModal.cx}px;top:${cropModal.cy}px;width:${cropModal.cw}px;height:${cropModal.ch}px`">
+                    <!-- rule-of-thirds -->
+                    <div class="absolute inset-0 pointer-events-none opacity-25">
+                      <div class="absolute left-1/3 top-0 bottom-0 border-l border-white"></div>
+                      <div class="absolute left-2/3 top-0 bottom-0 border-l border-white"></div>
+                      <div class="absolute top-1/3 left-0 right-0 border-t border-white"></div>
+                      <div class="absolute top-2/3 left-0 right-0 border-t border-white"></div>
+                    </div>
+                  </div>
+                  <!-- corner handles -->
+                  <div class="absolute w-5 h-5 pointer-events-auto cursor-nw-resize flex items-start justify-start"
+                    :style="`left:${cropModal.cx-4}px;top:${cropModal.cy-4}px`"
+                    @mousedown.stop="startResize($event,'nw')" @touchstart.stop.prevent="startResizeTouch($event,'nw')">
+                    <div class="w-3.5 h-3.5 bg-white rounded-sm shadow-md border border-black/20"></div>
+                  </div>
+                  <div class="absolute w-5 h-5 pointer-events-auto cursor-ne-resize flex items-start justify-end"
+                    :style="`left:${cropModal.cx+cropModal.cw-17}px;top:${cropModal.cy-4}px`"
+                    @mousedown.stop="startResize($event,'ne')" @touchstart.stop.prevent="startResizeTouch($event,'ne')">
+                    <div class="w-3.5 h-3.5 bg-white rounded-sm shadow-md border border-black/20"></div>
+                  </div>
+                  <div class="absolute w-5 h-5 pointer-events-auto cursor-sw-resize flex items-end justify-start"
+                    :style="`left:${cropModal.cx-4}px;top:${cropModal.cy+cropModal.ch-17}px`"
+                    @mousedown.stop="startResize($event,'sw')" @touchstart.stop.prevent="startResizeTouch($event,'sw')">
+                    <div class="w-3.5 h-3.5 bg-white rounded-sm shadow-md border border-black/20"></div>
+                  </div>
+                  <div class="absolute w-5 h-5 pointer-events-auto cursor-se-resize flex items-end justify-end"
+                    :style="`left:${cropModal.cx+cropModal.cw-17}px;top:${cropModal.cy+cropModal.ch-17}px`"
+                    @mousedown.stop="startResize($event,'se')" @touchstart.stop.prevent="startResizeTouch($event,'se')">
+                    <div class="w-3.5 h-3.5 bg-white rounded-sm shadow-md border border-black/20"></div>
+                  </div>
+                </template>
+              </div>
+            </div>
+            <!-- footer -->
+            <div class="px-6 py-4 border-t border-brand-border flex items-center justify-between">
+              <p class="text-xs text-brand-muted/60">
+                {{ cropModal.type === 'avatar' ? 'Квадрат · Выход 400 × 400 px' : 'Прямоугольник · Выход 1200 px ширина' }}
+              </p>
+              <div class="flex gap-3">
+                <button type="button" @click="cancelCrop"
+                  class="px-4 py-2 text-xs font-bold rounded-xl border border-brand-border text-brand-muted hover:text-white hover:border-brand-muted/40 transition-all">
+                  Отмена
+                </button>
+                <button type="button" @click="confirmCrop" :disabled="cropUploading"
+                  class="px-4 py-2 text-xs font-bold rounded-xl text-white transition-all disabled:opacity-50 shadow-lg flex items-center gap-2"
+                  :style="`background:${form.accent_color};box-shadow:0 4px 16px ${form.accent_color}44`">
+                  <span v-if="cropUploading" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                  </svg>
+                  {{ cropUploading ? 'Загрузка…' : 'Применить' }}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
+      </Transition>
+    </Teleport>
 
-        <form @submit.prevent="handleSubmit" class="space-y-5">
+    <!-- ─── App Header ──────────────────────────────────────────────── -->
+    <AppHeader />
 
-          <!-- ── Media: Avatar & Banner ──────────────────────────────── -->
-          <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
-            <div class="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-brand-accent/40 to-transparent relative"></div>
-            <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3">
-              <div class="w-8 h-8 rounded-xl bg-brand-accent/15 flex items-center justify-center">
-                <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+    <div class="max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-6 pb-20">
+
+      <!-- ─── Left: App navigation hub ─────────────────────────────── -->
+      <AppSidebar />
+
+      <!-- ─── Settings area ────────────────────────────────────────── -->
+      <main class="flex-1 min-w-0">
+        <div class="flex gap-6 items-start">
+
+          <!-- ── Left sticky section nav ────────────────────────────── -->
+          <aside class="w-56 hidden xl:flex flex-col gap-3 sticky top-24 self-start flex-shrink-0">
+
+            <!-- Mini profile preview card -->
+            <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
+              <div class="h-16 relative"
+                :style="form.banner_url
+                  ? `background-image:url(${form.banner_url});background-size:cover;background-position:center`
+                  : `background:linear-gradient(135deg,${form.accent_color}33,${form.accent_color}0a)`">
               </div>
-              <div>
-                <h2 class="font-bold text-white text-sm">Медиа профиля</h2>
-                <p class="text-xs text-brand-muted">Аватар и баннер</p>
-              </div>
-            </div>
-            <div class="p-6 space-y-5">
-
-              <!-- Banner preview -->
-              <div>
-                <label class="block text-sm font-semibold text-brand-muted mb-2">URL баннера</label>
-                <div v-if="form.banner_url" class="w-full h-28 rounded-2xl overflow-hidden mb-3 border border-brand-border">
-                  <img :src="form.banner_url" class="w-full h-full object-cover" />
-                </div>
-                <div v-else class="w-full h-28 rounded-2xl mb-3 border border-dashed border-brand-border flex items-center justify-center text-brand-muted/50">
-                  <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14"/></svg>
-                </div>
-                <input v-model="form.banner_url" type="url" placeholder="https://..."
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all" />
-              </div>
-
-              <!-- Avatar preview + URL -->
-              <div class="flex items-start gap-5">
-                <div class="flex-shrink-0">
-                  <p class="text-sm font-semibold text-brand-muted mb-2">Предпросмотр</p>
-                  <div class="p-1 rounded-full bg-gradient-to-br from-brand-accent/60 to-transparent shadow-lg w-fit">
-                    <img v-if="form.avatar_url" :src="form.avatar_url"
-                      class="w-20 h-20 rounded-full object-cover border-4 border-brand-card" />
-                  <div v-else class="w-20 h-20 rounded-full border-4 border-brand-card bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-3xl">{{ (authStore.user?.display_name || authStore.user?.username || '?')[0].toUpperCase() }}</div>
+              <div class="px-4 pb-4 -mt-6 relative">
+                <div class="w-12 h-12 rounded-full border-[3px] overflow-hidden mb-2 shadow-lg"
+                  :style="`border-color:${form.accent_color}66`">
+                  <img v-if="form.avatar_url" :src="form.avatar_url" class="w-full h-full object-cover" />
+                  <div v-else class="w-full h-full flex items-center justify-center font-bold text-lg"
+                    :style="`background:${form.accent_color}26;color:${form.accent_color}`">
+                    {{ (form.display_name || authStore.user?.username || '?')[0].toUpperCase() }}
                   </div>
                 </div>
-                <div class="flex-1 min-w-0">
-                  <label class="block text-sm font-semibold text-brand-muted mb-2">URL аватара</label>
-                  <input v-model="form.avatar_url" type="url" placeholder="https://..."
-                    class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all" />
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          <!-- ── Basic info ──────────────────────────────────────────── -->
-          <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
-            <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3">
-              <div class="w-8 h-8 rounded-xl bg-blue-500/15 flex items-center justify-center">
-                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-              </div>
-              <div>
-                <h2 class="font-bold text-white text-sm">Основная информация</h2>
-                <p class="text-xs text-brand-muted">Имя, описание, статус</p>
+                <p class="font-bold text-white text-sm truncate leading-tight">{{ form.display_name || authStore.user?.username }}</p>
+                <p class="text-xs text-brand-muted truncate">@{{ authStore.user?.username }}</p>
               </div>
             </div>
-            <div class="p-6 space-y-5">
 
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <!-- Display name -->
-                <div>
-                  <label class="block text-sm font-semibold text-brand-muted mb-2">Отображаемое имя</label>
-                  <input v-model="form.display_name" type="text" maxlength="50" placeholder="Ваше имя"
-                    class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all" />
-                  <p class="text-xs text-brand-muted mt-1.5">{{ form.display_name?.length ?? 0 }} / 50</p>
-                </div>
-
-                <!-- Status -->
-                <div>
-                  <label class="block text-sm font-semibold text-brand-muted mb-2">Статус</label>
-                  <input v-model="form.status" type="text" maxlength="100" placeholder="Чем вы занимаетесь?"
-                    class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all" />
-                </div>
+            <!-- Section scroll-spy nav -->
+            <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
+              <div class="px-4 py-3 border-b border-brand-border">
+                <h4 class="text-[11px] font-bold text-brand-muted uppercase tracking-widest">Разделы</h4>
               </div>
-
-              <!-- Bio -->
-              <div>
-                <label class="block text-sm font-semibold text-brand-muted mb-2">О себе</label>
-                <textarea v-model="form.bio" rows="4" maxlength="300" placeholder="Расскажите о себе…"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all resize-none"></textarea>
-                <p class="text-xs text-brand-muted mt-1.5">{{ form.bio?.length ?? 0 }} / 300</p>
-              </div>
-
-            </div>
-          </div>
-
-          <!-- ── Fursona ─────────────────────────────────────────────── -->
-          <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
-            <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3">
-              <div class="w-8 h-8 rounded-xl bg-purple-500/15 flex items-center justify-center">
-                <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-              </div>
-              <div>
-                <h2 class="font-bold text-white text-sm">Персонаж / Фурсона</h2>
-                <p class="text-xs text-brand-muted">Вид, интересы, антипатии</p>
-              </div>
-            </div>
-            <div class="p-6 space-y-5">
-
-              <!-- Persona -->
-              <div>
-                <label class="block text-sm font-semibold text-brand-muted mb-2">Вид персонажа</label>
-                <input v-model="form.persona" type="text" placeholder="Напр. Волк, Кот, Лиса…"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all" />
-              </div>
-
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <!-- Likes -->
-                <div>
-                  <label class="block text-sm font-semibold text-brand-success/80 mb-2 flex items-center gap-1.5">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-                    Нравится
-                  </label>
-                  <div class="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
-                    <span v-for="(item, idx) in form.likes" :key="idx"
-                      class="flex items-center gap-1 pl-3 pr-1.5 py-1 bg-brand-success/10 border border-brand-success/25 text-brand-success text-xs rounded-full font-semibold">
-                      {{ item }}
-                      <button type="button" @click="removeTag('likes', idx)"
-                        class="w-4 h-4 flex items-center justify-center rounded-full hover:bg-brand-success/20 text-brand-success/60 hover:text-brand-success transition-colors">×</button>
-                    </span>
+              <nav class="p-2 space-y-0.5">
+                <button
+                  v-for="sec in sections" :key="sec.id"
+                  @click="scrollTo(sec.id)"
+                  class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all group"
+                  :class="activeSection === sec.id ? 'text-white' : 'text-brand-muted hover:text-white'"
+                  :style="activeSection === sec.id ? `background:${sec.color}20;box-shadow:inset 0 0 0 1px ${sec.color}30` : ''">
+                  <div class="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 transition-all"
+                    :style="activeSection === sec.id ? `background:${sec.color}30` : ''"
+                    :class="activeSection !== sec.id ? 'group-hover:bg-white/5' : ''">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      :style="activeSection === sec.id ? `color:${sec.color}` : ''"
+                      :class="activeSection !== sec.id ? 'text-brand-muted group-hover:text-white' : ''">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sec.iconPath" />
+                    </svg>
                   </div>
-                  <div class="flex gap-2">
-                    <input v-model="newLike" type="text" placeholder="Добавить…"
-                      class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-success/60 transition-all"
-                      @keydown.enter.prevent="addTag('likes')" />
-                    <button type="button" @click="addTag('likes')"
-                      class="w-9 h-9 flex items-center justify-center bg-brand-success/15 border border-brand-success/30 text-brand-success hover:bg-brand-success/25 rounded-xl text-lg font-bold transition-colors">+</button>
-                  </div>
-                </div>
-
-                <!-- Dislikes -->
-                <div>
-                  <label class="block text-sm font-semibold text-brand-error/80 mb-2 flex items-center gap-1.5">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-                    Не нравится
-                  </label>
-                  <div class="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
-                    <span v-for="(item, idx) in form.dislikes" :key="idx"
-                      class="flex items-center gap-1 pl-3 pr-1.5 py-1 bg-brand-error/10 border border-brand-error/25 text-brand-error text-xs rounded-full font-semibold">
-                      {{ item }}
-                      <button type="button" @click="removeTag('dislikes', idx)"
-                        class="w-4 h-4 flex items-center justify-center rounded-full hover:bg-brand-error/20 text-brand-error/60 hover:text-brand-error transition-colors">×</button>
-                    </span>
-                  </div>
-                  <div class="flex gap-2">
-                    <input v-model="newDislike" type="text" placeholder="Добавить…"
-                      class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-error/60 transition-all"
-                      @keydown.enter.prevent="addTag('dislikes')" />
-                    <button type="button" @click="addTag('dislikes')"
-                      class="w-9 h-9 flex items-center justify-center bg-brand-error/10 border border-brand-error/25 text-brand-error hover:bg-brand-error/20 rounded-xl text-lg font-bold transition-colors">+</button>
-                  </div>
-                </div>
-              </div>
-
+                  <span class="flex-1 text-left">{{ sec.label }}</span>
+                  <div v-if="activeSection === sec.id" class="w-1.5 h-1.5 rounded-full flex-shrink-0" :style="`background:${sec.color}`"></div>
+                </button>
+              </nav>
             </div>
-          </div>
 
-          <!-- ── Personalisation ─────────────────────────────────────── -->
-          <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
-            <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3">
-              <div class="w-8 h-8 rounded-xl bg-pink-500/15 flex items-center justify-center">
-                <svg class="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/></svg>
+            <!-- Locked / coming soon settings -->
+            <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl opacity-60">
+              <div class="px-4 py-3 border-b border-brand-border">
+                <h4 class="text-[11px] font-bold text-brand-muted uppercase tracking-widest">Скоро</h4>
               </div>
+              <nav class="p-2 space-y-0.5">
+                <button v-for="item in lockedSettings" :key="item.label" disabled
+                  class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold text-brand-muted cursor-not-allowed">
+                  <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="item.d"/>
+                  </svg>
+                  <span class="flex-1 text-left">{{ item.label }}</span>
+                  <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                  </svg>
+                </button>
+              </nav>
+            </div>
+          </aside>
+
+          <!-- ── Form column ─────────────────────────────────────────── -->
+          <div class="flex-1 min-w-0 space-y-5">
+
+            <!-- Page header -->
+            <div class="flex items-center gap-4">
               <div>
-                <h2 class="font-bold text-white text-sm">Персонализация</h2>
-                <p class="text-xs text-brand-muted">Акцентный цвет профиля</p>
+                <h1 class="text-2xl font-extrabold text-white tracking-tight">Настройки</h1>
+                <p class="text-sm text-brand-muted mt-0.5">Управляйте профилем и персонализацией</p>
               </div>
             </div>
-            <div class="p-6">
-              <label class="block text-sm font-semibold text-brand-muted mb-3">Акцентный цвет</label>
-              <div class="flex items-center gap-4">
-                <input v-model="form.accent_color" type="color"
-                  class="h-12 w-16 rounded-2xl cursor-pointer bg-transparent border-2 border-brand-border p-1 transition-all hover:border-brand-accent/50" />
-                <div class="flex-1">
-                  <input v-model="form.accent_color" type="text" maxlength="7" placeholder="#4C97CF"
-                    class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm font-mono text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all" />
-                  <p class="text-xs text-brand-muted mt-1.5">HEX формат: #RRGGBB</p>
+
+            <form @submit.prevent="handleSubmit" class="space-y-5">
+
+              <!-- ── § 1: MEDIA ──────────────────────────────────────── -->
+              <section :id="sections[0].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
+                  :style="`background:linear-gradient(90deg,${sections[0].color}0c 0%,transparent 100%)`">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[0].color}1a`">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[0].color}`">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[0].iconPath"/>
+                    </svg>
+                  </div>
+                  <h2 class="font-bold text-white text-sm">{{ sections[0].label }}</h2>
                 </div>
-                <!-- Live preview swatch -->
-                <div class="flex flex-col items-center gap-1.5">
-                  <div class="w-12 h-12 rounded-2xl border-2 border-white/10 shadow-lg" :style="{ backgroundColor: form.accent_color }"></div>
-                  <span class="text-[10px] text-brand-muted font-semibold">Превью</span>
+                <div class="p-0">
+
+                  <!-- Hidden file inputs -->
+                  <input ref="avatarFileRef" type="file" accept="image/*" class="hidden" @change="onAvatarFileChange"/>
+                  <input ref="bannerFileRef" type="file" accept="image/*" class="hidden" @change="onBannerFileChange"/>
+
+                  <!-- ── Combined banner + avatar preview ── -->
+                  <div class="relative">
+                    <!-- Banner drag-drop + click zone -->
+                    <div
+                      class="relative w-full h-48 overflow-hidden cursor-pointer group transition-all"
+                      :class="bannerDragOver ? 'ring-2 ring-inset ring-sky-400' : ''"
+                      :style="form.banner_url
+                        ? `background-image:url(${form.banner_url});background-size:cover;background-position:center`
+                        : `background:linear-gradient(135deg,${form.accent_color}30 0%,${form.accent_color}08 60%,transparent 100%)`"
+                      @click="bannerFileRef?.click()"
+                      @dragover.prevent="bannerDragOver = true"
+                      @dragleave.self="bannerDragOver = false"
+                      @drop.prevent="onBannerDrop">
+                      <!-- grid overlay for empty state -->
+                      <div v-if="!form.banner_url"
+                        class="absolute inset-0 pointer-events-none"
+                        style="background-image:repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,255,255,0.025) 39px,rgba(255,255,255,0.025) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,255,255,0.025) 39px,rgba(255,255,255,0.025) 40px)">
+                      </div>
+                      <!-- hover / drag-over overlay -->
+                      <div class="absolute inset-0 transition-all duration-200 flex flex-col items-center justify-center gap-2 pointer-events-none"
+                        :class="bannerDragOver ? 'bg-sky-500/20 opacity-100' : 'bg-black/50 opacity-0 group-hover:opacity-100'">
+                        <div class="w-10 h-10 rounded-2xl border flex items-center justify-center backdrop-blur transition-all"
+                          :class="bannerDragOver ? 'bg-sky-500/30 border-sky-400/60' : 'bg-white/15 border-white/25'">
+                          <svg v-if="!bannerDragOver" class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                          </svg>
+                          <svg v-else class="w-5 h-5 text-sky-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                          </svg>
+                        </div>
+                        <span class="text-white text-xs font-bold">
+                          {{ bannerDragOver ? 'Отпустите файл' : (form.banner_url ? 'Изменить баннер' : 'Добавить баннер') }}
+                        </span>
+                        <span v-if="!bannerDragOver" class="text-white/50 text-[10px]">Клик или перетащите изображение</span>
+                      </div>
+                      <!-- action buttons top-right -->
+                      <div class="absolute top-3 right-3 flex gap-1.5">
+                        <Transition name="fade">
+                          <button v-if="form.banner_url" type="button"
+                            @click.stop="reopenCrop('banner')"
+                            class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-black/55 border border-white/20 backdrop-blur text-white/75 hover:text-white hover:bg-black/80 transition-all text-[10px] font-bold">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+                            Кадр
+                          </button>
+                        </Transition>
+                        <Transition name="fade">
+                          <button v-if="form.banner_url" type="button"
+                            @click.stop="form.banner_url = ''"
+                            class="w-7 h-7 rounded-full bg-black/55 border border-white/20 backdrop-blur flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-all">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                          </button>
+                        </Transition>
+                      </div>
+                    </div>
+
+                    <!-- Avatar drag-drop zone over banner bottom -->
+                    <div class="absolute left-6 -bottom-10">
+                      <div
+                        class="relative w-20 h-20 rounded-full cursor-pointer group/av transition-all"
+                        :class="avatarDragOver ? 'scale-105' : ''"
+                        @click="avatarFileRef?.click()"
+                        @dragover.prevent="avatarDragOver = true"
+                        @dragleave.self="avatarDragOver = false"
+                        @drop.prevent="onAvatarDrop">
+                        <div class="w-20 h-20 rounded-full overflow-hidden border-[3px] shadow-xl transition-all"
+                          :style="`border-color:${avatarDragOver ? '#38bdf8' : form.accent_color + '66'}`">
+                          <img v-if="form.avatar_url" :src="form.avatar_url" class="w-full h-full object-cover"/>
+                          <div v-else class="w-full h-full flex items-center justify-center font-bold text-3xl"
+                            :style="`background:${form.accent_color}26;color:${form.accent_color}`">
+                            {{ (form.display_name || authStore.user?.username || '?')[0].toUpperCase() }}
+                          </div>
+                        </div>
+                        <!-- hover / drag overlay -->
+                        <div class="absolute inset-0 rounded-full transition-all duration-200 flex items-center justify-center"
+                          :class="avatarDragOver ? 'bg-sky-500/45 opacity-100' : 'bg-black/55 opacity-0 group-hover/av:opacity-100'">
+                          <svg v-if="!avatarDragOver" class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                          </svg>
+                          <svg v-else class="w-6 h-6 text-sky-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                          </svg>
+                        </div>
+                        <!-- remove avatar -->
+                        <button v-if="form.avatar_url" type="button"
+                          @click.stop="form.avatar_url = ''"
+                          class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-brand-error border-2 border-brand-card flex items-center justify-center text-white shadow-lg opacity-0 group-hover/av:opacity-100 transition-all">
+                          <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Spacer + action row -->
+                  <div class="pt-12 px-6 pb-4 flex items-end justify-between">
+                    <div>
+                      <p class="font-bold text-white text-sm">{{ form.display_name || authStore.user?.username }}</p>
+                      <p class="text-xs text-brand-muted">@{{ authStore.user?.username }}</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2 text-xs text-brand-muted/60 font-semibold">
+                      <button type="button" @click="avatarFileRef?.click()"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-border hover:border-brand-accent/50 hover:text-white transition-all">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        Аватар
+                      </button>
+                      <button type="button" @click="bannerFileRef?.click()"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-border hover:border-brand-accent/50 hover:text-white transition-all">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        Баннер
+                      </button>
+                      <button v-if="form.avatar_url" type="button" @click="reopenCrop('avatar')"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-border hover:border-sky-400/50 hover:text-sky-300 transition-all">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+                        Кадр аватар
+                      </button>
+                    </div>
+                  </div>
+
                 </div>
+              </section>
+
+              <!-- ── § 2: BASIC INFO ─────────────────────────────────── -->
+              <section :id="sections[1].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
+                  :style="`background:linear-gradient(90deg,${sections[1].color}0c 0%,transparent 100%)`">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[1].color}1a`">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[1].color}`">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[1].iconPath"/>
+                    </svg>
+                  </div>
+                  <h2 class="font-bold text-white text-sm">{{ sections[1].label }}</h2>
+                </div>
+                <div class="p-6 space-y-5">
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <!-- Display name -->
+                    <div>
+                      <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-bold text-brand-muted uppercase tracking-wider">Отображаемое имя</label>
+                        <span class="text-[11px] tabular-nums" :class="(form.display_name?.length??0) > 45 ? 'text-brand-error/80' : 'text-brand-muted/50'">
+                          {{ form.display_name?.length ?? 0 }}<span class="opacity-50">/50</span>
+                        </span>
+                      </div>
+                      <input v-model="form.display_name" type="text" maxlength="50" placeholder="Ваше имя" class="field-input"/>
+                      <p v-if="savedForm.display_name" class="text-[11px] text-brand-muted/50 mt-1.5 truncate">
+                        Сейчас: <span class="text-brand-muted/80 font-semibold">{{ savedForm.display_name }}</span>
+                      </p>
+                    </div>
+                    <!-- Status -->
+                    <div>
+                      <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-bold text-brand-muted uppercase tracking-wider">Статус</label>
+                        <span class="text-[11px] tabular-nums" :class="(form.status?.length??0) > 90 ? 'text-brand-error/80' : 'text-brand-muted/50'">
+                          {{ form.status?.length ?? 0 }}<span class="opacity-50">/100</span>
+                        </span>
+                      </div>
+                      <input v-model="form.status" type="text" maxlength="100" placeholder="Чем вы занимаетесь?" class="field-input"/>
+                      <p v-if="savedForm.status" class="text-[11px] text-brand-muted/50 mt-1.5 truncate">
+                        Сейчас: <span class="text-brand-muted/80 font-semibold">{{ savedForm.status }}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Bio -->
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider">О себе</label>
+                      <span class="text-[11px] tabular-nums" :class="(form.bio?.length??0) > 270 ? 'text-brand-error/80' : 'text-brand-muted/50'">
+                        {{ form.bio?.length ?? 0 }}<span class="opacity-50">/300</span>
+                      </span>
+                    </div>
+                    <textarea v-model="form.bio" rows="4" maxlength="300" placeholder="Расскажите о себе…" class="field-input resize-none"></textarea>
+                    <p v-if="savedForm.bio" class="text-[11px] text-brand-muted/50 mt-1.5 line-clamp-1">
+                      Сейчас: <span class="text-brand-muted/80 font-semibold">{{ savedForm.bio }}</span>
+                    </p>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <!-- Job title -->
+                    <div>
+                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-2">Должность / Занятие</label>
+                      <input v-model="form.job_title" type="text" placeholder="Напр. Цифровой художник" class="field-input"/>
+                      <p v-if="savedForm.job_title" class="text-[11px] text-brand-muted/50 mt-1.5 truncate">
+                        Сейчас: <span class="text-brand-muted/80 font-semibold">{{ savedForm.job_title }}</span>
+                      </p>
+                    </div>
+                    <!-- Pronouns -->
+                    <div>
+                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-2">Местоимения</label>
+                      <div class="flex gap-2">
+                        <input v-model="form.pronouns" type="text" placeholder="он/его, она/её…" class="field-input flex-1"/>
+                        <div class="flex gap-1.5 items-center flex-shrink-0">
+                          <button v-for="p in pronounPresets" :key="p" type="button" @click="form.pronouns = p"
+                            class="px-2 py-1 rounded-xl text-[10px] font-bold transition-all border"
+                            :class="form.pronouns === p ? 'border-transparent text-white' : 'bg-brand-bg border-brand-border text-brand-muted hover:text-white'"
+                            :style="form.pronouns === p ? `background:${form.accent_color};border-color:${form.accent_color}` : ''">
+                            {{ p.split('/')[0] }}
+                          </button>
+                        </div>
+                      </div>
+                      <p v-if="savedForm.pronouns" class="text-[11px] text-brand-muted/50 mt-1.5 truncate">
+                        Сейчас: <span class="text-brand-muted/80 font-semibold">{{ savedForm.pronouns }}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Birth date + NSFW note -->
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-2">Дата рождения</label>
+                      <input v-model="form.birth_date" type="date" class="field-input"
+                        :max="new Date().toISOString().substring(0,10)" />
+                      <p class="text-[11px] mt-1.5"
+                        :class="birthAge !== null && birthAge < 18 ? 'text-brand-error/80' : 'text-brand-muted/50'">
+                        <template v-if="birthAge !== null">
+                          {{ birthAge }} лет
+                          <span v-if="birthAge < 18"> · NSFW-контент недоступен (менее 18 лет)</span>
+                        </template>
+                        <template v-else>Используется для проверки доступа к NSFW-контенту</template>
+                      </p>
+                    </div>
+                  </div>
+
+                </div>
+              </section>
+
+              <!-- ── § 3: CONTACTS ───────────────────────────────────── -->
+              <section :id="sections[2].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
+                  :style="`background:linear-gradient(90deg,${sections[2].color}0c 0%,transparent 100%)`">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[2].color}1a`">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[2].color}`">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[2].iconPath"/>
+                    </svg>
+                  </div>
+                  <h2 class="font-bold text-white text-sm">{{ sections[2].label }}</h2>
+                </div>
+                <div class="p-6 space-y-5">
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <!-- Website -->
+                    <div>
+                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-2">Веб-сайт</label>
+                      <div class="relative">
+                        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted/50 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                        </svg>
+                        <input v-model="form.website" type="url" placeholder="https://yoursite.com" class="field-input pl-10"/>
+                      </div>
+                    </div>
+
+                    <!-- Country combobox -->
+                    <div class="relative">
+                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-2">Страна</label>
+                      <div class="relative">
+                        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted/50 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064"/>
+                        </svg>
+                        <input
+                          v-model="countrySearch"
+                          type="text"
+                          placeholder="Выбрать страну…"
+                          class="field-input pl-10 pr-8"
+                          @focus="countryDropOpen = true"
+                          @blur="onCountryBlur"
+                          @input="countryDropOpen = true"
+                        />
+                        <svg v-if="form.country" class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#22c55e">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                        </svg>
+                      </div>
+                      <Transition name="fade">
+                        <div v-if="countryDropOpen && filteredCountries.length"
+                          class="absolute z-30 mt-1 w-full bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-y-auto max-h-52">
+                          <button v-for="c in filteredCountries" :key="c" type="button"
+                            class="w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-all"
+                            :class="c === form.country ? 'text-white font-bold' : 'text-brand-muted'"
+                            @mousedown.prevent="selectCountry(c)">
+                            {{ c }}
+                          </button>
+                        </div>
+                      </Transition>
+                    </div>
+
+                    <!-- City combobox -->
+                    <div class="relative">
+                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-2">Город</label>
+                      <div class="relative">
+                        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted/50 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        <input
+                          v-model="citySearch"
+                          type="text"
+                          placeholder="Введите или выберите…"
+                          class="field-input pl-10"
+                          @focus="cityDropOpen = filteredCities.length > 0"
+                          @blur="onCityBlur"
+                          @input="cityDropOpen = filteredCities.length > 0; form.location = citySearch"
+                        />
+                      </div>
+                      <Transition name="fade">
+                        <div v-if="cityDropOpen && filteredCities.length"
+                          class="absolute z-30 mt-1 w-full bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-y-auto max-h-52">
+                          <button v-for="c in filteredCities" :key="c" type="button"
+                            class="w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-all"
+                            :class="c === form.location ? 'text-white font-bold' : 'text-brand-muted'"
+                            @mousedown.prevent="selectCity(c)">
+                            {{ c }}
+                          </button>
+                        </div>
+                      </Transition>
+                    </div>
+
+                    <!-- Relationship status -->
+                    <div>
+                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-2">Семейное положение</label>
+                      <div class="grid grid-cols-2 gap-1.5">
+                        <button v-for="rs in relationshipOptions" :key="rs.value" type="button"
+                          @click="form.relationship_status = form.relationship_status === rs.value ? '' : rs.value"
+                          class="py-2 px-3 rounded-xl text-xs font-semibold transition-all border text-center"
+                          :class="form.relationship_status === rs.value
+                            ? 'text-white border-transparent'
+                            : 'bg-brand-bg border-brand-border text-brand-muted hover:text-white'"
+                          :style="form.relationship_status === rs.value
+                            ? `background:${form.accent_color}30;border-color:${form.accent_color}55;color:${form.accent_color}`
+                            : ''">
+                          {{ rs.label }}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Partner picker (shown when applicable status) -->
+                  <Transition name="fade">
+                    <div v-if="showPartnerPicker" class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-3">
+                      <p class="text-xs font-bold text-brand-muted uppercase tracking-wider flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#ec4899">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                        </svg>
+                        Партнёр (из друзей)
+                      </p>
+
+                      <!-- Current partner chip -->
+                      <div v-if="selectedPartner" class="flex items-center gap-3 p-3 rounded-xl border border-brand-border bg-brand-card">
+                        <img v-if="selectedPartner.avatar_url" :src="selectedPartner.avatar_url" class="w-8 h-8 rounded-full object-cover flex-shrink-0"/>
+                        <div v-else class="w-8 h-8 rounded-full bg-brand-border flex items-center justify-center text-xs font-bold text-brand-muted flex-shrink-0">
+                          {{ (selectedPartner.display_name ?? selectedPartner.username)[0].toUpperCase() }}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-bold text-white truncate">{{ selectedPartner.display_name ?? selectedPartner.username }}</p>
+                          <p class="text-xs text-brand-muted truncate">@{{ selectedPartner.username }}</p>
+                        </div>
+                        <button type="button" @click="clearPartner"
+                          class="w-7 h-7 flex items-center justify-center rounded-xl text-brand-muted hover:text-white hover:bg-white/10 transition-all flex-shrink-0">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                      </div>
+
+                      <!-- Search / select -->
+                      <div class="relative">
+                        <input
+                          v-model="partnerSearch"
+                          type="text"
+                          placeholder="Найти по имени или @логину…"
+                          class="field-input"
+                          @focus="partnerDropOpen = true"
+                          @blur="onPartnerBlur"
+                        />
+                        <Transition name="fade">
+                          <div v-if="partnerDropOpen && filteredPartners.length"
+                            class="absolute z-30 mt-1 w-full bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-y-auto max-h-48">
+                            <button v-for="u in filteredPartners" :key="u.id" type="button"
+                              class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-all"
+                              @mousedown.prevent="selectPartner(u)">
+                              <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover flex-shrink-0"/>
+                              <div v-else class="w-7 h-7 rounded-full bg-brand-border flex items-center justify-center text-xs font-bold text-brand-muted flex-shrink-0">
+                                {{ (u.display_name ?? u.username)[0].toUpperCase() }}
+                              </div>
+                              <div class="flex-1 min-w-0 text-left">
+                                <p class="text-sm font-semibold text-white truncate">{{ u.display_name ?? u.username }}</p>
+                                <p class="text-xs text-brand-muted truncate">@{{ u.username }}</p>
+                              </div>
+                            </button>
+                            <p v-if="!filteredPartners.length" class="text-xs text-brand-muted px-4 py-3">Никого не найдено</p>
+                          </div>
+                        </Transition>
+                      </div>
+                      <p v-if="!followingList.length" class="text-xs text-brand-muted/60">Вы пока ни на кого не подписаны</p>
+                    </div>
+                  </Transition>
+
+                </div>
+              </section>
+
+              <!-- ── § 4: FURSONA ────────────────────────────────────── -->
+              <section :id="sections[3].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
+                  :style="`background:linear-gradient(90deg,${sections[3].color}0c 0%,transparent 100%)`">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[3].color}1a`">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[3].color}`">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[3].iconPath"/>
+                    </svg>
+                  </div>
+                  <h2 class="font-bold text-white text-sm">{{ sections[3].label }}</h2>
+                </div>
+                <div class="p-6 space-y-5">
+
+                  <!-- Step indicators -->
+                  <div class="flex gap-2 mb-1">
+                    <div v-for="(step, i) in fursonaSteps" :key="i" class="flex-1 flex flex-col items-center gap-1">
+                      <div class="w-full h-1 rounded-full"
+                        :class="step.done ? 'bg-brand-accent' : step.locked ? 'bg-brand-border/30' : 'bg-brand-border'"></div>
+                      <span class="text-[10px] font-semibold"
+                        :class="step.done ? 'text-brand-accent' : step.locked ? 'text-brand-muted/40' : 'text-brand-muted'">
+                        {{ step.label }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Step 1: Species + Name -->
+                  <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-4">
+                    <p class="text-xs font-bold text-brand-muted uppercase tracking-wider flex items-center gap-1.5">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[3].color}`">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                      </svg>
+                      Шаг 1 — Вид персонажа
+                    </p>
+
+                    <!-- Species multi-select grid -->
+                    <div>
+                      <label class="block text-xs font-semibold text-brand-muted mb-2">Вид / порода (можно несколько)</label>
+                      <div class="flex flex-wrap gap-1.5">
+                        <button v-for="sp in fursonaSpeciesList" :key="sp" type="button"
+                          @click="toggleSpecies(sp)"
+                          class="px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all"
+                          :class="selectedSpecies.includes(sp)
+                            ? 'text-white border-transparent'
+                            : 'bg-brand-bg border-brand-border text-brand-muted hover:text-white hover:border-brand-accent/50'"
+                          :style="selectedSpecies.includes(sp)
+                            ? `background:${sections[3].color}35;border-color:${sections[3].color}60;color:${sections[3].color}`
+                            : ''">
+                          {{ sp }}
+                        </button>
+                      </div>
+                      <!-- Custom free-text add -->
+                      <div class="flex gap-2 mt-2">
+                        <input v-model="customSpeciesInput" type="text" placeholder="Свой вид…" maxlength="30"
+                          class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-brand-muted/50 focus:outline-none focus:border-brand-accent/60 transition-all"
+                          @keydown.enter.prevent="addCustomSpecies" />
+                        <button type="button" @click="addCustomSpecies"
+                          class="px-3 py-2 rounded-xl text-xs font-bold border transition-all"
+                          :style="`background:${sections[3].color}20;border-color:${sections[3].color}40;color:${sections[3].color}`">+</button>
+                      </div>
+                    </div>
+
+                    <!-- Primary color -->
+                    <div>
+                      <label class="block text-xs font-semibold text-brand-muted mb-2">Основной окрас шерсти</label>
+                      <div class="flex flex-wrap gap-2">
+                        <button v-for="fc in fursonaColorSwatches" :key="fc.color" type="button"
+                          @click="form.fursona_color = form.fursona_color === fc.color ? '' : fc.color"
+                          class="relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all"
+                          :class="form.fursona_color === fc.color ? 'border-white/60 scale-105' : 'border-transparent hover:border-brand-border'"
+                          :title="fc.label">
+                          <span class="w-7 h-7 rounded-lg shadow-sm border border-black/20"
+                            :style="`background:${fc.color}`"></span>
+                          <span v-if="form.fursona_color === fc.color"
+                            class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full flex items-center justify-center shadow">
+                            <svg class="w-2 h-2 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                          </span>
+                        </button>
+                        <!-- Custom hex color input -->
+                        <label class="relative flex flex-col items-center gap-1 p-1.5 cursor-pointer rounded-xl border border-brand-border hover:border-brand-accent/50 transition-all" title="Свой цвет">
+                          <span class="w-7 h-7 rounded-lg shadow-sm border border-black/20 flex items-center justify-center overflow-hidden"
+                            :style="form.fursona_color && !fursonaColorSwatches.some(s=>s.color===form.fursona_color) ? `background:${form.fursona_color}` : 'background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)'">
+                          </span>
+                          <input type="color" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                            :value="form.fursona_color || '#ffffff'"
+                            @input="form.fursona_color = ($event.target as HTMLInputElement).value" />
+                        </label>
+                      </div>
+                      <p v-if="form.fursona_color" class="text-[11px] text-brand-muted/60 mt-1.5 flex items-center gap-1.5">
+                        <span class="w-3 h-3 rounded-sm inline-block border border-black/20" :style="`background:${form.fursona_color}`"></span>
+                        {{ fursonaColorSwatches.find(s=>s.color===form.fursona_color)?.label ?? form.fursona_color }}
+                      </p>
+                    </div>
+
+                    <!-- Character name -->
+                    <div>
+                      <label class="block text-xs font-semibold text-brand-muted mb-1">Имя персонажа</label>
+                      <input v-model="form.fursona_name" type="text" placeholder="Как зовут фурсону…"
+                        class="field-input" :disabled="!form.persona"
+                        :class="!form.persona ? 'opacity-40 cursor-not-allowed' : ''"/>
+                    </div>
+                  </div>
+
+                  <!-- Step 2: Character (likes/dislikes) -->
+                  <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-4"
+                    :class="!form.persona ? 'opacity-40 pointer-events-none' : ''">
+                    <p class="text-xs font-bold text-brand-muted uppercase tracking-wider flex items-center gap-1.5">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#22c55e">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                      </svg>
+                      Шаг 2 — Характер
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                      <!-- Likes -->
+                      <div>
+                        <label class="text-sm font-bold mb-2 flex items-center gap-1.5" style="color:#22c55e">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                          </svg>
+                          Нравится
+                        </label>
+                        <div class="flex flex-wrap gap-1.5 mb-2 min-h-[34px]">
+                          <span v-for="(item, idx) in form.likes" :key="idx"
+                            class="flex items-center gap-1 pl-3 pr-1.5 py-1 text-xs rounded-full font-bold"
+                            style="background:#22c55e18;border:1px solid #22c55e35;color:#22c55e">
+                            {{ item }}
+                            <button type="button" @click="removeTag('likes', idx)"
+                              class="w-4 h-4 flex items-center justify-center rounded-full transition-all text-xs leading-none hover:bg-green-500/20">×</button>
+                          </span>
+                        </div>
+                        <div class="flex gap-2">
+                          <input v-model="newLike" type="text" placeholder="Добавить…"
+                            class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-brand-muted/50 focus:outline-none focus:border-green-500/50 transition-all"
+                            @keydown.enter.prevent="addTagFromInput('likes')"/>
+                          <button type="button" @click="addTagFromInput('likes')"
+                            class="w-9 h-9 flex items-center justify-center rounded-xl text-lg font-bold transition-all border"
+                            style="background:#22c55e18;border-color:#22c55e35;color:#22c55e">+</button>
+                        </div>
+                      </div>
+                      <!-- Dislikes -->
+                      <div>
+                        <label class="text-sm font-bold mb-2 flex items-center gap-1.5" style="color:#ef4444">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2"/>
+                          </svg>
+                          Не нравится
+                        </label>
+                        <div class="flex flex-wrap gap-1.5 mb-2 min-h-[34px]">
+                          <span v-for="(item, idx) in form.dislikes" :key="idx"
+                            class="flex items-center gap-1 pl-3 pr-1.5 py-1 text-xs rounded-full font-bold"
+                            style="background:#ef444418;border:1px solid #ef444435;color:#ef4444">
+                            {{ item }}
+                            <button type="button" @click="removeTag('dislikes', idx)"
+                              class="w-4 h-4 flex items-center justify-center rounded-full transition-all text-xs leading-none hover:bg-red-500/20">×</button>
+                          </span>
+                        </div>
+                        <div class="flex gap-2">
+                          <input v-model="newDislike" type="text" placeholder="Добавить…"
+                            class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-brand-muted/50 focus:outline-none focus:border-red-500/50 transition-all"
+                            @keydown.enter.prevent="addTagFromInput('dislikes')"/>
+                          <button type="button" @click="addTagFromInput('dislikes')"
+                            class="w-9 h-9 flex items-center justify-center rounded-xl text-lg font-bold transition-all border"
+                            style="background:#ef444418;border-color:#ef444435;color:#ef4444">+</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Step 3: Fursona Photo + Step 4: Ref Sheet -->
+                  <div class="grid grid-cols-2 gap-3">
+                    <!-- Step 3 — Photo (unlocked) -->
+                    <div>
+                      <input ref="fursonaPhotoRef" type="file" accept="image/*" class="hidden"
+                        @change="onFursonaPhotoChange" />
+                      <div
+                        class="p-4 border-2 border-dashed rounded-2xl flex flex-col items-center gap-2 transition-all cursor-pointer"
+                        :class="uploadingFursonaPhoto ? 'border-brand-accent/40 bg-brand-accent/5' : 'border-brand-border/50 hover:border-brand-accent/40 hover:bg-brand-accent/5'"
+                        @click="fursonaPhotoRef?.click()">
+                        <!-- Preview or icon -->
+                        <div v-if="form.fursona_photo_url" class="relative group">
+                          <img :src="form.fursona_photo_url" class="w-14 h-14 rounded-xl object-cover border border-brand-border" />
+                          <div class="absolute inset-0 rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                            </svg>
+                          </div>
+                        </div>
+                        <div v-else-if="uploadingFursonaPhoto" class="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
+                        <svg v-else class="w-6 h-6 text-brand-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        <p class="text-xs font-semibold text-brand-muted">Шаг 3 — Фото</p>
+                        <span class="text-[10px] text-brand-accent/80 bg-brand-accent/10 px-2 py-0.5 rounded-full">
+                          {{ form.fursona_photo_url ? 'Сменить' : 'Загрузить' }}
+                        </span>
+                      </div>
+                      <!-- Remove button -->
+                      <button v-if="form.fursona_photo_url" type="button"
+                        @click.stop="form.fursona_photo_url = ''"
+                        class="mt-1.5 w-full text-[10px] text-brand-muted hover:text-rose-400 transition-colors text-center">
+                        Удалить фото
+                      </button>
+                    </div>
+                    <!-- Step 4 — Ref Sheet (still coming soon) -->
+                    <div class="p-4 border-2 border-dashed border-brand-border/50 rounded-2xl flex flex-col items-center gap-2 opacity-40 cursor-not-allowed">
+                      <svg class="w-6 h-6 text-brand-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                      </svg>
+                      <p class="text-xs font-semibold text-brand-muted">Шаг 4 — Реф</p>
+                      <span class="text-[10px] text-brand-muted/60 bg-brand-bg px-2 py-0.5 rounded-full">coming soon</span>
+                    </div>
+                  </div>
+
+                </div>
+              </section>
+
+              <!-- ── § 5: APPEARANCE ─────────────────────────────────── -->
+              <section :id="sections[4].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
+                  :style="`background:linear-gradient(90deg,${sections[4].color}0c 0%,transparent 100%)`">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[4].color}1a`">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[4].color}`">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[4].iconPath"/>
+                    </svg>
+                  </div>
+                  <h2 class="font-bold text-white text-sm">{{ sections[4].label }}</h2>
+                </div>
+                <div class="p-6 space-y-5">
+
+                  <div>
+                    <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-4">Акцентный цвет</label>
+
+                    <!-- Preset swatches -->
+                    <div class="flex flex-wrap gap-2.5 mb-5">
+                      <button v-for="swatch in colorSwatches" :key="swatch.color" type="button"
+                        @click="form.accent_color = swatch.color"
+                        class="relative w-9 h-9 rounded-2xl transition-all duration-200 hover:scale-110"
+                        :style="`background:${swatch.color};box-shadow:0 4px 12px ${swatch.color}44`"
+                        :title="swatch.name">
+                        <Transition name="swatch-check">
+                          <div v-if="form.accent_color === swatch.color"
+                            class="absolute inset-0 rounded-2xl flex items-center justify-center">
+                            <svg class="w-4 h-4 text-white drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                            </svg>
+                          </div>
+                        </Transition>
+                      </button>
+                    </div>
+
+                    <!-- Custom picker row -->
+                    <div class="flex items-center gap-4 p-4 rounded-2xl border border-brand-border" style="background:rgba(255,255,255,0.03)">
+                      <!-- color input hidden behind preview div -->
+                      <div class="relative flex-shrink-0">
+                        <input v-model="form.accent_color" type="color"
+                          class="absolute inset-0 w-full h-full opacity-0 cursor-pointer rounded-xl"/>
+                        <div class="w-14 h-12 rounded-xl border border-white/10 transition-all pointer-events-none"
+                          :style="`background:${form.accent_color};box-shadow:0 4px 16px ${form.accent_color}55`"></div>
+                      </div>
+                      <div class="flex-1">
+                        <p class="text-xs text-brand-muted font-bold mb-1.5">HEX-код</p>
+                        <input v-model="form.accent_color" type="text" maxlength="7" placeholder="#4C97CF"
+                          class="field-input font-mono tracking-widest uppercase text-center"/>
+                      </div>
+                      <!-- Live button preview -->
+                      <div class="flex-shrink-0 text-center">
+                        <p class="text-xs text-brand-muted font-bold mb-1.5">Кнопка</p>
+                        <div class="h-10 px-4 rounded-2xl flex items-center justify-center text-white text-xs font-bold transition-all"
+                          :style="`background:${form.accent_color};box-shadow:0 4px 16px ${form.accent_color}44`">
+                          Сохранить
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </section>
+
+              <!-- ── Submit (mobile / tablet) ───────────────────────── -->
+              <div class="flex items-center justify-between gap-4 pt-2 xl:hidden">
+                <router-link :to="`/profile/${authStore.user?.id}`"
+                  class="px-6 py-3 bg-brand-card border border-brand-border hover:border-brand-muted/40 text-brand-muted hover:text-white rounded-2xl text-sm font-bold transition-all">
+                  Отмена
+                </router-link>
+                <button type="submit" :disabled="userStore.isLoading"
+                  class="flex-1 max-w-xs py-3 text-sm font-bold text-white transition-all shadow-lg flex items-center justify-center gap-2 rounded-2xl disabled:opacity-50"
+                  :style="`background:${form.accent_color};box-shadow:0 4px 24px ${form.accent_color}44`">
+                  <span v-if="userStore.isLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                  {{ userStore.isLoading ? 'Сохранение…' : 'Сохранить профиль' }}
+                </button>
               </div>
-            </div>
-          </div>
 
-          <!-- ── Submit ──────────────────────────────────────────────── -->
-          <div class="flex items-center justify-between gap-4 py-2">
-            <router-link :to="`/profile/${authStore.user?.id}`"
-              class="px-6 py-3 bg-brand-card border border-brand-border hover:border-brand-accent/50 text-brand-muted hover:text-white rounded-2xl text-sm font-bold transition-all">
-              Отмена
-            </router-link>
-            <button type="submit" :disabled="userStore.isLoading"
-              class="flex-1 max-w-xs py-3 bg-brand-accent hover:bg-brand-accent-plus disabled:opacity-50 disabled:cursor-not-allowed rounded-2xl text-sm font-bold text-white transition-all shadow-lg shadow-brand-accent/25 flex items-center justify-center gap-2">
-              <svg v-if="!userStore.isLoading" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-              <span v-if="userStore.isLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-              {{ userStore.isLoading ? 'Сохранение…' : 'Сохранить профиль' }}
-            </button>
+            </form>
           </div>
+          <!-- end form column -->
 
-        </form>
+        </div>
       </main>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
-import { useRouter } from 'vue-router'
+import AppHeader from '@/components/AppHeader.vue'
+import AppSidebar from '@/components/AppSidebar.vue'
+import api from '@/api'
 
-const router = useRouter()
-const userStore = useUserStore()
-const authStore = useAuthStore()
+const userStore  = useUserStore()
+const authStore  = useAuthStore()
 
-const saved      = ref(false)
+// ── Toast ──────────────────────────────────────────────────────────────────
+const toast = reactive({ show: false, type: 'success' as 'success' | 'error', message: '' })
+let toastTimer = 0
+function showToast(type: 'success' | 'error', message: string) {
+  clearTimeout(toastTimer)
+  Object.assign(toast, { show: true, type, message })
+  toastTimer = window.setTimeout(() => { toast.show = false }, 3500)
+}
+
+// ── Tag inputs ──────────────────────────────────────────────────────────────
 const newLike    = ref('')
 const newDislike = ref('')
 
+// ── Media file refs + drag state ───────────────────────────────────────────
+const avatarFileRef       = ref<HTMLInputElement | null>(null)
+const bannerFileRef       = ref<HTMLInputElement | null>(null)
+const fursonaPhotoRef     = ref<HTMLInputElement | null>(null)
+const avatarDragOver      = ref(false)
+const bannerDragOver      = ref(false)
+const uploadingFursonaPhoto = ref(false)
+
+// ── Original source data-URLs (always the pre-crop file) ──────────────────
+// Stored the moment a file is picked from disk or dropped — never replaced by
+// the cropped/uploaded result, so re-cropping always starts from the original.
+const avatarOriginalSrc = ref<string>('')
+const bannerOriginalSrc = ref<string>('')
+
+// ── Shake / unsaved warning state ──────────────────────────────────────────
+const shaking        = ref(false)
+const unsavedWarning = ref(false)
+
+// ── Form ───────────────────────────────────────────────────────────────────
 const form = reactive({
-  display_name: '',
-  bio:          '',
-  status:       '',
-  persona:      '',
-  avatar_url:   '',
-  banner_url:   '',
-  accent_color: '#4C97CF',
-  likes:        [] as string[],
-  dislikes:     [] as string[],
+  display_name:        '',
+  bio:                 '',
+  status:              '',
+  persona:             '',
+  fursona_name:        '',
+  avatar_url:          '',
+  banner_url:          '',
+  accent_color:        '#4C97CF',
+  website:             '',
+  location:            '',
+  pronouns:            '',
+  job_title:           '',
+  relationship_status: '',
+  relationship_with:   '',
+  country:             '',
+  fursona_color:       '',
+  fursona_photo_url:   '',
+  birth_date:          '',
+  likes:               [] as string[],
+  dislikes:            [] as string[],
+})
+
+// ── Saved snapshot ─────────────────────────────────────────────────────────
+const savedForm = reactive({
+  display_name:        '',
+  bio:                 '',
+  status:              '',
+  persona:             '',
+  fursona_name:        '',
+  avatar_url:          '',
+  banner_url:          '',
+  accent_color:        '#4C97CF',
+  website:             '',
+  location:            '',
+  pronouns:            '',
+  job_title:           '',
+  relationship_status: '',
+  relationship_with:   '',
+  country:             '',
+  fursona_color:       '',
+  fursona_photo_url:   '',
+  birth_date:          '',
+  likes:               [] as string[],
+  dislikes:            [] as string[],
+})
+
+function snapshotToSaved() {
+  savedForm.display_name        = form.display_name
+  savedForm.bio                 = form.bio
+  savedForm.status              = form.status
+  savedForm.persona             = form.persona
+  savedForm.fursona_name        = form.fursona_name
+  savedForm.avatar_url          = form.avatar_url
+  savedForm.banner_url          = form.banner_url
+  savedForm.accent_color        = form.accent_color
+  savedForm.website             = form.website
+  savedForm.location            = form.location
+  savedForm.pronouns            = form.pronouns
+  savedForm.job_title           = form.job_title
+  savedForm.relationship_status = form.relationship_status
+  savedForm.relationship_with   = form.relationship_with
+  savedForm.country             = form.country
+  savedForm.fursona_color       = form.fursona_color
+  savedForm.fursona_photo_url   = form.fursona_photo_url
+  savedForm.birth_date          = form.birth_date
+  savedForm.likes               = [...form.likes]
+  savedForm.dislikes            = [...form.dislikes]
+}
+
+function resetForm() {
+  form.display_name        = savedForm.display_name
+  form.bio                 = savedForm.bio
+  form.status              = savedForm.status
+  form.persona             = savedForm.persona
+  form.fursona_name        = savedForm.fursona_name
+  form.avatar_url          = savedForm.avatar_url
+  form.banner_url          = savedForm.banner_url
+  form.accent_color        = savedForm.accent_color
+  form.website             = savedForm.website
+  form.location            = savedForm.location
+  form.pronouns            = savedForm.pronouns
+  form.job_title           = savedForm.job_title
+  form.relationship_status = savedForm.relationship_status
+  form.relationship_with   = savedForm.relationship_with
+  form.country             = savedForm.country
+  form.fursona_color       = savedForm.fursona_color
+  form.fursona_photo_url   = savedForm.fursona_photo_url
+  form.birth_date          = savedForm.birth_date
+  form.likes               = [...savedForm.likes]
+  form.dislikes            = [...savedForm.dislikes]
+  // Clear originals so re-crop picks up the reverted server images
+  avatarOriginalSrc.value = ''
+  bannerOriginalSrc.value = ''
+}
+
+// ── isDirty ────────────────────────────────────────────────────────────────
+const isDirty = computed(() => {
+  const fieldsChanged = (
+    form.display_name        !== savedForm.display_name ||
+    form.bio                 !== savedForm.bio ||
+    form.status              !== savedForm.status ||
+    form.persona             !== savedForm.persona ||
+    form.fursona_name        !== savedForm.fursona_name ||
+    form.avatar_url          !== savedForm.avatar_url ||
+    form.banner_url          !== savedForm.banner_url ||
+    form.accent_color        !== savedForm.accent_color ||
+    form.website             !== savedForm.website ||
+    form.location            !== savedForm.location ||
+    form.pronouns            !== savedForm.pronouns ||
+    form.job_title           !== savedForm.job_title ||
+    form.relationship_status !== savedForm.relationship_status ||
+    form.relationship_with   !== savedForm.relationship_with ||
+    form.country             !== savedForm.country ||
+    form.fursona_color       !== savedForm.fursona_color ||
+    form.fursona_photo_url   !== savedForm.fursona_photo_url ||
+    form.birth_date          !== savedForm.birth_date
+  )
+  return fieldsChanged ||
+    JSON.stringify(form.likes)    !== JSON.stringify(savedForm.likes) ||
+    JSON.stringify(form.dislikes) !== JSON.stringify(savedForm.dislikes)
 })
 
 onMounted(async () => {
   await userStore.fetchMyProfile()
   const p = userStore.profile
   if (!p) return
-  form.display_name = p.display_name ?? ''
-  form.bio          = p.bio          ?? ''
-  form.status       = p.status       ?? ''
-  form.persona      = p.persona      ?? ''
-  form.avatar_url   = p.avatar_url   ?? ''
-  form.banner_url   = p.banner_url   ?? ''
-  form.accent_color = p.accent_color ?? '#4C97CF'
-  form.likes        = [...p.likes]
-  form.dislikes     = [...p.dislikes]
+  form.display_name        = p.display_name        ?? ''
+  form.bio                 = p.bio                 ?? ''
+  form.status              = p.status              ?? ''
+  form.persona             = p.persona             ?? ''
+  form.fursona_name        = p.fursona_name           ?? ''
+  form.avatar_url          = p.avatar_url          ?? ''
+  form.banner_url          = p.banner_url          ?? ''
+  form.accent_color        = p.accent_color        ?? '#4C97CF'
+  form.website             = p.website             ?? ''
+  form.location            = p.location            ?? ''
+  form.pronouns            = p.pronouns            ?? ''
+  form.job_title           = p.job_title           ?? ''
+  form.relationship_status = p.relationship_status ?? ''
+  form.relationship_with   = p.relationship_with   ?? ''
+  form.country             = p.country             ?? ''
+  form.fursona_color       = p.fursona_color        ?? ''
+  form.fursona_photo_url   = p.fursona_photo_url    ?? ''
+  form.birth_date          = p.birth_date ? p.birth_date.substring(0, 10) : ''
+  form.likes               = [...p.likes]
+  form.dislikes            = [...p.dislikes]
+  snapshotToSaved()
+  // Pre-fill combobox search inputs with saved values
+  countrySearch.value = form.country
+  citySearch.value    = form.location
+  // Load following list for partner picker
+  loadFollowing()
 })
 
-function addTag(field: 'likes' | 'dislikes') {
-  const raw  = field === 'likes' ? newLike : newDislike
-  const val  = raw.value.trim()
+// ── Navigation guard ───────────────────────────────────────────────────────
+onBeforeRouteLeave((_to, _from, next) => {
+  if (!isDirty.value) return next()
+  unsavedWarning.value = true
+  shaking.value = true
+  setTimeout(() => { shaking.value = false }, 600)
+  setTimeout(() => { unsavedWarning.value = false }, 3000)
+  next(false)
+})
+
+// ── File picking ───────────────────────────────────────────────────────────
+function onAvatarFileChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) openCrop(file, 'avatar')
+  if (avatarFileRef.value) avatarFileRef.value.value = ''
+}
+function onBannerFileChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) openCrop(file, 'banner')
+  if (bannerFileRef.value) bannerFileRef.value.value = ''
+}
+function onAvatarDrop(e: DragEvent) {
+  avatarDragOver.value = false
+  const file = e.dataTransfer?.files?.[0]
+  if (file && file.type.startsWith('image/')) openCrop(file, 'avatar')
+}
+function onBannerDrop(e: DragEvent) {
+  bannerDragOver.value = false
+  const file = e.dataTransfer?.files?.[0]
+  if (file && file.type.startsWith('image/')) openCrop(file, 'banner')
+}
+
+// ── Fursona photo upload ───────────────────────────────────────────────────
+async function onFursonaPhotoChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  if (fursonaPhotoRef.value) fursonaPhotoRef.value.value = ''
+  uploadingFursonaPhoto.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await api.post('/media/upload?folder=fursona', fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } })
+    if (res.data.success && res.data.data?.url) {
+      form.fursona_photo_url = res.data.data.url
+      showToast('success', 'Фото фурсоны загружено!')
+    }
+  } catch {
+    showToast('error', 'Ошибка загрузки фото')
+  } finally {
+    uploadingFursonaPhoto.value = false
+  }
+}
+
+// ── Crop modal ─────────────────────────────────────────────────────────────
+const CROP_CONTAINER_W = computed(() => Math.min(600, window.innerWidth - 64))
+const CROP_CONTAINER_H = computed(() => Math.round(CROP_CONTAINER_W.value * (2 / 3)))
+
+const cropModal = reactive({
+  show:     false,
+  type:     'avatar' as 'avatar' | 'banner',
+  src:      '',
+  naturalW: 0,
+  naturalH: 0,
+  imgX:     0,
+  imgY:     0,
+  imgW:     0,
+  imgH:     0,
+  cx: 0,
+  cy: 0,
+  cw: 0,
+  ch: 0,
+  dragging: false,
+  dragOffX: 0,
+  dragOffY: 0,
+  resizing: '' as '' | 'nw' | 'ne' | 'sw' | 'se',
+  resStart: { mx: 0, my: 0, cx: 0, cy: 0, cw: 0, ch: 0 },
+})
+const cropUploading = ref(false)
+
+function openCrop(file: File, type: 'avatar' | 'banner') {
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const src = e.target!.result as string
+    // Always store the original data URL so re-cropping uses the full source
+    if (type === 'avatar') avatarOriginalSrc.value = src
+    else                   bannerOriginalSrc.value = src
+    cropModal.src  = src
+    cropModal.type = type
+    cropModal.imgW = 0
+    cropModal.show = true
+  }
+  reader.readAsDataURL(file)
+}
+
+/**
+ * Re-open the crop modal for an already-selected image.
+ * Uses the stored original data URL so we never crop from a cropped result.
+ * Falls back to fetching the current URL if no local original exists.
+ */
+async function reopenCrop(type: 'avatar' | 'banner') {
+  const localSrc = type === 'avatar' ? avatarOriginalSrc.value : bannerOriginalSrc.value
+  if (localSrc) {
+    // Use the original file data URL — no quality loss
+    cropModal.src  = localSrc
+    cropModal.type = type
+    cropModal.imgW = 0
+    cropModal.show = true
+    return
+  }
+  // No local original yet — fetch from server (this will be the cropped version,
+  // which is unavoidable for images uploaded in a previous session)
+  const url = type === 'avatar' ? form.avatar_url : form.banner_url
+  if (!url) return
+  try {
+    const res  = await fetch(url)
+    const blob = await res.blob()
+    openCrop(new File([blob], 'image.jpg', { type: blob.type }), type)
+  } catch {
+    cropModal.src  = url
+    cropModal.type = type
+    cropModal.imgW = 0
+    cropModal.show = true
+  }
+}
+
+function onCropImageLoad(e: Event) {
+  const img = e.target as HTMLImageElement
+  cropModal.naturalW = img.naturalWidth
+  cropModal.naturalH = img.naturalHeight
+
+  const cw = CROP_CONTAINER_W.value
+  const ch = CROP_CONTAINER_H.value
+  const containerAspect = cw / ch
+  const imageAspect     = cropModal.naturalW / cropModal.naturalH
+  let iw: number, ih: number
+  if (imageAspect > containerAspect) {
+    iw = cw
+    ih = cw / imageAspect
+  } else {
+    ih = ch
+    iw = ch * imageAspect
+  }
+  cropModal.imgW = iw
+  cropModal.imgH = ih
+  cropModal.imgX = (cw - iw) / 2
+  cropModal.imgY = (ch - ih) / 2
+
+  if (cropModal.type === 'avatar') {
+    const size = Math.min(iw, ih) * 0.82
+    cropModal.cx = cropModal.imgX + (iw - size) / 2
+    cropModal.cy = cropModal.imgY + (ih - size) / 2
+    cropModal.cw = size
+    cropModal.ch = size
+  } else {
+    const bw = iw * 0.92
+    const bh = Math.min(bw / 3, ih * 0.92)
+    cropModal.cx = cropModal.imgX + (iw - bw) / 2
+    cropModal.cy = cropModal.imgY + (ih - bh) / 2
+    cropModal.cw = bw
+    cropModal.ch = bh
+  }
+}
+
+function onCropMouseDown(e: MouseEvent) {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  const mx = e.clientX - rect.left
+  const my = e.clientY - rect.top
+  if (mx >= cropModal.cx && mx <= cropModal.cx + cropModal.cw &&
+      my >= cropModal.cy && my <= cropModal.cy + cropModal.ch) {
+    cropModal.dragging = true
+    cropModal.dragOffX = mx - cropModal.cx
+    cropModal.dragOffY = my - cropModal.cy
+  }
+}
+
+function startResize(e: MouseEvent, corner: 'nw' | 'ne' | 'sw' | 'se') {
+  e.stopPropagation()
+  const container = document.getElementById('crop-container')!
+  const rect = container.getBoundingClientRect()
+  cropModal.resizing = corner
+  cropModal.resStart = {
+    mx: e.clientX - rect.left,
+    my: e.clientY - rect.top,
+    cx: cropModal.cx,
+    cy: cropModal.cy,
+    cw: cropModal.cw,
+    ch: cropModal.ch,
+  }
+}
+
+function onCropMouseMove(e: MouseEvent) {
+  if (!cropModal.show || (!cropModal.dragging && !cropModal.resizing)) return
+  const container = document.getElementById('crop-container')
+  if (!container) return
+  const rect = container.getBoundingClientRect()
+  const mx = e.clientX - rect.left
+  const my = e.clientY - rect.top
+  const { imgX, imgY, imgW, imgH } = cropModal
+  const minSize = 30
+  const isAvatar = cropModal.type === 'avatar'
+
+  if (cropModal.dragging) {
+    let nx = mx - cropModal.dragOffX
+    let ny = my - cropModal.dragOffY
+    nx = Math.max(imgX, Math.min(imgX + imgW - cropModal.cw, nx))
+    ny = Math.max(imgY, Math.min(imgY + imgH - cropModal.ch, ny))
+    cropModal.cx = nx
+    cropModal.cy = ny
+  } else {
+    const { mx: smx, my: smy, cx, cy, cw, ch } = cropModal.resStart
+    const dx = mx - smx
+    const dy = my - smy
+    let nx = cx, ny = cy, nw = cw, nh = ch
+
+    if (cropModal.resizing === 'se') {
+      nw = Math.max(minSize, cw + dx)
+      nh = isAvatar ? nw : Math.max(minSize, ch + dy)
+    } else if (cropModal.resizing === 'sw') {
+      nw = Math.max(minSize, cw - dx)
+      nh = isAvatar ? nw : Math.max(minSize, ch + dy)
+      nx = cx + cw - nw
+    } else if (cropModal.resizing === 'ne') {
+      nw = Math.max(minSize, cw + dx)
+      nh = isAvatar ? nw : Math.max(minSize, ch - dy)
+      ny = isAvatar ? cy + ch - nw : cy + ch - nh
+    } else if (cropModal.resizing === 'nw') {
+      nw = Math.max(minSize, cw - dx)
+      nh = isAvatar ? nw : Math.max(minSize, ch - dy)
+      nx = cx + cw - nw
+      ny = cy + ch - nh
+    }
+
+    // clamp to image bounds
+    nx = Math.max(imgX, nx)
+    ny = Math.max(imgY, ny)
+    nw = Math.min(nw, imgX + imgW - nx)
+    nh = Math.min(nh, imgY + imgH - ny)
+
+    cropModal.cx = nx
+    cropModal.cy = ny
+    cropModal.cw = nw
+    cropModal.ch = nh
+  }
+}
+
+function onCropMouseUp() {
+  cropModal.dragging = false
+  cropModal.resizing = ''
+}
+
+// ── Touch support for crop modal ──────────────────────────────────────────
+function onCropTouchStart(e: TouchEvent) {
+  const touch = e.touches[0]
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  const mx = touch.clientX - rect.left
+  const my = touch.clientY - rect.top
+  if (mx >= cropModal.cx && mx <= cropModal.cx + cropModal.cw &&
+      my >= cropModal.cy && my <= cropModal.cy + cropModal.ch) {
+    cropModal.dragging = true
+    cropModal.dragOffX = mx - cropModal.cx
+    cropModal.dragOffY = my - cropModal.cy
+  }
+}
+
+function startResizeTouch(e: TouchEvent, corner: 'nw' | 'ne' | 'sw' | 'se') {
+  const touch = e.touches[0]
+  const container = document.getElementById('crop-container')!
+  const rect = container.getBoundingClientRect()
+  cropModal.resizing = corner
+  cropModal.resStart = {
+    mx: touch.clientX - rect.left,
+    my: touch.clientY - rect.top,
+    cx: cropModal.cx,
+    cy: cropModal.cy,
+    cw: cropModal.cw,
+    ch: cropModal.ch,
+  }
+}
+
+function onCropTouchMove(e: TouchEvent) {
+  if (!e.touches.length) return
+  const touch = e.touches[0]
+  onCropMouseMove({ clientX: touch.clientX, clientY: touch.clientY } as MouseEvent)
+}
+
+async function confirmCrop() {
+  cropUploading.value = true
+  try {
+    const { imgX, imgY, imgW, imgH, naturalW, naturalH, cx, cy, cw, ch, type } = cropModal
+
+    const relX = (cx - imgX) / imgW
+    const relY = (cy - imgY) / imgH
+    const relW = cw / imgW
+    const relH = ch / imgH
+
+    const srcX = relX * naturalW
+    const srcY = relY * naturalH
+    const srcW = relW * naturalW
+    const srcH = relH * naturalH
+
+    const canvas = document.createElement('canvas')
+    if (type === 'avatar') {
+      canvas.width  = 400
+      canvas.height = 400
+    } else {
+      canvas.width  = 1200
+      canvas.height = Math.round(1200 * (srcH / srcW))
+    }
+
+    const ctx = canvas.getContext('2d')!
+    await new Promise<void>((res, rej) => {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload  = () => { ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height); res() }
+      img.onerror = rej
+      img.src = cropModal.src
+    })
+
+    const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', 0.92))
+    if (!blob) throw new Error('Canvas toBlob failed')
+
+    const fd = new FormData()
+    fd.append('file', blob, type === 'avatar' ? 'avatar.jpg' : 'banner.jpg')
+
+    const result = await api.post(
+      `/media/upload?folder=${type === 'avatar' ? 'avatars' : 'banners'}`,
+      fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    )
+
+    if (type === 'avatar') {
+      form.avatar_url = result.data.data.url
+    } else {
+      form.banner_url = result.data.data.url
+    }
+    cropModal.show = false
+    showToast('success', type === 'avatar' ? 'Аватар загружен!' : 'Баннер загружен!')
+  } catch (err) {
+    console.error(err)
+    showToast('error', 'Ошибка загрузки изображения')
+  } finally {
+    cropUploading.value = false
+  }
+}
+
+function cancelCrop() {
+  cropModal.show = false
+}
+
+// ── Tags ───────────────────────────────────────────────────────────────────
+function addTagFromInput(field: 'likes' | 'dislikes') {
+  const raw = field === 'likes' ? newLike : newDislike
+  const val = raw.value.trim()
   if (!val || form[field].includes(val)) return
   form[field].push(val)
-  if (field === 'likes') newLike.value = ''
-  else newDislike.value = ''
+  raw.value = ''
 }
 
 function removeTag(field: 'likes' | 'dislikes', idx: number) {
   form[field].splice(idx, 1)
 }
 
+// ── Submit ─────────────────────────────────────────────────────────────────
 async function handleSubmit() {
-  saved.value = false
-  const payload: Record<string, unknown> = {}
+  // ── Handle relationship partner changes separately ─────────────────────
+  const newPartner  = form.relationship_with  || null
+  const savedPartner = savedForm.relationship_with || null
 
-  if (form.display_name) payload.display_name = form.display_name
-  if (form.bio)          payload.bio           = form.bio
-  if (form.status)       payload.status        = form.status
-  if (form.persona)      payload.persona       = form.persona
-  if (form.avatar_url)   payload.avatar_url    = form.avatar_url
-  if (form.banner_url)   payload.banner_url    = form.banner_url
+  if (newPartner !== savedPartner) {
+    if (!newPartner && savedPartner) {
+      // User cleared their partner → break up (unlinks both sides)
+      try {
+        await api.delete('/relationships/partner')
+        showToast('success', 'Отношения завершены')
+      } catch {
+        showToast('error', 'Ошибка при сбросе партнёра')
+        return
+      }
+    } else if (newPartner) {
+      // New partner selected → send a relationship request
+      try {
+        await api.post('/relationships/request', { toId: newPartner })
+        showToast('success', 'Запрос отправлен партнёру 💕')
+      } catch (e: any) {
+        const msg = e?.response?.data?.error?.message ?? 'Ошибка отправки запроса'
+        showToast('error', msg)
+        return
+      }
+    }
+  }
+
+  // ── Save all other profile fields (relationship_with excluded — managed by request system) ──
+  const payload: Record<string, unknown> = {
+    display_name:        form.display_name,
+    bio:                 form.bio,
+    status:              form.status,
+    persona:             form.persona,
+    fursona_name:        form.fursona_name,
+    avatar_url:          form.avatar_url,
+    banner_url:          form.banner_url,
+    website:             form.website,
+    location:            form.location,
+    pronouns:            form.pronouns,
+    job_title:           form.job_title,
+    relationship_status: form.relationship_status,
+    country:             form.country,
+    fursona_color:       form.fursona_color || null,
+    fursona_photo_url:   form.fursona_photo_url || null,
+    birth_date:          form.birth_date || null,
+    likes:               form.likes,
+    dislikes:            form.dislikes,
+  }
   if (/^#[0-9A-Fa-f]{6}$/.test(form.accent_color)) payload.accent_color = form.accent_color
-
-  payload.likes    = form.likes
-  payload.dislikes = form.dislikes
 
   try {
     await userStore.updateProfile(payload)
-    saved.value = true
-    setTimeout(() => { saved.value = false }, 3000)
+    snapshotToSaved()
+    if (newPartner === savedPartner) showToast('success', 'Профиль успешно сохранён!')
   } catch {
-    // error is shown via userStore.error
+    showToast('error', userStore.error ?? 'Ошибка сохранения')
   }
 }
+
+// ── Sections ───────────────────────────────────────────────────────────────
+const sections = [
+  { id: 'sec-media',      label: 'Медиа',       color: '#4C97CF', iconPath: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
+  { id: 'sec-basic',      label: 'Основное',    color: '#60a5fa', iconPath: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+  { id: 'sec-contacts',   label: 'Контакты',    color: '#34d399', iconPath: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+  { id: 'sec-fursona',    label: 'Фурсона',     color: '#a78bfa', iconPath: 'M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+  { id: 'sec-appearance', label: 'Внешний вид', color: '#f472b6', iconPath: 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01' },
+]
+
+const lockedSettings = [
+  { label: 'Уведомления', d: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
+  { label: 'Безопасность',  d: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+  { label: 'Подписка',      d: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
+  { label: 'Приватность',   d: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
+]
+
+const pronounPresets = ['он/его', 'она/её', 'они/их']
+
+// ── Birth date helpers ─────────────────────────────────────────────────────
+const birthAge = computed<number | null>(() => {
+  if (!form.birth_date) return null
+  const birthYear  = new Date(form.birth_date)
+  const now        = new Date()
+  let age = now.getFullYear() - birthYear.getFullYear()
+  const m = now.getMonth() - birthYear.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < birthYear.getDate())) age--
+  return age
+})
+
+// ── Fursona species helpers ────────────────────────────────────────────────
+const fursonaSpeciesList = [
+  'Волк', 'Лис', 'Дракон', 'Кошка', 'Собака', 'Кролик', 'Олень', 'Выдра',
+  'Медведь', 'Рысь', 'Тигр', 'Лошадь', 'Летучая мышь', 'Гиена', 'Ящерица',
+  'Птица', 'Змея', 'Панда', 'Белка', 'Сергал', 'Мышь', 'Акула', 'Лев', 'Енот',
+]
+const customSpeciesInput = ref('')
+const selectedSpecies = computed(() =>
+  form.persona ? form.persona.split(',').map(s => s.trim()).filter(Boolean) : [],
+)
+function toggleSpecies(sp: string) {
+  const cur = selectedSpecies.value
+  if (cur.includes(sp)) {
+    form.persona = cur.filter(s => s !== sp).join(', ')
+  } else {
+    form.persona = [...cur, sp].join(', ')
+  }
+}
+function addCustomSpecies() {
+  const v = customSpeciesInput.value.trim()
+  if (!v) return
+  if (!selectedSpecies.value.includes(v)) {
+    form.persona = [...selectedSpecies.value, v].join(', ')
+  }
+  customSpeciesInput.value = ''
+}
+
+const fursonaColorSwatches = [
+  { label: 'Белый',          color: '#f5f5f5' },
+  { label: 'Светло-серый',   color: '#d1d5db' },
+  { label: 'Серый',          color: '#6b7280' },
+  { label: 'Чёрный',         color: '#1c1c1e' },
+  { label: 'Коричневый',     color: '#92400e' },
+  { label: 'Рыжий',          color: '#c2410c' },
+  { label: 'Рыжий-лис',     color: '#ea580c' },
+  { label: 'Золотой',        color: '#d97706' },
+  { label: 'Жёлтый',        color: '#ca8a04' },
+  { label: 'Кремовый',       color: '#fef3c7' },
+  { label: 'Тёмно-золот.',   color: '#b45309' },
+  { label: 'Красный',        color: '#dc2626' },
+  { label: 'Розовый',        color: '#ec4899' },
+  { label: 'Фиолетовый',     color: '#7c3aed' },
+  { label: 'Синий',          color: '#2563eb' },
+  { label: 'Голубой',        color: '#0ea5e9' },
+  { label: 'Бирюзовый',      color: '#0d9488' },
+  { label: 'Зелёный',        color: '#16a34a' },
+  { label: 'Серебристый',    color: '#94a3b8' },
+]
+
+const relationshipOptions = [
+  { value: 'single',          label: 'Свободен' },
+  { value: 'in_relationship', label: 'В отношениях' },
+  { value: 'married',      label: 'Женат/Замужем' },
+  { value: 'open',         label: 'Открытые' },
+  { value: 'complicated',  label: 'Сложно' },
+  { value: 'secret',       label: 'Секрет' },
+]
+
+const colorSwatches = [
+  { name: 'Sky',    color: '#4C97CF' },
+  { name: 'Blue',   color: '#3b82f6' },
+  { name: 'Indigo', color: '#6366f1' },
+  { name: 'Violet', color: '#8b5cf6' },
+  { name: 'Purple', color: '#a855f7' },
+  { name: 'Pink',   color: '#ec4899' },
+  { name: 'Rose',   color: '#f43f5e' },
+  { name: 'Orange', color: '#f97316' },
+  { name: 'Amber',  color: '#f59e0b' },
+  { name: 'Green',  color: '#22c55e' },
+  { name: 'Teal',   color: '#14b8a6' },
+  { name: 'Slate',  color: '#64748b' },
+]
+
+// ── Country / City data ────────────────────────────────────────────────────
+const COUNTRIES = [
+  'Австралия','Австрия','Азербайджан','Аргентина','Беларусь','Бельгия','Бразилия',
+  'Великобритания','Венгрия','Германия','Греция','Грузия','Дания','Египет',
+  'Израиль','Индия','Индонезия','Иран','Ирландия','Испания','Италия','Казахстан',
+  'Канада','Китай','Колумбия','Латвия','Литва','Мексика','Нидерланды','Новая Зеландия',
+  'Норвегия','ОАЭ','Пакистан','Польша','Португалия','Россия','Румыния','Сербия',
+  'Сингапур','Словакия','США','Таиланд','Турция','Узбекистан','Украина','Финляндия',
+  'Франция','Чехия','Швейцария','Швеция','Япония',
+]
+
+const CITIES_BY_COUNTRY: Record<string, string[]> = {
+  'Россия': ['Москва','Санкт-Петербург','Новосибирск','Екатеринбург','Нижний Новгород','Казань','Челябинск','Омск','Самара','Ростов-на-Дону','Уфа','Красноярск','Пермь','Воронеж','Волгоград','Краснодар','Тюмень','Саратов','Тольятти','Ижевск','Барнаул','Иркутск','Хабаровск','Владивосток','Ярославль','Томск'],
+  'Украина': ['Киев','Харьков','Одесса','Днепр','Донецк','Запорожье','Львов','Кривой Рог','Николаев','Мариуполь'],
+  'Беларусь': ['Минск','Гомель','Могилев','Витебск','Гродно','Брест','Бобруйск','Барановичи'],
+  'Казахстан': ['Алматы','Астана','Шымкент','Актобе','Таραз','Павлодар','Усть-Каменогорск','Семей'],
+  'Германия': ['Берлин','Гамбург','Мюнхен','Кёльн','Франкфурт','Штутгарт','Дюссельдорф','Дортмунд','Лейпциг','Бремен'],
+  'США': ['Нью-Йорк','Лос-Анджелес','Чикаго','Хьюстон','Феникс','Филадельфия','Сан-Антонио','Сан-Диего','Даллас','Джексонвилл','Сан-Хосе','Остин','Сан-Франциско','Сиэтл','Денвер','Бостон','Вашингтон','Майами','Атланта'],
+  'Великобритания': ['Лондон','Бирмингем','Манчестер','Лидс','Глазго','Ливерпуль','Эдинбург','Шеффилд','Бристоль','Ньюкасл'],
+  'Франция': ['Париж','Марсель','Лион','Тулуза','Ницца','Нант','Монпелье','Страсбург','Бордо','Лилль'],
+  'Италия': ['Рим','Милан','Неаполь','Турин','Палермо','Генуя','Болонья','Флоренция','Бари','Катания'],
+  'Испания': ['Мадрид','Барселона','Валенсия','Севилья','Сарагоса','Малага','Мурсия','Пальма','Лас-Пальмас','Бильбао'],
+  'Канада': ['Торонто','Монреаль','Ванкувер','Калгари','Эдмонтон','Оттава','Виннипег','Квебек'],
+  'Австралия': ['Сидней','Мельбурн','Брисбен','Перт','Аделаида','Канберра','Голд-Кост'],
+  'Япония': ['Токио','Йокогама','Осака','Нагоя','Саппоро','Кобе','Кото','Кавасаки','Сайтама','Хиросима'],
+  'Китай': ['Пекин','Шанхай','Гуанчжоу','Шэньчжэнь','Чэнду','Ухань','Чунцин','Тяньцзинь','Нанкин','Сиань'],
+  'Индия': ['Мумбаи','Дели','Бангалор','Хайдарабад','Ченнай','Калькутта','Ахмадабад','Пуна','Сурат','Джайпур'],
+  'Польша': ['Варшава','Краков','Лодзь','Вроцлав','Познань','Гданьск','Щецин','Катовице','Люблин'],
+  'Türkiye': ['Стамбул','Анкара','Измир','Бурса','Адана','Газиантеп','Конья','Анталья'],
+  'Нидерланды': ['Амстердам','Роттердам','Гаага','Утрехт','Эйндховен','Тилбург','Гронинген'],
+  'Швеция': ['Стокгольм','Гётеборг','Мальмё','Уппсала','Вестерос','Эребру'],
+  'Норвегия': ['Осло','Берген','Ставангер','Трондхейм','Драммен'],
+  'Финляндия': ['Хельсинки','Эспоо','Тампере','Вантаа','Оулу','Турку'],
+  'Австрия': ['Вена','Грац','Линц','Зальцбург','Инсбрук'],
+  'Швейцария': ['Цюрих','Женева','Базель','Берн','Лозанна'],
+  'Чехия': ['Прага','Брно','Острава','Пльзень','Либерец'],
+  'Португалия': ['Лиссабон','Порту','Брага','Сетубал','Коимбра'],
+  'Греция': ['Афины','Салоники','Патры','Пирей','Ираклион'],
+  'ОАЭ': ['Дубай','Абу-Даби','Шарджа','Аджман','Рас-эль-Хайма'],
+  'Грузия': ['Тбилиси','Кутаиси','Батуми','Рустави','Гори'],
+  'Азербайджан': ['Баку','Гянджа','Сумгайыт','Нахчыван','Лянкяран'],
+  'Узбекистан': ['Ташкент','Самарканд','Наманган','Андижан','Нукус','Бухара'],
+  'Израиль': ['Тель-Авив','Иерусалим','Хайфа','Ришон-ле-Цион','Петах-Тиква'],
+  'Бразилия': ['Сан-Паулу','Рио-де-Жанейро','Бразилиа','Салвадор','Форталеза','Белу-Оризонти','Манаус'],
+  'Аргентина': ['Буэнос-Айрес','Кордова','Росарио','Мендоса','Тукуман','Ла-Плата'],
+  'Мексика': ['Мехико','Гвадалахара','Монтеррей','Пуэбла','Тихуана','Леон'],
+  'Сингапур': ['Сингапур'],
+}
+
+// ── Country & city combobox state ─────────────────────────────────────────
+const countrySearch   = ref('')
+const countryDropOpen = ref(false)
+const citySearch      = ref('')
+const cityDropOpen    = ref(false)
+
+const filteredCountries = computed(() => {
+  const q = countrySearch.value.toLowerCase()
+  return q ? COUNTRIES.filter(c => c.toLowerCase().includes(q)) : COUNTRIES
+})
+
+const filteredCities = computed(() => {
+  const cities = CITIES_BY_COUNTRY[form.country] ?? []
+  const q = citySearch.value.toLowerCase()
+  return q ? cities.filter(c => c.toLowerCase().includes(q)) : cities
+})
+
+function selectCountry(name: string) {
+  form.country      = name
+  countrySearch.value = name
+  countryDropOpen.value = false
+  // Reset city if country changed
+  form.location     = ''
+  citySearch.value  = ''
+}
+
+function selectCity(name: string) {
+  form.location    = name
+  citySearch.value = name
+  cityDropOpen.value = false
+}
+
+function onCountryBlur() {
+  setTimeout(() => {
+    countryDropOpen.value = false
+    // If typed text isn't in list, revert to last confirmed value
+    if (!COUNTRIES.includes(countrySearch.value)) {
+      countrySearch.value = form.country
+    }
+  }, 180)
+}
+
+function onCityBlur() {
+  setTimeout(() => {
+    cityDropOpen.value = false
+    citySearch.value   = form.location
+  }, 180)
+}
+
+function onPartnerBlur() {
+  setTimeout(() => { partnerDropOpen.value = false }, 180)
+}
+
+// ── Following / partner picker ────────────────────────────────────────────
+interface FollowUser { id: string; username: string; display_name: string | null; avatar_url: string | null }
+const followingList   = ref<FollowUser[]>([])
+const partnerSearch   = ref('')
+const partnerDropOpen = ref(false)
+
+async function loadFollowing() {
+  const auth = authStore
+  if (!auth.user?.id) return
+  try {
+    // Load mutual friends for partner picker
+    const res  = await fetch(`/api/follows/${auth.user.id}/friends`, {
+      headers: { Authorization: `Bearer ${auth.token}` },
+    })
+    const data = await res.json()
+    if (data.success) followingList.value = data.data.users ?? []
+  } catch { /* ignore */ }
+}
+
+const filteredPartners = computed(() => {
+  const q = partnerSearch.value.toLowerCase()
+  if (!q) return followingList.value
+  return followingList.value.filter(u =>
+    (u.display_name ?? u.username).toLowerCase().includes(q) ||
+    u.username.toLowerCase().includes(q),
+  )
+})
+
+const showPartnerPicker = computed(() =>
+  ['in_relationship', 'relationship', 'married', 'open', 'open_relationship'].includes(form.relationship_status),
+)
+
+const selectedPartner = computed(() =>
+  followingList.value.find(u => u.id === form.relationship_with) ?? null,
+)
+
+function selectPartner(u: FollowUser) {
+  form.relationship_with = u.id
+  partnerSearch.value    = u.display_name ?? u.username
+  partnerDropOpen.value  = false
+}
+
+function clearPartner() {
+  form.relationship_with = ''
+  partnerSearch.value    = ''
+}
+
+// ── Fursona steps ─────────────────────────────────────────────────────────
+const fursonaSteps = computed(() => [
+  { label: 'Вид',      done: !!form.persona,                                    locked: false },
+  { label: 'Имя',      done: !!form.fursona_name,                               locked: !form.persona },
+  { label: 'Характер', done: form.likes.length > 0 || form.dislikes.length > 0, locked: !form.persona },
+  { label: 'Фото',     done: false,                                              locked: true },
+])
+
+// ── Active section scroll spy ──────────────────────────────────────────────
+const activeSection = ref('sec-media')
+let observer: IntersectionObserver | null = null
+
+onMounted(() => {
+  observer = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) activeSection.value = e.target.id
+      }
+    },
+    { rootMargin: '-20% 0px -65% 0px', threshold: 0 },
+  )
+  for (const s of sections) {
+    const el = document.getElementById(s.id)
+    if (el) observer.observe(el)
+  }
+})
+onUnmounted(() => observer?.disconnect())
+
+function scrollTo(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 </script>
+
+<style scoped>
+/* stylelint-disable */
+.field-input {
+  @apply w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/50 focus:outline-none transition-all;
+}
+
+/* ── Toast ─────────────────────────────────────────────────────────────── */
+.toast-enter-active, .toast-leave-active { transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(-20px) scale(0.88); }
+
+/* ── Floating bar ──────────────────────────────────────────────────────── */
+.floatbar-enter-active, .floatbar-leave-active { transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+.floatbar-enter-from, .floatbar-leave-to { opacity: 0; transform: translateY(20px) scale(0.92); }
+
+/* ── Crop modal ────────────────────────────────────────────────────────── */
+.modal-fade-enter-active, .modal-fade-leave-active { transition: all 0.25s ease; }
+.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; transform: scale(0.96); }
+
+/* ── Swatch check ──────────────────────────────────────────────────────── */
+.swatch-check-enter-active, .swatch-check-leave-active { transition: all 0.2s ease; }
+.swatch-check-enter-from, .swatch-check-leave-to { opacity: 0; transform: scale(0.5); }
+
+/* ── Fade ──────────────────────────────────────────────────────────────── */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* ── Shake ─────────────────────────────────────────────────────────────── */
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  15%     { transform: translateX(-6px); }
+  30%     { transform: translateX(6px); }
+  45%     { transform: translateX(-5px); }
+  60%     { transform: translateX(5px); }
+  75%     { transform: translateX(-3px); }
+  90%     { transform: translateX(3px); }
+}
+.animate-shake { animation: shake 0.55s ease; }
+</style>

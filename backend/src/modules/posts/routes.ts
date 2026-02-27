@@ -1,5 +1,5 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { createPostHandler, votePostHandler, getPostsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler } from './controller.js';
+import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
+import { createPostHandler, votePostHandler, getPostsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler, getPostByIdHandler } from './controller.js';
 
 // The authenticate decorator is declared in auth/routes.ts; this re-declaration
 // merges into the same global FastifyInstance augmentation via TypeScript.
@@ -50,23 +50,25 @@ const getPostsSchema = {
 };
 
 export async function postsRoutes(fastify: FastifyInstance) {
-  fastify.post('/', { schema: createPostSchema, onRequest: [fastify.authenticate] }, createPostHandler);
-  fastify.post('/:id/vote', { schema: voteSchema, onRequest: [fastify.authenticate] }, votePostHandler);
-  fastify.post('/:id/repaw', { onRequest: [fastify.authenticate] }, repawPostHandler);
-  fastify.post('/:id/favourite', { onRequest: [fastify.authenticate] }, favouritePostHandler);
-  fastify.post('/:id/comments', { onRequest: [fastify.authenticate] }, createCommentHandler);
-  fastify.get('/:id/comments', getCommentsHandler);
-  fastify.post('/comments/:commentId/vote', { onRequest: [fastify.authenticate] }, voteCommentHandler);
-  fastify.delete('/comments/:commentId', { onRequest: [fastify.authenticate] }, deleteCommentHandler);
-  fastify.delete('/:id', { onRequest: [fastify.authenticate] }, deletePostHandler);
-  fastify.patch('/:id', { onRequest: [fastify.authenticate] }, editPostHandler);
-  fastify.get('/trending-tags', getTrendingTagsHandler);
-  fastify.get('/status', { onRequest: [fastify.authenticate] }, getUserPostStatusHandler);
+  const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
+  fastify.post('/', { schema: createPostSchema, onRequest: [fastify.authenticate] }, createPostHandler as any);
+  fastify.post('/:id/vote', { schema: voteSchema, onRequest: [fastify.authenticate] }, votePostHandler as any);
+  fastify.post('/:id/repaw', auth, repawPostHandler as any);
+  fastify.post('/:id/favourite', auth, favouritePostHandler as any);
+  fastify.post('/:id/comments', auth, createCommentHandler as any);
+  fastify.get('/:id/comments', getCommentsHandler as any);
+  fastify.post('/comments/:commentId/vote', auth, voteCommentHandler as any);
+  fastify.delete('/comments/:commentId', auth, deleteCommentHandler as any);
+  fastify.delete('/:id', auth, deletePostHandler as any);
+  fastify.patch('/:id', auth, editPostHandler as any);
+  fastify.get('/trending-tags', getTrendingTagsHandler as any);
+  fastify.get('/:id', getPostByIdHandler as any);
+  fastify.get('/status', auth, getUserPostStatusHandler as any);
   // User-specific endpoints (must come before /:id)
-  fastify.get('/user/:userId', getUserPostsHandler);
-  fastify.get('/user/:userId/media', getUserMediaPostsHandler);
-  fastify.get('/user/:userId/repaws', getUserRepawsHandler);
-  fastify.get('/user/:userId/likes', getUserFavouritesHandler);
-  fastify.get('/', { schema: getPostsSchema }, getPostsHandler);
-  fastify.get('/personalized', { onRequest: [fastify.authenticate] }, getPersonalizedPostsHandler);
+  fastify.get('/user/:userId', getUserPostsHandler as any);
+  fastify.get('/user/:userId/media', getUserMediaPostsHandler as any);
+  fastify.get('/user/:userId/repaws', getUserRepawsHandler as any);
+  fastify.get('/user/:userId/likes', getUserFavouritesHandler as any);
+  fastify.get('/', { schema: getPostsSchema }, getPostsHandler as any);
+  fastify.get('/personalized', auth, getPersonalizedPostsHandler as any);
 }

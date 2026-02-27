@@ -95,3 +95,13 @@ export async function toggleAdModeHandler(
     return reply.code(400).send({ success: false, data: null, error: { code: 'AD_TOGGLE_ERROR', message } });
   }
 }
+
+export async function getMediaHistoryHandler(
+  request: FastifyRequest<{ Params: { id: string }; Querystring: { type?: string } }>,
+  reply: FastifyReply,
+) {
+  const { id } = request.params;
+  const type = request.query.type as 'avatar' | 'banner' | undefined;
+  const history = await usersService.getMediaHistory(id, type);
+  return reply.send({ success: true, data: { history }, error: null });
+}

@@ -32,8 +32,9 @@ async function ensureBucket() {
   }
 }
 
-// Ensure bucket exists on startup
-ensureBucket().catch(console.error);
+// Ensure bucket exists once on startup; subsequent uploads skip the check.
+// bucketReady resolves when the bucket is confirmed available.
+const bucketReady: Promise<void> = ensureBucket().catch(console.error) as Promise<void>;
 
 export async function uploadFile(
   buffer: Buffer,
@@ -41,7 +42,8 @@ export async function uploadFile(
   mimeType: string,
   folder: 'posts' | 'avatars' | 'banners' = 'posts',
 ): Promise<string> {
-  await ensureBucket();
+  // Await only if the startup promise hasn't resolved yet (no-op on subsequent calls)
+  await bucketReady;
 
   const ext        = path.extname(originalName) || '.bin';
   const objectName = `${folder}/${randomUUID()}${ext}`;
@@ -53,3 +55,19 @@ export async function uploadFile(
   // URL structure: <public_base>/<bucket>/<object>
   return `${PUBLIC_URL}/${BUCKET}/${objectName}`;
 }
+
+/**
+ * Try to delete a file from MinIO by its public URL.
+ * Silently ignores errors (e.g. file already gone, external URL).
+ */
+export async function deleteFileByUrl(url: string): Promise<void> {
+  const prefix = `${PUBLIC_URL}/${BUCKET}/`;
+  if (!url || !url.startsWith(prefix)) return;           // not a MinIO file
+  const objectName = url.slice(prefix.length);
+  try {
+    await minioClient.removeObject(BUCKET, objectName);
+  } catch {
+    // best-effort – never throw
+  }
+}
+

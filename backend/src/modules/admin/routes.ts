@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import {
   getStatsHandler, getUsersHandler, updateUserRoleHandler, deleteUserHandler,
   getPostsAdminHandler, deletePostAdminHandler,
@@ -14,28 +14,31 @@ declare module 'fastify' {
 }
 
 export async function adminRoutes(fastify: FastifyInstance) {
+  // Explicitly typed to avoid @fastify/websocket overload ambiguity
+  const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
+
   // Stats
-  fastify.get('/stats', { onRequest: [fastify.authenticate] }, getStatsHandler);
+  fastify.get('/stats', auth, getStatsHandler as any);
 
   // Users
-  fastify.get('/users',           { onRequest: [fastify.authenticate] }, getUsersHandler);
-  fastify.patch('/users/:id/role',{ onRequest: [fastify.authenticate] }, updateUserRoleHandler);
-  fastify.delete('/users/:id',    { onRequest: [fastify.authenticate] }, deleteUserHandler);
+  fastify.get('/users',            auth, getUsersHandler as any);
+  fastify.patch('/users/:id/role', auth, updateUserRoleHandler as any);
+  fastify.delete('/users/:id',     auth, deleteUserHandler as any);
 
   // Posts
-  fastify.get('/posts',         { onRequest: [fastify.authenticate] }, getPostsAdminHandler);
-  fastify.delete('/posts/:id',  { onRequest: [fastify.authenticate] }, deletePostAdminHandler);
+  fastify.get('/posts',         auth, getPostsAdminHandler as any);
+  fastify.delete('/posts/:id',  auth, deletePostAdminHandler as any);
 
   // Reports
-  fastify.get('/reports',           { onRequest: [fastify.authenticate] }, getReportsHandler);
-  fastify.post('/reports',          { onRequest: [fastify.authenticate] }, submitReportHandler);
-  fastify.patch('/reports/:id',     { onRequest: [fastify.authenticate] }, resolveReportHandler);
+  fastify.get('/reports',        auth, getReportsHandler as any);
+  fastify.post('/reports',       auth, submitReportHandler as any);
+  fastify.patch('/reports/:id',  auth, resolveReportHandler as any);
 
   // Ads
-  fastify.get('/ads',              { onRequest: [fastify.authenticate] }, getAdsHandler);
-  fastify.get('/ads/active',       getActiveAdsHandler);
-  fastify.post('/ads',             submitAdHandler);
-  fastify.patch('/ads/:id/review', { onRequest: [fastify.authenticate] }, reviewAdHandler);
-  fastify.post('/ads/:id/impression', trackImpressionHandler);
-  fastify.post('/ads/:id/click',      trackClickHandler);
+  fastify.get('/ads',              auth, getAdsHandler as any);
+  fastify.get('/ads/active',       getActiveAdsHandler as any);
+  fastify.post('/ads',             submitAdHandler as any);
+  fastify.patch('/ads/:id/review', auth, reviewAdHandler as any);
+  fastify.post('/ads/:id/impression', trackImpressionHandler as any);
+  fastify.post('/ads/:id/click',      trackClickHandler as any);
 }

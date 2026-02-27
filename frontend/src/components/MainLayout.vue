@@ -148,22 +148,12 @@ const toggleComments = (postId: string) => {
 const bookmarkedPosts = ref<any[]>([])
 const isLoadingBookmarks = ref(false)
 const fetchBookmarks = async () => {
+  if (!auth.user?.id) return
   isLoadingBookmarks.value = true
   try {
-    // Reuse the getUserFavouritePosts logic: fetch personalized but from bookmarks perspective
-    // Bookmarks = favourited posts, fetched via the general posts endpoint filtered to favourited
-    const res = await api.get('/posts', { params: { sort: 'new' } })
-    if (res.data.success) {
-      const allPosts = res.data.data.posts
-      // We need status — get favourites from status
-      const ids = allPosts.map((p: any) => p.id).join(',')
-      if (!ids) { bookmarkedPosts.value = []; return }
-      const statusRes = await api.get(`/posts/status?ids=${ids}`)
-      if (statusRes.data.success) {
-        const favouritedIds = new Set(statusRes.data.data.filter((s: any) => s.favourited).map((s: any) => s.id))
-        bookmarkedPosts.value = allPosts.filter((p: any) => favouritedIds.has(p.id))
-      }
-    }
+    // Use the dedicated favourites endpoint — do not fetch all posts
+    const res = await api.get(`/posts/user/${auth.user.id}/likes`)
+    bookmarkedPosts.value = res.data.success ? (res.data.data.posts ?? []) : []
   } catch {} finally { isLoadingBookmarks.value = false }
 }
 watch(activeNav, (v) => { if (v === 'bookmarks') fetchBookmarks() })
@@ -177,7 +167,7 @@ const setPostRef = (el: any, postId: string) => {
 }
 const cleanupObservers = () => { postObservers.forEach(u => u()); postObservers.clear() }
 
-onUnmounted(() => { cleanupObservers(); disconnectWebSocket(); closeStory() })
+onUnmounted(() => { cleanupObservers(); disconnectWebSocket(); closeStory(); if (onlineFetchTimer) clearTimeout(onlineFetchTimer) })
 
 const newPost = ref({ content: '', category: '', tags: [] as string[], isNsfw: false })
 const tagInput = ref('')
@@ -357,7 +347,19 @@ const recommendedUsers = ref<any[]>([])
 const fetchRecommendedUsers = async () => {
   try {
     const res = await api.get('/users/recommended')
-    if (res.data.success) recommendedUsers.value = res.data.data.users
+    if (res.data.success) {
+      recommendedUsers.value = res.data.data.users
+      // Fetch follow status for these users
+      const ids = recommendedUsers.value.map((u: any) => u.id)
+      if (ids.length) {
+        const r = await api.get(`/follows/check-bulk?ids=${ids.join(',')}`)
+        if (r.data.success) {
+          Object.entries(r.data.data).forEach(([id, val]) => { followStatus[id] = val as boolean })
+        }
+        // Fetch online status
+        fetchOnlineStatus(ids)
+      }
+    }
   } catch {}
 }
 
@@ -529,10 +531,32 @@ const openLightbox = (urls: string[], idx: number) => {
 
 // ── WebSocket ─────────────────────────────────────────────────────────────
 const isOnline = ref(false)
+// Online status for other users: userId -> boolean
+const onlineStatus = reactive<Record<string, boolean>>({})
 let ws: WebSocket | null = null
 let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
 let wsPingTimer: ReturnType<typeof setInterval> | null = null
 let wsDestroyed = false
+
+// Fetch online status for a list of user IDs (de-bounced batch)
+let onlineFetchTimer: ReturnType<typeof setTimeout> | null = null
+const pendingOnlineIds = new Set<string>()
+const fetchOnlineStatus = (ids: string[]) => {
+  ids.forEach(id => pendingOnlineIds.add(id))
+  if (onlineFetchTimer) return
+  onlineFetchTimer = setTimeout(async () => {
+    onlineFetchTimer = null
+    const batchIds = Array.from(pendingOnlineIds)
+    pendingOnlineIds.clear()
+    if (!batchIds.length) return
+    try {
+      const res = await api.get(`/users/online?ids=${batchIds.join(',')}`)
+      if (res.data.success) {
+        Object.entries(res.data.data).forEach(([id, val]) => { onlineStatus[id] = val as boolean })
+      }
+    } catch {}
+  }, 500)
+}
 
 const disconnectWebSocket = () => {
   wsDestroyed = true
@@ -562,11 +586,15 @@ const connectWebSocket = () => {
   ws = new WebSocket(`${protocol}//${window.location.host}/api/`)
   ws.onopen = () => {
     isOnline.value = true
+    // Authenticate so the server can track this user as online
+    if (auth.token && ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'auth', token: auth.token }))
+    }
     wsPingTimer = setInterval(() => { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' })) }, 30_000)
   }
   ws.onclose = () => { isOnline.value = false; if (wsPingTimer !== null) { clearInterval(wsPingTimer); wsPingTimer = null }; scheduleReconnect() }
   ws.onerror = () => {}
-  ws.onmessage = (event) => { try { const d = JSON.parse(event.data); if (d?.type === 'pong') return } catch {} }
+  ws.onmessage = (event) => { try { const d = JSON.parse(event.data); if (d?.type === 'pong' || d?.type === 'auth_ok' || d?.type === 'auth_err') return } catch {} }
 }
 
 // reset drag state when modal closes
@@ -976,6 +1004,11 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
                   class="w-10 h-10 rounded-full border-2 border-brand-border group-hover:border-brand-accent/40 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm transition-colors">
                   {{ (user.display_name || user.username || '?')[0].toUpperCase() }}
                 </div>
+                <!-- Online indicator -->
+                <span v-if="onlineStatus[user.id]"
+                  class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-brand-success border-2 border-brand-card shadow-sm"
+                  title="Онлайн"
+                ></span>
               </div>
 
               <!-- Name + username -->

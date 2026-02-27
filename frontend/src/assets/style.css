@@ -40,6 +40,18 @@
     color: var(--c-offwhite);
   }
 
+  /* Remove tap highlight on mobile */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent text selection on interactive controls */
+  button, a, [role="button"], label {
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+  }
+
   /* Scrollbar styling */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: var(--c-bg); }

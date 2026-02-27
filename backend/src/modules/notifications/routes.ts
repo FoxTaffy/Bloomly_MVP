@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import {
   getNotificationsHandler, getUnreadCountHandler,
   markReadHandler, deleteAllHandler, sseNotificationsHandler,
@@ -11,10 +11,11 @@ declare module 'fastify' {
 }
 
 export async function notificationsRoutes(fastify: FastifyInstance) {
-  fastify.get('/',        { onRequest: [fastify.authenticate] }, getNotificationsHandler);
-  fastify.get('/count',   { onRequest: [fastify.authenticate] }, getUnreadCountHandler);
-  fastify.post('/read',   { onRequest: [fastify.authenticate] }, markReadHandler);
-  fastify.delete('/',     { onRequest: [fastify.authenticate] }, deleteAllHandler);
+  const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
+  fastify.get('/',        auth, getNotificationsHandler as any);
+  fastify.get('/count',   auth, getUnreadCountHandler as any);
+  fastify.post('/read',   auth, markReadHandler as any);
+  fastify.delete('/',     auth, deleteAllHandler as any);
 
   // SSE endpoint: EventSource can't send headers, so we verify token from query param
   fastify.get('/stream', async (req: FastifyRequest<{ Querystring: { token?: string } }>, reply: FastifyReply) => {

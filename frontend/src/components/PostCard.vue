@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all group">
+  <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all group select-none">
     <div class="p-5 md:p-6">
 
       <!-- ── Header ────────────────────────────────────────────────────── -->
@@ -71,12 +71,6 @@
               v-click-outside="() => showMenu = false"
               class="absolute right-0 top-10 z-30 w-48 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1"
             >
-              <button
-                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5"
-                @click="openFullscreen"
-              >
-                <BIcon name="Maximize2" class="w-4 h-4 text-brand-accent" /> Открыть полностью
-              </button>
               <button v-if="canPin && !isPinnedThis" @click="emit('pin', post.id); showMenu = false"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5">
                 <BIcon name="Pin" class="w-4 h-4 text-brand-accent" /> Закрепить
@@ -128,15 +122,27 @@
           <p v-else class="text-white/95 text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap">
             <template v-for="seg in parsedContent" :key="seg.key">
               <span v-if="seg.type === 'text'">{{ seg.text }}</span>
+              <!-- ── MENTION PILL ── -->
               <span v-else
-                class="inline-flex items-center gap-0.5 px-2 py-0.5 bg-brand-accent/15 border border-brand-accent/30 rounded-full text-brand-accent text-sm font-semibold cursor-pointer hover:bg-brand-accent/25 transition-all group/mention relative align-baseline"
+                class="mention-pill inline-flex items-center gap-1 pl-0.5 pr-2 py-0.5 bg-brand-accent/15 border border-brand-accent/30 rounded-full text-brand-accent text-[13px] font-semibold cursor-pointer hover:bg-brand-accent/25 transition-all align-middle"
+                style="vertical-align: middle; white-space: nowrap;"
                 @click.stop="goToMention(seg.username!)"
+                @mouseenter="onMentionEnter(seg.username!, $event)"
+                @mouseleave="onMentionLeave()"
               >
-                @{{ seg.username }}
-                <span class="absolute bottom-full left-0 mb-2 z-50 w-40 bg-brand-card border border-brand-border rounded-xl p-2.5 shadow-2xl opacity-0 group-hover/mention:opacity-100 scale-95 group-hover/mention:scale-100 transition-all duration-150 pointer-events-none whitespace-normal">
-                  <span class="font-bold text-white text-xs block">@{{ seg.username }}</span>
-                  <span class="text-[10px] text-brand-muted mt-0.5 block">Нажми, чтобы открыть</span>
+                <!-- Avatar or initials -->
+                <span class="flex-shrink-0 w-5 h-5 rounded-full overflow-hidden border border-brand-accent/40 bg-brand-accent/20 flex items-center justify-center">
+                  <img
+                    v-if="mentionUsers[seg.username!]?.avatar_url"
+                    :src="mentionUsers[seg.username!]!.avatar_url!"
+                    class="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                  <span v-else class="text-[8px] font-bold text-brand-accent leading-none">
+                    {{ (seg.username ?? '?')[0].toUpperCase() }}
+                  </span>
                 </span>
+                <span class="leading-none">{{ seg.username }}</span>
               </span>
             </template>
           </p>
@@ -159,6 +165,8 @@
                 v-else
                 :src="url"
                 controls
+                preload="metadata"
+                playsinline
                 class="w-full rounded-2xl border border-brand-border max-h-[520px]"
               />
             </template>
@@ -245,6 +253,20 @@
       </div>
     </div>
 
+    <!-- ── Repaw undo bar ────────────────────────────────────────────────── -->
+    <Transition name="slide-up">
+      <div v-if="repawUndoVisible" class="flex items-center justify-between gap-3 px-5 py-2.5 bg-brand-accent/10 border-t border-brand-accent/25">
+        <div class="flex items-center gap-2 text-brand-accent text-xs font-bold">
+          <BIcon name="Repeat2" class="w-3.5 h-3.5" />
+          Репав будет опубликован...
+        </div>
+        <button @click.stop="undoRepaw"
+          class="px-3 py-1 rounded-full bg-brand-card border border-brand-border hover:border-brand-accent/40 text-brand-muted hover:text-white text-xs font-semibold transition-all">
+          Отменить
+        </button>
+      </div>
+    </Transition>
+
     <!-- ── Comments section ──────────────────────────────────────────────── -->
     <Transition name="slide">
       <div v-if="isExpanded" class="border-t border-brand-border px-5 pb-5 pt-4">
@@ -260,16 +282,83 @@
       @close="lightboxOpen = false"
     />
   </div>
+
+  <!-- ── Mention hover popup (teleported to body, escapes overflow:hidden) ── -->
+  <Teleport to="body">
+    <Transition name="mention-popup">
+      <div
+        v-if="hoveredMention && mentionUsers[hoveredMention]"
+        class="fixed z-[9999] w-52 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden pointer-events-none"
+        :style="{ top: mentionPopupPos.top, left: mentionPopupPos.left, transform: 'translateY(calc(-100% - 6px))' }"
+      >
+        <!-- Banner -->
+        <div class="w-full h-14 relative overflow-hidden bg-gradient-to-br from-brand-accent/30 to-brand-accent-plus/20">
+          <img
+            v-if="mentionUsers[hoveredMention]?.banner_url"
+            :src="mentionUsers[hoveredMention]!.banner_url!"
+            class="w-full h-full object-cover"
+            loading="lazy"
+          />
+          <div class="absolute inset-0 bg-gradient-to-t from-brand-card/70 to-transparent"></div>
+        </div>
+        <!-- Avatar overlapping banner -->
+        <div class="px-3 pb-3 -mt-5 relative">
+          <div class="w-10 h-10 rounded-full border-2 border-brand-card overflow-hidden bg-brand-accent/20 flex items-center justify-center">
+            <img
+              v-if="mentionUsers[hoveredMention]?.avatar_url"
+              :src="mentionUsers[hoveredMention]!.avatar_url!"
+              class="w-full h-full object-cover"
+              loading="lazy"
+            />
+            <span v-else class="text-sm font-bold text-brand-accent">
+              {{ (hoveredMention ?? '?')[0].toUpperCase() }}
+            </span>
+          </div>
+          <div class="mt-1.5">
+            <div class="text-sm font-bold text-white leading-tight truncate">
+              {{ mentionUsers[hoveredMention]?.display_name || hoveredMention }}
+            </div>
+            <div class="text-xs text-brand-muted truncate">@{{ hoveredMention }}</div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
 import PostComments from '@/components/PostComments.vue'
 import PostLightbox from '@/components/PostLightbox.vue'
+
+// ── Module-level mention user cache (shared across all PostCard instances) ──
+type MentionUser = { id: string; username: string; display_name: string | null; avatar_url: string | null; banner_url: string | null }
+const _mentionCache = new Map<string, MentionUser | null>()
+const _pendingFetches = new Map<string, Promise<MentionUser | null>>()
+
+async function lookupMentionUser(username: string): Promise<MentionUser | null> {
+  if (_mentionCache.has(username)) return _mentionCache.get(username) ?? null
+  if (_pendingFetches.has(username)) return _pendingFetches.get(username)!
+  const promise = api.get(`/users/search?q=${encodeURIComponent(username)}`).then(r => {
+    const users: any[] = r.data.data?.users ?? []
+    const found = users.find((u: any) => u.username.toLowerCase() === username.toLowerCase()) ?? null
+    const result: MentionUser | null = found ? {
+      id: found.id, username: found.username,
+      display_name: found.display_name ?? null,
+      avatar_url: found.avatar_url ?? null,
+      banner_url: found.banner_url ?? null,
+    } : null
+    _mentionCache.set(username, result)
+    _pendingFetches.delete(username)
+    return result
+  }).catch(() => { _mentionCache.set(username, null); _pendingFetches.delete(username); return null })
+  _pendingFetches.set(username, promise)
+  return promise
+}
 
 // ── Props & emits ─────────────────────────────────────────────────────────
 const props = defineProps<{
@@ -307,8 +396,44 @@ const editContent = ref('')
 const isSaving    = ref(false)
 const isDeleting  = ref(false)
 
+const repawUndoVisible = ref(false)
+let repawTimer: ReturnType<typeof setTimeout> | null = null
+
 const lightboxOpen  = ref(false)
 const lightboxIndex = ref(0)
+
+// ── Mention hover popup (Teleport-based to escape overflow:hidden) ─────────
+const hoveredMention = ref<string | null>(null)
+const mentionPopupPos = ref({ top: '0px', left: '0px' })
+
+function onMentionEnter(username: string, e: MouseEvent) {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  hoveredMention.value = username
+  const left = Math.max(0, Math.min(rect.left, window.innerWidth - 224))
+  mentionPopupPos.value = {
+    top: `${rect.top}px`,
+    left: `${left}px`,
+  }
+}
+function onMentionLeave() { hoveredMention.value = null }
+
+// ── Mention user data ──────────────────────────────────────────────────────
+// reactive map so template updates when data arrives
+const mentionUsers = ref<Record<string, MentionUser | null>>({})
+
+async function loadMentionUsers() {
+  const content = props.post.content ?? ''
+  const usernames = [...new Set((content.match(/@(\w+)/g) ?? []).map((m: string) => m.slice(1)))]
+  for (const username of usernames) {
+    if (!(username in mentionUsers.value)) {
+      const user = await lookupMentionUser(username)
+      mentionUsers.value = { ...mentionUsers.value, [username]: user }
+    }
+  }
+}
+
+onMounted(() => { loadMentionUsers() })
+watch(() => props.post.content, () => { loadMentionUsers() })
 
 // ── Computed ──────────────────────────────────────────────────────────────
 const isOwn = computed(() =>
@@ -363,13 +488,50 @@ async function vote(value: 1 | -1) {
 
 async function toggleRepaw() {
   if (!authStore.isAuthenticated) return
-  try {
-    const r = await api.post(`/posts/${props.post.id}/repaw`, {})
-    if (r.data.success) {
-      localRepawed.value = r.data.data.repawed
-      localRepaws.value = r.data.data.repaw_count
+
+  // If already repawed, undo immediately (no toast)
+  if (localRepawed.value) {
+    if (repawTimer) { clearTimeout(repawTimer); repawTimer = null }
+    repawUndoVisible.value = false
+    localRepawed.value = false
+    localRepaws.value = Math.max(0, localRepaws.value - 1)
+    try {
+      const r = await api.post(`/posts/${props.post.id}/repaw`, {})
+      if (r.data.success) {
+        localRepawed.value = r.data.data.repawed
+        localRepaws.value = r.data.data.repaw_count
+      }
+    } catch {}
+    return
+  }
+
+  // Optimistic update + show undo toast
+  localRepawed.value = true
+  localRepaws.value++
+  repawUndoVisible.value = true
+  if (repawTimer) clearTimeout(repawTimer)
+  repawTimer = setTimeout(async () => {
+    repawUndoVisible.value = false
+    repawTimer = null
+    // Commit: call API to actually create the repaw
+    try {
+      const r = await api.post(`/posts/${props.post.id}/repaw`, {})
+      if (r.data.success) {
+        localRepawed.value = r.data.data.repawed
+        localRepaws.value = r.data.data.repaw_count
+      }
+    } catch {
+      localRepawed.value = false
+      localRepaws.value = Math.max(0, localRepaws.value - 1)
     }
-  } catch {}
+  }, 5000)
+}
+
+function undoRepaw() {
+  if (repawTimer) { clearTimeout(repawTimer); repawTimer = null }
+  repawUndoVisible.value = false
+  localRepawed.value = false
+  localRepaws.value = Math.max(0, localRepaws.value - 1)
 }
 
 async function toggleFavourite() {
@@ -482,5 +644,40 @@ const vClickOutside = {
 .slide-leave-from {
   opacity: 1;
   max-height: 1000px;
+}
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.slide-up-enter-to,
+.slide-up-leave-from {
+  opacity: 1;
+  max-height: 60px;
+}
+
+/* Mention pill */
+.mention-pill {
+  position: relative;
+}
+/* Mention popup teleport transition */
+.mention-popup-enter-active,
+.mention-popup-leave-active {
+  transition: opacity 0.12s ease;
+}
+.mention-popup-enter-from,
+.mention-popup-leave-to {
+  opacity: 0;
+}
+.mention-popup-enter-to,
+.mention-popup-leave-from {
+  opacity: 1;
 }
 </style>

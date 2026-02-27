@@ -28,6 +28,18 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/bookmarks',
+    name: 'bookmarks',
+    component: () => import('@/views/BookmarksView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/messages',
+    name: 'messages',
+    component: () => import('@/views/MessagesView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/settings/profile',
     name: 'settings-profile',
     component: () => import('@/views/SettingsProfileView.vue'),
@@ -37,6 +49,12 @@ const routes: RouteRecordRaw[] = [
     path: '/admin',
     name: 'admin',
     component: () => import('@/views/AdminView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/post/:id',
+    name: 'post',
+    component: () => import('@/views/PostView.vue'),
     meta: { requiresAuth: true },
   },
 ]

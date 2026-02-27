@@ -10,7 +10,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{ (e: 'uploaded', urls: string[]): void }>()
 
-type PreviewEntry = { localUrl: string; uploading: boolean; progress: number; finalUrl?: string }
+type PreviewEntry = { localUrl: string; uploading: boolean; progress: number; finalUrl?: string; name: string; size: number }
 
 const previews = ref<PreviewEntry[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -55,8 +55,10 @@ function compressImage(file: File): Promise<File> {
 const processFiles = (files: FileList | File[] | null) => {
   if (!files) return
   Array.from(files).forEach((file) => {
+    // Content-based dedup: skip if same name+size is already queued
+    if (previews.value.some(p => p.name === file.name && p.size === file.size)) return
     const idx = previews.value.length
-    previews.value.push({ localUrl: URL.createObjectURL(file), uploading: true, progress: 0 })
+    previews.value.push({ localUrl: URL.createObjectURL(file), uploading: true, progress: 0, name: file.name, size: file.size })
     uploadFile(file, idx)
   })
 }
@@ -95,11 +97,11 @@ const uploadFile = async (file: File, idx: number) => {
   }
 }
 
-const emitAll = () => emit('uploaded', previews.value.filter(p => p.finalUrl).map(p => p.finalUrl!))
+const emitAll = () => emit('uploaded', [...new Set(previews.value.filter(p => p.finalUrl).map(p => p.finalUrl!))])
 
 const remove = (idx: number) => { previews.value.splice(idx, 1); emitAll() }
 
-const clearAll = () => { previews.value = [] }
+const clearAll = () => { previews.value = []; emit('uploaded', []) }
 
 const onDrop = (e: DragEvent) => { processFiles(e.dataTransfer?.files ?? null) }
 
@@ -117,7 +119,7 @@ defineExpose({
       ref="fileInput"
       type="file"
       class="hidden"
-      @change="(e) => processFiles((e.target as HTMLInputElement).files)"
+      @change="(e) => { const el = e.target as HTMLInputElement; const snapshot = Array.from(el.files ?? []); el.value = ''; processFiles(snapshot) }"
       accept="image/*,video/*"
       :multiple="multiple !== false"
     />

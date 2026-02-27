@@ -26,12 +26,13 @@ export const notificationService = {
     type:       string;
     postId?:    string;
     commentId?: string;
+    refId?:     string;
   }) {
-    const { receiverId, senderId, type, postId, commentId } = input;
+    const { receiverId, senderId, type, postId, commentId, refId } = input;
     if (receiverId === senderId) return null; // don't notify yourself
 
     const notif = await prisma.notification.create({
-      data:    { receiver_id: receiverId, sender_id: senderId, type, post_id: postId, comment_id: commentId },
+      data:    { receiver_id: receiverId, sender_id: senderId, type, post_id: postId, comment_id: commentId, ref_id: refId },
       include: {
         sender: { select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true } },
       },

@@ -14,19 +14,27 @@ import { mediaRoutes } from './modules/media/routes.js';
 import { followsRoutes } from './modules/follows/routes.js';
 import { notificationsRoutes } from './modules/notifications/routes.js';
 import { adminRoutes } from './modules/admin/routes.js';
+import { relationshipsRoutes } from './modules/relationships/routes.js';
 
 dotenv.config();
+
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[FATAL] JWT_SECRET env variable is not set. Refusing to start in production.');
+    process.exit(1);
+  }
+  console.warn('[WARN] JWT_SECRET is not set. Using insecure fallback for development only.');
+}
 
 const fastify = Fastify({ logger: true, bodyLimit: 26_214_400 }); // 25 MB
 
 fastify.register(cors, { origin: true });
-fastify.register(jwt, { secret: process.env.JWT_SECRET || 'bloomly_secret_2026' });
+fastify.register(jwt, { secret: jwtSecret || 'bloomly_secret_dev_only' });
 fastify.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
 fastify.register(rateLimit, {
   max: 100,
   timeWindow: '1 minute',
-  // Skip rate-limiting for WebSocket upgrade requests
-  skip: (request) => request.headers.upgrade?.toLowerCase() === 'websocket',
 });
 fastify.register(websocket);
 
@@ -62,19 +70,62 @@ fastify.register(mediaRoutes, { prefix: '/api/media' });
 fastify.register(followsRoutes, { prefix: '/api/follows' });
 fastify.register(notificationsRoutes, { prefix: '/api/notifications' });
 fastify.register(adminRoutes, { prefix: '/api/admin' });
+fastify.register(relationshipsRoutes, { prefix: '/api/relationships' });
+
+// ── In-memory online status tracking ─────────────────────────────────────
+// Use a Set per user so multiple browser tabs / pages work correctly
+const onlineUsers = new Map<string, Set<any>>()
+
+// Remove entirely if set becomes empty
+function markOffline(userId: string, socket: any) {
+  const sockets = onlineUsers.get(userId)
+  if (!sockets) return
+  sockets.delete(socket)
+  if (sockets.size === 0) onlineUsers.delete(userId)
+}
 
 fastify.register(async function (fastify) {
   fastify.get('/api/', { websocket: true }, (connection) => {
-    connection.socket.on('message', (raw) => {
+    let authedUserId: string | null = null
+
+    connection.socket.on('message', (raw: Buffer) => {
       try {
         const msg = JSON.parse(raw.toString())
         if (msg?.type === 'ping') {
           connection.socket.send(JSON.stringify({ type: 'pong' }))
           return
         }
+        if (msg?.type === 'auth' && msg?.token) {
+          try {
+            const payload = fastify.jwt.verify(msg.token) as { id: string }
+            // If re-authing with a different ID (shouldn't happen), clean up old
+            if (authedUserId && authedUserId !== payload.id) {
+              markOffline(authedUserId, connection.socket)
+            }
+            authedUserId = payload.id
+            if (!onlineUsers.has(authedUserId)) onlineUsers.set(authedUserId, new Set())
+            onlineUsers.get(authedUserId)!.add(connection.socket)
+            connection.socket.send(JSON.stringify({ type: 'auth_ok' }))
+          } catch {
+            connection.socket.send(JSON.stringify({ type: 'auth_err' }))
+          }
+          return
+        }
       } catch { /* non-JSON frame — ignore */ }
     })
+
+    connection.socket.on('close', () => {
+      if (authedUserId) markOffline(authedUserId, connection.socket)
+    })
     connection.socket.on('error', () => {})
+  })
+
+  // REST endpoint: GET /api/users/online?ids=id1,id2,...
+  fastify.get('/api/users/online', async (request, reply) => {
+    const ids = ((request.query as any).ids ?? '').split(',').filter(Boolean) as string[]
+    const result: Record<string, boolean> = {}
+    for (const id of ids) result[id] = onlineUsers.has(id)
+    return reply.send({ success: true, data: result, error: null })
   })
 })
 
