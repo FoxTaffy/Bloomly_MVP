@@ -61,7 +61,7 @@ onMounted(fetchPost)
       <div v-else-if="notFound" class="mt-16 text-center">
         <div class="text-6xl mb-4">🐾</div>
         <h2 class="text-xl font-bold text-white mb-2">Публикация не найдена</h2>
-        <p class="text-brand-muted text-sm mb-6">Возможно, она была удалена или никогда не существовала.</p>
+        <p class="text-white/55 text-sm mb-6">Возможно, она была удалена или никогда не существовала.</p>
         <button
           @click="router.push('/')"
           class="px-6 py-2.5 bg-brand-accent hover:bg-brand-accent2 rounded-2xl text-white font-semibold text-sm transition-colors">

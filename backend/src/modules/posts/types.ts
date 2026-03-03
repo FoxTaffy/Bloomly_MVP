@@ -16,10 +16,14 @@ export interface GetPostsQuery {
   sort?: PostSortBy;
   safeMode?: boolean;
   hasMedia?: boolean;
+  page?: string;
+  limit?: string;
 }
 
 export interface GetPersonalizedQuery {
   safeMode?: boolean;
+  page?: string;
+  limit?: string;
 }
 
 export interface JwtUser {

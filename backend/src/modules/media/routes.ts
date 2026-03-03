@@ -23,7 +23,7 @@ export async function mediaRoutes(fastify: FastifyInstance) {
           return reply.code(400).send({ success: false, data: null, error: { code: 'NO_FILE', message: 'Uploaded file is empty' } });
         }
 
-        const folder = ((request.query as any).folder || 'posts') as 'posts' | 'avatars' | 'banners';
+        const folder = ((request.query as any).folder || 'posts') as 'posts' | 'avatars' | 'banners' | 'messages' | 'backgrounds';
         const url = await uploadFile(buf, data.filename, data.mimetype, folder);
         return reply.send({ success: true, data: { url }, error: null });
       } catch (err: any) {

@@ -101,7 +101,10 @@ export const getPersonalizedPostsHandler = async (
   try {
     const { id: userId } = request.user as JwtUser;
     const safeMode = (request.query as any).safeMode === 'true';
-    const posts = await postService.getPersonalizedPosts(userId, safeMode);
+    const pageNum = request.query.page ? parseInt(request.query.page as string, 10) : 1;
+    const limitNum = request.query.limit ? parseInt(request.query.limit as string, 10) : 30;
+    
+    const posts = await postService.getPersonalizedPosts(userId, safeMode, pageNum, limitNum);
     return reply.send({ success: true, data: { posts }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch personalized posts';

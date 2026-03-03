@@ -34,7 +34,7 @@ export const notificationService = {
     const notif = await prisma.notification.create({
       data:    { receiver_id: receiverId, sender_id: senderId, type, post_id: postId, comment_id: commentId, ref_id: refId },
       include: {
-        sender: { select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true } },
+        sender: { select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true, pronouns: true } },
       },
     });
 
@@ -43,13 +43,13 @@ export const notificationService = {
     return notif;
   },
 
-  async getForUser(userId: string, limit = 30) {
+  async getForUser(userId: string, limit = 50) {
     return prisma.notification.findMany({
       where:   { receiver_id: userId },
       orderBy: { created_at: 'desc' },
       take:    limit,
       include: {
-        sender: { select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true } },
+        sender: { select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true, pronouns: true } },
       },
     });
   },

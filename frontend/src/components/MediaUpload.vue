@@ -120,7 +120,7 @@ defineExpose({
       type="file"
       class="hidden"
       @change="(e) => { const el = e.target as HTMLInputElement; const snapshot = Array.from(el.files ?? []); el.value = ''; processFiles(snapshot) }"
-      accept="image/*,video/*"
+      accept="image/*,video/*,audio/*"
       :multiple="multiple !== false"
     />
 

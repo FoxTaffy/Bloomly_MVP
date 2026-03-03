@@ -12,7 +12,6 @@
               :src="post.author.avatar_url"
               :alt="post.author.display_name || post.author.username"
               class="w-11 h-11 rounded-full object-cover border border-brand-border"
-              loading="lazy"
               width="44" height="44"
             />
             <div
@@ -38,8 +37,13 @@
               <h4 class="font-bold text-white truncate hover:text-brand-accent transition-colors">
                 {{ post.author.display_name || post.author.username }}
               </h4>
+              <!-- AD badge -->
+              <span v-if="post.author.role === 'ad'"
+                class="inline-flex items-center gap-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded-md">
+                AD
+              </span>
               <span v-if="showRepawLabel"
-                class="inline-flex items-center gap-1 text-[10px] text-brand-muted bg-brand-bg border border-brand-border px-1.5 py-0.5 rounded-md font-semibold">
+                class="inline-flex items-center gap-1 text-[10px] text-white/55 bg-brand-bg border border-brand-border px-1.5 py-0.5 rounded-md font-semibold">
                 <BIcon name="Repeat2" class="w-3 h-3" /> Репав
               </span>
               <span v-if="isPinnedThis"
@@ -47,7 +51,7 @@
                 <BIcon name="Pin" class="w-3 h-3" /> Закреплён
               </span>
             </div>
-            <p class="text-xs text-brand-muted truncate">@{{ post.author.username }} · {{ fmtDate(post.created_at) }}</p>
+            <p class="text-xs text-white/55 truncate">@{{ post.author.username }} · {{ fmtDate(post.created_at) }}</p>
           </div>
         </div>
 
@@ -62,7 +66,7 @@
           <div class="relative">
             <button
               @click.stop="showMenu = !showMenu"
-              class="text-brand-muted hover:text-white p-2 rounded-full hover:bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"
+              class="text-white/55 hover:text-white p-2 rounded-full hover:bg-white/5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
             >
               <BIcon name="MoreHorizontal" class="w-5 h-5" />
             </button>
@@ -88,7 +92,7 @@
                 <BIcon name="Trash2" class="w-4 h-4" /> Удалить
               </button>
               <button @click="doShare"
-                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-muted hover:bg-white/5 hover:text-white">
+                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/55 hover:bg-white/5 hover:text-white">
                 <BIcon name="Share2" class="w-4 h-4" /> Поделиться
               </button>
             </div>
@@ -110,7 +114,7 @@
               class="w-full bg-brand-bg border border-brand-accent/50 rounded-2xl px-4 py-3 text-white text-[15px] leading-relaxed resize-none outline-none focus:border-brand-accent"
             ></textarea>
             <div class="flex gap-2 mt-2 justify-end">
-              <button @click="cancelEdit" class="px-4 py-1.5 text-sm text-brand-muted hover:text-white hover:bg-white/5 rounded-xl">Отмена</button>
+              <button @click="cancelEdit" class="px-4 py-1.5 text-sm text-white/55 hover:text-white hover:bg-white/5 rounded-xl">Отмена</button>
               <button @click="saveEdit" :disabled="isSaving"
                 class="px-4 py-1.5 text-sm bg-brand-accent text-white font-bold rounded-xl hover:bg-brand-accent-plus disabled:opacity-50">
                 {{ isSaving ? 'Сохранение...' : 'Сохранить' }}
@@ -147,29 +151,75 @@
             </template>
           </p>
 
-          <!-- Media grid -->
+          <!-- ── Media carousel ────────────────────────────────────── -->
           <div
             v-if="post.media_urls && post.media_urls.length"
-            class="grid gap-2 mt-3"
-            :class="post.media_urls.length === 1 ? 'grid-cols-1' : post.media_urls.length === 2 ? 'grid-cols-2' : 'grid-cols-3'"
+            class="relative mt-3 rounded-2xl overflow-hidden bg-black/20 group/carousel"
+            :class="adMode ? 'select-none' : ''"
+            @contextmenu="adMode ? ($event as Event).preventDefault() : null"
+            @touchstart.passive="carouselTouchStart"
+            @touchend.passive="carouselTouchEnd"
           >
-            <template v-for="(url, i) in post.media_urls" :key="i">
-              <img
-                v-if="isImg(url)"
-                :src="url"
-                class="w-full rounded-2xl object-cover max-h-[520px] border border-brand-border cursor-pointer hover:opacity-90 transition-opacity"
-                loading="lazy"
+            <!-- Slide -->
+            <div class="carousel-track" :style="{ transform: `translateX(-${carouselIndex * 100}%)` }">
+              <div
+                v-for="(url, i) in post.media_urls"
+                :key="i"
+                class="carousel-slide"
+                :style="isImg(url) ? { '--blur-url': `url(${url})` } : {}"
+                :data-has-blur="isImg(url) ? 'true' : 'false'"
                 @click="openLightbox(i)"
+              >
+                <CustomPlayer :src="url" @click-image="openLightbox(i)" />
+              </div>
+            </div>
+
+            <!-- Counter badge -->
+            <div
+              v-if="post.media_urls.length > 1"
+              class="absolute top-2.5 left-2.5 z-10 px-2.5 py-1 rounded-full bg-black/60 text-white text-xs font-bold backdrop-blur-sm border border-white/10 select-none"
+            >
+              {{ carouselIndex + 1 }}&thinsp;/&thinsp;{{ post.media_urls.length }}
+            </div>
+
+            <!-- Prev / Next arrows -->
+            <button
+              v-if="post.media_urls.length > 1 && carouselIndex > 0"
+              @click.stop="carouselIndex--"
+              class="carousel-arrow left-2 opacity-0 group-hover/carousel:opacity-100"
+            >
+              <BIcon name="ChevronLeft" class="w-5 h-5" />
+            </button>
+            <button
+              v-if="post.media_urls.length > 1 && carouselIndex < post.media_urls.length - 1"
+              @click.stop="carouselIndex++"
+              class="carousel-arrow right-2 opacity-0 group-hover/carousel:opacity-100"
+            >
+              <BIcon name="ChevronRight" class="w-5 h-5" />
+            </button>
+
+            <!-- Dots -->
+            <div
+              v-if="post.media_urls.length > 1"
+              class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-10 flex gap-1.5 select-none"
+            >
+              <button
+                v-for="(_, i) in post.media_urls"
+                :key="i"
+                @click.stop="carouselIndex = i"
+                class="w-1.5 h-1.5 rounded-full transition-all duration-200"
+                :class="i === carouselIndex ? 'bg-white w-4' : 'bg-white/40'"
               />
-              <video
-                v-else
-                :src="url"
-                controls
-                preload="metadata"
-                playsinline
-                class="w-full rounded-2xl border border-brand-border max-h-[520px]"
-              />
-            </template>
+            </div>
+
+            <!-- Expand to lightbox with comments -->
+            <button
+              @click.stop="openLightbox(carouselIndex)"
+              class="absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white hover:bg-black/80 transition-colors opacity-0 group-hover/carousel:opacity-100"
+              title="Открыть"
+            >
+              <BIcon name="Expand" class="w-4 h-4" />
+            </button>
           </div>
         </div>
 
@@ -181,7 +231,7 @@
           </span>
           <span
             v-for="tag in post.tags" :key="tag.tag?.id ?? tag.id"
-            class="px-3 py-1 bg-brand-bg text-brand-muted text-xs font-medium rounded-full border border-brand-border hover:bg-brand-border hover:text-white cursor-pointer transition-colors"
+            class="px-3 py-1 bg-brand-bg text-white/55 text-xs font-medium rounded-full border border-brand-border hover:bg-brand-border hover:text-white cursor-pointer transition-colors"
           >
             #{{ tag.tag?.name ?? tag.name }}
           </span>
@@ -197,8 +247,8 @@
               class="p-1 rounded-full transition-all duration-150"
               :class="localVote === 1
                 ? 'bg-brand-success/25 text-brand-success shadow-[0_0_8px_0px] shadow-brand-success/40'
-                : 'text-brand-muted hover:bg-brand-success/20 hover:text-brand-success'">
-              <BIcon name="ArrowUp" class="w-4 h-4" />
+                : 'text-white/55 hover:bg-brand-success/20 hover:text-brand-success'">
+              <BIcon name="ThumbsUp" class="w-4 h-4" />
             </button>
             <span class="font-bold text-sm min-w-[28px] text-center"
               :class="localVote === 1 ? 'text-emerald-400' : localVote === -1 ? 'text-rose-400' : localRating > 0 ? 'text-emerald-400' : localRating < 0 ? 'text-rose-400' : 'text-white'">
@@ -208,17 +258,17 @@
               class="p-1 rounded-full transition-all duration-150"
               :class="localVote === -1
                 ? 'bg-rose-500/25 text-rose-400 shadow-[0_0_8px_0px] shadow-rose-500/40'
-                : 'text-brand-muted hover:bg-rose-500/20 hover:text-rose-400'">
-              <BIcon name="ArrowDown" class="w-4 h-4" />
+                : 'text-white/55 hover:bg-rose-500/20 hover:text-rose-400'">
+              <BIcon name="ThumbsDown" class="w-4 h-4" />
             </button>
           </div>
 
           <!-- Repaw -->
-          <button @click="toggleRepaw"
+          <button v-if="!adMode" @click="toggleRepaw"
             class="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-semibold border transition-all"
             :class="localRepawed
               ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
-              : 'bg-brand-bg border-brand-border text-brand-muted hover:text-brand-accent hover:border-brand-accent/30'">
+              : 'bg-brand-bg border-brand-border text-white/55 hover:text-brand-accent hover:border-brand-accent/30'">
             <BIcon name="Repeat2" class="w-4 h-4" />
             <span class="text-sm">{{ localRepaws }}</span>
           </button>
@@ -228,7 +278,7 @@
             class="flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-xs transition-all"
             :class="isExpanded
               ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
-              : 'bg-brand-bg border-brand-border text-brand-muted hover:text-white'">
+              : 'bg-brand-bg border-brand-border text-white/55 hover:text-white'">
             <BIcon name="MessageSquare" class="w-4 h-4" />
             <span>{{ post._count?.comments ?? 0 }}</span>
           </button>
@@ -240,13 +290,13 @@
             class="p-2 rounded-full border transition-all"
             :class="localFavourited
               ? 'bg-yellow-500/15 border-yellow-500/40 text-yellow-400'
-              : 'bg-brand-bg border-brand-border text-brand-muted hover:text-yellow-400 hover:border-yellow-500/30'">
+              : 'bg-brand-bg border-brand-border text-white/55 hover:text-yellow-400 hover:border-yellow-500/30'">
             <BIcon :name="localFavourited ? 'BookmarkCheck' : 'Bookmark'" class="w-4.5 h-4.5" />
           </button>
 
           <!-- Share -->
-          <button @click="doShare"
-            class="p-2 rounded-full border bg-brand-bg border-brand-border text-brand-muted hover:text-white hover:border-brand-border/80 transition-all">
+          <button v-if="!adMode" @click="doShare"
+            class="p-2 rounded-full border bg-brand-bg border-brand-border text-white/55 hover:text-white hover:border-brand-border/80 transition-all">
             <BIcon name="Share2" class="w-4.5 h-4.5" />
           </button>
         </div>
@@ -255,13 +305,13 @@
 
     <!-- ── Repaw undo bar ────────────────────────────────────────────────── -->
     <Transition name="slide-up">
-      <div v-if="repawUndoVisible" class="flex items-center justify-between gap-3 px-5 py-2.5 bg-brand-accent/10 border-t border-brand-accent/25">
+      <div v-if="!adMode && repawUndoVisible" class="flex items-center justify-between gap-3 px-5 py-2.5 bg-brand-accent/10 border-t border-brand-accent/25">
         <div class="flex items-center gap-2 text-brand-accent text-xs font-bold">
           <BIcon name="Repeat2" class="w-3.5 h-3.5" />
-          Репав будет опубликован...
+          Репав через {{ repawCountdown }}с...
         </div>
         <button @click.stop="undoRepaw"
-          class="px-3 py-1 rounded-full bg-brand-card border border-brand-border hover:border-brand-accent/40 text-brand-muted hover:text-white text-xs font-semibold transition-all">
+          class="px-3 py-1 rounded-full bg-brand-card border border-brand-border hover:border-brand-accent/40 text-white/55 hover:text-white text-xs font-semibold transition-all">
           Отменить
         </button>
       </div>
@@ -279,6 +329,7 @@
       v-if="lightboxOpen"
       :images="lightboxUrls"
       :start-index="lightboxIndex"
+      :post-id="post.id"
       @close="lightboxOpen = false"
     />
   </div>
@@ -318,7 +369,7 @@
             <div class="text-sm font-bold text-white leading-tight truncate">
               {{ mentionUsers[hoveredMention]?.display_name || hoveredMention }}
             </div>
-            <div class="text-xs text-brand-muted truncate">@{{ hoveredMention }}</div>
+            <div class="text-xs text-white/55 truncate">@{{ hoveredMention }}</div>
           </div>
         </div>
       </div>
@@ -332,6 +383,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
+import CustomPlayer from '@/components/CustomPlayer.vue'
 import PostComments from '@/components/PostComments.vue'
 import PostLightbox from '@/components/PostLightbox.vue'
 
@@ -368,6 +420,10 @@ const props = defineProps<{
   showRepawLabel?: boolean
   showFollowButton?: boolean
   initialFollowing?: boolean
+  initialVote?: 1 | -1 | 0
+  initialRepawed?: boolean
+  initialFavourited?: boolean
+  adMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -384,10 +440,15 @@ const authStore = useAuthStore()
 // ── Local state ───────────────────────────────────────────────────────────
 const localRating    = ref<number>(props.post.rating ?? 0)
 const localRepaws    = ref<number>(props.post._count?.repaws ?? 0)
-const localVote      = ref<1 | -1 | 0>(0)
-const localRepawed   = ref(false)
-const localFavourited = ref(false)
+const localVote      = ref<1 | -1 | 0>(props.initialVote ?? 0)
+const localRepawed   = ref(props.initialRepawed ?? false)
+const localFavourited = ref(props.initialFavourited ?? false)
 const localFollowing = ref<boolean | null>(props.initialFollowing ?? null)
+
+// Sync with parent postStatus when it loads asynchronously
+watch(() => props.initialVote, (val) => { if (val !== undefined) localVote.value = val })
+watch(() => props.initialRepawed, (val) => { if (val !== undefined) localRepawed.value = val })
+watch(() => props.initialFavourited, (val) => { if (val !== undefined) localFavourited.value = val })
 
 const showMenu    = ref(false)
 const isExpanded  = ref(false)
@@ -397,10 +458,25 @@ const isSaving    = ref(false)
 const isDeleting  = ref(false)
 
 const repawUndoVisible = ref(false)
+const repawCountdown = ref(5)
 let repawTimer: ReturnType<typeof setTimeout> | null = null
+let repawCountdownTimer: ReturnType<typeof setInterval> | null = null
 
 const lightboxOpen  = ref(false)
 const lightboxIndex = ref(0)
+
+// ── Carousel ──────────────────────────────────────────────────────────────
+const carouselIndex = ref(0)
+watch(() => props.post.id, () => { carouselIndex.value = 0 })
+
+let _carouselTouchX = 0
+function carouselTouchStart(e: TouchEvent) { _carouselTouchX = e.touches[0].clientX }
+function carouselTouchEnd(e: TouchEvent) {
+  const diff = _carouselTouchX - e.changedTouches[0].clientX
+  const total = props.post.media_urls?.length ?? 1
+  if (diff > 50 && carouselIndex.value < total - 1) carouselIndex.value++
+  else if (diff < -50 && carouselIndex.value > 0) carouselIndex.value--
+}
 
 // ── Mention hover popup (Teleport-based to escape overflow:hidden) ─────────
 const hoveredMention = ref<string | null>(null)
@@ -435,6 +511,7 @@ async function loadMentionUsers() {
 onMounted(() => { loadMentionUsers() })
 watch(() => props.post.content, () => { loadMentionUsers() })
 
+
 // ── Computed ──────────────────────────────────────────────────────────────
 const isOwn = computed(() =>
   !!authStore.user && (authStore.user.id === props.post.author_id || authStore.user.id === props.post.author?.id)
@@ -443,7 +520,7 @@ const canPin = computed(() => props.isOwnProfile && isOwn.value)
 const isPinnedThis = computed(() => !!props.isPinnedPostId && props.isPinnedPostId === props.post.id)
 
 const lightboxUrls = computed<string[]>(() =>
-  (props.post.media_urls ?? []).filter((u: string) => isImg(u))
+  props.post.media_urls ?? []
 )
 
 type Seg = { type: 'text' | 'mention'; key: number; text: string; username?: string }
@@ -492,6 +569,7 @@ async function toggleRepaw() {
   // If already repawed, undo immediately (no toast)
   if (localRepawed.value) {
     if (repawTimer) { clearTimeout(repawTimer); repawTimer = null }
+    if (repawCountdownTimer) { clearInterval(repawCountdownTimer); repawCountdownTimer = null }
     repawUndoVisible.value = false
     localRepawed.value = false
     localRepaws.value = Math.max(0, localRepaws.value - 1)
@@ -505,14 +583,24 @@ async function toggleRepaw() {
     return
   }
 
-  // Optimistic update + show undo toast
+  // Optimistic update + show undo toast with countdown
   localRepawed.value = true
   localRepaws.value++
   repawUndoVisible.value = true
+  repawCountdown.value = 5
   if (repawTimer) clearTimeout(repawTimer)
+  if (repawCountdownTimer) clearInterval(repawCountdownTimer)
+  repawCountdownTimer = setInterval(() => {
+    repawCountdown.value--
+    if (repawCountdown.value <= 0 && repawCountdownTimer) {
+      clearInterval(repawCountdownTimer)
+      repawCountdownTimer = null
+    }
+  }, 1000)
   repawTimer = setTimeout(async () => {
     repawUndoVisible.value = false
     repawTimer = null
+    if (repawCountdownTimer) { clearInterval(repawCountdownTimer); repawCountdownTimer = null }
     // Commit: call API to actually create the repaw
     try {
       const r = await api.post(`/posts/${props.post.id}/repaw`, {})
@@ -529,6 +617,7 @@ async function toggleRepaw() {
 
 function undoRepaw() {
   if (repawTimer) { clearTimeout(repawTimer); repawTimer = null }
+  if (repawCountdownTimer) { clearInterval(repawCountdownTimer); repawCountdownTimer = null }
   repawUndoVisible.value = false
   localRepawed.value = false
   localRepaws.value = Math.max(0, localRepaws.value - 1)
@@ -561,7 +650,13 @@ async function goToMention(username: string) {
 
 function openLightbox(index: number) {
   lightboxIndex.value = index
+  carouselIndex.value = index
   lightboxOpen.value = true
+}
+
+function openLightboxByUrl(url: string) {
+  const index = (props.post.media_urls ?? []).indexOf(url)
+  openLightbox(index !== -1 ? index : 0)
 }
 
 function openFullscreen() {
@@ -661,6 +756,96 @@ const vClickOutside = {
 .slide-up-leave-from {
   opacity: 1;
   max-height: 60px;
+}
+
+/* ── Carousel ───────────────────────────────────────────────────────────── */
+.carousel-track {
+  display: flex;
+  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  will-change: transform;
+}
+.carousel-slide {
+  position: relative;
+  flex: 0 0 100%;
+  min-width: 0;
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0d0d14;
+  min-height: 220px;
+}
+/* Blur layer — только для изображений (data-has-blur=true) */
+.carousel-slide[data-has-blur='true']::before {
+  content: '';
+  position: absolute;
+  inset: -40px;
+  background-image: var(--blur-url);
+  background-size: cover;
+  background-position: center;
+  filter: blur(32px);
+  opacity: 0.55;
+  z-index: 0;
+  pointer-events: none;
+}
+/* Прямой дочерний <img> (тип image) — центрирование с contain */
+.carousel-slide[data-has-blur='true'] :deep(> img) {
+  position: relative;
+  z-index: 1;
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: 100% !important;
+  max-height: 480px !important;
+  object-fit: contain !important;
+  border-radius: 12px !important;
+  border: none !important;
+  margin: 0 auto !important;
+}
+/* GIF и Video враппер — без изменений, просто z-index поверх blur нет (нет blur у них) */
+.carousel-slide[data-has-blur='false'] :deep(> div) {
+  width: 100%;
+}
+.carousel-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  transition: opacity 0.2s, background 0.2s;
+  backdrop-filter: blur(4px);
+}
+.carousel-arrow:hover { background: rgba(0,0,0,0.8); }
+
+/* ── Media grid cells (legacy, kept for compatibility) ───────────────────── */
+.media-cell {
+  position: relative;
+  overflow: hidden;
+}
+/* Заставляем изображения и видео полностью заполнять ячейку */
+.media-cell :deep(> div),
+.media-cell :deep(> figure) {
+  width: 100%;
+  height: 100%;
+}
+.media-cell :deep(img),
+.media-cell :deep(video) {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  max-height: none !important;
+  border-radius: 0 !important;
+  border: none !important;
+  display: block;
 }
 
 /* Mention pill */

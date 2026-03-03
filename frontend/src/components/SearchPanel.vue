@@ -2,7 +2,7 @@
   <div class="bg-brand-card/70 backdrop-blur-md border border-brand-border p-4 rounded-2xl mb-6">
     <div class="relative mb-4">
       <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-        <BIcon name="Search" class="h-5 w-5 text-brand-muted" />
+        <BIcon name="Search" class="h-5 w-5 text-white/55" />
       </div>
       <input
         type="text"
@@ -22,7 +22,7 @@
           'px-4 py-1.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-200',
           selectedCategory === category.id
             ? 'bg-brand-accent text-white shadow-lg shadow-brand-accent/30'
-            : 'bg-brand-bg border border-brand-border text-brand-muted hover:text-brand-offwhite hover:border-brand-accent/40'
+            : 'bg-brand-bg border border-brand-border text-white/55 hover:text-brand-offwhite hover:border-brand-accent/40'
         ]"
       >
         {{ category.name }}

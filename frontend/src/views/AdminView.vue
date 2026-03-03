@@ -20,7 +20,7 @@ onMounted(async () => {
 })
 
 // ── Tabs ──────────────────────────────────────────────────────────────
-const activeTab = ref<'overview' | 'users' | 'posts' | 'reports' | 'ads'>('overview')
+const activeTab = ref<'overview' | 'users' | 'archived' | 'posts' | 'reports' | 'ads' | 'verification'>('overview')
 
 // ── Stats ─────────────────────────────────────────────────────────────
 const stats = ref<any>(null)
@@ -67,6 +67,36 @@ const deleteUser = async (userId: string) => {
   try {
     await api.delete(`/admin/users/${userId}`)
     users.value = users.value.filter(u => u.id !== userId)
+  } catch {}
+}
+
+// ── Archived Users ────────────────────────────────────────────────────
+const archivedUsers = ref<any[]>([])
+const archivedPage = ref(1)
+const archivedTotal = ref(0)
+const archivedSearch = ref('')
+const isLoadingArchived = ref(false)
+let archivedSearchDebounce: ReturnType<typeof setTimeout>
+
+const fetchArchivedUsers = async () => {
+  isLoadingArchived.value = true
+  try {
+    const res = await api.get('/admin/users/archived', { params: { page: archivedPage.value, search: archivedSearch.value || undefined } })
+    if (res.data.success) { archivedUsers.value = res.data.data.users; archivedTotal.value = res.data.data.total }
+  } catch {} finally { isLoadingArchived.value = false }
+}
+
+const onArchivedSearch = () => {
+  clearTimeout(archivedSearchDebounce)
+  archivedSearchDebounce = setTimeout(() => { archivedPage.value = 1; fetchArchivedUsers() }, 300)
+}
+
+const restoreUser = async (userId: string) => {
+  if (!confirm('Восстановить пользователя?')) return
+  try {
+    await api.post(`/admin/users/${userId}/restore`)
+    archivedUsers.value = archivedUsers.value.filter(u => u.id !== userId)
+    archivedTotal.value = Math.max(0, archivedTotal.value - 1)
   } catch {}
 }
 
@@ -166,13 +196,37 @@ const reviewAd = async (adId: string, status: 'active' | 'rejected') => {
   } catch {}
 }
 
+// ── Verification ──────────────────────────────────────────────────────
+const verRequests = ref<any[]>([])
+const verFilter = ref('')
+const isLoadingVer = ref(false)
+
+const fetchVerRequests = async () => {
+  isLoadingVer.value = true
+  try {
+    const params: any = { page: 1 }
+    if (verFilter.value) params.status = verFilter.value
+    const res = await api.get('/verification/admin/requests', { params })
+    if (res.data.success) verRequests.value = res.data.data.requests
+  } catch {} finally { isLoadingVer.value = false }
+}
+
+const reviewVerRequest = async (id: string, action: 'approve' | 'reject', reason?: string) => {
+  try {
+    await api.patch(`/verification/admin/requests/${id}`, { action, reason })
+    verRequests.value = verRequests.value.filter(r => r.id !== id)
+  } catch {}
+}
+
 // Tab switch data loading
 const switchTab = (tab: typeof activeTab.value) => {
   activeTab.value = tab
   if (tab === 'users' && !users.value.length) fetchUsers()
+  if (tab === 'archived' && !archivedUsers.value.length) fetchArchivedUsers()
   if (tab === 'posts' && !posts.value.length) fetchPosts()
   if (tab === 'reports' && !reports.value.length) fetchReports()
   if (tab === 'ads' && !ads.value.length) fetchAds()
+  if (tab === 'verification' && !verRequests.value.length) fetchVerRequests()
 }
 
 const formatNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
@@ -195,21 +249,21 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
             </div>
             Панель управления
           </h1>
-          <p class="text-sm text-brand-muted mt-1">Bloomly Admin</p>
+          <p class="text-sm text-white/55 mt-1">Bloomly Admin</p>
         </div>
         <button @click="router.push({ name: 'home' })"
-          class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-brand-bg text-brand-muted hover:text-white hover:bg-brand-border text-sm font-semibold border border-brand-border transition-all">
+          class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-brand-bg text-white/55 hover:text-white hover:bg-brand-border text-sm font-semibold border border-brand-border transition-all">
           <BIcon name="ArrowLeft" class="w-4 h-4" /> На главную
         </button>
       </div>
 
       <!-- Tab Nav -->
       <div class="flex flex-wrap gap-2 mb-6">
-        <button v-for="tab in (['overview', 'users', 'posts', 'reports', 'ads'] as const)" :key="tab"
+        <button v-for="tab in (['overview', 'users', 'archived', 'posts', 'reports', 'ads', 'verification'] as const)" :key="tab"
           @click="switchTab(tab)"
-          :class="activeTab === tab ? 'bg-gradient-to-r bg-brand-accent text-white shadow-sm shadow-brand-accent/25' : 'bg-brand-bg text-brand-muted hover:text-white border border-brand-border'"
+          :class="activeTab === tab ? 'bg-gradient-to-r bg-brand-accent text-white shadow-sm shadow-brand-accent/25' : 'bg-brand-bg text-white/55 hover:text-white border border-brand-border'"
           class="px-5 py-2.5 rounded-2xl text-sm font-bold transition-all capitalize">
-          {{ { overview: 'Обзор', users: 'Пользователи', posts: 'Посты', reports: 'Жалобы', ads: 'Реклама' }[tab] }}
+          {{ { overview: 'Обзор', users: 'Пользователи', archived: 'Архив', posts: 'Посты', reports: 'Жалобы', ads: 'Реклама', verification: 'Верификация' }[tab] }}
         </button>
       </div>
 
@@ -222,22 +276,22 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
           <!-- Stat cards -->
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div class="bg-brand-card border border-brand-border rounded-3xl p-5 shadow-xl">
-              <p class="text-xs text-brand-muted font-semibold mb-2 flex items-center gap-1.5"><BIcon name="Users" class="w-3.5 h-3.5" />Пользователи</p>
+              <p class="text-xs text-white/55 font-semibold mb-2 flex items-center gap-1.5"><BIcon name="Users" class="w-3.5 h-3.5" />Пользователи</p>
               <p class="text-3xl font-black text-white">{{ formatNum(stats.users.total) }}</p>
               <p class="text-xs text-brand-success mt-1">+{{ stats.users.today }} сегодня</p>
             </div>
             <div class="bg-brand-card border border-brand-border rounded-3xl p-5 shadow-xl">
-              <p class="text-xs text-brand-muted font-semibold mb-2 flex items-center gap-1.5"><BIcon name="MessageSquare" class="w-3.5 h-3.5" />Посты</p>
+              <p class="text-xs text-white/55 font-semibold mb-2 flex items-center gap-1.5"><BIcon name="MessageSquare" class="w-3.5 h-3.5" />Посты</p>
               <p class="text-3xl font-black text-white">{{ formatNum(stats.posts.total) }}</p>
               <p class="text-xs text-brand-accent mt-1">+{{ stats.posts.today }} сегодня</p>
             </div>
             <div class="bg-brand-card border border-brand-border rounded-3xl p-5 shadow-xl">
-              <p class="text-xs text-brand-muted font-semibold mb-2 flex items-center gap-1.5"><BIcon name="Flag" class="w-3.5 h-3.5" />Жалобы</p>
+              <p class="text-xs text-white/55 font-semibold mb-2 flex items-center gap-1.5"><BIcon name="Flag" class="w-3.5 h-3.5" />Жалобы</p>
               <p class="text-3xl font-black text-white">{{ formatNum(stats.moderation.pendingReports) }}</p>
               <p class="text-xs text-brand-yellow mt-1">Ожидают рассмотрения</p>
             </div>
             <div class="bg-brand-card border border-brand-border rounded-3xl p-5 shadow-xl">
-              <p class="text-xs text-brand-muted font-semibold mb-2 flex items-center gap-1.5"><BIcon name="Megaphone" class="w-3.5 h-3.5" />Реклама</p>
+              <p class="text-xs text-white/55 font-semibold mb-2 flex items-center gap-1.5"><BIcon name="Megaphone" class="w-3.5 h-3.5" />Реклама</p>
               <p class="text-3xl font-black text-white">{{ formatNum(stats.moderation.pendingAds) }}</p>
               <p class="text-xs text-brand-error mt-1">Ожидают проверки</p>
             </div>
@@ -254,12 +308,12 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
                 <div class="w-full bg-gradient-to-t bg-brand-accent rounded-t-md transition-all hover:opacity-80"
                   :style="`height: ${Math.max(4, (point.count / histMax) * 96)}px`"
                   :title="`${point.day}: ${point.count} постов`"></div>
-                <span class="text-[8px] text-brand-muted hidden group-hover/bar:block absolute -bottom-4">{{ point.count }}</span>
+                <span class="text-[8px] text-white/55 hidden group-hover/bar:block absolute -bottom-4">{{ point.count }}</span>
               </div>
             </div>
             <div class="flex justify-between mt-2">
-              <span class="text-[10px] text-brand-muted">{{ stats.postsHistory[0]?.day?.slice(5) }}</span>
-              <span class="text-[10px] text-brand-muted">{{ stats.postsHistory[stats.postsHistory.length - 1]?.day?.slice(5) }}</span>
+              <span class="text-[10px] text-white/55">{{ stats.postsHistory[0]?.day?.slice(5) }}</span>
+              <span class="text-[10px] text-white/55">{{ stats.postsHistory[stats.postsHistory.length - 1]?.day?.slice(5) }}</span>
             </div>
           </div>
 
@@ -270,7 +324,7 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
               <div v-for="rb in stats.roleBreakdown" :key="rb.role"
                 class="flex items-center gap-2 px-4 py-2 bg-brand-bg border border-brand-border rounded-2xl">
                 <span class="text-sm font-bold text-white">{{ rb.count }}</span>
-                <span class="text-xs text-brand-muted capitalize">{{ rb.role }}</span>
+                <span class="text-xs text-white/55 capitalize">{{ rb.role }}</span>
               </div>
             </div>
           </div>
@@ -281,11 +335,11 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
       <div v-else-if="activeTab === 'users'">
         <div class="flex items-center gap-3 mb-4">
           <div class="relative flex-1 max-w-xs">
-            <BIcon name="Search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
+            <BIcon name="Search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/55" />
             <input v-model="userSearch" @input="onUserSearch" type="text" placeholder="Поиск пользователей..."
               class="w-full bg-brand-bg border border-brand-border rounded-2xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent" />
           </div>
-          <span class="text-xs text-brand-muted">{{ userTotal }} всего</span>
+          <span class="text-xs text-white/55">{{ userTotal }} всего</span>
         </div>
 
         <div v-if="isLoadingUsers" class="space-y-3">
@@ -299,7 +353,7 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
             <div v-else class="w-9 h-9 rounded-full flex-shrink-0 border border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (user.display_name || user.username || '?')[0].toUpperCase() }}</div>
             <div class="flex-1 min-w-0">
               <p class="font-bold text-sm text-white truncate">{{ user.display_name || user.username }}</p>
-              <p class="text-xs text-brand-muted">@{{ user.username }} · {{ user._count?.posts ?? 0 }} постов · {{ formatDate(user.created_at) }}</p>
+              <p class="text-xs text-white/55">@{{ user.username }} · {{ user._count?.posts ?? 0 }} постов · {{ formatDate(user.created_at) }}</p>
             </div>
             <div class="flex items-center gap-2 flex-shrink-0">
               <select :value="user.role" @change="updateUserRole(user.id, ($event.target as HTMLSelectElement).value)"
@@ -309,7 +363,7 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
                 <option value="admin">admin</option>
               </select>
               <button @click="deleteUser(user.id)"
-                class="p-1.5 text-brand-muted hover:text-brand-error hover:bg-rose-500/10 rounded-xl transition-colors">
+                class="p-1.5 text-white/55 hover:text-brand-error hover:bg-rose-500/10 rounded-xl transition-colors">
                 <BIcon name="Trash2" class="w-4 h-4" />
               </button>
             </div>
@@ -319,12 +373,57 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
         <!-- Pagination -->
         <div v-if="userTotal > 20" class="flex justify-center gap-2 mt-4">
           <button @click="userPage--; fetchUsers()" :disabled="userPage <= 1"
-            class="p-2 rounded-xl bg-brand-bg text-brand-muted hover:text-white disabled:opacity-30 border border-brand-border">
+            class="p-2 rounded-xl bg-brand-bg text-white/55 hover:text-white disabled:opacity-30 border border-brand-border">
             <BIcon name="ChevronLeft" class="w-4 h-4" />
           </button>
-          <span class="px-4 py-2 text-sm text-brand-muted">{{ userPage }} / {{ Math.ceil(userTotal / 20) }}</span>
+          <span class="px-4 py-2 text-sm text-white/55">{{ userPage }} / {{ Math.ceil(userTotal / 20) }}</span>
           <button @click="userPage++; fetchUsers()" :disabled="userPage >= Math.ceil(userTotal / 20)"
-            class="p-2 rounded-xl bg-brand-bg text-brand-muted hover:text-white disabled:opacity-30 border border-brand-border">
+            class="p-2 rounded-xl bg-brand-bg text-white/55 hover:text-white disabled:opacity-30 border border-brand-border">
+            <BIcon name="ChevronRight" class="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <!-- ── ARCHIVED USERS ─────────────────────────────────────────────── -->
+      <div v-else-if="activeTab === 'archived'">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="relative flex-1 max-w-xs">
+            <BIcon name="Search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/55" />
+            <input v-model="archivedSearch" @input="onArchivedSearch" type="text" placeholder="Поиск в архиве..."
+              class="w-full bg-brand-bg border border-brand-border rounded-2xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent" />
+          </div>
+          <span class="text-xs text-white/55">{{ archivedTotal }} в архиве</span>
+        </div>
+
+        <div v-if="isLoadingArchived" class="space-y-3">
+          <div v-for="n in 5" :key="n" class="bg-brand-card border border-brand-border rounded-2xl p-4 animate-pulse h-16"></div>
+        </div>
+        <div v-else-if="archivedUsers.length === 0" class="text-center py-12 text-white/55 text-sm">Архив пуст</div>
+        <div v-else class="space-y-2">
+          <div v-for="user in archivedUsers" :key="user.id"
+            class="bg-brand-card border border-brand-border rounded-2xl px-4 py-3 flex items-center gap-3 hover:border-brand-accent/30 transition-all opacity-70">
+            <img v-if="user.avatar_url" :src="user.avatar_url"
+              class="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-brand-border grayscale" />
+            <div v-else class="w-9 h-9 rounded-full flex-shrink-0 border border-brand-border bg-white/10 flex items-center justify-center text-white/40 font-bold text-sm">{{ (user.display_name || user.username || '?')[0].toUpperCase() }}</div>
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-sm text-white/70 truncate">{{ user.display_name || user.username }}</p>
+              <p class="text-xs text-white/40">@{{ user.username }} · удалён {{ formatDate(user.deleted_at) }}</p>
+            </div>
+            <button @click="restoreUser(user.id)"
+              class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-brand-accent/15 text-brand-accent hover:bg-brand-accent/25 transition-colors">
+              Восстановить
+            </button>
+          </div>
+        </div>
+
+        <div v-if="archivedTotal > 20" class="flex justify-center gap-2 mt-4">
+          <button @click="archivedPage--; fetchArchivedUsers()" :disabled="archivedPage <= 1"
+            class="p-2 rounded-xl bg-brand-bg text-white/55 hover:text-white disabled:opacity-30 border border-brand-border">
+            <BIcon name="ChevronLeft" class="w-4 h-4" />
+          </button>
+          <span class="px-4 py-2 text-sm text-white/55">{{ archivedPage }} / {{ Math.ceil(archivedTotal / 20) }}</span>
+          <button @click="archivedPage++; fetchArchivedUsers()" :disabled="archivedPage >= Math.ceil(archivedTotal / 20)"
+            class="p-2 rounded-xl bg-brand-bg text-white/55 hover:text-white disabled:opacity-30 border border-brand-border">
             <BIcon name="ChevronRight" class="w-4 h-4" />
           </button>
         </div>
@@ -334,11 +433,11 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
       <div v-else-if="activeTab === 'posts'">
         <div class="flex items-center gap-3 mb-4">
           <div class="relative flex-1 max-w-xs">
-            <BIcon name="Search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
+            <BIcon name="Search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/55" />
             <input v-model="postSearch" @input="onPostSearch" type="text" placeholder="Поиск постов..."
               class="w-full bg-brand-bg border border-brand-border rounded-2xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent" />
           </div>
-          <span class="text-xs text-brand-muted">{{ postTotal }} всего</span>
+          <span class="text-xs text-white/55">{{ postTotal }} всего</span>
         </div>
 
         <div v-if="isLoadingPosts" class="space-y-3">
@@ -351,16 +450,16 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
               class="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-brand-border mt-0.5" />
             <div v-else class="w-9 h-9 rounded-full flex-shrink-0 border border-brand-border mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (post.author?.display_name || post.author?.username || '?')[0].toUpperCase() }}</div>
             <div class="flex-1 min-w-0">
-              <p class="text-xs text-brand-muted mb-0.5">@{{ post.author?.username }} · {{ formatDate(post.created_at) }}</p>
+              <p class="text-xs text-white/55 mb-0.5">@{{ post.author?.username }} · {{ formatDate(post.created_at) }}</p>
               <p class="text-sm text-white line-clamp-2">{{ post.content }}</p>
-              <div class="flex items-center gap-3 mt-1.5 text-[10px] text-brand-muted">
+              <div class="flex items-center gap-3 mt-1.5 text-[10px] text-white/55">
                 <span>{{ post._count?.votes ?? 0 }} голосов</span>
                 <span>{{ post._count?.comments ?? 0 }} комм.</span>
                 <span v-if="post.is_nsfw" class="text-brand-error font-bold">NSFW</span>
               </div>
             </div>
             <button @click="deletePost(post.id)"
-              class="p-1.5 text-brand-muted hover:text-brand-error hover:bg-rose-500/10 rounded-xl transition-colors flex-shrink-0">
+              class="p-1.5 text-white/55 hover:text-brand-error hover:bg-rose-500/10 rounded-xl transition-colors flex-shrink-0">
               <BIcon name="Trash2" class="w-4 h-4" />
             </button>
           </div>
@@ -368,12 +467,12 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
 
         <div v-if="postTotal > 20" class="flex justify-center gap-2 mt-4">
           <button @click="postPage--; fetchPosts()" :disabled="postPage <= 1"
-            class="p-2 rounded-xl bg-brand-bg text-brand-muted hover:text-white disabled:opacity-30 border border-brand-border">
+            class="p-2 rounded-xl bg-brand-bg text-white/55 hover:text-white disabled:opacity-30 border border-brand-border">
             <BIcon name="ChevronLeft" class="w-4 h-4" />
           </button>
-          <span class="px-4 py-2 text-sm text-brand-muted">{{ postPage }} / {{ Math.ceil(postTotal / 20) }}</span>
+          <span class="px-4 py-2 text-sm text-white/55">{{ postPage }} / {{ Math.ceil(postTotal / 20) }}</span>
           <button @click="postPage++; fetchPosts()" :disabled="postPage >= Math.ceil(postTotal / 20)"
-            class="p-2 rounded-xl bg-brand-bg text-brand-muted hover:text-white disabled:opacity-30 border border-brand-border">
+            class="p-2 rounded-xl bg-brand-bg text-white/55 hover:text-white disabled:opacity-30 border border-brand-border">
             <BIcon name="ChevronRight" class="w-4 h-4" />
           </button>
         </div>
@@ -384,7 +483,7 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
         <div class="flex items-center gap-2 mb-4">
           <button v-for="s in (['', 'pending', 'resolved', 'dismissed'] as const)" :key="s"
             @click="reportFilter = s; fetchReports()"
-            :class="reportFilter === s ? 'bg-brand-accent/20 border-brand-accent text-brand-accent' : 'bg-brand-bg border-brand-border text-brand-muted hover:text-white'"
+            :class="reportFilter === s ? 'bg-brand-accent/20 border-brand-accent text-brand-accent' : 'bg-brand-bg border-brand-border text-white/55 hover:text-white'"
             class="px-4 py-2 rounded-2xl text-xs font-bold border transition-all">
             {{ { '': 'Все', pending: 'Ожид.', resolved: 'Решено', dismissed: 'Откл.' }[s] }}
           </button>
@@ -393,20 +492,20 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
         <div v-if="isLoadingReports" class="space-y-3">
           <div v-for="n in 4" :key="n" class="bg-brand-card border border-brand-border rounded-2xl p-4 animate-pulse h-20"></div>
         </div>
-        <div v-else-if="reports.length === 0" class="text-center py-12 text-brand-muted">Жалоб нет</div>
+        <div v-else-if="reports.length === 0" class="text-center py-12 text-white/55">Жалоб нет</div>
         <div v-else class="space-y-2">
           <div v-for="report in reports" :key="report.id"
             class="bg-brand-card border border-brand-border rounded-2xl px-4 py-3 flex items-start gap-3">
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-xs font-bold px-2 py-0.5 rounded-full border capitalize"
-                  :class="report.status === 'pending' ? 'text-brand-yellow bg-brand-yellow/10 border-brand-yellow/20' : report.status === 'resolved' ? 'text-brand-success bg-brand-success/10 border-brand-success/20' : 'text-brand-muted bg-brand-bg border-brand-border'">
+                  :class="report.status === 'pending' ? 'text-brand-yellow bg-brand-yellow/10 border-brand-yellow/20' : report.status === 'resolved' ? 'text-brand-success bg-brand-success/10 border-brand-success/20' : 'text-white/55 bg-brand-bg border-brand-border'">
                   {{ report.status }}
                 </span>
-                <span class="text-xs text-brand-muted">{{ report.target_type }} · {{ formatDate(report.created_at) }}</span>
+                <span class="text-xs text-white/55">{{ report.target_type }} · {{ formatDate(report.created_at) }}</span>
               </div>
               <p class="text-sm text-white">{{ report.reason }}</p>
-              <p class="text-xs text-brand-muted mt-0.5">от @{{ report.reporter?.username }}</p>
+              <p class="text-xs text-white/55 mt-0.5">от @{{ report.reporter?.username }}</p>
             </div>
             <div v-if="report.status === 'pending'" class="flex gap-2 flex-shrink-0">
               <button @click="resolveReport(report.id, 'resolved')"
@@ -414,7 +513,7 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
                 Решено
               </button>
               <button @click="resolveReport(report.id, 'dismissed')"
-                class="px-3 py-1.5 rounded-xl text-xs font-bold bg-brand-bg text-brand-muted border border-brand-border hover:text-white transition-colors">
+                class="px-3 py-1.5 rounded-xl text-xs font-bold bg-brand-bg text-white/55 border border-brand-border hover:text-white transition-colors">
                 Откл.
               </button>
             </div>
@@ -445,7 +544,7 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
             <input v-model="newAd.imageUrl" type="url" placeholder="URL изображения (опционально)"
               class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent" />
             <div class="flex gap-2 justify-end">
-              <button @click="showAdForm = false" class="px-4 py-2 rounded-xl text-sm text-brand-muted hover:text-white hover:bg-brand-bg border border-brand-border">Отмена</button>
+              <button @click="showAdForm = false" class="px-4 py-2 rounded-xl text-sm text-white/55 hover:text-white hover:bg-brand-bg border border-brand-border">Отмена</button>
               <button @click="submitAd" :disabled="isSubmittingAd || !newAd.title || !newAd.linkUrl"
                 class="px-4 py-2 rounded-xl text-sm font-bold bg-brand-accent text-white hover:bg-[#5b74d8] disabled:opacity-40">
                 {{ isSubmittingAd ? 'Создание...' : 'Создать' }}
@@ -457,7 +556,7 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
         <div v-if="isLoadingAds" class="space-y-3">
           <div v-for="n in 3" :key="n" class="bg-brand-card border border-brand-border rounded-2xl p-4 animate-pulse h-24"></div>
         </div>
-        <div v-else-if="ads.length === 0" class="text-center py-12 text-brand-muted">Объявлений нет</div>
+        <div v-else-if="ads.length === 0" class="text-center py-12 text-white/55">Объявлений нет</div>
         <div v-else class="space-y-3">
           <div v-for="ad in ads" :key="ad.id"
             class="bg-brand-card border border-brand-border rounded-2xl p-4 flex items-start gap-4 hover:border-brand-accent/30 transition-all">
@@ -465,13 +564,13 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-1">
                 <span class="text-xs font-bold px-2 py-0.5 rounded-full border"
-                  :class="ad.status === 'active' ? 'text-brand-success bg-brand-success/10 border-brand-success/20' : ad.status === 'pending' ? 'text-brand-yellow bg-brand-yellow/10 border-brand-yellow/20' : 'text-brand-muted bg-brand-bg border-brand-border'">
+                  :class="ad.status === 'active' ? 'text-brand-success bg-brand-success/10 border-brand-success/20' : ad.status === 'pending' ? 'text-brand-yellow bg-brand-yellow/10 border-brand-yellow/20' : 'text-white/55 bg-brand-bg border-brand-border'">
                   {{ ad.status }}
                 </span>
-                <span class="text-xs text-brand-muted">{{ ad.impressions ?? 0 }} показов · {{ ad.clicks ?? 0 }} кликов</span>
+                <span class="text-xs text-white/55">{{ ad.impressions ?? 0 }} показов · {{ ad.clicks ?? 0 }} кликов</span>
               </div>
               <p class="font-bold text-sm text-white">{{ ad.title }}</p>
-              <p v-if="ad.description" class="text-xs text-brand-muted mt-0.5 line-clamp-1">{{ ad.description }}</p>
+              <p v-if="ad.description" class="text-xs text-white/55 mt-0.5 line-clamp-1">{{ ad.description }}</p>
               <a :href="ad.link_url" target="_blank" class="text-xs text-brand-accent hover:underline mt-0.5 block truncate">{{ ad.link_url }}</a>
             </div>
             <div v-if="ad.status === 'pending'" class="flex flex-col gap-2 flex-shrink-0">
@@ -481,6 +580,81 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
               </button>
               <button @click="reviewAd(ad.id, 'rejected')"
                 class="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 text-brand-error border border-rose-500/20 hover:bg-rose-500/20 transition-colors">
+                Отклонить
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── VERIFICATION ──────────────────────────────────────────────── -->
+      <div v-else-if="activeTab === 'verification'">
+        <div class="flex items-center gap-2 mb-4">
+          <button v-for="s in (['', 'pending', 'approved', 'rejected'] as const)" :key="s"
+            @click="verFilter = s; fetchVerRequests()"
+            :class="verFilter === s ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-brand-bg border-brand-border text-white/55 hover:text-white'"
+            class="px-4 py-2 rounded-2xl text-xs font-bold border transition-all">
+            {{ { '': 'Все', pending: 'Ожид.', approved: 'Одобр.', rejected: 'Откл.' }[s] }}
+          </button>
+        </div>
+
+        <div v-if="isLoadingVer" class="space-y-3">
+          <div v-for="n in 4" :key="n" class="bg-brand-card border border-brand-border rounded-2xl p-4 animate-pulse h-20"></div>
+        </div>
+        <div v-else-if="verRequests.length === 0" class="text-center py-12 text-white/55">Заявок нет</div>
+        <div v-else class="space-y-2">
+          <div v-for="req in verRequests" :key="req.id"
+            class="bg-brand-card border border-brand-border rounded-2xl px-4 py-3 flex items-start gap-3 hover:border-blue-500/30 transition-all">
+            <img v-if="req.user?.avatar_url" :src="req.user.avatar_url"
+              class="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-brand-border" />
+            <div v-else class="w-9 h-9 rounded-full flex-shrink-0 border border-brand-border bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm">
+              {{ (req.user?.display_name || req.user?.username || '?')[0].toUpperCase() }}
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-xs font-bold px-2 py-0.5 rounded-full border"
+                  :class="req.status === 'pending' ? 'text-amber-400 bg-amber-400/10 border-amber-400/20' : req.status === 'approved' ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
+                  {{ { pending: 'Ожидает', approved: 'Одобрено', rejected: 'Отклонено' }[req.status] }}
+                </span>
+                <span class="text-xs text-white/55">{{ formatDate(req.created_at) }}</span>
+              </div>
+              <p class="font-bold text-sm text-white">{{ req.user?.display_name || req.user?.username }}</p>
+              <p class="text-xs text-white/55 mt-0.5">@{{ req.user?.username }}</p>
+              <!-- Criteria summary -->
+              <div class="flex flex-wrap gap-2 mt-2">
+                <span class="text-[10px] px-2 py-0.5 rounded-full border"
+                  :class="req.account_age_days >= 14 ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
+                  {{ req.account_age_days }}дн.
+                </span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full border"
+                  :class="req.post_count >= 3 ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
+                  {{ req.post_count }} постов
+                </span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full border"
+                  :class="req.has_avatar ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
+                  Аватар {{ req.has_avatar ? '✓' : '✗' }}
+                </span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full border"
+                  :class="req.has_bio ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
+                  Био {{ req.has_bio ? '✓' : '✗' }}
+                </span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full border"
+                  :class="req.has_email ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
+                  Email {{ req.has_email ? '✓' : '✗' }}
+                </span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full border"
+                  :class="req.follower_count >= 5 ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
+                  {{ req.follower_count }} подписч.
+                </span>
+              </div>
+            </div>
+            <div v-if="req.status === 'pending'" class="flex flex-col gap-2 flex-shrink-0">
+              <button @click="reviewVerRequest(req.id, 'approve')"
+                class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/25 transition-colors">
+                Одобрить
+              </button>
+              <button @click="reviewVerRequest(req.id, 'reject', prompt('Причина отклонения:') || undefined)"
+                class="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition-colors">
                 Отклонить
               </button>
             </div>

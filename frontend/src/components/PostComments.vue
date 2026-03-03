@@ -138,12 +138,12 @@ const deleteComment = async (commentId: string) => {
     </div>
 
     <!-- Loading -->
-    <div v-if="isLoading" class="text-center py-3 text-brand-muted text-sm">
+    <div v-if="isLoading" class="text-center py-3 text-white/55 text-sm">
       <BIcon name="Loader2" class="w-5 h-5 animate-spin inline-block" />
     </div>
 
     <!-- No comments -->
-    <div v-else-if="comments.length === 0" class="text-center py-4 text-brand-muted text-sm">
+    <div v-else-if="comments.length === 0" class="text-center py-4 text-white/55 text-sm">
       {{ langStore.t.noComments }}
     </div>
 
@@ -161,8 +161,8 @@ const deleteComment = async (commentId: string) => {
             <div class="bg-brand-bg/50 rounded-2xl px-4 py-3 border border-brand-border/50">
               <div class="flex items-center gap-2 mb-1.5">
                 <span class="font-bold text-white text-sm">{{ comment.author.display_name || comment.author.username }}</span>
-                <span class="text-brand-muted text-xs">@{{ comment.author.username }}</span>
-                <span class="text-brand-muted text-xs ml-auto">{{ formatDate(comment.created_at) }}</span>
+                <span class="text-white/55 text-xs">@{{ comment.author.username }}</span>
+                <span class="text-white/55 text-xs ml-auto">{{ formatDate(comment.created_at) }}</span>
               </div>
               <p class="text-white/85 text-sm leading-relaxed">{{ comment.content }}</p>
             </div>
@@ -170,19 +170,19 @@ const deleteComment = async (commentId: string) => {
             <div class="flex items-center gap-3 mt-1.5 pl-1">
               <!-- Vote -->
               <div class="flex items-center gap-1">
-                <button @click="voteComment(comment.id, 1)" class="p-1 text-brand-muted hover:text-emerald-400 rounded">
+                <button @click="voteComment(comment.id, 1)" class="p-1 text-white/55 hover:text-emerald-400 rounded">
                   <BIcon name="ArrowUp" class="w-3.5 h-3.5" />
                 </button>
                 <span class="text-xs font-bold min-w-[16px] text-center"
-                  :class="comment.rating > 0 ? 'text-emerald-400' : comment.rating < 0 ? 'text-rose-400' : 'text-brand-muted'">
+                  :class="comment.rating > 0 ? 'text-emerald-400' : comment.rating < 0 ? 'text-rose-400' : 'text-white/55'">
                   {{ comment.rating }}
                 </span>
-                <button @click="voteComment(comment.id, -1)" class="p-1 text-brand-muted hover:text-rose-400 rounded">
+                <button @click="voteComment(comment.id, -1)" class="p-1 text-white/55 hover:text-rose-400 rounded">
                   <BIcon name="ArrowDown" class="w-3.5 h-3.5" />
                 </button>
               </div>
               <button @click="replyingTo = { id: comment.id, username: comment.author.username }; replyText = ''"
-                class="text-brand-muted hover:text-brand-accent text-xs font-semibold flex items-center gap-1">
+                class="text-white/55 hover:text-brand-accent text-xs font-semibold flex items-center gap-1">
                 <BIcon name="CornerDownRight" class="w-3 h-3" />
                 {{ langStore.t.reply }}
               </button>
@@ -193,7 +193,7 @@ const deleteComment = async (commentId: string) => {
               </button>
               <button v-if="comment.author.id === auth.user?.id"
                 @click="deleteComment(comment.id)"
-                class="ml-auto text-brand-muted hover:text-rose-400 p-1">
+                class="ml-auto text-white/55 hover:text-rose-400 p-1">
                 <BIcon name="Trash2" class="w-3.5 h-3.5" />
               </button>
             </div>
@@ -213,7 +213,7 @@ const deleteComment = async (commentId: string) => {
                 class="px-3 py-1.5 bg-brand-accent text-white text-xs font-bold rounded-xl disabled:opacity-40">
                 {{ langStore.t.send }}
               </button>
-              <button @click="cancelReply" class="p-1.5 text-brand-muted hover:text-white rounded-xl hover:bg-brand-border">
+              <button @click="cancelReply" class="p-1.5 text-white/55 hover:text-white rounded-xl hover:bg-brand-border">
                 <BIcon name="X" class="w-4 h-4" />
               </button>
             </div>
@@ -230,23 +230,23 @@ const deleteComment = async (commentId: string) => {
                   <div class="bg-brand-bg/50 rounded-2xl px-4 py-2.5 border border-brand-border/50">
                     <div class="flex items-center gap-2 mb-1">
                       <span class="font-bold text-white text-xs">{{ reply.author.display_name || reply.author.username }}</span>
-                      <span class="text-brand-muted text-[11px] ml-auto">{{ formatDate(reply.created_at) }}</span>
+                      <span class="text-white/55 text-[11px] ml-auto">{{ formatDate(reply.created_at) }}</span>
                     </div>
                     <p class="text-white/85 text-sm leading-relaxed">{{ reply.content }}</p>
                   </div>
                   <div class="flex items-center gap-3 mt-1 pl-1">
                     <div class="flex items-center gap-1">
-                      <button @click="voteComment(reply.id, 1)" class="p-1 text-brand-muted hover:text-emerald-400 rounded">
+                      <button @click="voteComment(reply.id, 1)" class="p-1 text-white/55 hover:text-emerald-400 rounded">
                         <BIcon name="ArrowUp" class="w-3 h-3" />
                       </button>
-                      <span class="text-xs font-bold" :class="reply.rating > 0 ? 'text-emerald-400' : reply.rating < 0 ? 'text-rose-400' : 'text-brand-muted'">{{ reply.rating }}</span>
-                      <button @click="voteComment(reply.id, -1)" class="p-1 text-brand-muted hover:text-rose-400 rounded">
+                      <span class="text-xs font-bold" :class="reply.rating > 0 ? 'text-emerald-400' : reply.rating < 0 ? 'text-rose-400' : 'text-white/55'">{{ reply.rating }}</span>
+                      <button @click="voteComment(reply.id, -1)" class="p-1 text-white/55 hover:text-rose-400 rounded">
                         <BIcon name="ArrowDown" class="w-3 h-3" />
                       </button>
                     </div>
                     <button v-if="reply.author.id === auth.user?.id"
                       @click="deleteComment(reply.id)"
-                      class="ml-auto text-brand-muted hover:text-rose-400 p-1">
+                      class="ml-auto text-white/55 hover:text-rose-400 p-1">
                       <BIcon name="Trash2" class="w-3 h-3" />
                     </button>
                   </div>

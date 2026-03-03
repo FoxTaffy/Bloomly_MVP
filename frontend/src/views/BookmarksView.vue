@@ -73,14 +73,14 @@ onMounted(fetchBookmarks)
             </div>
             <div>
               <h1 class="text-xl font-extrabold text-white">Закладки</h1>
-              <p class="text-xs text-brand-muted mt-0.5">
+              <p class="text-xs text-white/55 mt-0.5">
                 {{ isLoading ? '…' : `${visiblePosts.length} сохранено` }}
               </p>
             </div>
           </div>
           <button
             @click="fetchBookmarks"
-            class="p-2 rounded-xl text-brand-muted hover:text-white hover:bg-brand-bg transition-all"
+            class="p-2 rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all"
             title="Обновить">
             <BIcon name="RefreshCw" class="w-4 h-4" />
           </button>
@@ -94,10 +94,10 @@ onMounted(fetchBookmarks)
             @click="!tab.disabled && (activeTab = tab.key)"
             class="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap flex-shrink-0 transition-all"
             :class="tab.disabled
-              ? 'opacity-40 cursor-not-allowed bg-brand-card border border-brand-border text-brand-muted'
+              ? 'opacity-40 cursor-not-allowed bg-brand-card border border-brand-border text-white/55'
               : activeTab === tab.key
                 ? 'bg-brand-accent text-white shadow-md shadow-brand-accent/25'
-                : 'bg-brand-card border border-brand-border text-brand-muted hover:text-white hover:border-brand-accent/40'">
+                : 'bg-brand-card border border-brand-border text-white/55 hover:text-white hover:border-brand-accent/40'">
             <BIcon :name="tab.icon" class="w-3.5 h-3.5" />
             <span>{{ tab.label }}</span>
             <BIcon v-if="tab.disabled" name="Lock" class="w-3 h-3 ml-0.5" />
@@ -114,10 +114,10 @@ onMounted(fetchBookmarks)
           v-else-if="visiblePosts.length === 0"
           class="text-center py-20 bg-brand-card border border-brand-border rounded-3xl shadow-xl">
           <div class="w-20 h-20 bg-brand-border rounded-full flex items-center justify-center mx-auto mb-5">
-            <BIcon name="Bookmark" class="w-10 h-10 text-brand-muted" />
+            <BIcon name="Bookmark" class="w-10 h-10 text-white/55" />
           </div>
           <h3 class="text-2xl font-bold text-white mb-2">Закладок пока нет</h3>
-          <p class="text-brand-muted text-sm mb-6">
+          <p class="text-white/55 text-sm mb-6">
             Нажми на иконку закладки на любом посте, чтобы сохранить его здесь
           </p>
           <button
@@ -147,7 +147,7 @@ onMounted(fetchBookmarks)
         <!-- Filter card -->
         <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
           <div class="px-4 py-3 border-b border-brand-border">
-            <h4 class="text-xs font-bold text-brand-muted uppercase tracking-wider">Категория</h4>
+            <h4 class="text-xs font-bold text-white/55 uppercase tracking-wider">Категория</h4>
           </div>
           <nav class="p-2 space-y-1">
             <button
@@ -156,10 +156,10 @@ onMounted(fetchBookmarks)
               @click="!tab.disabled && (activeTab = tab.key)"
               class="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-semibold transition-all"
               :class="tab.disabled
-                ? 'opacity-40 cursor-not-allowed text-brand-muted'
+                ? 'opacity-40 cursor-not-allowed text-white/55'
                 : activeTab === tab.key
                   ? 'bg-brand-accent/15 text-brand-accent'
-                  : 'text-brand-muted hover:bg-brand-bg hover:text-white'">
+                  : 'text-white/55 hover:bg-brand-bg hover:text-white'">
               <BIcon :name="tab.icon" class="w-4 h-4 flex-shrink-0" />
               <span class="flex-1 text-left">{{ tab.label }}</span>
               <BIcon v-if="tab.disabled" name="Lock" class="w-3.5 h-3.5 opacity-60" />
@@ -169,14 +169,14 @@ onMounted(fetchBookmarks)
 
         <!-- Stats mini-card -->
         <div class="bg-brand-card border border-brand-border rounded-3xl p-4 shadow-xl">
-          <h4 class="text-xs font-bold text-brand-muted uppercase tracking-wider mb-3">Статистика</h4>
+          <h4 class="text-xs font-bold text-white/55 uppercase tracking-wider mb-3">Статистика</h4>
           <div class="space-y-2">
             <div class="flex items-center justify-between">
-              <span class="text-xs text-brand-muted">Всего сохранено</span>
+              <span class="text-xs text-white/55">Всего сохранено</span>
               <span class="text-sm font-bold text-white">{{ allPosts.length }}</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-xs text-brand-muted">С медиа</span>
+              <span class="text-xs text-white/55">С медиа</span>
               <span class="text-sm font-bold text-white">
                 {{ allPosts.filter((p: any) => p.media_urls?.length).length }}
               </span>

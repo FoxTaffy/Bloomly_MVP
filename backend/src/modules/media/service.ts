@@ -1,6 +1,7 @@
 import * as Minio from 'minio';
 import { randomUUID } from 'crypto';
 import path from 'path';
+import sharp from 'sharp';
 
 // ── MinIO (local S3-compatible storage) ───────────────────────────────────
 const minioClient = new Minio.Client({
@@ -40,16 +41,54 @@ export async function uploadFile(
   buffer: Buffer,
   originalName: string,
   mimeType: string,
-  folder: 'posts' | 'avatars' | 'banners' = 'posts',
+  folder: 'posts' | 'avatars' | 'banners' | 'messages' | 'backgrounds' = 'posts',
 ): Promise<string> {
   // Await only if the startup promise hasn't resolved yet (no-op on subsequent calls)
   await bucketReady;
 
-  const ext        = path.extname(originalName) || '.bin';
-  const objectName = `${folder}/${randomUUID()}${ext}`;
+  let finalBuffer = buffer;
+  let finalMimeType = mimeType;
+  let finalExt = path.extname(originalName).toLowerCase() || '.bin';
 
-  await minioClient.putObject(BUCKET, objectName, buffer, buffer.length, {
-    'Content-Type': mimeType,
+  // Process images with sharp (ignore GIFs to preserve animation if needed)
+  if (mimeType.startsWith('image/') && !mimeType.includes('gif')) {
+    try {
+      const image = sharp(buffer);
+      
+      if (folder === 'avatars') {
+        finalBuffer = await image
+          .resize(500, 500, { fit: 'cover' })
+          .webp({ quality: 80 })
+          .toBuffer();
+      } else if (folder === 'banners') {
+        finalBuffer = await image
+          .resize(1500, 500, { fit: 'cover' })
+          .webp({ quality: 80 })
+          .toBuffer();
+      } else if (folder === 'backgrounds') {
+        finalBuffer = await image
+          .resize(2560, 1440, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 82 })
+          .toBuffer();
+      } else {
+        // posts / messages
+        finalBuffer = await image
+          .resize(2000, 2000, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 85 })
+          .toBuffer();
+      }
+      finalMimeType = 'image/webp';
+      finalExt = '.webp';
+    } catch (err: any) {
+      console.error('Sharp failed to process image:', err.message);
+      // Fallback to original buffer and extension if sharp fails
+    }
+  }
+
+  const objectName = `${folder}/${randomUUID()}${finalExt}`;
+
+  await minioClient.putObject(BUCKET, objectName, finalBuffer, finalBuffer.length, {
+    'Content-Type': finalMimeType,
   });
 
   // URL structure: <public_base>/<bucket>/<object>

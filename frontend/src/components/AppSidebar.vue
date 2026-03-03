@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useFriendsStore } from '@/stores/friends'
+import { useLangStore } from '@/stores/lang'
 import BIcon from './BIcon.vue'
 
 // kept for backward compat (MainLayout still passes it for home sub-views)
@@ -15,70 +18,89 @@ const emit = defineEmits<{
 const router = useRouter()
 const route  = useRoute()
 const auth   = useAuthStore()
+const friendsStore = useFriendsStore()
+const langStore = useLangStore()
+
+onMounted(() => { friendsStore.loadRequests().catch(() => {}) })
 
 // Active detection: prefer route name, fall back to activeNav prop
 const isActive = (key: string): boolean => {
   const routeMap: Record<string, string> = {
-    home:      'home',
-    bookmarks: 'bookmarks',
-    messages:  'messages',
-    settings:  'settings-profile',
+    home:          'home',
+    bookmarks:     'bookmarks',
+    messages:      'messages',
+    friends:       'friends',
+    settings:      'settings-profile',
+    groups:        'groups',
+    subscriptions: 'subscriptions',
   }
   if (routeMap[key]) return route.name === routeMap[key]
   return props.activeNav === key
 }
 
-const navItems = [
+const navItems = computed(() => [
   {
     key: 'home',
     icon: 'Home',
-    label: 'Главная',
+    label: langStore.t.home,
     disabled: false,
     action: () => { emit('update:activeNav', 'home'); router.push({ name: 'home' }) },
   },
   {
     key: 'explore',
     icon: 'Compass',
-    label: 'Исследовать',
+    label: langStore.t.explore,
     disabled: true,
     action: () => {},
   },
   {
     key: 'messages',
     icon: 'MessageCircle',
-    label: 'Сообщения',
+    label: langStore.t.messages,
     disabled: false,
     action: () => router.push({ name: 'messages' }),
   },
   {
     key: 'friends',
     icon: 'Users',
-    label: 'Друзья',
-    disabled: true,
-    action: () => {},
+    label: langStore.t.friends,
+    disabled: false,
+    action: () => router.push({ name: 'friends' }),
+    badge: friendsStore.requestsCount > 0 ? String(friendsStore.requestsCount) : undefined,
   },
   {
     key: 'groups',
     icon: 'Grid',
-    label: 'Группы',
-    disabled: true,
-    action: () => {},
+    label: langStore.t.groups,
+    disabled: false,
+    action: () => router.push({ name: 'groups' }),
   },
   {
     key: 'bookmarks',
     icon: 'Bookmark',
-    label: 'Закладки',
+    label: langStore.t.bookmarks,
     disabled: false,
     action: () => router.push({ name: 'bookmarks' }),
   },
-]
+  {
+    key: 'subscriptions',
+    icon: 'Sparkles',
+    label: langStore.t.premium,
+    disabled: false,
+    action: () => router.push({ name: 'subscriptions' }),
+    badge: (() => {
+      const tier = (auth.user as any)?.subscription_tier ?? 'free'
+      return tier !== 'free' ? tier.charAt(0).toUpperCase() + tier.slice(1) : undefined
+    })(),
+  },
+])
 
-const categoryItems = [
-  { icon: 'Sticker',     label: 'Стикеры' },
-  { icon: 'Gift',        label: 'Подарки' },
-  { icon: 'ShoppingBag', label: "Dealers' Den" },
-  { icon: 'HelpCircle',  label: 'Помощь' },
-]
+const categoryItems = computed(() => [
+  { icon: 'Sticker',     label: langStore.t.stickers },
+  { icon: 'Gift',        label: langStore.t.gifts },
+  { icon: 'ShoppingBag', label: langStore.t.dealersDen },
+  { icon: 'HelpCircle',  label: langStore.t.help },
+])
 </script>
 
 <template>
@@ -99,7 +121,7 @@ const categoryItems = [
       </div>
       <div>
         <h3 class="font-bold text-white text-sm group-hover:text-brand-accent transition-colors">{{ auth.displayName }}</h3>
-        <p class="text-xs text-brand-muted">Перейти в профиль</p>
+        <p class="text-xs text-white/50">{{ langStore.t.goToProfile }}</p>
       </div>
     </div>
 
@@ -112,10 +134,10 @@ const categoryItems = [
         @click="!item.disabled && item.action()"
         class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
         :class="item.disabled
-          ? 'opacity-40 cursor-not-allowed text-brand-muted'
+          ? 'opacity-40 cursor-not-allowed text-white/35'
           : isActive(item.key)
             ? 'bg-brand-card text-white'
-            : 'text-brand-muted hover:bg-brand-card/50 hover:text-white'">
+            : 'text-white/65 hover:bg-brand-card/50 hover:text-white'">
         <BIcon :name="item.icon" class="w-5 h-5" />
         <span class="flex-1 text-left">{{ item.label }}</span>
         <!-- Lock icon for disabled items -->
@@ -123,7 +145,10 @@ const categoryItems = [
         <!-- Badge for available items -->
         <span
           v-else-if="item.badge"
-          class="text-[10px] font-bold bg-brand-bg px-2 py-0.5 rounded-full text-white">
+          class="text-[10px] font-bold px-2 py-0.5 rounded-full"
+          :class="item.key === 'subscriptions'
+            ? 'bg-brand-accent/20 text-brand-accent border border-brand-accent/30'
+            : 'bg-brand-bg text-white'">
           {{ item.badge }}
         </span>
       </button>
@@ -134,9 +159,9 @@ const categoryItems = [
         class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
         :class="isActive('settings')
           ? 'bg-brand-card text-white'
-          : 'text-brand-muted hover:bg-brand-card/50 hover:text-white'">
+          : 'text-white/65 hover:bg-brand-card/50 hover:text-white'">
         <BIcon name="Settings" class="w-5 h-5" />
-        <span>Настройки</span>
+        <span>{{ langStore.t.settings }}</span>
       </button>
     </nav>
 
@@ -145,13 +170,13 @@ const categoryItems = [
 
     <!-- Categories (coming soon — locked) -->
     <div>
-      <h4 class="px-4 text-xs font-bold text-brand-muted mb-2 uppercase tracking-wider">Категории</h4>
+      <h4 class="px-4 text-xs font-bold text-white/40 mb-2 uppercase tracking-wider">{{ langStore.t.categories }}</h4>
       <nav class="space-y-1">
         <button
           v-for="cat in categoryItems"
           :key="cat.label"
           disabled
-          class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-brand-muted opacity-40 cursor-not-allowed">
+          class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-white/35 opacity-60 cursor-not-allowed">
           <BIcon :name="cat.icon" class="w-5 h-5" />
           <span class="flex-1 text-left">{{ cat.label }}</span>
           <BIcon name="Lock" class="w-3.5 h-3.5 opacity-60" />

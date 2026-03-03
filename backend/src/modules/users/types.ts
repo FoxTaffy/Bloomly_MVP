@@ -21,12 +21,20 @@ export interface UserPublicProfile {
   fursona_name: string | null;
   fursona_color: string | null;
   fursona_photo_url: string | null;
+  has_fursuit: boolean;
+  fursuit_photo_url: string | null;
+  fursuit_description: string | null;
+  fursuit_maker: string | null;
   birth_date: Date | null;
   relationship_since: Date | null;
   pinned_post_id: string | null;
   social_links: Record<string, string> | null;
   interests: string[];
   created_at: Date;
+  subscription_tier: string;
+  profile_theme: string | null;
+  profile_bg_url: string | null;
+  profile_frame: string | null;
 }
 
 export interface UpdateUserInput {
@@ -49,10 +57,17 @@ export interface UpdateUserInput {
   country?: string;
   fursona_color?: string;
   fursona_photo_url?: string;
+  has_fursuit?: boolean;
+  fursuit_photo_url?: string | null;
+  fursuit_description?: string | null;
+  fursuit_maker?: string | null;
   birth_date?: string | null;
   social_links?: Record<string, string> | null;
   interests?: string[];
   role?: string;
+  profile_theme?: string | null;
+  profile_bg_url?: string | null;
+  profile_frame?: string | null;
 }
 
 export interface JwtPayload {

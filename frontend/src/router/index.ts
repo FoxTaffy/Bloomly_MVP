@@ -57,6 +57,42 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/PostView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/friends',
+    name: 'friends',
+    component: () => import('@/views/FriendsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/subscriptions',
+    name: 'subscriptions',
+    component: () => import('@/views/SubscriptionView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/groups',
+    name: 'groups',
+    component: () => import('@/views/GroupsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/groups/:slugOrId',
+    name: 'group-detail',
+    component: () => import('@/views/GroupDetailView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/groups/:slugOrId/settings',
+    name: 'group-settings',
+    component: () => import('@/views/GroupSettingsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/events/:eventId',
+    name: 'event-detail',
+    component: () => import('@/views/EventDetailView.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

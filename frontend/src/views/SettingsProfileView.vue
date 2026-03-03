@@ -20,7 +20,7 @@
     <Transition name="floatbar">
       <div
         v-if="isDirty"
-        class="fixed bottom-6 right-6 z-50 flex items-center gap-2 p-1.5 rounded-2xl shadow-2xl border transition-all"
+        class="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-50 flex items-center gap-2 p-1.5 rounded-2xl shadow-2xl border transition-all"
         :class="[
           shaking ? 'animate-shake' : '',
           unsavedWarning
@@ -30,14 +30,14 @@
       >
         <!-- Unsaved badge -->
         <div class="px-3 py-1.5 flex items-center gap-2"
-          :class="unsavedWarning ? 'text-brand-error' : 'text-brand-muted'">
+          :class="unsavedWarning ? 'text-brand-error' : 'text-white/55'">
           <div class="w-2 h-2 rounded-full animate-pulse"
             :class="unsavedWarning ? 'bg-brand-error' : 'bg-amber-400'"></div>
           <span class="text-xs font-bold">{{ unsavedWarning ? 'Не сохранено!' : 'Есть изменения' }}</span>
         </div>
         <!-- Reset -->
         <button type="button" @click="resetForm"
-          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all text-brand-muted hover:text-white hover:bg-white/10 border border-transparent hover:border-brand-border">
+          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all text-white/55 hover:text-white hover:bg-white/10 border border-transparent hover:border-brand-border">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
           Сбросить
         </button>
@@ -78,13 +78,13 @@
                   <h3 class="font-bold text-white text-sm">
                     {{ cropModal.type === 'avatar' ? 'Обрезать аватар' : 'Обрезать баннер' }}
                   </h3>
-                  <p class="text-[11px] text-brand-muted">
+                  <p class="text-[11px] text-white/55">
                     {{ cropModal.type === 'avatar' ? 'Квадрат 1:1 · Перемещайте и масштабируйте' : 'Прямоугольник · Перемещайте и масштабируйте' }}
                   </p>
                 </div>
               </div>
               <button @click="cancelCrop"
-                class="w-8 h-8 rounded-xl flex items-center justify-center text-brand-muted hover:text-white hover:bg-white/10 transition-all">
+                class="w-8 h-8 rounded-xl flex items-center justify-center text-white/55 hover:text-white hover:bg-white/10 transition-all">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
@@ -144,12 +144,12 @@
             </div>
             <!-- footer -->
             <div class="px-6 py-4 border-t border-brand-border flex items-center justify-between">
-              <p class="text-xs text-brand-muted/60">
+              <p class="text-xs text-white/35">
                 {{ cropModal.type === 'avatar' ? 'Квадрат · Выход 400 × 400 px' : 'Прямоугольник · Выход 1200 px ширина' }}
               </p>
               <div class="flex gap-3">
                 <button type="button" @click="cancelCrop"
-                  class="px-4 py-2 text-xs font-bold rounded-xl border border-brand-border text-brand-muted hover:text-white hover:border-brand-muted/40 transition-all">
+                  class="px-4 py-2 text-xs font-bold rounded-xl border border-brand-border text-white/55 hover:text-white hover:border-brand-muted/40 transition-all">
                   Отмена
                 </button>
                 <button type="button" @click="confirmCrop" :disabled="cropUploading"
@@ -178,7 +178,7 @@
 
       <!-- ─── Settings area ────────────────────────────────────────── -->
       <main class="flex-1 min-w-0">
-        <div class="flex gap-6 items-start">
+        <div class="flex flex-row-reverse gap-6 items-start">
 
           <!-- ── Left sticky section nav ────────────────────────────── -->
           <aside class="w-56 hidden xl:flex flex-col gap-3 sticky top-24 self-start flex-shrink-0">
@@ -200,55 +200,37 @@
                   </div>
                 </div>
                 <p class="font-bold text-white text-sm truncate leading-tight">{{ form.display_name || authStore.user?.username }}</p>
-                <p class="text-xs text-brand-muted truncate">@{{ authStore.user?.username }}</p>
+                <p class="text-xs text-white/55 truncate">@{{ authStore.user?.username }}</p>
               </div>
             </div>
 
             <!-- Section scroll-spy nav -->
             <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
               <div class="px-4 py-3 border-b border-brand-border">
-                <h4 class="text-[11px] font-bold text-brand-muted uppercase tracking-widest">Разделы</h4>
+                <h4 class="text-[11px] font-bold text-white/55 uppercase tracking-widest">Разделы</h4>
               </div>
               <nav class="p-2 space-y-0.5">
                 <button
-                  v-for="sec in sections" :key="sec.id"
-                  @click="scrollTo(sec.id)"
+                  v-for="sec in sections.filter(s => s.id !== 'sec-ad')" :key="sec.id"
+                  @click="openSec(sec.id)"
                   class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all group"
-                  :class="activeSection === sec.id ? 'text-white' : 'text-brand-muted hover:text-white'"
-                  :style="activeSection === sec.id ? `background:${sec.color}20;box-shadow:inset 0 0 0 1px ${sec.color}30` : ''">
+                  :class="openSection === sec.id ? 'text-white' : 'text-white/55 hover:text-white'"
+                  :style="openSection === sec.id ? `background:${sec.color}20;box-shadow:inset 0 0 0 1px ${sec.color}30` : ''">
                   <div class="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 transition-all"
-                    :style="activeSection === sec.id ? `background:${sec.color}30` : ''"
-                    :class="activeSection !== sec.id ? 'group-hover:bg-white/5' : ''">
+                    :style="openSection === sec.id ? `background:${sec.color}30` : ''"
+                    :class="openSection !== sec.id ? 'group-hover:bg-white/5' : ''">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                      :style="activeSection === sec.id ? `color:${sec.color}` : ''"
-                      :class="activeSection !== sec.id ? 'text-brand-muted group-hover:text-white' : ''">
+                      :style="openSection === sec.id ? `color:${sec.color}` : ''"
+                      :class="openSection !== sec.id ? 'text-white/55 group-hover:text-white' : ''">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sec.iconPath" />
                     </svg>
                   </div>
                   <span class="flex-1 text-left">{{ sec.label }}</span>
-                  <div v-if="activeSection === sec.id" class="w-1.5 h-1.5 rounded-full flex-shrink-0" :style="`background:${sec.color}`"></div>
+                  <div v-if="openSection === sec.id" class="w-1.5 h-1.5 rounded-full flex-shrink-0" :style="`background:${sec.color}`"></div>
                 </button>
               </nav>
             </div>
 
-            <!-- Locked / coming soon settings -->
-            <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl opacity-60">
-              <div class="px-4 py-3 border-b border-brand-border">
-                <h4 class="text-[11px] font-bold text-brand-muted uppercase tracking-widest">Скоро</h4>
-              </div>
-              <nav class="p-2 space-y-0.5">
-                <button v-for="item in lockedSettings" :key="item.label" disabled
-                  class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold text-brand-muted cursor-not-allowed">
-                  <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="item.d"/>
-                  </svg>
-                  <span class="flex-1 text-left">{{ item.label }}</span>
-                  <svg class="w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                  </svg>
-                </button>
-              </nav>
-            </div>
           </aside>
 
           <!-- ── Form column ─────────────────────────────────────────── -->
@@ -258,14 +240,26 @@
             <div class="flex items-center gap-4">
               <div>
                 <h1 class="text-2xl font-extrabold text-white tracking-tight">Настройки</h1>
-                <p class="text-sm text-brand-muted mt-0.5">Управляйте профилем и персонализацией</p>
+                <p class="text-sm text-white/55 mt-0.5">{{ sections.find(s => s.id === openSection)?.label ?? 'Профиль' }}</p>
               </div>
+            </div>
+
+            <!-- Mobile section tabs (xl+ uses the sticky sidebar instead) -->
+            <div class="flex gap-2 overflow-x-auto pb-1 xl:hidden no-scrollbar">
+              <button
+                v-for="sec in sections.filter(s => s.id !== 'sec-ad')" :key="sec.id"
+                @click="openSec(sec.id)"
+                class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all"
+                :class="openSection === sec.id ? 'text-white border-transparent shadow-lg' : 'text-white/55 border-brand-border hover:border-white/20 bg-brand-card'"
+                :style="openSection === sec.id ? `background:${sec.color};box-shadow:0 4px 12px ${sec.color}44` : ''">
+                {{ sec.label }}
+              </button>
             </div>
 
             <form @submit.prevent="handleSubmit" class="space-y-5">
 
-              <!-- ── § 1: MEDIA ──────────────────────────────────────── -->
-              <section :id="sections[0].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+              <!-- ── § 1: ОСНОВНОЕ + МЕДИА ──────────────────────────── -->
+              <section v-show="openSection === sections[0].id" :id="sections[0].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                   :style="`background:linear-gradient(90deg,${sections[0].color}0c 0%,transparent 100%)`">
                   <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[0].color}1a`">
@@ -277,9 +271,9 @@
                 </div>
                 <div class="p-0">
 
-                  <!-- Hidden file inputs -->
-                  <input ref="avatarFileRef" type="file" accept="image/*" class="hidden" @change="onAvatarFileChange"/>
-                  <input ref="bannerFileRef" type="file" accept="image/*" class="hidden" @change="onBannerFileChange"/>
+                  <!-- Hidden file inputs (sr-only for mobile compatibility) -->
+                  <input ref="avatarFileRef" type="file" accept="image/*" class="sr-only" @change="onAvatarFileChange"/>
+                  <input ref="bannerFileRef" type="file" accept="image/*" class="sr-only" @change="onBannerFileChange"/>
 
                   <!-- ── Combined banner + avatar preview ── -->
                   <div class="relative">
@@ -338,10 +332,10 @@
 
                     <!-- Avatar drag-drop zone over banner bottom -->
                     <div class="absolute left-6 -bottom-10">
-                      <div
-                        class="relative w-20 h-20 rounded-full cursor-pointer group/av transition-all"
+                      <label
+                        class="relative w-20 h-20 rounded-full cursor-pointer group/av transition-all block"
                         :class="avatarDragOver ? 'scale-105' : ''"
-                        @click="avatarFileRef?.click()"
+                        @click.prevent="avatarFileRef?.click()"
                         @dragover.prevent="avatarDragOver = true"
                         @dragleave.self="avatarDragOver = false"
                         @drop.prevent="onAvatarDrop">
@@ -352,6 +346,12 @@
                             :style="`background:${form.accent_color}26;color:${form.accent_color}`">
                             {{ (form.display_name || authStore.user?.username || '?')[0].toUpperCase() }}
                           </div>
+                        </div>
+                        <!-- GIF badge -->
+                        <span v-if="form.avatar_url && form.avatar_url.toLowerCase().includes('.gif')" class="absolute -top-1 -left-1 text-[9px] font-extrabold bg-brand-accent text-white px-1.5 py-0.5 rounded-full border border-brand-card shadow z-10">GIF</span>
+                        <!-- Loading overlay for GIF upload -->
+                        <div v-if="uploadingGifAvatar" class="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
+                          <span class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                         </div>
                         <!-- hover / drag overlay -->
                         <div class="absolute inset-0 rounded-full transition-all duration-200 flex items-center justify-center"
@@ -370,7 +370,7 @@
                           class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-brand-error border-2 border-brand-card flex items-center justify-center text-white shadow-lg opacity-0 group-hover/av:opacity-100 transition-all">
                           <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
-                      </div>
+                      </label>
                     </div>
                   </div>
 
@@ -378,9 +378,9 @@
                   <div class="pt-12 px-6 pb-4 flex items-end justify-between">
                     <div>
                       <p class="font-bold text-white text-sm">{{ form.display_name || authStore.user?.username }}</p>
-                      <p class="text-xs text-brand-muted">@{{ authStore.user?.username }}</p>
+                      <p class="text-xs text-white/55">@{{ authStore.user?.username }}</p>
                     </div>
-                    <div class="flex flex-wrap gap-2 text-xs text-brand-muted/60 font-semibold">
+                    <div class="flex flex-wrap gap-2 text-xs text-white/35 font-semibold">
                       <button type="button" @click="avatarFileRef?.click()"
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-border hover:border-brand-accent/50 hover:text-white transition-all">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -399,11 +399,104 @@
                     </div>
                   </div>
 
-                </div>
+                  <!-- ── Поля формы ── -->
+                  <div class="p-6 space-y-5 border-t border-brand-border/40">
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <!-- Display name -->
+                    <div>
+                      <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider">Отображаемое имя</label>
+                        <span class="text-[11px] tabular-nums" :class="(form.display_name?.length??0) > 45 ? 'text-brand-error/80' : 'text-white/35'">
+                          {{ form.display_name?.length ?? 0 }}<span class="opacity-50">/50</span>
+                        </span>
+                      </div>
+                      <input v-model="form.display_name" type="text" maxlength="50" placeholder="Ваше имя" class="field-input"/>
+                      <p v-if="savedForm.display_name" class="text-[11px] text-white/35 mt-1.5 truncate">
+                        Сейчас: <span class="text-white/35 font-semibold">{{ savedForm.display_name }}</span>
+                      </p>
+                    </div>
+                    <!-- Status -->
+                    <div>
+                      <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider">Статус</label>
+                        <span class="text-[11px] tabular-nums" :class="(form.status?.length??0) > 90 ? 'text-brand-error/80' : 'text-white/35'">
+                          {{ form.status?.length ?? 0 }}<span class="opacity-50">/100</span>
+                        </span>
+                      </div>
+                      <input v-model="form.status" type="text" maxlength="100" placeholder="Чем вы занимаетесь?" class="field-input"/>
+                      <p v-if="savedForm.status" class="text-[11px] text-white/35 mt-1.5 truncate">
+                        Сейчас: <span class="text-white/35 font-semibold">{{ savedForm.status }}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Bio -->
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">О себе</label>
+                      <span class="text-[11px] tabular-nums" :class="(form.bio?.length??0) > 270 ? 'text-brand-error/80' : 'text-white/35'">
+                        {{ form.bio?.length ?? 0 }}<span class="opacity-50">/300</span>
+                      </span>
+                    </div>
+                    <textarea v-model="form.bio" rows="4" maxlength="300" placeholder="Расскажите о себе…" class="field-input resize-none"></textarea>
+                    <p v-if="savedForm.bio" class="text-[11px] text-white/35 mt-1.5 line-clamp-1">
+                      Сейчас: <span class="text-white/35 font-semibold">{{ savedForm.bio }}</span>
+                    </p>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <!-- Job title -->
+                    <div>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Должность / Занятие</label>
+                      <input v-model="form.job_title" type="text" placeholder="Напр. Цифровой художник" class="field-input"/>
+                      <p v-if="savedForm.job_title" class="text-[11px] text-white/35 mt-1.5 truncate">
+                        Сейчас: <span class="text-white/35 font-semibold">{{ savedForm.job_title }}</span>
+                      </p>
+                    </div>
+                    <!-- Pronouns -->
+                    <div>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Местоимения</label>
+                      <div class="flex gap-2">
+                        <input v-model="form.pronouns" type="text" placeholder="он/его, она/её…" class="field-input flex-1"/>
+                        <div class="flex gap-1.5 items-center flex-shrink-0">
+                          <button v-for="p in pronounPresets" :key="p" type="button" @click="form.pronouns = p"
+                            class="px-2 py-1 rounded-xl text-[10px] font-bold transition-all border"
+                            :class="form.pronouns === p ? 'border-transparent text-white' : 'bg-brand-bg border-brand-border text-white/55 hover:text-white'"
+                            :style="form.pronouns === p ? `background:${form.accent_color};border-color:${form.accent_color}` : ''">
+                            {{ p.split('/')[0] }}
+                          </button>
+                        </div>
+                      </div>
+                      <p v-if="savedForm.pronouns" class="text-[11px] text-white/35 mt-1.5 truncate">
+                        Сейчас: <span class="text-white/35 font-semibold">{{ savedForm.pronouns }}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Birth date + NSFW note -->
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Дата рождения</label>
+                      <input v-model="form.birth_date" type="date" class="field-input"
+                        :max="new Date().toISOString().substring(0,10)" />
+                      <p class="text-[11px] mt-1.5"
+                        :class="birthAge !== null && birthAge < 18 ? 'text-brand-error/80' : 'text-white/35'">
+                        <template v-if="birthAge !== null">
+                          {{ birthAge }} лет
+                          <span v-if="birthAge < 18"> · NSFW-контент недоступен (менее 18 лет)</span>
+                        </template>
+                        <template v-else>Используется для проверки доступа к NSFW-контенту</template>
+                      </p>
+                    </div>
+                  </div>
+
+                </div><!-- /p-6 form fields -->
+                </div><!-- /p-0 outer -->
               </section>
 
-              <!-- ── § 2: BASIC INFO ─────────────────────────────────── -->
-              <section :id="sections[1].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+              <!-- ── § 2: CONTACTS ───────────────────────────────────── -->
+              <section v-show="openSection === sections[1].id" :id="sections[1].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                   :style="`background:linear-gradient(90deg,${sections[1].color}0c 0%,transparent 100%)`">
                   <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[1].color}1a`">
@@ -416,134 +509,29 @@
                 <div class="p-6 space-y-5">
 
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <!-- Display name -->
-                    <div>
-                      <div class="flex items-center justify-between mb-2">
-                        <label class="text-xs font-bold text-brand-muted uppercase tracking-wider">Отображаемое имя</label>
-                        <span class="text-[11px] tabular-nums" :class="(form.display_name?.length??0) > 45 ? 'text-brand-error/80' : 'text-brand-muted/50'">
-                          {{ form.display_name?.length ?? 0 }}<span class="opacity-50">/50</span>
-                        </span>
-                      </div>
-                      <input v-model="form.display_name" type="text" maxlength="50" placeholder="Ваше имя" class="field-input"/>
-                      <p v-if="savedForm.display_name" class="text-[11px] text-brand-muted/50 mt-1.5 truncate">
-                        Сейчас: <span class="text-brand-muted/80 font-semibold">{{ savedForm.display_name }}</span>
-                      </p>
-                    </div>
-                    <!-- Status -->
-                    <div>
-                      <div class="flex items-center justify-between mb-2">
-                        <label class="text-xs font-bold text-brand-muted uppercase tracking-wider">Статус</label>
-                        <span class="text-[11px] tabular-nums" :class="(form.status?.length??0) > 90 ? 'text-brand-error/80' : 'text-brand-muted/50'">
-                          {{ form.status?.length ?? 0 }}<span class="opacity-50">/100</span>
-                        </span>
-                      </div>
-                      <input v-model="form.status" type="text" maxlength="100" placeholder="Чем вы занимаетесь?" class="field-input"/>
-                      <p v-if="savedForm.status" class="text-[11px] text-brand-muted/50 mt-1.5 truncate">
-                        Сейчас: <span class="text-brand-muted/80 font-semibold">{{ savedForm.status }}</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  <!-- Bio -->
-                  <div>
-                    <div class="flex items-center justify-between mb-2">
-                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider">О себе</label>
-                      <span class="text-[11px] tabular-nums" :class="(form.bio?.length??0) > 270 ? 'text-brand-error/80' : 'text-brand-muted/50'">
-                        {{ form.bio?.length ?? 0 }}<span class="opacity-50">/300</span>
-                      </span>
-                    </div>
-                    <textarea v-model="form.bio" rows="4" maxlength="300" placeholder="Расскажите о себе…" class="field-input resize-none"></textarea>
-                    <p v-if="savedForm.bio" class="text-[11px] text-brand-muted/50 mt-1.5 line-clamp-1">
-                      Сейчас: <span class="text-brand-muted/80 font-semibold">{{ savedForm.bio }}</span>
-                    </p>
-                  </div>
-
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <!-- Job title -->
-                    <div>
-                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-2">Должность / Занятие</label>
-                      <input v-model="form.job_title" type="text" placeholder="Напр. Цифровой художник" class="field-input"/>
-                      <p v-if="savedForm.job_title" class="text-[11px] text-brand-muted/50 mt-1.5 truncate">
-                        Сейчас: <span class="text-brand-muted/80 font-semibold">{{ savedForm.job_title }}</span>
-                      </p>
-                    </div>
-                    <!-- Pronouns -->
-                    <div>
-                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-2">Местоимения</label>
-                      <div class="flex gap-2">
-                        <input v-model="form.pronouns" type="text" placeholder="он/его, она/её…" class="field-input flex-1"/>
-                        <div class="flex gap-1.5 items-center flex-shrink-0">
-                          <button v-for="p in pronounPresets" :key="p" type="button" @click="form.pronouns = p"
-                            class="px-2 py-1 rounded-xl text-[10px] font-bold transition-all border"
-                            :class="form.pronouns === p ? 'border-transparent text-white' : 'bg-brand-bg border-brand-border text-brand-muted hover:text-white'"
-                            :style="form.pronouns === p ? `background:${form.accent_color};border-color:${form.accent_color}` : ''">
-                            {{ p.split('/')[0] }}
-                          </button>
-                        </div>
-                      </div>
-                      <p v-if="savedForm.pronouns" class="text-[11px] text-brand-muted/50 mt-1.5 truncate">
-                        Сейчас: <span class="text-brand-muted/80 font-semibold">{{ savedForm.pronouns }}</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  <!-- Birth date + NSFW note -->
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div>
-                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-2">Дата рождения</label>
-                      <input v-model="form.birth_date" type="date" class="field-input"
-                        :max="new Date().toISOString().substring(0,10)" />
-                      <p class="text-[11px] mt-1.5"
-                        :class="birthAge !== null && birthAge < 18 ? 'text-brand-error/80' : 'text-brand-muted/50'">
-                        <template v-if="birthAge !== null">
-                          {{ birthAge }} лет
-                          <span v-if="birthAge < 18"> · NSFW-контент недоступен (менее 18 лет)</span>
-                        </template>
-                        <template v-else>Используется для проверки доступа к NSFW-контенту</template>
-                      </p>
-                    </div>
-                  </div>
-
-                </div>
-              </section>
-
-              <!-- ── § 3: CONTACTS ───────────────────────────────────── -->
-              <section :id="sections[2].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
-                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
-                  :style="`background:linear-gradient(90deg,${sections[2].color}0c 0%,transparent 100%)`">
-                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[2].color}1a`">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[2].color}`">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[2].iconPath"/>
-                    </svg>
-                  </div>
-                  <h2 class="font-bold text-white text-sm">{{ sections[2].label }}</h2>
-                </div>
-                <div class="p-6 space-y-5">
-
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <!-- Website -->
                     <div>
-                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-2">Веб-сайт</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Веб-сайт</label>
                       <div class="relative">
-                        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted/50 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/35 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
                         </svg>
-                        <input v-model="form.website" type="url" placeholder="https://yoursite.com" class="field-input pl-10"/>
+                        <input v-model="form.website" type="url" placeholder="https://yoursite.com" class="field-input !pl-10"/>
                       </div>
                     </div>
 
                     <!-- Country combobox -->
                     <div class="relative">
-                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-2">Страна</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Страна</label>
                       <div class="relative">
-                        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted/50 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/35 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064"/>
                         </svg>
                         <input
                           v-model="countrySearch"
                           type="text"
                           placeholder="Выбрать страну…"
-                          class="field-input pl-10 pr-8"
+                          class="field-input !pl-10 pr-8"
                           @focus="countryDropOpen = true"
                           @blur="onCountryBlur"
                           @input="countryDropOpen = true"
@@ -557,7 +545,7 @@
                           class="absolute z-30 mt-1 w-full bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-y-auto max-h-52">
                           <button v-for="c in filteredCountries" :key="c" type="button"
                             class="w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-all"
-                            :class="c === form.country ? 'text-white font-bold' : 'text-brand-muted'"
+                            :class="c === form.country ? 'text-white font-bold' : 'text-white/55'"
                             @mousedown.prevent="selectCountry(c)">
                             {{ c }}
                           </button>
@@ -567,9 +555,9 @@
 
                     <!-- City combobox -->
                     <div class="relative">
-                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-2">Город</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Город</label>
                       <div class="relative">
-                        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted/50 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/35 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
                         </svg>
@@ -577,7 +565,7 @@
                           v-model="citySearch"
                           type="text"
                           placeholder="Введите или выберите…"
-                          class="field-input pl-10"
+                          class="field-input !pl-10"
                           @focus="cityDropOpen = filteredCities.length > 0"
                           @blur="onCityBlur"
                           @input="cityDropOpen = filteredCities.length > 0; form.location = citySearch"
@@ -588,7 +576,7 @@
                           class="absolute z-30 mt-1 w-full bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-y-auto max-h-52">
                           <button v-for="c in filteredCities" :key="c" type="button"
                             class="w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-all"
-                            :class="c === form.location ? 'text-white font-bold' : 'text-brand-muted'"
+                            :class="c === form.location ? 'text-white font-bold' : 'text-white/55'"
                             @mousedown.prevent="selectCity(c)">
                             {{ c }}
                           </button>
@@ -598,14 +586,14 @@
 
                     <!-- Relationship status -->
                     <div>
-                      <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-2">Семейное положение</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Семейное положение</label>
                       <div class="grid grid-cols-2 gap-1.5">
                         <button v-for="rs in relationshipOptions" :key="rs.value" type="button"
                           @click="form.relationship_status = form.relationship_status === rs.value ? '' : rs.value"
                           class="py-2 px-3 rounded-xl text-xs font-semibold transition-all border text-center"
                           :class="form.relationship_status === rs.value
                             ? 'text-white border-transparent'
-                            : 'bg-brand-bg border-brand-border text-brand-muted hover:text-white'"
+                            : 'bg-brand-bg border-brand-border text-white/55 hover:text-white'"
                           :style="form.relationship_status === rs.value
                             ? `background:${form.accent_color}30;border-color:${form.accent_color}55;color:${form.accent_color}`
                             : ''">
@@ -618,7 +606,7 @@
                   <!-- Partner picker (shown when applicable status) -->
                   <Transition name="fade">
                     <div v-if="showPartnerPicker" class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-3">
-                      <p class="text-xs font-bold text-brand-muted uppercase tracking-wider flex items-center gap-1.5">
+                      <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#ec4899">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
                         </svg>
@@ -628,15 +616,15 @@
                       <!-- Current partner chip -->
                       <div v-if="selectedPartner" class="flex items-center gap-3 p-3 rounded-xl border border-brand-border bg-brand-card">
                         <img v-if="selectedPartner.avatar_url" :src="selectedPartner.avatar_url" class="w-8 h-8 rounded-full object-cover flex-shrink-0"/>
-                        <div v-else class="w-8 h-8 rounded-full bg-brand-border flex items-center justify-center text-xs font-bold text-brand-muted flex-shrink-0">
+                        <div v-else class="w-8 h-8 rounded-full bg-brand-border flex items-center justify-center text-xs font-bold text-white/55 flex-shrink-0">
                           {{ (selectedPartner.display_name ?? selectedPartner.username)[0].toUpperCase() }}
                         </div>
                         <div class="flex-1 min-w-0">
                           <p class="text-sm font-bold text-white truncate">{{ selectedPartner.display_name ?? selectedPartner.username }}</p>
-                          <p class="text-xs text-brand-muted truncate">@{{ selectedPartner.username }}</p>
+                          <p class="text-xs text-white/55 truncate">@{{ selectedPartner.username }}</p>
                         </div>
                         <button type="button" @click="clearPartner"
-                          class="w-7 h-7 flex items-center justify-center rounded-xl text-brand-muted hover:text-white hover:bg-white/10 transition-all flex-shrink-0">
+                          class="w-7 h-7 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-white/10 transition-all flex-shrink-0">
                           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                       </div>
@@ -658,35 +646,58 @@
                               class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-all"
                               @mousedown.prevent="selectPartner(u)">
                               <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover flex-shrink-0"/>
-                              <div v-else class="w-7 h-7 rounded-full bg-brand-border flex items-center justify-center text-xs font-bold text-brand-muted flex-shrink-0">
+                              <div v-else class="w-7 h-7 rounded-full bg-brand-border flex items-center justify-center text-xs font-bold text-white/55 flex-shrink-0">
                                 {{ (u.display_name ?? u.username)[0].toUpperCase() }}
                               </div>
                               <div class="flex-1 min-w-0 text-left">
                                 <p class="text-sm font-semibold text-white truncate">{{ u.display_name ?? u.username }}</p>
-                                <p class="text-xs text-brand-muted truncate">@{{ u.username }}</p>
+                                <p class="text-xs text-white/55 truncate">@{{ u.username }}</p>
                               </div>
                             </button>
-                            <p v-if="!filteredPartners.length" class="text-xs text-brand-muted px-4 py-3">Никого не найдено</p>
+                            <p v-if="!filteredPartners.length" class="text-xs text-white/55 px-4 py-3">Никого не найдено</p>
                           </div>
                         </Transition>
                       </div>
-                      <p v-if="!followingList.length" class="text-xs text-brand-muted/60">Вы пока ни на кого не подписаны</p>
+                      <p v-if="!followingList.length" class="text-xs text-white/35">Вы пока ни на кого не подписаны</p>
                     </div>
                   </Transition>
+
+                  <!-- ── Соцсети ────────────────────────────── -->
+                  <div class="pt-2">
+                    <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-3">Соцсети</label>
+                    <div class="space-y-2">
+                      <div v-for="net in socialNetworks" :key="net.key" class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border"
+                          :style="{ backgroundColor: net.color + '22', borderColor: net.color + '44' }">
+                          <span class="text-[10px] font-bold" :style="{ color: net.color }">{{ net.label.slice(0,2) }}</span>
+                        </div>
+                        <div class="flex-1">
+                          <label class="block text-[11px] font-semibold text-white/45 mb-1">{{ net.label }}</label>
+                          <input
+                            :value="form.social_links[net.key] ?? ''"
+                            @input="form.social_links = { ...form.social_links, [net.key]: ($event.target as HTMLInputElement).value }"
+                            type="text"
+                            :placeholder="net.key === 'telegram' ? '@username' : net.key === 'discord' ? 'username#0000' : net.key === 'other' ? 'https://example.com' : '@username'"
+                            class="field-input"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                 </div>
               </section>
 
-              <!-- ── § 4: FURSONA ────────────────────────────────────── -->
-              <section :id="sections[3].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+              <!-- ── § 3: FURSONA ────────────────────────────────────── -->
+              <section v-show="openSection === sections[2].id" :id="sections[2].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
-                  :style="`background:linear-gradient(90deg,${sections[3].color}0c 0%,transparent 100%)`">
-                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[3].color}1a`">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[3].color}`">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[3].iconPath"/>
+                  :style="`background:linear-gradient(90deg,${sections[2].color}0c 0%,transparent 100%)`">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[2].color}1a`">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[2].color}`">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[2].iconPath"/>
                     </svg>
                   </div>
-                  <h2 class="font-bold text-white text-sm">{{ sections[3].label }}</h2>
+                  <h2 class="font-bold text-white text-sm">{{ sections[2].label }}</h2>
                 </div>
                 <div class="p-6 space-y-5">
 
@@ -696,7 +707,7 @@
                       <div class="w-full h-1 rounded-full"
                         :class="step.done ? 'bg-brand-accent' : step.locked ? 'bg-brand-border/30' : 'bg-brand-border'"></div>
                       <span class="text-[10px] font-semibold"
-                        :class="step.done ? 'text-brand-accent' : step.locked ? 'text-brand-muted/40' : 'text-brand-muted'">
+                        :class="step.done ? 'text-brand-accent' : step.locked ? 'text-white/35' : 'text-white/55'">
                         {{ step.label }}
                       </span>
                     </div>
@@ -704,8 +715,8 @@
 
                   <!-- Step 1: Species + Name -->
                   <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-4">
-                    <p class="text-xs font-bold text-brand-muted uppercase tracking-wider flex items-center gap-1.5">
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[3].color}`">
+                    <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[2].color}`">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                       </svg>
                       Шаг 1 — Вид персонажа
@@ -713,16 +724,16 @@
 
                     <!-- Species multi-select grid -->
                     <div>
-                      <label class="block text-xs font-semibold text-brand-muted mb-2">Вид / порода (можно несколько)</label>
+                      <label class="block text-xs font-semibold text-white/55 mb-2">Вид / порода (можно несколько)</label>
                       <div class="flex flex-wrap gap-1.5">
                         <button v-for="sp in fursonaSpeciesList" :key="sp" type="button"
                           @click="toggleSpecies(sp)"
                           class="px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all"
                           :class="selectedSpecies.includes(sp)
                             ? 'text-white border-transparent'
-                            : 'bg-brand-bg border-brand-border text-brand-muted hover:text-white hover:border-brand-accent/50'"
+                            : 'bg-brand-bg border-brand-border text-white/55 hover:text-white hover:border-brand-accent/50'"
                           :style="selectedSpecies.includes(sp)
-                            ? `background:${sections[3].color}35;border-color:${sections[3].color}60;color:${sections[3].color}`
+                            ? `background:${sections[2].color}35;border-color:${sections[2].color}60;color:${sections[2].color}`
                             : ''">
                           {{ sp }}
                         </button>
@@ -734,13 +745,13 @@
                           @keydown.enter.prevent="addCustomSpecies" />
                         <button type="button" @click="addCustomSpecies"
                           class="px-3 py-2 rounded-xl text-xs font-bold border transition-all"
-                          :style="`background:${sections[3].color}20;border-color:${sections[3].color}40;color:${sections[3].color}`">+</button>
+                          :style="`background:${sections[2].color}20;border-color:${sections[2].color}40;color:${sections[2].color}`">+</button>
                       </div>
                     </div>
 
                     <!-- Primary color -->
                     <div>
-                      <label class="block text-xs font-semibold text-brand-muted mb-2">Основной окрас шерсти</label>
+                      <label class="block text-xs font-semibold text-white/55 mb-2">Основной окрас шерсти</label>
                       <div class="flex flex-wrap gap-2">
                         <button v-for="fc in fursonaColorSwatches" :key="fc.color" type="button"
                           @click="form.fursona_color = form.fursona_color === fc.color ? '' : fc.color"
@@ -764,7 +775,7 @@
                             @input="form.fursona_color = ($event.target as HTMLInputElement).value" />
                         </label>
                       </div>
-                      <p v-if="form.fursona_color" class="text-[11px] text-brand-muted/60 mt-1.5 flex items-center gap-1.5">
+                      <p v-if="form.fursona_color" class="text-[11px] text-white/35 mt-1.5 flex items-center gap-1.5">
                         <span class="w-3 h-3 rounded-sm inline-block border border-black/20" :style="`background:${form.fursona_color}`"></span>
                         {{ fursonaColorSwatches.find(s=>s.color===form.fursona_color)?.label ?? form.fursona_color }}
                       </p>
@@ -772,7 +783,7 @@
 
                     <!-- Character name -->
                     <div>
-                      <label class="block text-xs font-semibold text-brand-muted mb-1">Имя персонажа</label>
+                      <label class="block text-xs font-semibold text-white/55 mb-1">Имя персонажа</label>
                       <input v-model="form.fursona_name" type="text" placeholder="Как зовут фурсону…"
                         class="field-input" :disabled="!form.persona"
                         :class="!form.persona ? 'opacity-40 cursor-not-allowed' : ''"/>
@@ -782,7 +793,7 @@
                   <!-- Step 2: Character (likes/dislikes) -->
                   <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-4"
                     :class="!form.persona ? 'opacity-40 pointer-events-none' : ''">
-                    <p class="text-xs font-bold text-brand-muted uppercase tracking-wider flex items-center gap-1.5">
+                    <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
                       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#22c55e">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
                       </svg>
@@ -864,10 +875,10 @@
                           </div>
                         </div>
                         <div v-else-if="uploadingFursonaPhoto" class="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
-                        <svg v-else class="w-6 h-6 text-brand-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg v-else class="w-6 h-6 text-white/55" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
                         </svg>
-                        <p class="text-xs font-semibold text-brand-muted">Шаг 3 — Фото</p>
+                        <p class="text-xs font-semibold text-white/55">Шаг 3 — Фото</p>
                         <span class="text-[10px] text-brand-accent/80 bg-brand-accent/10 px-2 py-0.5 rounded-full">
                           {{ form.fursona_photo_url ? 'Сменить' : 'Загрузить' }}
                         </span>
@@ -875,25 +886,213 @@
                       <!-- Remove button -->
                       <button v-if="form.fursona_photo_url" type="button"
                         @click.stop="form.fursona_photo_url = ''"
-                        class="mt-1.5 w-full text-[10px] text-brand-muted hover:text-rose-400 transition-colors text-center">
+                        class="mt-1.5 w-full text-[10px] text-white/55 hover:text-rose-400 transition-colors text-center">
                         Удалить фото
                       </button>
                     </div>
                     <!-- Step 4 — Ref Sheet (still coming soon) -->
                     <div class="p-4 border-2 border-dashed border-brand-border/50 rounded-2xl flex flex-col items-center gap-2 opacity-40 cursor-not-allowed">
-                      <svg class="w-6 h-6 text-brand-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg class="w-6 h-6 text-white/55" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                       </svg>
-                      <p class="text-xs font-semibold text-brand-muted">Шаг 4 — Реф</p>
-                      <span class="text-[10px] text-brand-muted/60 bg-brand-bg px-2 py-0.5 rounded-full">coming soon</span>
+                      <p class="text-xs font-semibold text-white/55">Шаг 4 — Реф</p>
+                      <span class="text-[10px] text-white/35 bg-brand-bg px-2 py-0.5 rounded-full">coming soon</span>
+                    </div>
+                  </div>
+
+                  <!-- 🐾 Фурсьют (выключен по умолчанию) -->
+                  <div class="border-t border-brand-border/60 pt-4 space-y-4">
+                    <div class="flex items-center justify-between">
+                      <div>
+                        <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
+                          <span class="text-base">🐾</span> Фурсьют
+                        </p>
+                        <p class="text-[10px] text-white/35 mt-1">Включает или скрывает вкладку «Фурсьют» в профиле</p>
+                      </div>
+                      <button type="button" @click="form.has_fursuit = !form.has_fursuit"
+                        class="relative w-11 h-6 rounded-full border transition-all flex-shrink-0"
+                        :class="form.has_fursuit ? 'bg-brand-accent/20 border-brand-accent/60' : 'bg-brand-bg border-brand-border'">
+                        <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-all"
+                          :class="form.has_fursuit ? 'translate-x-5 bg-brand-accent' : 'translate-x-0 bg-white/40'"></span>
+                      </button>
+                    </div>
+
+                    <div v-if="form.has_fursuit" class="space-y-3">
+                      <!-- Fursuit photo upload -->
+                      <input ref="fursuiPhotoRef" type="file" accept="image/*" class="hidden" @change="onFursuiPhotoChange" />
+                      <div
+                        class="p-4 border-2 border-dashed rounded-2xl flex flex-col items-center gap-2 transition-all cursor-pointer"
+                        :class="uploadingFursuiPhoto ? 'border-brand-accent/40 bg-brand-accent/5' : 'border-brand-border/50 hover:border-brand-accent/40 hover:bg-brand-accent/5'"
+                        @click="fursuiPhotoRef?.click()">
+                        <div v-if="form.fursuit_photo_url" class="relative group">
+                          <img :src="form.fursuit_photo_url" class="w-14 h-14 rounded-xl object-cover border border-brand-border" />
+                          <div class="absolute inset-0 rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                            </svg>
+                          </div>
+                        </div>
+                        <div v-else-if="uploadingFursuiPhoto" class="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
+                        <svg v-else class="w-6 h-6 text-white/55" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                        <p class="text-xs font-semibold text-white/55">Фото с фурсьютом</p>
+                        <span class="text-[10px] text-brand-accent/80 bg-brand-accent/10 px-2 py-0.5 rounded-full">
+                          {{ form.fursuit_photo_url ? 'Сменить' : 'Загрузить' }}
+                        </span>
+                      </div>
+                      <button v-if="form.fursuit_photo_url" type="button"
+                        @click.stop="form.fursuit_photo_url = ''"
+                        class="w-full text-[10px] text-white/55 hover:text-rose-400 transition-colors text-center">
+                        Удалить фото
+                      </button>
+
+                      <!-- Description -->
+                      <div>
+                        <label class="block text-xs font-semibold text-white/55 mb-1">Описание фурсьюта</label>
+                        <textarea v-model="form.fursuit_description"
+                          placeholder="Расскажи о своём фурсьюте…"
+                          class="field-input w-full resize-none h-20"
+                          maxlength="300"></textarea>
+                      </div>
+
+                      <!-- Maker -->
+                      <div>
+                        <label class="block text-xs font-semibold text-white/55 mb-1">Мастер (изготовитель)</label>
+                        <input v-model="form.fursuit_maker" type="text"
+                          placeholder="Имя или ник мастера…"
+                          class="field-input" maxlength="200" />
+                      </div>
                     </div>
                   </div>
 
                 </div>
               </section>
 
-              <!-- ── § 5: APPEARANCE ─────────────────────────────────── -->
-              <section :id="sections[4].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+              <!-- ── § 4: APPEARANCE ─────────────────────────────────── -->
+
+              <!-- ── Section 4: Profile style ──────────────────────── -->
+              <section v-show="openSection === sections[3].id" :id="sections[3].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
+                  :style="`background:linear-gradient(90deg,${sections[3].color}0c 0%,transparent 100%)`">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[3].color}1a`">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[3].color}`">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[3].iconPath"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 class="font-bold text-white text-sm">{{ sections[3].label }}</h2>
+                  </div>
+                  <!-- Plan badge -->
+                  <router-link to="/subscriptions"
+                    class="ml-auto text-[9px] font-extrabold uppercase tracking-wider px-2 py-1 rounded-full border transition-all hover:opacity-80"
+                    :class="(authStore.user as any)?.subscription_tier === 'pro' || (authStore.user as any)?.subscription_tier === 'business'
+                      ? 'text-brand-accent border-brand-accent/30 bg-brand-accent/5'
+                      : 'text-amber-400 border-amber-400/30 bg-amber-400/5'">
+                    {{ (authStore.user as any)?.subscription_tier === 'free' ? 'Lite+ для тем' : (authStore.user as any)?.subscription_tier?.toUpperCase() }}
+                  </router-link>
+                </div>
+
+                <div class="p-6 space-y-7">
+
+                  <!-- ── Theme selector (Lite+) ────────────────────────── -->
+                  <div>
+                    <div class="flex items-center justify-between mb-3">
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">Тема профиля</label>
+                      <span class="text-[10px] text-amber-400 font-bold bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">Lite+</span>
+                    </div>
+                    <div v-if="['free'].includes((authStore.user as any)?.subscription_tier ?? 'free')"
+                      class="rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 flex items-center gap-3">
+                      <BIcon name="Lock" class="w-4 h-4 text-amber-400 flex-shrink-0" />
+                      <p class="text-xs text-white/55">Темы профиля доступны с подпиской <router-link to="/subscriptions" class="text-amber-400 hover:underline font-bold">Lite</router-link>.</p>
+                    </div>
+                    <div v-else class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <button v-for="(theme, id) in PROFILE_THEMES" :key="id" type="button"
+                        @click="form.profile_theme = id"
+                        class="relative rounded-2xl p-3 border-2 transition-all text-left overflow-hidden"
+                        :class="form.profile_theme === id
+                          ? 'border-brand-accent shadow-lg shadow-brand-accent/20'
+                          : 'border-brand-border hover:border-white/20'"
+                        :style="`background:${theme.bg}`">
+                        <!-- Accent dot -->
+                        <div class="w-5 h-5 rounded-full mb-2 border-2 border-white/10"
+                          :style="`background:${theme.accent}`" />
+                        <p class="text-xs font-bold text-white">{{ theme.label }}</p>
+                        <!-- Checkmark -->
+                        <div v-if="form.profile_theme === id"
+                          class="absolute top-2 right-2 w-5 h-5 rounded-full bg-brand-accent flex items-center justify-center">
+                          <BIcon name="Check" class="w-3 h-3 text-white" />
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- ── Avatar frame (Pro+) ────────────────────────────── -->
+                  <div>
+                    <div class="flex items-center justify-between mb-3">
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">Рамка аватара</label>
+                      <span class="text-[10px] text-brand-accent font-bold bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Pro+</span>
+                    </div>
+                    <div v-if="!['pro', 'business'].includes((authStore.user as any)?.subscription_tier ?? 'free')"
+                      class="rounded-2xl border border-brand-accent/20 bg-brand-accent/5 px-4 py-3 flex items-center gap-3">
+                      <BIcon name="Lock" class="w-4 h-4 text-brand-accent flex-shrink-0" />
+                      <p class="text-xs text-white/55">Рамки аватара доступны с подпиской <router-link to="/subscriptions" class="text-brand-accent hover:underline font-bold">Pro</router-link>.</p>
+                    </div>
+                    <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <button v-for="(frame, id) in PROFILE_FRAMES" :key="id" type="button"
+                        @click="form.profile_frame = id"
+                        class="relative flex items-center gap-3 rounded-2xl px-4 py-3 border-2 transition-all"
+                        :class="form.profile_frame === id
+                          ? 'border-brand-accent bg-brand-accent/10'
+                          : 'border-brand-border hover:border-white/20 bg-brand-bg'">
+                        <!-- Mini avatar preview with frame -->
+                        <div class="w-10 h-10 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm flex-shrink-0"
+                          :class="frame.style || ''">
+                          B
+                        </div>
+                        <span class="text-xs font-bold text-white">{{ frame.label }}</span>
+                        <BIcon v-if="form.profile_frame === id" name="Check" class="w-4 h-4 text-brand-accent ml-auto flex-shrink-0" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- ── Custom background (Pro+) ──────────────────────── -->
+                  <div>
+                    <div class="flex items-center justify-between mb-3">
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">Фон профиля (URL)</label>
+                      <span class="text-[10px] text-brand-accent font-bold bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Pro+</span>
+                    </div>
+                    <div v-if="!['pro', 'business'].includes((authStore.user as any)?.subscription_tier ?? 'free')"
+                      class="rounded-2xl border border-brand-accent/20 bg-brand-accent/5 px-4 py-3 flex items-center gap-3">
+                      <BIcon name="Lock" class="w-4 h-4 text-brand-accent flex-shrink-0" />
+                      <p class="text-xs text-white/55">Кастомный фон доступен с <router-link to="/subscriptions" class="text-brand-accent hover:underline font-bold">Pro</router-link>.</p>
+                    </div>
+                    <div v-else>
+                      <input ref="bgFileRef" type="file" accept="image/*" class="hidden" @change="onBgChange" />
+                      <div class="relative rounded-2xl overflow-hidden border border-brand-border h-32 bg-brand-bg cursor-pointer group"
+                        @click="bgFileRef?.click()">
+                        <img v-if="form.profile_bg_url" :src="form.profile_bg_url" class="w-full h-full object-cover" @error="form.profile_bg_url = ''" />
+                        <div class="absolute inset-0 flex items-center justify-center gap-2"
+                          :class="form.profile_bg_url ? 'bg-black/55 opacity-0 group-hover:opacity-100 transition-all' : 'bg-white/5'">
+                          <span v-if="uploadingBg" class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <svg v-else class="w-5 h-5 text-white/55" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                          <span class="text-white/55 text-sm font-bold">{{ form.profile_bg_url ? 'Изменить фон' : 'Загрузить фон' }}</span>
+                        </div>
+                        <div v-if="form.profile_bg_url" class="absolute inset-0 bg-black/40 flex items-end p-3 pointer-events-none opacity-0 group-hover:opacity-0">
+                        </div>
+                        <button v-if="form.profile_bg_url" type="button" @click.stop="form.profile_bg_url = ''"
+                          class="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 border border-white/20 flex items-center justify-center text-white/80 opacity-0 group-hover:opacity-100 transition-all">
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </section>
+
+              <!-- ── § 5: VERIFICATION ──────────────────────────────── -->
+              <section v-show="openSection === sections[4].id" :id="sections[4].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                   :style="`background:linear-gradient(90deg,${sections[4].color}0c 0%,transparent 100%)`">
                   <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[4].color}1a`">
@@ -901,63 +1100,119 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[4].iconPath"/>
                     </svg>
                   </div>
-                  <h2 class="font-bold text-white text-sm">{{ sections[4].label }}</h2>
-                </div>
-                <div class="p-6 space-y-5">
-
                   <div>
-                    <label class="text-xs font-bold text-brand-muted uppercase tracking-wider block mb-4">Акцентный цвет</label>
+                    <h2 class="font-bold text-white text-sm">{{ sections[4].label }}</h2>
+                    <p class="text-[10px] text-white/40">Подтвердите аккаунт для получения донатов</p>
+                  </div>
+                </div>
 
-                    <!-- Preset swatches -->
-                    <div class="flex flex-wrap gap-2.5 mb-5">
-                      <button v-for="swatch in colorSwatches" :key="swatch.color" type="button"
-                        @click="form.accent_color = swatch.color"
-                        class="relative w-9 h-9 rounded-2xl transition-all duration-200 hover:scale-110"
-                        :style="`background:${swatch.color};box-shadow:0 4px 12px ${swatch.color}44`"
-                        :title="swatch.name">
-                        <Transition name="swatch-check">
-                          <div v-if="form.accent_color === swatch.color"
-                            class="absolute inset-0 rounded-2xl flex items-center justify-center">
-                            <svg class="w-4 h-4 text-white drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
-                            </svg>
-                          </div>
-                        </Transition>
-                      </button>
+                <div class="p-6 space-y-6">
+
+                  <!-- Loading state -->
+                  <div v-if="isLoadingVerification" class="flex items-center justify-center py-8">
+                    <div class="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+
+                  <template v-else>
+                    <!-- Already verified -->
+                    <div v-if="verificationStatus?.isVerified" class="text-center py-6">
+                      <div class="w-16 h-16 rounded-full bg-blue-500/15 border border-blue-500/25 flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                      </div>
+                      <h3 class="text-lg font-bold text-white mb-1">Аккаунт верифицирован</h3>
+                      <p class="text-sm text-white/55">Подтверждено {{ verificationStatus.verifiedAt ? new Date(verificationStatus.verifiedAt).toLocaleDateString('ru-RU') : '' }}</p>
+                      <div class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        Донаты доступны
+                      </div>
                     </div>
 
-                    <!-- Custom picker row -->
-                    <div class="flex items-center gap-4 p-4 rounded-2xl border border-brand-border" style="background:rgba(255,255,255,0.03)">
-                      <!-- color input hidden behind preview div -->
-                      <div class="relative flex-shrink-0">
-                        <input v-model="form.accent_color" type="color"
-                          class="absolute inset-0 w-full h-full opacity-0 cursor-pointer rounded-xl"/>
-                        <div class="w-14 h-12 rounded-xl border border-white/10 transition-all pointer-events-none"
-                          :style="`background:${form.accent_color};box-shadow:0 4px 16px ${form.accent_color}55`"></div>
+                    <!-- Pending request -->
+                    <div v-else-if="verificationStatus?.latestRequest?.status === 'pending'" class="text-center py-6">
+                      <div class="w-16 h-16 rounded-full bg-amber-500/15 border border-amber-500/25 flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-amber-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
                       </div>
-                      <div class="flex-1">
-                        <p class="text-xs text-brand-muted font-bold mb-1.5">HEX-код</p>
-                        <input v-model="form.accent_color" type="text" maxlength="7" placeholder="#4C97CF"
-                          class="field-input font-mono tracking-widest uppercase text-center"/>
-                      </div>
-                      <!-- Live button preview -->
-                      <div class="flex-shrink-0 text-center">
-                        <p class="text-xs text-brand-muted font-bold mb-1.5">Кнопка</p>
-                        <div class="h-10 px-4 rounded-2xl flex items-center justify-center text-white text-xs font-bold transition-all"
-                          :style="`background:${form.accent_color};box-shadow:0 4px 16px ${form.accent_color}44`">
-                          Сохранить
+                      <h3 class="text-lg font-bold text-white mb-1">Заявка на рассмотрении</h3>
+                      <p class="text-sm text-white/55">Мы проверяем вашу заявку. Обычно это занимает 1-3 дня.</p>
+                      <p class="text-xs text-white/40 mt-2">Отправлено {{ new Date(verificationStatus.latestRequest.created_at).toLocaleDateString('ru-RU') }}</p>
+                    </div>
+
+                    <!-- Rejected request -->
+                    <div v-else-if="verificationStatus?.latestRequest?.status === 'rejected'" class="space-y-4">
+                      <div class="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4 flex items-start gap-3">
+                        <svg class="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                        </svg>
+                        <div>
+                          <p class="text-sm font-bold text-rose-400">Заявка отклонена</p>
+                          <p v-if="verificationStatus.latestRequest.reason" class="text-xs text-white/55 mt-1">{{ verificationStatus.latestRequest.reason }}</p>
                         </div>
                       </div>
                     </div>
-                  </div>
+
+                    <!-- Show criteria (not verified, no pending request or has rejected) -->
+                    <template v-if="!verificationStatus?.isVerified && verificationStatus?.latestRequest?.status !== 'pending'">
+                      <!-- Criteria checklist -->
+                      <div>
+                        <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
+                          <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                          </svg>
+                          Критерии верификации
+                        </h3>
+                        <div class="space-y-2">
+                          <div v-for="(cr, i) in verCriteriaList" :key="i"
+                            class="flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all"
+                            :class="cr.met ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-brand-bg border-brand-border'">
+                            <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+                              :class="cr.met ? 'bg-emerald-500/20' : 'bg-white/5'">
+                              <svg v-if="cr.met" class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                              </svg>
+                              <svg v-else class="w-3.5 h-3.5 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                              </svg>
+                            </div>
+                            <span class="text-sm font-semibold flex-1" :class="cr.met ? 'text-white' : 'text-white/55'">{{ cr.label }}</span>
+                            <span v-if="cr.detail" class="text-xs font-bold" :class="cr.met ? 'text-emerald-400' : 'text-white/40'">{{ cr.detail }}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Info about manual review -->
+                      <div class="bg-blue-500/5 border border-blue-500/15 rounded-2xl px-4 py-3">
+                        <p class="text-xs text-white/55">
+                          <span class="text-blue-400 font-bold">Совет:</span>
+                          Если все критерии выполнены — аккаунт верифицируется автоматически. Иначе заявка отправляется на проверку модераторам.
+                        </p>
+                      </div>
+
+                      <!-- Submit button -->
+                      <button type="button" @click="requestVerification" :disabled="isRequestingVerification"
+                        class="w-full py-3.5 rounded-2xl text-sm font-bold text-white transition-all shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                        style="background: linear-gradient(135deg, #3b82f6, #2563eb); box-shadow: 0 4px 20px rgba(59,130,246,0.35)">
+                        <span v-if="isRequestingVerification" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                        {{ isRequestingVerification ? 'Отправка…' : 'Запросить верификацию' }}
+                      </button>
+                    </template>
+                  </template>
 
                 </div>
               </section>
 
+              
+
               <!-- ── Submit (mobile / tablet) ───────────────────────── -->
               <div class="flex items-center justify-between gap-4 pt-2 xl:hidden">
                 <router-link :to="`/profile/${authStore.user?.id}`"
-                  class="px-6 py-3 bg-brand-card border border-brand-border hover:border-brand-muted/40 text-brand-muted hover:text-white rounded-2xl text-sm font-bold transition-all">
+                  class="px-6 py-3 bg-brand-card border border-brand-border hover:border-brand-muted/40 text-white/55 hover:text-white rounded-2xl text-sm font-bold transition-all">
                   Отмена
                 </router-link>
                 <button type="submit" :disabled="userStore.isLoading"
@@ -980,13 +1235,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
+import BIcon from '@/components/BIcon.vue'
 import api from '@/api'
+import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
 
 const userStore  = useUserStore()
 const authStore  = useAuthStore()
@@ -1041,9 +1298,17 @@ const form = reactive({
   country:             '',
   fursona_color:       '',
   fursona_photo_url:   '',
+  has_fursuit:         false,
+  fursuit_photo_url:   '' as string,
+  fursuit_description: '' as string,
+  fursuit_maker:       '' as string,
   birth_date:          '',
   likes:               [] as string[],
   dislikes:            [] as string[],
+  profile_theme:       '' as string,
+  profile_bg_url:      '' as string,
+  profile_frame:       '' as string,
+  social_links:        {} as Record<string, string>,
 })
 
 // ── Saved snapshot ─────────────────────────────────────────────────────────
@@ -1065,9 +1330,17 @@ const savedForm = reactive({
   country:             '',
   fursona_color:       '',
   fursona_photo_url:   '',
+  has_fursuit:         false,
+  fursuit_photo_url:   '' as string,
+  fursuit_description: '' as string,
+  fursuit_maker:       '' as string,
   birth_date:          '',
   likes:               [] as string[],
   dislikes:            [] as string[],
+  profile_theme:       '' as string,
+  profile_bg_url:      '' as string,
+  profile_frame:       '' as string,
+  social_links:        {} as Record<string, string>,
 })
 
 function snapshotToSaved() {
@@ -1088,9 +1361,17 @@ function snapshotToSaved() {
   savedForm.country             = form.country
   savedForm.fursona_color       = form.fursona_color
   savedForm.fursona_photo_url   = form.fursona_photo_url
+  savedForm.has_fursuit         = form.has_fursuit
+  savedForm.fursuit_photo_url   = form.fursuit_photo_url
+  savedForm.fursuit_description = form.fursuit_description
+  savedForm.fursuit_maker       = form.fursuit_maker
   savedForm.birth_date          = form.birth_date
   savedForm.likes               = [...form.likes]
   savedForm.dislikes            = [...form.dislikes]
+  savedForm.profile_theme       = form.profile_theme
+  savedForm.profile_bg_url      = form.profile_bg_url
+  savedForm.profile_frame       = form.profile_frame
+  savedForm.social_links        = { ...form.social_links }
 }
 
 function resetForm() {
@@ -1111,9 +1392,17 @@ function resetForm() {
   form.country             = savedForm.country
   form.fursona_color       = savedForm.fursona_color
   form.fursona_photo_url   = savedForm.fursona_photo_url
+  form.has_fursuit         = savedForm.has_fursuit
+  form.fursuit_photo_url   = savedForm.fursuit_photo_url
+  form.fursuit_description = savedForm.fursuit_description
+  form.fursuit_maker       = savedForm.fursuit_maker
   form.birth_date          = savedForm.birth_date
   form.likes               = [...savedForm.likes]
   form.dislikes            = [...savedForm.dislikes]
+  form.profile_theme       = savedForm.profile_theme
+  form.profile_bg_url      = savedForm.profile_bg_url
+  form.profile_frame       = savedForm.profile_frame
+  form.social_links        = { ...savedForm.social_links }
   // Clear originals so re-crop picks up the reverted server images
   avatarOriginalSrc.value = ''
   bannerOriginalSrc.value = ''
@@ -1139,11 +1428,19 @@ const isDirty = computed(() => {
     form.country             !== savedForm.country ||
     form.fursona_color       !== savedForm.fursona_color ||
     form.fursona_photo_url   !== savedForm.fursona_photo_url ||
-    form.birth_date          !== savedForm.birth_date
+    form.has_fursuit         !== savedForm.has_fursuit ||
+    form.fursuit_photo_url   !== savedForm.fursuit_photo_url ||
+    form.fursuit_description !== savedForm.fursuit_description ||
+    form.fursuit_maker       !== savedForm.fursuit_maker ||
+    form.birth_date          !== savedForm.birth_date ||
+    form.profile_theme       !== savedForm.profile_theme ||
+    form.profile_bg_url      !== savedForm.profile_bg_url ||
+    form.profile_frame       !== savedForm.profile_frame
   )
   return fieldsChanged ||
-    JSON.stringify(form.likes)    !== JSON.stringify(savedForm.likes) ||
-    JSON.stringify(form.dislikes) !== JSON.stringify(savedForm.dislikes)
+    JSON.stringify(form.likes)         !== JSON.stringify(savedForm.likes) ||
+    JSON.stringify(form.dislikes)      !== JSON.stringify(savedForm.dislikes) ||
+    JSON.stringify(form.social_links)  !== JSON.stringify(savedForm.social_links)
 })
 
 onMounted(async () => {
@@ -1167,15 +1464,25 @@ onMounted(async () => {
   form.country             = p.country             ?? ''
   form.fursona_color       = p.fursona_color        ?? ''
   form.fursona_photo_url   = p.fursona_photo_url    ?? ''
+  form.has_fursuit         = (p as any).has_fursuit        ?? false
+  form.fursuit_photo_url   = (p as any).fursuit_photo_url  ?? ''
+  form.fursuit_description = (p as any).fursuit_description ?? ''
+  form.fursuit_maker       = (p as any).fursuit_maker      ?? ''
   form.birth_date          = p.birth_date ? p.birth_date.substring(0, 10) : ''
   form.likes               = [...p.likes]
   form.dislikes            = [...p.dislikes]
+  form.profile_theme       = (p as any).profile_theme  ?? ''
+  form.profile_bg_url      = (p as any).profile_bg_url ?? ''
+  form.profile_frame       = (p as any).profile_frame  ?? ''
+  form.social_links        = { ...((p as any).social_links ?? {}) }
   snapshotToSaved()
   // Pre-fill combobox search inputs with saved values
   countrySearch.value = form.country
   citySearch.value    = form.location
   // Load following list for partner picker
   loadFollowing()
+  // Load verification data
+  fetchVerificationData()
 })
 
 // ── Navigation guard ───────────────────────────────────────────────────────
@@ -1188,10 +1495,48 @@ onBeforeRouteLeave((_to, _from, next) => {
   next(false)
 })
 
+// ── Media uploads ──────────────────────────────────────────────────────────
+const bgFileRef         = ref<HTMLInputElement | null>(null)
+const uploadingBg       = ref(false)
+
+async function onBgChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  uploadingBg.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file, file.name)
+    const res = await api.post('/media/upload?folder=backgrounds', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    form.profile_bg_url = res.data.data.url
+    showToast('success', 'Фон профиля загружен!')
+  } catch { showToast('error', 'Ошибка загрузки фона') }
+  finally { uploadingBg.value = false; if (bgFileRef.value) bgFileRef.value.value = '' }
+}
+
 // ── File picking ───────────────────────────────────────────────────────────
+const uploadingGifAvatar = ref(false)
+
+async function uploadGifAvatar(file: File) {
+  uploadingGifAvatar.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file, file.name)
+    const result = await api.post('/media/upload?folder=avatars', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    form.avatar_url = result.data.data.url
+    showToast('success', '🎥 GIF-аватар загружен!')
+  } catch {
+    showToast('error', 'Ошибка загрузки GIF')
+  } finally {
+    uploadingGifAvatar.value = false
+    if (avatarFileRef.value) avatarFileRef.value.value = ''
+  }
+}
 function onAvatarFileChange(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) openCrop(file, 'avatar')
+  if (file) {
+    if (file.type === 'image/gif') { uploadGifAvatar(file); return }
+    openCrop(file, 'avatar')
+  }
   if (avatarFileRef.value) avatarFileRef.value.value = ''
 }
 function onBannerFileChange(e: Event) {
@@ -1202,7 +1547,9 @@ function onBannerFileChange(e: Event) {
 function onAvatarDrop(e: DragEvent) {
   avatarDragOver.value = false
   const file = e.dataTransfer?.files?.[0]
-  if (file && file.type.startsWith('image/')) openCrop(file, 'avatar')
+  if (!file || !file.type.startsWith('image/')) return
+  if (file.type === 'image/gif') { uploadGifAvatar(file); return }
+  openCrop(file, 'avatar')
 }
 function onBannerDrop(e: DragEvent) {
   bannerDragOver.value = false
@@ -1229,6 +1576,31 @@ async function onFursonaPhotoChange(e: Event) {
     showToast('error', 'Ошибка загрузки фото')
   } finally {
     uploadingFursonaPhoto.value = false
+  }
+}
+
+// ── Fursuit photo upload ───────────────────────────────────────────────────
+const fursuiPhotoRef        = ref<HTMLInputElement | null>(null)
+const uploadingFursuiPhoto  = ref(false)
+
+async function onFursuiPhotoChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  if (fursuiPhotoRef.value) fursuiPhotoRef.value.value = ''
+  uploadingFursuiPhoto.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await api.post('/media/upload?folder=fursuit', fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } })
+    if (res.data.success && res.data.data?.url) {
+      form.fursuit_photo_url = res.data.data.url
+      showToast('success', '🐾 Фото фурсьюта загружено!')
+    }
+  } catch {
+    showToast('error', 'Ошибка загрузки фото')
+  } finally {
+    uploadingFursuiPhoto.value = false
   }
 }
 
@@ -1587,9 +1959,17 @@ async function handleSubmit() {
     country:             form.country,
     fursona_color:       form.fursona_color || null,
     fursona_photo_url:   form.fursona_photo_url || null,
+    has_fursuit:         form.has_fursuit,
+    fursuit_photo_url:   form.fursuit_photo_url  || null,
+    fursuit_description: form.fursuit_description || null,
+    fursuit_maker:       form.fursuit_maker       || null,
     birth_date:          form.birth_date || null,
     likes:               form.likes,
     dislikes:            form.dislikes,
+    profile_theme:       form.profile_theme  || null,
+    profile_bg_url:      form.profile_bg_url || null,
+    profile_frame:       form.profile_frame  || null,
+    social_links:        form.social_links,
   }
   if (/^#[0-9A-Fa-f]{6}$/.test(form.accent_color)) payload.accent_color = form.accent_color
 
@@ -1604,11 +1984,11 @@ async function handleSubmit() {
 
 // ── Sections ───────────────────────────────────────────────────────────────
 const sections = [
-  { id: 'sec-media',      label: 'Медиа',       color: '#4C97CF', iconPath: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
-  { id: 'sec-basic',      label: 'Основное',    color: '#60a5fa', iconPath: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
-  { id: 'sec-contacts',   label: 'Контакты',    color: '#34d399', iconPath: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
-  { id: 'sec-fursona',    label: 'Фурсона',     color: '#a78bfa', iconPath: 'M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-  { id: 'sec-appearance', label: 'Внешний вид', color: '#f472b6', iconPath: 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01' },
+  { id: 'sec-basic',         label: 'Основное',       color: '#60a5fa', iconPath: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+  { id: 'sec-contacts',      label: 'Контакты',       color: '#34d399', iconPath: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+  { id: 'sec-fursona',       label: 'Фурсона',        color: '#a78bfa', iconPath: 'M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+  { id: 'sec-profile-style', label: 'Стиль профиля',  color: '#f59e0b', iconPath: 'M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 2h14v14H5V5zm2 2v2h10V7H7zm0 4v2h7v-2H7z' },
+  { id: 'sec-verification',  label: 'Верификация',    color: '#3b82f6', iconPath: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
 ]
 
 const lockedSettings = [
@@ -1619,6 +1999,50 @@ const lockedSettings = [
 ]
 
 const pronounPresets = ['он/его', 'она/её', 'они/их']
+
+// ── Verification ────────────────────────────────────────────────────────────
+const verificationStatus = ref<any>(null)
+const verificationCriteria = ref<any>(null)
+const isLoadingVerification = ref(false)
+const isRequestingVerification = ref(false)
+
+async function fetchVerificationData() {
+  isLoadingVerification.value = true
+  try {
+    const [statusRes, criteriaRes] = await Promise.all([
+      api.get('/verification/status'),
+      api.get('/verification/criteria'),
+    ])
+    if (statusRes.data.success) verificationStatus.value = statusRes.data.data
+    if (criteriaRes.data.success) verificationCriteria.value = criteriaRes.data.data
+  } catch {} finally { isLoadingVerification.value = false }
+}
+
+async function requestVerification() {
+  isRequestingVerification.value = true
+  try {
+    const res = await api.post('/verification/request')
+    if (res.data.success) {
+      showToast('success', res.data.data.autoApproved ? 'Аккаунт верифицирован!' : 'Заявка отправлена на рассмотрение')
+      await fetchVerificationData()
+    }
+  } catch (e: any) {
+    showToast('error', e.response?.data?.error ?? 'Ошибка отправки заявки')
+  } finally { isRequestingVerification.value = false }
+}
+
+const verCriteriaList = computed(() => {
+  const c = verificationCriteria.value
+  if (!c) return []
+  return [
+    { label: 'Аккаунт старше 14 дней', met: c.accountAgeDays >= 14, detail: `${c.accountAgeDays} дн.` },
+    { label: '3+ публикаций', met: c.postCount >= 3, detail: `${c.postCount} постов` },
+    { label: 'Аватар установлен', met: c.hasAvatar, detail: '' },
+    { label: 'Био заполнено', met: c.hasBio, detail: '' },
+    { label: 'Email привязан', met: c.hasEmail, detail: '' },
+    { label: '5+ подписчиков', met: c.followerCount >= 5, detail: `${c.followerCount} подписчиков` },
+  ]
+})
 
 // ── Birth date helpers ─────────────────────────────────────────────────────
 const birthAge = computed<number | null>(() => {
@@ -1678,6 +2102,19 @@ const fursonaColorSwatches = [
   { label: 'Бирюзовый',      color: '#0d9488' },
   { label: 'Зелёный',        color: '#16a34a' },
   { label: 'Серебристый',    color: '#94a3b8' },
+]
+
+const socialNetworks = [
+  { key: 'telegram',    label: 'Telegram',      color: '#2AABEE' },
+  { key: 'twitter',     label: 'X / Twitter',   color: '#1DA1F2' },
+  { key: 'instagram',   label: 'Instagram',     color: '#E4405F' },
+  { key: 'youtube',     label: 'YouTube',       color: '#FF0000' },
+  { key: 'twitch',      label: 'Twitch',        color: '#9146FF' },
+  { key: 'furaffinity', label: 'FurAffinity',   color: '#FAAF3A' },
+  { key: 'vk',          label: 'ВКонтакте',     color: '#4C75A3' },
+  { key: 'discord',     label: 'Discord',       color: '#7289DA' },
+  { key: 'github',      label: 'GitHub',        color: '#6e8196' },
+  { key: 'other',       label: 'Другое / Сайт', color: '#6366f1' },
 ]
 
 const relationshipOptions = [
@@ -1861,28 +2298,13 @@ const fursonaSteps = computed(() => [
   { label: 'Фото',     done: false,                                              locked: true },
 ])
 
-// ── Active section scroll spy ──────────────────────────────────────────────
-const activeSection = ref('sec-media')
-let observer: IntersectionObserver | null = null
+// ── Active section (accordion) ────────────────────────────────────────────
+const openSection = ref('sec-basic')
 
-onMounted(() => {
-  observer = new IntersectionObserver(
-    (entries) => {
-      for (const e of entries) {
-        if (e.isIntersecting) activeSection.value = e.target.id
-      }
-    },
-    { rootMargin: '-20% 0px -65% 0px', threshold: 0 },
-  )
-  for (const s of sections) {
-    const el = document.getElementById(s.id)
-    if (el) observer.observe(el)
-  }
-})
-onUnmounted(() => observer?.disconnect())
-
-function scrollTo(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+function openSec(id: string) {
+  openSection.value = id
+  // Scroll the form column to the top so newly opened section is visible
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 </script>
 
@@ -1891,6 +2313,14 @@ function scrollTo(id: string) {
 .field-input {
   @apply w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/50 focus:outline-none transition-all;
 }
+
+/* ── Accordion section transition ───────────────────────────────────────── */
+.accordion-enter-active, .accordion-leave-active { transition: all 0.25s ease; }
+.accordion-enter-from, .accordion-leave-to { opacity: 0; max-height: 0; overflow: hidden; }
+
+/* ── No scrollbar (mobile tabs) ─────────────────────────────────────────── */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 
 /* ── Toast ─────────────────────────────────────────────────────────────── */
 .toast-enter-active, .toast-leave-active { transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1); }

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, onUnmounted, reactive, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch, onUnmounted, reactive, nextTick } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
+import { useGroupsStore } from '@/stores/groups'
 import api from '@/api'
 import BIcon from './BIcon.vue'
 import AppHeader from './AppHeader.vue'
@@ -14,6 +15,7 @@ import PostComments from './PostComments.vue'
 import PostCard from './PostCard.vue'
 import MentionTextarea from './MentionTextarea.vue'
 import { useAnalytics } from '@/composables/useAnalytics'
+import { formatCount } from '@/lib/utils'
 
 // MediaUpload component ref
 const mediaUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
@@ -32,8 +34,10 @@ const onFormDrop = (e: DragEvent) => {
 }
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const langStore = useLangStore()
+const groupsStore = useGroupsStore()
 const { observePost } = useAnalytics()
 const activeNav = ref('home')
 const isPosting = ref(false)
@@ -43,7 +47,8 @@ const isLoadingPosts = ref(true)
 
 // Feed controls
 // nsfwMode=false (default): NSFW content is hidden. nsfwMode=true: NSFW is shown.
-const nsfwMode = ref(false)
+const nsfwMode = ref(localStorage.getItem('bloomly_nsfw') === 'true')
+watch(nsfwMode, (val) => { localStorage.setItem('bloomly_nsfw', String(val)) })
 const feedMode = ref<'for-you' | 'subscriptions' | 'trending' | 'news' | 'photos' | 'nsfw'>('for-you')
 const searchQuery = ref('')
 const selectedCategory = ref('')
@@ -92,8 +97,17 @@ const closeCreateModal = () => {
 // ── Mobile navigation ────────────────────────────────────────────────────────
 const mobileSearchOpen = ref(false)
 const mobileActiveTab = ref<'home' | 'friends' | 'search' | 'profile'>('home')
+const mobileHubOpen = ref(false)
 const closeMobileSearch = () => { mobileSearchOpen.value = false }
 const openMobileSearch = () => { mobileSearchOpen.value = true; mobileActiveTab.value = 'search' }
+
+// Sync mobile tab with current route
+watch(() => route.name, (name) => {
+  if (name === 'home') mobileActiveTab.value = 'home'
+  else if (name === 'friends') mobileActiveTab.value = 'friends'
+  else if (name === 'messages') mobileActiveTab.value = 'search'
+  else if (name === 'profile') mobileActiveTab.value = 'profile'
+}, { immediate: true })
 
 // Search handled by AppHeader component
 
@@ -245,43 +259,61 @@ const initPostStatus = (loadedPosts: any[]) => {
   }).catch(() => {})
 }
 
-const fetchPosts = async () => {
-  isLoadingPosts.value = true
+const currentPage = ref(1)
+const isFetchingMore = ref(false)
+const hasMorePosts = ref(true)
+
+const fetchPosts = async (loadMore = false) => {
+  if (loadMore) {
+    if (isFetchingMore.value || !hasMorePosts.value) return;
+    isFetchingMore.value = true;
+    currentPage.value++;
+  } else {
+    isLoadingPosts.value = true;
+    currentPage.value = 1;
+    hasMorePosts.value = true;
+  }
+  
   try {
     let loadedPosts: any[] = []
     if (feedMode.value === 'for-you') {
       const params = new URLSearchParams()
+      params.append('page', currentPage.value.toString())
       if (!nsfwMode.value) params.append('safeMode', 'true')
       const res = await api.get(`/posts/personalized?${params.toString()}`)
-      if (res.data.success) { cleanupObservers(); loadedPosts = res.data.data.posts }
+      if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
     } else if (feedMode.value === 'subscriptions') {
       const params = new URLSearchParams()
+      params.append('page', currentPage.value.toString())
       if (!nsfwMode.value) params.append('safeMode', 'true')
       const res = await api.get(`/follows/feed?${params.toString()}`)
-      if (res.data.success) { cleanupObservers(); loadedPosts = res.data.data.posts }
+      if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
     } else if (feedMode.value === 'trending') {
       const params = new URLSearchParams()
       params.append('sort', 'hot')
+      params.append('page', currentPage.value.toString())
       if (!nsfwMode.value) params.append('safeMode', 'true')
       if (selectedTag.value) params.append('tag', selectedTag.value)
       const res = await api.get(`/posts?${params.toString()}`)
-      if (res.data.success) { cleanupObservers(); loadedPosts = res.data.data.posts }
+      if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
     } else if (feedMode.value === 'news') {
       const params = new URLSearchParams()
       params.append('sort', 'new')
+      params.append('page', currentPage.value.toString())
       if (!nsfwMode.value) params.append('safeMode', 'true')
       if (selectedTag.value) params.append('tag', selectedTag.value)
       const res = await api.get(`/posts?${params.toString()}`)
-      if (res.data.success) { cleanupObservers(); loadedPosts = res.data.data.posts }
+      if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
     } else if (feedMode.value === 'photos') {
       const params = new URLSearchParams()
       params.append('hasMedia', 'true')
+      params.append('page', currentPage.value.toString())
       if (!nsfwMode.value) params.append('safeMode', 'true')
       const res = await api.get(`/posts?${params.toString()}`)
-      if (res.data.success) { cleanupObservers(); loadedPosts = res.data.data.posts }
+      if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
     } else if (feedMode.value === 'nsfw') {
-      const res = await api.get('/posts?safeMode=false')
-      if (res.data.success) { cleanupObservers(); loadedPosts = res.data.data.posts }
+      const res = await api.get(`/posts?safeMode=false&page=${currentPage.value}`)
+      if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
     } else {
       // fallback: general posts
       const params = new URLSearchParams()
@@ -289,19 +321,45 @@ const fetchPosts = async () => {
       if (selectedCategory.value) params.append('category', selectedCategory.value)
       if (selectedTag.value) params.append('tag', selectedTag.value)
       params.append('sort', sortBy.value)
+      params.append('page', currentPage.value.toString())
       if (!nsfwMode.value) params.append('safeMode', 'true')
       const res = await api.get(`/posts?${params.toString()}`)
-      if (res.data.success) { cleanupObservers(); loadedPosts = res.data.data.posts }
+      if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
     }
-    posts.value = loadedPosts
-    initPostStatus(loadedPosts)
-    fetchFollowStatusForPosts(loadedPosts)
+    
+    if (loadedPosts.length === 0) {
+      hasMorePosts.value = false;
+    } else {
+      if (loadMore) {
+        posts.value = [...posts.value, ...loadedPosts];
+      } else {
+        posts.value = loadedPosts;
+      }
+      initPostStatus(loadedPosts)
+      fetchFollowStatusForPosts(loadedPosts)
+    }
   } catch (e) {
     console.error('Failed to fetch posts', e)
   } finally {
     isLoadingPosts.value = false
+    isFetchingMore.value = false
   }
 }
+
+// Global infinite scroll listener
+const handleScroll = () => {
+  const bottomOfWindow = document.documentElement.scrollTop + window.innerHeight >= document.documentElement.offsetHeight - 200;
+  if (bottomOfWindow && !isLoadingPosts.value && !isFetchingMore.value && hasMorePosts.value) {
+    fetchPosts(true);
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('scroll', handleScroll);
+});
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll);
+});
 
 const selectedTag = ref('')
 watch([selectedCategory, sortBy, nsfwMode, feedMode, selectedTag], () => { fetchPosts() })
@@ -344,6 +402,12 @@ const trackAdClick = async (adId: string) => {
 
 // ── Recommended users (from DB) ──────────────────────────────────────────────
 const recommendedUsers = ref<any[]>([])
+// Скрываем AD-профили если NSFW выключен
+const visibleRecommendedUsers = computed(() =>
+  nsfwMode.value
+    ? recommendedUsers.value
+    : recommendedUsers.value.filter((u: any) => u.role !== 'ad')
+)
 const fetchRecommendedUsers = async () => {
   try {
     const res = await api.get('/users/recommended')
@@ -363,13 +427,59 @@ const fetchRecommendedUsers = async () => {
   } catch {}
 }
 
-// ── Trending events (hot posts used as event cards) ────────────────────────
-const trendingEvents = ref<any[]>([])
+// ── Upcoming events (real from groups/events API) ──────────────────────────
+const upcomingEvents = ref<any[]>([])
+const isLoadingEvents = ref(false)
 const fetchTrendingEvents = async () => {
+  isLoadingEvents.value = true
   try {
-    const res = await api.get('/posts?sort=hot')
-    if (res.data.success) trendingEvents.value = (res.data.data.posts as any[]).slice(0, 3)
+    const userCountry = auth.user?.country || ''
+    const res = await api.get('/groups/events', {
+      params: { upcoming: true, sort: 'popular', limit: 6, location: userCountry || undefined }
+    })
+    let events = res.data?.data?.events ?? []
+    // If user has country/location, try to boost local events to top
+    if (userCountry) {
+      const loc = userCountry.toLowerCase()
+      events.sort((a: any, b: any) => {
+        const aLocal = (a.location_name || '').toLowerCase().includes(loc) ? 1 : 0
+        const bLocal = (b.location_name || '').toLowerCase().includes(loc) ? 1 : 0
+        if (bLocal !== aLocal) return bLocal - aLocal
+        // Then by attendee count desc
+        if (b.attendee_count !== a.attendee_count) return b.attendee_count - a.attendee_count
+        // Then by nearest date
+        return new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime()
+      })
+    }
+    // If country filter returned nothing, reload without it
+    if (!events.length && userCountry) {
+      const res2 = await api.get('/groups/events', {
+        params: { upcoming: true, sort: 'popular', limit: 6 }
+      })
+      events = res2.data?.data?.events ?? []
+    }
+    upcomingEvents.value = events
   } catch {}
+  isLoadingEvents.value = false
+}
+
+// Format event date range nicely
+function formatEventDate(start: string, end: string): string {
+  const s = new Date(start)
+  const e = new Date(end)
+  const months = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
+  const day = (d: Date) => d.getDate()
+  const mon = (d: Date) => months[d.getMonth()]
+  const time = (d: Date) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+  // Same day
+  if (s.toDateString() === e.toDateString()) {
+    return `${day(s)} ${mon(s)} ${time(s)} – ${time(e)}`
+  }
+  // Same month
+  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
+    return `${day(s)} – ${day(e)} ${mon(s)} ${s.getFullYear()}`
+  }
+  return `${day(s)} ${mon(s)} – ${day(e)} ${mon(e)} ${e.getFullYear()}`
 }
 
 // ── Trending hashtags (with stats + trend direction) ─────────────────────────
@@ -615,11 +725,11 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
     <!-- Header -->
     <AppHeader v-model:nsfwMode="nsfwMode" />
 
-    <div class="max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-8">
+    <div class="max-w-7xl mx-auto flex pt-16 md:pt-24 px-3 md:px-4 gap-4 md:gap-8">
       <!-- Left Sidebar -->
       <AppSidebar v-model:activeNav="activeNav">
         <template #bottom>
-          <template v-if="activeAds.length">
+          <template v-if="activeAds.length && nsfwMode">
             <a v-for="ad in activeAds" :key="ad.id"
               :href="ad.link_url" target="_blank" rel="noopener noreferrer"
               @click="trackAdClick(ad.id)"
@@ -630,7 +740,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
                   <span class="text-[9px] font-bold uppercase tracking-wider text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Реклама</span>
                 </div>
                 <p class="text-xs font-bold text-white group-hover:text-brand-accent transition-colors leading-snug">{{ ad.title }}</p>
-                <p v-if="ad.description" class="text-[11px] text-brand-muted mt-0.5 line-clamp-2">{{ ad.description }}</p>
+                <p v-if="ad.description" class="text-[11px] text-white/55 mt-0.5 line-clamp-2">{{ ad.description }}</p>
               </div>
             </a>
           </template>
@@ -651,10 +761,10 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
           </div>
           <div v-else-if="bookmarkedPosts.length === 0" class="text-center py-16 bg-brand-card border border-brand-border rounded-3xl shadow-xl">
             <div class="w-20 h-20 bg-brand-border rounded-full flex items-center justify-center mx-auto mb-5">
-              <BIcon name="Bookmark" class="w-10 h-10 text-brand-muted" />
+              <BIcon name="Bookmark" class="w-10 h-10 text-white/55" />
             </div>
             <h3 class="text-2xl font-bold text-white mb-2">{{ langStore.t.noBookmarks }}</h3>
-            <p class="text-brand-muted">{{ langStore.t.saveToBookmarks }}</p>
+            <p class="text-white/55">{{ langStore.t.saveToBookmarks }}</p>
           </div>
           <div v-else class="space-y-4">
             <PostCard
@@ -677,10 +787,10 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
             <div class="flex flex-col items-center gap-1.5 cursor-pointer" @click="showStoryModal = true">
               <div class="relative">
                 <div class="w-16 h-16 rounded-2xl p-[2px] bg-brand-card border border-brand-border flex items-center justify-center">
-                  <BIcon name="Plus" class="w-6 h-6 text-brand-muted" />
+                  <BIcon name="Plus" class="w-6 h-6 text-white/55" />
                 </div>
               </div>
-              <span class="text-[10px] font-semibold text-brand-muted">История</span>
+              <span class="text-[10px] font-semibold text-white/55">История</span>
             </div>
             <div v-for="story in stories" :key="story.id" class="flex flex-col items-center gap-1.5 cursor-pointer" @click="openStory(story)">
               <div class="relative">
@@ -689,7 +799,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
                   <div v-else class="w-full h-full rounded-xl border-2 border-brand-card bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-lg">{{ (story.user.username ?? '?')[0].toUpperCase() }}</div>
                 </div>
               </div>
-              <span class="text-[10px] font-semibold text-brand-muted max-w-[64px] truncate">{{ story.user.username }}</span>
+              <span class="text-[10px] font-semibold text-white/55 max-w-[64px] truncate">{{ story.user.username }}</span>
             </div>
           </div>
         </div>
@@ -711,8 +821,8 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
           >
             <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" />
             <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
-            <span class="flex-1 text-sm text-brand-muted bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">Что нового?</span>
-            <div class="flex items-center gap-2 text-brand-muted group-hover:text-white transition-colors ml-1">
+            <span class="flex-1 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">Что нового?</span>
+            <div class="flex items-center gap-2 text-white/55 group-hover:text-white transition-colors ml-1">
               <BIcon name="ImagePlus" class="w-4.5 h-4.5" />
               <BIcon name="Hash" class="w-4.5 h-4.5" />
             </div>
@@ -779,7 +889,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
               <!-- Media -->
               <button
                 @click="mediaUploadRef?.openPicker()"
-                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-brand-muted hover:text-white hover:bg-brand-bg border border-transparent hover:border-brand-border transition-all"
+                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white/55 hover:text-white hover:bg-brand-bg border border-transparent hover:border-brand-border transition-all"
                 title="Прикрепить медиа"
               >
                 <BIcon name="ImagePlus" class="w-4 h-4" />
@@ -788,7 +898,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
 
               <!-- Tag input -->
               <div class="relative inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-transparent hover:border-brand-border hover:bg-brand-bg transition-all">
-                <BIcon name="Hash" class="w-4 h-4 text-brand-muted flex-shrink-0" />
+                <BIcon name="Hash" class="w-4 h-4 text-white/55 flex-shrink-0" />
                 <input
                   type="text"
                   v-model="tagInput"
@@ -801,7 +911,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
               <!-- Category -->
               <select
                 v-model="newPost.category"
-                class="px-3 py-2 rounded-xl text-xs text-brand-muted bg-transparent border border-transparent hover:border-brand-border hover:bg-brand-bg outline-none transition-all cursor-pointer"
+                class="px-3 py-2 rounded-xl text-xs text-white/55 bg-transparent border border-transparent hover:border-brand-border hover:bg-brand-bg outline-none transition-all cursor-pointer"
               >
                 <option value="" class="bg-brand-card">Категория</option>
                 <template v-for="c in allCategories" :key="c.id || 'empty-cat'">
@@ -815,7 +925,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
                 class="px-3 py-2 rounded-xl text-xs font-bold border transition-all"
                 :class="newPost.isNsfw
                   ? 'border-brand-error/60 text-brand-error bg-brand-error/10'
-                  : 'border-transparent text-brand-muted hover:border-brand-border hover:bg-brand-bg hover:text-white'"
+                  : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'"
               >
                 NSFW
               </button>
@@ -826,7 +936,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
               <!-- Cancel -->
               <button
                 @click="closeCreateModal"
-                class="text-xs font-semibold text-brand-muted hover:text-white transition-all"
+                class="text-xs font-semibold text-white/55 hover:text-white transition-all"
               >
                 Отмена
               </button>
@@ -837,64 +947,82 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
         <!-- Feed Filters -->
         <div class="flex flex-wrap gap-2 px-2">
           <button @click="feedMode = 'for-you'; selectedTag = ''"
-            :class="feedMode === 'for-you' ? 'bg-brand-card text-white' : 'text-brand-muted hover:text-white'"
+            :class="feedMode === 'for-you' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
             class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
             Для Вас
           </button>
           <button @click="feedMode = 'subscriptions'; selectedTag = ''"
-            :class="feedMode === 'subscriptions' ? 'bg-brand-card text-white' : 'text-brand-muted hover:text-white'"
+            :class="feedMode === 'subscriptions' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
             class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
             Подписки
           </button>
           <button @click="feedMode = 'news'; selectedTag = ''"
-            :class="feedMode === 'news' ? 'bg-brand-card text-white' : 'text-brand-muted hover:text-white'"
+            :class="feedMode === 'news' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
             class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
             Общие новости
           </button>
           <button @click="feedMode = 'photos'; selectedTag = ''"
-            :class="feedMode === 'photos' ? 'bg-brand-card text-white' : 'text-brand-muted hover:text-white'"
+            :class="feedMode === 'photos' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
             class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
             Фото
           </button>
           <button v-if="nsfwMode" @click="feedMode = 'nsfw'; selectedTag = ''"
-            :class="feedMode === 'nsfw' ? 'bg-brand-card text-white' : 'text-brand-muted hover:text-white'"
+            :class="feedMode === 'nsfw' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
             class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
             NSFW
           </button>
         </div>
 
-        <!-- Events Section -->
-        <div class="bg-brand-card border border-brand-border rounded-3xl p-5 shadow-xl">
-          <h3 class="font-bold text-white mb-4">Мероприятие в твоём городе:</h3>
-          <div class="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
-            <!-- Event Card 1 -->
-            <div class="min-w-[240px] bg-brand-bg rounded-2xl overflow-hidden border border-brand-border">
-              <div class="h-24 bg-gradient-to-r from-purple-900 to-indigo-900 relative">
-                <div class="absolute bottom-2 left-2 bg-black/50 backdrop-blur-sm px-2 py-1 rounded-lg text-[10px] font-bold text-white">FoxWood: back to 2000</div>
-              </div>
-              <div class="p-3">
-                <div class="flex items-center gap-1.5 text-[10px] text-brand-muted mb-1">
-                  <BIcon name="Calendar" class="w-3 h-3" /> 15 мая - 18 мая 2025
-                </div>
-                <div class="flex items-center gap-1.5 text-[10px] text-brand-muted">
-                  <BIcon name="MapPin" class="w-3 h-3" /> Москва
-                </div>
-              </div>
+        <!-- Events Section — Ближайшие крупные мероприятия -->
+        <div v-if="upcomingEvents.length || isLoadingEvents" class="bg-brand-card border border-brand-border rounded-3xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-white flex items-center gap-2">
+              <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+              Ближайшие крупные мероприятия
+            </h3>
+            <button class="text-xs text-brand-accent font-semibold hover:text-brand-accent-plus transition-colors"
+              @click="router.push('/groups?type=event')">Все →</button>
+          </div>
+          <!-- Loading skeleton -->
+          <div v-if="isLoadingEvents" class="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
+            <div v-for="n in 3" :key="n" class="min-w-[260px] bg-brand-bg rounded-2xl overflow-hidden border border-brand-border animate-pulse">
+              <div class="h-28 bg-white/5"></div>
+              <div class="p-3 space-y-2"><div class="h-3 bg-white/5 rounded w-2/3"></div><div class="h-3 bg-white/5 rounded w-1/2"></div></div>
             </div>
-            <!-- Event Card 2 -->
-            <div class="min-w-[240px] bg-brand-bg rounded-2xl overflow-hidden border border-brand-border">
-              <div class="h-24 bg-gradient-to-r from-orange-900 to-red-900 relative">
-                <div class="absolute bottom-2 left-2 bg-black/50 backdrop-blur-sm px-2 py-1 rounded-lg text-[10px] font-bold text-white">AnyFurry Fest V</div>
-              </div>
-              <div class="p-3">
-                <div class="flex items-center gap-1.5 text-[10px] text-brand-muted mb-1">
-                  <BIcon name="Calendar" class="w-3 h-3" /> 19 октября 12:00 - 21:00
+          </div>
+          <!-- Actual event cards -->
+          <div v-else class="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
+            <router-link v-for="ev in upcomingEvents" :key="ev.id"
+              :to="ev.group ? `/groups/${ev.group.slug}` : '#'"
+              class="min-w-[260px] max-w-[280px] bg-brand-bg rounded-2xl overflow-hidden border border-brand-border hover:border-brand-accent/40 transition-all group/ev flex-shrink-0">
+              <div class="h-28 relative overflow-hidden">
+                <img v-if="ev.banner_url" :src="ev.banner_url" class="w-full h-full object-cover group-hover/ev:scale-105 transition-transform duration-300" />
+                <div v-else class="h-full w-full" :style="`background:linear-gradient(135deg,${ev.group?.accent_color || '#4C67CF'}44,${ev.group?.accent_color || '#4C67CF'}11)`"></div>
+                <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                <div class="absolute bottom-2 left-2 right-2 flex items-end justify-between">
+                  <div class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-lg text-[11px] font-bold text-white truncate max-w-[75%]">{{ ev.title }}</div>
+                  <div v-if="ev.attendee_count > 0" class="bg-brand-accent/80 backdrop-blur-sm px-1.5 py-0.5 rounded-md text-[10px] font-bold text-white flex items-center gap-1 shrink-0">
+                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    {{ ev.attendee_count }}
+                  </div>
                 </div>
-                <div class="flex items-center gap-1.5 text-[10px] text-brand-muted">
-                  <BIcon name="MapPin" class="w-3 h-3" /> Москва, Новосущёвский переулок
+              </div>
+              <div class="p-3 space-y-1.5">
+                <div class="flex items-center gap-1.5 text-[11px] text-white/55">
+                  <BIcon name="Calendar" class="w-3 h-3 shrink-0" />
+                  <span>{{ formatEventDate(ev.starts_at, ev.ends_at) }}</span>
+                </div>
+                <div v-if="ev.location_name" class="flex items-center gap-1.5 text-[11px] text-white/55">
+                  <BIcon name="MapPin" class="w-3 h-3 shrink-0" />
+                  <span class="truncate">{{ ev.location_name }}</span>
+                </div>
+                <div v-if="ev.group" class="flex items-center gap-1.5 mt-1 pt-1.5 border-t border-brand-border/40">
+                  <img v-if="ev.group.avatar_url" :src="ev.group.avatar_url" class="w-4 h-4 rounded-full object-cover" />
+                  <div v-else class="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold" :style="`background:${ev.group.accent_color || '#4C67CF'}33;color:${ev.group.accent_color || '#4C67CF'}`">{{ (ev.group.name || '?')[0] }}</div>
+                  <span class="text-[10px] text-white/40 truncate">{{ ev.group.name }}</span>
                 </div>
               </div>
-            </div>
+            </router-link>
           </div>
         </div>
 
@@ -903,8 +1031,8 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
           <div v-if="selectedTag" class="flex items-center gap-2 bg-brand-card border border-brand-accent/30 rounded-2xl px-4 py-2.5 shadow-xl">
             <BIcon name="Hash" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
             <span class="text-sm font-bold text-brand-accent flex-1">#{{ selectedTag }}</span>
-            <span class="text-[10px] text-brand-muted">фильтр по тегу</span>
-            <button @click="selectedTag = ''" class="ml-1 p-1 text-brand-muted hover:text-white hover:bg-white/8 rounded-lg transition-colors">
+            <span class="text-[10px] text-white/55">фильтр по тегу</span>
+            <button @click="selectedTag = ''" class="ml-1 p-1 text-white/55 hover:text-white hover:bg-white/8 rounded-lg transition-colors">
               <BIcon name="X" class="w-3.5 h-3.5" />
             </button>
           </div>
@@ -917,10 +1045,10 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
 
         <div v-else-if="posts.length === 0" class="text-center py-16 bg-brand-card border border-brand-border rounded-3xl shadow-xl">
           <div class="w-20 h-20 bg-brand-border rounded-full flex items-center justify-center mx-auto mb-5">
-            <BIcon name="MessageSquare" class="w-10 h-10 text-brand-muted" />
+            <BIcon name="MessageSquare" class="w-10 h-10 text-white/55" />
           </div>
           <h3 class="text-2xl font-bold text-white mb-2">{{ langStore.t.noPosts }}</h3>
-          <p class="text-brand-muted">{{ langStore.t.beFirst }}</p>
+          <p class="text-white/55">{{ langStore.t.beFirst }}</p>
         </div>
 
         <div v-else class="space-y-4">
@@ -931,9 +1059,18 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
             :post="post"
             :show-follow-button="true"
             :initial-following="followStatus[post.author.id] ?? null"
+            :initial-vote="postStatus[post.id]?.userVote ?? 0"
+            :initial-repawed="postStatus[post.id]?.repawed ?? false"
+            :initial-favourited="postStatus[post.id]?.favourited ?? false"
             @deleted="(id: string) => { posts = posts.filter(p => p.id !== id) }"
             @updated="(p: any) => { const idx = posts.findIndex((x: any) => x.id === p.id); if (idx !== -1) posts[idx] = p }"
           />
+          <div v-if="isFetchingMore" class="flex justify-center p-4">
+            <BIcon name="Loader2" class="animate-spin text-brand-accent w-6 h-6" />
+          </div>
+          <div v-if="!hasMorePosts && posts.length > 0" class="text-center text-white/55 text-sm p-4">
+            Это все посты.
+          </div>
         </div>
 
         </template><!-- /v-else main feed -->
@@ -952,16 +1089,16 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
             </div>
           </div>
           <div v-else-if="trendingTags.length === 0" class="text-center py-6">
-            <p class="text-xs text-brand-muted">Хештеги появятся после публикации постов</p>
+            <p class="text-xs text-white/55">Хештеги появятся после публикации постов</p>
           </div>
           <div v-else class="space-y-3">
             <div v-for="tag in trendingTags.slice(0, 10)" :key="tag.name"
               class="flex items-center justify-between cursor-pointer group"
               @click="activeNav = 'home'; feedMode = 'trending'; selectedCategory = ''; sortBy = 'hot'; selectedTag = tag.name">
-              <span class="text-sm text-brand-muted group-hover:text-white transition-colors">{{ tag.name }}</span>
-              <div class="flex items-center gap-1.5 text-xs font-bold" :class="tag.trend === 'up' ? 'text-brand-success' : tag.trend === 'down' ? 'text-brand-error' : 'text-brand-muted'">
+              <span class="text-sm text-white/55 group-hover:text-white transition-colors">{{ tag.name }}</span>
+              <div class="flex items-center gap-1.5 text-xs font-bold" :class="tag.trend === 'up' ? 'text-brand-success' : tag.trend === 'down' ? 'text-brand-error' : 'text-white/55'">
                 <BIcon :name="tag.trend === 'up' ? 'TrendingUp' : tag.trend === 'down' ? 'TrendingDown' : 'Minus'" class="w-3 h-3" />
-                {{ (tag.totalCount / 1000).toFixed(1) }}k
+                {{ formatCount(tag.totalCount) }}
               </div>
             </div>
           </div>
@@ -974,7 +1111,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
           </div>
 
           <!-- Skeletons -->
-          <div v-if="recommendedUsers.length === 0" class="space-y-2">
+          <div v-if="visibleRecommendedUsers.length === 0" class="space-y-2">
             <div v-for="n in 3" :key="n" class="flex items-center gap-3 px-1 animate-pulse">
               <div class="w-10 h-10 rounded-full bg-white/8 flex-shrink-0"></div>
               <div class="flex-1 space-y-1.5">
@@ -988,7 +1125,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
           <!-- User list -->
           <div v-else class="space-y-1">
             <div
-              v-for="user in recommendedUsers.slice(0, 5)"
+              v-for="user in visibleRecommendedUsers.slice(0, 5)"
               :key="user.id"
               class="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-brand-card/60 transition-colors group cursor-pointer"
               @click="router.push(`/profile/${user.id}`)"
@@ -1014,7 +1151,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
               <!-- Name + username -->
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-bold text-white truncate leading-tight">{{ user.display_name || user.username }}</p>
-                <p class="text-xs text-brand-muted truncate">@{{ user.username }}</p>
+                <p class="text-xs text-white/55 truncate">@{{ user.username }}</p>
               </div>
 
               <!-- Follow button -->
@@ -1022,7 +1159,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
                 @click.stop="toggleFollow(user.id)"
                 class="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all"
                 :class="followStatus[user.id]
-                  ? 'border-brand-border text-brand-muted hover:border-rose-500/40 hover:text-rose-400'
+                  ? 'border-brand-border text-white/55 hover:border-rose-500/40 hover:text-rose-400'
                   : 'border-brand-accent/50 text-brand-accent hover:bg-brand-accent hover:text-white hover:border-brand-accent'"
               >
                 {{ followStatus[user.id] ? 'Читаю' : 'Читать' }}
@@ -1049,10 +1186,10 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
               </div>
               <div class="flex-1">
                 <p class="text-sm font-bold text-white">Новая история</p>
-                <p class="text-[11px] text-brand-muted">Исчезнет через 24 часа</p>
+                <p class="text-[11px] text-white/55">Исчезнет через 24 часа</p>
               </div>
               <button @click="showStoryModal = false; storyMediaUrl = ''; storyMediaUploadRef?.clearAll()"
-                class="p-1.5 text-brand-muted hover:text-white hover:bg-white/8 rounded-full transition-colors">
+                class="p-1.5 text-white/55 hover:text-white hover:bg-white/8 rounded-full transition-colors">
                 <BIcon name="X" class="w-4 h-4" />
               </button>
             </div>
@@ -1065,7 +1202,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
                   <BIcon name="ImagePlus" class="w-7 h-7 text-purple-400" />
                 </div>
                 <p class="font-bold text-white">Добавь фото или видео</p>
-                <p class="text-xs text-brand-muted">Нажми или перетащи сюда</p>
+                <p class="text-xs text-white/55">Нажми или перетащи сюда</p>
                 <MediaUpload ref="storyMediaUploadRef" type="posts" :multiple="false" @uploaded="handleStoryUploaded" />
               </div>
               <div v-else class="relative rounded-2xl overflow-hidden border border-brand-border shadow-xl">
@@ -1079,7 +1216,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
             </div>
             <!-- Footer -->
             <div class="flex items-center justify-between px-5 pb-5">
-              <div class="flex items-center gap-1.5 text-[11px] text-brand-muted">
+              <div class="flex items-center gap-1.5 text-[11px] text-white/55">
                 <BIcon name="Clock" class="w-3.5 h-3.5" />
                 <span>24 часа — автоудаление</span>
               </div>
@@ -1115,7 +1252,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
               </h2>
               <!-- Search input -->
               <div class="relative">
-                <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-muted" />
+                <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/55" />
                 <input
                   type="text"
                   v-model="searchQuery"
@@ -1132,27 +1269,27 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
               <!-- Feed mode -->
               <div class="flex flex-wrap gap-2">
                 <button @click="feedMode = 'for-you'"
-                  :class="feedMode === 'for-you' ? 'bg-brand-accent text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-brand-muted'"
+                  :class="feedMode === 'for-you' ? 'bg-brand-accent text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-white/55'"
                   class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all">
                   <BIcon name="Sparkles" class="w-4 h-4" />Для вас
                 </button>
                 <button @click="feedMode = 'subscriptions'"
-                  :class="feedMode === 'subscriptions' ? 'bg-brand-accent text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-brand-muted'"
+                  :class="feedMode === 'subscriptions' ? 'bg-brand-accent text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-white/55'"
                   class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all">
                   <BIcon name="Users" class="w-4 h-4" />Подписки
                 </button>
                 <button @click="feedMode = 'trending'"
-                  :class="feedMode === 'trending' ? 'bg-brand-yellow text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-brand-muted'"
+                  :class="feedMode === 'trending' ? 'bg-brand-yellow text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-white/55'"
                   class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all">
                   <BIcon name="TrendingUp" class="w-4 h-4" />В тренде
                 </button>
                 <button @click="feedMode = 'news'"
-                  :class="feedMode === 'news' ? 'bg-brand-success text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-brand-muted'"
+                  :class="feedMode === 'news' ? 'bg-brand-success text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-white/55'"
                   class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all">
                   <BIcon name="Newspaper" class="w-4 h-4" />Новости
                 </button>
                 <button @click="feedMode = 'photos'"
-                  :class="feedMode === 'photos' ? 'bg-brand-pink text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-brand-muted'"
+                  :class="feedMode === 'photos' ? 'bg-brand-pink text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-white/55'"
                   class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all">
                   <BIcon name="Image" class="w-4 h-4" />Фото
                 </button>
@@ -1164,12 +1301,12 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
               </div>
 
               <!-- Recommended users in search panel -->
-              <div v-if="recommendedUsers.length">
-                <h3 class="text-xs font-bold text-brand-muted uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <div v-if="visibleRecommendedUsers.length">
+                <h3 class="text-xs font-bold text-white/55 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                   <BIcon name="UserPlus" class="w-3.5 h-3.5" />Рекомендуемые
                 </h3>
                 <div class="space-y-2">
-                  <div v-for="user in recommendedUsers" :key="user.id"
+                  <div v-for="user in visibleRecommendedUsers" :key="user.id"
                     class="flex items-center gap-3 p-3 rounded-2xl bg-brand-bg border border-brand-border hover:bg-brand-border cursor-pointer"
                     @click="closeMobileSearch(); router.push(`/profile/${user.id}`)">
                     <img v-if="user.avatar_url" :src="user.avatar_url"
@@ -1177,7 +1314,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
                     <div v-else class="w-9 h-9 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (user.display_name || user.username || '?')[0].toUpperCase() }}</div>
                     <div class="flex-1 min-w-0">
                       <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
-                      <p class="text-xs text-brand-muted">@{{ user.username }}</p>
+                      <p class="text-xs text-white/55">@{{ user.username }}</p>
                     </div>
                     <button class="px-3 py-1.5 text-xs font-bold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-xl hover:bg-brand-accent/30 flex-shrink-0">
                       + Follow
@@ -1188,11 +1325,11 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
 
               <!-- Language selector (mobile) -->
               <div>
-                <h3 class="text-xs font-bold text-brand-muted uppercase tracking-wider mb-2">Язык</h3>
+                <h3 class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2">Язык</h3>
                 <div class="flex gap-2 flex-wrap">
                   <button v-for="lang in ['RU','EN','JP','CN']" :key="lang"
                     @click="langStore.setLang(lang)"
-                    :class="langStore.currentLang === lang ? 'bg-brand-accent/20 border-brand-accent text-brand-accent' : 'bg-brand-bg border-brand-border text-brand-muted'"
+                    :class="langStore.currentLang === lang ? 'bg-brand-accent/20 border-brand-accent text-brand-accent' : 'bg-brand-bg border-brand-border text-white/55'"
                     class="px-4 py-2 rounded-xl text-sm font-bold border transition-all">{{ lang }}</button>
                 </div>
               </div>
@@ -1220,48 +1357,79 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
         <button
           @click="activeNav = 'home'; mobileActiveTab = 'home'; router.push({ name: 'home' })"
           class="flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl transition-all duration-200 min-w-[64px]"
-          :class="mobileActiveTab === 'home' ? 'text-white' : 'text-brand-muted'">
+          :class="mobileActiveTab === 'home' ? 'text-white' : 'text-white/55'">
           <div class="relative">
             <div v-if="mobileActiveTab === 'home'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-accent/30 blur-sm"></div>
             <BIcon name="Home" class="w-6 h-6 relative transition-transform duration-200"
               :class="mobileActiveTab === 'home' ? 'scale-110 text-white' : ''" />
           </div>
-          <span class="text-[10px] font-semibold">Главная</span>
+          <span class="text-[10px] font-semibold">{{ langStore.t.home }}</span>
           <div v-if="mobileActiveTab === 'home'" class="w-1 h-1 rounded-full bg-brand-accent mt-0.5"></div>
         </button>
 
         <!-- Friends -->
         <button
-          @click="mobileActiveTab = 'friends'; activeNav = 'bookmarks'"
+          @click="mobileActiveTab = 'friends'; activeNav = 'friends'; router.push({ name: 'friends' })"
           class="flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl transition-all duration-200 min-w-[64px]"
-          :class="mobileActiveTab === 'friends' ? 'text-white' : 'text-brand-muted'">
+          :class="mobileActiveTab === 'friends' ? 'text-white' : 'text-white/55'">
           <div class="relative">
             <div v-if="mobileActiveTab === 'friends'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-purple/30 blur-sm"></div>
             <BIcon name="Users" class="w-6 h-6 relative transition-transform duration-200"
               :class="mobileActiveTab === 'friends' ? 'scale-110 text-brand-purple' : ''" />
           </div>
-          <span class="text-[10px] font-semibold">Друзья</span>
+          <span class="text-[10px] font-semibold">{{ langStore.t.friends }}</span>
           <div v-if="mobileActiveTab === 'friends'" class="w-1 h-1 rounded-full bg-brand-purple mt-0.5"></div>
         </button>
 
-        <!-- Create post button (center FAB) -->
-        <button
-          @click="activeNav = 'home'; mobileActiveTab = 'home'"
-          class="flex-shrink-0 w-14 h-14 rounded-2xl bg-brand-accent flex items-center justify-center shadow-lg shadow-brand-accent/40 hover:bg-brand-accent-plus hover:shadow-brand-accent/60 active:scale-95 transition-all duration-150 -mt-2">
-          <BIcon name="Plus" class="w-7 h-7 text-white" />
-        </button>
+        <!-- Mobile Hub (center FAB) -->
+        <div class="relative flex-shrink-0 -mt-2">
+          <!-- Hub backdrop -->
+          <Transition name="fade">
+            <div v-if="mobileHubOpen" class="fixed inset-0 z-[199] bg-black/50 backdrop-blur-sm" @click="mobileHubOpen = false"></div>
+          </Transition>
 
-        <!-- Search / Menu -->
+          <!-- Hub menu -->
+          <Transition name="hub-pop">
+            <div v-if="mobileHubOpen" class="absolute bottom-[72px] left-1/2 -translate-x-1/2 z-[201] flex flex-col items-center gap-2 w-44">
+              <button @click="mobileHubOpen = false; showPostForm = true; createTab = 'post'"
+                class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-brand-card/95 backdrop-blur-xl border border-brand-border text-white text-sm font-semibold hover:bg-brand-accent/20 transition-all">
+                <BIcon name="Edit3" class="w-5 h-5 text-brand-accent" /> {{ langStore.t.newPost }}
+              </button>
+              <button @click="mobileHubOpen = false; showStoryModal = true"
+                class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-brand-card/95 backdrop-blur-xl border border-brand-border text-white text-sm font-semibold hover:bg-brand-purple/20 transition-all">
+                <BIcon name="Camera" class="w-5 h-5 text-brand-purple" /> {{ langStore.t.story }}
+              </button>
+              <button @click="mobileHubOpen = false; router.push({ name: 'groups' })"
+                class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-brand-card/95 backdrop-blur-xl border border-brand-border text-white text-sm font-semibold hover:bg-brand-success/20 transition-all">
+                <BIcon name="Grid" class="w-5 h-5 text-brand-success" /> {{ langStore.t.groups }}
+              </button>
+              <button @click="mobileHubOpen = false; router.push({ name: 'bookmarks' })"
+                class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-brand-card/95 backdrop-blur-xl border border-brand-border text-white text-sm font-semibold hover:bg-brand-yellow/20 transition-all">
+                <BIcon name="Bookmark" class="w-5 h-5 text-brand-yellow" /> {{ langStore.t.bookmarks }}
+              </button>
+            </div>
+          </Transition>
+
+          <!-- Hub trigger button -->
+          <button
+            @click="mobileHubOpen = !mobileHubOpen"
+            class="w-14 h-14 rounded-2xl bg-brand-accent flex items-center justify-center shadow-lg shadow-brand-accent/40 hover:bg-brand-accent-plus hover:shadow-brand-accent/60 active:scale-95 transition-all duration-150"
+            :class="mobileHubOpen ? 'rotate-45 bg-brand-error shadow-brand-error/40' : ''">
+            <BIcon name="Plus" class="w-7 h-7 text-white transition-transform duration-200" />
+          </button>
+        </div>
+
+        <!-- Messages -->
         <button
-          @click="openMobileSearch"
+          @click="mobileActiveTab = 'search'; router.push({ name: 'messages' })"
           class="flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl transition-all duration-200 min-w-[64px]"
-          :class="mobileActiveTab === 'search' ? 'text-white' : 'text-brand-muted'">
+          :class="mobileActiveTab === 'search' ? 'text-white' : 'text-white/55'">
           <div class="relative">
             <div v-if="mobileActiveTab === 'search'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-success/30 blur-sm"></div>
-            <BIcon name="Search" class="w-6 h-6 relative transition-transform duration-200"
+            <BIcon name="MessageCircle" class="w-6 h-6 relative transition-transform duration-200"
               :class="mobileActiveTab === 'search' ? 'scale-110 text-brand-success' : ''" />
           </div>
-          <span class="text-[10px] font-semibold">Поиск</span>
+          <span class="text-[10px] font-semibold">{{ langStore.t.chats }}</span>
           <div v-if="mobileActiveTab === 'search'" class="w-1 h-1 rounded-full bg-brand-success mt-0.5"></div>
         </button>
 
@@ -1269,7 +1437,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
         <button
           @click="mobileActiveTab = 'profile'; activeNav = 'profile'; router.push(`/profile/${auth.user?.id}`)"
           class="flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl transition-all duration-200 min-w-[64px]"
-          :class="mobileActiveTab === 'profile' ? 'text-white' : 'text-brand-muted'">
+          :class="mobileActiveTab === 'profile' ? 'text-white' : 'text-white/55'">
           <div class="relative">
             <div v-if="mobileActiveTab === 'profile'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-yellow/30 blur-sm"></div>
             <img v-if="auth.avatarUrl" :src="auth.avatarUrl"
@@ -1277,7 +1445,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
               :class="mobileActiveTab === 'profile' ? 'border-brand-yellow scale-110' : 'border-white/20'" />
             <BIcon v-else name="User" class="w-6 h-6 relative" :class="mobileActiveTab === 'profile' ? 'scale-110 text-brand-yellow' : ''" />
           </div>
-          <span class="text-[10px] font-semibold">Профиль</span>
+          <span class="text-[10px] font-semibold">{{ langStore.t.profile }}</span>
           <div v-if="mobileActiveTab === 'profile'" class="w-1 h-1 rounded-full bg-brand-yellow mt-0.5"></div>
         </button>
       </div>
@@ -1394,6 +1562,17 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
   transform: translateY(-1px);
   box-shadow: 0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(76,103,207,0.08);
 }
+
+/* Hub pop animation */
+.hub-pop-enter-active { transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.hub-pop-leave-active { transition: all 0.15s ease-in; }
+.hub-pop-enter-from { opacity: 0; transform: translateX(-50%) translateY(16px) scale(0.85); }
+.hub-pop-leave-to   { opacity: 0; transform: translateX(-50%) translateY(16px) scale(0.85); }
+
+/* Fade transition */
+.fade-enter-active { transition: opacity 0.2s ease; }
+.fade-leave-active { transition: opacity 0.15s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 
 /* Feed scroll area thin scrollbar */
 .feed-area {

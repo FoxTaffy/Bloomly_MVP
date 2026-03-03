@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Follow" ADD COLUMN IF NOT EXISTS "notify_posts" BOOLEAN NOT NULL DEFAULT false;

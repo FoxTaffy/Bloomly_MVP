@@ -27,18 +27,29 @@ const PUBLIC_SELECT = {
   fursona_name:         true,
   fursona_color:        true,
   fursona_photo_url:    true,
+  has_fursuit:          true,
+  fursuit_photo_url:    true,
+  fursuit_description:  true,
+  fursuit_maker:        true,
   birth_date:           true,
   relationship_since:   true,
   pinned_post_id:       true,
   role:                 true,
   social_links:         true,
   interests:            true,
+  subscription_tier:    true,
+  profile_theme:        true,
+  profile_bg_url:       true,
+  profile_frame:        true,
+  is_verified:          true,
+  verified_at:          true,
 } as const;
 
 export const usersService = {
   async getUserById(id: string) {
-    return prisma.user.findUnique({
-      where: { id, deleted_at: null },
+    // Accept both UUID and username
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    const PROFILE_SELECT = {
       select: {
         ...PUBLIC_SELECT,
         _count: { select: { followers: true, following: true, posts: true } },
@@ -52,7 +63,17 @@ export const usersService = {
           },
         },
       },
-    });
+    }
+    if (isUUID) {
+      return prisma.user.findFirst({
+        where: { id, deleted_at: null },
+        ...PROFILE_SELECT,
+      })
+    }
+    return prisma.user.findFirst({
+      where: { username: id, deleted_at: null },
+      ...PROFILE_SELECT,
+    })
   },
 
   async updateUser(id: string, data: UpdateUserInput) {
@@ -82,6 +103,17 @@ export const usersService = {
 
       if (historyEntries.length > 0) {
         await prisma.mediaHistory.createMany({ data: historyEntries });
+      }
+    }
+
+    // ── Normalise birth_date to a proper Date if it's a plain string ────────
+    if (typeof (data as any).birth_date === 'string') {
+      const raw = (data as any).birth_date as string;
+      if (raw) {
+        // Accept "YYYY-MM-DD" or full ISO — always store as midnight UTC
+        (data as any).birth_date = new Date(raw.length <= 10 ? `${raw}T00:00:00.000Z` : raw);
+      } else {
+        (data as any).birth_date = null;
       }
     }
 
@@ -121,17 +153,6 @@ export const usersService = {
     });
   },
 
-  async toggleAdMode(userId: string) {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
-    if (!user) throw new Error('User not found');
-    const newRole = user.role === 'advertiser' ? 'user' : 'advertiser';
-    return prisma.user.update({
-      where: { id: userId },
-      data: { role: newRole },
-      select: { id: true, role: true },
-    });
-  },
-
   async searchUsers(query: string, limit = 8) {
     const q = query.trim();
     if (!q) return [];
@@ -149,16 +170,82 @@ export const usersService = {
     });
   },
 
-  async getRecommendedUsers(currentUserId: string, limit = 4) {
-    // Exclude current user + everyone they already follow
-    const followingRows = await prisma.follow.findMany({
-      where: { follower_id: currentUserId },
-      select: { following_id: true },
-    });
-    const excludeIds = new Set(followingRows.map((r) => r.following_id));
-    excludeIds.add(currentUserId);
+  async getRecommendedUsers(currentUserId: string, limit = 6) {
+    // ── Build excluded set: self + already-following + blocked ───────────
+    const [followingRows, blockRows] = await Promise.all([
+      prisma.follow.findMany({ where: { follower_id: currentUserId }, select: { following_id: true } }),
+      prisma.block.findMany({
+        where: { OR: [{ blocker_id: currentUserId }, { blocked_id: currentUserId }] },
+        select: { blocker_id: true, blocked_id: true },
+      }),
+    ]);
+    const myFollowingSet = new Set(followingRows.map((r) => r.following_id));
+    const excludeIds = new Set<string>([currentUserId, ...myFollowingSet]);
+    for (const b of blockRows) { excludeIds.add(b.blocker_id); excludeIds.add(b.blocked_id); }
 
-    // Grab users who have posted recently, excluding self and already-followed
+    // ── Find my friends (mutual follows = both follow each other) ────────
+    const followerRows = await prisma.follow.findMany({
+      where: { following_id: currentUserId },
+      select: { follower_id: true },
+    });
+    const myFollowerSet = new Set(followerRows.map((r) => r.follower_id));
+    const myFriendIds = Array.from(myFollowingSet).filter((id) => myFollowerSet.has(id));
+
+    // Also include accepted friendship connections
+    const friendshipRows = await prisma.friendship.findMany({
+      where: { OR: [{ requester_id: currentUserId }, { addressee_id: currentUserId }], status: 'accepted' },
+      select: { requester_id: true, addressee_id: true },
+    });
+    for (const f of friendshipRows) {
+      const friendId = f.requester_id === currentUserId ? f.addressee_id : f.requester_id;
+      if (!myFriendIds.includes(friendId)) myFriendIds.push(friendId);
+    }
+
+    if (myFriendIds.length > 0) {
+      // ── Friends-of-friends scoring ──────────────────────────────────
+      const friendFollowRows = await prisma.follow.findMany({
+        where: {
+          OR: [
+            { follower_id:  { in: myFriendIds } },
+            { following_id: { in: myFriendIds } },
+          ],
+        },
+        select: { follower_id: true, following_id: true },
+      });
+      const mutualCount = new Map<string, number>();
+      for (const row of friendFollowRows) {
+        for (const candidateId of [row.follower_id, row.following_id]) {
+          if (!excludeIds.has(candidateId)) {
+            mutualCount.set(candidateId, (mutualCount.get(candidateId) ?? 0) + 1);
+          }
+        }
+      }
+      if (mutualCount.size > 0) {
+        const sortedIds = Array.from(mutualCount.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, limit)
+          .map(([id]) => id);
+        const users = await prisma.user.findMany({
+          where: { id: { in: sortedIds }, deleted_at: null },
+          select: PUBLIC_SELECT,
+        });
+        const sorted = users.sort((a, b) => (mutualCount.get(b.id) ?? 0) - (mutualCount.get(a.id) ?? 0));
+        if (sorted.length >= limit) return sorted;
+        // fill rest below
+        const filled = new Set(sorted.map((u) => u.id));
+        filled.forEach((id) => excludeIds.add(id));
+        const extras = await prisma.post.findMany({
+          where: { deleted_at: null, author_id: { notIn: Array.from(excludeIds) } },
+          orderBy: { created_at: 'desc' },
+          select: { author: { select: PUBLIC_SELECT } },
+          distinct: ['author_id'],
+          take: limit - sorted.length,
+        });
+        return [...sorted, ...extras.map((p) => p.author)];
+      }
+    }
+
+    // ── Fallback: recently active users ──────────────────────────────────
     const active = await prisma.post.findMany({
       where: { deleted_at: null, author_id: { notIn: Array.from(excludeIds) } },
       orderBy: { created_at: 'desc' },
@@ -168,7 +255,6 @@ export const usersService = {
     });
     const authors = active.map((p) => p.author);
     if (authors.length >= limit) return authors;
-    // Fill remainder with newest users not yet in the list
     const existingIds = new Set(authors.map((u) => u.id));
     excludeIds.forEach((id) => existingIds.add(id));
     const extras = await prisma.user.findMany({
@@ -179,4 +265,43 @@ export const usersService = {
     });
     return [...authors, ...extras];
   },
+
+  async blockUser(blockerId: string, blockedId: string) {
+    if (blockerId === blockedId) throw new Error('Cannot block yourself');
+    await prisma.block.upsert({
+      where: { blocker_id_blocked_id: { blocker_id: blockerId, blocked_id: blockedId } },
+      create: { blocker_id: blockerId, blocked_id: blockedId },
+      update: {},
+    });
+  },
+
+  async unblockUser(blockerId: string, blockedId: string) {
+    await prisma.block.deleteMany({
+      where: { blocker_id: blockerId, blocked_id: blockedId },
+    });
+  },
+
+  async getBlockStatus(viewerId: string, targetId: string) {
+    const b = await prisma.block.findUnique({
+      where: { blocker_id_blocked_id: { blocker_id: viewerId, blocked_id: targetId } },
+    });
+    return { blocked: !!b };
+  },
+
+  async setPublicKey(userId: string, publicKey: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { public_key: publicKey },
+      select: { id: true },
+    });
+  },
+
+  async getPublicKey(userId: string): Promise<string | null> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { public_key: true },
+    });
+    return user?.public_key ?? null;
+  },
+
 };

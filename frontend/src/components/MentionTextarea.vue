@@ -100,7 +100,7 @@ const closeDropdown = () => { showDropdown.value = false }
           :key="user.id"
           @mousedown.prevent="pickUser(user)"
           class="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors"
-          :class="i === dropdownActive ? 'bg-brand-accent/20 text-white' : 'text-brand-muted hover:bg-brand-border hover:text-white'"
+          :class="i === dropdownActive ? 'bg-brand-accent/20 text-white' : 'text-white/55 hover:bg-brand-border hover:text-white'"
         >
           <img v-if="user.avatar_url"
             :src="user.avatar_url"
@@ -109,7 +109,7 @@ const closeDropdown = () => { showDropdown.value = false }
           <div v-else class="w-8 h-8 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs">{{ (user.display_name || user.username || '?')[0].toUpperCase() }}</div>
           <div class="min-w-0">
             <div class="font-bold text-sm truncate">{{ user.display_name || user.username }}</div>
-            <div class="text-xs text-brand-muted truncate">@{{ user.username }}</div>
+            <div class="text-xs text-white/55 truncate">@{{ user.username }}</div>
           </div>
           <BIcon name="AtSign" class="w-3.5 h-3.5 ml-auto flex-shrink-0 opacity-50" />
         </button>

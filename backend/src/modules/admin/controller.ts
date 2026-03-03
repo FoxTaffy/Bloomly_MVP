@@ -55,6 +55,30 @@ export const deleteUserHandler = async (
   return reply.send({ success: true, data: null, error: null });
 };
 
+export const getArchivedUsersHandler = async (
+  req: FastifyRequest<{ Querystring: { page?: string; limit?: string; search?: string } }>,
+  reply: FastifyReply,
+) => {
+  if (!requireMod(req, reply)) return;
+  const page  = parseInt(req.query.page  || '1');
+  const limit = parseInt(req.query.limit || '30');
+  const result = await adminService.getArchivedUsers(page, limit, req.query.search);
+  return reply.send({ success: true, data: result, error: null });
+};
+
+export const restoreUserHandler = async (
+  req: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  if (!requireMod(req, reply)) return;
+  const actor = req.user as JwtUser;
+  if (actor.role !== 'admin') {
+    return reply.code(403).send({ success: false, data: null, error: { code: 'FORBIDDEN', message: 'Only admins can restore users' } });
+  }
+  const user = await adminService.restoreUser(req.params.id);
+  return reply.send({ success: true, data: { user }, error: null });
+};
+
 export const getPostsAdminHandler = async (
   req: FastifyRequest<{ Querystring: { page?: string; limit?: string; search?: string } }>,
   reply: FastifyReply,

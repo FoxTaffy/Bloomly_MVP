@@ -13,6 +13,8 @@ export function useAnalytics() {
   };
 
   const observePost = (element: HTMLElement, postId: string) => {
+    // Guard: element must be a real DOM Element
+    if (!(element instanceof Element)) return () => {};
     let timeoutId: ReturnType<typeof setTimeout>;
 
     const observer = new IntersectionObserver(

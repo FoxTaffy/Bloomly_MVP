@@ -73,7 +73,9 @@ export const postService = {
   },
 
   async getPosts(query: GetPostsQuery = {}) {
-    const { search, category, tag, sort = 'new', safeMode = false, hasMedia = false } = query;
+    const { search, category, tag, sort = 'new', safeMode = false, hasMedia = false, page, limit } = query;
+    const pageNum = page ? Math.max(1, parseInt(page, 10)) : 1;
+    const limitNum = limit ? Math.min(100, Math.max(1, parseInt(limit, 10))) : 20;
 
     const where: any = { deleted_at: null };
     if (safeMode) where.is_nsfw = false;
@@ -100,7 +102,8 @@ export const postService = {
     return prisma.post.findMany({
       where,
       orderBy: sort === 'hot' ? { rating: 'desc' } : { created_at: 'desc' },
-      take: 50,
+      skip: (pageNum - 1) * limitNum,
+      take: limitNum,
       include: {
         author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
@@ -109,7 +112,7 @@ export const postService = {
     });
   },
 
-  async getPersonalizedPosts(userId: string, safeMode: boolean = false) {
+  async getPersonalizedPosts(userId: string, safeMode: boolean = false, pageNum: number = 1, limitNum: number = 30) {
     const postInclude = {
       author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
       tags: { include: { tag: true } },
@@ -149,12 +152,18 @@ export const postService = {
     let personalizedPosts: any[] = [];
     let discoverPosts: any[] = [];
 
+    const pLimit = Math.ceil(limitNum * 0.6);
+    const dLimit = limitNum - pLimit;
+    const pSkip = (pageNum - 1) * pLimit;
+    const dSkip = (pageNum - 1) * dLimit;
+
     if (topCategories.length > 0) {
       // 60% from favourite categories
       personalizedPosts = await prisma.post.findMany({
         where: { deleted_at: null, category: { in: topCategories }, id: excludeIds, ...nsfwFilter },
         orderBy: { rating: 'desc' },
-        take: 18,
+        skip: pSkip,
+        take: pLimit,
         include: postInclude,
       });
 
@@ -167,7 +176,8 @@ export const postService = {
           ...nsfwFilter,
         },
         orderBy: [{ rating: 'desc' }, { created_at: 'desc' }],
-        take: 12,
+        skip: dSkip,
+        take: dLimit,
         include: postInclude,
       });
     } else {
@@ -175,7 +185,8 @@ export const postService = {
       discoverPosts = await prisma.post.findMany({
         where: { deleted_at: null, id: excludeIds, ...nsfwFilter },
         orderBy: [{ rating: 'desc' }, { created_at: 'desc' }],
-        take: 30,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
         include: postInclude,
       });
     }

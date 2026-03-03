@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { registerHandler, loginHandler } from './controller.js';
+import { registerHandler, loginHandler, statsHandler, forgotPasswordHandler, resetPasswordHandler } from './controller.js';
 import type { JwtPayload } from './types.js';
 import prisma from '../../config/prisma.js';
 
@@ -33,6 +33,17 @@ const loginSchema = {
 };
 
 export async function authRoutes(fastify: FastifyInstance) {
+  // Public stats
+  fastify.get('/stats', statsHandler);
+
+  // Password reset (no auth)
+  fastify.post('/forgot-password', {
+    schema: { body: { type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' } } } },
+  }, forgotPasswordHandler);
+  fastify.post('/reset-password', {
+    schema: { body: { type: 'object', required: ['code', 'password'], properties: { code: { type: 'string' }, password: { type: 'string', minLength: 6 } } } },
+  }, resetPasswordHandler);
+
   fastify.post('/register', { schema: registerSchema }, registerHandler);
 
   // Strict rate-limit for login: max 10 attempts per minute per IP (brute-force protection)

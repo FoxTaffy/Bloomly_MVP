@@ -97,6 +97,40 @@ export const adminService = {
     return prisma.user.update({ where: { id: userId }, data: { deleted_at: new Date() } });
   },
 
+  async restoreUser(userId: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { deleted_at: null },
+      select: { id: true, username: true, display_name: true, email: true, role: true, badge_type: true, avatar_url: true, created_at: true, deleted_at: true },
+    });
+  },
+
+  async getArchivedUsers(page = 1, limit = 30, search?: string) {
+    const skip = (page - 1) * limit;
+    const where: any = { deleted_at: { not: null } };
+    if (search) where.OR = [
+      { username:     { contains: search, mode: 'insensitive' } },
+      { display_name: { contains: search, mode: 'insensitive' } },
+      { email:        { contains: search, mode: 'insensitive' } },
+    ];
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { deleted_at: 'desc' },
+        select: {
+          id: true, username: true, display_name: true, email: true,
+          role: true, badge_type: true, avatar_url: true,
+          created_at: true, deleted_at: true,
+          _count: { select: { posts: true, followers: true, following: true } },
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+    return { users, total, page, pages: Math.ceil(total / limit) };
+  },
+
   // ── Posts moderation ───────────────────────────────────────────────────────
   async getPosts(page = 1, limit = 30, search?: string) {
     const skip = (page - 1) * limit;

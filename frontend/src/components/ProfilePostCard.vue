@@ -20,7 +20,7 @@
                 class="font-bold text-white hover:text-brand-accent transition-colors text-sm truncate"
               >{{ post.author.display_name || post.author.username }}</router-link>
               <span v-if="showRepawLabel"
-                class="inline-flex items-center gap-1 text-[10px] text-brand-muted bg-brand-card border border-brand-border px-1.5 py-0.5 rounded-md font-semibold">
+                class="inline-flex items-center gap-1 text-[10px] text-white/55 bg-brand-card border border-brand-border px-1.5 py-0.5 rounded-md font-semibold">
                 <Repeat2 class="w-3 h-3" /> Репав
               </span>
               <span v-if="isPinnedThis"
@@ -28,7 +28,7 @@
                 <Pin class="w-3 h-3" /> Закреплён
               </span>
             </div>
-            <p class="text-[11px] text-brand-muted">@{{ post.author.username }} · {{ fmtDate(post.created_at) }}</p>
+            <p class="text-[11px] text-white/55">@{{ post.author.username }} · {{ fmtDate(post.created_at) }}</p>
           </div>
         </div>
 
@@ -36,7 +36,7 @@
         <div class="relative flex-shrink-0">
           <button
             @click.stop="showMenu = !showMenu"
-            class="p-1.5 text-brand-muted hover:text-white rounded-lg hover:bg-brand-card transition opacity-0 group-hover:opacity-100"
+            class="p-1.5 text-white/55 hover:text-white rounded-lg hover:bg-brand-card transition opacity-0 group-hover:opacity-100"
           >
             <MoreVertical class="w-4 h-4" />
           </button>
@@ -88,7 +88,7 @@
           class="w-full bg-brand-card border border-brand-border rounded-lg px-3 py-2 text-sm text-white resize-none focus:border-brand-accent outline-none"
         ></textarea>
         <div class="flex items-center gap-2 mt-2">
-          <button @click="isEditing = false" class="px-3 py-1.5 text-xs text-brand-muted hover:text-white transition">Отмена</button>
+          <button @click="isEditing = false" class="px-3 py-1.5 text-xs text-white/55 hover:text-white transition">Отмена</button>
           <button @click="saveEdit" :disabled="isSaving"
             class="px-4 py-1.5 bg-brand-accent text-white text-xs font-bold rounded-lg disabled:opacity-50 transition hover:bg-brand-accent-plus">
             {{ isSaving ? 'Сохранение...' : 'Сохранить' }}
@@ -113,18 +113,7 @@
         :class="post.media_urls.length === 1 ? '' : 'grid grid-cols-2 gap-0.5'"
       >
         <template v-for="(url, i) in post.media_urls" :key="i">
-          <img
-            v-if="isImg(url)"
-            :src="url"
-            class="w-full object-cover cursor-pointer"
-            :class="post.media_urls.length > 1
-              ? 'max-h-44 rounded-none first:rounded-tl-xl first:rounded-bl-xl last:rounded-tr-xl last:rounded-br-xl'
-              : 'max-h-80 rounded-xl'"
-            loading="lazy"
-            @click="showLightboxUrl = url"
-          />
-          <video v-else :src="url" controls class="w-full"
-            :class="post.media_urls.length > 1 ? 'max-h-44' : 'max-h-80 rounded-xl'" />
+          <CustomPlayer :src="url" @click-image="showLightboxUrl = url" class="w-full h-full object-cover" />
         </template>
       </div>
 
@@ -141,26 +130,26 @@
         <!-- Upvote -->
         <button @click="vote(1)"
           class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-bold transition-all min-w-[52px]"
-          :class="localVote === 1 ? 'text-brand-success bg-brand-success/10' : 'text-brand-muted hover:text-brand-success hover:bg-brand-success/8'">
-          <ChevronUp class="w-4 h-4 flex-shrink-0" />
+          :class="localVote === 1 ? 'text-brand-success bg-brand-success/10' : 'text-white/55 hover:text-brand-success hover:bg-brand-success/8'">
+          <ThumbsUp class="w-4 h-4 flex-shrink-0" />
           {{ localRating }}
         </button>
         <!-- Downvote -->
         <button @click="vote(-1)"
           class="p-1.5 rounded-lg text-sm transition-all"
-          :class="localVote === -1 ? 'text-brand-error bg-brand-error/10' : 'text-brand-muted hover:text-brand-error hover:bg-brand-error/8'">
-          <ChevronDown class="w-4 h-4" />
+          :class="localVote === -1 ? 'text-brand-error bg-brand-error/10' : 'text-white/55 hover:text-brand-error hover:bg-brand-error/8'">
+          <ThumbsDown class="w-4 h-4" />
         </button>
         <!-- Repaw -->
         <button @click="toggleRepaw"
           class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-bold transition-all"
-          :class="localRepawed ? 'text-brand-accent bg-brand-accent/10' : 'text-brand-muted hover:text-brand-accent hover:bg-brand-accent/8'">
+          :class="localRepawed ? 'text-brand-accent bg-brand-accent/10' : 'text-white/55 hover:text-brand-accent hover:bg-brand-accent/8'">
           <Repeat2 class="w-4 h-4 flex-shrink-0" />
           {{ localRepaws }}
         </button>
         <!-- Comments -->
         <button @click="isExpanded = !isExpanded"
-          class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-bold text-brand-muted hover:text-brand-accent-minus hover:bg-brand-card transition-all ml-auto">
+          class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-bold text-white/55 hover:text-brand-accent-minus hover:bg-brand-card transition-all ml-auto">
           <MessageCircle class="w-4 h-4 flex-shrink-0" />
           {{ post._count?.comments ?? 0 }}
         </button>
@@ -193,8 +182,9 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
 import PostComments from '@/components/PostComments.vue'
+import CustomPlayer from '@/components/CustomPlayer.vue'
 import {
-  ChevronUp, ChevronDown, Repeat2, MessageCircle, Pin, PinOff,
+  ThumbsUp, ThumbsDown, Repeat2, MessageCircle, Pin, PinOff,
   Pencil, Trash2, MoreVertical, Maximize2, X
 } from 'lucide-vue-next'
 

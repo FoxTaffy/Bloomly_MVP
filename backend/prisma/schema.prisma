@@ -1,112 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model User {
-  id           String    @id @default(uuid()) @db.Uuid
-  email        String    @unique
-  username     String    @unique
-  password     String
-  role         String    @default("user")
-  display_name String?   @db.VarChar(50)
-  bio          String?   @db.VarChar(300)
-  avatar_url   String?
-  banner_url   String?
-  status       String?   @db.VarChar(100)
-  persona      String?
-  likes        String[]
-  dislikes     String[]
-  accent_color String?
-  website      String?
-  location     String?
-  pronouns     String?
-  badge_type      String?   // admin | moderator | creator | verified
-  job_title            String?   @db.VarChar(80)
-  relationship_status  String?   @db.VarChar(50)
-  relationship_with    String?   @db.Uuid
-  country              String?   @db.VarChar(80)
-  fursona_name         String?   @db.VarChar(80)
-  fursona_color        String?   @db.VarChar(50)
-  fursona_photo_url    String?
-  birth_date           DateTime?
-  relationship_since   DateTime?
-  pinned_post_id       String?   @db.Uuid
-  social_links         Json?     @default("{}")
-  interests            String[]  @default([])
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
-  deleted_at      DateTime?
-
-  wallet     Wallet?
-  posts      Post[]
-  votes      Vote[]
-  stories    Story[]
-  activities UserActivity[]
-  repaws        Repaw[]
-  favourites    Favourite[]
-  comments      Comment[]
-  commentVotes  CommentVote[]
-  followers     Follow[]       @relation("UserFollowers")
-  following     Follow[]       @relation("UserFollowing")
-  pinnedPost    Post?          @relation("UserPinnedPost", fields: [pinned_post_id], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  notifications Notification[] @relation("NotificationReceiver")
-  sentNotifications Notification[] @relation("NotificationSender")
-  reports       Report[]       @relation("ReportReporter")
-  resolvedReports Report[]     @relation("ReportResolver")
-  adRequests    Advertisement[] @relation("AdRequester")
-  adReviews     Advertisement[] @relation("AdReviewer")
-  mediaHistory  MediaHistory[]
+  id                           String                @id @default(uuid()) @db.Uuid
+  email                        String                @unique
+  username                     String                @unique
+  password                     String
+  display_name                 String?               @db.VarChar(50)
+  created_at                   DateTime              @default(now())
+  updated_at                   DateTime              @updatedAt
+  deleted_at                   DateTime?
+  role                         String                @default("user")
+  bio                          String?               @db.VarChar(300)
+  avatar_url                   String?
+  banner_url                   String?
+  status                       String?               @db.VarChar(100)
+  persona                      String?
+  likes                        String[]
+  dislikes                     String[]
+  accent_color                 String?
+  website                      String?
+  location                     String?
+  pronouns                     String?
+  badge_type                   String?
+  job_title                    String?               @db.VarChar(80)
+  pinned_post_id               String?               @db.Uuid
+  relationship_status          String?               @db.VarChar(50)
+  country                      String?               @db.VarChar(80)
+  fursona_name                 String?               @db.VarChar(80)
+  relationship_with            String?               @db.Uuid
+  birth_date                   DateTime?             @db.Timestamp(6)
+  fursona_color                String?               @db.VarChar(50)
+  relationship_since           DateTime?             @db.Timestamp(6)
+  fursona_photo_url            String?
+  has_fursuit                  Boolean               @default(false)
+  fursuit_photo_url            String?
+  fursuit_description          String?
+  fursuit_maker                String?               @db.VarChar(200)
+  social_links                 Json?                 @default("{}")
+  interests                    String[]              @default([])
+  public_key                   String?
+  subscription_tier            String                @default("free") @db.VarChar(20)
+  profile_theme                String?               @db.VarChar(50)
+  profile_bg_url               String?
+  profile_frame                String?               @db.VarChar(50)
+  adRequests                   Advertisement[]       @relation("AdRequester")
+  adReviews                    Advertisement[]       @relation("AdReviewer")
+  comments                     Comment[]
+  commentVotes                 CommentVote[]
+  favourites                   Favourite[]
+  followers                    Follow[]              @relation("UserFollowers")
+  following                    Follow[]              @relation("UserFollowing")
+  mediaHistory                 MediaHistory[]
+  notifications                Notification[]        @relation("NotificationReceiver")
+  sentNotifications            Notification[]        @relation("NotificationSender")
+  posts                        Post[]
   sentRelationshipRequests     RelationshipRequest[] @relation("SentRelationshipRequests")
   receivedRelationshipRequests RelationshipRequest[] @relation("ReceivedRelationshipRequests")
+  repaws                       Repaw[]
+  reports                      Report[]              @relation("ReportReporter")
+  resolvedReports              Report[]              @relation("ReportResolver")
+  stories                      Story[]
+  pinnedPost                   Post?                 @relation("UserPinnedPost", fields: [pinned_post_id], references: [id])
+  activities                   UserActivity[]
+  votes                        Vote[]
+  wallet                       Wallet?
+  conversationParticipants     ConversationParticipant[]
+  sentMessages                 Message[]
+  blocksGiven                  Block[]  @relation("Blocker")
+  blocksReceived               Block[]  @relation("Blocked")
+  sentFriendRequests           Friendship[] @relation("FriendshipRequester")
+  receivedFriendRequests       Friendship[] @relation("FriendshipAddressee")
+  subscriptionPlans            SubscriptionPlan[]
+  is_verified                  Boolean               @default(false)
+  verified_at                  DateTime?
+  ownedGroups                  Group[]       @relation("GroupOwner")
+  groupMemberships             GroupMember[]
+  soonBadges                   SoonBadge[]
+  verificationRequests         VerificationRequest[]
+  groupRatings                 GroupRating[]
 }
 
 model Post {
-  id         String    @id @default(uuid()) @db.Uuid
+  id         String         @id @default(uuid()) @db.Uuid
   content    String
-  category   String?
-  author_id  String    @db.Uuid
-  rating     Int       @default(0)
-  is_nsfw    Boolean   @default(false)
-  media_urls String[]  @default([])
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
+  author_id  String         @db.Uuid
+  rating     Int            @default(0)
+  is_nsfw    Boolean        @default(false)
+  created_at DateTime       @default(now())
+  updated_at DateTime       @updatedAt
   deleted_at DateTime?
-
-  author     User          @relation(fields: [author_id], references: [id])
-  votes      Vote[]
-  tags       PostTag[]
-  activities UserActivity[]
-  repaws     Repaw[]
-  favourites Favourite[]
+  category   String?
+  media_urls String[]       @default([])
   comments   Comment[]
-  pinnedBy   User[]        @relation("UserPinnedPost")
+  favourites Favourite[]
+  author     User           @relation(fields: [author_id], references: [id])
+  tags       PostTag[]
+  repaws     Repaw[]
+  pinnedBy   User[]         @relation("UserPinnedPost")
+  groupPosts GroupPost[]
+  activities UserActivity[]
+  votes      Vote[]
 }
 
 model Repaw {
-  id         String   @id @default(uuid()) @db.Uuid
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id    String   @db.Uuid
   post_id    String   @db.Uuid
   created_at DateTime @default(now())
-
-  user User @relation(fields: [user_id], references: [id])
-  post Post @relation(fields: [post_id], references: [id])
+  post       Post     @relation(fields: [post_id], references: [id])
+  user       User     @relation(fields: [user_id], references: [id])
 
   @@unique([user_id, post_id])
 }
 
 model Favourite {
-  id         String   @id @default(uuid()) @db.Uuid
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id    String   @db.Uuid
   post_id    String   @db.Uuid
   created_at DateTime @default(now())
-
-  user User @relation(fields: [user_id], references: [id])
-  post Post @relation(fields: [post_id], references: [id])
+  post       Post     @relation(fields: [post_id], references: [id])
+  user       User     @relation(fields: [user_id], references: [id])
 
   @@unique([user_id, post_id])
 }
@@ -132,24 +152,19 @@ model Story {
   image_url  String?
   created_at DateTime @default(now())
   expires_at DateTime
-
-  user User @relation(fields: [user_id], references: [id])
+  user       User     @relation(fields: [user_id], references: [id])
 }
 
-// One record per user+post pair (enforced by @@unique).
-// Soft-delete (deleted_at != null) means the vote is retracted;
-// restoring (deleted_at = null) reactivates it without changing the rating history.
 model Vote {
   id         String    @id @default(uuid()) @db.Uuid
   user_id    String    @db.Uuid
   post_id    String    @db.Uuid
-  value      Int       // 1 (upvote) or -1 (downvote)
+  value      Int
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt
   deleted_at DateTime?
-
-  user User @relation(fields: [user_id], references: [id])
-  post Post @relation(fields: [post_id], references: [id])
+  post       Post      @relation(fields: [post_id], references: [id])
+  user       User      @relation(fields: [user_id], references: [id])
 
   @@unique([user_id, post_id])
 }
@@ -161,62 +176,60 @@ model Wallet {
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt
   deleted_at DateTime?
-
-  user User @relation(fields: [user_id], references: [id])
+  user       User      @relation(fields: [user_id], references: [id])
 }
 
 model UserActivity {
-  id         String   @id @default(uuid()) @db.Uuid
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id    String   @db.Uuid
   post_id    String   @db.Uuid
-  type       String   // VIEW, LIKE, CLICK
+  type       String
   duration   Int?
-  created_at DateTime @default(now())
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  post       Post     @relation(fields: [post_id], references: [id])
+  user       User     @relation(fields: [user_id], references: [id])
 
-  user User @relation(fields: [user_id], references: [id])
-  post Post @relation(fields: [post_id], references: [id])
+  @@index([user_id, created_at(sort: Desc)])
 }
 
 model Comment {
-  id         String    @id @default(uuid()) @db.Uuid
-  post_id    String    @db.Uuid
-  author_id  String    @db.Uuid
-  parent_id  String?   @db.Uuid
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  post_id    String        @db.Uuid
+  author_id  String        @db.Uuid
+  parent_id  String?       @db.Uuid
   content    String
-  rating     Int       @default(0)
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
+  rating     Int           @default(0)
+  created_at DateTime      @default(now())
+  updated_at DateTime      @default(now()) @updatedAt
   deleted_at DateTime?
-
-  post     Post          @relation(fields: [post_id], references: [id])
-  author   User          @relation(fields: [author_id], references: [id])
-  parent   Comment?      @relation("CommentReplies", fields: [parent_id], references: [id])
-  replies  Comment[]     @relation("CommentReplies")
-  votes    CommentVote[]
+  author     User          @relation(fields: [author_id], references: [id])
+  parent     Comment?      @relation("CommentReplies", fields: [parent_id], references: [id])
+  replies    Comment[]     @relation("CommentReplies")
+  post       Post          @relation(fields: [post_id], references: [id])
+  votes      CommentVote[]
 }
 
 model CommentVote {
-  id         String    @id @default(uuid()) @db.Uuid
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id    String    @db.Uuid
   comment_id String    @db.Uuid
-  value      Int       // 1 or -1
+  value      Int
   created_at DateTime  @default(now())
   deleted_at DateTime?
-
-  user    User    @relation(fields: [user_id], references: [id])
-  comment Comment @relation(fields: [comment_id], references: [id])
+  comment    Comment   @relation(fields: [comment_id], references: [id])
+  user       User      @relation(fields: [user_id], references: [id])
 
   @@unique([user_id, comment_id])
 }
 
 model Follow {
-  id           String   @id @default(uuid()) @db.Uuid
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   follower_id  String   @db.Uuid
   following_id String   @db.Uuid
   created_at   DateTime @default(now())
-
-  follower  User @relation("UserFollowers", fields: [follower_id],  references: [id])
-  following User @relation("UserFollowing", fields: [following_id], references: [id])
+  notify_posts Boolean  @default(false)
+  follower     User     @relation("UserFollowers", fields: [follower_id], references: [id])
+  following    User     @relation("UserFollowing", fields: [following_id], references: [id])
 
   @@unique([follower_id, following_id])
   @@index([follower_id])
@@ -224,31 +237,30 @@ model Follow {
 }
 
 model Notification {
-  id          String   @id @default(uuid()) @db.Uuid
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   receiver_id String   @db.Uuid
   sender_id   String?  @db.Uuid
-  type        String   // FOLLOW | LIKE | COMMENT | REPAW | MENTION
+  type        String
   post_id     String?  @db.Uuid
   comment_id  String?  @db.Uuid
-  ref_id      String?  @db.Uuid
   read        Boolean  @default(false)
   created_at  DateTime @default(now())
-
-  receiver User  @relation("NotificationReceiver", fields: [receiver_id], references: [id], onDelete: Cascade)
-  sender   User? @relation("NotificationSender",   fields: [sender_id],   references: [id], onDelete: SetNull)
+  ref_id      String?  @db.Uuid
+  receiver    User     @relation("NotificationReceiver", fields: [receiver_id], references: [id], onDelete: Cascade)
+  sender      User?    @relation("NotificationSender", fields: [sender_id], references: [id])
 
   @@index([receiver_id])
-  @@index([receiver_id, read])
+  @@index([receiver_id, read], map: "Notification_receiver_read_idx")
 }
 
 model Advertisement {
-  id           String    @id @default(uuid()) @db.Uuid
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   title        String
   description  String?
   image_url    String?
   link_url     String
   contact_info String?
-  status       String    @default("pending") // pending | active | rejected
+  status       String    @default("pending")
   requester_id String?   @db.Uuid
   reviewed_by  String?   @db.Uuid
   impressions  Int       @default(0)
@@ -256,52 +268,361 @@ model Advertisement {
   starts_at    DateTime?
   ends_at      DateTime?
   created_at   DateTime  @default(now())
-  updated_at   DateTime  @updatedAt
-
-  requester User? @relation("AdRequester", fields: [requester_id], references: [id], onDelete: SetNull)
-  reviewer  User? @relation("AdReviewer",  fields: [reviewed_by],  references: [id], onDelete: SetNull)
+  updated_at   DateTime  @default(now()) @updatedAt
+  requester    User?     @relation("AdRequester", fields: [requester_id], references: [id])
+  reviewer     User?     @relation("AdReviewer", fields: [reviewed_by], references: [id])
 }
 
 model MediaHistory {
-  id         String   @id @default(uuid()) @db.Uuid
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id    String   @db.Uuid
-  type       String   // "avatar" | "banner"
+  type       String
   url        String
   created_at DateTime @default(now())
-
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
 }
 
 model Report {
-  id          String   @id @default(uuid()) @db.Uuid
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   reporter_id String   @db.Uuid
-  target_type String   // post | comment | user
+  target_type String
   target_id   String   @db.Uuid
   reason      String
-  status      String   @default("pending") // pending | reviewed | dismissed
+  status      String   @default("pending")
   resolved_by String?  @db.Uuid
   note        String?
   created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
-
-  reporter User  @relation("ReportReporter", fields: [reporter_id], references: [id])
-  resolver User? @relation("ReportResolver", fields: [resolved_by], references: [id], onDelete: SetNull)
+  updated_at  DateTime @default(now()) @updatedAt
+  reporter    User     @relation("ReportReporter", fields: [reporter_id], references: [id])
+  resolver    User?    @relation("ReportResolver", fields: [resolved_by], references: [id])
 
   @@index([status])
 }
 
 model RelationshipRequest {
-  id         String   @id @default(uuid()) @db.Uuid
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   from_id    String   @db.Uuid
   to_id      String   @db.Uuid
-  status     String   @db.VarChar(20) @default("pending") // pending | accepted | declined
+  status     String   @default("pending") @db.VarChar(20)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  from       User     @relation("SentRelationshipRequests", fields: [from_id], references: [id], onDelete: Cascade)
+  to         User     @relation("ReceivedRelationshipRequests", fields: [to_id], references: [id], onDelete: Cascade)
+
+  @@unique([from_id, to_id], map: "RelationshipRequest_from_to_unique")
+  @@index([to_id, status])
+}
+
+// ── Messages ──────────────────────────────────────────────────────────────────
+
+model Conversation {
+  id           String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at   DateTime                  @default(now())
+  updated_at   DateTime                  @updatedAt
+  deleted_at   DateTime?
+  is_group     Boolean                   @default(false)
+  name         String?                   @db.VarChar(100)
+  avatar_url   String?
+  participants ConversationParticipant[]
+  messages     Message[]
+}
+
+model Friendship {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requester_id String   @db.Uuid
+  addressee_id String   @db.Uuid
+  status       String   @default("pending") @db.VarChar(20)
+  created_at   DateTime @default(now()) @db.Timestamp(6)
+  updated_at   DateTime @default(now()) @updatedAt @db.Timestamp(6)
+  requester    User     @relation("FriendshipRequester", fields: [requester_id], references: [id], onDelete: Cascade)
+  addressee    User     @relation("FriendshipAddressee", fields: [addressee_id], references: [id], onDelete: Cascade)
+
+  @@unique([requester_id, addressee_id])
+  @@index([addressee_id, status])
+  @@index([requester_id])
+}
+
+model Block {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  blocker_id  String   @db.Uuid
+  blocked_id  String   @db.Uuid
+  created_at  DateTime @default(now())
+  blocker     User     @relation("Blocker", fields: [blocker_id], references: [id], onDelete: Cascade)
+  blocked     User     @relation("Blocked", fields: [blocked_id], references: [id], onDelete: Cascade)
+
+  @@unique([blocker_id, blocked_id])
+  @@index([blocker_id])
+}
+
+model SubscriptionPlan {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String    @db.Uuid
+  tier       String    @default("free") @db.VarChar(20)
+  starts_at  DateTime  @default(now())
+  ends_at    DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @default(now()) @updatedAt
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+model ConversationParticipant {
+  conversation_id String       @db.Uuid
+  user_id         String       @db.Uuid
+  archived        Boolean      @default(false)
+  hidden_at       DateTime?
+  last_read_at    DateTime?
+  role            String       @default("member") @db.VarChar(20)
+  conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([conversation_id, user_id])
+  @@index([user_id])
+}
+
+model Message {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversation_id String       @db.Uuid
+  sender_id       String       @db.Uuid
+  text            String?
+  type            String       @default("text")
+  file_url        String?
+  reply_to_id     String?      @db.Uuid
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  deleted_at      DateTime?
+  conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender          User         @relation(fields: [sender_id], references: [id])
+  reply_to        Message?     @relation("MessageReplies", fields: [reply_to_id], references: [id], onDelete: SetNull)
+  replies         Message[]    @relation("MessageReplies")
+
+  @@index([conversation_id, created_at(sort: Desc)])
+  @@index([reply_to_id])
+}
+
+// ── Groups ────────────────────────────────────────────────────────────────────
+
+model Group {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug            String          @unique @db.VarChar(60)
+  name            String          @db.VarChar(120)
+  description     String?
+  type            String          @db.VarChar(20) // event | creative | static
+  owner_id        String          @db.Uuid
+  avatar_url      String?
+  banner_url      String?
+  accent_color    String?         @db.VarChar(20)
+  mascot_url      String?
+  social_links    Json?           @default("{}")
+  is_public       Boolean         @default(true)
+  created_at      DateTime        @default(now())
+  updated_at      DateTime        @updatedAt
+  deleted_at      DateTime?
+
+  // Extended fields
+  rules_text      String?                             // Правила группы (markdown)
+  faq             Json?           @default("[]")      // [{q: "...", a: "..."}]
+  contact_phone   String?         @db.VarChar(30)
+  contact_email   String?         @db.VarChar(120)
+  about_text      String?                             // Расширенное описание
+  schedule        Json?           @default("[]")      // [{time: "09:30-10:00", label: "..."}]
+  what_to_bring   Json?           @default("[]")      // ["Коврик", "Вода"]
+  is_nsfw         Boolean         @default(false)
+  rating          Float           @default(0)
+  rating_count    Int             @default(0)
+  subscriber_count Int            @default(0)
+
+  // Creative-specific
+  production_time   String?       @db.VarChar(100)    // "2-3 месяца"
+  delivery_info     String?       @db.VarChar(200)    // "Доставка по всему миру"
+  completed_works   Int           @default(0)
+  recent_works      Json?         @default("[]")      // [{url, title, count}]
+  guarantee_text    String?       @db.VarChar(300)
+
+  owner           User            @relation("GroupOwner", fields: [owner_id], references: [id], onDelete: Cascade)
+  members         GroupMember[]
+  events          Event[]
+  commissionInfo  CommissionInfo?
+  achievements    GroupAchievement[]
+  posts           GroupPost[]
+  ratings         GroupRating[]
+
+  @@index([owner_id])
+  @@index([type])
+}
+
+model GroupRating {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  group_id   String   @db.Uuid
+  user_id    String   @db.Uuid
+  value      Int      // 1-5
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  group      Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([group_id, user_id])
+  @@index([group_id])
+}
+
+model GroupMember {
+  group_id    String   @db.Uuid
+  user_id     String   @db.Uuid
+  role        String   @default("member") @db.VarChar(20) // owner | admin | moderator | member
+  joined_at   DateTime @default(now())
+
+  group       Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([group_id, user_id])
+  @@index([user_id])
+}
+
+model GroupPost {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  group_id   String   @db.Uuid
+  post_id    String   @db.Uuid
+  pinned     Boolean  @default(false)
   created_at DateTime @default(now())
 
-  from User @relation("SentRelationshipRequests",     fields: [from_id], references: [id], onDelete: Cascade)
-  to   User @relation("ReceivedRelationshipRequests", fields: [to_id],   references: [id], onDelete: Cascade)
+  group      Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  post       Post     @relation(fields: [post_id], references: [id], onDelete: Cascade)
 
-  @@unique([from_id, to_id])
-  @@index([to_id, status])
+  @@unique([group_id, post_id])
+}
+
+// ── Events (афиша) ────────────────────────────────────────────────────────────
+
+model Event {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  group_id        String          @db.Uuid
+  title           String          @db.VarChar(200)
+  short_code      String          @db.VarChar(10) // FURM, EF, etc.
+  description     String?
+  banner_url      String?
+  location_name   String?         @db.VarChar(200)
+  location_lat    Float?
+  location_lng    Float?
+  starts_at       DateTime
+  ends_at         DateTime
+  status          String          @default("announced") @db.VarChar(30)
+  is_recurring    Boolean         @default(false)
+  theme           Json?           @default("{}")
+  attendee_count  Int             @default(0)
+  is_top          Boolean         @default(false)
+  created_at      DateTime        @default(now())
+  updated_at      DateTime        @updatedAt
+
+  // Extended fields
+  schedule        Json?           @default("[]")   // [{time, label}]
+  what_to_bring   Json?           @default("[]")   // string[]
+  rules_text      String?
+  faq             Json?           @default("[]")   // [{q, a}]
+
+  group           Group           @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  tickets         TicketTier[]
+  soonBadges      SoonBadge[]
+
+  @@index([group_id])
+  @@index([starts_at])
+  @@index([status])
+}
+
+model TicketTier {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id        String   @db.Uuid
+  name            String   @db.VarChar(100)
+  price           Decimal  @db.Decimal(10, 2)
+  currency        String   @default("USD") @db.VarChar(10)
+  total_count     Int
+  sold_count      Int      @default(0)
+  sale_starts_at  DateTime?
+  sale_ends_at    DateTime?
+  created_at      DateTime @default(now())
+
+  event           Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@index([event_id])
+}
+
+// ── SOON Badge ────────────────────────────────────────────────────────────────
+
+model SoonBadge {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  event_id   String   @db.Uuid
+  show_badge Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  event      Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, event_id])
+  @@index([user_id])
+  @@index([event_id])
+}
+
+// ── Commission Info (для Creative-групп) ──────────────────────────────────────
+
+model CommissionInfo {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  group_id         String   @unique @db.Uuid
+  status           String   @default("closed") @db.VarChar(20) // open | closed | waitlist
+  base_prices      Json?    @default("{}")
+  currency         String   @default("USD") @db.VarChar(10)
+  tos_text         String?
+  queue_count      Int      @default(0)
+  max_queue        Int      @default(5)
+  updated_at       DateTime @updatedAt
+
+  // Extended
+  rush_slots       Int      @default(0)        // быстрые заказы - свободные слоты
+  rush_max         Int      @default(0)
+  turnaround_days  String?  @db.VarChar(30)    // "5-7 дней"
+  price_list       Json?    @default("[]")     // [{name, price, description}]
+
+  group            Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+}
+
+// ── Group Achievements (медальки) ─────────────────────────────────────────────
+
+model GroupAchievement {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  group_id   String   @db.Uuid
+  title      String   @db.VarChar(100)
+  icon       String   @db.VarChar(60)
+  color      String?  @db.VarChar(20)
+  earned_at  DateTime @default(now())
+
+  group      Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+
+  @@index([group_id])
+}
+
+// ── Verification Requests ─────────────────────────────────────────────────────
+
+model VerificationRequest {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id          String   @db.Uuid
+  status           String   @default("pending") @db.VarChar(20)  // pending, approved, rejected
+  reason           String?  @db.VarChar(500)                     // rejection reason or notes
+  // Criteria snapshot at request time
+  account_age_days Int      @default(0)
+  post_count       Int      @default(0)
+  has_avatar       Boolean  @default(false)
+  has_bio          Boolean  @default(false)
+  has_email        Boolean  @default(false)
+  follower_count   Int      @default(0)
+  // Timestamps
+  created_at       DateTime @default(now())
+  reviewed_at      DateTime?
+  reviewed_by      String?  @db.Uuid
+
+  user             User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([status])
 }

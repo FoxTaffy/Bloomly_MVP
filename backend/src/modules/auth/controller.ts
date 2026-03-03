@@ -4,6 +4,36 @@ import type { RegisterInput, LoginInput } from './types.js';
 
 const authService = new AuthService();
 
+export const statsHandler = async (_req: FastifyRequest, reply: FastifyReply) => {
+  const stats = await authService.getPublicStats()
+  return reply.send({ success: true, data: stats, error: null })
+}
+
+export const forgotPasswordHandler = async (
+  request: FastifyRequest<{ Body: { email: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    await authService.requestPasswordReset(request.body.email)
+    // Всегда отвечаем успехом — не раскрываем существование аккаунта
+    return reply.send({ success: true, data: { message: 'Если аккаунт существует, код отправлен' }, error: null })
+  } catch {
+    return reply.code(500).send({ success: false, data: null, error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } })
+  }
+}
+
+export const resetPasswordHandler = async (
+  request: FastifyRequest<{ Body: { code: string; password: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    await authService.resetPassword(request.body.code, request.body.password)
+    return reply.send({ success: true, data: { message: 'Пароль успешно изменён' }, error: null })
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'RESET_ERROR', message: e.message } })
+  }
+}
+
 export const registerHandler = async (
   request: FastifyRequest<{ Body: RegisterInput }>,
   reply: FastifyReply,

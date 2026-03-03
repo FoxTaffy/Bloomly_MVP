@@ -5,6 +5,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
 import api from '@/api'
 import BIcon from './BIcon.vue'
+import PostCard from './PostCard.vue'
+import PostComments from './PostComments.vue'
 
 const props = withDefaults(defineProps<{
   showBack?: boolean
@@ -20,7 +22,11 @@ const auth = useAuthStore()
 const langStore = useLangStore()
 
 // ── NSFW ─────────────────────────────────────────────────────────────────────
-const toggleNsfw = () => emit('update:nsfwMode', !props.nsfwMode)
+const toggleNsfw = () => {
+  const next = !props.nsfwMode
+  emit('update:nsfwMode', next)
+  localStorage.setItem('bloomly_nsfw', String(next))
+}
 
 // ── Notifications ─────────────────────────────────────────────────────────────
 const showNotifications = ref(false)
@@ -35,19 +41,31 @@ const fetchUnreadCount = async () => {
   } catch {}
 }
 
+// Normalize backend field `read` → `is_read` used throughout the template
+const normalizeNotif = (n: any) => ({ ...n, is_read: n.is_read ?? n.read ?? false })
+
 const fetchNotifications = async () => {
   try {
     const res = await api.get('/notifications')
     if (res.data.success) {
-      notifications.value = res.data.data.notifications
+      notifications.value = res.data.data.notifications.map(normalizeNotif)
       unreadCount.value = notifications.value.filter((n: any) => !n.is_read).length
     }
   } catch {}
 }
 
-const toggleNotifications = () => {
+const toggleNotifications = async () => {
   showNotifications.value = !showNotifications.value
-  if (showNotifications.value) fetchNotifications()
+  if (showNotifications.value) {
+    await fetchNotifications()
+    // Immediately mark all unread as read — locally + API
+    const hasUnread = notifications.value.some((n: any) => !n.is_read)
+    if (hasUnread) {
+      notifications.value.forEach((n: any) => { n.is_read = true })
+      unreadCount.value = 0
+      try { await api.post('/notifications/read', {}) } catch {}
+    }
+  }
 }
 
 const markAllRead = async () => {
@@ -58,39 +76,78 @@ const markAllRead = async () => {
   } catch {}
 }
 
+let sseReconnectTimer: ReturnType<typeof setTimeout> | null = null
 const connectNotifSSE = () => {
   if (!auth.token) return
+  if (notifEventSource) { notifEventSource.close(); notifEventSource = null }
   try {
     notifEventSource = new EventSource(`/api/notifications/stream?token=${encodeURIComponent(auth.token as string)}`)
     notifEventSource.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data)
         if (data.type && data.type !== 'heartbeat') {
-          notifications.value.unshift(data)
+          const notif = data.data ?? data
+          notifications.value.unshift(normalizeNotif(notif))
           unreadCount.value++
         }
       } catch {}
     }
-    notifEventSource.onerror = () => { notifEventSource?.close(); notifEventSource = null }
+    notifEventSource.onerror = () => {
+      notifEventSource?.close()
+      notifEventSource = null
+      // Auto-reconnect after 5 seconds
+      if (auth.isAuthenticated) {
+        sseReconnectTimer = setTimeout(connectNotifSSE, 5000)
+      }
+    }
   } catch {}
 }
 
-const notifTypeLabel = (type: string) => {
-  const map: Record<string, string> = {
-    LIKE: 'лайкнул(а) вашу публикацию',
-    COMMENT: 'прокомментировал(а) вашу публикацию',
-    REPAW: 'репостнул(а) вашу публикацию',
-    FOLLOW: 'подписался(ась) на вас',
-    MENTION: 'упомянул(а) вас',
-    RELATIONSHIP_REQUEST:  'хочет быть вашим партнёром 💕',
-    RELATIONSHIP_ACCEPTED: 'принял(а) ваш запрос в отношения ❤️',
-    like: 'лайкнул(а) вашу публикацию',
-    comment: 'прокомментировал(а) вашу публикацию',
-    repaw: 'репостнул(а) вашу публикацию',
-    follow: 'подписался(ась) на вас',
-    mention: 'упомянул(а) вас',
+const notifTypeLabel = (type: string, pronouns?: string | null) => {
+  // Determine gender from pronouns field: 'он/его' → male, 'она/её' → female, else neutral
+  const p = (pronouns || '').toLowerCase()
+  const isMale = p.startsWith('он')
+  const isFemale = p.startsWith('она')
+
+  const genderMap: Record<string, { m: string; f: string; n: string }> = {
+    LIKE:    { m: 'поставил + вашей публикации',    f: 'поставила + вашей публикации',    n: 'поставил(а) + вашей публикации' },
+    COMMENT: { m: 'прокомментировал вашу публикацию', f: 'прокомментировала вашу публикацию', n: 'прокомментировал(а) вашу публикацию' },
+    REPAW:   { m: 'поставил RePaw вашей публикации',  f: 'поставила RePaw вашей публикации',  n: 'поставил(а) RePaw вашей публикации' },
+    FOLLOW:  { m: 'подписался на вас',                 f: 'подписалась на вас',                 n: 'подписался(ась) на вас' },
+    MENTION: { m: 'упомянул вас',                      f: 'упомянула вас',                      n: 'упомянул(а) вас' },
+    RELATIONSHIP_REQUEST:  { m: 'хочет быть вашим партнёром 💕',  f: 'хочет быть вашим партнёром 💕',  n: 'хочет быть вашим партнёром 💕' },
+    RELATIONSHIP_ACCEPTED: { m: 'принял ваш запрос в отношения ❤️', f: 'приняла ваш запрос в отношения ❤️', n: 'принял(а) ваш запрос в отношения ❤️' },
   }
-  return map[type] ?? type
+  const key = type.toUpperCase()
+  const entry = genderMap[key]
+  if (!entry) return type
+  return isMale ? entry.m : isFemale ? entry.f : entry.n
+}
+
+const notifBadgeIcon = (type: string) => {
+  const map: Record<string, string> = {
+    LIKE: 'Heart', like: 'Heart',
+    COMMENT: 'MessageSquare', comment: 'MessageSquare',
+    REPAW: 'Repeat2', repaw: 'Repeat2',
+    FOLLOW: 'UserPlus', follow: 'UserPlus',
+    MENTION: 'AtSign', mention: 'AtSign',
+    RELATIONSHIP_REQUEST: 'HeartHandshake',
+    RELATIONSHIP_ACCEPTED: 'Heart',
+  }
+  return map[type] ?? 'Bell'
+}
+
+const notifBadgeClass = (type: string) => {
+  const map: Record<string, string> = {
+    LIKE: 'bg-rose-500 text-white', like: 'bg-rose-500 text-white',
+    COMMENT: 'bg-brand-accent text-white', comment: 'bg-brand-accent text-white',
+    REPAW: 'bg-emerald-500 text-white', repaw: 'bg-emerald-500 text-white',
+    FOLLOW: 'bg-violet-500 text-white', follow: 'bg-violet-500 text-white',
+    MENTION: 'bg-amber-500 text-white', mention: 'bg-amber-500 text-white',
+    RELATIONSHIP_REQUEST: 'bg-pink-500 text-white',
+    RELATIONSHIP_ACCEPTED: 'bg-pink-500 text-white',
+  }
+  return map[type] ?? 'bg-white/20 text-white/60'
 }
 
 // ── Relationship request actions ──────────────────────────────────────────────
@@ -121,16 +178,48 @@ const declineRelationship = async (n: any) => {
   } finally { relActionLoading.value[n.id] = false }
 }
 
+// ── Post modal ───────────────────────────────────────────────────────────────
+const postModal = ref<{ id: string; data: any | null; loading: boolean } | null>(null)
+
+const openPostModal = async (postId: string) => {
+  postModal.value = { id: postId, data: null, loading: true }
+  try {
+    const res = await api.get(`/posts/${postId}`)
+    if (res.data.success) postModal.value.data = res.data.data.post
+  } catch {
+    postModal.value = null
+  } finally {
+    if (postModal.value) postModal.value.loading = false
+  }
+}
+
+const closePostModal = () => { postModal.value = null }
+
+const POST_TYPES = new Set(['LIKE', 'COMMENT', 'REPAW', 'MENTION', 'like', 'comment', 'repaw', 'mention'])
+const PROFILE_TYPES = new Set(['FOLLOW', 'RELATIONSHIP_ACCEPTED', 'follow', 'relationship_accepted'])
+
 const onNotifClick = async (n: any) => {
   if (n.type === 'RELATIONSHIP_REQUEST') return
-  showNotifications.value = false
+  // Mark this single notification as read
   if (!n.is_read) {
     n.is_read = true
     unreadCount.value = Math.max(0, unreadCount.value - 1)
-    try { await api.post('/notifications/read', {}) } catch {}
+    try { await api.post('/notifications/read', { ids: [n.id] }) } catch {}
   }
-  if (n.post_id) { router.push(`/post/${n.post_id}`); return }
-  if (n.sender?.id) router.push(`/profile/${n.sender.id}`)
+  // Open post modal
+  if (POST_TYPES.has(n.type) && n.post_id) {
+    showNotifications.value = false
+    openPostModal(n.post_id)
+    return
+  }
+  // Open sender profile
+  if (PROFILE_TYPES.has(n.type) && n.sender?.id) {
+    showNotifications.value = false
+    router.push(`/profile/${n.sender.id}`)
+    return
+  }
+  // Fallback: navigate to post page
+  if (n.post_id) { showNotifications.value = false; router.push(`/post/${n.post_id}`) }
 }
 
 // ── Search modal ──────────────────────────────────────────────────────────────
@@ -175,9 +264,40 @@ const onSearchModalInput = () => {
 const searchGoToPost = (id: string) => { closeSearchModal(); router.push(`/post/${id}`) }
 const searchGoToUser = (id: string) => { closeSearchModal(); router.push(`/profile/${id}`) }
 
+// ── Stories (inside search modal) ─────────────────────────────────────────────
+const searchStories = ref<any[]>([])
+const activeStory = ref<any>(null)
+const storyProgress = ref(0)
+let storyTimerInterval: ReturnType<typeof setInterval> | null = null
+
+const fetchSearchStories = async () => {
+  try {
+    const res = await api.get('/stories')
+    if (res.data.success) searchStories.value = res.data.data.stories
+  } catch {}
+}
+
+const openStory = (story: any) => {
+  activeStory.value = story
+  storyProgress.value = 0
+  if (storyTimerInterval) clearInterval(storyTimerInterval)
+  const start = Date.now()
+  storyTimerInterval = setInterval(() => {
+    storyProgress.value = Math.min(100, ((Date.now() - start) / 5000) * 100)
+    if (storyProgress.value >= 100) closeStory()
+  }, 50)
+}
+
+const closeStory = () => {
+  activeStory.value = null
+  storyProgress.value = 0
+  if (storyTimerInterval) { clearInterval(storyTimerInterval); storyTimerInterval = null }
+}
+
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 const onGlobalKeydown = (e: KeyboardEvent) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); openSearchModal() }
+  if (e.key === 'Escape' && postModal.value) { closePostModal(); return }
   if (e.key === 'Escape' && showSearchModal.value) closeSearchModal()
 }
 
@@ -194,11 +314,13 @@ function formatDate(d: string) {
 }
 
 onMounted(() => {
-  if (auth.isAuthenticated) { fetchUnreadCount(); connectNotifSSE() }
+  if (auth.isAuthenticated) { fetchUnreadCount(); connectNotifSSE(); fetchSearchStories() }
   window.addEventListener('keydown', onGlobalKeydown)
 })
 onUnmounted(() => {
   notifEventSource?.close()
+  if (sseReconnectTimer) clearTimeout(sseReconnectTimer)
+  if (storyTimerInterval) clearInterval(storyTimerInterval)
   window.removeEventListener('keydown', onGlobalKeydown)
 })
 </script>
@@ -212,16 +334,13 @@ onUnmounted(() => {
     <!-- Left: Logo or Back -->
     <div class="flex items-center gap-2.5">
       <button v-if="showBack" @click="router.back()"
-        class="flex items-center gap-2 px-3 py-1.5 bg-brand-card border border-brand-border hover:border-brand-accent/50 rounded-xl text-sm font-semibold text-brand-muted hover:text-white transition-all">
+        class="flex items-center gap-2 px-3 py-1.5 bg-brand-card border border-brand-border hover:border-brand-accent/50 rounded-xl text-sm font-semibold text-white/55 hover:text-white transition-all">
         <BIcon name="ArrowLeft" class="w-4 h-4" />
         <span class="hidden sm:block">Назад</span>
       </button>
       <div v-else class="flex items-center gap-2.5 cursor-pointer" @click="router.push({ name: 'home' })">
-        <div class="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M16 2C16 2 18 6 22 6C26 6 28 10 28 14C28 18 24 20 24 20C24 20 28 22 28 26C28 30 24 30 20 30C16 30 16 26 16 26C16 26 16 30 12 30C8 30 4 30 4 26C4 22 8 20 8 20C8 20 4 18 4 14C4 10 6 6 10 6C14 6 16 2 16 2Z" fill="#D5DDFF" stroke="#4C67CF" stroke-width="2" stroke-linejoin="round"/>
-            <circle cx="16" cy="16" r="4" fill="#D5DDFF" stroke="#4C67CF" stroke-width="2"/>
-          </svg>
+        <div class="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center flex-shrink-0">
+          <img src="/bloomly.png?v=2" alt="Bloomly" class="w-full h-full object-contain" />
         </div>
         <span class="text-xl md:text-2xl font-extrabold tracking-tight text-white">Bloomly</span>
       </div>
@@ -229,10 +348,10 @@ onUnmounted(() => {
 
     <!-- Center: Search trigger -->
     <button @click="openSearchModal"
-      class="flex-1 max-w-xl mx-8 hidden md:flex items-center gap-3 bg-brand-card border border-brand-border rounded-full py-2.5 pl-4 pr-5 text-sm text-brand-muted hover:border-brand-accent/50 hover:text-white transition-colors cursor-text">
+      class="flex-1 max-w-xl mx-8 hidden md:flex items-center gap-3 bg-brand-card border border-brand-border rounded-full py-2.5 pl-4 pr-5 text-sm text-white/55 hover:border-brand-accent/50 hover:text-white transition-colors cursor-text">
       <BIcon name="Search" class="h-4 w-4 flex-shrink-0" />
       <span class="truncate">{{ langStore.t.search }}</span>
-      <span class="ml-auto flex items-center gap-1 text-xs text-brand-muted/60 bg-brand-bg px-2 py-0.5 rounded-md border border-brand-border/60 hidden xl:flex">Ctrl K</span>
+      <span class="ml-auto flex items-center gap-1 text-xs text-white/35 bg-brand-bg px-2 py-0.5 rounded-md border border-brand-border/60 hidden xl:flex">Ctrl K</span>
     </button>
 
     <!-- Right: Actions -->
@@ -248,7 +367,7 @@ onUnmounted(() => {
 
       <!-- Notifications -->
       <div class="relative">
-        <button @click.stop="toggleNotifications" class="p-2 md:p-2.5 text-brand-muted hover:text-white hover:bg-white/5 rounded-full relative">
+        <button @click.stop="toggleNotifications" class="p-2 md:p-2.5 text-white/55 hover:text-white hover:bg-white/5 rounded-full relative">
           <BIcon name="Bell" class="h-5 w-5" />
           <span v-if="unreadCount > 0" class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-brand-error rounded-full text-[10px] font-bold text-white border-2 border-brand-bg">
             {{ unreadCount > 9 ? '9+' : unreadCount }}
@@ -256,42 +375,118 @@ onUnmounted(() => {
         </button>
         <Transition name="filter-expand">
           <div v-if="showNotifications" @click.stop
-            class="absolute right-0 top-12 z-50 w-80 bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-brand-border">
-              <span class="font-bold text-sm">Уведомления</span>
-              <button v-if="unreadCount > 0" @click="markAllRead" class="text-xs text-brand-accent hover:text-white font-semibold">Всё прочитано</button>
+            class="fixed inset-x-3 top-14 sm:inset-x-auto sm:absolute sm:right-0 sm:top-12 z-50 sm:w-[400px] bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] sm:max-h-[540px]">
+
+            <!-- Header -->
+            <div class="flex items-center justify-between px-5 py-3.5 border-b border-brand-border flex-shrink-0">
+              <span class="font-bold text-base">Уведомления</span>
+              <button v-if="unreadCount > 0" @click="markAllRead"
+                class="text-xs text-brand-accent hover:text-white font-semibold transition-colors">
+                Прочитать всё
+              </button>
             </div>
-            <div class="max-h-80 overflow-y-auto">
-              <div v-if="notifications.length === 0" class="py-8 text-center text-brand-muted text-sm">Нет уведомлений</div>
-              <div v-for="n in notifications" :key="n.id"
-                class="flex items-start gap-3 px-4 py-3 border-b border-brand-border/50 transition hover:bg-brand-border/30 cursor-pointer"
-                :class="!n.is_read ? 'bg-brand-accent/5' : ''"
-                @click="onNotifClick(n)">
-                <img v-if="n.sender?.avatar_url" :src="n.sender.avatar_url"
-                  class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5" />
-                <div v-else class="w-8 h-8 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs">{{ (n.sender?.display_name || n.sender?.username || '?')[0].toUpperCase() }}</div>
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm text-white leading-snug">
-                    <span class="font-bold">{{ n.sender?.display_name || n.sender?.username }}</span>
-                    {{ ' ' }}{{ notifTypeLabel(n.type) }}
-                  </p>
-                  <p class="text-xs text-brand-muted mt-0.5">{{ formatDate(n.created_at) }}</p>
-                  <!-- Relationship request accept / decline -->
-                  <div v-if="n.type === 'RELATIONSHIP_REQUEST' && !n._relDone" class="flex gap-2 mt-2">
-                    <button @click.stop="acceptRelationship(n)" :disabled="relActionLoading[n.id]"
-                      class="flex-1 py-1 rounded-lg bg-pink-500 hover:bg-pink-400 disabled:opacity-50 text-white text-xs font-bold transition-colors">
-                      Принять
-                    </button>
-                    <button @click.stop="declineRelationship(n)" :disabled="relActionLoading[n.id]"
-                      class="flex-1 py-1 rounded-lg bg-brand-bg border border-brand-border hover:border-brand-muted disabled:opacity-50 text-brand-muted hover:text-white text-xs font-semibold transition-colors">
-                      Отклонить
-                    </button>
-                  </div>
-                  <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'accepted'" class="text-xs text-pink-400 mt-1 font-semibold">❤️ Вы приняли запрос</p>
-                  <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'declined'" class="text-xs text-brand-muted mt-1">❌ Запрос отклонён</p>
-                </div>
-                <div v-if="!n.is_read" class="w-2 h-2 bg-brand-accent rounded-full flex-shrink-0 mt-1.5"></div>
+
+            <!-- Scrollable list -->
+            <div class="overflow-y-auto flex-1">
+              <!-- Empty -->
+              <div v-if="notifications.length === 0" class="py-12 text-center flex flex-col items-center gap-2">
+                <BIcon name="BellOff" class="w-10 h-10 text-white/20" />
+                <span class="text-white/40 text-sm">Нет уведомлений</span>
               </div>
+
+              <template v-else>
+                <!-- НОВЫЕ -->
+                <template v-if="notifications.filter(n => !n.is_read).length > 0">
+                  <div class="px-5 pt-3 pb-1.5">
+                    <span class="text-[10px] font-bold tracking-widest text-white/35 uppercase">Новые</span>
+                  </div>
+                  <div v-for="n in notifications.filter(n => !n.is_read)" :key="n.id"
+                    class="flex items-start gap-3 px-4 py-3 mx-2 mb-0.5 rounded-2xl
+                           bg-brand-accent/5 hover:bg-brand-accent/10 cursor-pointer transition-colors"
+                    @click="onNotifClick(n)">
+                    <!-- Avatar + type badge -->
+                    <div class="relative flex-shrink-0 mt-0.5 cursor-pointer" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.id)">
+                      <img v-if="n.sender?.avatar_url" :src="n.sender.avatar_url"
+                        class="w-10 h-10 rounded-full object-cover border border-brand-border" />
+                      <div v-else
+                        class="w-10 h-10 rounded-full border border-brand-border bg-brand-accent/20
+                               flex items-center justify-center text-brand-accent font-bold text-sm">
+                        {{ (n.sender?.display_name || n.sender?.username || '?')[0].toUpperCase() }}
+                      </div>
+                      <!-- Type icon badge -->
+                      <div :class="['absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center', notifBadgeClass(n.type)]">
+                        <BIcon :name="notifBadgeIcon(n.type)" class="w-2.5 h-2.5" />
+                      </div>
+                    </div>
+                    <!-- Text -->
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm text-white leading-snug">
+                        <span class="font-semibold cursor-pointer hover:underline" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.id)">{{ n.sender?.display_name || n.sender?.username }}</span>
+                        {{ ' ' }}{{ notifTypeLabel(n.type, n.sender?.pronouns) }}
+                      </p>
+                      <p class="text-xs text-white/40 mt-0.5">{{ formatDate(n.created_at) }}</p>
+                      <!-- Relationship request -->
+                      <div v-if="n.type === 'RELATIONSHIP_REQUEST' && !n._relDone" class="flex gap-2 mt-2">
+                        <button @click.stop="acceptRelationship(n)" :disabled="relActionLoading[n.id]"
+                          class="flex-1 py-1 rounded-lg bg-pink-500 hover:bg-pink-400 disabled:opacity-50 text-white text-xs font-bold transition-colors">
+                          Принять
+                        </button>
+                        <button @click.stop="declineRelationship(n)" :disabled="relActionLoading[n.id]"
+                          class="flex-1 py-1 rounded-lg bg-brand-bg border border-brand-border hover:border-white/20 disabled:opacity-50 text-white/55 hover:text-white text-xs font-semibold transition-colors">
+                          Отклонить
+                        </button>
+                      </div>
+                      <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'accepted'" class="text-xs text-pink-400 mt-1 font-semibold">❤️ Принято</p>
+                      <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'declined'" class="text-xs text-white/40 mt-1">Отклонено</p>
+                    </div>
+                    <!-- Unread dot -->
+                    <div class="w-2 h-2 bg-brand-accent rounded-full flex-shrink-0 mt-2"></div>
+                  </div>
+                </template>
+
+                <!-- ПРОСМОТРЕННЫЕ -->
+                <template v-if="notifications.filter(n => n.is_read).length > 0">
+                  <div class="px-5 pt-3 pb-1.5">
+                    <span class="text-[10px] font-bold tracking-widest text-white/35 uppercase">Просмотренные</span>
+                  </div>
+                  <div v-for="n in notifications.filter(n => n.is_read)" :key="n.id"
+                    class="flex items-start gap-3 px-4 py-3 mx-2 mb-0.5 rounded-2xl
+                           hover:bg-white/5 cursor-pointer transition-colors"
+                    @click="onNotifClick(n)">
+                    <!-- Avatar + type badge -->
+                    <div class="relative flex-shrink-0 mt-0.5 cursor-pointer" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.id)">
+                      <img v-if="n.sender?.avatar_url" :src="n.sender.avatar_url"
+                        class="w-10 h-10 rounded-full object-cover border border-brand-border opacity-70" />
+                      <div v-else
+                        class="w-10 h-10 rounded-full border border-brand-border bg-white/5
+                               flex items-center justify-center text-white/40 font-bold text-sm">
+                        {{ (n.sender?.display_name || n.sender?.username || '?')[0].toUpperCase() }}
+                      </div>
+                      <div :class="['absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center opacity-60', notifBadgeClass(n.type)]">
+                        <BIcon :name="notifBadgeIcon(n.type)" class="w-2.5 h-2.5" />
+                      </div>
+                    </div>
+                    <!-- Text -->
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm text-white/65 leading-snug">
+                        <span class="font-semibold text-white/80 cursor-pointer hover:underline" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.id)">{{ n.sender?.display_name || n.sender?.username }}</span>
+                        {{ ' ' }}{{ notifTypeLabel(n.type, n.sender?.pronouns) }}
+                      </p>
+                      <p class="text-xs text-white/30 mt-0.5">{{ formatDate(n.created_at) }}</p>
+                    </div>
+                  </div>
+                </template>
+              </template>
+            </div>
+
+            <!-- Footer -->
+            <div class="border-t border-brand-border flex-shrink-0 px-4 py-2.5">
+              <button @click="showNotifications = false; router.push('/notifications')"
+                class="w-full py-2 rounded-xl text-sm text-white/55 hover:text-white hover:bg-white/5
+                       font-medium transition-colors flex items-center justify-center gap-1.5">
+                <BIcon name="List" class="w-4 h-4" />
+                Все уведомления
+              </button>
             </div>
           </div>
         </Transition>
@@ -300,7 +495,7 @@ onUnmounted(() => {
       <!-- NSFW toggle -->
       <button @click="toggleNsfw"
         class="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 rounded-full border transition-all duration-200"
-        :class="nsfwMode ? 'bg-brand-error/15 border-brand-error/40 text-brand-error shadow-sm shadow-brand-error/20' : 'bg-brand-card border-brand-border text-brand-muted hover:text-white'">
+        :class="nsfwMode ? 'bg-brand-error/15 border-brand-error/40 text-brand-error shadow-sm shadow-brand-error/20' : 'bg-brand-card border-brand-border text-white/55 hover:text-white'">
         <BIcon :name="nsfwMode ? 'Eye' : 'EyeOff'" class="h-4 w-4" />
         <span class="text-xs font-bold hidden sm:block">NSFW</span>
         <div class="relative w-7 h-3.5 flex-shrink-0 hidden sm:block">
@@ -310,7 +505,7 @@ onUnmounted(() => {
       </button>
 
       <!-- Logout -->
-      <button @click="handleLogout" class="hidden md:flex p-2.5 text-brand-muted hover:text-rose-400 hover:bg-rose-500/10 rounded-full">
+      <button @click="handleLogout" class="hidden md:flex p-2.5 text-white/55 hover:text-rose-400 hover:bg-rose-500/10 rounded-full">
         <BIcon name="LogOut" class="h-5 w-5" />
       </button>
     </div>
@@ -326,12 +521,12 @@ onUnmounted(() => {
         <div class="relative w-full max-w-2xl bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden flex flex-col" style="max-height: 78vh">
           <!-- Input row -->
           <div class="flex items-center gap-3 px-5 py-4 border-b border-brand-border flex-shrink-0">
-            <BIcon name="Search" class="h-5 w-5 text-brand-muted flex-shrink-0" />
+            <BIcon name="Search" class="h-5 w-5 text-white/55 flex-shrink-0" />
             <input id="app-search-modal-input" type="text" v-model="searchModalQuery"
               @input="onSearchModalInput" @keydown.esc="closeSearchModal"
               :placeholder="langStore.t.search"
               class="flex-1 bg-transparent text-white placeholder-brand-muted text-base outline-none" />
-            <button @click="closeSearchModal" class="p-1 text-brand-muted hover:text-white transition-colors">
+            <button @click="closeSearchModal" class="p-1 text-white/55 hover:text-white transition-colors">
               <BIcon name="X" class="h-5 w-5" />
             </button>
           </div>
@@ -339,22 +534,42 @@ onUnmounted(() => {
           <div class="flex items-center gap-1 px-5 pt-3 pb-2 border-b border-brand-border flex-shrink-0">
             <button v-for="tab in ([{ id: 'posts', icon: 'FileText', label: 'Посты' }, { id: 'accounts', icon: 'Users', label: 'Аккаунты' }] as const)"
               :key="tab.id" @click="searchModalTab = tab.id"
-              :class="['flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-semibold transition-all', searchModalTab === tab.id ? 'bg-brand-accent text-white shadow-sm' : 'text-brand-muted hover:text-white hover:bg-white/5']">
+              :class="['flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-semibold transition-all', searchModalTab === tab.id ? 'bg-brand-accent text-white shadow-sm' : 'text-white/55 hover:text-white hover:bg-white/5']">
               <BIcon :name="tab.icon" class="h-4 w-4" />{{ tab.label }}
             </button>
           </div>
           <!-- Results -->
           <div class="flex-1 overflow-y-auto">
-            <div v-if="!searchModalQuery.trim()" class="flex flex-col items-center justify-center py-16 text-brand-muted">
-              <BIcon name="Search" class="h-10 w-10 mb-3 opacity-30" />
-              <p class="text-sm">Начните вводить запрос...</p>
+            <div v-if="!searchModalQuery.trim()" class="p-4">
+              <!-- Stories bar -->
+              <div v-if="searchStories.length" class="mb-4">
+                <p class="text-[10px] font-bold uppercase tracking-widest text-white/35 mb-3 px-1">Истории</p>
+                <div class="flex gap-3 overflow-x-auto hide-scrollbar pb-1">
+                  <div v-for="story in searchStories" :key="story.id"
+                    class="flex flex-col items-center gap-1.5 cursor-pointer flex-shrink-0"
+                    @click="openStory(story)">
+                    <div class="w-14 h-14 rounded-2xl p-[2px] bg-gradient-to-tr from-brand-accent to-brand-purple">
+                      <img v-if="story.user.avatar_url" :src="story.user.avatar_url"
+                        class="w-full h-full rounded-xl border-2 border-brand-card object-cover" />
+                      <div v-else class="w-full h-full rounded-xl border-2 border-brand-card bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">
+                        {{ (story.user.username ?? '?')[0].toUpperCase() }}
+                      </div>
+                    </div>
+                    <span class="text-[10px] font-semibold text-white/55 max-w-[56px] truncate">{{ story.user.username }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-col items-center justify-center py-10 text-white/55">
+                <BIcon name="Search" class="h-10 w-10 mb-3 opacity-30" />
+                <p class="text-sm">Начните вводить запрос...</p>
+              </div>
             </div>
             <div v-else-if="searchModalLoading" class="flex items-center justify-center py-12">
               <BIcon name="Loader2" class="h-6 w-6 text-brand-accent animate-spin" />
             </div>
             <!-- Posts -->
             <template v-else-if="searchModalTab === 'posts'">
-              <div v-if="searchModalPosts.length === 0" class="flex flex-col items-center justify-center py-14 text-brand-muted">
+              <div v-if="searchModalPosts.length === 0" class="flex flex-col items-center justify-center py-14 text-white/55">
                 <BIcon name="FileSearch" class="h-8 w-8 mb-2 opacity-30" /><p class="text-sm">Постов не найдено</p>
               </div>
               <button v-for="post in searchModalPosts" :key="post.id" @click="searchGoToPost(post.id)"
@@ -365,10 +580,10 @@ onUnmounted(() => {
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2 mb-0.5">
                     <span class="text-sm font-semibold text-white">{{ post.author?.display_name || post.author?.username }}</span>
-                    <span class="text-xs text-brand-muted">@{{ post.author?.username }}</span>
+                    <span class="text-xs text-white/55">@{{ post.author?.username }}</span>
                     <span v-if="post.is_nsfw" class="text-[10px] font-bold bg-brand-error/20 text-brand-error px-1.5 py-0.5 rounded-full">NSFW</span>
                   </div>
-                  <p class="text-sm text-brand-muted line-clamp-2 leading-snug">{{ post.content }}</p>
+                  <p class="text-sm text-white/55 line-clamp-2 leading-snug">{{ post.content }}</p>
                 </div>
                 <div v-if="post.media_urls?.length" class="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 border border-brand-border">
                   <img :src="post.media_urls[0]" class="w-full h-full object-cover" />
@@ -377,7 +592,7 @@ onUnmounted(() => {
             </template>
             <!-- Accounts -->
             <template v-else-if="searchModalTab === 'accounts'">
-              <div v-if="searchModalUsers.length === 0" class="flex flex-col items-center justify-center py-14 text-brand-muted">
+              <div v-if="searchModalUsers.length === 0" class="flex flex-col items-center justify-center py-14 text-white/55">
                 <BIcon name="UserSearch" class="h-8 w-8 mb-2 opacity-30" /><p class="text-sm">Аккаунты не найдены</p>
               </div>
               <button v-for="user in searchModalUsers" :key="user.id" @click="searchGoToUser(user.id)"
@@ -387,16 +602,116 @@ onUnmounted(() => {
                 <div v-else class="w-10 h-10 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (user.display_name || user.username || '?')[0].toUpperCase() }}</div>
                 <div class="min-w-0 flex-1">
                   <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
-                  <p class="text-xs text-brand-muted">@{{ user.username }}</p>
-                  <p v-if="user.bio" class="text-xs text-brand-muted/70 mt-0.5 line-clamp-1">{{ user.bio }}</p>
+                  <p class="text-xs text-white/55">@{{ user.username }}</p>
+                  <p v-if="user.bio" class="text-xs text-white/35 mt-0.5 line-clamp-1">{{ user.bio }}</p>
                 </div>
-                <div class="flex-shrink-0 text-xs text-brand-muted">
+                <div class="flex-shrink-0 text-xs text-white/55">
                   <span class="font-bold text-white">{{ user._count?.followers ?? 0 }}</span> подписчиков
                 </div>
               </button>
             </template>
           </div>
         </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       POST MODAL (from notification click)
+  ═══════════════════════════════════════════════════════════════ -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition duration-200"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-150"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div v-if="postModal" class="fixed inset-0 z-[200] overflow-y-auto"
+        @click.self="closePostModal">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="closePostModal" />
+
+        <!-- Centering wrapper -->
+        <div class="flex items-center justify-center min-h-full py-8 px-4">
+        <!-- Content -->
+        <div class="relative w-full max-w-2xl z-10">
+          <!-- Close button -->
+          <button
+            @click="closePostModal"
+            class="absolute -top-3 -right-3 z-20 w-9 h-9 bg-brand-card border border-brand-border
+                   rounded-full flex items-center justify-center text-white/55 hover:text-white
+                   hover:bg-white/10 transition-colors shadow-lg"
+          >
+            <BIcon name="X" class="w-4 h-4" />
+          </button>
+
+          <!-- Loading skeleton -->
+          <div v-if="postModal.loading" class="bg-brand-card border border-brand-border rounded-3xl p-6 animate-pulse">
+            <div class="flex items-center gap-3 mb-4">
+              <div class="w-11 h-11 rounded-full bg-brand-border"></div>
+              <div class="flex-1 space-y-2">
+                <div class="h-3 bg-brand-border rounded w-32"></div>
+                <div class="h-2 bg-brand-border rounded w-20"></div>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <div class="h-3 bg-brand-border rounded w-full"></div>
+              <div class="h-3 bg-brand-border rounded w-4/5"></div>
+              <div class="h-3 bg-brand-border rounded w-2/3"></div>
+            </div>
+          </div>
+
+          <!-- Post + Comments -->
+          <template v-else-if="postModal.data">
+            <PostCard :post="postModal.data" />
+            <div class="mt-3">
+              <PostComments :post-id="postModal.id" />
+            </div>
+          </template>
+
+          <!-- Error -->
+          <div v-else class="bg-brand-card border border-brand-border rounded-3xl p-8 text-center">
+            <BIcon name="AlertCircle" class="w-10 h-10 text-white/20 mx-auto mb-2" />
+            <p class="text-white/40 text-sm">Не удалось загрузить публикацию</p>
+          </div>
+        </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       STORY VIEWER
+  ═══════════════════════════════════════════════════════════════ -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition duration-200"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-150"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div v-if="activeStory" class="fixed inset-0 z-[600] bg-black/95 flex items-center justify-center" @click.self="closeStory">
+        <!-- Progress bar -->
+        <div class="absolute top-4 left-1/2 -translate-x-1/2 w-64 h-1 bg-white/20 rounded-full overflow-hidden">
+          <div class="h-full bg-brand-accent rounded-full transition-all duration-100" :style="{ width: storyProgress + '%' }" />
+        </div>
+        <!-- User info -->
+        <div class="absolute top-8 left-1/2 -translate-x-1/2 flex items-center gap-3 cursor-pointer"
+          @click="closeStory(); closeSearchModal(); router.push('/profile/' + activeStory.user.id)">
+          <img v-if="activeStory.user.avatar_url" :src="activeStory.user.avatar_url" class="w-9 h-9 rounded-full border-2 border-white/20 object-cover" />
+          <div v-else class="w-9 h-9 rounded-full border-2 border-white/20 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (activeStory.user.username ?? '?')[0].toUpperCase() }}</div>
+          <span class="text-white font-semibold text-sm">{{ activeStory.user.display_name || activeStory.user.username }}</span>
+        </div>
+        <!-- Story image -->
+        <img :src="activeStory.image_url" class="max-w-[90vw] max-h-[80vh] object-contain rounded-2xl shadow-2xl" />
+        <!-- Close -->
+        <button @click="closeStory" class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
+          <BIcon name="X" class="w-5 h-5" />
+        </button>
       </div>
     </Transition>
   </Teleport>

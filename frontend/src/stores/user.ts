@@ -26,13 +26,23 @@ export interface UserProfile {
   fursona_name: string | null
   fursona_color: string | null
   fursona_photo_url: string | null
+  has_fursuit: boolean
+  fursuit_photo_url: string | null
+  fursuit_description: string | null
+  fursuit_maker: string | null
   birth_date: string | null
   relationship_since: string | null
   pinned_post_id: string | null
   role: string
   created_at: string
+  subscription_tier?: string
+  profile_theme?: string | null
+  profile_bg_url?: string | null
+  profile_frame?: string | null
   _count?: { followers: number; following: number; posts: number }
   pinnedPost?: any | null
+  is_verified?: boolean
+  verified_at?: string | null
 }
 
 export interface UpdateProfileInput {
@@ -55,7 +65,15 @@ export interface UpdateProfileInput {
   country?: string
   fursona_color?: string
   fursona_photo_url?: string
+  has_fursuit?: boolean
+  fursuit_photo_url?: string | null
+  fursuit_description?: string | null
+  fursuit_maker?: string | null
   birth_date?: string | null
+  subscription_tier?: string
+  profile_theme?: string | null
+  profile_bg_url?: string | null
+  profile_frame?: string | null
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
