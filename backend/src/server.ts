@@ -35,7 +35,11 @@ if (!jwtSecret) {
 
 const fastify = Fastify({ logger: true, bodyLimit: 26_214_400 }); // 25 MB
 
-fastify.register(cors, { origin: true });
+// Allow specific origins in production; fall back to wildcard for development only
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : true // dev fallback
+fastify.register(cors, { origin: allowedOrigins, credentials: true });
 fastify.register(jwt, { secret: jwtSecret || 'bloomly_secret_dev_only' });
 fastify.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
 fastify.register(rateLimit, {
@@ -104,6 +108,12 @@ fastify.register(async function (fastify) {
 
     connection.socket.on('message', async (raw: Buffer) => {
       try {
+        // Guard against excessively large WebSocket frames (prevent DoS)
+        if (raw.length > 65_536) {
+          connection.socket.send(JSON.stringify({ type: 'error', message: 'Message too large' }))
+          return
+        }
+
         const msg = JSON.parse(raw.toString())
 
         if (msg?.type === 'ping') {

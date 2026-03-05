@@ -51,9 +51,10 @@ export const messageService = {
       })
     }
 
-    // Find an existing conversation where BOTH users participate
+    // Find an existing 1-to-1 (non-group) conversation where BOTH users participate
     const existing = await prisma.conversation.findFirst({
       where: {
+        is_group: false,
         AND: [
           { participants: { some: { user_id: userA } } },
           { participants: { some: { user_id: userB } } },
@@ -117,27 +118,24 @@ export const messageService = {
   },
 
   /**
-   * Count unread messages across all conversations.
+   * Count unread messages across all conversations — single aggregated query.
    */
   async getUnreadCount(userId: string): Promise<number> {
-    const parts = await prisma.conversationParticipant.findMany({
-      where: { user_id: userId },
-      select: { conversation_id: true, last_read_at: true },
-    });
-
-    let total = 0;
-    for (const p of parts) {
-      const count = await prisma.message.count({
-        where: {
-          conversation_id: p.conversation_id,
-          sender_id: { not: userId },
-          deleted_at: null,
-          ...(p.last_read_at ? { created_at: { gt: p.last_read_at } } : {}),
-        },
-      });
-      total += count;
-    }
-    return total;
+    type Row = { count: bigint }
+    const rows = await prisma.$queryRaw<Row[]>`
+      SELECT COUNT(*) AS count
+      FROM "Message" m
+      JOIN "ConversationParticipant" cp
+        ON cp.conversation_id = m.conversation_id
+       AND cp.user_id = ${userId}
+      WHERE m.sender_id   <> ${userId}
+        AND m.deleted_at  IS NULL
+        AND (
+          cp.last_read_at IS NULL
+          OR m.created_at > cp.last_read_at
+        )
+    `
+    return Number(rows[0]?.count ?? 0)
   },
 
   /**

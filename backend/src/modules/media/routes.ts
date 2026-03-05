@@ -1,6 +1,17 @@
 import { FastifyInstance } from 'fastify';
 import { uploadFile } from './service.js';
 
+const ALLOWED_MIME_PREFIXES = ['image/', 'video/', 'audio/'];
+const ALLOWED_MIME_TYPES = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif',
+  'video/mp4', 'video/webm', 'video/quicktime',
+  'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/mp4',
+]);
+
+function isAllowedMime(mime: string): boolean {
+  return ALLOWED_MIME_TYPES.has(mime) || ALLOWED_MIME_PREFIXES.some((p) => mime.startsWith(p));
+}
+
 export async function mediaRoutes(fastify: FastifyInstance) {
   fastify.post(
     '/upload',
@@ -10,6 +21,10 @@ export async function mediaRoutes(fastify: FastifyInstance) {
 
       if (!data) {
         return reply.code(400).send({ success: false, data: null, error: { code: 'NO_FILE', message: 'No file uploaded' } });
+      }
+
+      if (!isAllowedMime(data.mimetype)) {
+        return reply.code(415).send({ success: false, data: null, error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'File type not allowed' } });
       }
 
       try {
@@ -23,7 +38,10 @@ export async function mediaRoutes(fastify: FastifyInstance) {
           return reply.code(400).send({ success: false, data: null, error: { code: 'NO_FILE', message: 'Uploaded file is empty' } });
         }
 
-        const folder = ((request.query as any).folder || 'posts') as 'posts' | 'avatars' | 'banners' | 'messages' | 'backgrounds';
+        const ALLOWED_FOLDERS = ['posts', 'avatars', 'banners', 'messages', 'backgrounds'] as const;
+        type Folder = typeof ALLOWED_FOLDERS[number];
+        const rawFolder = (request.query as any).folder ?? 'posts';
+        const folder: Folder = ALLOWED_FOLDERS.includes(rawFolder) ? rawFolder : 'posts';
         const url = await uploadFile(buf, data.filename, data.mimetype, folder);
         return reply.send({ success: true, data: { url }, error: null });
       } catch (err: any) {

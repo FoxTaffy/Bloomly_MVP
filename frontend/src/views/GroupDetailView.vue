@@ -10,6 +10,7 @@ import MediaUpload from '@/components/MediaUpload.vue'
 import EventCard from '@/components/groups/EventCard.vue'
 import TicketCard from '@/components/groups/TicketCard.vue'
 import AchievementBadge from '@/components/groups/AchievementBadge.vue'
+import AppBadge from '@/components/shared/AppBadge.vue'
 import { useGroupsStore } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
@@ -47,7 +48,7 @@ async function submitRating(value: number) {
   if (!group.value || ratingSubmitting.value) return
   ratingSubmitting.value = true
   try {
-    const result = await groupsStore.rateGroup(group.value.id, value)
+    await groupsStore.rateGroup(group.value.id, value)
     myRating.value = value
     showRatingModal.value = false
   } catch (e) { console.error('Rate failed', e) }
@@ -374,6 +375,13 @@ async function loadMoreMembers() {
                       {{ group.commissionInfo.status === 'open' ? 'Заказы открыты' : group.commissionInfo.status === 'waitlist' ? 'Лист ожидания' : 'Закрыты' }}
                     </span>
                     <span v-if="group.is_nsfw" class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase bg-brand-error/15 text-brand-error border border-brand-error/25">18+</span>
+                    <!-- Group tier badge -->
+                    <AppBadge
+                      v-if="(group as any).badge_level && (group as any).badge_level !== 'none'"
+                      type="group"
+                      :level="(group as any).badge_level"
+                      size="sm"
+                    />
                   </div>
 
                   <!-- Sub-info row -->

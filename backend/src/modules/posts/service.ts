@@ -2,6 +2,9 @@ import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import type { CreatePostInput, GetPostsQuery } from './types.js';
 
+/** Reusable author select for posts — includes verification fields */
+const AUTHOR_SELECT = { id: true, username: true, display_name: true, avatar_url: true, is_verified: true, verification_type: true } as const;
+
 export const postService = {
   async createPost(input: CreatePostInput) {
     const content = (input.content ?? '').trim();
@@ -52,7 +55,7 @@ export const postService = {
       return tx.post.findUnique({
         where: { id: post.id },
         include: {
-          author: { select: { id: true, username: true, display_name: true } },
+          author: { select: AUTHOR_SELECT },
           tags: { include: { tag: true } },
           _count: { select: { votes: true, repaws: true, comments: true } },
         },
@@ -64,7 +67,7 @@ export const postService = {
     const post = await prisma.post.findUnique({
       where: { id: postId, deleted_at: null },
       include: {
-        author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        author: { select: AUTHOR_SELECT },
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: true } },
       },
@@ -105,7 +108,7 @@ export const postService = {
       skip: (pageNum - 1) * limitNum,
       take: limitNum,
       include: {
-        author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        author: { select: AUTHOR_SELECT },
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: true } }
       },
@@ -114,7 +117,7 @@ export const postService = {
 
   async getPersonalizedPosts(userId: string, safeMode: boolean = false, pageNum: number = 1, limitNum: number = 30) {
     const postInclude = {
-      author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+      author: { select: AUTHOR_SELECT },
       tags: { include: { tag: true } },
       _count: { select: { votes: true, repaws: true, comments: true } },
     };
@@ -236,11 +239,12 @@ export const postService = {
         });
       }
 
-      // Recalculate rating from active (non-deleted) votes only
-      const activeVotes = await tx.vote.findMany({
+      // Recalculate rating using aggregate sum — much faster than fetching all rows
+      const agg = await tx.vote.aggregate({
         where: { post_id: postId, deleted_at: null },
+        _sum: { value: true },
       });
-      const newRating = activeVotes.reduce((acc, v) => acc + v.value, 0);
+      const newRating = agg._sum.value ?? 0;
 
       const updated = await tx.post.update({
         where: { id: postId },
@@ -317,7 +321,7 @@ export const postService = {
       orderBy: { created_at: 'desc' },
       take,
       include: {
-        author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        author: { select: AUTHOR_SELECT },
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: true } },
       },
@@ -330,7 +334,7 @@ export const postService = {
       orderBy: { created_at: 'desc' },
       take,
       include: {
-        author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        author: { select: AUTHOR_SELECT },
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: true } },
       },
@@ -345,7 +349,7 @@ export const postService = {
       include: {
         post: {
           include: {
-            author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+            author: { select: AUTHOR_SELECT },
             tags: { include: { tag: true } },
             _count: { select: { votes: true, repaws: true } },
           },
@@ -363,7 +367,7 @@ export const postService = {
       include: {
         post: {
           include: {
-            author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+            author: { select: AUTHOR_SELECT },
             tags: { include: { tag: true } },
             _count: { select: { votes: true, repaws: true } },
           },
@@ -399,7 +403,7 @@ export const postService = {
         parent_id: parentId ?? null,
       },
       include: {
-        author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        author: { select: AUTHOR_SELECT },
         _count: { select: { replies: true, votes: true } },
       },
     });
@@ -444,13 +448,13 @@ export const postService = {
       where: { post_id: postId, parent_id: null, deleted_at: null },
       orderBy: { created_at: 'asc' },
       include: {
-        author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        author: { select: AUTHOR_SELECT },
         _count: { select: { replies: true } },
         replies: {
           where: { deleted_at: null },
           orderBy: { created_at: 'asc' },
           include: {
-            author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+            author: { select: AUTHOR_SELECT },
             _count: { select: { replies: true } },
           },
         },
@@ -493,31 +497,31 @@ export const postService = {
   },
 
   async deletePost(userId: string, postId: string, isAdmin: boolean) {
-    const post = await prisma.post.findUnique({ where: { id: postId } });
+    const post = await prisma.post.findUnique({ where: { id: postId, deleted_at: null } });
     if (!post) throw new Error('Post not found');
     if (!isAdmin && post.author_id !== userId) throw new Error('Not authorized');
     return prisma.post.update({ where: { id: postId }, data: { deleted_at: new Date() } });
   },
 
   async editPost(userId: string, postId: string, content: string) {
-    const post = await prisma.post.findUnique({ where: { id: postId } });
+    const post = await prisma.post.findUnique({ where: { id: postId, deleted_at: null } });
     if (!post) throw new Error('Post not found');
     if (post.author_id !== userId) throw new Error('Not authorized');
     return prisma.post.update({
       where: { id: postId },
       data: { content },
       include: {
-        author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        author: { select: AUTHOR_SELECT },
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true } },
       },
     });
   },
 
-  async deleteComment(userId: string, commentId: string) {
-    const comment = await prisma.comment.findUnique({ where: { id: commentId } });
+  async deleteComment(userId: string, commentId: string, isAdmin = false) {
+    const comment = await prisma.comment.findUnique({ where: { id: commentId, deleted_at: null } });
     if (!comment) throw new Error('Comment not found');
-    if (comment.author_id !== userId) throw new Error('Not authorized');
+    if (!isAdmin && comment.author_id !== userId) throw new Error('Not authorized');
     return prisma.comment.update({ where: { id: commentId }, data: { deleted_at: new Date() } });
   },
 

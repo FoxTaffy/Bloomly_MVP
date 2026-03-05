@@ -1,19 +1,23 @@
-FROM node:20-alpine
-
-# Устанавливаем зависимости для Prisma и OpenSSL 1.1
-# Мы добавляем репозиторий со старыми библиотеками, чтобы Prisma могла их найти
-RUN apk add --no-cache openssl libc6-compat
-
+# Этап 1: Сборка приложения
+FROM node:20-alpine AS builder
 WORKDIR /app
-
+RUN apk add --no-cache libc6-compat
 COPY package*.json ./
 RUN npm install
-
 COPY . .
+RUN npm run build
 
-# Генерируем клиент Prisma специально под текущую архитектуру
+# Этап 2: Создание production-образа
+FROM node:20-alpine
+WORKDIR /app
+RUN apk add --no-cache openssl
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
+
+# Генерируем клиент Prisma для production
 RUN npx prisma generate
 
 EXPOSE 8080
-
-CMD ["npx", "tsx", "src/server.ts"]
+CMD ["npm", "run", "start"]

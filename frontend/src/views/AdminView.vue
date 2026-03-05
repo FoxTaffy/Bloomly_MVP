@@ -215,7 +215,16 @@ const reviewVerRequest = async (id: string, action: 'approve' | 'reject', reason
   try {
     await api.patch(`/verification/admin/requests/${id}`, { action, reason })
     verRequests.value = verRequests.value.filter(r => r.id !== id)
+    // Could also re-fetch: fetchVerRequests()
   } catch {}
+}
+
+const expandedEvidence = ref<string | null>(null)
+const verTypeLabels: Record<string, string> = { artist: 'Художник', master: 'Мастер', event: 'Мероприятие' }
+const verTypeColors: Record<string, string> = {
+  artist: 'text-purple-400 bg-purple-400/10 border-purple-400/20',
+  master: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
+  event: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
 }
 
 // Tab switch data loading
@@ -602,61 +611,84 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
           <div v-for="n in 4" :key="n" class="bg-brand-card border border-brand-border rounded-2xl p-4 animate-pulse h-20"></div>
         </div>
         <div v-else-if="verRequests.length === 0" class="text-center py-12 text-white/55">Заявок нет</div>
-        <div v-else class="space-y-2">
+        <div v-else class="space-y-3">
           <div v-for="req in verRequests" :key="req.id"
-            class="bg-brand-card border border-brand-border rounded-2xl px-4 py-3 flex items-start gap-3 hover:border-blue-500/30 transition-all">
-            <img v-if="req.user?.avatar_url" :src="req.user.avatar_url"
-              class="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-brand-border" />
-            <div v-else class="w-9 h-9 rounded-full flex-shrink-0 border border-brand-border bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm">
-              {{ (req.user?.display_name || req.user?.username || '?')[0].toUpperCase() }}
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="text-xs font-bold px-2 py-0.5 rounded-full border"
-                  :class="req.status === 'pending' ? 'text-amber-400 bg-amber-400/10 border-amber-400/20' : req.status === 'approved' ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
-                  {{ { pending: 'Ожидает', approved: 'Одобрено', rejected: 'Отклонено' }[req.status] }}
-                </span>
-                <span class="text-xs text-white/55">{{ formatDate(req.created_at) }}</span>
+            class="bg-brand-card border border-brand-border rounded-2xl overflow-hidden hover:border-blue-500/30 transition-all">
+            <div class="px-4 py-3 flex items-start gap-3">
+              <img v-if="req.user?.avatar_url" :src="req.user.avatar_url"
+                class="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-brand-border" />
+              <div v-else class="w-9 h-9 rounded-full flex-shrink-0 border border-brand-border bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm">
+                {{ (req.user?.display_name || req.user?.username || '?')[0].toUpperCase() }}
               </div>
-              <p class="font-bold text-sm text-white">{{ req.user?.display_name || req.user?.username }}</p>
-              <p class="text-xs text-white/55 mt-0.5">@{{ req.user?.username }}</p>
-              <!-- Criteria summary -->
-              <div class="flex flex-wrap gap-2 mt-2">
-                <span class="text-[10px] px-2 py-0.5 rounded-full border"
-                  :class="req.account_age_days >= 14 ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
-                  {{ req.account_age_days }}дн.
-                </span>
-                <span class="text-[10px] px-2 py-0.5 rounded-full border"
-                  :class="req.post_count >= 3 ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
-                  {{ req.post_count }} постов
-                </span>
-                <span class="text-[10px] px-2 py-0.5 rounded-full border"
-                  :class="req.has_avatar ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
-                  Аватар {{ req.has_avatar ? '✓' : '✗' }}
-                </span>
-                <span class="text-[10px] px-2 py-0.5 rounded-full border"
-                  :class="req.has_bio ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
-                  Био {{ req.has_bio ? '✓' : '✗' }}
-                </span>
-                <span class="text-[10px] px-2 py-0.5 rounded-full border"
-                  :class="req.has_email ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
-                  Email {{ req.has_email ? '✓' : '✗' }}
-                </span>
-                <span class="text-[10px] px-2 py-0.5 rounded-full border"
-                  :class="req.follower_count >= 5 ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
-                  {{ req.follower_count }} подписч.
-                </span>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
+                  <span class="text-xs font-bold px-2 py-0.5 rounded-full border"
+                    :class="req.status === 'pending' ? 'text-amber-400 bg-amber-400/10 border-amber-400/20' : req.status === 'approved' ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
+                    {{ { pending: 'Ожидает', approved: 'Одобрено', rejected: 'Отклонено' }[req.status] }}
+                  </span>
+                  <!-- Verification type badge -->
+                  <span v-if="req.verification_type" class="text-xs font-bold px-2 py-0.5 rounded-full border inline-flex items-center gap-1"
+                    :class="verTypeColors[req.verification_type] || 'text-blue-400 bg-blue-400/10 border-blue-400/20'">
+                    <img :src="`/icons/badges/${req.verification_type}.svg`" class="w-3.5 h-3.5" />
+                    {{ verTypeLabels[req.verification_type] || req.verification_type }}
+                  </span>
+                  <span class="text-xs text-white/55">{{ formatDate(req.created_at) }}</span>
+                </div>
+                <p class="font-bold text-sm text-white">{{ req.user?.display_name || req.user?.username }}</p>
+                <p class="text-xs text-white/55 mt-0.5">@{{ req.user?.username }} · UUID: {{ req.user_id?.slice(0,8) }}…</p>
+                <!-- Criteria summary -->
+                <div class="flex flex-wrap gap-2 mt-2">
+                  <span class="text-[10px] px-2 py-0.5 rounded-full border"
+                    :class="req.account_age_days >= 14 ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
+                    {{ req.account_age_days }}дн.
+                  </span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full border"
+                    :class="req.post_count >= 3 ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
+                    {{ req.post_count }} постов
+                  </span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full border"
+                    :class="req.has_avatar ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
+                    Аватар {{ req.has_avatar ? '✓' : '✗' }}
+                  </span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full border"
+                    :class="req.has_bio ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
+                    Био {{ req.has_bio ? '✓' : '✗' }}
+                  </span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full border"
+                    :class="req.has_email ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
+                    Email {{ req.has_email ? '✓' : '✗' }}
+                  </span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full border"
+                    :class="req.follower_count >= 5 ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 'text-rose-400 bg-rose-400/10 border-rose-400/20'">
+                    {{ req.follower_count }} подписч.
+                  </span>
+                </div>
+
+                <!-- Evidence images toggle -->
+                <div v-if="req.evidence_urls?.length > 0" class="mt-3">
+                  <button type="button" @click="expandedEvidence = expandedEvidence === req.id ? null : req.id"
+                    class="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors">
+                    <svg class="w-3.5 h-3.5 transition-transform" :class="expandedEvidence === req.id ? 'rotate-90' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    Доказательства ({{ req.evidence_urls.length }})
+                  </button>
+                  <div v-if="expandedEvidence === req.id" class="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-2">
+                    <a v-for="(url, idx) in req.evidence_urls" :key="idx" :href="url" target="_blank"
+                      class="block rounded-xl overflow-hidden border border-brand-border aspect-square hover:border-blue-500/40 transition-all">
+                      <img :src="url" class="w-full h-full object-cover" />
+                    </a>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div v-if="req.status === 'pending'" class="flex flex-col gap-2 flex-shrink-0">
-              <button @click="reviewVerRequest(req.id, 'approve')"
-                class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/25 transition-colors">
-                Одобрить
-              </button>
-              <button @click="reviewVerRequest(req.id, 'reject', prompt('Причина отклонения:') || undefined)"
-                class="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition-colors">
-                Отклонить
-              </button>
+              <div v-if="req.status === 'pending'" class="flex flex-col gap-2 flex-shrink-0">
+                <button @click="reviewVerRequest(req.id, 'approve')"
+                  class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/25 transition-colors">
+                  Одобрить
+                </button>
+                <button @click="reviewVerRequest(req.id, 'reject', prompt('Причина отклонения:') || undefined)"
+                  class="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition-colors">
+                  Отклонить
+                </button>
+              </div>
             </div>
           </div>
         </div>

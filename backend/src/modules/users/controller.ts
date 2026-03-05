@@ -26,8 +26,8 @@ export async function updateMeHandler(
   reply: FastifyReply,
 ) {
   const payload = request.user as JwtPayload;
-  // Never allow role changes via the general update endpoint
-  const { role: _role, ...safeData } = request.body as any;
+  // Never allow privileged field changes via the general update endpoint
+  const { role: _role, subscription_tier: _tier, is_verified: _v, verified_at: _va, ...safeData } = request.body as any;
   const user = await usersService.updateUser(payload.id, safeData);
 
   return reply.send({ success: true, data: { user }, error: null });
@@ -143,6 +143,21 @@ export async function getPublicKeyHandler(
 ) {
   const key = await usersService.getPublicKey(request.params.id);
   return reply.send({ success: true, data: { public_key: key }, error: null });
+}
+
+export async function updateSubscriptionHandler(
+  request: FastifyRequest<{ Body: { tier: string } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = request.user as JwtPayload;
+    const { tier } = request.body;
+    const data = await usersService.updateSubscriptionTier(userId, tier);
+    return reply.send({ success: true, data, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'SUBSCRIPTION_ERROR', message: e.message } });
+  }
 }
 
 export async function notifyStatusHandler(

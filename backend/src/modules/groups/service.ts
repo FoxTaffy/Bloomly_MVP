@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma.js';
+import { getGroupBadgeLevel } from '../../lib/badges.js';
 import type {
   CreateGroupInput,
   UpdateGroupInput,
@@ -36,6 +37,7 @@ const GROUP_SELECT = {
   rating: true,
   rating_count: true,
   subscriber_count: true,
+  members_count: true,
   production_time: true,
   delivery_info: true,
   completed_works: true,
@@ -98,13 +100,16 @@ export const groupService = {
       prisma.group.count({ where }),
     ]);
 
-    return { groups, total, page, limit };
+    // Attach computed badge_level
+    const enriched = groups.map((g: any) => ({ ...g, badge_level: getGroupBadgeLevel(g.members_count) }));
+
+    return { groups: enriched, total, page, limit };
   },
 
   // ── get by slug or id ─────────────────────────────────────────────────────
   async getBySlugOrId(slugOrId: string) {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slugOrId);
-    return prisma.group.findFirst({
+    const raw = await prisma.group.findFirst({
       where: {
         deleted_at: null,
         ...(isUuid ? { id: slugOrId } : { slug: slugOrId }),
@@ -116,6 +121,8 @@ export const groupService = {
         achievements: { orderBy: { earned_at: 'desc' } },
       },
     });
+    if (!raw) return null;
+    return { ...raw, badge_level: getGroupBadgeLevel(raw.members_count) };
   },
 
   // ── create ────────────────────────────────────────────────────────────────
@@ -134,6 +141,7 @@ export const groupService = {
           mascot_url: input.mascotUrl,
           social_links: input.socialLinks ?? {},
           is_public: input.isPublic ?? true,
+          members_count: 1, // owner is the first member
         },
       });
 
@@ -180,17 +188,37 @@ export const groupService = {
 
   // ── membership ────────────────────────────────────────────────────────────
   async join(groupId: string, userId: string) {
-    return prisma.groupMember.upsert({
+    // Check if already a member
+    const existing = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+    });
+    const membership = await prisma.groupMember.upsert({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
       update: {},
       create: { group_id: groupId, user_id: userId, role: 'member' },
     });
+    // Increment members_count only if the user was NOT already a member
+    if (!existing) {
+      await prisma.group.update({
+        where: { id: groupId },
+        data: { members_count: { increment: 1 } },
+      });
+    }
+    return membership;
   },
 
   async leave(groupId: string, userId: string) {
-    return prisma.groupMember.deleteMany({
+    const result = await prisma.groupMember.deleteMany({
       where: { group_id: groupId, user_id: userId, role: { not: 'owner' } },
     });
+    // Decrement members_count only if a row was actually deleted
+    if (result.count > 0) {
+      await prisma.group.update({
+        where: { id: groupId },
+        data: { members_count: { decrement: result.count } },
+      });
+    }
+    return result;
   },
 
   async getMembers(groupId: string, page = 1, limit = 30) {

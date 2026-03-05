@@ -20,6 +20,8 @@ export interface UserPublicProfile {
   country: string | null;
   fursona_name: string | null;
   fursona_color: string | null;
+  fursona_gender: string | null;
+  fursona_description: string | null;
   fursona_photo_url: string | null;
   has_fursuit: boolean;
   fursuit_photo_url: string | null;
@@ -35,6 +37,10 @@ export interface UserPublicProfile {
   profile_theme: string | null;
   profile_bg_url: string | null;
   profile_frame: string | null;
+  is_verified: boolean;
+  verified_at: Date | null;
+  verification_type: string | null;
+  artist_since: Date | null;
 }
 
 export interface UpdateUserInput {
@@ -45,6 +51,8 @@ export interface UpdateUserInput {
   status?: string;
   persona?: string;
   fursona_name?: string;
+  fursona_gender?: string;
+  fursona_description?: string;
   likes?: string[];
   dislikes?: string[];
   accent_color?: string;
@@ -68,6 +76,7 @@ export interface UpdateUserInput {
   profile_theme?: string | null;
   profile_bg_url?: string | null;
   profile_frame?: string | null;
+  artist_since?: string | null;
 }
 
 export interface JwtPayload {

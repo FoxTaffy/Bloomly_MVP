@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "node --loader ts-node/esm src/server.ts",
-    "start": "node --loader ts-node/esm src/server.ts",
+    "start": "node dist/server.js",
+    "build": "npx tsc -p tsconfig.json",
     "db:migrate": "npx prisma migrate dev",
     "db:generate": "npx prisma generate",
     "db:seed": "node --loader ts-node/esm seed.ts"

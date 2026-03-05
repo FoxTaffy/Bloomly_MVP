@@ -1,12 +1,20 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { AuthService } from './service.js';
+import prisma from '../../config/prisma.js';
 import type { RegisterInput, LoginInput } from './types.js';
 
 const authService = new AuthService();
 
-export const statsHandler = async (_req: FastifyRequest, reply: FastifyReply) => {
-  const stats = await authService.getPublicStats()
-  return reply.send({ success: true, data: stats, error: null })
+export const statsHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+  // Use actual WebSocket online map (set in server.ts) — accurate real-time count
+  const onlineMap: Map<string, Set<any>> | undefined = (req.server as any).onlineUsers
+  const online = onlineMap ? onlineMap.size : 0
+
+  const [users, posts] = await Promise.all([
+    prisma.user.count({ where: { deleted_at: null } }),
+    prisma.post.count({ where: { deleted_at: null } }),
+  ])
+  return reply.send({ success: true, data: { users, posts, online }, error: null })
 }
 
 export const forgotPasswordHandler = async (

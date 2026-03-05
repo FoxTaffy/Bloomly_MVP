@@ -37,6 +37,8 @@ export interface Group {
   rating: number
   rating_count: number
   subscriber_count: number
+  members_count: number
+  badge_level?: string
   production_time: string | null
   delivery_info: string | null
   completed_works: number

@@ -70,6 +70,13 @@ export async function authRoutes(fastify: FastifyInstance) {
           avatar_url: true,
           bio: true,
           status: true,
+          subscription_tier: true,
+          profile_theme: true,
+          profile_bg_url: true,
+          profile_frame: true,
+          is_verified: true,
+          verification_type: true,
+          badge_type: true,
         },
       });
       if (!user) {

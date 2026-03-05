@@ -136,12 +136,15 @@ async function selectPlan(planId: string) {
   if (planId === currentTier.value || planId === 'free') return
   upgrading.value = planId
   try {
-    await api.patch('/users/me', { subscription_tier: planId } as any)
-    // update local user
-    if (auth.user) (auth.user as any).subscription_tier = planId
+    await api.patch('/users/me/subscription', { tier: planId })
+    // update local user state and persist
+    if (auth.user) {
+      ;(auth.user as any).subscription_tier = planId
+      const storage = localStorage.getItem('access_token') ? localStorage : sessionStorage
+      storage.setItem('auth_user', JSON.stringify(auth.user))
+    }
     toast.value = `Подписка ${planId.charAt(0).toUpperCase() + planId.slice(1)} активирована!`
     setTimeout(() => { toast.value = '' }, 3000)
-    sessionStorage.setItem('auth_user', JSON.stringify(auth.user))
   } catch {
     toast.value = 'Ошибка при активации подписки'
     setTimeout(() => { toast.value = '' }, 3000)

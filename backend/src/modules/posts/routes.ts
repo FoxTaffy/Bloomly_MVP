@@ -51,24 +51,31 @@ const getPostsSchema = {
 
 export async function postsRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
-  fastify.post('/', { schema: createPostSchema, onRequest: [fastify.authenticate] }, createPostHandler as any);
-  fastify.post('/:id/vote', { schema: voteSchema, onRequest: [fastify.authenticate] }, votePostHandler as any);
-  fastify.post('/:id/repaw', auth, repawPostHandler as any);
-  fastify.post('/:id/favourite', auth, favouritePostHandler as any);
-  fastify.post('/:id/comments', auth, createCommentHandler as any);
-  fastify.get('/:id/comments', getCommentsHandler as any);
-  fastify.post('/comments/:commentId/vote', auth, voteCommentHandler as any);
-  fastify.delete('/comments/:commentId', auth, deleteCommentHandler as any);
-  fastify.delete('/:id', auth, deletePostHandler as any);
-  fastify.patch('/:id', auth, editPostHandler as any);
-  fastify.get('/trending-tags', getTrendingTagsHandler as any);
-  fastify.get('/:id', getPostByIdHandler as any);
-  fastify.get('/status', auth, getUserPostStatusHandler as any);
-  // User-specific endpoints (must come before /:id)
-  fastify.get('/user/:userId', getUserPostsHandler as any);
-  fastify.get('/user/:userId/media', getUserMediaPostsHandler as any);
-  fastify.get('/user/:userId/repaws', getUserRepawsHandler as any);
-  fastify.get('/user/:userId/likes', getUserFavouritesHandler as any);
+
+  // ── Static / non-parametric ─────────────────────────────────────────────
   fastify.get('/', { schema: getPostsSchema }, getPostsHandler as any);
   fastify.get('/personalized', auth, getPersonalizedPostsHandler as any);
+  fastify.get('/trending-tags', getTrendingTagsHandler as any);
+  fastify.get('/status', auth, getUserPostStatusHandler as any);
+
+  // ── User-specific ───────────────────────────────────────────────────────
+  fastify.get('/user/:userId',        getUserPostsHandler as any);
+  fastify.get('/user/:userId/media',  getUserMediaPostsHandler as any);
+  fastify.get('/user/:userId/repaws', getUserRepawsHandler as any);
+  fastify.get('/user/:userId/likes',  getUserFavouritesHandler as any);
+
+  // ── Comment sub-resources ───────────────────────────────────────────────
+  fastify.post('/comments/:commentId/vote', auth, voteCommentHandler as any);
+  fastify.delete('/comments/:commentId',    auth, deleteCommentHandler as any);
+
+  // ── Single-post actions ─────────────────────────────────────────────────
+  fastify.post('/', { schema: createPostSchema, onRequest: [fastify.authenticate] }, createPostHandler as any);
+  fastify.get('/:id', getPostByIdHandler as any);
+  fastify.delete('/:id', auth, deletePostHandler as any);
+  fastify.patch('/:id',  auth, editPostHandler as any);
+  fastify.post('/:id/vote',      { schema: voteSchema, onRequest: [fastify.authenticate] }, votePostHandler as any);
+  fastify.post('/:id/repaw',     auth, repawPostHandler as any);
+  fastify.post('/:id/favourite', auth, favouritePostHandler as any);
+  fastify.post('/:id/comments',  auth, createCommentHandler as any);
+  fastify.get('/:id/comments',   getCommentsHandler as any);
 }

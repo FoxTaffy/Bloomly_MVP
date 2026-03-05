@@ -19,6 +19,13 @@
                 :to="'/profile/' + post.author.id"
                 class="font-bold text-white hover:text-brand-accent transition-colors text-sm truncate"
               >{{ post.author.display_name || post.author.username }}</router-link>
+              <!-- Verification badge -->
+              <img v-if="post.author.is_verified && post.author.verification_type"
+                :src="`/icons/badges/${post.author.verification_type}.svg`"
+                class="w-4 h-4 flex-shrink-0" :title="({ artist: 'Верифицированный художник', master: 'Верифицированный мастер', event: 'Мероприятие' } as Record<string, string>)[post.author.verification_type] || 'Верифицирован'" />
+              <img v-else-if="post.author.is_verified"
+                src="/icons/badges/verified.svg"
+                class="w-4 h-4 flex-shrink-0" title="Верифицирован" />
               <span v-if="showRepawLabel"
                 class="inline-flex items-center gap-1 text-[10px] text-white/55 bg-brand-card border border-brand-border px-1.5 py-0.5 rounded-md font-semibold">
                 <Repeat2 class="w-3 h-3" /> Репав

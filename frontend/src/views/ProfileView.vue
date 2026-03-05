@@ -11,7 +11,7 @@
         <div class="w-full max-w-lg bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
           <div class="flex items-center justify-between px-6 py-4 border-b border-brand-border sticky top-0 bg-brand-card z-10">
             <h3 class="font-bold text-white text-lg">
-              {{ editSection === 'bio' ? 'О себе' : editSection === 'fursona' ? 'Фурсона' : editSection === 'fursuit' ? 'Фурсьют' : editSection === 'contacts' ? 'Контакты' : editSection === 'basics' ? 'Основное' : editSection === 'socials' ? 'Соцсети' : 'Редактировать' }}
+              {{ editSection === 'bio' ? 'О себе' : editSection === 'fursona' ? 'Фурсона' : editSection === 'fursuit' ? 'Фурсьют' : editSection === 'contacts' ? 'Контакты' : editSection === 'basics' ? 'Основное' : editSection === 'socials' ? 'Соцсети' : 'Изменить профиль' }}
             </h3>
             <button @click="showEditModal = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
               <BIcon name="X" class="w-4 h-4" />
@@ -36,6 +36,12 @@
                 <input v-model="editForm.job_title" type="text" maxlength="80" placeholder="Художник, Программист…"
                   class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
               </div>
+              <div v-if="!(viewedProfile as any)?.is_verified">
+                <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5">Творчество с (дата)</label>
+                <input v-model="editForm.artist_since" type="date" :max="todayISO"
+                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
+                <p class="text-[10px] text-white/40 mt-1">Определяет ваш значок стажа художника</p>
+              </div>
             </template>
 
             <!-- Bio -->
@@ -50,58 +56,119 @@
 
             <!-- Fursona -->
             <template v-if="editSection === 'fursona'">
-              <!-- Step indicators -->
-              <div class="flex gap-2 mb-2">
-                <div v-for="(step, i) in fursonaSteps" :key="i"
-                  class="flex-1 flex flex-col items-center gap-1">
-                  <div class="w-full h-1 rounded-full" :class="step.done ? 'bg-brand-accent' : step.locked ? 'bg-brand-border/40' : 'bg-brand-border'"></div>
-                  <span class="text-[10px] font-semibold" :class="step.done ? 'text-brand-accent' : 'text-white/55'">{{ step.label }}</span>
+              <!-- Hero banner -->
+              <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-accent/20 via-purple-500/10 to-pink-500/10 border border-brand-accent/20 p-5 mb-1">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-brand-accent/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                <div class="flex items-center gap-3 relative z-10">
+                  <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-accent to-purple-500 flex items-center justify-center shadow-lg shadow-brand-accent/25">
+                    <BIcon name="PawPrint" class="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h4 class="text-sm font-extrabold text-white">Твоя фурсона</h4>
+                    <p class="text-[11px] text-white/50 mt-0.5">Расскажи о своём персонаже — заполни все поля</p>
+                  </div>
                 </div>
               </div>
-              <!-- Species -->
-              <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-3">
-                <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5"><BIcon name="PawPrint" class="w-3.5 h-3.5 text-brand-accent" /> Шаг 1 — Вид персонажа</p>
+
+              <!-- Имя и вид -->
+              <div class="p-4 bg-gradient-to-br from-brand-bg/80 to-brand-card/40 border border-brand-border/60 rounded-2xl space-y-3">
+                <p class="text-xs font-bold text-brand-accent uppercase tracking-wider flex items-center gap-1.5">
+                  <span class="w-5 h-5 rounded-md bg-brand-accent/15 flex items-center justify-center text-[10px] font-black text-brand-accent">1</span>
+                  Основная информация
+                </p>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label class="block text-xs font-semibold text-white/55 mb-1">Вид / порода</label>
+                    <label class="block text-xs font-semibold text-white/55 mb-1.5">Имя персонажа</label>
+                    <input v-model="editForm.fursona_name" type="text" maxlength="80" placeholder="Как зовут фурсону…"
+                      class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-white/55 mb-1.5">Вид / порода</label>
                     <input v-model="editForm.persona" type="text" placeholder="Волк, Дракон, Лис…"
+                      class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all" />
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-semibold text-white/55 mb-1.5">Пол персонажа</label>
+                    <select v-model="editForm.fursona_gender"
+                      class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all appearance-none">
+                      <option value="">Не указан</option>
+                      <option value="male">Мужской</option>
+                      <option value="female">Женский</option>
+                      <option value="nonbinary">Небинарный</option>
+                      <option value="androgynous">Андрогин</option>
+                      <option value="other">Другой</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-white/55 mb-1.5">Цвет</label>
+                    <div class="flex items-center gap-2">
+                      <input v-model="editForm.fursona_color" type="color"
+                        class="w-10 h-10 rounded-xl border border-brand-border cursor-pointer bg-transparent p-0.5" />
+                      <input v-model="editForm.fursona_color" type="text" maxlength="20" placeholder="#A855F7"
+                        class="flex-1 bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Описание / особенности -->
+              <div class="p-4 bg-gradient-to-br from-brand-bg/80 to-brand-card/40 border border-brand-border/60 rounded-2xl space-y-3">
+                <p class="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <span class="w-5 h-5 rounded-md bg-purple-500/15 flex items-center justify-center text-[10px] font-black text-purple-400">2</span>
+                  Особенности и характер
+                </p>
+                <div>
+                  <label class="block text-xs font-semibold text-white/55 mb-1.5">Описание / особенности</label>
+                  <textarea v-model="editForm.fursona_description" rows="4" maxlength="500"
+                    placeholder="Опиши внешность, характер, историю… Всё, что делает персонажа уникальным."
+                    class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all resize-none leading-relaxed"></textarea>
+                  <p class="text-[11px] text-white/40 mt-1 text-right">{{ (editForm.fursona_description ?? '').length }}/500</p>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-semibold text-white/55 mb-1.5">Любит</label>
+                    <input :value="editForm.likes?.join(', ')" @input="editForm.likes = ($event.target as HTMLInputElement).value.split(',').map(s => s.trim()).filter(Boolean)"
+                      type="text" placeholder="Музыка, Горы…"
                       class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold text-white/55 mb-1">Имя персонажа</label>
-                    <input v-model="editForm.fursona_name" type="text" placeholder="Как зовут фурсону…"
+                    <label class="block text-xs font-semibold text-white/55 mb-1.5">Не любит</label>
+                    <input :value="editForm.dislikes?.join(', ')" @input="editForm.dislikes = ($event.target as HTMLInputElement).value.split(',').map(s => s.trim()).filter(Boolean)"
+                      type="text" placeholder="Шум, Понедельник…"
                       class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
                   </div>
                 </div>
               </div>
-              <!-- Character -->
-              <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-3">
-                <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5"><BIcon name="Heart" class="w-3.5 h-3.5 text-brand-accent" /> Шаг 2 — Характер</p>
-                <div>
-                  <label class="block text-xs font-semibold text-white/55 mb-1">Любит (через запятую)</label>
-                  <input :value="editForm.likes?.join(', ')" @input="editForm.likes = ($event.target as HTMLInputElement).value.split(',').map(s => s.trim()).filter(Boolean)"
-                    type="text" placeholder="Музыка, Горы…"
-                    class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
+
+              <!-- Реф-лист -->
+              <div class="p-4 bg-gradient-to-br from-brand-bg/80 to-brand-card/40 border border-brand-border/60 rounded-2xl space-y-3">
+                <p class="text-xs font-bold text-pink-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <span class="w-5 h-5 rounded-md bg-pink-500/15 flex items-center justify-center text-[10px] font-black text-pink-400">3</span>
+                  Реф-лист
+                </p>
+                <input ref="fursonaRefInput" type="file" accept="image/*" class="sr-only" @change="onFursonaRefUpload" />
+                <div v-if="editForm.fursona_photo_url" class="relative group/ref rounded-xl overflow-hidden border border-brand-border">
+                  <img :src="editForm.fursona_photo_url" class="w-full max-h-48 object-cover" />
+                  <div class="absolute inset-0 bg-black/50 opacity-0 group-hover/ref:opacity-100 transition-all flex items-center justify-center gap-3">
+                    <button type="button" @click="(fursonaRefInput as any)?.click()" class="px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm rounded-lg text-xs font-bold text-white transition-all">
+                      <BIcon name="RefreshCw" class="w-3 h-3 inline mr-1" />Заменить
+                    </button>
+                    <button type="button" @click="editForm.fursona_photo_url = ''" class="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 backdrop-blur-sm rounded-lg text-xs font-bold text-rose-300 transition-all">
+                      <BIcon name="Trash2" class="w-3 h-3 inline mr-1" />Удалить
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label class="block text-xs font-semibold text-white/55 mb-1">Не любит (через запятую)</label>
-                  <input :value="editForm.dislikes?.join(', ')" @input="editForm.dislikes = ($event.target as HTMLInputElement).value.split(',').map(s => s.trim()).filter(Boolean)"
-                    type="text" placeholder="Шум, Понедельник…"
-                    class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
-                </div>
-              </div>
-              <!-- Photo / Ref - locked -->
-              <div class="grid grid-cols-2 gap-3">
-                <div class="p-4 border-2 border-dashed border-brand-border/50 rounded-2xl flex flex-col items-center gap-2 opacity-50 cursor-not-allowed">
-                  <BIcon name="Camera" class="w-6 h-6 text-white/55" />
-                  <p class="text-xs font-semibold text-white/55">Шаг 3 — Фото</p>
-                  <span class="text-[10px] text-white/35 bg-brand-bg px-2 py-0.5 rounded-full">coming soon</span>
-                </div>
-                <div class="p-4 border-2 border-dashed border-brand-border/50 rounded-2xl flex flex-col items-center gap-2 opacity-50 cursor-not-allowed">
-                  <BIcon name="Image" class="w-6 h-6 text-white/55" />
-                  <p class="text-xs font-semibold text-white/55">Шаг 4 — Реф</p>
-                  <span class="text-[10px] text-white/35 bg-brand-bg px-2 py-0.5 rounded-full">coming soon</span>
-                </div>
+                <button v-else type="button" @click="(fursonaRefInput as any)?.click()" :disabled="isUploadingRef"
+                  class="w-full py-6 border-2 border-dashed border-brand-border/60 hover:border-brand-accent/40 rounded-xl flex flex-col items-center gap-2 transition-all group/upload cursor-pointer">
+                  <div class="w-12 h-12 rounded-2xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center group-hover/upload:scale-105 transition-transform">
+                    <span v-if="isUploadingRef" class="w-5 h-5 border-2 border-pink-400 border-t-transparent rounded-full animate-spin" />
+                    <BIcon v-else name="Image" class="w-6 h-6 text-pink-400" />
+                  </div>
+                  <p class="text-xs font-bold text-white/55 group-hover/upload:text-white transition-colors">Загрузить реф-лист</p>
+                  <p class="text-[10px] text-white/35">PNG, JPG до 10 МБ</p>
+                </button>
               </div>
             </template>
 
@@ -405,7 +472,7 @@
                         class="relative inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand-accent to-brand-accent-plus text-white rounded-xl text-sm font-bold shadow-lg shadow-brand-accent/30 hover:shadow-brand-accent/50 hover:scale-[1.03] active:scale-[0.98] transition-all overflow-hidden group">
                         <span class="absolute inset-0 bg-white/0 group-hover:bg-white/8 transition-colors duration-200" />
                         <BIcon name="Pencil" class="w-4 h-4 relative z-10" />
-                        <span class="relative z-10">Редактировать</span>
+                        <span class="relative z-10">Изменить профиль</span>
                       </router-link>
                     </template>
                     <template v-else-if="authStore.isAuthenticated">
@@ -435,6 +502,15 @@
                 <div class="mt-3">
                   <div class="flex items-center flex-wrap gap-2 mb-1">
                     <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white">{{ profileDisplayName }}</h1>
+                    <!-- Verification type SVG badge -->
+                    <img v-if="(viewedProfile as any)?.is_verified && (viewedProfile as any)?.verification_type"
+                      :src="`/icons/badges/${(viewedProfile as any).verification_type}.svg`"
+                      class="w-6 h-6 flex-shrink-0"
+                      :title="({ artist: 'Верифицированный художник', master: 'Верифицированный мастер', event: 'Мероприятие' } as Record<string, string>)[(viewedProfile as any).verification_type] || 'Верифицирован'" />
+                    <img v-else-if="(viewedProfile as any)?.is_verified"
+                      src="/icons/badges/verified.svg"
+                      class="w-6 h-6 flex-shrink-0"
+                      title="Верифицирован" />
                     <span v-if="badgePillLabel" class="inline-flex items-center justify-center w-7 h-7 rounded-lg" :class="badgePillClass" :title="badgePillLabel">
                       <component :is="badgePillIcon" class="w-4 h-4" />
                     </span>
@@ -450,6 +526,13 @@
                       {{ (viewedProfile as any).subscription_tier === 'lite' ? 'Lite' : (viewedProfile as any).subscription_tier === 'pro' ? 'Pro' : 'Business' }}
                     </span>
                     <span v-if="viewedProfile.pronouns" class="px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-semibold text-white/55">{{ viewedProfile.pronouns }}</span>
+                    <!-- Artist Badge -->
+                    <AppBadge
+                      v-if="(viewedProfile as any).badge_level && (viewedProfile as any).badge_level !== 'none'"
+                      type="user"
+                      :level="(viewedProfile as any).badge_level"
+                      size="sm"
+                    />
                     <!-- SOON Badges -->
                     <SoonBadge
                       v-for="badge in profileSoonBadges"
@@ -1264,6 +1347,7 @@ import MediaUpload from '@/components/MediaUpload.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
 import BIcon from '@/components/BIcon.vue'
 import SoonBadge from '@/components/groups/SoonBadge.vue'
+import AppBadge from '@/components/shared/AppBadge.vue'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import api from '@/api'
@@ -1366,12 +1450,17 @@ const fursonaSubTab = ref<'info' | 'personality' | 'features' | 'media'>('person
 const editSection = ref<'basics' | 'bio' | 'fursona' | 'fursuit' | 'contacts' | 'socials'>('bio')
 const isSavingEdit = ref(false)
 const editForm = ref<{
-  display_name?: string; pronouns?: string; job_title?: string
-  bio?: string; persona?: string; fursona_name?: string; likes?: string[]; dislikes?: string[]
+  display_name?: string; pronouns?: string; job_title?: string; artist_since?: string
+  bio?: string; persona?: string; fursona_name?: string; fursona_gender?: string; fursona_description?: string; fursona_color?: string; fursona_photo_url?: string; likes?: string[]; dislikes?: string[]
   location?: string; country?: string; website?: string; relationship_status?: string
   accent_color?: string; social_links?: Record<string, string>
   has_fursuit?: boolean; fursuit_description?: string; fursuit_maker?: string
 }>({})
+
+const fursonaRefInput = ref<HTMLInputElement | null>(null)
+const isUploadingRef = ref(false)
+
+const todayISO = new Date().toISOString().slice(0, 10)
 
 function openEditModal(section: 'basics' | 'bio' | 'fursona' | 'fursuit' | 'contacts' | 'socials') {
   editSection.value = section
@@ -1384,6 +1473,10 @@ function openEditModal(section: 'basics' | 'bio' | 'fursona' | 'fursuit' | 'cont
     bio: p.bio ?? '',
     persona: (p as any).persona ?? '',
     fursona_name: (p as any).fursona_name ?? '',
+    fursona_gender: (p as any).fursona_gender ?? '',
+    fursona_description: (p as any).fursona_description ?? '',
+    fursona_color: (p as any).fursona_color ?? '',
+    fursona_photo_url: (p as any).fursona_photo_url ?? '',
     likes: [...((p as any).likes ?? [])],
     dislikes: [...((p as any).dislikes ?? [])],
     location: p.location ?? '',
@@ -1395,6 +1488,7 @@ function openEditModal(section: 'basics' | 'bio' | 'fursona' | 'fursuit' | 'cont
     has_fursuit: (p as any).has_fursuit ?? false,
     fursuit_description: (p as any).fursuit_description ?? '',
     fursuit_maker: (p as any).fursuit_maker ?? '',
+    artist_since: (p as any).artist_since ? new Date((p as any).artist_since).toISOString().slice(0, 10) : '',
   }
   showEditModal.value = true
 }
@@ -1526,6 +1620,24 @@ async function onAvatarFileChange(e: Event) {
   }
 }
 
+async function onFursonaRefUpload(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  isUploadingRef.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await api.post('/media/upload?folder=posts', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    if (res.data.success && res.data.data?.url) {
+      editForm.value.fursona_photo_url = res.data.data.url
+    }
+  } catch (err) { console.error('fursona ref upload failed', err) }
+  finally {
+    isUploadingRef.value = false
+    if (fursonaRefInput.value) fursonaRefInput.value.value = ''
+  }
+}
+
 // ── Computed ──────────────────────────────────────────────────────────────────
 const isOwnProfile = computed(() => !!authStore.user && authStore.user.id === viewedProfile.value?.id)
 const groupsCount = computed(() => 0)
@@ -1633,24 +1745,34 @@ const badgePillMap: Record<string, { label: string; cls: string; icon: any }> = 
   moderator:  { label: 'Модератор',     cls: 'bg-purple-500/25 border border-purple-500/40 text-purple-300', icon: Shield },
   creator:    { label: 'Криэйтор',      cls: 'bg-orange-500/25 border border-orange-500/40 text-orange-300', icon: Star },
   verified:   { label: 'Верификация',   cls: 'bg-blue-500/25 border border-blue-500/40 text-blue-300', icon: BadgeCheck },
+  artist:     { label: 'Художник',      cls: 'bg-purple-500/25 border border-purple-500/40 text-purple-300', icon: BadgeCheck },
+  master:     { label: 'Мастер',        cls: 'bg-amber-500/25 border border-amber-500/40 text-amber-300', icon: BadgeCheck },
+  event:      { label: 'Мероприятие',   cls: 'bg-emerald-500/25 border border-emerald-500/40 text-emerald-300', icon: BadgeCheck },
   advertiser: { label: 'Рекламодатель', cls: 'bg-emerald-500/25 border border-emerald-500/40 text-emerald-300', icon: Megaphone },
   ad:         { label: 'Рекламодатель', cls: 'bg-amber-500/25 border border-amber-500/40 text-amber-400', icon: Megaphone },
 }
 
 const badgePillClass = computed(() => {
   const p = viewedProfile.value
+  // Check verification_type first for specific badge styles
+  const vt = (p as any)?.verification_type
+  if (vt && badgePillMap[vt]) return badgePillMap[vt].cls
   if ((p as any)?.is_verified && !p?.badge_type) return badgePillMap['verified']?.cls ?? ''
   const bt = p?.badge_type ?? p?.role
   return badgePillMap[bt ?? '']?.cls ?? ''
 })
 const badgePillLabel = computed(() => {
   const p = viewedProfile.value
+  const vt = (p as any)?.verification_type
+  if (vt && badgePillMap[vt]) return badgePillMap[vt].label
   if ((p as any)?.is_verified && !p?.badge_type) return badgePillMap['verified']?.label ?? ''
   const bt = p?.badge_type ?? p?.role
   return badgePillMap[bt ?? '']?.label ?? ''
 })
 const badgePillIcon = computed(() => {
   const p = viewedProfile.value
+  const vt = (p as any)?.verification_type
+  if (vt && badgePillMap[vt]) return badgePillMap[vt].icon
   if ((p as any)?.is_verified && !p?.badge_type) return badgePillMap['verified']?.icon ?? User
   const bt = p?.badge_type ?? p?.role
   return badgePillMap[bt ?? '']?.icon ?? User
@@ -1718,7 +1840,12 @@ const achievementBadges = computed(() => {
   if (p.badge_type === 'admin')      badges.push({ key: 'admin',      label: 'Администратор',      desc: 'Управляет платформой',     iconComp: Crown,      iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
   if (p.badge_type === 'moderator')  badges.push({ key: 'mod',        label: 'Модератор',           desc: 'Поддерживает порядок',     iconComp: Shield,     iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
   if (p.badge_type === 'creator')    badges.push({ key: 'creator',    label: 'Топ контрибьютор',    desc: '100+ публикаций',          iconComp: Star,       iconBg: 'bg-orange-500/20',  iconColor: 'text-orange-400' })
-  if (p.badge_type === 'verified' || (p as any).is_verified)   badges.push({ key: 'verified',   label: 'Подтверждённая страница', desc: 'Верифицированный аккаунт', iconComp: BadgeCheck, iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
+  // Verification type specific badges
+  const vt = (p as any).verification_type
+  if (vt === 'artist')  badges.push({ key: 'artist',  label: 'Верифицированный художник', desc: 'Подтверждено модератором', iconComp: BadgeCheck, iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
+  else if (vt === 'master')  badges.push({ key: 'master',  label: 'Верифицированный мастер',  desc: 'Подтверждено модератором', iconComp: BadgeCheck, iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
+  else if (vt === 'event')   badges.push({ key: 'event',   label: 'Мероприятие',              desc: 'Подтверждено модератором', iconComp: BadgeCheck, iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' })
+  else if (p.badge_type === 'verified' || (p as any).is_verified)   badges.push({ key: 'verified',   label: 'Подтверждённая страница', desc: 'Верифицированный аккаунт', iconComp: BadgeCheck, iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
   if (p.role === 'advertiser')       badges.push({ key: 'advertiser', label: 'Рекламодатель',       desc: 'Активный рекламодатель',   iconComp: Megaphone,  iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' })
   if ((p._count?.posts ?? 0) >= 10)  badges.push({ key: 'active',     label: 'Активный автор',      desc: '10+ публикаций',           iconComp: Flame,      iconBg: 'bg-red-500/20',     iconColor: 'text-red-400' })
   if ((p._count?.followers ?? 0) >= 50) badges.push({ key: 'popular', label: 'Популярный',          desc: '50+ читателей',            iconComp: Sparkles,   iconBg: 'bg-yellow-500/20',  iconColor: 'text-yellow-400' })

@@ -1102,7 +1102,7 @@
                   </div>
                   <div>
                     <h2 class="font-bold text-white text-sm">{{ sections[4].label }}</h2>
-                    <p class="text-[10px] text-white/40">Подтвердите аккаунт для получения донатов</p>
+                    <p class="text-[10px] text-white/40">Честная верификация — подтвердите свою деятельность</p>
                   </div>
                 </div>
 
@@ -1123,7 +1123,16 @@
                       </div>
                       <h3 class="text-lg font-bold text-white mb-1">Аккаунт верифицирован</h3>
                       <p class="text-sm text-white/55">Подтверждено {{ verificationStatus.verifiedAt ? new Date(verificationStatus.verifiedAt).toLocaleDateString('ru-RU') : '' }}</p>
-                      <div class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
+                      <div v-if="verificationStatus.verificationType" class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold"
+                        :class="{
+                          'bg-purple-500/10 border border-purple-500/20 text-purple-400': verificationStatus.verificationType === 'artist',
+                          'bg-amber-500/10 border border-amber-500/20 text-amber-400': verificationStatus.verificationType === 'master',
+                          'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400': verificationStatus.verificationType === 'event',
+                        }">
+                        <img :src="`/icons/badges/${verificationStatus.verificationType}.svg`" class="w-4 h-4" />
+                        {{ { artist: 'Художник', master: 'Мастер', event: 'Мероприятие' }[verificationStatus.verificationType as string] }}
+                      </div>
+                      <div class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                         Донаты доступны
                       </div>
@@ -1137,8 +1146,11 @@
                         </svg>
                       </div>
                       <h3 class="text-lg font-bold text-white mb-1">Заявка на рассмотрении</h3>
-                      <p class="text-sm text-white/55">Мы проверяем вашу заявку. Обычно это занимает 1-3 дня.</p>
+                      <p class="text-sm text-white/55">Модераторы вручную проверяют вашу заявку. Обычно это занимает 1-3 дня.</p>
                       <p class="text-xs text-white/40 mt-2">Отправлено {{ new Date(verificationStatus.latestRequest.created_at).toLocaleDateString('ru-RU') }}</p>
+                      <div v-if="verificationStatus.latestRequest.verification_type" class="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
+                        {{ { artist: 'Художник', master: 'Мастер', event: 'Мероприятие' }[verificationStatus.latestRequest.verification_type as string] }}
+                      </div>
                     </div>
 
                     <!-- Rejected request -->
@@ -1150,12 +1162,46 @@
                         <div>
                           <p class="text-sm font-bold text-rose-400">Заявка отклонена</p>
                           <p v-if="verificationStatus.latestRequest.reason" class="text-xs text-white/55 mt-1">{{ verificationStatus.latestRequest.reason }}</p>
+                          <p class="text-xs text-white/40 mt-1">Вы можете исправить замечания и подать заявку повторно.</p>
                         </div>
                       </div>
                     </div>
 
-                    <!-- Show criteria (not verified, no pending request or has rejected) -->
+                    <!-- Show form (not verified, no pending request or has rejected) -->
                     <template v-if="!verificationStatus?.isVerified && verificationStatus?.latestRequest?.status !== 'pending'">
+
+                      <!-- Profile completeness -->
+                      <div>
+                        <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
+                          <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                          </svg>
+                          Заполненность профиля
+                          <span class="ml-auto text-xs font-bold"
+                            :class="profileCompleteness?.canSubmit ? 'text-emerald-400' : 'text-amber-400'">
+                            {{ profileCompleteness?.percentage ?? 0 }}%
+                          </span>
+                        </h3>
+                        <div class="w-full h-3 bg-brand-bg rounded-full overflow-hidden border border-brand-border">
+                          <div class="h-full rounded-full transition-all duration-500"
+                            :class="profileCompleteness?.canSubmit ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : 'bg-gradient-to-r from-amber-500 to-amber-400'"
+                            :style="`width: ${profileCompleteness?.percentage ?? 0}%`"></div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 mt-3">
+                          <div v-for="field in completenessFields" :key="field.key"
+                            class="flex items-center gap-2 px-3 py-2 rounded-xl border text-xs"
+                            :class="field.met ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' : 'bg-brand-bg border-brand-border text-white/40'">
+                            <svg v-if="field.met" class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                            <svg v-else class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            {{ field.label }}
+                          </div>
+                        </div>
+                        <p v-if="!profileCompleteness?.canSubmit" class="text-xs text-amber-400/80 mt-2 flex items-center gap-1.5">
+                          <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01"/></svg>
+                          Заполните профиль минимум на 80%, чтобы подать заявку
+                        </p>
+                      </div>
+
                       <!-- Criteria checklist -->
                       <div>
                         <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
@@ -1183,23 +1229,117 @@
                         </div>
                       </div>
 
-                      <!-- Info about manual review -->
-                      <div class="bg-blue-500/5 border border-blue-500/15 rounded-2xl px-4 py-3">
+                      <!-- Verification type selector -->
+                      <div>
+                        <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
+                          <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                          </svg>
+                          Тип верификации
+                        </h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <!-- Artist -->
+                          <button type="button" @click="selectedVerType = 'artist'"
+                            class="relative p-4 rounded-2xl border-2 transition-all text-left group"
+                            :class="selectedVerType === 'artist' ? 'border-purple-500 bg-purple-500/10 shadow-lg shadow-purple-500/10' : 'border-brand-border bg-brand-bg hover:border-purple-500/40'">
+                            <div class="flex items-center gap-2 mb-2">
+                              <img src="/icons/badges/artist.svg" class="w-6 h-6" />
+                              <span class="font-bold text-sm" :class="selectedVerType === 'artist' ? 'text-purple-400' : 'text-white'">Художник</span>
+                            </div>
+                            <p class="text-[11px] text-white/50 leading-relaxed">Скриншот слоёв или видео процесса рисования</p>
+                            <div v-if="selectedVerType === 'artist'" class="absolute top-2 right-2 w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center">
+                              <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                            </div>
+                          </button>
+                          <!-- Master -->
+                          <button type="button" @click="selectedVerType = 'master'"
+                            class="relative p-4 rounded-2xl border-2 transition-all text-left group"
+                            :class="selectedVerType === 'master' ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/10' : 'border-brand-border bg-brand-bg hover:border-amber-500/40'">
+                            <div class="flex items-center gap-2 mb-2">
+                              <img src="/icons/badges/master.svg" class="w-6 h-6" />
+                              <span class="font-bold text-sm" :class="selectedVerType === 'master' ? 'text-amber-400' : 'text-white'">Мастер</span>
+                            </div>
+                            <p class="text-[11px] text-white/50 leading-relaxed">Фото работы с сигной: «Bloomly», дата, ваш ID</p>
+                            <div v-if="selectedVerType === 'master'" class="absolute top-2 right-2 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
+                              <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                            </div>
+                          </button>
+                          <!-- Event -->
+                          <button type="button" @click="selectedVerType = 'event'"
+                            class="relative p-4 rounded-2xl border-2 transition-all text-left group"
+                            :class="selectedVerType === 'event' ? 'border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10' : 'border-brand-border bg-brand-bg hover:border-emerald-500/40'">
+                            <div class="flex items-center gap-2 mb-2">
+                              <img src="/icons/badges/event.svg" class="w-6 h-6" />
+                              <span class="font-bold text-sm" :class="selectedVerType === 'event' ? 'text-emerald-400' : 'text-white'">Мероприятие</span>
+                            </div>
+                            <p class="text-[11px] text-white/50 leading-relaxed">Фото билета или селфи на месте мероприятия</p>
+                            <div v-if="selectedVerType === 'event'" class="absolute top-2 right-2 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                              <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+
+                      <!-- Evidence upload -->
+                      <div v-if="selectedVerType">
+                        <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
+                          <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                          </svg>
+                          Доказательства
+                          <span class="text-[10px] text-white/40 font-normal ml-1">{{ evidenceUrls.length }}/5</span>
+                        </h3>
+
+                        <!-- Evidence description per type -->
+                        <div class="bg-blue-500/5 border border-blue-500/15 rounded-2xl px-4 py-3 mb-3">
+                          <p class="text-xs text-white/55">
+                            <span class="text-blue-400 font-bold">Требования:</span>
+                            <span v-if="selectedVerType === 'artist'"> Загрузите скриншот с видимыми слоями проекта или ссылку на видео процесса рисования. Это докажет, что работа создана вами, а не ИИ.</span>
+                            <span v-else-if="selectedVerType === 'master'"> Загрузите фото вашей работы рядом с бумажкой, на которой написано «Bloomly», текущая дата и ваш ID ({{ authStore.user?.id?.slice(0,8) }}).</span>
+                            <span v-else-if="selectedVerType === 'event'"> Загрузите фото билета/бейджа мероприятия или селфи на локации мероприятия.</span>
+                          </p>
+                        </div>
+
+                        <!-- Uploaded evidence preview -->
+                        <div v-if="evidenceUrls.length > 0" class="grid grid-cols-3 gap-2 mb-3">
+                          <div v-for="(url, idx) in evidenceUrls" :key="idx" class="relative group rounded-xl overflow-hidden border border-brand-border aspect-square">
+                            <img :src="url" class="w-full h-full object-cover" />
+                            <button type="button" @click="evidenceUrls.splice(idx, 1)"
+                              class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                          </div>
+                        </div>
+
+                        <!-- Upload button -->
+                        <button v-if="evidenceUrls.length < 5" type="button" @click="evidenceInput?.click()"
+                          :disabled="isUploadingEvidence"
+                          class="w-full py-3 rounded-2xl border-2 border-dashed border-brand-border hover:border-blue-500/40 bg-brand-bg text-sm text-white/55 hover:text-white transition-all flex items-center justify-center gap-2">
+                          <span v-if="isUploadingEvidence" class="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
+                          <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                          {{ isUploadingEvidence ? 'Загрузка…' : 'Загрузить файл' }}
+                        </button>
+                        <input ref="evidenceInput" type="file" accept="image/*,video/*" class="hidden" @change="onEvidenceUpload" />
+                      </div>
+
+                      <!-- Anti-AI notice -->
+                      <div class="bg-rose-500/5 border border-rose-500/15 rounded-2xl px-4 py-3">
                         <p class="text-xs text-white/55">
-                          <span class="text-blue-400 font-bold">Совет:</span>
-                          Если все критерии выполнены — аккаунт верифицируется автоматически. Иначе заявка отправляется на проверку модераторам.
+                          <span class="text-rose-400 font-bold">Важно:</span>
+                          Все заявки проверяются модераторами вручную. Автоматическая верификация отсутствует. Использование AI-генераций в качестве доказательств запрещено и приведёт к отклонению заявки.
                         </p>
                       </div>
 
                       <!-- Submit button -->
-                      <button type="button" @click="requestVerification" :disabled="isRequestingVerification"
-                        class="w-full py-3.5 rounded-2xl text-sm font-bold text-white transition-all shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                      <button type="button" @click="requestVerification"
+                        :disabled="isRequestingVerification || !selectedVerType || evidenceUrls.length === 0 || !profileCompleteness?.canSubmit"
+                        class="w-full py-3.5 rounded-2xl text-sm font-bold text-white transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         style="background: linear-gradient(135deg, #3b82f6, #2563eb); box-shadow: 0 4px 20px rgba(59,130,246,0.35)">
                         <span v-if="isRequestingVerification" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                         <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
                         </svg>
-                        {{ isRequestingVerification ? 'Отправка…' : 'Запросить верификацию' }}
+                        {{ isRequestingVerification ? 'Отправка…' : !profileCompleteness?.canSubmit ? 'Заполните профиль (≥80%)' : !selectedVerType ? 'Выберите тип верификации' : evidenceUrls.length === 0 ? 'Загрузите доказательства' : 'Отправить на верификацию' }}
                       </button>
                     </template>
                   </template>
@@ -2003,31 +2143,61 @@ const pronounPresets = ['он/его', 'она/её', 'они/их']
 // ── Verification ────────────────────────────────────────────────────────────
 const verificationStatus = ref<any>(null)
 const verificationCriteria = ref<any>(null)
+const profileCompleteness = ref<any>(null)
 const isLoadingVerification = ref(false)
 const isRequestingVerification = ref(false)
+const selectedVerType = ref<'artist' | 'master' | 'event' | ''>('')
+const evidenceUrls = ref<string[]>([])
+const evidenceInput = ref<HTMLInputElement | null>(null)
+const isUploadingEvidence = ref(false)
 
 async function fetchVerificationData() {
   isLoadingVerification.value = true
   try {
-    const [statusRes, criteriaRes] = await Promise.all([
+    const [statusRes, criteriaRes, completenessRes] = await Promise.all([
       api.get('/verification/status'),
       api.get('/verification/criteria'),
+      api.get('/verification/completeness'),
     ])
     if (statusRes.data.success) verificationStatus.value = statusRes.data.data
     if (criteriaRes.data.success) verificationCriteria.value = criteriaRes.data.data
+    if (completenessRes.data.success) profileCompleteness.value = completenessRes.data.data
   } catch {} finally { isLoadingVerification.value = false }
 }
 
+async function onEvidenceUpload(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file || evidenceUrls.value.length >= 5) return
+  isUploadingEvidence.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await api.post('/media/upload?folder=evidence', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    if (res.data?.url) evidenceUrls.value.push(res.data.url)
+  } catch (err: any) {
+    showToast('error', 'Ошибка загрузки файла')
+  } finally {
+    isUploadingEvidence.value = false
+    if (evidenceInput.value) evidenceInput.value.value = ''
+  }
+}
+
 async function requestVerification() {
+  if (!selectedVerType.value || evidenceUrls.value.length === 0) return
   isRequestingVerification.value = true
   try {
-    const res = await api.post('/verification/request')
+    const res = await api.post('/verification/request', {
+      verificationType: selectedVerType.value,
+      evidenceUrls: evidenceUrls.value,
+    })
     if (res.data.success) {
-      showToast('success', res.data.data.autoApproved ? 'Аккаунт верифицирован!' : 'Заявка отправлена на рассмотрение')
+      showToast('success', 'Заявка отправлена на проверку модераторам')
+      selectedVerType.value = ''
+      evidenceUrls.value = []
       await fetchVerificationData()
     }
   } catch (e: any) {
-    showToast('error', e.response?.data?.error ?? 'Ошибка отправки заявки')
+    showToast('error', e.response?.data?.error?.message ?? e.response?.data?.error ?? 'Ошибка отправки заявки')
   } finally { isRequestingVerification.value = false }
 }
 
@@ -2041,6 +2211,20 @@ const verCriteriaList = computed(() => {
     { label: 'Био заполнено', met: c.hasBio, detail: '' },
     { label: 'Email привязан', met: c.hasEmail, detail: '' },
     { label: '5+ подписчиков', met: c.followerCount >= 5, detail: `${c.followerCount} подписчиков` },
+  ]
+})
+
+const completenessFields = computed(() => {
+  const c = profileCompleteness.value
+  if (!c) return []
+  return [
+    { key: 'avatar', label: 'Аватар', met: c.hasAvatar },
+    { key: 'email', label: 'Email', met: c.hasEmail },
+    { key: 'bio', label: 'Био', met: c.hasBio },
+    { key: 'fursonaName', label: 'Имя фурсоны', met: c.hasFursonaName },
+    { key: 'fursonaSpecies', label: 'Вид фурсоны', met: c.hasFursonaSpecies },
+    { key: 'fursonaGender', label: 'Пол фурсоны', met: c.hasFursonaGender },
+    { key: 'fursonaDesc', label: 'Описание фурсоны', met: c.hasFursonaDescription },
   ]
 })
 

@@ -1,17 +1,32 @@
 import prisma from '../../config/prisma.js';
 
 /**
- * Verification criteria:
- * 1. Account age ≥ 14 days
- * 2. At least 3 posts published
- * 3. Avatar uploaded (has_avatar)
- * 4. Bio filled (has_bio)
- * 5. Email verified (has_email – we use email existence)
- * 6. At least 5 followers
+ * «Честная верификация» — Anti-AI verification system.
  *
- * All criteria must be met for auto-approval.
- * If not all met, request goes to manual admin review.
+ * Verification types:
+ *   - artist:  Screenshot of layers or video of art process
+ *   - master:  Photo of craft with "signa" (paper with "Bloomly", date, user ID)
+ *   - event:   Photo of ticket or selfie at event location
+ *
+ * Rules:
+ *   - NO auto-approve. All requests go to manual admin review.
+ *   - Verification is bound to user UUID, non-transferable.
+ *   - Profile must be ≥ 80% complete to submit (avatar, fursona tab filled, email).
  */
+
+export type VerificationType = 'artist' | 'master' | 'event';
+
+export interface ProfileCompleteness {
+  hasAvatar: boolean;
+  hasEmail: boolean;
+  hasFursonaName: boolean;
+  hasFursonaSpecies: boolean;
+  hasFursonaGender: boolean;
+  hasFursonaDescription: boolean;
+  hasBio: boolean;
+  percentage: number;
+  canSubmit: boolean;
+}
 
 export interface VerificationCriteria {
   accountAgeDays: number;
@@ -20,7 +35,45 @@ export interface VerificationCriteria {
   hasBio: boolean;
   hasEmail: boolean;
   followerCount: number;
+  profileCompleteness: ProfileCompleteness;
   meetsAll: boolean;
+}
+
+/**
+ * Calculate profile completeness percentage.
+ * Fields checked (each worth ~14.3%):
+ *   1. Avatar, 2. Email, 3. Bio, 4. Fursona name, 5. Fursona species,
+ *   6. Fursona gender, 7. Fursona description
+ * 80% = at least 6 out of 7 filled.
+ */
+export async function getProfileCompleteness(userId: string): Promise<ProfileCompleteness> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      avatar_url: true,
+      email: true,
+      bio: true,
+      fursona_name: true,
+      persona: true,
+      fursona_gender: true,
+      fursona_description: true,
+    },
+  });
+  if (!user) throw new Error('User not found');
+
+  const hasAvatar = !!user.avatar_url;
+  const hasEmail = !!user.email && user.email.trim().length > 0;
+  const hasBio = !!user.bio && user.bio.trim().length > 0;
+  const hasFursonaName = !!user.fursona_name && user.fursona_name.trim().length > 0;
+  const hasFursonaSpecies = !!user.persona && user.persona.trim().length > 0;
+  const hasFursonaGender = !!user.fursona_gender && user.fursona_gender.trim().length > 0;
+  const hasFursonaDescription = !!user.fursona_description && user.fursona_description.trim().length > 0;
+
+  const filledCount = [hasAvatar, hasEmail, hasBio, hasFursonaName, hasFursonaSpecies, hasFursonaGender, hasFursonaDescription].filter(Boolean).length;
+  const percentage = Math.round((filledCount / 7) * 100);
+  const canSubmit = percentage >= 80;
+
+  return { hasAvatar, hasEmail, hasFursonaName, hasFursonaSpecies, hasFursonaGender, hasFursonaDescription, hasBio, percentage, canSubmit };
 }
 
 const MIN_ACCOUNT_AGE = 14;
@@ -46,21 +99,24 @@ export async function checkCriteria(userId: string): Promise<VerificationCriteri
   const hasBio = !!user.bio && user.bio.trim().length > 0;
   const hasEmail = !!user.email && user.email.trim().length > 0;
 
+  const profileCompleteness = await getProfileCompleteness(userId);
+
   const meetsAll =
     accountAgeDays >= MIN_ACCOUNT_AGE &&
     postCount >= MIN_POSTS &&
     hasAvatar &&
     hasBio &&
     hasEmail &&
-    followerCount >= MIN_FOLLOWERS;
+    followerCount >= MIN_FOLLOWERS &&
+    profileCompleteness.canSubmit;
 
-  return { accountAgeDays, postCount, hasAvatar, hasBio, hasEmail, followerCount, meetsAll };
+  return { accountAgeDays, postCount, hasAvatar, hasBio, hasEmail, followerCount, profileCompleteness, meetsAll };
 }
 
 export async function getVerificationStatus(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { is_verified: true, verified_at: true },
+    select: { is_verified: true, verified_at: true, verification_type: true },
   });
   const latestRequest = await prisma.verificationRequest.findFirst({
     where: { user_id: userId },
@@ -69,15 +125,20 @@ export async function getVerificationStatus(userId: string) {
   return {
     isVerified: user?.is_verified ?? false,
     verifiedAt: user?.verified_at,
+    verificationType: user?.verification_type,
     latestRequest,
   };
 }
 
-export async function requestVerification(userId: string) {
+export async function requestVerification(
+  userId: string,
+  verificationType: VerificationType,
+  evidenceUrls: string[],
+) {
   // Check if already verified
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { is_verified: true },
+    select: { is_verified: true, id: true },
   });
   if (user?.is_verified) throw new Error('Already verified');
 
@@ -87,33 +148,46 @@ export async function requestVerification(userId: string) {
   });
   if (pending) throw new Error('Already have pending request');
 
-  // Collect criteria
+  // Check profile completeness (≥ 80%)
+  const completeness = await getProfileCompleteness(userId);
+  if (!completeness.canSubmit) {
+    throw new Error('Profile must be at least 80% complete to request verification');
+  }
+
+  // Validate evidence
+  if (!evidenceUrls || evidenceUrls.length === 0) {
+    throw new Error('Evidence is required for verification');
+  }
+
+  // Validate verification type
+  if (!['artist', 'master', 'event'].includes(verificationType)) {
+    throw new Error('Invalid verification type. Must be: artist, master, or event');
+  }
+
+  // Collect criteria snapshot
   const criteria = await checkCriteria(userId);
 
-  // Create the request
+  // Determine badge type based on verification type
+  const badgeType = verificationType; // artist, master, or event
+
+  // Create the request — ALWAYS pending, NO auto-approve
   const request = await prisma.verificationRequest.create({
     data: {
       user_id: userId,
+      verification_type: verificationType,
+      evidence_urls: evidenceUrls,
+      badge_type: badgeType,
       account_age_days: criteria.accountAgeDays,
       post_count: criteria.postCount,
       has_avatar: criteria.hasAvatar,
       has_bio: criteria.hasBio,
       has_email: criteria.hasEmail,
       follower_count: criteria.followerCount,
-      status: criteria.meetsAll ? 'approved' : 'pending',
-      reviewed_at: criteria.meetsAll ? new Date() : null,
+      status: 'pending', // NEVER auto-approve
     },
   });
 
-  // Auto-approve if all criteria met
-  if (criteria.meetsAll) {
-    await prisma.user.update({
-      where: { id: userId },
-      data: { is_verified: true, verified_at: new Date() },
-    });
-  }
-
-  return { request, criteria, autoApproved: criteria.meetsAll };
+  return { request, criteria, autoApproved: false };
 }
 
 export async function adminGetRequests(status?: string, page = 1, limit = 20) {
@@ -138,7 +212,12 @@ export async function adminGetRequests(status?: string, page = 1, limit = 20) {
   return { requests, total, page, limit };
 }
 
-export async function adminReviewRequest(requestId: string, action: 'approve' | 'reject', reviewerId: string, reason?: string) {
+export async function adminReviewRequest(
+  requestId: string,
+  action: 'approve' | 'reject',
+  reviewerId: string,
+  reason?: string,
+) {
   const req = await prisma.verificationRequest.findUnique({ where: { id: requestId } });
   if (!req) throw new Error('Request not found');
   if (req.status !== 'pending') throw new Error('Request already reviewed');
@@ -154,9 +233,15 @@ export async function adminReviewRequest(requestId: string, action: 'approve' | 
   });
 
   if (action === 'approve') {
+    // Set user as verified with their specific badge/verification type
     await prisma.user.update({
       where: { id: req.user_id },
-      data: { is_verified: true, verified_at: new Date() },
+      data: {
+        is_verified: true,
+        verified_at: new Date(),
+        verification_type: req.verification_type,
+        badge_type: req.badge_type || 'verified',
+      },
     });
   }
 

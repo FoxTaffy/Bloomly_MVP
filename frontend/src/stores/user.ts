@@ -43,6 +43,8 @@ export interface UserProfile {
   pinnedPost?: any | null
   is_verified?: boolean
   verified_at?: string | null
+  artist_since?: string | null
+  badge_level?: string
 }
 
 export interface UpdateProfileInput {

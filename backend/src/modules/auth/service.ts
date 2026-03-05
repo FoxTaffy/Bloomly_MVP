@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { randomInt } from 'crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma.js';
 import type { RegisterInput } from './types.js';
@@ -6,8 +7,9 @@ import type { RegisterInput } from './types.js';
 // ── In-memory reset tokens (TTL = 15 min) ────────────────────────────────────
 const resetTokens = new Map<string, { userId: string; expiresAt: number }>()
 
+/** Cryptographically secure 6-digit code */
 function genCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString()
+  return randomInt(100000, 1000000).toString()
 }
 
 export class AuthService {
@@ -69,20 +71,10 @@ export class AuthService {
     return userWithoutPassword;
   }
 
-  // ── Stats ───────────────────────────────────────────────────────────────────
-  async getPublicStats() {
-    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000)
-    const [users, posts, online] = await Promise.all([
-      prisma.user.count({ where: { deleted_at: null } }),
-      prisma.post.count({ where: { deleted_at: null } }),
-      prisma.user.count({ where: { deleted_at: null, updated_at: { gte: fifteenMinutesAgo } } }),
-    ])
-    return { users, posts, online }
-  }
-
   // ── Forgot password ─────────────────────────────────────────────────────────
   async requestPasswordReset(email: string) {
-    const user = await prisma.user.findUnique({ where: { email, deleted_at: null } })
+    // findFirst supports composite where (non-deleted + email match)
+    const user = await prisma.user.findFirst({ where: { email, deleted_at: null } })
     if (!user) return null // silent — не раскрываем существование аккаунта
 
     // Очищаем старые токены этого пользователя
@@ -93,9 +85,10 @@ export class AuthService {
     const code = genCode()
     resetTokens.set(code, { userId: user.id, expiresAt: Date.now() + 15 * 60 * 1000 })
 
-    // В реальном продакшне здесь был бы sendEmail(email, code)
-    // Пока выводим в консоль для тестирования
-    console.log(`[RESET] код для ${email}: ${code}`)
+    // TODO: replace with real sendEmail(email, code) in production
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[RESET][DEV] code for ${email}: ${code}`)
+    }
 
     return code
   }

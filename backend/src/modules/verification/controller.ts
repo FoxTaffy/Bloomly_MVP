@@ -5,6 +5,7 @@ import {
   requestVerification,
   adminGetRequests,
   adminReviewRequest,
+  getProfileCompleteness,
 } from './service.js';
 
 // GET /api/verification/status
@@ -21,11 +22,19 @@ export async function getCriteriaHandler(request: FastifyRequest, reply: Fastify
   return reply.send({ success: true, data: criteria });
 }
 
+// GET /api/verification/completeness
+export async function getCompletenessHandler(request: FastifyRequest, reply: FastifyReply) {
+  const userId = (request.user as any).id;
+  const data = await getProfileCompleteness(userId);
+  return reply.send({ success: true, data });
+}
+
 // POST /api/verification/request
 export async function requestHandler(request: FastifyRequest, reply: FastifyReply) {
   const userId = (request.user as any).id;
+  const { verificationType, evidenceUrls } = request.body as any;
   try {
-    const result = await requestVerification(userId);
+    const result = await requestVerification(userId, verificationType, evidenceUrls);
     return reply.send({ success: true, data: result });
   } catch (err: any) {
     return reply.code(400).send({ success: false, error: { message: err.message } });

@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } 
 import {
   getStatusHandler,
   getCriteriaHandler,
+  getCompletenessHandler,
   requestHandler,
   adminRequestsHandler,
   adminReviewHandler,
@@ -17,9 +18,10 @@ export async function verificationRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
 
   // User endpoints
-  fastify.get('/status',    auth, getStatusHandler as any);
-  fastify.get('/criteria',  auth, getCriteriaHandler as any);
-  fastify.post('/request',  auth, requestHandler as any);
+  fastify.get('/status',        auth, getStatusHandler as any);
+  fastify.get('/criteria',      auth, getCriteriaHandler as any);
+  fastify.get('/completeness',  auth, getCompletenessHandler as any);
+  fastify.post('/request',      auth, requestHandler as any);
 
   // Admin endpoints
   fastify.get('/admin/requests',       auth, adminRequestsHandler as any);

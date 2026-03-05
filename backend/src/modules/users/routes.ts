@@ -5,6 +5,7 @@ import {
   blockUserHandler, unblockUserHandler, getBlockStatusHandler,
   setPublicKeyHandler, getPublicKeyHandler,
   notifyStatusHandler, notifyToggleHandler,
+  updateSubscriptionHandler,
 } from './controller.js';
 import { getUserParamsSchema, updateUserSchema, pinPostSchema } from './schemas.js';
 
@@ -29,6 +30,21 @@ export async function usersRoutes(fastify: FastifyInstance) {
   fastify.post('/:id/block', auth, blockUserHandler as any);
   fastify.delete('/:id/block', auth, unblockUserHandler as any);
   fastify.get('/:id/block-status', auth, getBlockStatusHandler as any);
+
+  // PATCH /api/users/me/subscription — update subscription tier
+  fastify.patch('/me/subscription', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['tier'],
+        properties: {
+          tier: { type: 'string', enum: ['free', 'lite', 'pro', 'business'] },
+        },
+        additionalProperties: false,
+      },
+    },
+    onRequest: [fastify.authenticate],
+  }, updateSubscriptionHandler as any);
 
   // PUT /api/users/me/public-key — store E2E public key
   fastify.put('/me/public-key', auth, setPublicKeyHandler as any);

@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js';
 import { deleteFileByUrl } from '../media/service.js';
+import { getUserBadgeLevel } from '../../lib/badges.js';
 import type { UpdateUserInput } from './types.js';
 
 // Fields exposed in public profile responses (never email, password, role)
@@ -26,6 +27,8 @@ const PUBLIC_SELECT = {
   country:              true,
   fursona_name:         true,
   fursona_color:        true,
+  fursona_gender:       true,
+  fursona_description:  true,
   fursona_photo_url:    true,
   has_fursuit:          true,
   fursuit_photo_url:    true,
@@ -43,6 +46,8 @@ const PUBLIC_SELECT = {
   profile_frame:        true,
   is_verified:          true,
   verified_at:          true,
+  verification_type:    true,
+  artist_since:         true,
 } as const;
 
 export const usersService = {
@@ -64,16 +69,14 @@ export const usersService = {
         },
       },
     }
-    if (isUUID) {
-      return prisma.user.findFirst({
-        where: { id, deleted_at: null },
-        ...PROFILE_SELECT,
-      })
-    }
-    return prisma.user.findFirst({
-      where: { username: id, deleted_at: null },
-      ...PROFILE_SELECT,
-    })
+    const raw = isUUID
+      ? await prisma.user.findFirst({ where: { id, deleted_at: null }, ...PROFILE_SELECT })
+      : await prisma.user.findFirst({ where: { username: id, deleted_at: null }, ...PROFILE_SELECT });
+
+    if (!raw) return null;
+
+    // Attach computed badge_level
+    return { ...raw, badge_level: getUserBadgeLevel((raw as any).artist_since) };
   },
 
   async updateUser(id: string, data: UpdateUserInput) {
@@ -106,6 +109,24 @@ export const usersService = {
       }
     }
 
+    // ── Normalise artist_since to a proper Date if it's a plain string ───────
+    if (typeof (data as any).artist_since === 'string') {
+      const raw = (data as any).artist_since as string;
+      if (raw) {
+        const d = new Date(raw.length <= 10 ? `${raw}T00:00:00.000Z` : raw);
+        if (d.getTime() > Date.now()) throw new Error('artist_since cannot be in the future');
+        (data as any).artist_since = d;
+      } else {
+        (data as any).artist_since = null;
+      }
+    }
+
+    // ── Security: verified users cannot change artist_since ─────────────────
+    if ((data as any).artist_since !== undefined) {
+      const user = await prisma.user.findUnique({ where: { id }, select: { is_verified: true } });
+      if (user?.is_verified) throw new Error('Verified users cannot change artist_since');
+    }
+
     // ── Normalise birth_date to a proper Date if it's a plain string ────────
     if (typeof (data as any).birth_date === 'string') {
       const raw = (data as any).birth_date as string;
@@ -117,9 +138,19 @@ export const usersService = {
       }
     }
 
+    // ── Normalise relationship_since to a proper Date if it's a plain string
+    if (typeof (data as any).relationship_since === 'string') {
+      const raw = (data as any).relationship_since as string;
+      if (raw) {
+        (data as any).relationship_since = new Date(raw.length <= 10 ? `${raw}T00:00:00.000Z` : raw);
+      } else {
+        (data as any).relationship_since = null;
+      }
+    }
+
     return prisma.user.update({
       where: { id, deleted_at: null },
-      data,
+      data: data as any,
       select: PUBLIC_SELECT,
     });
   },
@@ -293,6 +324,19 @@ export const usersService = {
       where: { id: userId },
       data: { public_key: publicKey },
       select: { id: true },
+    });
+  },
+
+  /** Change subscription tier. Validated allowlist prevents SQL-injection / unexpected values. */
+  async updateSubscriptionTier(userId: string, tier: string) {
+    const ALLOWED_TIERS = ['free', 'lite', 'pro', 'business'] as const;
+    if (!ALLOWED_TIERS.includes(tier as any)) {
+      throw Object.assign(new Error(`Invalid tier: ${tier}`), { statusCode: 400 });
+    }
+    return prisma.user.update({
+      where: { id: userId, deleted_at: null },
+      data: { subscription_tier: tier },
+      select: { id: true, subscription_tier: true },
     });
   },
 

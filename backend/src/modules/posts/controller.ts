@@ -246,9 +246,9 @@ export const deleteCommentHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const { id: userId } = request.user as JwtUser;
+    const { id: userId, role } = request.user as JwtUser;
     const { commentId } = request.params;
-    await postService.deleteComment(userId, commentId);
+    await postService.deleteComment(userId, commentId, ['admin', 'moderator'].includes(role));
     return reply.send({ success: true, data: null, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to delete comment';

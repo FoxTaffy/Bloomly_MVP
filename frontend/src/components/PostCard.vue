@@ -37,6 +37,13 @@
               <h4 class="font-bold text-white truncate hover:text-brand-accent transition-colors">
                 {{ post.author.display_name || post.author.username }}
               </h4>
+              <!-- Verification badge -->
+              <img v-if="post.author.is_verified && post.author.verification_type"
+                :src="`/icons/badges/${post.author.verification_type}.svg`"
+                class="w-4 h-4 flex-shrink-0" :title="({ artist: 'Верифицированный художник', master: 'Верифицированный мастер', event: 'Мероприятие' } as Record<string, string>)[post.author.verification_type] || 'Верифицирован'" />
+              <img v-else-if="post.author.is_verified"
+                src="/icons/badges/verified.svg"
+                class="w-4 h-4 flex-shrink-0" title="Верифицирован" />
               <!-- AD badge -->
               <span v-if="post.author.role === 'ad'"
                 class="inline-flex items-center gap-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded-md">

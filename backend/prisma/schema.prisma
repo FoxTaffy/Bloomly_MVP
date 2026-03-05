@@ -37,6 +37,8 @@ model User {
   relationship_with            String?               @db.Uuid
   birth_date                   DateTime?             @db.Timestamp(6)
   fursona_color                String?               @db.VarChar(50)
+  fursona_gender               String?               @db.VarChar(50)
+  fursona_description          String?
   relationship_since           DateTime?             @db.Timestamp(6)
   fursona_photo_url            String?
   has_fursuit                  Boolean               @default(false)
@@ -50,6 +52,8 @@ model User {
   profile_theme                String?               @db.VarChar(50)
   profile_bg_url               String?
   profile_frame                String?               @db.VarChar(50)
+  artist_since                 DateTime?             @db.Timestamp(6)
+  verification_type            String?               @db.VarChar(30)
   adRequests                   Advertisement[]       @relation("AdRequester")
   adReviews                    Advertisement[]       @relation("AdReviewer")
   comments                     Comment[]
@@ -85,6 +89,7 @@ model User {
   soonBadges                   SoonBadge[]
   verificationRequests         VerificationRequest[]
   groupRatings                 GroupRating[]
+  dealerListings               DealerListing[]
 }
 
 model Post {
@@ -167,6 +172,7 @@ model Vote {
   user       User      @relation(fields: [user_id], references: [id])
 
   @@unique([user_id, post_id])
+  @@index([post_id])
 }
 
 model Wallet {
@@ -207,6 +213,9 @@ model Comment {
   replies    Comment[]     @relation("CommentReplies")
   post       Post          @relation(fields: [post_id], references: [id])
   votes      CommentVote[]
+
+  @@index([post_id])
+  @@index([parent_id])
 }
 
 model CommentVote {
@@ -220,6 +229,7 @@ model CommentVote {
   user       User      @relation(fields: [user_id], references: [id])
 
   @@unique([user_id, comment_id])
+  @@index([comment_id])
 }
 
 model Follow {
@@ -433,6 +443,7 @@ model Group {
   rating          Float           @default(0)
   rating_count    Int             @default(0)
   subscriber_count Int            @default(0)
+  members_count   Int             @default(0)
 
   // Creative-specific
   production_time   String?       @db.VarChar(100)    // "2-3 месяца"
@@ -620,9 +631,41 @@ model VerificationRequest {
   created_at       DateTime @default(now())
   reviewed_at      DateTime?
   reviewed_by      String?  @db.Uuid
+  verification_type String?  @db.VarChar(30)  // general, artist, master, event
+  evidence_urls    String[] @default([])
+  badge_type       String?  @db.VarChar(30)  // verified, artist, master, event
 
   user             User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
   @@index([status])
+}
+
+// ── Dealers Den ───────────────────────────────────────────────────────────────
+
+model DealerListing {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  seller_id     String    @db.Uuid
+  title         String    @db.VarChar(200)
+  description   String?
+  price         Decimal   @db.Decimal(12, 2) @default(0)
+  currency      String    @default("USD") @db.VarChar(10)
+  category      String    @default("other") @db.VarChar(50) // art | fursuit | badge | print | music | craft | merch | other
+  type          String    @default("physical") @db.VarChar(20) // digital | physical | both
+  images        String[]  @default([])
+  status        String    @default("active") @db.VarChar(20) // active | sold | draft | archived
+  quantity      Int       @default(1)
+  quantity_sold Int       @default(0)
+  is_nsfw       Boolean   @default(false)
+  tags          String[]  @default([])
+  created_at    DateTime  @default(now()) @db.Timestamp(6)
+  updated_at    DateTime  @default(now()) @updatedAt @db.Timestamp(6)
+  deleted_at    DateTime? @db.Timestamp(6)
+
+  seller        User      @relation(fields: [seller_id], references: [id], onDelete: Cascade)
+
+  @@index([seller_id])
+  @@index([status])
+  @@index([category])
+  @@index([created_at(sort: Desc)])
 }
