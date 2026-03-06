@@ -438,20 +438,35 @@
                   -->
                   <div class="relative flex-shrink-0 -mt-12 md:-mt-16 w-24 h-24 md:w-32 md:h-32 overflow-visible">
 
+                    <!-- ── Story ring: animated gradient, sits behind avatar ── -->
+                    <div
+                      v-if="hasStory"
+                      class="absolute -inset-[4px] rounded-full story-ring-gradient z-[5] pointer-events-none"
+                    ></div>
+
                     <!-- ── Карта A: ОСНОВНОЙ аватар ──────────────────────── -->
                     <div
-                      class="absolute top-0 left-0 w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-4 shadow-xl will-change-transform
-                             transition-[transform,opacity,border-color,box-shadow] duration-500 translate-x-0 translate-y-0 scale-100 opacity-100 z-10 border-brand-card"
-                      :style="[avatarRingStyle, { transitionTimingFunction: 'cubic-bezier(0.34,1.56,0.64,1)' }]"
-                      @click="avatarSrc && (showAvatarViewer = true)">
+                      class="absolute top-0 left-0 w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden shadow-xl will-change-transform
+                             transition-[transform,opacity,border-color,box-shadow] duration-500 translate-x-0 translate-y-0 scale-100 opacity-100 z-10"
+                      :class="hasStory ? 'border-[4px] border-brand-card cursor-pointer hover:scale-105' : 'border-4 border-brand-card'"
+                      :style="hasStory ? {} : [avatarRingStyle, { transitionTimingFunction: 'cubic-bezier(0.34,1.56,0.64,1)' }]"
+                      @click="onAvatarClick">
                       <img v-if="viewedProfile.avatar_url" :src="avatarSrc"
                         class="w-full h-full object-cover"
                         width="128" height="128" fetchpriority="high" />
                       <div v-else class="w-full h-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-4xl">
                         {{ (viewedProfile.display_name || viewedProfile.username || '?')[0].toUpperCase() }}
                       </div>
-                      <!-- upload camera: только когда основной спереди -->
-                      <button v-if="isOwnProfile"
+                      <!-- Story tap affordance -->
+                      <div v-if="hasStory"
+                        class="absolute inset-0 rounded-full bg-black/0 hover:bg-black/30 transition-all flex items-center justify-center opacity-0 hover:opacity-100">
+                        <div class="flex flex-col items-center gap-0.5">
+                          <BIcon name="Play" class="w-6 h-6 text-white drop-shadow" />
+                          <span class="text-[10px] font-bold text-white drop-shadow">История</span>
+                        </div>
+                      </div>
+                      <!-- upload camera: только для своего профиля без истории -->
+                      <button v-if="isOwnProfile && !hasStory"
                         @click.stop="avatarFileInput?.click()" :disabled="isUploadingAvatar"
                         class="absolute inset-0 rounded-full bg-black/0 hover:bg-black/40 transition-all flex items-center justify-center pointer-events-none hover:pointer-events-auto opacity-0 hover:opacity-100">
                         <span v-if="isUploadingAvatar" class="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -1272,6 +1287,15 @@
 
     </div>
 
+    <!-- ─── Story Viewer ─────────────────────────────────────────────── -->
+    <StoryViewer
+      v-if="profileStoryViewerOpen && profileStories.length"
+      :groups="[profileStories]"
+      :group-index="0"
+      :story-index="0"
+      @close="profileStoryViewerOpen = false"
+    />
+
     <!-- ─── Avatar Viewer Modal ─────────────────────────────────────── -->
     <Transition name="fade">
       <div v-if="showAvatarViewer" class="fixed inset-0 z-[600] bg-black/92 flex items-center justify-center p-4" @click.self="showAvatarViewer = false">
@@ -1350,6 +1374,7 @@ import SoonBadge from '@/components/groups/SoonBadge.vue'
 import AppBadge from '@/components/shared/AppBadge.vue'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
+import StoryViewer from '@/components/StoryViewer.vue'
 import api from '@/api'
 import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
 import {
@@ -1397,6 +1422,36 @@ const closeMenu = () => {}
 const viewedProfile = ref<UserProfile | null>(null)
 const isLoading = ref(false)
 const error = ref<string | null>(null)
+
+// ── Profile stories ───────────────────────────────────────────────────────────
+interface ProfileStory {
+  id: string
+  image_url: string | null
+  created_at: string
+  expires_at: string
+  user: { id: string; username: string; display_name: string | null; avatar_url: string | null }
+}
+const profileStories = ref<ProfileStory[]>([])
+const profileStoryViewerOpen = ref(false)
+const hasStory = computed(() => profileStories.value.length > 0)
+
+async function fetchProfileStories(userId: string) {
+  try {
+    const res = await api.get('/stories')
+    if (res.data.success) {
+      const all: ProfileStory[] = res.data.data.stories
+      profileStories.value = all.filter(s => s.user.id === userId)
+    }
+  } catch {}
+}
+
+function onAvatarClick() {
+  if (hasStory.value) {
+    profileStoryViewerOpen.value = true
+  } else if (avatarSrc.value) {
+    showAvatarViewer.value = true
+  }
+}
 
 type AboutTab = 'about' | 'fursona' | 'fursuit'
 type ContentTab = 'posts' | 'repaws' | 'media' | 'followers'
@@ -1988,6 +2043,7 @@ async function loadProfile() {
         fetchOnlineStatus(id),
         (result as any).relationship_with ? loadPartnerProfile((result as any).relationship_with) : Promise.resolve(),
         loadProfileSoonBadges(id),
+        fetchProfileStories(id),
       ])
       if (result.pinnedPost) pinnedPost.value = result.pinnedPost
       await loadTabData('posts')
@@ -2141,6 +2197,7 @@ function onPostUpdated(post: any) {
 
 onMounted(() => { loadProfile() })
 watch(() => route.params.id, () => { aboutTab.value = 'about'; activeContentTab.value = 'posts'; loadProfile() })
+// stories are loaded inside loadProfile via fetchProfileStories
 
 </script>
 
@@ -2153,4 +2210,14 @@ watch(() => route.params.id, () => { aboutTab.value = 'about'; activeContentTab.
   to   { opacity: 1; transform: translateY(0) }
 }
 .animate-fade-in { animation: fade-in 0.3s ease forwards }
+
+/* ── Story ring: animated rotating gradient around avatar ── */
+@keyframes story-ring-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.story-ring-gradient {
+  background: conic-gradient(#4C67CF, #a855f7, #ec4899, #f97316, #4C67CF);
+  animation: story-ring-spin 3s linear infinite;
+}
 </style>

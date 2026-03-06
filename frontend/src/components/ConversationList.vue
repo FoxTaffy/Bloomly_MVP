@@ -107,7 +107,7 @@
             <template v-if="conv.is_group && conv.last_message">
               <span class="text-brand-accent/80">{{ conv.last_message.sender?.display_name || conv.last_message.sender?.username }}: </span>
             </template>
-            {{ conv.last_message?.text || (conv.last_message?.file_url ? '📎 Медиафайл' : 'Нет сообщений') }}
+            {{ previewText(conv.last_message?.text) || (conv.last_message?.file_url ? '📎 Медиафайл' : 'Нет сообщений') }}
           </p>
         </div>
       </button>
@@ -333,6 +333,14 @@ function isUnread(conv: Conversation): boolean {
   const lastRead = conv.my_participant?.last_read_at
   if (!lastRead) return true
   return new Date(conv.last_message.created_at) > new Date(lastRead)
+}
+
+const STORY_REPLY_PREVIEW_RE = /^\[story_reply:[^\]]*\]/
+
+function previewText(text: string | undefined): string {
+  if (!text) return ''
+  if (STORY_REPLY_PREVIEW_RE.test(text)) return '📸 Ответ на историю'
+  return text
 }
 
 function formatTime(iso: string | undefined): string {

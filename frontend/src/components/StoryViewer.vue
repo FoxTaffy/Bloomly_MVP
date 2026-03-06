@@ -2,6 +2,9 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import BIcon from './BIcon.vue'
+import api from '@/api'
+import { useMessagesStore } from '@/stores/messages'
+import { useAuthStore } from '@/stores/auth'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Story {
@@ -35,6 +38,8 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const messagesStore = useMessagesStore()
+const authStore     = useAuthStore()
 
 // ── State ────────────────────────────────────────────────────────────────────
 const curGroupIdx = ref(props.groupIndex)
@@ -42,10 +47,42 @@ const curStoryIdx = ref(props.storyIndex)
 const progress = ref(0)          // 0-100
 const paused   = ref(false)
 const loaded   = ref(false)      // image loaded flag
-const replyText = ref('')
+const replyText    = ref('')
+const replySending = ref(false)
+const replyStatus  = ref<'idle' | 'sent' | 'error'>('idle')
+let replyStatusTimer = 0
+const inputFocused = ref(false)  // true while reply input is focused → guard resumeStory
 const showHeart = ref(false)     // double-tap heart burst
 const heartX = ref(0)
 const heartY = ref(0)
+
+// ── Vote (thumbs up / down — like PostCard, stored in localStorage) ──────────
+const VOTE_KEY   = 'bloomly_story_votes'
+const storyVote  = ref<1 | -1 | 0>(0)   // current user vote
+const storyScore = ref(0)               // aggregate score (optimistic)
+
+function loadVote(storyId: string) {
+  try {
+    const map = JSON.parse(localStorage.getItem(VOTE_KEY) ?? '{}')
+    const entry = map[storyId] as { vote: 1 | -1 | 0; score: number } | undefined
+    storyVote.value  = entry?.vote  ?? 0
+    storyScore.value = entry?.score ?? 0
+  } catch { storyVote.value = 0; storyScore.value = 0 }
+}
+
+function castVote(value: 1 | -1) {
+  if (!currentStory.value) return
+  const prev = storyVote.value
+  const prevScore = storyScore.value
+  // Toggle off if same button clicked
+  storyVote.value  = prev === value ? 0 : value
+  storyScore.value = prevScore - prev + storyVote.value
+  try {
+    const map = JSON.parse(localStorage.getItem(VOTE_KEY) ?? '{}')
+    map[currentStory.value.id] = { vote: storyVote.value, score: storyScore.value }
+    localStorage.setItem(VOTE_KEY, JSON.stringify(map))
+  } catch {}
+}
 
 // ── Computed ─────────────────────────────────────────────────────────────────
 const currentGroup  = computed(() => props.groups[curGroupIdx.value] ?? [])
@@ -117,9 +154,10 @@ function goPrev() {
   }
 }
 
-// Watch story change → reset
+// Watch story change → reset + load vote
 watch([curGroupIdx, curStoryIdx], () => {
   resetTimer()
+  if (currentStory.value) loadVote(currentStory.value.id)
 })
 
 // Watch loaded state → start timer when image loaded
@@ -169,7 +207,8 @@ function onTapStart(e: MouseEvent | TouchEvent) {
 
 function onTapEnd(e: MouseEvent | TouchEvent) {
   const dur = Date.now() - tapStartTime
-  resumeStory()
+  // Don't resume auto-play when the reply input has focus
+  if (!inputFocused.value) resumeStory()
   if (dur > 350) return  // was a hold — don't navigate
 
   const endX = 'changedTouches' in e ? e.changedTouches[0].clientX : e.clientX
@@ -206,13 +245,11 @@ function triggerHeart(x: number, y: number) {
 
 // ── Keyboard ─────────────────────────────────────────────────────────────────
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape')       { emit('close') }
+  // Don't intercept keys while typing in the reply input
+  if (inputFocused.value) return
+  if (e.key === 'Escape')          { emit('close') }
   else if (e.key === 'ArrowRight') goNext()
   else if (e.key === 'ArrowLeft')  goPrev()
-  else if (e.key === ' ') {
-    e.preventDefault()
-    paused.value ? resumeStory() : pauseStory()
-  }
 }
 
 function heartCenter() {
@@ -220,10 +257,42 @@ function heartCenter() {
 }
 
 // ── Reply ─────────────────────────────────────────────────────────────────────
-function sendReply() {
-  if (!replyText.value.trim()) return
-  // TODO: integrate with DM API
+function showReplyFeedback(status: 'sent' | 'error') {
+  replyStatus.value = status
+  clearTimeout(replyStatusTimer)
+  replyStatusTimer = window.setTimeout(() => { replyStatus.value = 'idle' }, 2500)
+}
+
+async function sendReply() {
+  const text = replyText.value.trim()
+  if (!text || replySending.value) return
+  if (!authStore.isAuthenticated) { router.push('/login'); return }
+  const story = currentStory.value
+  if (!story) return
+  // Can't reply to yourself
+  if (story.user.id === (authStore.user as any)?.id) return
+
+  replySending.value = true
   replyText.value = ''
+  try {
+    const convId = await messagesStore.openConversation(story.user.id)
+    // Encode story metadata as JSON for safe parsing in ChatWindow
+    const meta = JSON.stringify({
+      img: story.image_url ?? '',
+      exp: story.expires_at,
+      name: story.user.display_name || story.user.username || '',
+      ava: story.user.avatar_url ?? '',
+    })
+    const msgText = `[story_reply:${meta}]\n${text}`
+    await api.post(`/messages/conversations/${convId}/messages`, { content: msgText })
+    showReplyFeedback('sent')
+  } catch (err) {
+    console.error('Failed to send story reply', err)
+    replyText.value = text
+    showReplyFeedback('error')
+  } finally {
+    replySending.value = false
+  }
 }
 
 // ── Date format ───────────────────────────────────────────────────────────────
@@ -238,6 +307,7 @@ function formatAgo(d: string) {
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
   document.body.style.overflow = 'hidden'
+  if (currentStory.value) loadVote(currentStory.value.id)
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
@@ -276,7 +346,7 @@ onUnmounted(() => {
         </div>
 
         <!-- ── Story card ────────────────────────────────────────────────── -->
-        <div class="relative w-full h-full max-w-[430px] mx-auto flex flex-col">
+        <div class="relative w-full h-full max-w-[430px] mx-auto flex flex-col md:h-auto md:aspect-[9/16] md:max-h-[95vh] md:rounded-3xl md:overflow-hidden md:my-auto">
 
           <!-- Progress bars row -->
           <div class="relative z-10 flex gap-1 px-3 pt-3">
@@ -371,7 +441,7 @@ onUnmounted(() => {
                 <img
                   v-if="currentStory.image_url"
                   :src="currentStory.image_url"
-                  class="max-w-full max-h-full w-full h-full object-contain md:rounded-2xl md:shadow-2xl"
+                  class="w-full h-full object-cover"
                   @load="onImageLoad"
                   draggable="false"
                 />
@@ -451,36 +521,95 @@ onUnmounted(() => {
 
           <!-- Bottom: reply + reactions -->
           <div
-            class="relative z-10 px-4 pb-safe pb-5 pt-3 flex items-center gap-3"
+            class="relative z-10 px-4 pb-safe pb-5 pt-3 flex flex-col gap-2"
             @mousedown.stop
             @touchstart.stop
           >
-            <!-- Reply input -->
-            <div class="flex-1 flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-4 py-2.5">
-              <input
-                v-model="replyText"
-                type="text"
-                placeholder="Ответить в личку…"
-                class="flex-1 bg-transparent text-sm text-white placeholder-white/40 outline-none"
-                @keydown.enter.stop="sendReply"
-                @focus="pauseStory"
-                @blur="resumeStory"
-              />
-              <button
-                v-if="replyText.trim()"
-                @click.stop="sendReply"
-                class="w-7 h-7 rounded-full bg-brand-accent flex items-center justify-center flex-shrink-0 hover:bg-brand-accent-plus transition-colors"
+            <!-- Send status toast -->
+            <Transition
+              enter-active-class="transition duration-200 ease-out"
+              enter-from-class="opacity-0 translate-y-2"
+              enter-to-class="opacity-100 translate-y-0"
+              leave-active-class="transition duration-200 ease-in"
+              leave-from-class="opacity-100 translate-y-0"
+              leave-to-class="opacity-0 translate-y-2"
+            >
+              <div
+                v-if="replyStatus !== 'idle'"
+                class="flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold self-center"
+                :class="replyStatus === 'sent'
+                  ? 'bg-green-500/20 border border-green-500/30 text-green-300'
+                  : 'bg-rose-500/20 border border-rose-500/30 text-rose-300'"
               >
-                <BIcon name="SendHorizontal" class="w-3.5 h-3.5 text-white" />
+                <BIcon :name="replyStatus === 'sent' ? 'CheckCheck' : 'AlertCircle'" class="w-3.5 h-3.5" />
+                {{ replyStatus === 'sent' ? 'Сообщение отправлено' : 'Не удалось отправить' }}
+              </div>
+            </Transition>
+
+            <!-- Reply row -->
+            <div class="flex items-center gap-3">
+              <!-- Reply input — hidden when viewing own story -->
+              <div
+                v-if="currentStory && currentStory.user.id !== (authStore.user as any)?.id"
+                class="flex-1 flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-4 py-2.5"
+                :class="replyStatus === 'sent' ? 'border-green-500/30' : replyStatus === 'error' ? 'border-rose-500/30' : ''"
+              >
+                <input
+                  v-model="replyText"
+                  type="text"
+                  placeholder="Ответить в личку…"
+                  :disabled="replySending"
+                  class="flex-1 bg-transparent text-sm text-white placeholder-white/40 outline-none disabled:opacity-50"
+                  @keydown.enter.stop="sendReply"
+                  @focus="inputFocused = true; pauseStory()"
+                  @blur="inputFocused = false; resumeStory()"
+                />
+                <button
+                  v-if="replyText.trim() || replySending"
+                  @click.stop="sendReply"
+                  :disabled="replySending"
+                  class="w-7 h-7 rounded-full bg-brand-accent flex items-center justify-center flex-shrink-0 hover:bg-brand-accent-plus disabled:opacity-60 transition-all active:scale-90"
+                >
+                  <BIcon v-if="replySending" name="Loader2" class="w-3.5 h-3.5 text-white animate-spin" />
+                  <BIcon v-else name="SendHorizontal" class="w-3.5 h-3.5 text-white" />
+                </button>
+              </div>
+              <!-- Own story: label instead of reply input -->
+              <div
+                v-else-if="currentStory"
+                class="flex-1 flex items-center justify-center gap-2 bg-white/6 border border-white/10 rounded-full px-4 py-2.5 text-xs text-white/40"
+              >
+                <BIcon name="Eye" class="w-3.5 h-3.5" />
+                Ваша история
+              </div>
+
+            <!-- Vote pill — same style as PostCard.vue -->
+            <div class="flex items-center gap-1 bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/20 flex-shrink-0">
+              <button
+                @click.stop="castVote(1)"
+                class="p-1.5 rounded-full transition-all duration-150"
+                :class="storyVote === 1
+                  ? 'bg-green-500/25 text-green-400 shadow-[0_0_8px_0px] shadow-green-500/40'
+                  : 'text-white/55 hover:bg-green-500/20 hover:text-green-400'"
+                aria-label="Нравится"
+              >
+                <BIcon name="ThumbsUp" class="w-4 h-4" />
+              </button>
+              <span
+                class="font-bold text-sm min-w-[24px] text-center"
+                :class="storyVote === 1 ? 'text-green-400' : storyVote === -1 ? 'text-rose-400' : storyScore > 0 ? 'text-green-400' : storyScore < 0 ? 'text-rose-400' : 'text-white'"
+              >{{ storyScore }}</span>
+              <button
+                @click.stop="castVote(-1)"
+                class="p-1.5 rounded-full transition-all duration-150"
+                :class="storyVote === -1
+                  ? 'bg-rose-500/25 text-rose-400 shadow-[0_0_8px_0px] shadow-rose-500/40'
+                  : 'text-white/55 hover:bg-rose-500/20 hover:text-rose-400'"
+                aria-label="Не нравится"
+              >
+                <BIcon name="ThumbsDown" class="w-4 h-4" />
               </button>
             </div>
-
-            <!-- Quick reaction buttons -->
-            <button
-              @click.stop="heartCenter()"
-              class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center text-lg transition-all hover:scale-110 backdrop-blur-sm flex-shrink-0"
-              aria-label="Мне нравится"
-            >❤️</button>
             <button
               @click.stop
               class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center transition-all hover:scale-110 backdrop-blur-sm flex-shrink-0"
@@ -488,6 +617,7 @@ onUnmounted(() => {
             >
               <BIcon name="Share2" class="w-4.5 h-4.5 text-white" />
             </button>
+            </div><!-- end reply row -->
           </div>
         </div>
 

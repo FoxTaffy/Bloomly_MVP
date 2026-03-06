@@ -127,8 +127,8 @@ export const messageService = {
       FROM "Message" m
       JOIN "ConversationParticipant" cp
         ON cp.conversation_id = m.conversation_id
-       AND cp.user_id = ${userId}
-      WHERE m.sender_id   <> ${userId}
+       AND cp.user_id = ${userId}::uuid
+      WHERE m.sender_id   <> ${userId}::uuid
         AND m.deleted_at  IS NULL
         AND (
           cp.last_read_at IS NULL

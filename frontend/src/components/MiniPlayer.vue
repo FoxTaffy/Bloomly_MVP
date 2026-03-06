@@ -355,7 +355,6 @@ watch(() => props.src, async (newSrc) => {
 .range-overlay::-webkit-slider-thumb { width: 0; height: 0; }
 .range-overlay::-moz-range-thumb     { width: 0; height: 0; border: none; }
 .vol-vertical {
-  -webkit-appearance: slider-vertical; appearance: slider-vertical;
   width: 16px; height: 64px; cursor: pointer; accent-color: #4C67CF;
   writing-mode: vertical-lr; direction: rtl;
 }

@@ -366,7 +366,7 @@
                 </p>
                 <p class="text-[11px] truncate"
                   :class="isMine(msg) ? 'text-white/50' : 'text-white/55'">
-                  {{ msg.reply_to.file_url && !msg.reply_to.text ? '📎 Медиафайл' : (msg.reply_to.text || '').slice(0, 50) }}
+                  {{ msg.reply_to.file_url && !msg.reply_to.text ? '📎 Медиафайл' : previewMsgText(msg.reply_to.text, 50) }}
                 </p>
               </div>
             </div>
@@ -391,8 +391,94 @@
               <MiniPlayer :src="msg.file_url" :msg-type="msg.type" @click-image="openImageLightbox(msg.file_url!)" />
             </div>
 
-            <!-- Text bubble (not shown for pure sticker) -->
-            <div v-if="msg.type !== 'sticker' && (msg.text || !msg.file_url)"
+            <!-- ── Story reply card ─────────────────────────────────── -->
+            <template v-if="parseStoryReply(msg)">
+              <div
+                class="mb-0.5 max-w-[220px] w-full overflow-hidden rounded-2xl shadow-md cursor-pointer select-none group"
+                :class="[
+                  isMine(msg) ? 'rounded-br-sm' : 'rounded-bl-sm',
+                  parseStoryReply(msg)!.expired ? 'opacity-60 cursor-default' : 'hover:scale-[1.02] active:scale-[0.98] transition-transform duration-150',
+                ]"
+                @click.stop="openStoryCard(parseStoryReply(msg)!, msg)"
+              >
+                <!-- Thumbnail 9:16 -->
+                <div
+                  class="relative w-full overflow-hidden bg-gradient-to-br from-brand-accent/20 to-purple-900/40"
+                  style="aspect-ratio: 9/16; max-height: 300px"
+                >
+                  <img
+                    v-if="parseStoryReply(msg)!.imageUrl && !parseStoryReply(msg)!.expired"
+                    :src="parseStoryReply(msg)!.imageUrl"
+                    class="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                  <!-- Expired state -->
+                  <div
+                    v-else
+                    class="w-full h-full flex flex-col items-center justify-center gap-2 text-white/40"
+                  >
+                    <BIcon name="Clock" class="w-8 h-8" />
+                    <span class="text-xs font-semibold">История истекла</span>
+                  </div>
+
+                  <!-- Gradient overlays -->
+                  <div class="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/60 pointer-events-none" />
+
+                  <!-- Top: author chip -->
+                  <div class="absolute top-2 left-2 right-2 flex items-center gap-1.5">
+                    <div class="w-6 h-6 rounded-full overflow-hidden border border-white/30 flex-shrink-0 bg-brand-accent/30">
+                      <img
+                        v-if="parseStoryReply(msg)!.authorAvatar"
+                        :src="parseStoryReply(msg)!.authorAvatar"
+                        class="w-full h-full object-cover"
+                      />
+                      <div v-else class="w-full h-full flex items-center justify-center text-[9px] font-bold text-white">
+                        {{ (parseStoryReply(msg)!.authorName || '?')[0].toUpperCase() }}
+                      </div>
+                    </div>
+                    <span class="text-[10px] font-semibold text-white/90 truncate drop-shadow">
+                      {{ parseStoryReply(msg)!.authorName }}
+                    </span>
+                  </div>
+
+                  <!-- Bottom: label + play button -->
+                  <div v-if="!parseStoryReply(msg)!.expired" class="absolute bottom-2 inset-x-2 flex items-center justify-between">
+                    <div class="flex items-center gap-1">
+                      <BIcon name="Sparkles" class="w-3 h-3 text-white/70" />
+                      <span class="text-[10px] text-white/70 font-medium">История</span>
+                    </div>
+                    <div class="w-7 h-7 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center group-hover:bg-white/30 transition-colors">
+                      <BIcon name="Play" class="w-3 h-3 text-white ml-0.5" />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Reply text below thumbnail -->
+                <div
+                  v-if="parseStoryReply(msg)!.replyText"
+                  class="px-3 py-2 text-sm leading-snug"
+                  :class="isMine(msg)
+                    ? 'bg-brand-accent text-white'
+                    : 'bg-brand-card text-brand-offwhite border-t border-brand-border/40'"
+                >{{ parseStoryReply(msg)!.replyText }}</div>
+              </div>
+            </template>
+
+            <!-- Fallback: story reply that couldn't be parsed (old format / corrupted) -->
+            <template v-else-if="!parseStoryReply(msg) && /^\[story_reply:/u.test(msg.text || '')">
+              <div
+                class="mb-0.5 max-w-[220px] w-full overflow-hidden rounded-2xl shadow-md opacity-60 select-none"
+                :class="isMine(msg) ? 'rounded-br-sm' : 'rounded-bl-sm'"
+              >
+                <div class="relative w-full bg-gradient-to-br from-brand-accent/20 to-purple-900/40 flex flex-col items-center justify-center gap-2 text-white/40 py-8">
+                  <BIcon name="Clock" class="w-8 h-8" />
+                  <span class="text-xs font-semibold">История истекла</span>
+                </div>
+              </div>
+            </template>
+
+            <!-- Text bubble (not shown for pure sticker or story reply with text already shown in card) -->
+            <div v-if="msg.type !== 'sticker' && !parseStoryReply(msg) && !/^\[story_reply:/u.test(msg.text || '') && (msg.text || !msg.file_url)"
               @click="tappedMsgId = tappedMsgId === msg.id ? null : msg.id"
               :class="[
                 'px-3.5 py-2 rounded-3xl text-sm leading-relaxed break-words min-w-[60px] shadow-sm',
@@ -571,7 +657,7 @@
               <div class="w-0.5 h-7 rounded-full bg-brand-accent flex-shrink-0" />
               <div class="min-w-0">
                 <p class="text-[10px] text-brand-accent font-semibold truncate">{{ forwardMsg.sender?.display_name || forwardMsg.sender?.username }}</p>
-                <p class="text-[11px] text-white/55 truncate">{{ forwardMsg.file_url && !forwardMsg.text ? '📎 Медиафайл' : (forwardMsg.text || '').slice(0, 60) }}</p>
+                <p class="text-[11px] text-white/55 truncate">{{ forwardMsg.file_url && !forwardMsg.text ? '📎 Медиафайл' : previewMsgText(forwardMsg.text, 60) }}</p>
               </div>
             </div>
             <!-- Conv list -->
@@ -709,7 +795,7 @@
                 {{ replyTo.sender?.display_name || replyTo.sender?.username || 'Сообщение' }}
               </p>
               <p class="text-[11px] text-white/55 truncate leading-tight">
-                {{ replyTo.file_url && !replyTo.text ? '📎 Медиафайл' : (replyTo.text || '').slice(0, 60) }}
+                {{ replyTo.file_url && !replyTo.text ? '📎 Медиафайл' : previewMsgText(replyTo.text, 60) }}
               </p>
             </div>
             <button type="button" @click="replyTo = null" class="flex-shrink-0 p-0.5 text-white/55 hover:text-brand-error transition-colors">
@@ -767,6 +853,117 @@
       </form>
     </div>
   </div>
+
+  <!-- ── In-chat story viewer ──────────────────────────────────────────────── -->
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition duration-250 ease-out"
+      enter-from-class="opacity-0 scale-95"
+      enter-to-class="opacity-100 scale-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100 scale-100"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div
+        v-if="activeStoryCard"
+        class="fixed inset-0 z-[800] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+        @click.self="activeStoryCard = null"
+      >
+        <!-- Story phone frame -->
+        <div
+          class="relative flex flex-col bg-black rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10"
+          style="aspect-ratio:9/16; height:min(90vh,600px)"
+        >
+          <!-- Background blur -->
+          <div class="absolute inset-0 overflow-hidden">
+            <img
+              v-if="activeStoryCard.imageUrl"
+              :src="activeStoryCard.imageUrl"
+              class="w-full h-full object-cover scale-110 blur-2xl opacity-30 pointer-events-none"
+              aria-hidden="true"
+            />
+            <div class="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
+          </div>
+
+          <!-- Main image -->
+          <div class="flex-1 relative flex items-center justify-center overflow-hidden">
+            <img
+              v-if="activeStoryCard.imageUrl"
+              :src="activeStoryCard.imageUrl"
+              class="w-full h-full object-cover"
+              draggable="false"
+            />
+            <div v-else class="flex flex-col items-center gap-3 text-white/30">
+              <BIcon name="ImageOff" class="w-12 h-12" />
+              <span class="text-xs">Изображение недоступно</span>
+            </div>
+          </div>
+
+          <!-- Top bar: author + expiry + close -->
+          <div class="absolute top-0 left-0 right-0 z-10 flex items-center gap-2.5 px-3 pt-3 pb-4 bg-gradient-to-b from-black/70 to-transparent">
+            <!-- Avatar -->
+            <div class="w-9 h-9 rounded-full overflow-hidden border-2 border-white/30 flex-shrink-0 bg-brand-accent/20">
+              <img
+                v-if="activeStoryCard.authorAvatar"
+                :src="activeStoryCard.authorAvatar"
+                class="w-full h-full object-cover"
+              />
+              <div v-else class="w-full h-full flex items-center justify-center text-sm font-bold text-white">
+                {{ (activeStoryCard.authorName || '?')[0].toUpperCase() }}
+              </div>
+            </div>
+            <!-- Name + expiry -->
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-bold text-white leading-tight truncate">
+                {{ activeStoryCard.authorName }}
+              </p>
+              <div class="flex items-center gap-1 text-[11px] text-white/55">
+                <BIcon name="Sparkles" class="w-3 h-3" />
+                <span>История</span>
+                <span v-if="activeStoryCard.expiresAt" class="flex items-center gap-0.5 ml-1">
+                  <BIcon name="Clock" class="w-3 h-3" />
+                  {{
+                    (() => {
+                      const diff = Math.max(0, new Date(activeStoryCard.expiresAt).getTime() - Date.now())
+                      const h = Math.floor(diff / 3_600_000)
+                      const m = Math.floor((diff % 3_600_000) / 60_000)
+                      return h > 0 ? `${h}ч ${m}м` : `${m}м`
+                    })()
+                  }}
+                </span>
+              </div>
+            </div>
+            <!-- Close button -->
+            <button
+              @click="activeStoryCard = null"
+              class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors flex-shrink-0"
+            >
+              <BIcon name="X" class="w-5 h-5" />
+            </button>
+          </div>
+
+          <!-- Bottom: reply text if present -->
+          <div
+            v-if="activeStoryCard.replyText"
+            class="absolute bottom-0 left-0 right-0 z-10 px-4 pb-5 pt-8 bg-gradient-to-t from-black/80 to-transparent"
+          >
+            <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl px-4 py-3">
+              <p class="text-[10px] text-white/50 font-semibold uppercase tracking-wider mb-1">Ответ</p>
+              <p class="text-sm text-white leading-snug">{{ activeStoryCard.replyText }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Close hint -->
+        <button
+          @click="activeStoryCard = null"
+          class="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+        >
+          <BIcon name="X" class="w-5 h-5" />
+        </button>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -992,11 +1189,74 @@ const STICKER_MAP: Record<string, string> = {
 function getStickerEmoji(key: string): string { return STICKER_MAP[key] ?? '🎭' }
 
 const FWD_RE = /^↩️ Переслано от (.+?)\n/
+// Format v2 (JSON): [story_reply:{"img":...,"exp":...,"name":...,"ava":...}]\nreply
+// Format v1 (legacy pipe): [story_reply:IMAGE_URL|EXPIRES_AT|AUTHOR_NAME|AUTHOR_AVATAR]\nreply
+const STORY_REPLY_RE = /^\[story_reply:(\{[\s\S]*?\}|[^\]]*)\]\n?([\s\S]*)$/u
+
+/** Returns human-friendly short preview, stripping service tags */
+function previewMsgText(text: string | undefined, maxLen = 60): string {
+  if (!text) return ''
+  if (/^\[story_reply:/u.test(text)) return '📸 Ответ на историю'
+  return text.replace(FWD_RE, '').slice(0, maxLen)
+}
+
+interface StoryReplyMeta {
+  imageUrl: string
+  expiresAt: string
+  authorName: string
+  authorAvatar: string
+  replyText: string
+  expired: boolean
+}
+
+function parseStoryReply(msg: Message): StoryReplyMeta | null {
+  const m = (msg.text || '').match(STORY_REPLY_RE)
+  if (!m) return null
+  const raw = m[1]
+  let imageUrl = '', expiresAt = '', authorName = '', authorAvatar = ''
+  if (raw.startsWith('{')) {
+    // v2 JSON format
+    try {
+      const j = JSON.parse(raw)
+      imageUrl    = j.img  ?? ''
+      expiresAt   = j.exp  ?? ''
+      authorName  = j.name ?? ''
+      authorAvatar = j.ava ?? ''
+    } catch {
+      // JSON malformed — show as expired card with fallback sender info
+      const expired = true
+      return { imageUrl: '', expiresAt: '', authorName: msg.sender?.display_name || msg.sender?.username || '', authorAvatar: msg.sender?.avatar_url || '', replyText: '', expired }
+    }
+  } else {
+    // v1 pipe format (legacy fallback)
+    const parts = raw.split('|')
+    imageUrl     = parts[0] ?? ''
+    expiresAt    = parts[1] ?? ''
+    authorName   = parts[2] ?? ''
+    authorAvatar = parts[3] ?? ''
+  }
+  const expired = expiresAt ? Date.now() > new Date(expiresAt).getTime() : false
+  return { imageUrl, expiresAt, authorName, authorAvatar, replyText: m[2].trim(), expired }
+}
+
+// ── In-chat story viewer ──────────────────────────────────────────────────────
+const activeStoryCard = ref<StoryReplyMeta | null>(null)
+
+function openStoryCard(card: StoryReplyMeta, msg?: Message) {
+  if (card.expired) return
+  // If authorName is empty, try fallback from conversation partner (for old-format messages)
+  const enriched = { ...card }
+  if (!enriched.authorName && msg?.sender && !isMine(msg))
+    enriched.authorName = msg.sender.display_name || msg.sender.username || ''
+  activeStoryCard.value = enriched
+}
+
 function getForwardedAuthor(msg: Message): string | null {
   const m = (msg.text || '').match(FWD_RE); return m ? m[1] : null
 }
+
 function getMsgText(msg: Message): string {
-  return getDisplayText(msg).replace(FWD_RE, '')
+  return getDisplayText(msg).replace(FWD_RE, '').replace(STORY_REPLY_RE, '$2')
 }
 
 function renderMentions(text: string): string {

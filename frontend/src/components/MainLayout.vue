@@ -16,6 +16,7 @@ import PostCard from './PostCard.vue'
 import MentionTextarea from './MentionTextarea.vue'
 import StoriesBar from './StoriesBar.vue'
 import StoryViewer from './StoryViewer.vue'
+import StoryEditor from './StoryEditor.vue'
 import { useAnalytics } from '@/composables/useAnalytics'
 import { formatCount } from '@/lib/utils'
 
@@ -63,25 +64,9 @@ const mediaUrls = ref<string[]>([])
 const handleMediaUploaded = (urls: string[]) => { mediaUrls.value = urls }
 
 // ── Story creation ────────────────────────────────────────────────────────
-const storyMediaUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
-const storyMediaUrl = ref('')
-const storyCaption = ref('')
-const handleStoryUploaded = (urls: string[]) => { if (urls.length) storyMediaUrl.value = urls[0] }
-const isPostingStory = ref(false)
-const createStory = async () => {
-  if (!storyMediaUrl.value) return
-  isPostingStory.value = true
-  try {
-    const res = await api.post('/stories', { image_url: storyMediaUrl.value })
-    if (res.data.success) {
-      storyMediaUrl.value = ''
-      storyCaption.value = ''
-      storyMediaUploadRef.value?.clearAll()
-      showStoryModal.value = false
-      await fetchStories()
-    }
-  } catch (e) { console.error('Failed to create story', e) }
-  finally { isPostingStory.value = false }
+const onStoryEditorCreated = async () => {
+  showStoryModal.value = false
+  await fetchStories()
 }
 
 const closeCreateModal = () => {
@@ -91,9 +76,6 @@ const closeCreateModal = () => {
   newPost.value = { content: '', category: '', tags: [], isNsfw: false }
   mediaUrls.value = []
   mediaUploadRef.value?.clearAll()
-  storyMediaUrl.value = ''
-  storyCaption.value = ''
-  storyMediaUploadRef.value?.clearAll()
 }
 
 // ── Mobile navigation ────────────────────────────────────────────────────────
@@ -1168,63 +1150,8 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
     <!-- ═══════════════════════════════════════════════════════════════════
          STORY CREATION MODAL
     ═══════════════════════════════════════════════════════════════════ -->
-    <Teleport to="body">
-      <Transition name="fade-scale">
-        <div v-if="showStoryModal" class="fixed inset-0 z-[250] flex items-center justify-center px-4" @click.self="showStoryModal = false; storyMediaUrl = ''; storyMediaUploadRef?.clearAll()">
-          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
-          <div class="relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <!-- Header -->
-            <div class="flex items-center gap-3 px-5 pt-5 pb-4 border-b border-brand-border">
-              <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 flex items-center justify-center flex-shrink-0">
-                <BIcon name="Sparkles" class="w-4 h-4 text-purple-400" />
-              </div>
-              <div class="flex-1">
-                <p class="text-sm font-bold text-white">Новая история</p>
-                <p class="text-[11px] text-white/55">Исчезнет через 24 часа</p>
-              </div>
-              <button @click="showStoryModal = false; storyMediaUrl = ''; storyMediaUploadRef?.clearAll()"
-                class="p-1.5 text-white/55 hover:text-white hover:bg-white/8 rounded-full transition-colors">
-                <BIcon name="X" class="w-4 h-4" />
-              </button>
-            </div>
-            <!-- Body -->
-            <div class="p-5">
-              <div v-if="!storyMediaUrl"
-                class="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-brand-border bg-brand-bg cursor-pointer hover:border-purple-500/40 hover:bg-purple-500/5 transition-all py-10"
-                @click="storyMediaUploadRef?.openPicker()">
-                <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 flex items-center justify-center">
-                  <BIcon name="ImagePlus" class="w-7 h-7 text-purple-400" />
-                </div>
-                <p class="font-bold text-white">Добавь фото или видео</p>
-                <p class="text-xs text-white/55">Нажми или перетащи сюда</p>
-                <MediaUpload ref="storyMediaUploadRef" type="posts" :multiple="false" @uploaded="handleStoryUploaded" />
-              </div>
-              <div v-else class="relative rounded-2xl overflow-hidden border border-brand-border shadow-xl">
-                <img :src="storyMediaUrl" class="w-full max-h-72 object-cover" />
-                <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none"></div>
-                <button @click="storyMediaUrl = ''; storyMediaUploadRef?.clearAll()"
-                  class="absolute top-2 right-2 w-7 h-7 bg-black/60 border border-white/20 rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-colors">
-                  <BIcon name="X" class="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-            <!-- Footer -->
-            <div class="flex items-center justify-between px-5 pb-5">
-              <div class="flex items-center gap-1.5 text-[11px] text-white/55">
-                <BIcon name="Clock" class="w-3.5 h-3.5" />
-                <span>24 часа — автоудаление</span>
-              </div>
-              <button @click="createStory" :disabled="!storyMediaUrl || isPostingStory"
-                class="flex items-center gap-1.5 bg-gradient-to-r from-purple-500 to-pink-500 px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-md shadow-purple-500/30 hover:shadow-purple-500/50 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95">
-                <BIcon v-if="isPostingStory" name="Loader2" class="w-4 h-4 animate-spin" />
-                <BIcon v-else name="Sparkles" class="w-4 h-4" />
-                Опубликовать
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <!-- Story Editor (full-screen, handles its own Teleport) -->
+    <StoryEditor v-if="showStoryModal" @close="showStoryModal = false" @created="onStoryEditorCreated" />
 
     <!-- ═══════════════════════════════════════════════════════════════════
          MOBILE SEARCH / MENU PANEL (slide-up)
