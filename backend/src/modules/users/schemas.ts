@@ -45,6 +45,7 @@ export const updateUserSchema = {
       profile_bg_url:       { type: 'string', nullable: true },
       profile_frame:        { type: 'string', nullable: true },
       artist_since:         { type: 'string', format: 'date', nullable: true },
+      onboarding_done:     { type: 'boolean' },
     },
     additionalProperties: false,
   },

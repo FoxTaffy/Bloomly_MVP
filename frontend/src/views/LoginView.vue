@@ -1,26 +1,51 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { Mail, Lock, User, Eye, EyeOff, ArrowRight, KeyRound, CheckCircle2, Monitor } from 'lucide-vue-next'
+import { Mail, Lock, User, Eye, EyeOff, ArrowRight, KeyRound, CheckCircle2, Monitor, ShieldCheck } from 'lucide-vue-next'
 import api from '@/api'
 
 const router = useRouter()
+const route  = useRoute()
 const auth   = useAuthStore()
 
-type Mode = 'login' | 'register' | 'forgot' | 'reset'
+type Mode = 'login' | 'register' | 'forgot' | 'reset' | 'verify'
 const mode        = ref<Mode>('login')
 const email       = ref('')
 const username    = ref('')
 const password    = ref('')
 const newPassword = ref('')
 const resetCode   = ref('')
+const otpCode     = ref('')   // код подтверждения email при регистрации
 const showPass    = ref(false)
 const showNewPass = ref(false)
 const remember    = ref(false)
 const mounted     = ref(false)
 const mouseX      = ref(50)
 const mouseY      = ref(50)
+
+// Для повторной отправки OTP
+const resendCountdown = ref(0)
+let resendInterval: ReturnType<typeof setInterval> | null = null
+
+function startResendTimer() {
+  resendCountdown.value = 60
+  resendInterval = setInterval(() => {
+    resendCountdown.value--
+    if (resendCountdown.value <= 0 && resendInterval) {
+      clearInterval(resendInterval)
+      resendInterval = null
+    }
+  }, 1000)
+}
+
+async function onResendOtp() {
+  if (resendCountdown.value > 0) return
+  try {
+    await auth.resendOtp(email.value, mode.value === 'verify' ? 'register' : 'reset')
+    startResendTimer()
+  } catch { /* auth.error уже записан */ }
+}
 
 // ── Реальная статистика ────────────────────────────────────────────────────
 const statsData = ref({ users: 0, posts: 0, online: 0 })
@@ -52,6 +77,14 @@ const stats = computed(() => [
 onMounted(() => {
   setTimeout(() => { mounted.value = true }, 60)
   loadStats()
+  // OAuth-ошибка из redirect
+  if (route.query.error) {
+    const errMap: Record<string, string> = {
+      oauth_denied: 'Вход через соцсеть отменён.',
+      oauth_failed: 'Не удалось войти через соцсеть. Попробуй ещё раз.',
+    }
+    auth.error = errMap[route.query.error as string] ?? 'Ошибка OAuth'
+  }
   const card = document.getElementById('auth-card')
   if (card) {
     card.addEventListener('mousemove', (e: MouseEvent) => {
@@ -66,10 +99,27 @@ onMounted(() => {
 // ── Mode helpers ───────────────────────────────────────────────────────────────
 function switchMode(next: Mode) {
   mode.value = next; auth.error = null
-  email.value = ''; username.value = ''; password.value = ''
-  newPassword.value = ''; resetCode.value = ''
+  // Сохраняем email при переходе на шаги, где он уже введён
+  if (next !== 'verify' && next !== 'reset') email.value = ''
+  username.value = ''; password.value = ''
+  newPassword.value = ''; resetCode.value = ''; otpCode.value = ''
   showPass.value = false; showNewPass.value = false
 }
+
+// ── OAuth ─────────────────────────────────────────────────────────────────────
+const API_BASE = import.meta.env.VITE_API_URL ?? ''
+
+function loginWith(provider: string) {
+  window.location.href = `${API_BASE}/api/auth/oauth/${provider}`
+}
+
+const oauthProviders = [
+  // Яндекс первым — русский регион
+  { id: 'yandex',  label: 'Яндекс', bg: '#fc3f1d', logo: `<svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M14.155 4H12.25c-2.77 0-4.455 1.514-4.455 4.006 0 2.148 1.022 3.395 3.074 4.7L13 13.945 8.5 20H11l4.795-6.64-1.396-.894c-1.713-1.1-2.487-1.934-2.487-3.558C11.912 7.48 12.804 6.5 14.155 6.5V4zM14.5 4v16h2.5V4h-2.5z"/></svg>` },
+  { id: 'google',  label: 'Google',  bg: '#fff', textColor: '#1a1a2e', border: 'rgba(255,255,255,0.15)', logo: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>` },
+  { id: 'twitter', label: 'X',       bg: '#000', logo: `<svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.258 5.63 5.907-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>` },
+  { id: 'twitch',  label: 'Twitch',  bg: '#9146FF', logo: `<svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>` },
+]
 
 // ── Submit handlers ───────────────────────────────────────────────────────────
 async function onSubmit() {
@@ -79,12 +129,19 @@ async function onSubmit() {
       router.push({ name: 'home' })
     } else if (mode.value === 'register') {
       await auth.register(email.value, username.value, password.value)
+      // Переходим на OTP-шаг (email не сбрасываем)
+      mode.value = 'verify'
+      auth.error = null
+      startResendTimer()
+    } else if (mode.value === 'verify') {
+      await auth.verifyEmail(email.value, otpCode.value, remember.value)
       router.push({ name: 'home' })
     } else if (mode.value === 'forgot') {
       await auth.forgotPassword(email.value)
       switchMode('reset')
+      startResendTimer()
     } else if (mode.value === 'reset') {
-      await auth.resetPassword(resetCode.value, newPassword.value)
+      await auth.resetPassword(email.value, resetCode.value, newPassword.value)
       switchMode('login')
     }
   } catch { /* auth.error уже записан */ }
@@ -250,14 +307,16 @@ const features = [
                 <Transition name="t-head" mode="out-in">
                   <div :key="mode">
                     <h2 class="text-2xl font-black text-white mb-1">
-                      {{ mode === 'login' ? 'С возвращением 👋'
+                      {{ mode === 'login'    ? 'С возвращением 👋'
                        : mode === 'register' ? 'Привет, новенький ✨'
-                       : mode === 'forgot' ? 'Сброс пароля 🔑'
-                       : 'Новый пароль 🛡️' }}
+                       : mode === 'verify'   ? 'Подтверди email 📧'
+                       : mode === 'forgot'   ? 'Сброс пароля 🔑'
+                       :                      'Новый пароль 🛡️' }}
                     </h2>
                     <p class="text-sm text-white/35 font-medium">
                       {{ mode === 'login'    ? 'Войди, чтобы продолжить — твоя лента ждёт.'
                        : mode === 'register' ? 'Минута регистрации — и ты уже часть сообщества.'
+                       : mode === 'verify'   ? `Мы отправили 6-значный код на ${email || 'твою почту'}.`
                        : mode === 'forgot'   ? 'Введи email — мы отправим код для восстановления.'
                        :                      'Введи код из письма и придумай новый пароль.' }}
                     </p>
@@ -283,21 +342,21 @@ const features = [
                 >Регистрация</button>
               </div>
 
-              <!-- Кнопка назад для forgot/reset -->
+              <!-- Кнопка назад для forgot/reset/verify -->
               <button
-                v-if="mode === 'forgot' || mode === 'reset'"
+                v-if="mode === 'forgot' || mode === 'reset' || mode === 'verify'"
                 @click="switchMode('login')"
                 class="flex items-center gap-1.5 text-xs text-white/35 hover:text-white/60 transition-colors mb-5 -mt-1"
               >
                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-                Вернуться к входу
+                {{ mode === 'verify' ? 'Ввести другой email' : 'Вернуться к входу' }}
               </button>
 
               <!-- ФОРМА -->
               <form @submit.prevent="onSubmit" class="space-y-3.5">
 
-                <!-- Email (login / register / forgot) -->
-                <div v-if="mode !== 'reset'" class="input-group">
+                <!-- Email (login / register / forgot / reset) -->
+                <div v-if="mode !== 'verify'" class="input-group">
                   <Mail class="input-icon" />
                   <input v-model="email" type="email" placeholder="Email" required class="fld" />
                 </div>
@@ -358,6 +417,39 @@ const features = [
                 <div v-if="mode === 'reset'" class="input-group">
                   <KeyRound class="input-icon" />
                   <input v-model="resetCode" type="text" placeholder="6-значный код" required maxlength="6" pattern="[0-9]{6}" class="fld tracking-[0.3em] text-center" />
+                </div>
+
+                <!-- OTP для подтверждения email (режим verify) -->
+                <div v-if="mode === 'verify'" class="space-y-3">
+                  <!-- Информация куда отправлено -->
+                  <div class="flex items-center gap-2.5 p-3.5 rounded-2xl bg-[#7c3aed]/10 border border-[#7c3aed]/25">
+                    <ShieldCheck class="w-4 h-4 shrink-0 text-[#a78bfa]" />
+                    <p class="text-xs text-[#a78bfa] font-semibold">Код отправлен на <span class="text-white">{{ email }}</span></p>
+                  </div>
+                  <div class="input-group">
+                    <KeyRound class="input-icon" />
+                    <input
+                      v-model="otpCode"
+                      type="text"
+                      inputmode="numeric"
+                      placeholder="• • • • • •"
+                      required maxlength="6" pattern="[0-9]{6}"
+                      class="fld tracking-[0.5em] text-center text-xl font-bold"
+                      autocomplete="one-time-code"
+                    />
+                  </div>
+                  <!-- Повторная отправка -->
+                  <div class="flex justify-end">
+                    <button
+                      type="button"
+                      @click="onResendOtp"
+                      :disabled="resendCountdown > 0"
+                      class="text-xs font-semibold transition-colors"
+                      :class="resendCountdown > 0 ? 'text-white/20 cursor-default' : 'text-[#a78bfa] hover:text-white'"
+                    >
+                      {{ resendCountdown > 0 ? `Отправить повторно через ${resendCountdown}с` : 'Отправить код повторно' }}
+                    </button>
+                  </div>
                 </div>
 
                 <!-- Новый пароль (режим reset) -->
@@ -428,12 +520,52 @@ const features = [
                   <span v-else class="flex items-center justify-center gap-2.5 relative z-10">
                     {{ mode === 'login'    ? 'Войти'
                      : mode === 'register' ? 'Создать аккаунт'
+                     : mode === 'verify'   ? 'Подтвердить email'
                      : mode === 'forgot'   ? 'Отправить код'
                      :                      'Сменить пароль' }}
                     <ArrowRight class="w-5 h-5" />
                   </span>
                 </button>
               </form>
+
+              <!-- ── OAuth кнопки (только login/register) ── -->
+              <div v-if="mode === 'login' || mode === 'register'" class="mt-5">
+                <div class="flex items-center gap-3 mb-4">
+                  <div class="flex-1 h-px bg-white/8"></div>
+                  <span class="text-[11px] text-white/25 font-semibold uppercase tracking-widest shrink-0">или войти через</span>
+                  <div class="flex-1 h-px bg-white/8"></div>
+                </div>
+
+                <!-- Яндекс — крупная кнопка (русский регион) -->
+                <button
+                  type="button"
+                  @click="loginWith('yandex')"
+                  class="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-2xl font-bold text-sm text-white mb-2 transition-all duration-200 hover:opacity-90 hover:scale-[1.01] active:scale-[0.99]"
+                  style="background:#fc3f1d"
+                >
+                  <span class="w-5 h-5" v-html="oauthProviders[0].logo"></span>
+                  Войти через Яндекс
+                </button>
+
+                <!-- Остальные провайдеры — сетка -->
+                <div class="grid grid-cols-3 gap-2">
+                  <button
+                    v-for="p in oauthProviders.slice(1)" :key="p.id"
+                    type="button"
+                    @click="loginWith(p.id)"
+                    class="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 hover:opacity-90 hover:scale-[1.02] active:scale-[0.98]"
+                    :style="{
+                      background: p.bg,
+                      color: p.textColor ?? 'white',
+                      border: p.border ? `1px solid ${p.border}` : undefined,
+                    }"
+                    :title="`Войти через ${p.label}`"
+                  >
+                    <span class="w-4 h-4 shrink-0" v-html="p.logo"></span>
+                    <span>{{ p.label }}</span>
+                  </button>
+                </div>
+              </div>
 
               <!-- Footer links -->
               <p class="mt-6 text-center text-xs text-white/20 leading-relaxed">

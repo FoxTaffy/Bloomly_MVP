@@ -48,6 +48,7 @@ const PUBLIC_SELECT = {
   verified_at:          true,
   verification_type:    true,
   artist_since:         true,
+  onboarding_done:      true,
 } as const;
 
 export const usersService = {

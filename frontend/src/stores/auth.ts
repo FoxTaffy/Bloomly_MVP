@@ -16,6 +16,9 @@ export interface User {
   profile_theme?: string | null
   profile_bg_url?: string | null
   profile_frame?: string | null
+  email_verified?: boolean
+  is_verified?: boolean
+  onboarding_done?: boolean
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -85,12 +88,52 @@ export const useAuthStore = defineStore('auth', () => {
       const res = await api.post('/auth/register', { email, username, password })
       const data = res.data
       if (!data.success) throw new Error(data.error?.message ?? 'Registration failed')
-      await login(email, password, false)
+      // НЕ логиним автоматически — ждём подтверждения OTP
     } catch (e: any) {
       error.value = e.response?.data?.error?.message || e.message || 'Connection error'
       isLoading.value = false
       throw e
+    } finally {
+      isLoading.value = false
     }
+  }
+
+  async function verifyEmail(email: string, code: string, remember = false): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const res = await api.post('/auth/verify-email', { email, code })
+      const data = res.data
+      if (!data.success) throw new Error(data.error?.message ?? 'Verification failed')
+      token.value = data.data.token
+      user.value  = data.data.user
+      saveSession(data.data.token, data.data.user, remember)
+    } catch (e: any) {
+      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function resendOtp(email: string, purpose: 'register' | 'reset'): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      await api.post('/auth/resend-otp', { email, purpose })
+    } catch (e: any) {
+      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /** Вход через токен (после OAuth redirect или /verify-email) */
+  function loginWithToken(jwtToken: string, savedUser: User, remember = true): void {
+    token.value = jwtToken
+    user.value  = savedUser
+    saveSession(jwtToken, savedUser, remember)
   }
 
   async function forgotPassword(email: string): Promise<void> {
@@ -106,11 +149,11 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function resetPassword(code: string, newPassword: string): Promise<void> {
+  async function resetPassword(email: string, code: string, newPassword: string): Promise<void> {
     isLoading.value = true
     error.value = null
     try {
-      const res = await api.post('/auth/reset-password', { code, password: newPassword })
+      const res = await api.post('/auth/reset-password', { email, code, password: newPassword })
       const data = res.data
       if (!data.success) throw new Error(data.error?.message ?? 'Reset failed')
     } catch (e: any) {
@@ -147,6 +190,7 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     token, user, isLoading, error,
     isAuthenticated, displayName, avatarUrl,
-    login, register, forgotPassword, resetPassword, fetchMe, logout,
+    login, register, verifyEmail, resendOtp, loginWithToken,
+    forgotPassword, resetPassword, fetchMe, logout,
   }
 })

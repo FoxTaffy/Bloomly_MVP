@@ -11,7 +11,9 @@ model User {
   id                           String                @id @default(uuid()) @db.Uuid
   email                        String                @unique
   username                     String                @unique
-  password                     String
+  password                     String?
+  email_verified               Boolean               @default(false)
+  onboarding_done              Boolean               @default(false)
   display_name                 String?               @db.VarChar(50)
   created_at                   DateTime              @default(now())
   updated_at                   DateTime              @updatedAt
@@ -96,6 +98,30 @@ model User {
   warn_count                   Int                   @default(0)
   frozen_at                    DateTime?
   frozen_reason                String?               @db.VarChar(500)
+  oauthAccounts                OAuthAccount[]
+}
+
+model OAuthAccount {
+  id          String   @id @default(uuid()) @db.Uuid
+  user_id     String   @db.Uuid
+  provider    String   @db.VarChar(50)
+  provider_id String
+  created_at  DateTime @default(now())
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([provider, provider_id])
+}
+
+model EmailOtp {
+  id         String   @id @default(uuid()) @db.Uuid
+  email      String
+  code       String   @db.VarChar(10)
+  purpose    String   @db.VarChar(30)
+  expires_at DateTime
+  used       Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  @@index([email, purpose])
 }
 
 model Post {

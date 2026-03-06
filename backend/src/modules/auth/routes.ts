@@ -1,5 +1,10 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { registerHandler, loginHandler, statsHandler, forgotPasswordHandler, resetPasswordHandler } from './controller.js';
+import {
+  registerHandler, loginHandler, statsHandler,
+  forgotPasswordHandler, resetPasswordHandler,
+  verifyEmailHandler, resendOtpHandler,
+  oauthRedirectHandler, oauthCallbackHandler,
+} from './controller.js';
 import type { JwtPayload } from './types.js';
 import prisma from '../../config/prisma.js';
 
@@ -9,74 +14,103 @@ declare module 'fastify' {
   }
 }
 
-const registerSchema = {
-  body: {
-    type: 'object',
-    required: ['username', 'email', 'password'],
-    properties: {
-      username: { type: 'string', minLength: 3 },
-      email: { type: 'string', format: 'email' },
-      password: { type: 'string', minLength: 6 },
-    },
-  },
-};
-
-const loginSchema = {
-  body: {
-    type: 'object',
-    required: ['email', 'password'],
-    properties: {
-      email: { type: 'string', format: 'email' },
-      password: { type: 'string', minLength: 1 },
-    },
-  },
-};
-
 export async function authRoutes(fastify: FastifyInstance) {
-  // Public stats
+  // ── Публичные ────────────────────────────────────────────────────────────────
   fastify.get('/stats', statsHandler);
 
-  // Password reset (no auth)
+  // ── Email/password flow ───────────────────────────────────────────────────────
+  fastify.post('/register', {
+    schema: {
+      body: {
+        type: 'object', required: ['username', 'email', 'password'],
+        properties: {
+          username: { type: 'string', minLength: 3 },
+          email:    { type: 'string', format: 'email' },
+          password: { type: 'string', minLength: 6 },
+        },
+      },
+    },
+  }, registerHandler);
+
+  fastify.post('/verify-email', {
+    schema: {
+      body: {
+        type: 'object', required: ['email', 'code'],
+        properties: {
+          email: { type: 'string', format: 'email' },
+          code:  { type: 'string', minLength: 6, maxLength: 6 },
+        },
+      },
+    },
+    config: { rateLimit: { max: 10, timeWindow: '5 minutes' } },
+  }, verifyEmailHandler);
+
+  fastify.post('/resend-otp', {
+    schema: {
+      body: {
+        type: 'object', required: ['email', 'purpose'],
+        properties: {
+          email:   { type: 'string', format: 'email' },
+          purpose: { type: 'string', enum: ['register', 'reset'] },
+        },
+      },
+    },
+    config: { rateLimit: { max: 3, timeWindow: '1 minute' } },
+  }, resendOtpHandler);
+
+  fastify.post('/login', {
+    schema: {
+      body: {
+        type: 'object', required: ['email', 'password'],
+        properties: {
+          email:    { type: 'string', format: 'email' },
+          password: { type: 'string', minLength: 1 },
+        },
+      },
+    },
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+  }, loginHandler);
+
   fastify.post('/forgot-password', {
-    schema: { body: { type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' } } } },
+    schema: {
+      body: {
+        type: 'object', required: ['email'],
+        properties: { email: { type: 'string', format: 'email' } },
+      },
+    },
   }, forgotPasswordHandler);
+
   fastify.post('/reset-password', {
-    schema: { body: { type: 'object', required: ['code', 'password'], properties: { code: { type: 'string' }, password: { type: 'string', minLength: 6 } } } },
+    schema: {
+      body: {
+        type: 'object', required: ['email', 'code', 'password'],
+        properties: {
+          email:    { type: 'string', format: 'email' },
+          code:     { type: 'string' },
+          password: { type: 'string', minLength: 6 },
+        },
+      },
+    },
   }, resetPasswordHandler);
 
-  fastify.post('/register', { schema: registerSchema }, registerHandler);
+  // ── OAuth ─────────────────────────────────────────────────────────────────────
+  fastify.get('/oauth/:provider',     oauthRedirectHandler);
+  fastify.get('/callback/:provider',  oauthCallbackHandler);
 
-  // Strict rate-limit for login: max 10 attempts per minute per IP (brute-force protection)
-  fastify.post(
-    '/login',
-    { schema: loginSchema, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
-    loginHandler,
-  );
-
+  // ── Профиль (требует JWT) ─────────────────────────────────────────────────────
   fastify.get(
     '/me',
     { onRequest: [fastify.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const payload = request.user as JwtPayload;
-      // Fetch full user record so the client always gets username, display_name, avatar_url, etc.
       const user = await prisma.user.findUnique({
         where: { id: payload.id },
         select: {
-          id: true,
-          username: true,
-          email: true,
-          role: true,
-          display_name: true,
-          avatar_url: true,
-          bio: true,
-          status: true,
-          subscription_tier: true,
-          profile_theme: true,
-          profile_bg_url: true,
-          profile_frame: true,
-          is_verified: true,
-          verification_type: true,
-          badge_type: true,
+          id: true, username: true, email: true, role: true,
+          display_name: true, avatar_url: true, bio: true, status: true,
+          subscription_tier: true, profile_theme: true, profile_bg_url: true,
+          profile_frame: true, is_verified: true, verification_type: true,
+          badge_type: true, email_verified: true, onboarding_done: true,
         },
       });
       if (!user) {

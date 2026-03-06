@@ -16,6 +16,24 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/LoginView.vue'),
   },
   {
+    // После OAuth редиректа бэкенд направляет сюда с ?token=...
+    path: '/auth/callback',
+    name: 'oauth-callback',
+    component: () => import('@/views/OAuthCallbackView.vue'),
+  },
+  {
+    // Страница для передачи ошибки OAuth (deny / failed)
+    path: '/auth',
+    name: 'auth',
+    component: () => import('@/views/LoginView.vue'),
+  },
+  {
+    path: '/onboarding',
+    name: 'onboarding',
+    component: () => import('@/views/OnboardingView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/',
     name: 'home',
     component: () => import('@/components/MainLayout.vue'),
@@ -126,6 +144,9 @@ const router = createRouter({
 
 // ── Navigation guard ─────────────────────────────────────────────────────────
 // Pinia уже установлен в main.ts до app.use(router), поэтому useAuthStore() безопасен здесь.
+// Страницы, не требующие онбординга (публичные или сам онбординг)
+const ONBOARDING_BYPASS = new Set(['login', 'auth', 'oauth-callback', 'onboarding'])
+
 router.beforeEach((to) => {
   const auth = useAuthStore()
 
@@ -136,7 +157,19 @@ router.beforeEach((to) => {
 
   // Уже залогинен → не пускаем на /login повторно
   if (to.name === 'login' && auth.token) {
+    // Если онбординг не пройден — на онбординг
+    if (auth.user && !auth.user.onboarding_done) return { name: 'onboarding' }
     return { name: 'home' }
+  }
+
+  // Залогинен, онбординг не пройден → принудительно на онбординг
+  if (
+    auth.token &&
+    auth.user &&
+    !auth.user.onboarding_done &&
+    !ONBOARDING_BYPASS.has(String(to.name))
+  ) {
+    return { name: 'onboarding' }
   }
 })
 
