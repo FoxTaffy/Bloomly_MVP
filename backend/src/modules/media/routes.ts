@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { uploadFile } from './service.js';
+import { uploadFile, UploadValidationError } from './service.js';
 
 const ALLOWED_MIME_PREFIXES = ['image/', 'video/', 'audio/'];
 const ALLOWED_MIME_TYPES = new Set([
@@ -38,13 +38,22 @@ export async function mediaRoutes(fastify: FastifyInstance) {
           return reply.code(400).send({ success: false, data: null, error: { code: 'NO_FILE', message: 'Uploaded file is empty' } });
         }
 
-        const ALLOWED_FOLDERS = ['posts', 'avatars', 'banners', 'messages', 'backgrounds'] as const;
+        const ALLOWED_FOLDERS = ['posts', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers'] as const;
         type Folder = typeof ALLOWED_FOLDERS[number];
         const rawFolder = (request.query as any).folder ?? 'posts';
         const folder: Folder = ALLOWED_FOLDERS.includes(rawFolder) ? rawFolder : 'posts';
+
+        // For stickers: only PNG is allowed
+        if (folder === 'stickers' && data.mimetype !== 'image/png') {
+          return reply.code(422).send({ success: false, data: null, error: { code: 'STICKER_FORMAT', message: 'Стикер должен быть в формате PNG' } });
+        }
+
         const url = await uploadFile(buf, data.filename, data.mimetype, folder);
         return reply.send({ success: true, data: { url }, error: null });
       } catch (err: any) {
+        if (err instanceof UploadValidationError) {
+          return reply.code(422).send({ success: false, data: null, error: { code: err.code, message: err.message } });
+        }
         fastify.log.error({ err }, 'Media upload failed');
         return reply.code(500).send({ success: false, data: null, error: { code: 'UPLOAD_ERROR', message: err?.message ?? String(err) } });
       }

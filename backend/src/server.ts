@@ -19,8 +19,11 @@ import { messagesRoutes } from './modules/messages/routes.js';
 import { friendsRoutes } from './modules/friends/routes.js';
 import { groupsRoutes } from './modules/groups/routes.js';
 import { verificationRoutes } from './modules/verification/routes.js';
+import { dealersDenRoutes } from './modules/dealers-den/routes.js';
+import { stickersRoutes } from './modules/stickers/routes.js';
 import { messageService, messageSubscriptions } from './modules/messages/service.js';
 import { initCronJobs } from './cron.js';
+import prisma from './config/prisma.js';
 
 dotenv.config();
 
@@ -53,6 +56,16 @@ fastify.decorate(
   async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await request.jwtVerify();
+      // Always refresh role from DB so role changes take effect without re-login
+      const payload = request.user as { id: string; role: string };
+      const dbUser = await prisma.user.findUnique({
+        where: { id: payload.id },
+        select: { role: true, deleted_at: true },
+      });
+      if (!dbUser || dbUser.deleted_at) {
+        return reply.code(401).send({ success: false, data: null, error: { code: 'UNAUTHORIZED', message: 'User not found' } });
+      }
+      (request.user as any).role = dbUser.role;
     } catch (err) {
       reply.send(err);
     }
@@ -85,6 +98,8 @@ fastify.register(messagesRoutes, { prefix: '/api/messages' });
 fastify.register(friendsRoutes, { prefix: '/api/friends' });
 fastify.register(groupsRoutes, { prefix: '/api/groups' });
 fastify.register(verificationRoutes, { prefix: '/api/verification' });
+fastify.register(dealersDenRoutes, { prefix: '/api/dealers-den' });
+fastify.register(stickersRoutes, { prefix: '/api/stickers' });
 
 // ── In-memory online status tracking ─────────────────────────────────────
 // Use a Set per user so multiple browser tabs / pages work correctly

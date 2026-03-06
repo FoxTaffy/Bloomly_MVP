@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import prisma from './config/prisma.js';
+import { patrolSuspiciousActivity } from './modules/automod/service.js';
 
 export function initCronJobs() {
   console.log('[CRON] Initializing background tasks...');
@@ -40,6 +41,15 @@ export function initCronJobs() {
       console.log('[CRON] DB Cleanup completed successfully.');
     } catch (err: any) {
       console.error('[CRON] Failed to run daily DB cleanup task:', err.message);
+    }
+  });
+
+  // Automod patrol: every 15 minutes
+  cron.schedule('*/15 * * * *', async () => {
+    try {
+      await patrolSuspiciousActivity();
+    } catch (err: any) {
+      console.error('[CRON] AutoMod patrol error:', err.message);
     }
   });
 

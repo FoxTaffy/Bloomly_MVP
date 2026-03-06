@@ -93,6 +93,30 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/EventDetailView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/dealers-den',
+    name: 'dealers-den',
+    component: () => import('@/views/DealersDenView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/dealers-den/:id',
+    name: 'dealer-listing',
+    component: () => import('@/views/DealerListingView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/stickers',
+    name: 'stickers',
+    component: () => import('@/views/StickersView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/stickers/:id',
+    name: 'sticker-pack',
+    component: () => import('@/views/StickerPackView.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

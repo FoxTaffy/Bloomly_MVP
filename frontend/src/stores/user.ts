@@ -138,7 +138,10 @@ export const useUserStore = defineStore('user', () => {
       if (auth.user) {
         if (updated.avatar_url !== undefined) auth.user.avatar_url = updated.avatar_url
         if (updated.display_name !== undefined) auth.user.display_name = updated.display_name
-        sessionStorage.setItem('auth_user', JSON.stringify(auth.user))
+        // Persist to whichever storage the session was originally saved in
+        const inLocal = !!localStorage.getItem('access_token')
+        const storage = inLocal ? localStorage : sessionStorage
+        storage.setItem('auth_user', JSON.stringify(auth.user))
       }
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Connection error'

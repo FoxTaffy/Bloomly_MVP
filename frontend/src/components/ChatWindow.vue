@@ -230,9 +230,31 @@
                   class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/60 transition-colors" />
               </div>
               <div>
-                <label class="block text-xs text-white/55 mb-1.5 font-medium">URL аватара группы</label>
-                <input v-model="editGroupAvatar" type="url" placeholder="https://..."
-                  class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent/60 transition-colors" />
+                <label class="block text-xs text-white/55 mb-1.5 font-medium">Аватар группы</label>
+                <input ref="groupAvatarRef" type="file" accept="image/*" class="sr-only" @change="onGroupAvatarChange" />
+                <div class="flex items-center gap-3">
+                  <!-- Preview -->
+                  <div
+                    class="w-14 h-14 rounded-2xl border-2 border-dashed border-brand-border/60 hover:border-brand-accent/40 flex items-center justify-center cursor-pointer transition-all flex-shrink-0 overflow-hidden relative"
+                    @click="groupAvatarRef?.click()">
+                    <img v-if="editGroupAvatar" :src="editGroupAvatar" class="w-full h-full object-cover" />
+                    <span v-else-if="uploadingGroupAvatar" class="w-5 h-5 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
+                    <BIcon v-else name="Image" class="w-6 h-6 text-white/30" />
+                  </div>
+                  <!-- Actions -->
+                  <div class="flex flex-col gap-1.5 flex-1 min-w-0">
+                    <button type="button" @click="groupAvatarRef?.click()" :disabled="uploadingGroupAvatar"
+                      class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-bg border border-brand-border text-xs font-semibold text-white/70 hover:text-white hover:border-brand-accent/40 transition-all disabled:opacity-40">
+                      <BIcon name="Upload" class="w-3 h-3" />
+                      {{ uploadingGroupAvatar ? 'Загрузка…' : 'Выбрать фото' }}
+                    </button>
+                    <button v-if="editGroupAvatar" type="button" @click="editGroupAvatar = ''"
+                      class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs font-semibold text-rose-400 hover:bg-rose-500/20 transition-all">
+                      <BIcon name="Trash2" class="w-3 h-3" />
+                      Удалить
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="flex items-center gap-2 px-4 py-3 border-t border-brand-border">
@@ -349,10 +371,17 @@
               </div>
             </div>
 
-            <!-- Sticker (inline emoji, no bubble) -->
-            <div v-if="msg.type === 'sticker'"
-              class="text-[80px] leading-none select-none p-1">
-              {{ getStickerEmoji(msg.text || msg.file_url || '') }}
+            <!-- Sticker (real image or legacy emoji) -->
+            <div v-if="msg.type === 'sticker'" class="p-1">
+              <img
+                v-if="(msg.file_url || msg.text || '').startsWith('http')"
+                :src="msg.file_url || msg.text || ''"
+                class="w-28 h-28 object-contain select-none cursor-pointer hover:scale-110 transition-transform active:scale-95"
+                @click="openImageLightbox(msg.file_url || msg.text || '')"
+              />
+              <span v-else class="text-[80px] leading-none select-none">
+                {{ getStickerEmoji(msg.text || msg.file_url || '') }}
+              </span>
             </div>
 
             <!-- Media (compact MiniPlayer) -->
@@ -827,6 +856,21 @@ const showMembersPanel = ref(false)
 const showEditGroup    = ref(false)
 const editGroupName    = ref('')
 const editGroupAvatar  = ref('')
+const groupAvatarRef   = ref<HTMLInputElement | null>(null)
+const uploadingGroupAvatar = ref(false)
+
+async function onGroupAvatarChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  uploadingGroupAvatar.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file, file.name)
+    const res = await api.post('/media/upload?folder=avatars', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    editGroupAvatar.value = res.data.data.url
+  } catch (err) { console.error('Avatar upload failed:', err) }
+  finally { uploadingGroupAvatar.value = false; if (groupAvatarRef.value) groupAvatarRef.value.value = '' }
+}
 const savingGroup      = ref(false)
 const groupMembers     = ref<Array<{ user_id: string; role: string; user: MsgSender }>>([])
 const membersLoading   = ref(false)
@@ -925,7 +969,7 @@ function insertEmoji(emoji: string) {
 }
 
 function sendSticker(url: string) {
-  store.sendMessage(props.convId, url, undefined, 'sticker')
+  store.sendMessage(props.convId, '', url, 'sticker')
   showStickerPanel.value = false
 }
 

@@ -1,130 +1,196 @@
 <template>
-  <div class="sticker-panel w-72 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden flex flex-col" style="max-height: 340px">
-    <!-- Header -->
-    <div class="flex items-center justify-between px-3 pt-2.5 pb-2 flex-shrink-0 border-b border-brand-border">
-      <div class="flex items-center gap-2">
-        <span class="text-sm font-semibold text-white">Стикеры</span>
-        <span class="text-[9px] font-bold bg-brand-accent/30 text-brand-accent px-1.5 py-0.5 rounded-full border border-brand-accent/40">BETA</span>
-      </div>
-      <span class="text-[10px] text-white/55">Скоро в Dealers Den</span>
+  <div class="sticker-panel w-80 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden flex flex-col" style="max-height: 380px">
+
+    <!-- Header with search -->
+    <div class="flex items-center gap-2 px-3 pt-2.5 pb-2 flex-shrink-0 border-b border-brand-border">
+      <BIcon name="Sticker" class="w-4 h-4 text-brand-accent flex-shrink-0" />
+      <input
+        v-model="searchQuery"
+        type="text"
+        placeholder="Поиск стикеров…"
+        class="flex-1 text-xs bg-transparent text-white placeholder-white/35 outline-none" />
+      <button
+        v-if="searchQuery"
+        @click="searchQuery = ''"
+        class="text-white/40 hover:text-white transition-colors">
+        <BIcon name="X" class="w-3 h-3" />
+      </button>
+      <router-link
+        to="/stickers"
+        class="text-white/40 hover:text-brand-accent transition-colors ml-1"
+        title="Открыть каталог стикеров">
+        <BIcon name="ExternalLink" class="w-3.5 h-3.5" />
+      </router-link>
     </div>
 
-    <!-- Pack tabs -->
-    <div class="flex items-center gap-1 px-2 py-1.5 flex-shrink-0 overflow-x-auto hide-scrollbar border-b border-brand-border/50">
+    <!-- Pack tabs (hidden during search) -->
+    <div v-if="!searchQuery && collection.length" class="flex items-center gap-1 px-2 py-1.5 flex-shrink-0 overflow-x-auto scrollbar-hide border-b border-brand-border/50">
+      <!-- "All" tab -->
       <button
-        v-for="pack in PACKS"
+        @click="activePack = '__all__'"
+        :class="[
+          'flex-shrink-0 px-2.5 py-1 rounded-xl text-xs font-semibold transition-all whitespace-nowrap',
+          activePack === '__all__'
+            ? 'bg-brand-accent text-white shadow-sm'
+            : 'text-white/55 hover:text-white hover:bg-brand-bg',
+        ]">
+        ✨ Все
+      </button>
+      <button
+        v-for="pack in collection"
         :key="pack.id"
         @click="activePack = pack.id"
         :class="[
-          'flex-shrink-0 px-2.5 py-1 rounded-xl text-xs font-medium transition-all whitespace-nowrap',
+          'flex-shrink-0 px-2.5 py-1 rounded-xl text-xs font-semibold transition-all whitespace-nowrap',
           activePack === pack.id
             ? 'bg-brand-accent text-white shadow-sm'
             : 'text-white/55 hover:text-white hover:bg-brand-bg',
-        ]"
-      >{{ pack.name }}</button>
+        ]">
+        <!-- pack cover thumbnail -->
+        <span v-if="pack.cover_url" class="inline-flex items-center gap-1.5">
+          <img :src="pack.cover_url" class="w-3.5 h-3.5 object-contain" />
+          {{ pack.name.length > 14 ? pack.name.slice(0, 13) + '…' : pack.name }}
+          <span v-if="ownPackIds.has(pack.id)" class="text-[8px] opacity-70">✏️</span>
+        </span>
+        <span v-else class="inline-flex items-center gap-1">
+          {{ pack.name.length > 14 ? pack.name.slice(0, 13) + '…' : pack.name }}
+          <span v-if="ownPackIds.has(pack.id)" class="text-[8px] opacity-70">✏️</span>
+        </span>
+      </button>
     </div>
 
     <!-- Sticker grid -->
-    <div class="flex-1 overflow-y-auto p-2 min-h-0">
-      <!-- Coming soon state for certain packs -->
-      <div v-if="currentPack.comingSoon" class="flex flex-col items-center justify-center h-32 gap-2 text-white/55">
-        <BIcon name="Package" class="w-8 h-8 opacity-40" />
-        <p class="text-xs text-center">Этот пак появится<br>в Dealers Den</p>
+    <div class="flex-1 overflow-y-auto p-2 min-h-0 scrollbar-hide">
+
+      <!-- Loading -->
+      <div v-if="stickersStore.isLoading" class="grid grid-cols-5 gap-1.5">
+        <div v-for="i in 15" :key="i" class="aspect-square rounded-xl bg-brand-border animate-pulse" />
       </div>
 
-      <div v-else class="grid grid-cols-4 gap-1.5">
+      <!-- Empty collection -->
+      <div v-else-if="!collection.length" class="flex flex-col items-center justify-center h-32 gap-2.5 px-4 text-center">
+        <BIcon name="PackageOpen" class="w-9 h-9 text-white/25" />
+        <p class="text-xs text-white/50 leading-snug">
+          Коллекция пуста.<br>
+          <router-link to="/stickers" class="text-brand-accent hover:underline">Найдите паки</router-link>
+          в каталоге и добавьте их в коллекцию.
+        </p>
+      </div>
+
+      <!-- Search: no results -->
+      <div v-else-if="searchQuery && !searchResults.length" class="flex flex-col items-center justify-center h-24 gap-2 text-white/45 text-xs">
+        <BIcon name="SearchX" class="w-7 h-7 opacity-50" />
+        Ничего не найдено
+      </div>
+
+      <!-- Search results -->
+      <div v-else-if="searchQuery" class="grid grid-cols-5 gap-1.5">
         <button
-          v-for="sticker in currentPack.stickers"
-          :key="sticker.id"
-          @click="$emit('pick', sticker.url)"
-          class="aspect-square rounded-xl overflow-hidden bg-brand-bg border border-brand-border/50 hover:border-brand-accent/50 hover:bg-brand-bg/80 transition-all active:scale-95 flex items-center justify-center p-1.5"
-          :title="sticker.name"
-        >
-          <!-- Emoji-style placeholder sticker -->
-          <span class="text-3xl leading-none select-none">{{ sticker.emoji }}</span>
+          v-for="item in searchResults"
+          :key="item.url"
+          @click="pick(item.url)"
+          class="aspect-square rounded-xl bg-white/5 border border-brand-border/40 hover:border-brand-accent/50 hover:bg-brand-accent/8 transition-all active:scale-90 flex items-center justify-center p-1 overflow-hidden"
+          :title="item.packName">
+          <img :src="item.url" class="w-full h-full object-contain" loading="lazy" />
         </button>
       </div>
-    </div>
 
-    <!-- Dealers Den promo -->
-    <div class="flex items-center gap-2 border-t border-brand-border px-3 py-2 flex-shrink-0 bg-brand-bg/40">
-      <BIcon name="ShoppingBag" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
-      <p class="text-[10px] text-white/55 leading-tight">
-        Эксклюзивные стикер-паки появятся в
-        <span class="text-brand-accent font-semibold">Dealers Den</span>
-      </p>
+      <!-- All stickers flat -->
+      <div v-else-if="activePack === '__all__'" class="space-y-3">
+        <template v-for="pack in collection" :key="pack.id">
+          <div>
+            <p class="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-1.5 px-0.5">{{ pack.name }}</p>
+            <div class="grid grid-cols-5 gap-1.5">
+              <button
+                v-for="url in pack.stickers"
+                :key="url"
+                @click="pick(url)"
+                class="aspect-square rounded-xl bg-white/5 border border-brand-border/40 hover:border-brand-accent/50 hover:bg-brand-accent/8 transition-all active:scale-90 flex items-center justify-center p-1 overflow-hidden">
+                <img :src="url" class="w-full h-full object-contain" loading="lazy" />
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Single pack -->
+      <div v-else-if="currentPack">
+        <div v-if="!currentPack.stickers.length" class="flex flex-col items-center justify-center h-24 gap-2 text-white/45 text-xs">
+          <BIcon name="Ghost" class="w-7 h-7 opacity-50" />
+          В этом паке нет стикеров
+        </div>
+        <div v-else class="grid grid-cols-5 gap-1.5">
+          <button
+            v-for="url in currentPack.stickers"
+            :key="url"
+            @click="pick(url)"
+            class="aspect-square rounded-xl bg-white/5 border border-brand-border/40 hover:border-brand-accent/50 hover:bg-brand-accent/8 transition-all active:scale-90 flex items-center justify-center p-1 overflow-hidden">
+            <img :src="url" class="w-full h-full object-contain" loading="lazy" />
+          </button>
+        </div>
+      </div>
+
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import BIcon from '@/components/BIcon.vue'
+import { useStickersStore } from '@/stores/stickers'
 
-defineEmits<{ (e: 'pick', url: string): void }>()
+const emit = defineEmits<{ (e: 'pick', url: string): void }>()
 
-const activePack = ref('fluffy')
+const stickersStore = useStickersStore()
 
-interface Sticker {
-  id: string
-  name: string
-  emoji: string
-  url: string  // when real sticker images are available
+const activePack  = ref('__all__')
+const searchQuery = ref('')
+
+// ── Data: own packs + collection merged, deduplicated ────────────────────
+const collection = computed(() => {
+  const seen = new Set<string>()
+  const all: typeof stickersStore.myPacks = []
+  // Own packs first (marked)
+  for (const p of stickersStore.myPacks) {
+    if (!seen.has(p.id) && p.stickers.length > 0) { seen.add(p.id); all.push(p) }
+  }
+  // Then collected packs
+  for (const p of stickersStore.myCollection) {
+    if (!seen.has(p.id) && p.stickers.length > 0) { seen.add(p.id); all.push(p) }
+  }
+  return all
+})
+
+const ownPackIds = computed(() => new Set(stickersStore.myPacks.map((p) => p.id)))
+
+const currentPack = computed(() =>
+  collection.value.find((p) => p.id === activePack.value) ?? null,
+)
+
+// ── Search ────────────────────────────────────────────────────────────────
+interface FlatSticker { url: string; packName: string }
+
+const searchResults = computed<FlatSticker[]>(() => {
+  const q = searchQuery.value.toLowerCase().trim()
+  if (!q) return []
+  const results: FlatSticker[] = []
+  for (const pack of collection.value) {
+    if (pack.name.toLowerCase().includes(q) || pack.tags?.some((t: string) => t.toLowerCase().includes(q))) {
+      pack.stickers.forEach((url: string) => results.push({ url, packName: pack.name }))
+    }
+  }
+  return results
+})
+
+// ── Actions ───────────────────────────────────────────────────────────────
+function pick(url: string) {
+  emit('pick', url)
 }
 
-interface Pack {
-  id: string
-  name: string
-  comingSoon?: boolean
-  stickers: Sticker[]
-}
-
-const PACKS: Pack[] = [
-  {
-    id: 'fluffy',
-    name: '🐾 Мягкие',
-    stickers: [
-      { id: 'f1',  name: 'Привет',    emoji: '🐻',  url: 'sticker:fluffy:f1' },
-      { id: 'f2',  name: 'Обнимашки', emoji: '🐨',  url: 'sticker:fluffy:f2' },
-      { id: 'f3',  name: 'Сплю',      emoji: '🦥',  url: 'sticker:fluffy:f3' },
-      { id: 'f4',  name: 'Сердечко',  emoji: '🐰',  url: 'sticker:fluffy:f4' },
-      { id: 'f5',  name: 'Плачу',     emoji: '🐼',  url: 'sticker:fluffy:f5' },
-      { id: 'f6',  name: 'Смеюсь',    emoji: '🦊',  url: 'sticker:fluffy:f6' },
-      { id: 'f7',  name: 'Злюсь',     emoji: '🐯',  url: 'sticker:fluffy:f7' },
-      { id: 'f8',  name: 'Ем',        emoji: '🐻‍❄️', url: 'sticker:fluffy:f8' },
-      { id: 'f9',  name: 'Гуляю',     emoji: '🐕',  url: 'sticker:fluffy:f9' },
-      { id: 'f10', name: 'Устал',     emoji: '🦝',  url: 'sticker:fluffy:f10' },
-      { id: 'f11', name: 'Думаю',     emoji: '🦦',  url: 'sticker:fluffy:f11' },
-      { id: 'f12', name: 'Танцую',    emoji: '🦜',  url: 'sticker:fluffy:f12' },
-    ],
-  },
-  {
-    id: 'fursona',
-    name: '🎨 Фурсона',
-    stickers: [
-      { id: 'fu1', name: 'Лиса радуется', emoji: '🦊', url: 'sticker:fursona:fu1' },
-      { id: 'fu2', name: 'Волк воет',     emoji: '🐺', url: 'sticker:fursona:fu2' },
-      { id: 'fu3', name: 'Дракон огонь',  emoji: '🐲', url: 'sticker:fursona:fu3' },
-      { id: 'fu4', name: 'Пони скачет',   emoji: '🦄', url: 'sticker:fursona:fu4' },
-      { id: 'fu5', name: 'Пантера',       emoji: '🐆', url: 'sticker:fursona:fu5' },
-      { id: 'fu6', name: 'Кот доволен',   emoji: '😺', url: 'sticker:fursona:fu6' },
-      { id: 'fu7', name: 'Леопард',       emoji: '🐅', url: 'sticker:fursona:fu7' },
-      { id: 'fu8', name: 'Акула',         emoji: '🦈', url: 'sticker:fursona:fu8' },
-    ],
-  },
-  {
-    id: 'premium_1',
-    name: '💎 Эксклюзив',
-    comingSoon: true,
-    stickers: [],
-  },
-  {
-    id: 'premium_2',
-    name: '🌸 Аниме',
-    comingSoon: true,
-    stickers: [],
-  },
-]
-
-const currentPack = computed(() => PACKS.find((p) => p.id === activePack.value) ?? PACKS[0])
+onMounted(async () => {
+  const tasks: Promise<any>[] = []
+  if (!stickersStore.myCollection.length) tasks.push(stickersStore.loadMyCollection())
+  if (!stickersStore.myPacks.length)      tasks.push(stickersStore.loadMyPacks())
+  await Promise.all(tasks)
+})
 </script>

@@ -14,6 +14,8 @@ import PostLightbox from './PostLightbox.vue'
 import PostComments from './PostComments.vue'
 import PostCard from './PostCard.vue'
 import MentionTextarea from './MentionTextarea.vue'
+import StoriesBar from './StoriesBar.vue'
+import StoryViewer from './StoryViewer.vue'
 import { useAnalytics } from '@/composables/useAnalytics'
 import { formatCount } from '@/lib/utils'
 
@@ -599,33 +601,42 @@ const formatDate = (dateString: string) => {
 }
 
 // ── Stories ───────────────────────────────────────────────────────────────
-const stories = ref<any[]>([])
-const activeStory = ref<any>(null)
-const storyProgress = ref(0)
-let storyTimerInterval: ReturnType<typeof setInterval> | null = null
+interface StoryItem {
+  id: string
+  image_url: string | null
+  created_at: string
+  expires_at: string
+  user: { id: string; username: string; display_name: string | null; avatar_url: string | null }
+}
+const storiesBarRef = ref<InstanceType<typeof StoriesBar> | null>(null)
+// Grouped stories for viewer: [[userA stories], [userB stories], …]
+const storyGroups = ref<StoryItem[][]>([])
+const storyViewerOpen = ref(false)
+const storyViewerGroupIdx = ref(0)
+const storyViewerStoryIdx = ref(0)
 
-const openStory = (story: any) => {
-  activeStory.value = story
-  storyProgress.value = 0
-  if (storyTimerInterval) clearInterval(storyTimerInterval)
-  const start = Date.now()
-  storyTimerInterval = setInterval(() => {
-    storyProgress.value = Math.min(100, ((Date.now() - start) / 5000) * 100)
-    if (storyProgress.value >= 100) closeStory()
-  }, 50)
+const openStoryViewer = (story: StoryItem, group: StoryItem[]) => {
+  // Build full groups list from the storiesBar data, keeping same order
+  // We use the group the bar passed us as the initial group
+  const allGroups = (storiesBarRef.value as any)?.userStories as StoryItem[][] | undefined
+  if (allGroups && allGroups.length) {
+    storyGroups.value = allGroups
+    const gIdx = allGroups.findIndex(g => g[0].user.id === story.user.id)
+    storyViewerGroupIdx.value = gIdx >= 0 ? gIdx : 0
+  } else {
+    storyGroups.value = [group]
+    storyViewerGroupIdx.value = 0
+  }
+  storyViewerStoryIdx.value = group.findIndex(s => s.id === story.id) ?? 0
+  storyViewerOpen.value = true
 }
 
 const closeStory = () => {
-  activeStory.value = null
-  storyProgress.value = 0
-  if (storyTimerInterval) { clearInterval(storyTimerInterval); storyTimerInterval = null }
+  storyViewerOpen.value = false
 }
 
 const fetchStories = async () => {
-  try {
-    const res = await api.get('/stories')
-    if (res.data.success) stories.value = res.data.data.stories
-  } catch {}
+  storiesBarRef.value?.fetchStories()
 }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────
@@ -711,7 +722,7 @@ const connectWebSocket = () => {
 watch(showPostForm, (v) => { if (!v) { dragCounter = 0; formDragging.value = false } })
 watch(nsfwMode, () => { fetchTrendingTags() })
 
-onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebSocket(); fetchRecommendedUsers(); fetchTrendingEvents(); fetchTrendingTags(); fetchActiveAds() })
+onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRecommendedUsers(); fetchTrendingEvents(); fetchTrendingTags(); fetchActiveAds() })
 </script>
 
 <template>
@@ -781,28 +792,11 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
         <template v-else>
 
         <!-- Stories -->
-        <div class="bg-brand-card border border-brand-border rounded-3xl p-4 shadow-xl overflow-x-auto hide-scrollbar">
-          <div class="flex gap-4 min-w-max">
-            <!-- Own story create button -->
-            <div class="flex flex-col items-center gap-1.5 cursor-pointer" @click="showStoryModal = true">
-              <div class="relative">
-                <div class="w-16 h-16 rounded-2xl p-[2px] bg-brand-card border border-brand-border flex items-center justify-center">
-                  <BIcon name="Plus" class="w-6 h-6 text-white/55" />
-                </div>
-              </div>
-              <span class="text-[10px] font-semibold text-white/55">История</span>
-            </div>
-            <div v-for="story in stories" :key="story.id" class="flex flex-col items-center gap-1.5 cursor-pointer" @click="openStory(story)">
-              <div class="relative">
-                <div class="w-16 h-16 rounded-2xl p-[2px] bg-gradient-to-tr from-brand-accent to-brand-purple">
-                  <img v-if="story.user.avatar_url" :src="story.user.avatar_url" class="w-full h-full rounded-xl border-2 border-brand-card object-cover" />
-                  <div v-else class="w-full h-full rounded-xl border-2 border-brand-card bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-lg">{{ (story.user.username ?? '?')[0].toUpperCase() }}</div>
-                </div>
-              </div>
-              <span class="text-[10px] font-semibold text-white/55 max-w-[64px] truncate">{{ story.user.username }}</span>
-            </div>
-          </div>
-        </div>
+        <StoriesBar
+          ref="storiesBarRef"
+          @open="openStoryViewer"
+          @create="showStoryModal = true"
+        />
 
         <!-- Create Post Window -->
         <div
@@ -1457,31 +1451,14 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); fetchStories(); connectWebS
       @close="lightboxOpen = false"
     />
 
-    <!-- Story modal -->
-    <Teleport to="body">
-      <div v-if="activeStory" class="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center p-4" @click.self="closeStory">
-        <div class="relative w-full max-w-sm">
-          <div class="w-full h-1 bg-white/20 rounded-full mb-5 overflow-hidden">
-            <div class="h-1 bg-brand-accent rounded-full" :style="{ width: storyProgress + '%' }"></div>
-          </div>
-          <div class="flex items-center gap-3 mb-4 px-1">
-            <img v-if="activeStory.user?.avatar_url" :src="activeStory.user.avatar_url" class="w-10 h-10 rounded-full border-2 border-purple-500 object-cover" />
-            <div v-else class="w-10 h-10 rounded-full border-2 border-purple-500 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (activeStory.user?.username ?? '?')[0].toUpperCase() }}</div>
-            <span class="font-bold text-white text-sm">{{ activeStory.user?.username }}</span>
-            <span class="text-xs text-white/50 ml-auto">{{ formatDate(activeStory.created_at) }}</span>
-          </div>
-          <div class="rounded-3xl overflow-hidden bg-brand-bg border border-brand-border shadow-2xl">
-            <img v-if="activeStory.image_url" :src="activeStory.image_url" class="w-full object-contain max-h-[70vh]" />
-            <div v-else class="h-64 flex items-center justify-center text-white/30">
-              <BIcon name="Image" class="w-16 h-16" />
-            </div>
-          </div>
-          <button @click="closeStory" class="absolute -top-2 -right-2 w-9 h-9 bg-brand-card border border-brand-border rounded-full flex items-center justify-center text-white/60 hover:text-white shadow-lg">
-            <BIcon name="X" class="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    </Teleport>
+    <!-- Story viewer -->
+    <StoryViewer
+      v-if="storyViewerOpen && storyGroups.length"
+      :groups="storyGroups"
+      :group-index="storyViewerGroupIdx"
+      :story-index="storyViewerStoryIdx"
+      @close="closeStory"
+    />
   </div>
 </template>
 

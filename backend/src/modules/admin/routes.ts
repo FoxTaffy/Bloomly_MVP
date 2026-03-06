@@ -6,6 +6,8 @@ import {
   getReportsHandler, submitReportHandler, resolveReportHandler,
   getAdsHandler, getActiveAdsHandler, submitAdHandler, reviewAdHandler,
   trackImpressionHandler, trackClickHandler,
+  getBannersHandler, getActiveBannersHandler, createBannerHandler, updateBannerHandler, deleteBannerHandler,
+  getAutoModLogsHandler, unfreezeUserHandler, freezeUserHandler, clearWarnsHandler,
 } from './controller.js';
 
 declare module 'fastify' {
@@ -44,4 +46,17 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.patch('/ads/:id/review', auth, reviewAdHandler as any);
   fastify.post('/ads/:id/impression', trackImpressionHandler as any);
   fastify.post('/ads/:id/click',      trackClickHandler as any);
+
+  // Sticker Banners
+  fastify.get('/sticker-banners',        getBannersHandler as any);          // admin: all
+  fastify.get('/sticker-banners/active', getActiveBannersHandler as any);   // public
+  fastify.post('/sticker-banners',       auth, createBannerHandler as any);
+  fastify.patch('/sticker-banners/:id',  auth, updateBannerHandler as any);
+  fastify.delete('/sticker-banners/:id', auth, deleteBannerHandler as any);
+
+  // AutoMod
+  fastify.get('/automod/logs',              auth, getAutoModLogsHandler as any);
+  fastify.post('/users/:id/unfreeze',       auth, unfreezeUserHandler as any);
+  fastify.post('/users/:id/freeze',         auth, freezeUserHandler as any);
+  fastify.post('/users/:id/clear-warns',    auth, clearWarnsHandler as any);
 }

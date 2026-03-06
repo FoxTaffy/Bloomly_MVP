@@ -80,11 +80,33 @@ export const loginHandler = async (
       { expiresIn: '7d' },
     );
 
+    // Fetch full profile so the client has avatar_url, display_name, etc. immediately
+    const fullUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        role: true,
+        display_name: true,
+        avatar_url: true,
+        bio: true,
+        status: true,
+        subscription_tier: true,
+        profile_theme: true,
+        profile_bg_url: true,
+        profile_frame: true,
+        is_verified: true,
+        verification_type: true,
+        badge_type: true,
+      },
+    });
+
     return reply.send({
       success: true,
       data: {
         token,
-        user: {
+        user: fullUser ?? {
           id: user.id,
           username: user.username,
           email: user.email,

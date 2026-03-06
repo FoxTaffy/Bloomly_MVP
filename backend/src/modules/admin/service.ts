@@ -242,4 +242,35 @@ export const adminService = {
   async trackAdClick(adId: string) {
     return prisma.advertisement.update({ where: { id: adId }, data: { clicks: { increment: 1 } } });
   },
+
+  // ──  Sticker Banners  ──────────────────────────────────────────────────
+  async getBanners() {
+    return prisma.stickerBanner.findMany({ orderBy: { sort_order: 'asc' } });
+  },
+
+  async getActiveBanners() {
+    return prisma.stickerBanner.findMany({ where: { is_active: true }, orderBy: { sort_order: 'asc' }, take: 7 });
+  },
+
+  async createBanner(data: {
+    title: string; subtitle?: string; tag_label?: string;
+    image_url: string; link_url?: string; price_label?: string;
+    gradient?: string; sort_order?: number; is_active?: boolean;
+  }) {
+    const count = await prisma.stickerBanner.count();
+    if (count >= 7) throw Object.assign(new Error('Maximum 7 banners allowed'), { code: 'LIMIT' });
+    return prisma.stickerBanner.create({ data: { ...data, sort_order: data.sort_order ?? count } });
+  },
+
+  async updateBanner(id: string, data: Partial<{
+    title: string; subtitle: string; tag_label: string;
+    image_url: string; link_url: string; price_label: string;
+    gradient: string; sort_order: number; is_active: boolean;
+  }>) {
+    return prisma.stickerBanner.update({ where: { id }, data });
+  },
+
+  async deleteBanner(id: string) {
+    return prisma.stickerBanner.delete({ where: { id } });
+  },
 };

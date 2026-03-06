@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { adminService } from './service.js';
+import prisma from '../../config/prisma.js';
 
 interface JwtUser { id: string; role: string }
 
@@ -179,5 +180,101 @@ export const trackClickHandler = async (
   reply: FastifyReply,
 ) => {
   await adminService.trackAdClick(req.params.id);
+  return reply.send({ success: true, data: null, error: null });
+};
+
+// ── Sticker Banner handlers ────────────────────────────────────────────────
+export const getBannersHandler = async (_req: FastifyRequest, reply: FastifyReply) => {
+  const banners = await adminService.getBanners();
+  return reply.send({ success: true, data: { banners }, error: null });
+};
+
+export const getActiveBannersHandler = async (_req: FastifyRequest, reply: FastifyReply) => {
+  const banners = await adminService.getActiveBanners();
+  return reply.send({ success: true, data: { banners }, error: null });
+};
+
+export const createBannerHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+  if (!requireMod(req, reply)) return;
+  try {
+    const banner = await adminService.createBanner(req.body as any);
+    return reply.status(201).send({ success: true, data: { banner }, error: null });
+  } catch (err: any) {
+    if (err.code === 'LIMIT') return reply.status(400).send({ success: false, data: null, error: { code: 'LIMIT', message: err.message } });
+    return reply.status(500).send({ success: false, data: null, error: { code: 'ERROR', message: String(err) } });
+  }
+};
+
+export const updateBannerHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+  if (!requireMod(req, reply)) return;
+  const banner = await adminService.updateBanner(req.params.id, req.body as any);
+  return reply.send({ success: true, data: { banner }, error: null });
+};
+
+export const deleteBannerHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+  if (!requireMod(req, reply)) return;
+  await adminService.deleteBanner(req.params.id);
+  return reply.send({ success: true, data: null, error: null });
+};
+
+// ── AutoMod endpoints ─────────────────────────────────────────────────────────
+
+export const getAutoModLogsHandler = async (
+  req: FastifyRequest<{ Querystring: { page?: string; userId?: string; action?: string; category?: string } }>,
+  reply: FastifyReply,
+) => {
+  if (!requireMod(req, reply)) return;
+  const page  = Math.max(1, parseInt(req.query.page ?? '1', 10));
+  const limit = 50;
+  const skip  = (page - 1) * limit;
+  const where: Record<string, any> = {};
+  if (req.query.userId)   where.user_id  = req.query.userId;
+  if (req.query.action)   where.action   = req.query.action;
+  if (req.query.category) where.category = req.query.category;
+
+  const [logs, total] = await Promise.all([
+    prisma.autoModLog.findMany({
+      where,
+      include: { user: { select: { id: true, username: true, avatar_url: true } } },
+      orderBy: { created_at: 'desc' },
+      skip,
+      take: limit,
+    }),
+    prisma.autoModLog.count({ where }),
+  ]);
+  return reply.send({ success: true, data: { logs, total, page, pages: Math.ceil(total / limit) }, error: null });
+};
+
+export const unfreezeUserHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+  if (!requireMod(req, reply)) return;
+  const actor = req.user as JwtUser;
+  await prisma.user.update({ where: { id: req.params.id }, data: { frozen_at: null, frozen_reason: null } });
+  await prisma.autoModLog.create({
+    data: { user_id: req.params.id, action: 'unfreeze', reason: `Разморожен вручную модератором ${actor.id}`, category: 'manual', score: 0 },
+  });
+  return reply.send({ success: true, data: null, error: null });
+};
+
+export const freezeUserHandler = async (
+  req: FastifyRequest<{ Params: { id: string }; Body: { reason?: string } }>,
+  reply: FastifyReply,
+) => {
+  if (!requireMod(req, reply)) return;
+  const actor = req.user as JwtUser;
+  const reason = req.body?.reason ?? 'Заморожен вручную модератором';
+  await prisma.user.update({ where: { id: req.params.id }, data: { frozen_at: new Date(), frozen_reason: reason } });
+  await prisma.autoModLog.create({
+    data: { user_id: req.params.id, action: 'freeze', reason: `${reason} (мод: ${actor.id})`, category: 'manual', score: 0 },
+  });
+  return reply.send({ success: true, data: null, error: null });
+};
+
+export const clearWarnsHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+  if (!requireMod(req, reply)) return;
+  const actor = req.user as JwtUser;
+  await prisma.user.update({ where: { id: req.params.id }, data: { warn_count: 0 } });
+  await prisma.autoModLog.create({
+    data: { user_id: req.params.id, action: 'clear_warns', reason: `Предупреждения сброшены модератором ${actor.id}`, category: 'manual', score: 0 },
+  });
   return reply.send({ success: true, data: null, error: null });
 };

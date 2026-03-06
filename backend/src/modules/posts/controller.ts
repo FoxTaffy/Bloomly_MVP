@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { postService } from './service.js';
 import type { CreatePostInput, JwtUser, GetPostsQuery, GetPersonalizedQuery } from './types.js';
+import { moderatePost } from '../automod/service.js';
 
 export const getTrendingTagsHandler = async (
   request: FastifyRequest<{ Querystring: { includeNsfw?: string } }>,
@@ -25,6 +26,10 @@ export const createPostHandler = async (
     const { content, isNsfw, category, tags, mediaUrls } = request.body as any;
     const input: CreatePostInput = { content, authorId, isNsfw, category, tags, mediaUrls };
     const post = await postService.createPost(input);
+    // fire-and-forget automod check (does not block the response)
+    if (post) {
+      moderatePost(post.id, authorId, content ?? '').catch((err) => console.error('[AUTOMOD] analyzePost error:', err));
+    }
     return reply.code(201).send({ success: true, data: { post }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to create post';

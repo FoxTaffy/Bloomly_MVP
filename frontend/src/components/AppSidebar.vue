@@ -26,13 +26,15 @@ onMounted(() => { friendsStore.loadRequests().catch(() => {}) })
 // Active detection: prefer route name, fall back to activeNav prop
 const isActive = (key: string): boolean => {
   const routeMap: Record<string, string> = {
-    home:          'home',
-    bookmarks:     'bookmarks',
-    messages:      'messages',
-    friends:       'friends',
-    settings:      'settings-profile',
-    groups:        'groups',
-    subscriptions: 'subscriptions',
+    home:         'home',
+    bookmarks:    'bookmarks',
+    messages:     'messages',
+    friends:      'friends',
+    settings:     'settings-profile',
+    groups:       'groups',
+    subscriptions:'subscriptions',
+    'dealers-den':'dealers-den',
+    'stickers':   'stickers',
   }
   if (routeMap[key]) return route.name === routeMap[key]
   return props.activeNav === key
@@ -96,10 +98,10 @@ const navItems = computed(() => [
 ])
 
 const categoryItems = computed(() => [
-  { icon: 'Sticker',     label: langStore.t.stickers },
-  { icon: 'Gift',        label: langStore.t.gifts },
-  { icon: 'ShoppingBag', label: langStore.t.dealersDen },
-  { icon: 'HelpCircle',  label: langStore.t.help },
+  { key: 'stickers',    icon: 'Sticker',     label: langStore.t.stickers,  disabled: false, action: () => router.push({ name: 'stickers' }) },
+  { key: 'dealers-den', icon: 'ShoppingBag', label: langStore.t.dealersDen, disabled: false, action: () => router.push({ name: 'dealers-den' }) },
+  { key: 'gifts',       icon: 'Gift',        label: langStore.t.gifts,      disabled: true,  action: () => {} },
+  { key: 'help',        icon: 'HelpCircle',  label: langStore.t.help,       disabled: true,  action: () => {} },
 ])
 </script>
 
@@ -168,18 +170,23 @@ const categoryItems = computed(() => [
     <!-- Extra slot (e.g. "О профиле" section on profile page) -->
     <slot name="extra" />
 
-    <!-- Categories (coming soon — locked) -->
+    <!-- Categories -->
     <div>
       <h4 class="px-4 text-xs font-bold text-white/40 mb-2 uppercase tracking-wider">{{ langStore.t.categories }}</h4>
       <nav class="space-y-1">
         <button
           v-for="cat in categoryItems"
-          :key="cat.label"
-          disabled
-          class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-white/35 opacity-60 cursor-not-allowed">
+          :key="cat.key"
+          @click="!cat.disabled && cat.action()"
+          class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
+          :class="cat.disabled
+            ? 'opacity-40 cursor-not-allowed text-white/35'
+            : isActive(cat.key)
+              ? 'bg-brand-card text-white'
+              : 'text-white/65 hover:bg-brand-card/50 hover:text-white'">
           <BIcon :name="cat.icon" class="w-5 h-5" />
           <span class="flex-1 text-left">{{ cat.label }}</span>
-          <BIcon name="Lock" class="w-3.5 h-3.5 opacity-60" />
+          <BIcon v-if="cat.disabled" name="Lock" class="w-3.5 h-3.5 opacity-60" />
         </button>
       </nav>
     </div>

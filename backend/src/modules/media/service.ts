@@ -37,14 +37,48 @@ async function ensureBucket() {
 // bucketReady resolves when the bucket is confirmed available.
 const bucketReady: Promise<void> = ensureBucket().catch(console.error) as Promise<void>;
 
+export class UploadValidationError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'UploadValidationError';
+    this.code = code;
+  }
+}
+
 export async function uploadFile(
   buffer: Buffer,
   originalName: string,
   mimeType: string,
-  folder: 'posts' | 'avatars' | 'banners' | 'messages' | 'backgrounds' = 'posts',
+  folder: 'posts' | 'avatars' | 'banners' | 'messages' | 'backgrounds' | 'stickers' = 'posts',
 ): Promise<string> {
   // Await only if the startup promise hasn't resolved yet (no-op on subsequent calls)
   await bucketReady;
+
+  // ── Sticker validation (Telegram rules) ───────────────────────────────
+  if (folder === 'stickers') {
+    if (mimeType !== 'image/png') {
+      throw new UploadValidationError('STICKER_FORMAT', 'Стикер должен быть в формате PNG');
+    }
+    if (buffer.length > 100 * 1024) {
+      throw new UploadValidationError('STICKER_SIZE', `Размер файла превышает 100 КБ (${(buffer.length / 1024).toFixed(1)} КБ)`);
+    }
+    const meta = await sharp(buffer).metadata();
+    if (meta.width !== 512 || meta.height !== 512) {
+      throw new UploadValidationError(
+        'STICKER_DIMENSIONS',
+        `Размер стикера должен быть 512×512 пикселей (получен ${meta.width}×${meta.height})`,
+      );
+    }
+    const hasAlpha = meta.hasAlpha ?? false;
+    if (!hasAlpha) {
+      throw new UploadValidationError('STICKER_ALPHA', 'Стикер должен иметь прозрачный фон (PNG с альфа-каналом)');
+    }
+    // Store as-is: preserve transparency and exact pixel data
+    const objectName = `stickers/${randomUUID()}.png`;
+    await minioClient.putObject(BUCKET, objectName, buffer, buffer.length, { 'Content-Type': 'image/png' });
+    return `${PUBLIC_URL}/${BUCKET}/${objectName}`;
+  }
 
   let finalBuffer = buffer;
   let finalMimeType = mimeType;
@@ -92,6 +126,22 @@ export async function uploadFile(
   });
 
   // URL structure: <public_base>/<bucket>/<object>
+  return `${PUBLIC_URL}/${BUCKET}/${objectName}`;
+}
+
+/**
+ * Upload a raw buffer to MinIO without any processing (for trusted sources like Telegram).
+ * The caller is responsible for ensuring the buffer is valid.
+ */
+export async function uploadRawToMinIO(
+  buffer: Buffer,
+  ext: string,
+  mimeType: string,
+  folder: string = 'stickers',
+): Promise<string> {
+  await bucketReady;
+  const objectName = `${folder}/${randomUUID()}${ext}`;
+  await minioClient.putObject(BUCKET, objectName, buffer, buffer.length, { 'Content-Type': mimeType });
   return `${PUBLIC_URL}/${BUCKET}/${objectName}`;
 }
 

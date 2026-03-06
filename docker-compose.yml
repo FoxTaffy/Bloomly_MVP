@@ -30,6 +30,7 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-bloomly_secret_123}
       MINIO_BUCKET: bloomly
       MINIO_PUBLIC_URL: https://bloomly.fun/s3
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
     command: sh -c "npx prisma migrate deploy && npm run start"
     depends_on:
       db:

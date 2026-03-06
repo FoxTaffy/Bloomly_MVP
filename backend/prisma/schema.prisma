@@ -90,6 +90,12 @@ model User {
   verificationRequests         VerificationRequest[]
   groupRatings                 GroupRating[]
   dealerListings               DealerListing[]
+  stickerPacks                 StickerPack[]
+  stickerCollection            UserStickerPack[]
+  autoModLogs                  AutoModLog[]
+  warn_count                   Int                   @default(0)
+  frozen_at                    DateTime?
+  frozen_reason                String?               @db.VarChar(500)
 }
 
 model Post {
@@ -303,12 +309,34 @@ model Report {
   status      String   @default("pending")
   resolved_by String?  @db.Uuid
   note        String?
+  priority    Int      @default(0)
+  ai_category String?  @db.VarChar(50)
+  ai_score    Float    @default(0)
   created_at  DateTime @default(now())
   updated_at  DateTime @default(now()) @updatedAt
   reporter    User     @relation("ReportReporter", fields: [reporter_id], references: [id])
   resolver    User?    @relation("ReportResolver", fields: [resolved_by], references: [id])
 
   @@index([status])
+  @@index([priority(sort: Desc), status])
+}
+
+model AutoModLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  action     String   @db.VarChar(50)
+  reason     String   @db.VarChar(300)
+  category   String   @default("other") @db.VarChar(50)
+  score      Float    @default(0)
+  details    String?
+  post_id    String?  @db.Uuid
+  report_id  String?  @db.Uuid
+  created_at DateTime @default(now())
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([created_at])
+  @@index([action])
 }
 
 model RelationshipRequest {
@@ -668,4 +696,65 @@ model DealerListing {
   @@index([status])
   @@index([category])
   @@index([created_at(sort: Desc)])
+}
+
+// ── Stickers ──────────────────────────────────────────────────────────────────
+
+model StickerPack {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  author_id       String    @db.Uuid
+  name            String    @db.VarChar(120)
+  description     String?
+  cover_url         String?
+  cover_bg_color    String?   @db.VarChar(60)
+  cover_sticker_idx Int?
+  stickers          String[]  @default([])
+  nsfw_stickers     Int[]     @default([])
+  price             Decimal   @db.Decimal(10, 2) @default(0)
+  currency          String    @default("USD") @db.VarChar(10)
+  tags              String[]  @default([])
+  is_nsfw           Boolean   @default(false)
+  status            String    @default("published") @db.VarChar(20) // published | draft
+  downloads_count Int       @default(0)
+  created_at      DateTime  @default(now()) @db.Timestamp(6)
+  updated_at      DateTime  @default(now()) @updatedAt @db.Timestamp(6)
+  deleted_at      DateTime? @db.Timestamp(6)
+
+  author          User              @relation(fields: [author_id], references: [id], onDelete: Cascade)
+  userCollections UserStickerPack[]
+
+  @@index([author_id])
+  @@index([status])
+  @@index([created_at(sort: Desc)])
+}
+
+model UserStickerPack {
+  user_id  String   @db.Uuid
+  pack_id  String   @db.Uuid
+  added_at DateTime @default(now()) @db.Timestamp(6)
+
+  user     User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  pack     StickerPack @relation(fields: [pack_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, pack_id])
+  @@index([user_id])
+  @@index([pack_id])
+}
+
+model StickerBanner {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title       String   @db.VarChar(120)
+  subtitle    String?  @db.VarChar(240)
+  tag_label   String?  @db.VarChar(60)
+  image_url   String
+  link_url    String?
+  price_label String?  @db.VarChar(60)
+  gradient    String?  @db.VarChar(120)
+  sort_order  Int      @default(0)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([sort_order])
+  @@index([is_active])
 }
