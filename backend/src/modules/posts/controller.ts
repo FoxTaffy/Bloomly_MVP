@@ -18,13 +18,13 @@ export const getTrendingTagsHandler = async (
 };
 
 export const createPostHandler = async (
-  request: FastifyRequest<{ Body: { content: string; isNsfw?: boolean; category?: string; tags?: string[] } }>,
+  request: FastifyRequest<{ Body: { content: string; isNsfw?: boolean; subscriberOnly?: boolean; isPaid?: boolean; price?: number; rewardForUserId?: string; videoTitle?: string; videoDescription?: string; category?: string; tags?: string[] } }>,
   reply: FastifyReply,
 ) => {
   try {
     const { id: authorId } = request.user as JwtUser;
-    const { content, isNsfw, category, tags, mediaUrls } = request.body as any;
-    const input: CreatePostInput = { content, authorId, isNsfw, category, tags, mediaUrls };
+    const { content, isNsfw, subscriberOnly, isPaid, price, rewardForUserId, videoTitle, videoDescription, category, tags, mediaUrls } = request.body as any;
+    const input: CreatePostInput = { content, authorId, isNsfw, subscriberOnly, isPaid, price, rewardForUserId, videoTitle, videoDescription, category, tags, mediaUrls };
     const post = await postService.createPost(input);
     // fire-and-forget automod check (does not block the response)
     if (post) {

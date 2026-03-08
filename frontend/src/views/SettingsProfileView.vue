@@ -669,7 +669,7 @@
                       <div v-for="net in socialNetworks" :key="net.key" class="flex items-center gap-3">
                         <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border"
                           :style="{ backgroundColor: net.color + '22', borderColor: net.color + '44' }">
-                          <span class="text-[10px] font-bold" :style="{ color: net.color }">{{ net.label.slice(0,2) }}</span>
+                          <span class="w-5 h-5 flex items-center justify-center" :style="{ color: net.color }" v-html="net.svg"></span>
                         </div>
                         <div class="flex-1">
                           <label class="block text-[11px] font-semibold text-white/45 mb-1">{{ net.label }}</label>
@@ -1347,7 +1347,103 @@
                 </div>
               </section>
 
-              
+              <!-- ── § 6: БЕЗОПАСНОСТЬ / Способы входа ─────────────── -->
+              <section v-show="openSection === 'sec-security'" id="sec-security" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3" style="background:linear-gradient(90deg,rgba(16,185,129,0.07) 0%,transparent 100%)">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(16,185,129,0.15)">
+                    <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                  </div>
+                  <h2 class="font-bold text-white text-sm">Безопасность и способы входа</h2>
+                </div>
+                <div class="p-6 space-y-3">
+                  <!-- Email/пароль -->
+                  <div class="flex items-center justify-between p-4 rounded-2xl border border-brand-border bg-brand-bg/60">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-4.5 h-4.5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <p class="text-sm font-semibold text-white">Email и пароль</p>
+                        <p class="text-xs text-white/45">{{ authStore.user?.email }}</p>
+                      </div>
+                    </div>
+                    <span class="px-2.5 py-1 rounded-lg text-xs font-bold" style="background:rgba(16,185,129,0.15);color:#34d399">Активен</span>
+                  </div>
+
+                  <!-- OAuth провайдеры -->
+                  <div v-if="linkedAccountsLoading" class="flex justify-center py-6">
+                    <span class="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin"></span>
+                  </div>
+                  <template v-else>
+                    <div
+                      v-for="p in oauthProviders"
+                      :key="p.key"
+                      class="flex items-center justify-between p-4 rounded-2xl border transition-all"
+                      :class="linkedAccounts.includes(p.key) ? 'border-brand-border bg-brand-bg/60' : 'border-brand-border/50 bg-brand-bg/30'"
+                    >
+                      <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${p.color}22`">
+                          <svg class="w-5 h-5" :fill="p.iconFill ? p.color : 'none'" :stroke="p.iconFill ? 'none' : p.color" :stroke-width="p.iconFill ? '0' : '1.8'" viewBox="0 0 24 24">
+                            <path :d="p.iconPath" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p class="text-sm font-semibold text-white">{{ p.label }}</p>
+                          <p class="text-xs text-white/45">{{ linkedAccounts.includes(p.key) ? 'Привязан' : 'Не привязан' }}</p>
+                        </div>
+                      </div>
+                      <button
+                        v-if="!linkedAccounts.includes(p.key)"
+                        @click="linkProvider(p.key)"
+                        :disabled="linkingProvider === p.key"
+                        class="px-4 py-1.5 rounded-xl text-xs font-bold text-white border border-brand-border hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all disabled:opacity-50"
+                      >
+                        <span v-if="linkingProvider === p.key" class="flex items-center gap-1.5">
+                          <span class="w-3 h-3 border border-t-transparent border-white rounded-full animate-spin"></span>Подключение…
+                        </span>
+                        <span v-else>Привязать</span>
+                      </button>
+                      <button
+                        v-else
+                        @click="unlinkProvider(p.key)"
+                        :disabled="unlinkingProvider === p.key"
+                        class="px-4 py-1.5 rounded-xl text-xs font-bold text-red-400 border border-red-500/20 hover:border-red-500/50 bg-red-500/5 hover:bg-red-500/10 transition-all disabled:opacity-50"
+                      >
+                        <span v-if="unlinkingProvider === p.key" class="flex items-center gap-1.5">
+                          <span class="w-3 h-3 border border-t-transparent border-red-400 rounded-full animate-spin"></span>
+                        </span>
+                        <span v-else>Отвязать</span>
+                      </button>
+                    </div>
+                  </template>
+                </div>
+              </section>
+
+              <!-- ── § 7: DANGER ZONE ────────────────────────────────── -->
+              <section v-show="openSection === 'sec-danger'" id="sec-danger" class="bg-brand-card border border-red-500/30 rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                <div class="px-6 py-4 border-b border-red-500/20 flex items-center gap-3" style="background:linear-gradient(90deg,rgba(239,68,68,0.07) 0%,transparent 100%)">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(239,68,68,0.15)">
+                    <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                  </div>
+                  <h2 class="font-bold text-white text-sm">Аккаунт</h2>
+                </div>
+                <div class="p-6 space-y-4">
+                  <div class="p-4 rounded-2xl border border-red-500/25 bg-red-500/5">
+                    <h3 class="text-sm font-bold text-red-400 mb-1">Удалить аккаунт</h3>
+                    <p class="text-xs text-white/50 mb-4">Все данные, посты, сообщения и подписки будут безвозвратно удалены. Это действие нельзя отменить.</p>
+                    <button type="button" @click="showDeleteModal = true"
+                      class="px-5 py-2.5 rounded-2xl text-sm font-bold text-white bg-red-500/20 hover:bg-red-500/35 border border-red-500/40 hover:border-red-500/70 transition-all">
+                      Удалить мой аккаунт
+                    </button>
+                  </div>
+                </div>
+              </section>
 
               <!-- ── Submit (mobile / tablet) ───────────────────────── -->
               <div class="flex items-center justify-between gap-4 pt-2 xl:hidden">
@@ -1372,11 +1468,50 @@
       </main>
     </div>
   </div>
+
+  <!-- ── Delete Account Modal ─────────────────────────────────────────── -->
+  <Teleport to="body">
+    <Transition name="modal-fade">
+      <div v-if="showDeleteModal" class="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" @click.self="showDeleteModal = false">
+        <div class="bg-brand-card border border-red-500/40 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div class="px-6 py-4 border-b border-red-500/20 flex items-center gap-3" style="background:linear-gradient(90deg,rgba(239,68,68,0.1) 0%,transparent 100%)">
+            <div class="w-8 h-8 rounded-xl bg-red-500/20 flex items-center justify-center flex-shrink-0">
+              <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </div>
+            <h3 class="font-bold text-white text-sm">Удаление аккаунта</h3>
+          </div>
+          <div class="p-6 space-y-4">
+            <p class="text-sm text-white/70">Это действие <strong class="text-red-400">необратимо</strong>. Все твои данные, посты, сообщения и подписки будут удалены навсегда.</p>
+            <div>
+              <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-2">Для подтверждения введи слово <span class="text-red-400 font-black">УДАЛИТЬ</span></label>
+              <input v-model="deleteConfirmText" type="text" placeholder="УДАЛИТЬ"
+                class="w-full bg-brand-bg border border-red-500/30 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-red-500/60 transition-all"
+                @keydown.enter="handleDeleteAccount" />
+            </div>
+            <div class="flex gap-3 pt-1">
+              <button type="button" @click="showDeleteModal = false; deleteConfirmText = ''"
+                class="flex-1 py-2.5 rounded-2xl text-sm font-bold text-white/55 hover:text-white bg-brand-bg border border-brand-border hover:border-white/20 transition-all">
+                Отмена
+              </button>
+              <button type="button" @click="handleDeleteAccount" :disabled="deleteConfirmText !== 'УДАЛИТЬ' || isDeletingAccount"
+                class="flex-1 py-2.5 rounded-2xl text-sm font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                style="background:rgba(239,68,68,0.8)" :class="deleteConfirmText === 'УДАЛИТЬ' ? 'hover:bg-red-600' : ''">
+                <span v-if="isDeletingAccount" class="flex items-center justify-center gap-2">
+                  <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>Удаление…
+                </span>
+                <span v-else>Удалить навсегда</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import AppHeader from '@/components/AppHeader.vue'
@@ -1387,6 +1522,29 @@ import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
 
 const userStore  = useUserStore()
 const authStore  = useAuthStore()
+const route      = useRoute()
+const router     = useRouter()
+
+// ── Delete account modal ─────────────────────────────────────────────────────
+const showDeleteModal    = ref(false)
+const deleteConfirmText  = ref('')
+const isDeletingAccount  = ref(false)
+
+async function handleDeleteAccount() {
+  if (deleteConfirmText.value !== 'УДАЛИТЬ') return
+  isDeletingAccount.value = true
+  try {
+    await api.delete('/auth/me')
+    authStore.logout()
+    router.replace({ name: 'login' })
+  } catch (e: any) {
+    showToast('error', e.response?.data?.error?.message ?? 'Ошибка удаления')
+  } finally {
+    isDeletingAccount.value = false
+    showDeleteModal.value = false
+    deleteConfirmText.value = ''
+  }
+}
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 const toast = reactive({ show: false, type: 'success' as 'success' | 'error', message: '' })
@@ -1395,6 +1553,65 @@ function showToast(type: 'success' | 'error', message: string) {
   clearTimeout(toastTimer)
   Object.assign(toast, { show: true, type, message })
   toastTimer = window.setTimeout(() => { toast.show = false }, 3500)
+}
+
+// ── Linked OAuth accounts ──────────────────────────────────────────────────
+const linkedAccounts        = ref<string[]>([])
+const linkedAccountsLoading = ref(false)
+const linkingProvider       = ref<string | null>(null)
+const unlinkingProvider     = ref<string | null>(null)
+
+const oauthProviders = [
+  {
+    key: 'yandex', label: 'Яндекс', color: '#fc3f1d', iconFill: true,
+    iconPath: 'M14.155 4H12.25c-2.77 0-4.455 1.514-4.455 4.006 0 2.148 1.022 3.395 3.074 4.7L13 13.945 8.5 20H11l4.795-6.64-1.396-.894c-1.713-1.1-2.487-1.934-2.487-3.558C11.912 7.48 12.804 6.5 14.155 6.5V4zM14.5 4v16h2.5V4h-2.5z',
+  },
+  {
+    key: 'google', label: 'Google', color: '#4285f4', iconFill: true,
+    iconPath: 'M12.545 10.239v3.821h5.445c-.712 2.315-2.647 3.972-5.445 3.972a6.033 6.033 0 110-12.064c1.498 0 2.866.549 3.921 1.453l2.814-2.814A9.969 9.969 0 0012.545 2C7.021 2 2.543 6.477 2.543 12s4.478 10 10.002 10c8.396 0 10.249-7.85 9.426-11.748l-9.426-.013z',
+  },
+  {
+    key: 'twitter', label: 'X (Twitter)', color: '#ffffff', iconFill: true,
+    iconPath: 'M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.74l7.73-8.835L2.25 2.25h6.918l4.259 5.63 4.817-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z',
+  },
+  {
+    key: 'twitch', label: 'Twitch', color: '#9146ff', iconFill: true,
+    iconPath: 'M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z',
+  },
+]
+
+async function loadLinkedAccounts() {
+  linkedAccountsLoading.value = true
+  try {
+    const { data } = await api.get('/auth/linked-accounts')
+    linkedAccounts.value = data.data.accounts.map((a: { provider: string }) => a.provider)
+  } catch { /* ignore */ } finally {
+    linkedAccountsLoading.value = false
+  }
+}
+
+async function linkProvider(provider: string) {
+  linkingProvider.value = provider
+  try {
+    const { data } = await api.get(`/auth/link-init/${provider}`)
+    window.location.href = data.data.url
+  } catch (e: any) {
+    showToast('error', e.response?.data?.error?.message ?? 'Ошибка привязки')
+    linkingProvider.value = null
+  }
+}
+
+async function unlinkProvider(provider: string) {
+  unlinkingProvider.value = provider
+  try {
+    await api.delete(`/auth/linked-accounts/${provider}`)
+    linkedAccounts.value = linkedAccounts.value.filter(p => p !== provider)
+    showToast('success', 'Аккаунт отвязан')
+  } catch (e: any) {
+    showToast('error', e.response?.data?.error?.message ?? 'Ошибка отвязки')
+  } finally {
+    unlinkingProvider.value = null
+  }
 }
 
 // ── Tag inputs ──────────────────────────────────────────────────────────────
@@ -1623,6 +1840,28 @@ onMounted(async () => {
   loadFollowing()
   // Load verification data
   fetchVerificationData()
+  // Navigate to a specific section if ?section= param is present
+  const sectionParam = route.query.section as string | undefined
+  if (sectionParam) {
+    const valid = [...sections.map(s => s.id)]
+    if (valid.includes(sectionParam)) {
+      openSec(sectionParam)
+    }
+  }
+  // Загружаем привязанные аккаунты
+  loadLinkedAccounts()
+  // Тосты после OAuth привязки
+  const linkedParam = route.query.linked as string | undefined
+  const errorParam  = route.query.error  as string | undefined
+  if (linkedParam) {
+    const providerLabel = oauthProviders.find(p => p.key === linkedParam)?.label ?? linkedParam
+    showToast('success', `${providerLabel} успешно привязан!`)
+    // убираем парам из URL
+    router.replace({ query: { ...route.query, linked: undefined, error: undefined } })
+  } else if (errorParam === 'already_taken') {
+    showToast('error', 'Этот аккаунт уже привязан к другому пользователю')
+    router.replace({ query: { ...route.query, linked: undefined, error: undefined } })
+  }
 })
 
 // ── Navigation guard ───────────────────────────────────────────────────────
@@ -2129,6 +2368,8 @@ const sections = [
   { id: 'sec-fursona',       label: 'Фурсона',        color: '#a78bfa', iconPath: 'M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
   { id: 'sec-profile-style', label: 'Стиль профиля',  color: '#f59e0b', iconPath: 'M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 2h14v14H5V5zm2 2v2h10V7H7zm0 4v2h7v-2H7z' },
   { id: 'sec-verification',  label: 'Верификация',    color: '#3b82f6', iconPath: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+  { id: 'sec-security',      label: 'Безопасность',      color: '#10b981', iconPath: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
+  { id: 'sec-danger',        label: 'Аккаунт',        color: '#ef4444', iconPath: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
 ]
 
 const lockedSettings = [
@@ -2289,16 +2530,16 @@ const fursonaColorSwatches = [
 ]
 
 const socialNetworks = [
-  { key: 'telegram',    label: 'Telegram',      color: '#2AABEE' },
-  { key: 'twitter',     label: 'X / Twitter',   color: '#1DA1F2' },
-  { key: 'instagram',   label: 'Instagram',     color: '#E4405F' },
-  { key: 'youtube',     label: 'YouTube',       color: '#FF0000' },
-  { key: 'twitch',      label: 'Twitch',        color: '#9146FF' },
-  { key: 'furaffinity', label: 'FurAffinity',   color: '#FAAF3A' },
-  { key: 'vk',          label: 'ВКонтакте',     color: '#4C75A3' },
-  { key: 'discord',     label: 'Discord',       color: '#7289DA' },
-  { key: 'github',      label: 'GitHub',        color: '#6e8196' },
-  { key: 'other',       label: 'Другое / Сайт', color: '#6366f1' },
+  { key: 'telegram',    label: 'Telegram',      color: '#2AABEE', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>` },
+  { key: 'twitter',     label: 'X / Twitter',   color: '#fff',    svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.258 5.63 5.907-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>` },
+  { key: 'instagram',   label: 'Instagram',     color: '#E4405F', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>` },
+  { key: 'youtube',     label: 'YouTube',       color: '#FF0000', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>` },
+  { key: 'twitch',      label: 'Twitch',        color: '#9146FF', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>` },
+  { key: 'furaffinity', label: 'FurAffinity',   color: '#FAAF3A', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm.75 4.5c.414 0 .75.336.75.75s-.336.75-.75.75-.75-.336-.75-.75.336-.75.75-.75zM9 6.75A.75.75 0 0 1 9.75 6h4.5a.75.75 0 0 1 0 1.5H9.75A.75.75 0 0 1 9 6.75zm-.75 3a.75.75 0 0 1 .75-.75h6a.75.75 0 0 1 0 1.5h-6a.75.75 0 0 1-.75-.75zm9 4.5c0 2.9-2.35 5.25-5.25 5.25S6.75 17.15 6.75 14.25c0-.414.336-.75.75-.75s.75.336.75.75c0 2.07 1.68 3.75 3.75 3.75s3.75-1.68 3.75-3.75a.75.75 0 0 1 1.5 0z"/></svg>` },
+  { key: 'vk',          label: 'ВКонтакте',     color: '#4C75A3', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.684 0H8.316C1.592 0 0 1.592 0 8.316v7.368C0 22.408 1.592 24 8.316 24h7.368C22.408 24 24 22.408 24 15.684V8.316C24 1.592 22.391 0 15.684 0zm3.692 17.123h-1.744c-.66 0-.862-.523-2.049-1.714-1.033-1.01-1.49-1.135-1.744-1.135-.356 0-.458.102-.458.593v1.566c0 .424-.135.678-1.252.678-1.846 0-3.896-1.118-5.335-3.202C4.624 10.857 4.03 8.57 4.03 8.096c0-.254.102-.491.593-.491h1.744c.44 0 .61.203.78.677.863 2.49 2.303 4.675 2.896 4.675.22 0 .322-.102.322-.66V9.721c-.068-1.186-.695-1.287-.695-1.71 0-.204.17-.407.44-.407h2.743c.372 0 .508.203.508.643v3.473c0 .372.17.508.271.508.22 0 .407-.136.813-.542 1.252-1.406 2.151-3.574 2.151-3.574.119-.254.322-.491.763-.491h1.744c.525 0 .644.27.525.643-.22 1.017-2.354 4.031-2.354 4.031-.186.305-.254.44 0 .78.186.254.796.779 1.202 1.253.745.847 1.32 1.558 1.473 2.049.17.474-.085.716-.576.716z"/></svg>` },
+  { key: 'discord',     label: 'Discord',       color: '#7289DA', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>` },
+  { key: 'github',      label: 'GitHub',        color: '#fff',    svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.605-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>` },
+  { key: 'other',       label: 'Другое / Сайт', color: '#6366f1', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>` },
 ]
 
 const relationshipOptions = [

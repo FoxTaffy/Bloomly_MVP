@@ -18,6 +18,7 @@ import StoriesBar from './StoriesBar.vue'
 import StoryViewer from './StoryViewer.vue'
 import StoryEditor from './StoryEditor.vue'
 import { useAnalytics } from '@/composables/useAnalytics'
+import { useNsfwMode } from '@/composables/useNsfwMode'
 import { formatCount } from '@/lib/utils'
 
 // MediaUpload component ref
@@ -50,8 +51,7 @@ const isLoadingPosts = ref(true)
 
 // Feed controls
 // nsfwMode=false (default): NSFW content is hidden. nsfwMode=true: NSFW is shown.
-const nsfwMode = ref(localStorage.getItem('bloomly_nsfw') === 'true')
-watch(nsfwMode, (val) => { localStorage.setItem('bloomly_nsfw', String(val)) })
+const { nsfwEnabled: nsfwMode } = useNsfwMode()
 const feedMode = ref<'for-you' | 'subscriptions' | 'trending' | 'news' | 'photos' | 'nsfw'>('for-you')
 const searchQuery = ref('')
 const selectedCategory = ref('')
@@ -63,6 +63,18 @@ const createTab = ref<'post' | 'story'>('post')
 const mediaUrls = ref<string[]>([])
 const handleMediaUploaded = (urls: string[]) => { mediaUrls.value = urls }
 
+// ── "Post as" entity selector ────────────────────────────────────────────────
+type PostEntity = { type: 'user' } | { type: 'group'; id: string; slug: string; name: string; avatar_url: string | null }
+const postAsEntity = ref<PostEntity>({ type: 'user' })
+const showEntityPicker = ref(false)
+// maps post id → group info for locally created group posts
+const groupContextMap = reactive<Record<string, { id: string; slug: string; name: string; avatar_url: string | null }>>({}) 
+
+// Admin/owner groups filtered for post-as selector
+const adminGroups = computed(() =>
+  groupsStore.myGroups.filter(m => ['owner', 'admin'].includes(m.role)).map(m => m.group)
+)
+
 // ── Story creation ────────────────────────────────────────────────────────
 const onStoryEditorCreated = async () => {
   showStoryModal.value = false
@@ -73,7 +85,9 @@ const closeCreateModal = () => {
   showPostForm.value = false
   showStoryModal.value = false
   showAdvanced.value = false
-  newPost.value = { content: '', category: '', tags: [], isNsfw: false }
+  showEntityPicker.value = false
+  showVisibilityMenu.value = false
+  newPost.value = { content: '', category: '', tags: [], isNsfw: false, visibility: 'public', price: '', videoTitle: '', videoDescription: '' }
   mediaUrls.value = []
   mediaUploadRef.value?.clearAll()
 }
@@ -167,9 +181,10 @@ const cleanupObservers = () => { postObservers.forEach(u => u()); postObservers.
 
 onUnmounted(() => { cleanupObservers(); disconnectWebSocket(); closeStory(); if (onlineFetchTimer) clearTimeout(onlineFetchTimer) })
 
-const newPost = ref({ content: '', category: '', tags: [] as string[], isNsfw: false })
+const newPost = ref({ content: '', category: '', tags: [] as string[], isNsfw: false, visibility: 'public' as 'public' | 'subscriber_only' | 'paid', price: '' as string, videoTitle: '', videoDescription: '' })
 const tagInput = ref('')
 const showAdvanced = ref(false)
+const showVisibilityMenu = ref(false)
 
 // ── @mention helpers ─────────────────────────────────────────────────────────
 type MentionSegment = { type: 'text' | 'mention'; key: number; text: string; username?: string }
@@ -225,6 +240,11 @@ const initPostStatus = (loadedPosts: any[]) => {
         repawCount: p._count?.repaws ?? 0,
         userVote: 0,
       }
+    }
+    // populate groupContextMap from API-returned groupPosts relation
+    if (p.groupPosts?.[0]?.group && !groupContextMap[p.id]) {
+      const g = p.groupPosts[0].group
+      groupContextMap[p.id] = { id: g.id, slug: g.slug, name: g.name, avatar_url: g.avatar_url }
     }
   })
   // fetch server status in background
@@ -499,27 +519,48 @@ const createPost = async () => {
   if (!content) return
   isPosting.value = true
   try {
-    const res = await api.post('/posts', {
-      content,
-      category: newPost.value.category || undefined,
-      tags: newPost.value.tags,
-      isNsfw: newPost.value.isNsfw,
-      mediaUrls: mediaUrls.value,
-    })
-    if (res.data.success) {
-      const createdPost = res.data.data?.post
-      if (createdPost) {
-        posts.value = [createdPost, ...posts.value]
-        initPostStatus([createdPost])
-      }
-      newPost.value = { content: '', category: '', tags: [], isNsfw: false }
-      mediaUrls.value = []
-      mediaUploadRef.value?.clearAll()
-      showPostForm.value = false
-      shareToast.value = 'Пост опубликован'
-      setTimeout(() => { shareToast.value = '' }, 1800)
-      await fetchTrendingTags()
+    let createdPost: any = null
+    if (postAsEntity.value.type === 'group') {
+      const res = await groupsStore.createGroupPost(postAsEntity.value.id, {
+        content,
+        isNsfw: newPost.value.isNsfw,
+        mediaUrls: mediaUrls.value,
+        tags: newPost.value.tags,
+      })
+      createdPost = res
+    } else {
+      const res = await api.post('/posts', {
+        content,
+        category: newPost.value.category || undefined,
+        tags: newPost.value.tags,
+        isNsfw: newPost.value.isNsfw,
+        subscriberOnly: newPost.value.visibility === 'subscriber_only',
+        isPaid: newPost.value.visibility === 'paid',
+        price: newPost.value.visibility === 'paid' && newPost.value.price ? parseFloat(newPost.value.price) : undefined,
+        videoTitle: newPost.value.videoTitle.trim() || undefined,
+        videoDescription: newPost.value.videoDescription.trim() || undefined,
+        mediaUrls: mediaUrls.value,
+      })
+      if (res.data.success) createdPost = res.data.data?.post
     }
+    if (createdPost) {
+      posts.value = [createdPost, ...posts.value]
+      initPostStatus([createdPost])
+      if (postAsEntity.value.type === 'group') {
+        const ent = postAsEntity.value as { type: 'group'; id: string; slug: string; name: string; avatar_url: string | null }
+        groupContextMap[createdPost.id] = { id: ent.id, slug: ent.slug, name: ent.name, avatar_url: ent.avatar_url }
+      }
+    }
+    newPost.value = { content: '', category: '', tags: [], isNsfw: false, visibility: 'public', price: '', videoTitle: '', videoDescription: '' }
+    mediaUrls.value = []
+    mediaUploadRef.value?.clearAll()
+    showPostForm.value = false
+    showVisibilityMenu.value = false
+    shareToast.value = postAsEntity.value.type === 'group'
+      ? `Пост опубликован от имени «${(postAsEntity.value as any).name}»`
+      : 'Пост опубликован'
+    setTimeout(() => { shareToast.value = '' }, 1800)
+    await fetchTrendingTags()
   } catch (e) { console.error('Failed to create post', e) }
   finally { isPosting.value = false }
 }
@@ -701,10 +742,10 @@ const connectWebSocket = () => {
 }
 
 // reset drag state when modal closes
-watch(showPostForm, (v) => { if (!v) { dragCounter = 0; formDragging.value = false } })
+watch(showPostForm, (v) => { if (!v) { dragCounter = 0; formDragging.value = false; showEntityPicker.value = false } })
 watch(nsfwMode, () => { fetchTrendingTags() })
 
-onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRecommendedUsers(); fetchTrendingEvents(); fetchTrendingTags(); fetchActiveAds() })
+onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRecommendedUsers(); fetchTrendingEvents(); fetchTrendingTags(); fetchActiveAds(); if (auth.user && !groupsStore.myGroups.length) groupsStore.loadMyGroups().catch(() => {}) })
 </script>
 
 <template>
@@ -795,9 +836,21 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
             @click="showPostForm = true"
             class="w-full flex items-center gap-3 px-5 py-4 text-left group"
           >
-            <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" />
-            <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
-            <span class="flex-1 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">Что нового?</span>
+            <!-- Entity avatar -->
+            <template v-if="postAsEntity.type === 'group'">
+              <img v-if="(postAsEntity as any).avatar_url" :src="(postAsEntity as any).avatar_url"
+                class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" />
+              <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">
+                {{ ((postAsEntity as any).name || '?')[0].toUpperCase() }}
+              </div>
+            </template>
+            <template v-else>
+              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" />
+              <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
+            </template>
+            <span class="flex-1 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">
+              {{ postAsEntity.type === 'group' ? `Написать от имени «${(postAsEntity as any).name}»…` : 'Что нового?' }}
+            </span>
             <div class="flex items-center gap-2 text-white/55 group-hover:text-white transition-colors ml-1">
               <BIcon name="ImagePlus" class="w-4.5 h-4.5" />
               <BIcon name="Hash" class="w-4.5 h-4.5" />
@@ -806,10 +859,77 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
 
           <!-- Expanded composer -->
           <div v-else class="p-5 space-y-4">
+            <!-- Entity selector (only if user has admin groups) -->
+            <div v-if="adminGroups.length" class="relative">
+              <button @click.stop="showEntityPicker = !showEntityPicker"
+                class="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-brand-bg border border-brand-border hover:border-brand-accent/40 transition-all text-sm">
+                <!-- Entity avatar -->
+                <template v-if="postAsEntity.type === 'group'">
+                  <img v-if="(postAsEntity as any).avatar_url" :src="(postAsEntity as any).avatar_url"
+                    class="w-6 h-6 rounded-lg object-cover flex-shrink-0" />
+                  <div v-else class="w-6 h-6 rounded-lg bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold flex-shrink-0">
+                    {{ ((postAsEntity as any).name || '?')[0].toUpperCase() }}
+                  </div>
+                  <span class="text-white font-semibold">{{ (postAsEntity as any).name }}</span>
+                  <span class="text-[10px] text-brand-accent bg-brand-accent/10 border border-brand-accent/25 px-1.5 py-0.5 rounded font-bold uppercase">Группа</span>
+                </template>
+                <template v-else>
+                  <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                  <div v-else class="w-6 h-6 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold flex-shrink-0">
+                    {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
+                  </div>
+                  <span class="text-white font-semibold">{{ auth.user?.display_name || auth.user?.username }}</span>
+                  <span class="text-[10px] text-white/40 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded font-bold uppercase">Я</span>
+                </template>
+                <BIcon name="ChevronDown" class="w-3.5 h-3.5 text-white/55 ml-auto" :class="{ 'rotate-180': showEntityPicker }" />
+              </button>
+              <!-- Dropdown -->
+              <Transition name="slide">
+                <div v-if="showEntityPicker" class="absolute top-full left-0 mt-1.5 z-30 min-w-[220px] bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1.5">
+                  <!-- User option -->
+                  <button class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
+                    :class="postAsEntity.type === 'user' ? 'text-brand-accent' : 'text-white'"
+                    @click="postAsEntity = { type: 'user' }; showEntityPicker = false">
+                    <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                    <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
+                      {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
+                    </div>
+                    <span class="font-semibold truncate flex-1 text-left">{{ auth.user?.display_name || auth.user?.username }}</span>
+                    <span class="text-[9px] text-white/40 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">Я</span>
+                    <BIcon v-if="postAsEntity.type === 'user'" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+                  </button>
+                  <div class="h-px bg-brand-border mx-3 my-1" />
+                  <!-- Admin groups -->
+                  <button v-for="grp in adminGroups" :key="grp.id"
+                    class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
+                    :class="postAsEntity.type === 'group' && (postAsEntity as any).id === grp.id ? 'text-brand-accent' : 'text-white'"
+                    @click="postAsEntity = { type: 'group', id: grp.id, slug: grp.slug, name: grp.name, avatar_url: grp.avatar_url }; showEntityPicker = false">
+                    <img v-if="grp.avatar_url" :src="grp.avatar_url" class="w-7 h-7 rounded-xl object-cover flex-shrink-0" />
+                    <div v-else class="w-7 h-7 rounded-xl bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
+                      {{ (grp.name || '?')[0].toUpperCase() }}
+                    </div>
+                    <span class="font-semibold truncate flex-1 text-left">{{ grp.name }}</span>
+                    <span class="text-[9px] text-white/40 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">Группа</span>
+                    <BIcon v-if="postAsEntity.type === 'group' && (postAsEntity as any).id === grp.id" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+                  </button>
+                </div>
+              </Transition>
+            </div>
+
             <!-- Author + textarea + send -->
             <div class="flex items-start gap-3">
-              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 mt-0.5" />
-              <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
+              <!-- Entity avatar (large) -->
+              <template v-if="postAsEntity.type === 'group'">
+                <img v-if="(postAsEntity as any).avatar_url" :src="(postAsEntity as any).avatar_url"
+                  class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover flex-shrink-0 mt-0.5" />
+                <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold">
+                  {{ ((postAsEntity as any).name || '?')[0].toUpperCase() }}
+                </div>
+              </template>
+              <template v-else>
+                <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 mt-0.5" />
+                <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
+              </template>
               <div class="flex-1 min-w-0">
                 <MentionTextarea
                   v-model="newPost.content"
@@ -906,6 +1026,56 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
                 NSFW
               </button>
 
+              <!-- Visibility dropdown -->
+              <div class="relative">
+                <button
+                  @click.stop="showVisibilityMenu = !showVisibilityMenu"
+                  class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all"
+                  :class="newPost.visibility !== 'public'
+                    ? 'border-brand-accent/50 text-brand-accent bg-brand-accent/10'
+                    : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'"
+                >
+                  <BIcon :name="newPost.visibility === 'subscriber_only' ? 'Users' : newPost.visibility === 'paid' ? 'DollarSign' : 'Globe2'" class="w-3.5 h-3.5" />
+                  {{ newPost.visibility === 'subscriber_only' ? 'Только Подписчикам' : newPost.visibility === 'paid' ? 'Платный пост' : 'Видно всем' }}
+                  <BIcon name="ChevronDown" class="w-3 h-3 opacity-60" />
+                </button>
+                <Transition name="slide">
+                  <div
+                    v-if="showVisibilityMenu"
+                    v-click-outside="() => showVisibilityMenu = false"
+                    class="absolute bottom-full left-0 mb-1.5 z-30 w-52 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1"
+                  >
+                    <button
+                      @click="newPost.visibility = 'public'; showVisibilityMenu = false"
+                      class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
+                      :class="newPost.visibility === 'public' ? 'text-brand-accent' : 'text-white'"
+                    >
+                      <BIcon name="Globe2" class="w-4 h-4 flex-shrink-0" />
+                      Видно всем
+                      <BIcon v-if="newPost.visibility === 'public'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
+                    </button>
+                    <button
+                      @click="newPost.visibility = 'subscriber_only'; showVisibilityMenu = false"
+                      class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
+                      :class="newPost.visibility === 'subscriber_only' ? 'text-brand-accent' : 'text-white'"
+                    >
+                      <BIcon name="Users" class="w-4 h-4 flex-shrink-0" />
+                      Только Подписчикам
+                      <BIcon v-if="newPost.visibility === 'subscriber_only'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
+                    </button>
+                    <button
+                      @click="newPost.visibility = 'paid'; showVisibilityMenu = false"
+                      class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
+                      :class="newPost.visibility === 'paid' ? 'text-brand-accent' : 'text-white'"
+                    >
+                      <BIcon name="DollarSign" class="w-4 h-4 flex-shrink-0" />
+                      Платный пост
+                      <BIcon v-if="newPost.visibility === 'paid'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
+                    </button>
+                  </div>
+                </Transition>
+              </div>
+
               <!-- Spacer -->
               <div class="flex-1" />
 
@@ -916,6 +1086,30 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
               >
                 Отмена
               </button>
+            </div>
+
+            <!-- Paid post extra fields -->
+            <div v-if="newPost.visibility === 'paid'" class="flex flex-wrap gap-3 pt-1">
+              <input
+                v-model="newPost.price"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Цена (₽)"
+                class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-brand-accent transition-colors w-32"
+              />
+              <input
+                v-model="newPost.videoTitle"
+                type="text"
+                placeholder="Заголовок видео"
+                class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-brand-accent transition-colors flex-1 min-w-[160px]"
+              />
+              <input
+                v-model="newPost.videoDescription"
+                type="text"
+                placeholder="Описание видео"
+                class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-brand-accent transition-colors flex-1 min-w-[160px]"
+              />
             </div>
           </div>
         </div>
@@ -969,10 +1163,10 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
           <!-- Actual event cards -->
           <div v-else class="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
             <router-link v-for="ev in upcomingEvents" :key="ev.id"
-              :to="ev.group ? `/groups/${ev.group.slug}` : '#'"
+              :to="'/events/' + ev.id"
               class="min-w-[260px] max-w-[280px] bg-brand-bg rounded-2xl overflow-hidden border border-brand-border hover:border-brand-accent/40 transition-all group/ev flex-shrink-0">
               <div class="h-28 relative overflow-hidden">
-                <img v-if="ev.banner_url" :src="ev.banner_url" class="w-full h-full object-cover group-hover/ev:scale-105 transition-transform duration-300" />
+                <img v-if="ev.banner_url || ev.group?.banner_url" :src="ev.banner_url || ev.group?.banner_url" class="w-full h-full object-cover group-hover/ev:scale-105 transition-transform duration-300" />
                 <div v-else class="h-full w-full" :style="`background:linear-gradient(135deg,${ev.group?.accent_color || '#4C67CF'}44,${ev.group?.accent_color || '#4C67CF'}11)`"></div>
                 <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                 <div class="absolute bottom-2 left-2 right-2 flex items-end justify-between">
@@ -1033,7 +1227,8 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
             :key="post.id"
             :ref="(el: any) => setPostRef(el?.$el ?? el, post.id)"
             :post="post"
-            :show-follow-button="true"
+            :group-context="groupContextMap[post.id] ?? null"
+            :show-follow-button="!groupContextMap[post.id]"
             :initial-following="followStatus[post.author.id] ?? null"
             :initial-vote="postStatus[post.id]?.userVote ?? 0"
             :initial-repawed="postStatus[post.id]?.repawed ?? false"

@@ -1,9 +1,15 @@
 import cron from 'node-cron';
 import prisma from './config/prisma.js';
 import { patrolSuspiciousActivity } from './modules/automod/service.js';
+import { activityService } from './modules/activities/service.js';
 
 export function initCronJobs() {
   console.log('[CRON] Initializing background tasks...');
+
+  // ── DB keepalive — prevents idle connection drops ──────────────────────────
+  cron.schedule('*/5 * * * *', async () => {
+    try { await prisma.$queryRaw`SELECT 1` } catch { /* reconnect handled by Prisma */ }
+  });
 
   cron.schedule('0 3 * * *', async () => {
     console.log('[CRON] Running daily DB cleanup task...');
@@ -50,6 +56,19 @@ export function initCronJobs() {
       await patrolSuspiciousActivity();
     } catch (err: any) {
       console.error('[CRON] AutoMod patrol error:', err.message);
+    }
+  });
+
+  // Activity Engine: auto-ban overdue participants — every day at 04:00
+  cron.schedule('0 4 * * *', async () => {
+    console.log('[CRON] Running activity auto-ban check...');
+    try {
+      const { bannedCount } = await activityService.autoProcessOverdue();
+      if (bannedCount > 0) {
+        console.log(`[CRON] Activity auto-ban: ${bannedCount} participant(s) added to blacklist`);
+      }
+    } catch (err: any) {
+      console.error('[CRON] Activity auto-ban error:', err.message);
     }
   });
 

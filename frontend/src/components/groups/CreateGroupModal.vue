@@ -21,7 +21,7 @@ export interface CreateGroupPayload {
   eventIsTop?: boolean
   // Creative-specific
   commissionStatus?: 'open' | 'closed' | 'waitlist'
-  commissionPrices?: Record<string, number>
+  commissionStyles?: string[]
   commissionCurrency?: string
   commissionMaxQueue?: number
   // Social / static / community
@@ -54,6 +54,22 @@ const autoSlug = computed(() =>
   name.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '').slice(0, 60)
 )
 
+// Slug auto-sanitize: remove invalid chars, force lowercase, limit length
+watch(slug, (v) => {
+  const clean = v.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 60)
+  if (clean !== v) slug.value = clean
+})
+
+const slugError = computed((): string | null => {
+  const s = slug.value
+  if (!s) return null // пустой → будет использован autoSlug
+  if (s.length < 3) return 'Минимум 3 символа'
+  if (/^[-_]/.test(s)) return 'Нельзя начинать с дефиса или подчёркивания'
+  if (/[-_]$/.test(s)) return 'Нельзя заканчивать на дефис или подчёркивание'
+  if (/[-_]{2,}/.test(s)) return 'Нельзя ставить два — или __ подряд'
+  return null
+})
+
 const types: { value: GroupType; label: string; icon: string; desc: string; color: string }[] = [
   { value: 'community', label: 'Сообщество',  icon: 'Users',        desc: 'Обсуждения, фандомы',       color: '#4C67CF' },
   { value: 'event',     label: 'Афиша',       icon: 'CalendarDays', desc: 'Ивенты, вечеринки, маркеты', color: '#66C770' },
@@ -78,12 +94,28 @@ const eventIsTop = ref(false)
 const commissionStatus = ref<'open' | 'closed' | 'waitlist'>('closed')
 const commissionCurrency = ref('USD')
 const commissionMaxQueue = ref(5)
-const commissionPrices = ref<{ key: string; label: string; price: number }[]>([
-  { key: 'headshot', label: 'Хэдшот', price: 0 },
-  { key: 'halfbody', label: 'Полтела', price: 0 },
-  { key: 'fullbody', label: 'В полный рост', price: 0 },
-  { key: 'ref_sheet', label: 'Рефшит', price: 0 },
-])
+const commissionStyles = ref<string[]>([])
+
+const COMMISSION_STYLE_OPTIONS: { key: string; label: string; icon: string }[] = [
+  { key: 'sketch',       label: 'Скетч',           icon: 'PencilLine' },
+  { key: 'lineart',      label: 'Линарт',           icon: 'Pen' },
+  { key: 'colored',      label: 'Покрас',           icon: 'Paintbrush' },
+  { key: 'headshot',     label: 'Хэдшот',           icon: 'CircleUser' },
+  { key: 'halfbody',     label: 'Полтела',          icon: 'PersonStanding' },
+  { key: 'fullbody',     label: 'В полный рост',    icon: 'User' },
+  { key: 'ref_sheet',    label: 'Рефшит',           icon: 'LayoutTemplate' },
+  { key: 'animation',    label: 'Анимация',         icon: 'Clapperboard' },
+  { key: 'comic',        label: 'Комикс',           icon: 'BookOpen' },
+  { key: 'illustration', label: 'Иллюстрация',      icon: 'Image' },
+  { key: 'pixel',        label: 'Пиксель-арт',      icon: 'Grid2x2' },
+  { key: 'traditional',  label: 'Традиционный арт', icon: 'Brush' },
+]
+
+function toggleStyle(key: string) {
+  const idx = commissionStyles.value.indexOf(key)
+  if (idx === -1) commissionStyles.value.push(key)
+  else commissionStyles.value.splice(idx, 1)
+}
 
 // News
 const newsCategory = ref('general')
@@ -138,7 +170,7 @@ const stepLabels = computed(() => [
 ])
 
 // ── Validation ──────────────────────────────────────────────────────────────
-const step1Valid = computed(() => name.value.trim().length > 0)
+const step1Valid = computed(() => name.value.trim().length > 0 && !slugError.value)
 const step2Valid = computed(() => {
   if (type.value === 'event') {
     return eventTitle.value.trim().length > 0 && eventShortCode.value.trim().length > 0
@@ -186,9 +218,7 @@ function submit() {
     payload.commissionStatus = commissionStatus.value
     payload.commissionCurrency = commissionCurrency.value
     payload.commissionMaxQueue = commissionMaxQueue.value
-    const prices: Record<string, number> = {}
-    commissionPrices.value.forEach(p => { if (p.price > 0) prices[p.key] = p.price })
-    payload.commissionPrices = prices
+    payload.commissionStyles = commissionStyles.value
   }
 
   if (type.value === 'news') payload.newsCategory = newsCategory.value
@@ -286,11 +316,46 @@ function submit() {
 
           <!-- Slug -->
           <div>
-            <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 block">Ссылка</label>
+            <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span>Ссылка на группу</span>
+              <span v-if="slug" class="text-[10px] font-normal normal-case tracking-normal"
+                :class="slugError ? 'text-brand-error' : 'text-brand-success'">
+                {{ slug.length }}/60
+              </span>
+            </label>
             <div class="relative">
               <span class="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-sm">@</span>
-              <input v-model="slug" :placeholder="autoSlug || 'slug'"
-                class="w-full bg-brand-bg border border-brand-border rounded-2xl pl-8 pr-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-none" />
+              <input v-model="slug" :placeholder="autoSlug || 'my-group'"
+                class="w-full bg-brand-bg border rounded-2xl pl-8 pr-10 py-3 text-white text-sm placeholder-white/30 focus:outline-none transition-colors"
+                :class="slug
+                  ? (slugError ? 'border-brand-error focus:border-brand-error' : 'border-brand-success focus:border-brand-success')
+                  : 'border-brand-border focus:border-brand-accent'" />
+              <span v-if="slug" class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                <BIcon v-if="!slugError" name="CheckCircle" class="w-4 h-4 text-brand-success" />
+                <BIcon v-else name="XCircle" class="w-4 h-4 text-brand-error" />
+              </span>
+            </div>
+            <!-- Dynamic error -->
+            <p v-if="slugError && slug" class="flex items-center gap-1 text-[11px] text-brand-error mt-1.5">
+              <BIcon name="AlertCircle" class="w-3.5 h-3.5 flex-shrink-0" /> {{ slugError }}
+            </p>
+            <!-- Static rules -->
+            <div class="mt-2 px-1 space-y-1">
+              <p class="text-[10px] text-white/30 font-bold uppercase tracking-wider">Правила slug</p>
+              <div class="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                <span class="text-[10px] text-white/30 flex items-center gap-1">
+                  <span class="w-1 h-1 rounded-full bg-white/20 shrink-0" />только a–z, 0–9, - и _
+                </span>
+                <span class="text-[10px] text-white/30 flex items-center gap-1">
+                  <span class="w-1 h-1 rounded-full bg-white/20 shrink-0" />только строчные буквы
+                </span>
+                <span class="text-[10px] text-white/30 flex items-center gap-1">
+                  <span class="w-1 h-1 rounded-full bg-white/20 shrink-0" />от 3 до 60 символов
+                </span>
+                <span class="text-[10px] text-white/30 flex items-center gap-1">
+                  <span class="w-1 h-1 rounded-full bg-white/20 shrink-0" />не начинать/кончать на - _
+                </span>
+              </div>
             </div>
           </div>
 
@@ -421,15 +486,28 @@ function submit() {
             </div>
 
             <div>
-              <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-2 block">Базовые цены</label>
-              <div class="space-y-2">
-                <div v-for="p in commissionPrices" :key="p.key" class="flex items-center gap-3 bg-brand-bg/40 border border-brand-border rounded-xl px-3 py-2">
-                  <span class="text-white text-xs font-semibold flex-1">{{ p.label }}</span>
-                  <input v-model.number="p.price" type="number" min="0" placeholder="0"
-                    class="w-24 bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-white text-xs text-right focus:border-brand-accent focus:outline-none" />
-                  <span class="text-white/30 text-xs w-8">{{ commissionCurrency }}</span>
-                </div>
+              <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-2 block">Виды работ</label>
+              <p class="text-white/30 text-[11px] mb-2.5 -mt-1">Отметь, что ты рисуешь — можно изменить позже</p>
+              <div class="grid grid-cols-3 gap-2">
+                <button
+                  v-for="s in COMMISSION_STYLE_OPTIONS"
+                  :key="s.key"
+                  type="button"
+                  @click="toggleStyle(s.key)"
+                  class="flex flex-col items-center gap-1 p-2.5 rounded-2xl border transition-all duration-150 text-center"
+                  :class="commissionStyles.includes(s.key)
+                    ? 'bg-brand-purple/15 border-brand-purple/50 text-white'
+                    : 'bg-brand-bg/40 border-brand-border text-white/40 hover:border-brand-purple/30 hover:text-white/70'"
+                >
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center transition-colors"
+                    :class="commissionStyles.includes(s.key) ? 'bg-brand-purple/20' : 'bg-brand-bg'">
+                    <BIcon :name="s.icon" class="w-4 h-4"
+                      :class="commissionStyles.includes(s.key) ? 'text-brand-purple' : 'text-white/30'" />
+                  </div>
+                  <span class="text-[10px] font-semibold leading-tight">{{ s.label }}</span>
+                </button>
               </div>
+              <p class="text-white/20 text-[10px] mt-2">Выбрано: {{ commissionStyles.length }}</p>
             </div>
 
             <div class="grid grid-cols-2 gap-3">

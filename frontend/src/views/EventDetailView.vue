@@ -9,13 +9,15 @@ import SoonBadge from '@/components/groups/SoonBadge.vue'
 import SoonPopup from '@/components/groups/SoonPopup.vue'
 import { useGroupsStore } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
+import { useNsfwMode } from '@/composables/useNsfwMode'
+import { useToGoStore } from '@/stores/toGo'
 
 const route = useRoute()
 const router = useRouter()
 const groupsStore = useGroupsStore()
 const authStore = useAuthStore()
 
-const nsfwMode = ref(localStorage.getItem('bloomly_nsfw') === 'true')
+const nsfwMode = useNsfwMode().nsfwEnabled
 const activeNav = ref('groups')
 const showSoonPopup = ref(false)
 
@@ -105,6 +107,27 @@ async function confirmSoon() {
 function openMap() {
   if (!event.value?.location_lat || !event.value?.location_lng) return
   window.open(`https://www.google.com/maps?q=${event.value.location_lat},${event.value.location_lng}`, '_blank')
+}
+
+const toGo = useToGoStore()
+const isInToGo = computed(() => event.value ? toGo.has(event.value.id) : false)
+
+function toggleToGo() {
+  if (!event.value) return
+  if (isInToGo.value) {
+    toGo.remove(event.value.id)
+  } else {
+    toGo.add({
+      id:           event.value.id,
+      type:         'event',
+      title:        event.value.title,
+      subtitle:     dateRange.value,
+      imageUrl:     event.value.banner_url ?? undefined,
+      url:          `/events/${event.value.id}`,
+      startsAt:     event.value.starts_at,
+      locationName: event.value.location_name ?? undefined,
+    })
+  }
 }
 </script>
 
@@ -227,45 +250,57 @@ function openMap() {
 
               <!-- No tickets + SOON button -->
               <section v-else-if="event.status === 'announced' || event.status === 'teaser'">
-                <div class="bg-brand-card border border-brand-border rounded-3xl p-8 text-center">
-                  <div class="w-16 h-16 rounded-2xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center mx-auto mb-4">
-                    <BIcon name="Sparkles" class="w-8 h-8 text-brand-yellow" />
+                <div class="relative overflow-hidden bg-brand-card border border-brand-border rounded-3xl p-8 text-center">
+                  <!-- Background glow -->
+                  <div class="absolute inset-0 pointer-events-none">
+                    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-brand-yellow/8 rounded-full blur-2xl" />
                   </div>
-                  <p class="text-white font-bold mb-1">Билеты скоро!</p>
-                  <p class="text-white/40 text-sm mb-5">Добавь SOON в свой профиль, чтобы не пропустить</p>
-                  <button
-                    class="px-6 py-3 rounded-2xl font-bold text-sm transition-all duration-200"
-                    :class="hasMySoonBadge
-                      ? 'bg-brand-success/15 text-brand-success border border-brand-success/30'
-                      : 'bg-brand-accent text-white hover:bg-brand-accent-plus shadow-accent'"
-                    @click="handleToggleSoon"
-                  >
-                    <template v-if="hasMySoonBadge">
-                      <BIcon name="Check" class="w-4 h-4 inline mr-1.5 -mt-0.5" />
-                      Soon добавлен
-                    </template>
-                    <template v-else>
-                      <BIcon name="Sparkles" class="w-4 h-4 inline mr-1.5 -mt-0.5" />
-                      Присвоить Soon
-                    </template>
-                  </button>
+                  <div class="relative">
+                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-yellow/10 border border-brand-yellow/20 mb-4">
+                      <span class="text-3xl">✦</span>
+                    </div>
+                    <div class="flex items-center justify-center gap-2 mb-2">
+                      <SoonBadge :short-code="event.short_code" />
+                    </div>
+                    <p class="text-white font-extrabold text-lg mb-1">Билеты скоро откроются</p>
+                    <p class="text-white/40 text-sm mb-6">Отметь «Интересует» — и точно не пропустишь</p>
+                    <button
+                      class="inline-flex items-center gap-2 px-8 py-3 rounded-2xl font-bold text-sm transition-all duration-200 active:scale-95"
+                      :class="hasMySoonBadge
+                        ? 'bg-brand-success/15 text-brand-success border border-brand-success/30 hover:bg-brand-error/10 hover:text-brand-error hover:border-brand-error/30'
+                        : 'bg-brand-accent text-white hover:bg-brand-accent-plus shadow-lg shadow-brand-accent/25'"
+                      @click="handleToggleSoon"
+                    >
+                      <BIcon :name="hasMySoonBadge ? 'Check' : 'Star'" class="w-4 h-4" />
+                      {{ hasMySoonBadge ? 'Интересует ✓' : 'Интересует' }}
+                    </button>
+                    <p v-if="event._count.soonBadges" class="text-white/30 text-xs mt-3">
+                      {{ event._count.soonBadges }} {{ event._count.soonBadges === 1 ? 'человек' : 'человек' }} уже отметил(и)
+                    </p>
+                  </div>
                 </div>
               </section>
 
               <!-- Interested users (SOON avatars) -->
               <section v-if="event.soonBadges?.length">
-                <h2 class="text-sm font-extrabold text-white/40 uppercase tracking-wide mb-3">Собираются пойти</h2>
+                <h2 class="text-sm font-extrabold text-white/40 uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <BIcon name="Users" class="w-3.5 h-3.5" />
+                  Собираются пойти
+                </h2>
                 <div class="flex flex-wrap gap-2">
                   <div
                     v-for="badge in event.soonBadges"
                     :key="badge.id"
-                    class="flex items-center gap-2 bg-brand-card border border-brand-border rounded-xl px-3 py-1.5 cursor-pointer hover:border-brand-accent/30 transition-colors"
+                    class="flex items-center gap-2 bg-brand-card border border-brand-border hover:border-brand-accent/30 rounded-xl px-3 py-2 cursor-pointer transition-all hover:bg-brand-bg/40 active:scale-95"
                     @click="router.push({ name: 'profile', params: { id: badge.user.id } })"
                   >
-                    <div class="w-6 h-6 rounded-full bg-brand-accent/20 overflow-hidden">
+                    <div class="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-brand-accent/20 ring-1 ring-brand-border">
                       <img v-if="badge.user.avatar_url" :src="badge.user.avatar_url" class="w-full h-full object-cover" />
+                      <div v-else class="w-full h-full flex items-center justify-center text-[10px] font-bold text-brand-accent">
+                        {{ (badge.user.display_name || badge.user.username)[0].toUpperCase() }}
+                      </div>
                     </div>
-                    <span class="text-white text-xs font-bold">{{ badge.user.display_name || badge.user.username }}</span>
+                    <span class="text-white text-xs font-semibold">{{ badge.user.display_name || badge.user.username }}</span>
                     <SoonBadge :short-code="event.short_code" size="sm" />
                   </div>
                 </div>
@@ -275,20 +310,60 @@ function openMap() {
             <!-- Sidebar -->
             <div class="space-y-4">
               <!-- SOON action card -->
-              <div class="bg-brand-card border border-brand-border rounded-3xl p-4 space-y-3">
-                <h3 class="text-white font-extrabold text-sm">Интересует?</h3>
+              <div class="relative overflow-hidden bg-brand-card border border-brand-border rounded-3xl p-5">
+                <!-- Subtle glow effect -->
+                <div class="absolute top-0 right-0 w-24 h-24 rounded-full blur-2xl pointer-events-none"
+                  :class="hasMySoonBadge ? 'bg-brand-success/10' : 'bg-brand-accent/8'" />
+                <div class="relative">
+                  <!-- Badge preview -->
+                  <div class="flex items-center gap-2 mb-3">
+                    <SoonBadge :short-code="event.short_code" />
+                    <span class="text-white font-extrabold text-sm">Интересует?</span>
+                  </div>
+                  <!-- Mini avatars of interested users -->
+                  <div v-if="event.soonBadges?.length" class="flex items-center gap-1 mb-3">
+                    <div class="flex -space-x-1.5">
+                      <div v-for="b in event.soonBadges.slice(0, 5)" :key="b.id"
+                        class="w-6 h-6 rounded-full border-2 border-brand-card overflow-hidden bg-brand-accent/20 flex-shrink-0">
+                        <img v-if="b.user.avatar_url" :src="b.user.avatar_url" class="w-full h-full object-cover" />
+                        <div v-else class="w-full h-full flex items-center justify-center text-[8px] font-bold text-brand-accent">
+                          {{ (b.user.display_name || b.user.username)[0].toUpperCase() }}
+                        </div>
+                      </div>
+                    </div>
+                    <span class="text-white/40 text-[11px] ml-1">
+                      {{ event._count.soonBadges }} чел{{ event._count.soonBadges % 10 === 1 && event._count.soonBadges % 100 !== 11 ? 'овек' : 'овек' }}
+                    </span>
+                  </div>
+                  <p v-else class="text-white/30 text-[11px] mb-3">Будь первым!</p>
+                  <button
+                    class="w-full py-2.5 rounded-2xl font-bold text-sm transition-all duration-200 active:scale-[0.98]"
+                    :class="hasMySoonBadge
+                      ? 'bg-brand-success/15 text-brand-success border border-brand-success/30 hover:bg-brand-error/10 hover:text-brand-error hover:border-brand-error/30'
+                      : 'bg-brand-accent text-white hover:bg-brand-accent-plus shadow-lg shadow-brand-accent/20'"
+                    @click="handleToggleSoon"
+                  >
+                    {{ hasMySoonBadge ? '✓ Интересует' : 'Интересует' }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- To-go card -->
+              <div class="bg-brand-card border border-brand-border rounded-3xl p-5 flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
+                  :class="isInToGo ? 'bg-brand-accent/20' : 'bg-brand-border/60'">
+                  <BIcon name="Bookmark" class="w-5 h-5" :class="isInToGo ? 'text-brand-accent' : 'text-white/40'" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-white text-sm font-bold">{{ isInToGo ? 'В To-go списке' : 'To-go list' }}</p>
+                  <p class="text-white/30 text-xs">{{ isInToGo ? 'Добавлено, нажми чтобы убрать' : 'Сохранить в личный список' }}</p>
+                </div>
                 <button
-                  class="w-full py-3 rounded-2xl font-bold text-sm transition-all duration-200"
-                  :class="hasMySoonBadge
-                    ? 'bg-brand-success/15 text-brand-success border border-brand-success/30 hover:bg-brand-error/15 hover:text-brand-error hover:border-brand-error/30'
-                    : 'bg-brand-accent text-white hover:bg-brand-accent-plus shadow-accent'"
-                  @click="handleToggleSoon"
-                >
-                  {{ hasMySoonBadge ? '✓ Интересует' : 'Интересует' }}
+                  @click="toggleToGo"
+                  class="flex-shrink-0 px-3 py-2 rounded-xl text-xs font-bold transition-all"
+                  :class="isInToGo ? 'bg-brand-error/10 text-brand-error border border-brand-error/20 hover:bg-brand-error/20' : 'bg-brand-accent text-white hover:bg-brand-accent-plus shadow shadow-brand-accent/20'">
+                  {{ isInToGo ? 'Убрать' : 'Добавить' }}
                 </button>
-                <p class="text-white/30 text-[11px] text-center">
-                  {{ event._count.soonBadges }} человек собираются
-                </p>
               </div>
 
               <!-- Group card -->

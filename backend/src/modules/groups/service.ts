@@ -9,6 +9,8 @@ import type {
   UpdateCommissionInput,
   GetGroupsQuery,
   MemberRole,
+  SubEventInput,
+  UpdateSubEventInput,
 } from './types.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -43,7 +45,38 @@ const GROUP_SELECT = {
   completed_works: true,
   recent_works: true,
   guarantee_text: true,
-  _count: { select: { members: true, events: true, posts: true } },
+  sponsors: true,
+  volunteers_info: true,
+  is_looking_for_volunteers: true,
+  is_verified: true,
+  category: true,
+  _count: { select: { members: true, events: true, posts: { where: { post: { deleted_at: null } } } } },
+  owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+  communityChat: { select: { id: true } },
+};
+
+// Minimal select for list / discover / my-groups (no heavy text fields)
+const GROUP_LIST_SELECT = {
+  id: true,
+  slug: true,
+  name: true,
+  type: true,
+  owner_id: true,
+  avatar_url: true,
+  banner_url: true,
+  accent_color: true,
+  mascot_url: true,
+  is_public: true,
+  is_nsfw: true,
+  is_verified: true,
+  category: true,
+  rating: true,
+  rating_count: true,
+  members_count: true,
+  subscriber_count: true,
+  created_at: true,
+  communityChat: { select: { id: true } },
+  _count: { select: { members: true, events: true } },
   owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
 };
 
@@ -69,6 +102,8 @@ const EVENT_SELECT = {
   what_to_bring: true,
   rules_text: true,
   faq: true,
+  registration_url: true,
+  subEvents: { orderBy: { starts_at: 'asc' as const } },
   _count: { select: { tickets: true, soonBadges: true } },
   group: {
     select: {
@@ -96,7 +131,7 @@ export const groupService = {
     }
 
     const [groups, total] = await Promise.all([
-      prisma.group.findMany({ where, select: GROUP_SELECT, orderBy: { created_at: 'desc' }, skip, take: limit }),
+      prisma.group.findMany({ where, select: GROUP_LIST_SELECT, orderBy: { created_at: 'desc' }, skip, take: limit }),
       prisma.group.count({ where }),
     ]);
 
@@ -116,7 +151,10 @@ export const groupService = {
       },
       select: {
         ...GROUP_SELECT,
-        events: { select: EVENT_SELECT, orderBy: { starts_at: 'asc' } },
+        events: {
+          select: { ...EVENT_SELECT, tickets: { orderBy: { price: 'asc' }, select: { id: true, name: true, price: true, currency: true, total_count: true, sold_count: true, sale_starts_at: true, sale_ends_at: true, description: true, perks: true } } },
+          orderBy: { starts_at: 'asc' },
+        },
         commissionInfo: true,
         achievements: { orderBy: { earned_at: 'desc' } },
       },
@@ -177,6 +215,11 @@ export const groupService = {
     if (input.completedWorks !== undefined) data.completed_works = input.completedWorks;
     if (input.recentWorks !== undefined) data.recent_works = input.recentWorks;
     if (input.guaranteeText !== undefined) data.guarantee_text = input.guaranteeText;
+    if (input.slug !== undefined) {
+      data.slug = input.slug.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    }
+    if (input.category !== undefined) data.category = input.category || null;
+    if (input.isVerified !== undefined) data.is_verified = input.isVerified;
 
     return prisma.group.update({ where: { id: groupId }, data, select: GROUP_SELECT });
   },
@@ -196,6 +239,7 @@ export const groupService = {
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
       update: {},
       create: { group_id: groupId, user_id: userId, role: 'member' },
+      include: { group: { select: GROUP_LIST_SELECT } },
     });
     // Increment members_count only if the user was NOT already a member
     if (!existing) {
@@ -233,6 +277,12 @@ export const groupService = {
   },
 
   async setMemberRole(groupId: string, userId: string, role: MemberRole) {
+    if (role === 'owner') throw new Error('Cannot assign owner role via this endpoint');
+    // Cannot change the role of the current owner
+    const current = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+    });
+    if (current?.role === 'owner') throw new Error('Cannot change the role of the group owner');
     return prisma.groupMember.update({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
       data: { role },
@@ -262,6 +312,7 @@ export const groupService = {
         is_recurring: input.isRecurring ?? false,
         theme: input.theme ?? {},
         is_top: input.isTop ?? false,
+        registration_url: input.registrationUrl,
       },
       select: EVENT_SELECT,
     });
@@ -280,6 +331,8 @@ export const groupService = {
     if (input.status !== undefined) data.status = input.status;
     if (input.theme !== undefined) data.theme = input.theme;
     if (input.isTop !== undefined) data.is_top = input.isTop;
+    if (input.registrationUrl !== undefined) data.registration_url = input.registrationUrl || null;
+    if (input.shortCode !== undefined && input.shortCode.trim()) data.short_code = input.shortCode.trim().toUpperCase();
 
     return prisma.event.update({ where: { id: eventId }, data, select: EVENT_SELECT });
   },
@@ -309,7 +362,7 @@ export const groupService = {
     const limit = Math.min(50, Math.max(1, parseInt(query.limit ?? '20', 10)));
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = { group: { deleted_at: null } };
     if (query.groupId) where.group_id = query.groupId;
     if (query.status) where.status = query.status;
     if (query.upcoming) where.starts_at = { gt: new Date() };
@@ -345,6 +398,21 @@ export const groupService = {
     });
   },
 
+  async updateTicketTier(tierId: string, input: Partial<Omit<CreateTicketTierInput, 'eventId'>>) {
+    const data: any = {};
+    if (input.name !== undefined) data.name = input.name;
+    if (input.price !== undefined) data.price = input.price;
+    if (input.currency !== undefined) data.currency = input.currency;
+    if (input.totalCount !== undefined) data.total_count = input.totalCount;
+    if (input.saleStartsAt !== undefined) data.sale_starts_at = input.saleStartsAt ? new Date(input.saleStartsAt) : null;
+    if (input.saleEndsAt !== undefined) data.sale_ends_at = input.saleEndsAt ? new Date(input.saleEndsAt) : null;
+    return prisma.ticketTier.update({ where: { id: tierId }, data });
+  },
+
+  async deleteTicketTier(tierId: string) {
+    return prisma.ticketTier.delete({ where: { id: tierId } });
+  },
+
   // ── SOON Badge ────────────────────────────────────────────────────────────
   async toggleSoonBadge(userId: string, eventId: string) {
     const existing = await prisma.soonBadge.findUnique({
@@ -352,13 +420,17 @@ export const groupService = {
     });
 
     if (existing) {
-      await prisma.soonBadge.delete({ where: { id: existing.id } });
-      await prisma.event.update({ where: { id: eventId }, data: { attendee_count: { decrement: 1 } } });
+      await Promise.all([
+        prisma.soonBadge.delete({ where: { id: existing.id } }),
+        prisma.event.update({ where: { id: eventId }, data: { attendee_count: { decrement: 1 } } }),
+      ]);
       return { added: false };
     }
 
-    await prisma.soonBadge.create({ data: { user_id: userId, event_id: eventId } });
-    await prisma.event.update({ where: { id: eventId }, data: { attendee_count: { increment: 1 } } });
+    await Promise.all([
+      prisma.soonBadge.create({ data: { user_id: userId, event_id: eventId } }),
+      prisma.event.update({ where: { id: eventId }, data: { attendee_count: { increment: 1 } } }),
+    ]);
     return { added: true };
   },
 
@@ -386,7 +458,9 @@ export const groupService = {
             ends_at: true,
             status: true,
             banner_url: true,
-            group: { select: { id: true, slug: true, name: true, avatar_url: true } },
+            location_name: true,
+            attendee_count: true,
+            group: { select: { id: true, slug: true, name: true, avatar_url: true, banner_url: true } },
           },
         },
       },
@@ -426,7 +500,10 @@ export const groupService = {
   async getGroupPosts(groupId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
     return prisma.groupPost.findMany({
-      where: { group_id: groupId },
+      where: {
+        group_id: groupId,
+        post: { deleted_at: null },
+      },
       include: {
         post: {
           include: {
@@ -448,39 +525,56 @@ export const groupService = {
       where: { user_id: userId },
       include: {
         group: {
-          select: GROUP_SELECT,
+          select: GROUP_LIST_SELECT,
         },
       },
       orderBy: { joined_at: 'desc' },
     });
   },
 
-  // ── Group Rating ──────────────────────────────────────────────────────────
+  // ── Group Rating (Reddit-style: -1 / +1 toggle) ───────────────────────────
   async rateGroup(groupId: string, userId: string, value: number) {
-    if (value < 1 || value > 5) throw new Error('Rating must be between 1 and 5');
+    if (value !== 1 && value !== -1) throw new Error('value must be 1 or -1');
+    const group = await prisma.group.findUnique({ where: { id: groupId }, select: { owner_id: true } });
+    if (group?.owner_id === userId) throw new Error('You cannot vote on your own group');
 
-    await prisma.groupRating.upsert({
+    const existing = await prisma.groupRating.findUnique({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
-      update: { value, updated_at: new Date() },
-      create: { group_id: groupId, user_id: userId, value },
     });
 
-    // Recalculate average
-    const agg = await prisma.groupRating.aggregate({
-      where: { group_id: groupId },
-      _avg: { value: true },
-      _count: { value: true },
-    });
+    let delta = 0;
+    let finalVote: number = value;
 
-    const avg = agg._avg.value ?? 0;
-    const count = agg._count.value ?? 0;
+    if (existing) {
+      if (existing.value === value) {
+        // Toggle off — remove vote
+        await prisma.groupRating.delete({ where: { group_id_user_id: { group_id: groupId, user_id: userId } } });
+        delta = -value;
+        finalVote = 0;
+      } else {
+        // Flip vote direction
+        await prisma.groupRating.update({
+          where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+          data: { value, updated_at: new Date() },
+        });
+        delta = value * 2; // e.g. was -1, now +1 → net +2
+      }
+    } else {
+      await prisma.groupRating.create({ data: { group_id: groupId, user_id: userId, value } });
+      delta = value;
+    }
 
-    await prisma.group.update({
+    const newCountDelta = existing ? (existing.value === value ? -1 : 0) : 1;
+    const updated = await prisma.group.update({
       where: { id: groupId },
-      data: { rating: Math.round(avg * 10) / 10, rating_count: count },
+      data: {
+        rating: { increment: delta },
+        rating_count: { increment: newCountDelta },
+      },
+      select: { rating: true, rating_count: true },
     });
 
-    return { rating: Math.round(avg * 10) / 10, ratingCount: count, myRating: value };
+    return { score: updated.rating, voteCount: updated.rating_count, myVote: finalVote };
   },
 
   async getMyRating(groupId: string, userId: string) {
@@ -549,8 +643,157 @@ export const groupService = {
           author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
           tags: { include: { tag: true } },
           _count: { select: { votes: true, repaws: true, comments: true } },
+          groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true } } } },
         },
       });
     });
+  },
+
+  // ── RSVP ──────────────────────────────────────────────────────────────────
+  async rsvpEvent(eventId: string, userId: string, status: 'going' | 'maybe' | 'not_going') {
+    const prev = await prisma.eventAttendee.findUnique({
+      where: { event_id_user_id: { event_id: eventId, user_id: userId } },
+      select: { status: true },
+    });
+    const wasCountable = prev && (prev.status === 'going' || prev.status === 'maybe');
+    const isCountable  = status === 'going' || status === 'maybe';
+    const delta = (isCountable ? 1 : 0) - (wasCountable ? 1 : 0);
+
+    const [attendee] = await Promise.all([
+      prisma.eventAttendee.upsert({
+        where: { event_id_user_id: { event_id: eventId, user_id: userId } },
+        update: { status, confirmed_at: new Date() },
+        create: { event_id: eventId, user_id: userId, status },
+        include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
+      }),
+      delta !== 0
+        ? prisma.event.update({ where: { id: eventId }, data: { attendee_count: { increment: delta } } })
+        : Promise.resolve(null),
+    ]);
+    return attendee;
+  },
+
+  async cancelRsvp(eventId: string, userId: string) {
+    const prev = await prisma.eventAttendee.findUnique({
+      where: { event_id_user_id: { event_id: eventId, user_id: userId } },
+      select: { status: true },
+    });
+    const wasCountable = prev && (prev.status === 'going' || prev.status === 'maybe');
+    await Promise.all([
+      prisma.eventAttendee.delete({
+        where: { event_id_user_id: { event_id: eventId, user_id: userId } },
+      }).catch(() => null),
+      wasCountable
+        ? prisma.event.update({ where: { id: eventId }, data: { attendee_count: { decrement: 1 } } })
+        : Promise.resolve(null),
+    ]);
+  },
+
+  async getEventAttendees(eventId: string, page = 1, limit = 50) {
+    const [attendees, total] = await Promise.all([
+      prisma.eventAttendee.findMany({
+        where: { event_id: eventId },
+        include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
+        orderBy: [{ status: 'asc' }, { confirmed_at: 'asc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.eventAttendee.count({ where: { event_id: eventId } }),
+    ]);
+    return { attendees, total };
+  },
+
+  async getMyRsvp(eventId: string, userId: string) {
+    return prisma.eventAttendee.findUnique({
+      where: { event_id_user_id: { event_id: eventId, user_id: userId } },
+    });
+  },
+
+  // ── Sub-events ────────────────────────────────────────────────────────────
+  async listSubEvents(eventId: string) {
+    return prisma.subEvent.findMany({
+      where: { event_id: eventId },
+      orderBy: { starts_at: 'asc' },
+    });
+  },
+
+  async createSubEvent(eventId: string, input: SubEventInput) {
+    return prisma.subEvent.create({
+      data: {
+        event_id: eventId,
+        title: input.title,
+        type: input.type ?? 'panel',
+        speaker: input.speaker,
+        location_name: input.locationName,
+        starts_at: new Date(input.startsAt),
+        ends_at: new Date(input.endsAt),
+        description: input.description,
+      },
+    });
+  },
+
+  async updateSubEvent(subEventId: string, input: UpdateSubEventInput) {
+    const data: any = {};
+    if (input.title !== undefined) data.title = input.title;
+    if (input.type !== undefined) data.type = input.type;
+    if (input.speaker !== undefined) data.speaker = input.speaker;
+    if (input.locationName !== undefined) data.location_name = input.locationName;
+    if (input.startsAt !== undefined) data.starts_at = new Date(input.startsAt);
+    if (input.endsAt !== undefined) data.ends_at = new Date(input.endsAt);
+    if (input.description !== undefined) data.description = input.description;
+    return prisma.subEvent.update({ where: { id: subEventId }, data });
+  },
+
+  async deleteSubEvent(subEventId: string) {
+    return prisma.subEvent.delete({ where: { id: subEventId } });
+  },
+
+  // ── Group Messages ─────────────────────────────────────────────────────────
+  async getGroupMessages(groupId: string, before?: string, limit = 50) {
+    const where: any = { group_id: groupId, deleted_at: null };
+    if (before) where.created_at = { lt: new Date(before) };
+    const messages = await prisma.groupMessage.findMany({
+      where,
+      include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+    });
+    return messages.reverse();
+  },
+
+  async sendGroupMessage(groupId: string, userId: string, text: string) {
+    const msg = await prisma.groupMessage.create({
+      data: { group_id: groupId, user_id: userId, text },
+      include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
+    });
+    return msg;
+  },
+
+  async deleteGroupMessage(messageId: string, userId: string) {
+    const msg = await prisma.groupMessage.findUnique({ where: { id: messageId } });
+    if (!msg) return;
+    if (msg.user_id !== userId) throw new Error('Not the message author');
+    await prisma.groupMessage.update({ where: { id: messageId }, data: { deleted_at: new Date() } });
+  },
+
+  // ── Discover ──────────────────────────────────────────────────────────────
+  async discoverGroups(userId: string | null, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const where: any = { deleted_at: null, is_public: true };
+    if (userId) {
+      // Exclude groups where user is already a member
+      where.members = { none: { user_id: userId } };
+    }
+    const [groups, total] = await Promise.all([
+      prisma.group.findMany({
+        where,
+        select: GROUP_LIST_SELECT,
+        orderBy: [{ is_verified: 'desc' }, { members_count: 'desc' }, { created_at: 'desc' }],
+        skip,
+        take: limit,
+      }),
+      prisma.group.count({ where }),
+    ]);
+    return { groups, total };
   },
 };

@@ -116,12 +116,65 @@
 
       <!-- Media -->
       <div v-if="post.media_urls && post.media_urls.length"
-        class="mb-3 rounded-xl overflow-hidden"
-        :class="post.media_urls.length === 1 ? '' : 'grid grid-cols-2 gap-0.5'"
+        class="relative mb-3 rounded-xl overflow-hidden"
       >
-        <template v-for="(url, i) in post.media_urls" :key="i">
-          <CustomPlayer :src="url" @click-image="showLightboxUrl = url" class="w-full h-full object-cover" />
-        </template>
+        <!-- Blurred media grid -->
+        <div
+          class="transition-all duration-300"
+          :class="[
+            (post.is_nsfw && !nsfwEnabled) || (isPaywalled && !paidRevealed) ? 'blur-xl scale-110 pointer-events-none select-none' : '',
+            post.media_urls.length === 1 ? '' : 'grid grid-cols-2 gap-0.5'
+          ]"
+        >
+          <template v-for="(url, i) in post.media_urls" :key="i">
+            <CustomPlayer :src="url" @click-image="showLightboxUrl = url" class="w-full h-full object-cover" />
+          </template>
+        </div>
+
+          <!-- NSFW overlay -->
+        <Transition name="fade">
+          <div
+            v-if="post.is_nsfw && !nsfwEnabled"
+            class="absolute inset-0 z-10 flex items-center justify-center"
+            style="background: rgba(0,0,0,0.55)"
+          >
+            <div class="bg-[#1a1a2e]/90 backdrop-blur-sm border border-white/10 rounded-2xl px-6 py-5 text-center max-w-xs">
+              <div class="w-10 h-10 rounded-full border-2 border-red-500/40 bg-red-500/10 flex items-center justify-center mx-auto mb-3">
+                <AlertTriangle class="w-5 h-5 text-red-400" />
+              </div>
+              <h3 class="font-bold text-white text-sm mb-1.5">NSFW Контент</h3>
+              <p class="text-white/45 text-xs mb-4">Предназначен для пользователей старше 18 лет. Включите NSFW в шапке сайта.</p>
+              <button
+                @click.stop="enableNsfw()"
+                class="w-full py-2 bg-red-500 hover:bg-red-400 text-white font-bold text-xs rounded-xl transition-colors"
+              >
+                Включить NSFW
+              </button>
+            </div>
+          </div>
+        </Transition>
+
+        <!-- Paid / subscriber-only overlay -->
+        <Transition name="fade">
+          <div
+            v-if="(!post.is_nsfw || nsfwEnabled) && isPaywalled && !paidRevealed"
+            class="absolute inset-0 z-10 flex flex-col items-center justify-center px-4 py-6"
+            style="background: rgba(0,0,0,0.6)"
+          >
+            <template v-if="post.video_title">
+              <h3 class="font-bold text-white text-sm mb-1 text-center">{{ post.video_title }}</h3>
+              <p v-if="post.video_description" class="text-white/50 text-xs mb-2 text-center">{{ post.video_description }}</p>
+            </template>
+            <div class="flex items-center gap-2 mt-3 flex-wrap justify-center">
+              <button class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-black/50 border border-white/20 rounded-full text-white text-xs font-semibold hover:bg-black/70 transition-colors">
+                <Lock class="w-3.5 h-3.5" /> Подписаться
+              </button>
+              <button v-if="post.is_paid" class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-black/50 border border-white/20 rounded-full text-white text-xs font-semibold hover:bg-black/70 transition-colors">
+                <Lock class="w-3.5 h-3.5" /> Купить видео
+              </button>
+            </div>
+          </div>
+        </Transition>
       </div>
 
       <!-- Hashtags -->
@@ -187,12 +240,13 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useNsfwMode } from '@/composables/useNsfwMode'
 import api from '@/api'
 import PostComments from '@/components/PostComments.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
 import {
   ThumbsUp, ThumbsDown, Repeat2, MessageCircle, Pin, PinOff,
-  Pencil, Trash2, MoreVertical, Maximize2, X
+  Pencil, Trash2, MoreVertical, Maximize2, X, AlertTriangle, Lock
 } from 'lucide-vue-next'
 
 // ── Props & emits ──────────────────────────────────────────────────────────
@@ -214,6 +268,7 @@ const emit = defineEmits<{
 // ── Composables ────────────────────────────────────────────────────────────
 const router = useRouter()
 const authStore = useAuthStore()
+const { nsfwEnabled, enableNsfw } = useNsfwMode()
 
 // ── State ──────────────────────────────────────────────────────────────────
 const localRating  = ref<number>(props.post.rating ?? 0)
@@ -227,6 +282,7 @@ const editContent  = ref('')
 const isSaving     = ref(false)
 const isDeleting   = ref(false)
 const showLightboxUrl = ref<string | null>(null)
+const paidRevealed = ref(false)
 
 // ── Computed ───────────────────────────────────────────────────────────────
 const isOwn = computed(() =>
@@ -234,6 +290,9 @@ const isOwn = computed(() =>
 )
 const canPin = computed(() => props.isOwnProfile && isOwn.value)
 const isPinnedThis = computed(() => props.pinnedPostId === props.post.id)
+const isPaywalled = computed(() =>
+  (props.post.subscriber_only || props.post.is_paid) && !isOwn.value
+)
 
 type Seg = { type: 'text' | 'mention'; key: number; text: string; username?: string }
 const parsedContent = computed<Seg[]>(() =>

@@ -122,6 +122,7 @@ export const followsService = {
         author: { select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true } },
         tags:   { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: true } },
+        groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true } } } },
       },
     });
   },

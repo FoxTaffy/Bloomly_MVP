@@ -209,99 +209,126 @@ async function selectPlan(planId: string) {
           </div>
         </div>
 
-        <!-- Plans grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-12">
+        <!-- Plans grid — ticket style -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-12">
           <div
             v-for="plan in plans"
             :key="plan.id"
-            class="relative rounded-3xl border transition-all duration-300 overflow-hidden"
+            class="relative ticket-card transition-all duration-300"
             :class="[
-              `bg-gradient-to-b ${plan.gradient}`,
-              plan.featured
-                ? 'border-brand-accent/50 shadow-2xl shadow-brand-accent/15 scale-[1.02]'
-                : 'border-brand-border hover:border-white/20',
-              currentTier === plan.id
-                ? 'ring-2 ring-brand-success ring-offset-2 ring-offset-brand-bg'
-                : '',
+              plan.featured ? 'scale-[1.03]' : '',
+              currentTier === plan.id ? 'ring-2 ring-brand-success ring-offset-2 ring-offset-brand-bg rounded-3xl' : '',
             ]"
           >
-            <!-- Featured glow -->
-            <div v-if="plan.featured"
-              class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-accent to-transparent" />
+            <!-- Active glow -->
+            <div v-if="currentTier === plan.id"
+              class="absolute -inset-0.5 rounded-3xl opacity-30 blur-sm"
+              :class="`bg-gradient-to-b ${plan.gradient}`" />
 
-            <div class="p-6">
-              <!-- Badge -->
-              <div class="flex items-center justify-between mb-4">
-                <span class="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full border"
-                  :class="plan.badgeColor">
-                  {{ plan.badge }}
-                </span>
-                <span v-if="currentTier === plan.id"
-                  class="text-[10px] font-extrabold uppercase tracking-wider text-brand-success bg-brand-success/10 border border-brand-success/20 px-2.5 py-1 rounded-full">
-                  Активен
-                </span>
+            <!-- Ticket body -->
+            <div class="relative rounded-3xl border overflow-hidden"
+              :class="[
+                `bg-gradient-to-b ${plan.gradient}`,
+                plan.featured ? 'border-brand-accent/60 shadow-2xl shadow-brand-accent/20' : 'border-brand-border',
+              ]">
+
+              <!-- Accent line top -->
+              <div class="h-1 w-full" :class="plan.featured ? 'bg-brand-accent' : 'bg-white/10'" />
+
+              <!-- Top half: plan info -->
+              <div class="px-5 pt-5 pb-4">
+                <!-- Badge row -->
+                <div class="flex items-center justify-between mb-3">
+                  <span class="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full border"
+                    :class="plan.badgeColor">
+                    {{ plan.badge }}
+                  </span>
+                  <div class="flex items-center gap-1.5">
+                    <span v-if="currentTier === plan.id"
+                      class="text-[10px] font-extrabold uppercase tracking-wider text-brand-success bg-brand-success/10 border border-brand-success/20 px-2.5 py-1 rounded-full flex items-center gap-1">
+                      <BIcon name="CheckCircle" class="w-3 h-3" /> Активен
+                    </span>
+                    <BIcon v-if="plan.featured" name="Sparkles" class="w-4 h-4 text-brand-accent" />
+                  </div>
+                </div>
+
+                <!-- Plan name -->
+                <h2 class="text-2xl font-extrabold tracking-tight mb-1" :class="plan.color">{{ plan.label }}</h2>
+
+                <!-- Price -->
+                <div class="mb-4">
+                  <template v-if="plan.priceM === 0">
+                    <p class="text-3xl font-extrabold text-white">Бесплатно</p>
+                    <p class="text-xs text-white/35 mt-0.5">навсегда</p>
+                  </template>
+                  <template v-else>
+                    <div class="flex items-end gap-1.5">
+                      <p class="text-3xl font-extrabold text-white">{{ effectivePrice(plan) }} ₽</p>
+                      <p class="text-sm text-white/55 mb-1">/ мес</p>
+                    </div>
+                    <div class="flex items-center gap-2 mt-1">
+                      <span v-if="isEarlyUser && plan.discount > 0"
+                        class="text-xs text-white/30 line-through">{{ originalPrice(plan) }} ₽</span>
+                      <span v-if="isEarlyUser && plan.discount > 0"
+                        class="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-lg border border-amber-400/20">
+                        –{{ plan.discount }}%
+                      </span>
+                      <span v-if="billing === 'yearly'" class="text-[10px] text-white/35">
+                        {{ effectivePrice(plan) * 12 }} ₽/год
+                      </span>
+                    </div>
+                  </template>
+                </div>
               </div>
 
-              <!-- Name -->
-              <h2 class="text-2xl font-extrabold mb-1" :class="plan.color">{{ plan.label }}</h2>
-
-              <!-- Price -->
-              <div class="mb-6">
-                <template v-if="plan.priceM === 0">
-                  <p class="text-3xl font-extrabold text-white">Бесплатно</p>
-                </template>
-                <template v-else>
-                  <div class="flex items-end gap-2">
-                    <p class="text-3xl font-extrabold text-white">{{ effectivePrice(plan) }} ₽</p>
-                    <p class="text-sm text-white/55 mb-1">/ мес</p>
-                  </div>
-                  <!-- Original + discount -->
-                  <div class="flex items-center gap-2 mt-1">
-                    <span v-if="isEarlyUser && plan.discount > 0"
-                      class="text-sm text-white/30 line-through">{{ originalPrice(plan) }} ₽</span>
-                    <span v-if="isEarlyUser && plan.discount > 0"
-                      class="text-xs font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-lg border border-amber-400/20">
-                      –{{ plan.discount }}%
-                    </span>
-                    <span v-if="billing === 'yearly'" class="text-xs text-white/40">
-                      {{ effectivePrice(plan) * 12 }} ₽/год
-                    </span>
-                  </div>
-                </template>
+              <!-- Tear-line / perforation divider -->
+              <div class="relative px-3 flex items-center gap-0 -my-0.5 z-10">
+                <div class="w-5 h-5 rounded-full bg-brand-bg flex-shrink-0 -ml-4 border border-brand-border" />
+                <div class="flex-1 border-t-2 border-dashed border-white/10 mx-1" />
+                <div class="w-5 h-5 rounded-full bg-brand-bg flex-shrink-0 -mr-4 border border-brand-border" />
               </div>
 
-              <!-- Features -->
-              <ul class="space-y-2.5 mb-6">
-                <li
-                  v-for="feature in plan.features"
-                  :key="feature"
-                  class="flex items-start gap-2.5 text-sm text-white/70"
+              <!-- Bottom half: features + button -->
+              <div class="px-5 pt-4 pb-5">
+                <!-- Ticket stub meta -->
+                <div class="flex items-center gap-2 text-[10px] text-white/35 mb-3 font-mono uppercase tracking-wider">
+                  <BIcon name="Ticket" class="w-3 h-3" />
+                  <span>Bloomly {{ plan.label.toUpperCase() }} PASS</span>
+                </div>
+
+                <!-- Features -->
+                <ul class="space-y-2 mb-5">
+                  <li
+                    v-for="feature in plan.features"
+                    :key="feature"
+                    class="flex items-start gap-2 text-xs text-white/65"
+                  >
+                    <BIcon name="Check" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5" :class="plan.color" />
+                    {{ feature }}
+                  </li>
+                </ul>
+
+                <!-- CTA -->
+                <button
+                  @click="selectPlan(plan.id)"
+                  :disabled="currentTier === plan.id || plan.id === 'free' || upgrading === plan.id"
+                  class="w-full py-2.5 rounded-2xl text-sm font-bold transition-all disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  :class="currentTier === plan.id
+                    ? 'bg-brand-success/10 text-brand-success border border-brand-success/30'
+                    : plan.id === 'free'
+                      ? 'bg-white/5 text-white/30 border border-white/10'
+                      : plan.featured
+                        ? 'bg-brand-accent hover:bg-brand-accent-plus text-white shadow-lg shadow-brand-accent/30'
+                        : 'bg-white/8 hover:bg-white/15 text-white border border-white/10'"
                 >
-                  <BIcon name="Check" class="w-4 h-4 flex-shrink-0 mt-0.5" :class="plan.color" />
-                  {{ feature }}
-                </li>
-              </ul>
-
-              <!-- CTA button -->
-              <button
-                @click="selectPlan(plan.id)"
-                :disabled="currentTier === plan.id || plan.id === 'free' || upgrading === plan.id"
-                class="w-full py-3 rounded-2xl text-sm font-bold transition-all disabled:cursor-not-allowed"
-                :class="currentTier === plan.id
-                  ? 'bg-brand-success/10 text-brand-success border border-brand-success/30 cursor-default'
-                  : plan.id === 'free'
-                    ? 'bg-white/5 text-white/30 border border-white/10 cursor-default'
-                    : plan.featured
-                      ? 'bg-brand-accent hover:bg-brand-accent-plus text-white shadow-lg shadow-brand-accent/30'
-                      : 'bg-white/8 hover:bg-white/15 text-white border border-white/10'"
-              >
-                <span v-if="upgrading === plan.id" class="flex items-center justify-center gap-2">
-                  <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> Активация…
-                </span>
-                <span v-else-if="currentTier === plan.id">Ваш план</span>
-                <span v-else-if="plan.id === 'free'">Базовый</span>
-                <span v-else>Выбрать {{ plan.label }}</span>
-              </button>
+                  <BIcon v-if="upgrading === plan.id" name="Loader2" class="w-4 h-4 animate-spin" />
+                  <BIcon v-else-if="currentTier === plan.id" name="CheckCircle" class="w-4 h-4" />
+                  <BIcon v-else-if="plan.id !== 'free'" name="Ticket" class="w-4 h-4" />
+                  <span>
+                    {{ upgrading === plan.id ? 'Активация…' : currentTier === plan.id ? 'Ваш план' : plan.id === 'free' ? 'Базовый' : `Активировать ${plan.label}` }}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -341,4 +368,12 @@ async function selectPlan(planId: string) {
 <style scoped>
 .toast-enter-active, .toast-leave-active { transition: all 0.3s ease; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+
+.ticket-card {
+  filter: drop-shadow(0 4px 24px rgba(0,0,0,0.35));
+  transition: filter 0.2s, transform 0.2s;
+}
+.ticket-card:hover {
+  filter: drop-shadow(0 8px 32px rgba(0,0,0,0.5));
+}
 </style>

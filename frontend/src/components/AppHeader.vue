@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
+import { useNsfwMode } from '@/composables/useNsfwMode'
 import api from '@/api'
 import BIcon from './BIcon.vue'
 import PostCard from './PostCard.vue'
@@ -22,10 +23,11 @@ const auth = useAuthStore()
 const langStore = useLangStore()
 
 // ── NSFW ─────────────────────────────────────────────────────────────────────
+const { toggleNsfw: _nsfwToggle } = useNsfwMode()
 const toggleNsfw = () => {
   const next = !props.nsfwMode
+  _nsfwToggle()
   emit('update:nsfwMode', next)
-  localStorage.setItem('bloomly_nsfw', String(next))
 }
 
 // ── Notifications ─────────────────────────────────────────────────────────────

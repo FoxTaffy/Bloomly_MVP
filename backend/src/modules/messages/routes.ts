@@ -15,6 +15,7 @@ import {
   removeMemberHandler,
   setMemberRoleHandler,
   getGroupMembersHandler,
+  setConversationLabelHandler,
 } from './controller.js';
 
 declare module 'fastify' {
@@ -46,6 +47,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
   fastify.post('/conversations/:id/messages', auth, sendMessageHandler as any);
   fastify.post('/conversations/:id/read', auth, markReadHandler as any);
   fastify.patch('/conversations/:id/archive', auth, setArchivedHandler as any);
+  fastify.patch('/conversations/:id/label', auth, setConversationLabelHandler as any);
   fastify.delete('/conversations/:id', auth, deleteConversationHandler as any);
 
   // Individual message actions

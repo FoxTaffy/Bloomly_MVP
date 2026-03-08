@@ -107,7 +107,7 @@ const providers: Record<OAuthProvider, ProviderConfig> = {
 }
 
 // ── State + PKCE store (TTL 10 min) ──────────────────────────────────────────
-interface StateEntry { provider: OAuthProvider; codeVerifier?: string; createdAt: number }
+interface StateEntry { provider: OAuthProvider; codeVerifier?: string; createdAt: number; linkUserId?: string }
 const stateStore = new Map<string, StateEntry>()
 
 function pruneExpiredStates() {
@@ -131,12 +131,13 @@ function generatePkce() {
 
 const REDIRECT_BASE = () => process.env.OAUTH_REDIRECT_BASE ?? 'http://localhost:8080/api'
 
-/** Строим URL редиректа на провайдера, возвращаем его + state */
-export function buildOAuthUrl(provider: OAuthProvider): { url: string; state: string } {
+/** Строим URL редиректа на провайдера, возвращаем его + state.
+ *  Если передан `linkUserId` — это mode "привязать к существующему аккаунту". */
+export function buildOAuthUrl(provider: OAuthProvider, linkUserId?: string): { url: string; state: string } {
   pruneExpiredStates()
   const cfg   = providers[provider]
   const state = base64urlEncode(randomBytes(16))
-  const entry: StateEntry = { provider, createdAt: Date.now() }
+  const entry: StateEntry = { provider, createdAt: Date.now(), ...(linkUserId ? { linkUserId } : {}) }
 
   const params = new URLSearchParams({
     client_id:     cfg.clientId(),
@@ -157,14 +158,15 @@ export function buildOAuthUrl(provider: OAuthProvider): { url: string; state: st
   return { url: `${cfg.authUrl}?${params}`, state }
 }
 
-/** Обрабатываем callback — возвращаем user данные от провайдера */
+/** Обрабатываем callback — возвращаем user данные + linkUserId (если это режим привязки) */
 export async function handleOAuthCallback(
   provider: OAuthProvider,
   code: string,
   state: string,
-): Promise<OAuthUser> {
+): Promise<{ oauthUser: OAuthUser; linkUserId?: string }> {
   const entry = stateStore.get(state)
   if (!entry || entry.provider !== provider) throw new Error('Invalid OAuth state')
+  const { linkUserId } = entry
   stateStore.delete(state)
 
   const cfg = providers[provider]
@@ -187,7 +189,8 @@ export async function handleOAuthCallback(
   const tokenData = await tokenRes.json() as any
   if (!tokenData.access_token) throw new Error(`Token exchange failed: ${JSON.stringify(tokenData)}`)
 
-  return cfg.fetchUser(tokenData.access_token, { clientId: cfg.clientId() })
+  const oauthUser = await cfg.fetchUser(tokenData.access_token, { clientId: cfg.clientId() })
+  return { oauthUser, linkUserId }
 }
 
 // ── Поиск / создание пользователя через OAuth ─────────────────────────────────

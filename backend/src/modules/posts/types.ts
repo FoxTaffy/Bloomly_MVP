@@ -2,6 +2,12 @@ export interface CreatePostInput {
   content: string;
   authorId: string;
   isNsfw?: boolean;
+  subscriberOnly?: boolean;
+  isPaid?: boolean;
+  price?: number;
+  rewardForUserId?: string;
+  videoTitle?: string;
+  videoDescription?: string;
   category?: string;
   tags?: string[];
   mediaUrls?: string[];

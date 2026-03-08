@@ -41,12 +41,12 @@ export const messageService = {
     // Self-DM = "Notes" (single participant)
     if (userA === userB) {
       const existing = await prisma.conversation.findFirst({
-        where: { participants: { every: { user_id: userA } } },
+        where: { type: 'direct', participants: { every: { user_id: userA } } },
         include: { participants: { include: { user: { select: senderSelect } } } },
       })
       if (existing) return existing
       return prisma.conversation.create({
-        data: { participants: { create: [{ user_id: userA }] } },
+        data: { type: 'direct', participants: { create: [{ user_id: userA }] } },
         include: { participants: { include: { user: { select: senderSelect } } } },
       })
     }
@@ -54,7 +54,7 @@ export const messageService = {
     // Find an existing 1-to-1 (non-group) conversation where BOTH users participate
     const existing = await prisma.conversation.findFirst({
       where: {
-        is_group: false,
+        type: 'direct',
         AND: [
           { participants: { some: { user_id: userA } } },
           { participants: { some: { user_id: userB } } },
@@ -71,6 +71,7 @@ export const messageService = {
 
     return prisma.conversation.create({
       data: {
+        type: 'direct',
         participants: {
           create: [{ user_id: userA }, { user_id: userB }],
         },
@@ -85,10 +86,15 @@ export const messageService = {
 
   /**
    * List conversations for a user, ordered by latest message.
+   * @param label  If provided, filter by participant label ('customer' = Заказы tab)
    */
-  async getConversations(userId: string, archived = false) {
+  async getConversations(userId: string, archived = false, label?: string) {
     const participants = await prisma.conversationParticipant.findMany({
-      where: { user_id: userId, archived },
+      where: {
+        user_id: userId,
+        archived,
+        ...(label ? { label } : {}),
+      },
       include: {
         conversation: {
           include: {
@@ -109,7 +115,7 @@ export const messageService = {
 
     return participants.map((p) => ({
       ...p.conversation,
-      my_participant: { archived: p.archived, hidden_at: p.hidden_at, last_read_at: p.last_read_at },
+      my_participant: { archived: p.archived, hidden_at: p.hidden_at, last_read_at: p.last_read_at, label: p.label },
       last_message: p.conversation.messages[0] ?? null,
       other_participants: p.conversation.participants
         .filter((cp) => cp.user_id !== userId)
@@ -287,6 +293,20 @@ export const messageService = {
   },
 
   /**
+   * Set a CRM label on a conversation for the current user.
+   * label: 'default' | 'customer'
+   */
+  async setConversationLabel(conversationId: string, userId: string, label: string) {
+    await this._assertParticipant(conversationId, userId);
+    const allowed = ['default', 'customer'];
+    if (!allowed.includes(label)) throw Object.assign(new Error('Invalid label'), { statusCode: 400 });
+    return prisma.conversationParticipant.update({
+      where: { conversation_id_user_id: { conversation_id: conversationId, user_id: userId } },
+      data: { label },
+    });
+  },
+
+  /**
    * Delete a conversation.
    * scope='me'  → just hide it for the current user (hidden_at)
    * scope='all' → hard-delete the whole conversation and all messages
@@ -323,6 +343,7 @@ export const messageService = {
 
     return prisma.conversation.create({
       data: {
+        type: 'group',
         is_group: true,
         name: name.trim(),
         participants: {
@@ -413,6 +434,56 @@ export const messageService = {
   },
 
   // ── private ──────────────────────────────────────────────────────────────
+
+  // ── Community Chat ────────────────────────────────────────────────────────
+  /**
+   * Create a COMMUNITY conversation for a group. Idempotent.
+   * All current group members are added as participants.
+   */
+  async initCommunityChat(groupId: string, ownerId: string): Promise<{ conversation: any; alreadyExists: boolean }> {
+    const existing = await prisma.conversation.findUnique({
+      where: { group_id: groupId },
+      include: { participants: { include: { user: { select: senderSelect } } } },
+    });
+    if (existing) return { conversation: existing, alreadyExists: true };
+
+    const [group, members] = await Promise.all([
+      prisma.group.findUnique({ where: { id: groupId }, select: { name: true } }),
+      prisma.groupMember.findMany({ where: { group_id: groupId }, select: { user_id: true, role: true } }),
+    ]);
+    if (!members.length) throw Object.assign(new Error('Group has no members'), { statusCode: 400 });
+
+    const conversation = await prisma.conversation.create({
+      data: {
+        type: 'community',
+        is_group: true,
+        name: group?.name ?? 'Community Chat',
+        group_id: groupId,
+        participants: {
+          create: members.map((m) => ({
+            user_id: m.user_id,
+            role: m.user_id === ownerId ? 'admin' : 'member',
+          })),
+        },
+      },
+      include: { participants: { include: { user: { select: senderSelect } } } },
+    });
+    return { conversation, alreadyExists: false };
+  },
+
+  /**
+   * Get the community conversation for a group (null if not initialised).
+   */
+  async getCommunityConversation(groupId: string) {
+    return prisma.conversation.findUnique({
+      where: { group_id: groupId },
+      select: {
+        id: true, type: true, name: true, avatar_url: true, group_id: true,
+        _count: { select: { participants: true, messages: true } },
+      },
+    });
+  },
+
   async _assertParticipant(conversationId: string, userId: string) {
     const p = await prisma.conversationParticipant.findFirst({
       where: { conversation_id: conversationId, user_id: userId },

@@ -553,9 +553,17 @@
                       v-for="badge in profileSoonBadges"
                       :key="badge.id"
                       :short-code="badge.event.short_code"
-                      size="sm"
-                      class="cursor-pointer hover:scale-105 transition-transform"
-                      @click="$router.push({ name: 'event-detail', params: { eventId: badge.event.id } })"
+                      :event-title="badge.event.title"
+                      :starts-at="badge.event.starts_at"
+                      :ends-at="badge.event.ends_at"
+                      :status="badge.event.status"
+                      :banner-url="badge.event.banner_url || badge.event.group.banner_url"
+                      :group-name="badge.event.group.name"
+                      :group-avatar="badge.event.group.avatar_url"
+                      :location-name="badge.event.location_name"
+                      :attendee-count="badge.event.attendee_count"
+                      class="cursor-pointer"
+                      @click="$router.push(`/groups/${badge.event.group.slug}`)"
                     />
                   </div>
                   <div class="flex items-center gap-3 flex-wrap text-sm">
@@ -1262,6 +1270,9 @@
                 </div>
               </div>
 
+              <!-- TrustScore card (only for activity participants) -->
+              <TrustScoreCard v-if="viewedProfile?.id" :user-id="viewedProfile.id" />
+
               <!-- Mini media thumbnails -->
               <div v-if="tabPosts.filter((p: any) => p.media_urls?.length).length" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl p-3">
                 <p class="text-[11px] font-bold uppercase tracking-widest text-white/55 mb-2 px-1">Медиа</p>
@@ -1398,6 +1409,8 @@ const langStore = useLangStore()
 
 import { useMessagesStore } from '@/stores/messages'
 import { useGroupsStore, type SoonBadge as SoonBadgeType } from '@/stores/groups'
+import { useNsfwMode } from '@/composables/useNsfwMode'
+import TrustScoreCard from '@/components/TrustScoreCard.vue'
 const messagesStore = useMessagesStore()
 const groupsStore = useGroupsStore()
 
@@ -1488,7 +1501,7 @@ async function fetchOnlineStatus(userId: string) {
 }
 
 // ── NSFW (shared with AppHeader via v-model) ──────────────────────────────────
-const nsfwMode = ref(localStorage.getItem('bloomly_nsfw') === 'true')
+const { nsfwEnabled: nsfwMode } = useNsfwMode()
 
 // ── Full post creator state ───────────────────────────────────────────────────
 const showPostForm = ref(false)
@@ -1518,34 +1531,16 @@ const isUploadingRef = ref(false)
 const todayISO = new Date().toISOString().slice(0, 10)
 
 function openEditModal(section: 'basics' | 'bio' | 'fursona' | 'fursuit' | 'contacts' | 'socials') {
-  editSection.value = section
-  const p = viewedProfile.value
-  if (!p) return
-  editForm.value = {
-    display_name: p.display_name ?? '',
-    pronouns: (p as any).pronouns ?? '',
-    job_title: (p as any).job_title ?? '',
-    bio: p.bio ?? '',
-    persona: (p as any).persona ?? '',
-    fursona_name: (p as any).fursona_name ?? '',
-    fursona_gender: (p as any).fursona_gender ?? '',
-    fursona_description: (p as any).fursona_description ?? '',
-    fursona_color: (p as any).fursona_color ?? '',
-    fursona_photo_url: (p as any).fursona_photo_url ?? '',
-    likes: [...((p as any).likes ?? [])],
-    dislikes: [...((p as any).dislikes ?? [])],
-    location: p.location ?? '',
-    country: (p as any).country ?? '',
-    website: p.website ?? '',
-    relationship_status: (p as any).relationship_status ?? '',
-    accent_color: p.accent_color ?? '',
-    social_links: { ...((p as any).social_links ?? {}) },
-    has_fursuit: (p as any).has_fursuit ?? false,
-    fursuit_description: (p as any).fursuit_description ?? '',
-    fursuit_maker: (p as any).fursuit_maker ?? '',
-    artist_since: (p as any).artist_since ? new Date((p as any).artist_since).toISOString().slice(0, 10) : '',
+  // Map profile section → settings section ID
+  const sectionMap: Record<string, string> = {
+    basics:   'sec-basic',
+    bio:      'sec-basic',
+    fursona:  'sec-fursona',
+    fursuit:  'sec-fursona',
+    contacts: 'sec-contacts',
+    socials:  'sec-contacts',
   }
-  showEditModal.value = true
+  router.push({ name: 'settings-profile', query: { section: sectionMap[section] ?? 'sec-basic' } })
 }
 
 const fursonaRefImages = computed(() => {

@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, reactive } from 'vue'
+import { ref, onMounted, computed, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
+import SoonBadge from '@/components/groups/SoonBadge.vue'
 import { useGroupsStore } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
+import { useNsfwMode } from '@/composables/useNsfwMode'
 import api from '@/api'
 
 const route = useRoute()
@@ -13,7 +15,7 @@ const router = useRouter()
 const groupsStore = useGroupsStore()
 const authStore = useAuthStore()
 
-const nsfwMode = ref(localStorage.getItem('bloomly_nsfw') === 'true')
+const nsfwMode = useNsfwMode().nsfwEnabled
 const activeNav = ref('groups')
 const saving = ref(false)
 
@@ -43,6 +45,9 @@ const baseSections = [
 const eventSections = [
   { id: 'sec-event',      label: 'Мероприятие',   color: '#34d399', iconPath: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
   { id: 'sec-organizers', label: 'Организаторы',  color: '#38bdf8', iconPath: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
+  { id: 'sec-tickets',    label: 'Билеты',         color: '#a78bfa', iconPath: 'M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z' },
+  { id: 'sec-soon',       label: 'SOON Беджи',      color: '#fbbf24', iconPath: 'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z' },
+  { id: 'sec-finance',    label: 'Финансы',         color: '#10b981', iconPath: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z' },
 ]
 
 const creativeSections = [
@@ -68,14 +73,161 @@ const sections = computed(() => {
   return s
 })
 
-// ── Active section (accordion) ──────────────────────────────────────────────
-const openSection = ref('sec-general')
+// ── Active section ──────────────────────────────────────────────────────────
+const openSection = ref<string>('sec-general')
+
+// ── SOON badge management state ────────────────────────────────────────────
+const soonBadgesLoaded = ref(false)
+const soonBadgesLoading = ref(false)
+const eventSoonMap = ref<Record<string, any[]>>({}) // eventId → soonBadges[]
+
+// Per-event edit state: { shortCode, status, saving, saved }
+const soonEditMap = ref<Record<string, { shortCode: string; status: string; saving: boolean; saved: boolean }>>({})
+
+const EVENT_STATUSES = [
+  { value: 'teaser',       label: 'Скоро анонс',      color: '#9ca3af', icon: '🌫️' },
+  { value: 'announced',    label: 'Анонсировано',     color: '#60a5fa', icon: '📣' },
+  { value: 'tickets_open', label: 'Билеты открыты',  color: '#34d399', icon: '🎟️' },
+  { value: 'sold_out',     label: 'Распродано',       color: '#f87171', icon: '🔥' },
+  { value: 'active',       label: 'Идёт сейчас',      color: '#fbbf24', icon: '⚡' },
+  { value: 'finished',     label: 'Завершено',         color: '#6b7280', icon: '✅' },
+]
+
+function computeEventStatus(ev: any): string {
+  const now = new Date()
+  const starts = ev.starts_at ? new Date(ev.starts_at) : null
+  const ends   = ev.ends_at   ? new Date(ev.ends_at)   : null
+  const tiers  = ev.ticket_tiers ?? ev.ticketTiers ?? []
+  const hasSaleOpen = tiers.some((t: any) => {
+    const ss = t.sale_starts_at ? new Date(t.sale_starts_at) : null
+    const se = t.sale_ends_at   ? new Date(t.sale_ends_at)   : null
+    return (!ss || ss <= now) && (!se || se >= now)
+  })
+  const allSoldOut = tiers.length > 0 && tiers.every((t: any) => {
+    const sold  = t.sold_count  ?? 0
+    const total = t.total_count ?? Infinity
+    return sold >= total
+  })
+  if (ends   && now > ends)   return 'finished'
+  if (starts && now >= starts) return 'active'
+  if (allSoldOut) return 'sold_out'
+  if (hasSaleOpen) return 'tickets_open'
+  if (starts) {
+    const daysToStart = (starts.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    return daysToStart > 120 ? 'teaser' : 'announced'
+  }
+  return 'announced'
+}
+
+function suggestShortCode(title: string): string {
+  if (!title) return ''
+  // 1. Multi-word: first letters
+  const words = title.trim().split(/[\s\-_]+/).filter(Boolean)
+  if (words.length > 1) {
+    return words.map(w => w[0]).join('').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4)
+  }
+  // 2. CamelCase: split at uppercase boundaries
+  const camel = title.replace(/([a-z])([A-Z])/g, '$1 $2').split(' ').filter(Boolean)
+  if (camel.length > 1) {
+    return camel.map(w => w[0]).join('').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4)
+  }
+  // 3. Single word: first letter + consonants at 1/3 and 2/3 positions
+  const s = title.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (!s) return ''
+  if (s.length <= 4) return s
+  const VOWELS = new Set(['A','E','I','O','U'])
+  const result: string[] = [s[0]]
+  const checkPositions = [Math.floor(s.length / 3), Math.floor(2 * s.length / 3)]
+  for (const pos of checkPositions) {
+    let found = ''
+    for (let d = 0; d <= 3 && !found; d++) {
+      if (pos + d < s.length && !VOWELS.has(s[pos + d])) { found = s[pos + d]; break }
+      if (pos - d >= 0 && !VOWELS.has(s[pos - d])) { found = s[pos - d]; break }
+    }
+    if (found && !result.includes(found)) result.push(found)
+  }
+  return result.slice(0, 4).join('')
+}
+
+async function loadSoonBadges() {
+  if (soonBadgesLoaded.value) return
+  soonBadgesLoading.value = true
+  try {
+    const events = (group.value as any)?.events ?? []
+    const results = await Promise.all(
+      events.map((ev: any) =>
+        api.get(`/groups/events/${ev.id}`)
+          .then((r: any) => ({ eventId: ev.id, badges: r.data?.data?.event?.soonBadges ?? [], event: r.data?.data?.event }))
+          .catch(() => ({ eventId: ev.id, badges: [], event: null }))
+      )
+    )
+    for (const { eventId, badges, event } of results) {
+      eventSoonMap.value[eventId] = badges
+      // init edit state from loaded event data
+      if (event && !soonEditMap.value[eventId]) {
+        soonEditMap.value[eventId] = {
+          shortCode: event.short_code ?? '',
+          status: event.status ?? 'announced',
+          saving: false,
+          saved: false,
+        }
+      }
+    }
+    // init any events not yet in edit map from group data
+    for (const ev of events) {
+      if (!soonEditMap.value[ev.id]) {
+        soonEditMap.value[ev.id] = {
+          shortCode: ev.short_code ?? '',
+          status: ev.status ?? 'announced',
+          saving: false,
+          saved: false,
+        }
+      }
+    }
+    soonBadgesLoaded.value = true
+  } finally {
+    soonBadgesLoading.value = false
+  }
+}
+
+async function saveSoonEvent(eventId: string) {
+  const edit = soonEditMap.value[eventId]
+  if (!edit || edit.saving) return
+  edit.saving = true
+  edit.saved = false
+  try {
+    const code = edit.shortCode.trim().toUpperCase()
+    if (!code) { showToast('error', 'Введите код бейджа'); return }
+    await api.patch(`/groups/events/${eventId}`, {
+      shortCode: code,
+    })
+    edit.shortCode = code
+    edit.saved = true
+    // refresh group in store to reflect new short_code etc.
+    await groupsStore.loadGroup((group.value as any).slug ?? (group.value as any).id)
+    // refresh badges
+    soonBadgesLoaded.value = false
+    await loadSoonBadges()
+    showToast('success', 'Мероприятие обновлено')
+    setTimeout(() => { if (soonEditMap.value[eventId]) soonEditMap.value[eventId].saved = false }, 2000)
+  } catch (e: any) {
+    showToast('error', e.response?.data?.error?.message || 'Ошибка сохранения')
+  } finally {
+    if (soonEditMap.value[eventId]) soonEditMap.value[eventId].saving = false
+  }
+}
+
+async function toggleSoonVisibility(eventId: string) {
+  await groupsStore.toggleSoonBadgeVisibility(eventId)
+  soonBadgesLoaded.value = false
+  await loadSoonBadges()
+}
 function openSec(id: string) {
   openSection.value = id
+  if (id === 'sec-soon') loadSoonBadges()
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-// ── Form State ──────────────────────────────────────────────────────────────
 const form = reactive({
   name: '',
   slug: '',
@@ -99,6 +251,23 @@ const form = reactive({
   socialTwitter: '',
   socialVk: '',
   socialWebsite: '',
+  category: '',
+})
+
+// Slug: авто-санитизация ввода
+watch(() => form.slug, (v) => {
+  const clean = v.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 60)
+  if (clean !== v) form.slug = clean
+})
+
+const settingsSlugError = computed((): string | null => {
+  const s = form.slug
+  if (!s) return null
+  if (s.length < 3) return 'Минимум 3 символа'
+  if (/^[-_]/.test(s)) return 'Нельзя начинать с дефиса или подчёркивания'
+  if (/[-_]$/.test(s)) return 'Нельзя заканчивать на дефис или подчёркивание'
+  if (/[-_]{2,}/.test(s)) return 'Нельзя ставить два -- или __ подряд'
+  return null
 })
 
 const savedForm = reactive({
@@ -110,6 +279,7 @@ const savedForm = reactive({
   whatToBring: [] as string[],
   productionTime: '', deliveryInfo: '', completedWorks: 0, guaranteeText: '',
   socialTelegram: '', socialDiscord: '', socialTwitter: '', socialVk: '', socialWebsite: '',
+  category: '',
 })
 
 function snapshotToSaved() {
@@ -124,6 +294,7 @@ function snapshotToSaved() {
     completedWorks: form.completedWorks, guaranteeText: form.guaranteeText,
     socialTelegram: form.socialTelegram, socialDiscord: form.socialDiscord,
     socialTwitter: form.socialTwitter, socialVk: form.socialVk, socialWebsite: form.socialWebsite,
+    category: form.category,
   })
 }
 
@@ -139,6 +310,7 @@ function resetForm() {
     completedWorks: savedForm.completedWorks, guaranteeText: savedForm.guaranteeText,
     socialTelegram: savedForm.socialTelegram, socialDiscord: savedForm.socialDiscord,
     socialTwitter: savedForm.socialTwitter, socialVk: savedForm.socialVk, socialWebsite: savedForm.socialWebsite,
+    category: savedForm.category,
   })
   avatarOriginalSrc.value = ''
   bannerOriginalSrc.value = ''
@@ -155,7 +327,7 @@ const isDirty = computed(() => {
     form.guaranteeText !== savedForm.guaranteeText ||
     form.socialTelegram !== savedForm.socialTelegram || form.socialDiscord !== savedForm.socialDiscord ||
     form.socialTwitter !== savedForm.socialTwitter || form.socialVk !== savedForm.socialVk ||
-    form.socialWebsite !== savedForm.socialWebsite ||
+    form.socialWebsite !== savedForm.socialWebsite || form.category !== savedForm.category ||
     JSON.stringify(form.faq) !== JSON.stringify(savedForm.faq) ||
     JSON.stringify(form.schedule) !== JSON.stringify(savedForm.schedule) ||
     JSON.stringify(form.whatToBring) !== JSON.stringify(savedForm.whatToBring)
@@ -174,6 +346,96 @@ const commForm = ref({
   basePrices: {} as Record<string, number>,
   priceList: [] as { name: string; price: number; description: string }[],
 })
+
+// ── Ticket Tiers ─────────────────────────────────────────────────────────────
+const ticketSaving = ref(false)
+const ticketError = ref('')
+const showNewTierForm = ref<string | null>(null) // eventId for which form is open
+const editingTier = ref<string | null>(null) // tierId being edited
+const newTierForm = reactive({ name: '', price: 0, currency: 'RUB', totalCount: 100, saleStartsAt: '', saleEndsAt: '' })
+const editTierForm = reactive({ name: '', price: 0, currency: 'RUB', totalCount: 100, saleStartsAt: '', saleEndsAt: '' })
+
+function openNewTierForm(eventId: string) {
+  showNewTierForm.value = eventId
+  editingTier.value = null
+  Object.assign(newTierForm, { name: '', price: 0, currency: 'RUB', totalCount: 100, saleStartsAt: '', saleEndsAt: '' })
+}
+
+function openEditTierForm(tier: any) {
+  editingTier.value = tier.id
+  showNewTierForm.value = null
+  Object.assign(editTierForm, {
+    name: tier.name,
+    price: parsed(tier.price),
+    currency: tier.currency,
+    totalCount: tier.total_count,
+    saleStartsAt: tier.sale_starts_at ? tier.sale_starts_at.substring(0, 16) : '',
+    saleEndsAt: tier.sale_ends_at ? tier.sale_ends_at.substring(0, 16) : '',
+  })
+}
+
+function parsed(v: any) { return typeof v === 'string' ? parseFloat(v) || 0 : (v ?? 0) }
+
+async function saveNewTier(eventId: string) {
+  if (!newTierForm.name.trim()) return
+  ticketSaving.value = true; ticketError.value = ''
+  try {
+    const tier = await groupsStore.createTicketTier(eventId, {
+      name: newTierForm.name.trim(),
+      price: newTierForm.price,
+      currency: newTierForm.currency,
+      totalCount: newTierForm.totalCount,
+      saleStartsAt: newTierForm.saleStartsAt || undefined,
+      saleEndsAt: newTierForm.saleEndsAt || undefined,
+    })
+    // Inject tier into the local group events
+    if (group.value) {
+      const ev = (group.value as any).events?.find((e: any) => e.id === eventId)
+      if (ev) { if (!ev.tickets) ev.tickets = []; ev.tickets.push(tier) }
+    }
+    showNewTierForm.value = null
+    showToast('success', 'Билет добавлен')
+  } catch (e: any) { ticketError.value = e.message || 'Ошибка' }
+  finally { ticketSaving.value = false }
+}
+
+async function saveEditTier(tierId: string, eventId: string) {
+  if (!editTierForm.name.trim()) return
+  ticketSaving.value = true; ticketError.value = ''
+  try {
+    const updated = await groupsStore.updateTicketTier(tierId, {
+      name: editTierForm.name.trim(),
+      price: editTierForm.price,
+      currency: editTierForm.currency,
+      totalCount: editTierForm.totalCount,
+      saleStartsAt: editTierForm.saleStartsAt || null,
+      saleEndsAt: editTierForm.saleEndsAt || null,
+    })
+    // Update local tier data
+    if (group.value) {
+      const ev = (group.value as any).events?.find((e: any) => e.id === eventId)
+      if (ev?.tickets) {
+        const idx = ev.tickets.findIndex((t: any) => t.id === tierId)
+        if (idx !== -1) ev.tickets[idx] = { ...ev.tickets[idx], ...updated }
+      }
+    }
+    editingTier.value = null
+    showToast('success', 'Билет обновлён')
+  } catch (e: any) { ticketError.value = e.message || 'Ошибка' }
+  finally { ticketSaving.value = false }
+}
+
+async function deleteTier(tierId: string, eventId: string) {
+  if (!confirm('Удалить этот тип билета?')) return
+  try {
+    await groupsStore.deleteTicketTier(tierId)
+    if (group.value) {
+      const ev = (group.value as any).events?.find((e: any) => e.id === eventId)
+      if (ev?.tickets) ev.tickets = ev.tickets.filter((t: any) => t.id !== tierId)
+    }
+    showToast('success', 'Билет удалён')
+  } catch (e: any) { showToast('error', e.message || 'Ошибка') }
+}
 
 // File inputs
 const avatarInput = ref<HTMLInputElement | null>(null)
@@ -468,6 +730,7 @@ async function load() {
   form.socialTwitter = sl.twitter || ''
   form.socialVk = sl.vk || ''
   form.socialWebsite = sl.website || ''
+  form.category = g.category || ''
   if (g.commissionInfo) {
     const c = g.commissionInfo
     commForm.value.status = c.status || 'closed'
@@ -527,6 +790,9 @@ const basePriceLabels: Record<string, string> = { headshot: 'Хэдшот', half
 async function save() {
   if (!group.value) return
   saving.value = true
+  const oldSlug = (group.value as any).slug
+  const newSlug = form.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+  form.slug = newSlug || oldSlug
   try {
     const socialLinks: Record<string, string> = {}
     if (form.socialTelegram.trim()) socialLinks.telegram = form.socialTelegram.trim()
@@ -536,6 +802,7 @@ async function save() {
     if (form.socialWebsite.trim()) socialLinks.website = form.socialWebsite.trim()
     await groupsStore.updateGroup(group.value.id, {
       name: form.name,
+      slug: form.slug,
       description: form.description,
       aboutText: form.aboutText,
       accentColor: form.accentColor,
@@ -552,6 +819,7 @@ async function save() {
       deliveryInfo: form.deliveryInfo,
       completedWorks: form.completedWorks,
       guaranteeText: form.guaranteeText,
+      category: form.category || undefined,
     })
     if (group.value.type === 'creative') {
       await groupsStore.updateCommission(group.value.id, {
@@ -568,6 +836,10 @@ async function save() {
     }
     snapshotToSaved()
     showToast('success', 'Настройки группы сохранены!')
+    // If slug changed, navigate to new URL
+    if (form.slug !== oldSlug) {
+      await router.replace({ name: 'group-settings', params: { slugOrId: form.slug } })
+    }
   } catch (err) {
     showToast('error', 'Ошибка сохранения')
   } finally { saving.value = false }
@@ -701,7 +973,7 @@ async function deleteGroup() {
       <!-- ─── Settings area ────────────────────────────────────────── -->
       <main class="flex-1 min-w-0">
         <button class="flex items-center gap-2 text-white/40 hover:text-white/70 text-sm mb-4 transition-colors"
-          @click="router.push({ name: 'group-detail', params: { slugOrId: route.params.slugOrId } })">
+          @click="router.push({ name: 'group-detail', params: { slugOrId: (group as any)?.slug ?? route.params.slugOrId } })">
           <BIcon name="ArrowLeft" class="w-4 h-4" /> Назад к группе
         </button>
 
@@ -800,12 +1072,55 @@ async function deleteGroup() {
                       <input v-model="form.name" class="field-input" placeholder="Название группы" />
                     </div>
                     <div>
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">Ссылка (slug)</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 flex items-center justify-between">
+                        <span>Ссылка (slug)</span>
+                        <span v-if="form.slug" class="text-[10px] font-normal normal-case tracking-normal"
+                          :class="settingsSlugError ? 'text-brand-error' : 'text-brand-success'">
+                          {{ form.slug.length }}/60
+                        </span>
+                      </label>
                       <div class="relative">
                         <span class="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-sm">@</span>
-                        <input v-model="form.slug" disabled class="field-input pl-8 text-white/40 cursor-not-allowed" />
+                        <input v-model="form.slug"
+                          class="field-input pl-8 pr-10 transition-colors"
+                          :class="form.slug
+                            ? (settingsSlugError ? '!border-brand-error focus:!border-brand-error' : '!border-brand-success focus:!border-brand-success')
+                            : ''"
+                          placeholder="my-group" />
+                        <span v-if="form.slug" class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                          <BIcon v-if="!settingsSlugError" name="CheckCircle" class="w-4 h-4 text-brand-success" />
+                          <BIcon v-else name="XCircle" class="w-4 h-4 text-brand-error" />
+                        </span>
                       </div>
-                      <p class="text-white/25 text-xs mt-1.5">Slug нельзя изменить после создания</p>
+                      <p v-if="settingsSlugError && form.slug" class="flex items-center gap-1 text-[11px] text-brand-error mt-1.5">
+                        <BIcon name="AlertCircle" class="w-3.5 h-3.5 flex-shrink-0" /> {{ settingsSlugError }}
+                      </p>
+                      <div class="mt-2 px-0.5 space-y-1">
+                        <p class="text-[10px] text-white/30 font-bold uppercase tracking-wider">Правила slug</p>
+                        <div class="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                          <span class="text-[10px] text-white/30 flex items-center gap-1"><span class="w-1 h-1 rounded-full bg-white/20 shrink-0" />только a–z, 0–9, - и _</span>
+                          <span class="text-[10px] text-white/30 flex items-center gap-1"><span class="w-1 h-1 rounded-full bg-white/20 shrink-0" />только строчные буквы</span>
+                          <span class="text-[10px] text-white/30 flex items-center gap-1"><span class="w-1 h-1 rounded-full bg-white/20 shrink-0" />от 3 до 60 символов</span>
+                          <span class="text-[10px] text-white/30 flex items-center gap-1"><span class="w-1 h-1 rounded-full bg-white/20 shrink-0" />не начинать/кончать на - _</span>
+                        </div>
+                        <p class="text-[10px] text-white/25 mt-1">После изменения адрес группы обновится.</p>
+                      </div>
+                    </div>
+                    <div>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">Категория</label>
+                      <select v-model="form.category" class="field-input">
+                        <option value="">— Не выбрана —</option>
+                        <option value="art">Art (Арт, иллюстрации)</option>
+                        <option value="cosplay">Cosplay (Косплей, костюмы)</option>
+                        <option value="fandom">Fandom (Фандом, сообщество)</option>
+                        <option value="dev">Dev (Разработка, технологии)</option>
+                        <option value="music">Music (Музыка, аудио)</option>
+                        <option value="fursuit">Fursuit (Фурсьюты)</option>
+                        <option value="writing">Writing (Литература, тексты)</option>
+                        <option value="events">Events (Ивенты, слёты)</option>
+                        <option value="other">Other (Прочее)</option>
+                      </select>
+                      <p class="text-white/40 text-xs mt-1.5">Помогает другим находить вас через поиск и рекомендации.</p>
                     </div>
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">Краткое описание</label>
@@ -1035,6 +1350,525 @@ async function deleteGroup() {
                         <input v-model="form.contactEmail" placeholder="event@example.com" class="field-input" />
                       </div>
                     </div>
+                  </div>
+                </section>
+
+                <!-- ═══ § TICKETS ══════════════════════════════════════╗ -->
+                <section v-if="group.type === 'event'" v-show="openSection === 'sec-tickets'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                  <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
+                    :style="`background:linear-gradient(90deg,${eventSections[2].color}0c 0%,transparent 100%)`">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${eventSections[2].color}1a`">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${eventSections[2].color}`">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="eventSections[2].iconPath"/>
+                      </svg>
+                    </div>
+                    <h2 class="font-bold text-white text-sm">{{ eventSections[2].label }}</h2>
+                  </div>
+                  <div class="p-6 space-y-6">
+
+                    <!-- No events notice -->
+                    <div v-if="!(group as any).events?.length" class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl p-6 text-center">
+                      <p class="text-white/50 text-sm">Сначала создайте мероприятие, чтобы добавить билеты.</p>
+                    </div>
+
+                    <!-- Per-event ticket management -->
+                    <div v-for="ev in (group as any).events || []" :key="ev.id" class="space-y-3">
+                      <!-- Event header -->
+                      <div class="flex items-center justify-between">
+                        <div>
+                          <h4 class="text-sm font-bold text-white">{{ ev.title }}</h4>
+                          <p class="text-xs text-white/40 mt-0.5">
+                            {{ ev.short_code }} · {{ new Date(ev.starts_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }) }}
+                          </p>
+                        </div>
+                        <button type="button"
+                          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all"
+                          :style="`background:${eventSections[2].color}1a; color:${eventSections[2].color}; border:1px solid ${eventSections[2].color}30`"
+                          @click="openNewTierForm(ev.id)">
+                          <BIcon name="Plus" class="w-3.5 h-3.5" /> Добавить
+                        </button>
+                      </div>
+
+                      <!-- Existing tiers -->
+                      <div v-if="ev.tickets?.length" class="space-y-2">
+                        <div v-for="tier in ev.tickets" :key="tier.id">
+                          <!-- Edit form -->
+                          <div v-if="editingTier === tier.id" class="bg-brand-bg/60 border border-brand-border rounded-2xl p-4 space-y-3">
+                            <div class="grid grid-cols-2 gap-3">
+                              <div class="col-span-2">
+                                <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5 block">Название</label>
+                                <input v-model="editTierForm.name" placeholder="VIP, Стандарт…" class="field-input" />
+                              </div>
+                              <div>
+                                <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5 block">Цена</label>
+                                <input v-model.number="editTierForm.price" type="number" min="0" step="0.01" class="field-input" />
+                              </div>
+                              <div>
+                                <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5 block">Валюта</label>
+                                <select v-model="editTierForm.currency" class="field-input appearance-none">
+                                  <option value="RUB">RUB ₽</option>
+                                  <option value="USD">USD $</option>
+                                  <option value="EUR">EUR €</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5 block">Кол-во</label>
+                                <input v-model.number="editTierForm.totalCount" type="number" min="1" class="field-input" />
+                              </div>
+                              <div class="col-span-2 grid grid-cols-2 gap-3">
+                                <div>
+                                  <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5 block">Продажи с</label>
+                                  <input v-model="editTierForm.saleStartsAt" type="datetime-local" class="field-input" />
+                                </div>
+                                <div>
+                                  <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5 block">Продажи до</label>
+                                  <input v-model="editTierForm.saleEndsAt" type="datetime-local" class="field-input" />
+                                </div>
+                              </div>
+                            </div>
+                            <div class="flex gap-2 justify-end pt-1">
+                              <button type="button" @click="editingTier = null" class="px-4 py-2 text-xs font-semibold text-white/55 hover:text-white hover:bg-brand-bg border border-transparent hover:border-brand-border rounded-xl transition-all">Отмена</button>
+                              <button type="button" :disabled="ticketSaving" @click="saveEditTier(tier.id, ev.id)"
+                                class="px-4 py-2 text-xs font-bold text-white rounded-xl disabled:opacity-50 transition-all"
+                                :style="`background:${eventSections[2].color}`">
+                                {{ ticketSaving ? 'Сохранение…' : 'Сохранить' }}
+                              </button>
+                            </div>
+                          </div>
+
+                          <!-- Tier card (view mode) -->
+                          <div v-else class="flex items-center gap-3 px-4 py-3 bg-brand-bg/40 border border-brand-border rounded-2xl">
+                            <div class="flex-1 min-w-0">
+                              <div class="flex items-center gap-2">
+                                <span class="text-sm font-bold text-white truncate">{{ tier.name }}</span>
+                                <span class="text-xs font-bold px-2 py-0.5 rounded-lg"
+                                  :style="`color:${eventSections[2].color}; background:${eventSections[2].color}1a; border:1px solid ${eventSections[2].color}30`">
+                                  {{ tier.currency === 'RUB' ? `${parseFloat(tier.price).toLocaleString('ru-RU')} ₽` : `${parseFloat(tier.price)} ${tier.currency}` }}
+                                </span>
+                              </div>
+                              <p class="text-xs text-white/40 mt-0.5">
+                                {{ tier.sold_count }}/{{ tier.total_count }} продано
+                                <template v-if="tier.sale_starts_at">
+                                  · с {{ new Date(tier.sale_starts_at).toLocaleDateString('ru-RU') }}
+                                </template>
+                                <template v-if="tier.sale_ends_at">
+                                  до {{ new Date(tier.sale_ends_at).toLocaleDateString('ru-RU') }}
+                                </template>
+                              </p>
+                            </div>
+                            <div class="flex items-center gap-1.5 flex-shrink-0">
+                              <button type="button" @click="openEditTierForm(tier)"
+                                class="w-8 h-8 rounded-xl bg-brand-bg border border-brand-border flex items-center justify-center hover:border-brand-accent/40 hover:text-brand-accent text-white/55 transition-all">
+                                <BIcon name="Pencil" class="w-3.5 h-3.5" />
+                              </button>
+                              <button type="button" @click="deleteTier(tier.id, ev.id)"
+                                class="w-8 h-8 rounded-xl bg-brand-error/10 border border-brand-error/25 flex items-center justify-center hover:bg-brand-error/20 text-brand-error transition-all">
+                                <BIcon name="Trash2" class="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- No tiers -->
+                      <div v-else-if="showNewTierForm !== ev.id" class="bg-brand-bg/40 border border-dashed border-brand-border rounded-2xl p-4 text-center text-xs text-white/40">
+                        Билетов нет — нажмите «Добавить»
+                      </div>
+
+                      <!-- New tier form -->
+                      <div v-if="showNewTierForm === ev.id" class="bg-brand-bg/60 border border-brand-border rounded-2xl p-4 space-y-3">
+                        <h5 class="text-xs font-bold text-white/70 uppercase tracking-wider">Новый тип билета</h5>
+                        <div class="grid grid-cols-2 gap-3">
+                          <div class="col-span-2">
+                            <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5 block">Название</label>
+                            <input v-model="newTierForm.name" placeholder="VIP, Стандарт, Press…" class="field-input" />
+                          </div>
+                          <div>
+                            <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5 block">Цена</label>
+                            <input v-model.number="newTierForm.price" type="number" min="0" step="0.01" class="field-input" />
+                          </div>
+                          <div>
+                            <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5 block">Валюта</label>
+                            <select v-model="newTierForm.currency" class="field-input appearance-none">
+                              <option value="RUB">RUB ₽</option>
+                              <option value="USD">USD $</option>
+                              <option value="EUR">EUR €</option>
+                            </select>
+                          </div>
+                          <div class="col-span-2">
+                            <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5 block">Количество билетов</label>
+                            <input v-model.number="newTierForm.totalCount" type="number" min="1" class="field-input" />
+                          </div>
+                          <div>
+                            <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5 block">Начало продаж</label>
+                            <input v-model="newTierForm.saleStartsAt" type="datetime-local" class="field-input" />
+                          </div>
+                          <div>
+                            <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5 block">Конец продаж</label>
+                            <input v-model="newTierForm.saleEndsAt" type="datetime-local" class="field-input" />
+                          </div>
+                        </div>
+                        <p v-if="ticketError" class="text-xs text-brand-error">{{ ticketError }}</p>
+                        <div class="flex gap-2 justify-end pt-1">
+                          <button type="button" @click="showNewTierForm = null" class="px-4 py-2 text-xs font-semibold text-white/55 hover:text-white hover:bg-brand-bg border border-transparent hover:border-brand-border rounded-xl transition-all">Отмена</button>
+                          <button type="button" :disabled="ticketSaving || !newTierForm.name.trim()" @click="saveNewTier(ev.id)"
+                            class="px-4 py-2 text-xs font-bold text-white rounded-xl disabled:opacity-50 transition-all"
+                            :style="`background:${eventSections[2].color}`">
+                            {{ ticketSaving ? 'Сохранение…' : 'Добавить билет' }}
+                          </button>
+                        </div>
+                      </div>
+
+                      <!-- Divider between events -->
+                      <div v-if="(group as any).events?.length > 1" class="h-px bg-brand-border mt-2" />
+                    </div>
+                  </div>
+                </section>
+
+                <!-- ═══ § SOON BADGES ════════════════════════════════════ -->
+                <section v-if="group.type === 'event'" v-show="openSection === 'sec-soon'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                  <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
+                    :style="`background:linear-gradient(90deg,${eventSections[3].color}0c 0%,transparent 100%)`">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${eventSections[3].color}1a`">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${eventSections[3].color}`">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="eventSections[3].iconPath"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h2 class="font-bold text-white text-sm">{{ eventSections[3].label }}</h2>
+                      <p class="text-white/40 text-xs">Настройте бейджи и статусы мероприятий</p>
+                    </div>
+                  </div>
+                  <div class="p-6 space-y-6">
+                    <!-- No events notice -->
+                    <div v-if="!(group as any).events?.length" class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl p-8 text-center">
+                      <div class="text-3xl mb-3">🌟</div>
+                      <p class="text-white/60 text-sm font-medium">Сначала создайте мероприятие</p>
+                      <p class="text-white/30 text-xs mt-1">SOON бейджи появятся после добавления ивентов</p>
+                    </div>
+
+                    <!-- Loading -->
+                    <div v-else-if="soonBadgesLoading" class="flex flex-col items-center justify-center py-12 gap-3">
+                      <div class="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                      <p class="text-white/40 text-xs">Загружаем статистику...</p>
+                    </div>
+
+                    <template v-else>
+                      <!-- Global stats bar -->
+                      <div class="grid grid-cols-3 gap-3">
+                        <div class="bg-brand-bg/60 border border-brand-border/60 rounded-2xl p-3.5 text-center">
+                          <p class="text-2xl font-black text-white">
+                            {{ Object.values(eventSoonMap).reduce((s, arr) => s + arr.length, 0) }}
+                          </p>
+                          <p class="text-[10px] text-white/40 mt-0.5 font-medium uppercase tracking-wide">Следят</p>
+                        </div>
+                        <div class="bg-brand-bg/60 border border-brand-border/60 rounded-2xl p-3.5 text-center">
+                          <p class="text-2xl font-black text-white">{{ (group as any).events?.length ?? 0 }}</p>
+                          <p class="text-[10px] text-white/40 mt-0.5 font-medium uppercase tracking-wide">Ивентов</p>
+                        </div>
+                        <div class="bg-brand-bg/60 border border-brand-border/60 rounded-2xl p-3.5 text-center">
+                          <p class="text-2xl font-black" :style="`color: ${EVENT_STATUSES.find(s => s.value === computeEventStatus((group as any).events?.[0]))?.color || '#fbbf24'}`">
+                            {{ EVENT_STATUSES.find(s => s.value === computeEventStatus((group as any).events?.[0]))?.icon || '⭐' }}
+                          </p>
+                          <p class="text-[10px] text-white/40 mt-0.5 font-medium uppercase tracking-wide">Статус</p>
+                        </div>
+                      </div>
+
+                      <!-- Per-event editor -->
+                      <div v-for="(ev, evIdx) in ((group as any).events || [])" :key="ev.id"
+                        class="rounded-3xl border overflow-hidden transition-all"
+                        :style="`border-color: ${EVENT_STATUSES.find(s=>s.value===computeEventStatus(ev))?.color || '#fbbf24'}33`">
+
+                        <!-- Event header with banner -->
+                        <div class="relative h-24 overflow-hidden">
+                          <img v-if="ev.banner_url || (group as any)?.banner_url" :src="ev.banner_url || (group as any)?.banner_url" class="w-full h-full object-cover" />
+                          <div v-else class="w-full h-full" :style="`background: linear-gradient(135deg, ${(group as any).accent_color || '#4C67CF'}44, ${(group as any).accent_color || '#4C67CF'}11)`" />
+                          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                          <!-- Status badge top-right -->
+                          <div class="absolute top-2 right-2">
+                            <span class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold backdrop-blur-sm"
+                              :style="`background: ${EVENT_STATUSES.find(s=>s.value===computeEventStatus(ev))?.color || '#fbbf24'}33; color: ${EVENT_STATUSES.find(s=>s.value===computeEventStatus(ev))?.color || '#fbbf24'}; border: 1px solid ${EVENT_STATUSES.find(s=>s.value===computeEventStatus(ev))?.color || '#fbbf24'}44`">
+                              <span>{{ EVENT_STATUSES.find(s=>s.value===computeEventStatus(ev))?.icon }}</span>
+                              {{ EVENT_STATUSES.find(s=>s.value===computeEventStatus(ev))?.label }}
+                            </span>
+                          </div>
+                          <!-- Title + date bottom-left -->
+                          <div class="absolute bottom-2 left-3 right-16">
+                            <p class="text-white font-bold text-sm truncate">{{ ev.title }}</p>
+                            <p class="text-white/55 text-[11px]">{{ new Date(ev.starts_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }) }}</p>
+                          </div>
+                          <!-- Interested count bottom-right -->
+                          <div class="absolute bottom-2 right-3 flex items-center gap-1 text-white/70 text-[11px] font-bold">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+                            {{ (eventSoonMap[ev.id] ?? []).length }}
+                          </div>
+                        </div>
+
+                        <!-- Edit body -->
+                        <div class="p-4 space-y-4 bg-brand-bg/30">
+
+                          <!-- Short code row -->
+                          <div>
+                            <div class="flex items-center justify-between mb-2">
+                              <label class="text-xs font-bold text-white/55 uppercase tracking-wider">Код бейджа (макс. 4 символа)</label>
+                              <button
+                                type="button"
+                                @click="() => { if(soonEditMap[ev.id]) soonEditMap[ev.id].shortCode = suggestShortCode((group as any).name || ev.title) }"
+                                class="text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all hover:opacity-80 active:scale-95"
+                                style="background:#fbbf2415; color:#fbbf24; border:1px solid #fbbf2430"
+                              >
+                                ✨ Предложить
+                              </button>
+                            </div>
+                            <div class="flex items-center gap-3">
+                              <div class="flex-shrink-0 scale-110 origin-left">
+                                <SoonBadge :short-code="soonEditMap[ev.id]?.shortCode || '???'" />
+                              </div>
+                              <div class="flex-1 relative">
+                                <input
+                                  v-if="soonEditMap[ev.id]"
+                                  v-model="soonEditMap[ev.id].shortCode"
+                                  @input="() => { if (soonEditMap[ev.id]) soonEditMap[ev.id].shortCode = soonEditMap[ev.id].shortCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) }"
+                                  maxlength="4"
+                                  placeholder="EF"
+                                  class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-white text-sm font-mono placeholder-white/25 focus:outline-none focus:border-amber-400/60 transition-colors uppercase tracking-widest text-center text-lg"
+                                />
+                                <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-white/25 font-mono">
+                                  {{ (soonEditMap[ev.id]?.shortCode || '').length }}/4
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <!-- Save row -->
+                          <div class="flex items-center justify-between pt-1 border-t border-brand-border/40">
+                            <Transition name="fade">
+                              <span v-if="soonEditMap[ev.id]?.saved" class="text-xs text-green-400 flex items-center gap-1.5 font-medium">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                Сохранено!
+                              </span>
+                              <span v-else class="text-[11px] text-white/25">Изменения не сохранены</span>
+                            </Transition>
+                            <button
+                              @click="saveSoonEvent(ev.id)"
+                              :disabled="soonEditMap[ev.id]?.saving"
+                              class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 disabled:opacity-50 hover:opacity-80"
+                              style="background:linear-gradient(135deg, #fbbf2430, #f59e0b20); border: 1px solid #fbbf2450; color: #fbbf24"
+                            >
+                              <svg v-if="soonEditMap[ev.id]?.saving" class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                              <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                              {{ soonEditMap[ev.id]?.saving ? 'Сохраняем...' : 'Сохранить изменения' }}
+                            </button>
+                          </div>
+                        </div>
+
+                        <!-- Badge holders -->
+                        <div class="px-4 pb-4 bg-brand-bg/30 space-y-2.5">
+                          <div class="flex items-center justify-between">
+                            <p class="text-xs font-bold text-white/40 uppercase tracking-wider">Интересуются</p>
+                            <div class="flex items-center gap-2">
+                              <!-- Mini avatars stack -->
+                              <div v-if="(eventSoonMap[ev.id] ?? []).length" class="flex -space-x-2">
+                                <div v-for="badge in (eventSoonMap[ev.id] ?? []).slice(0, 5)" :key="badge.id"
+                                  class="w-5 h-5 rounded-full border border-brand-card overflow-hidden bg-brand-accent/20">
+                                  <img v-if="badge.user.avatar_url" :src="badge.user.avatar_url" class="w-full h-full object-cover" />
+                                  <div v-else class="w-full h-full flex items-center justify-center text-[8px] font-bold text-white">
+                                    {{ (badge.user.display_name || badge.user.username)[0].toUpperCase() }}
+                                  </div>
+                                </div>
+                              </div>
+                              <span class="text-xs font-bold px-2 py-0.5 rounded-lg"
+                                :style="`background:${eventSections[3].color}1a; color:${eventSections[3].color}`">
+                                {{ (eventSoonMap[ev.id] ?? []).length }} чел.
+                              </span>
+                            </div>
+                          </div>
+
+                          <div v-if="(eventSoonMap[ev.id] ?? []).length" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            <div
+                              v-for="badge in eventSoonMap[ev.id]"
+                              :key="badge.id"
+                              class="flex items-center gap-2.5 px-3 py-2 bg-brand-bg/60 border border-brand-border/60 rounded-xl cursor-pointer hover:border-amber-400/20 hover:bg-brand-bg transition-all group"
+                              @click="router.push({ name: 'profile', params: { id: badge.user.id } })"
+                            >
+                              <div class="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 ring-1 ring-brand-border bg-brand-accent/20">
+                                <img v-if="badge.user.avatar_url" :src="badge.user.avatar_url" class="w-full h-full object-cover" />
+                                <div v-else class="w-full h-full flex items-center justify-center text-[10px] font-bold text-brand-accent">
+                                  {{ (badge.user.display_name || badge.user.username)[0].toUpperCase() }}
+                                </div>
+                              </div>
+                              <div class="flex-1 min-w-0">
+                                <p class="text-white text-xs font-bold truncate">{{ badge.user.display_name || badge.user.username }}</p>
+                                <p class="text-white/35 text-[10px] truncate">@{{ badge.user.username }}</p>
+                              </div>
+                              <BIcon name="ChevronRight" class="w-3 h-3 text-white/15 group-hover:text-white/30 transition-colors flex-shrink-0" />
+                            </div>
+                          </div>
+
+                          <div v-else class="rounded-2xl p-4 text-center" style="border: 1px dashed rgba(251,191,36,0.2); background: rgba(251,191,36,0.04)">
+                            <p class="text-[11px] font-medium" style="color:rgba(251,191,36,0.4)">Пока никто не добавил этот бейдж</p>
+                          </div>
+                        </div>
+
+                        <!-- Divider -->
+                        <div v-if="evIdx < ((group as any).events?.length ?? 0) - 1" class="h-0" />
+                      </div>
+                    </template>
+                  </div>
+                </section>
+
+                <!-- ═══ § FINANCE ════════════════════════════════════════ -->
+                <section v-if="group.type === 'event'" v-show="openSection === 'sec-finance'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                  <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
+                    style="background:linear-gradient(90deg,#10b98112 0%,transparent 100%)">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:#10b98120">
+                      <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h2 class="font-bold text-white text-sm">Финансы</h2>
+                      <p class="text-white/40 text-xs">Доходы, расходы и взаиморасчёты — предварительный макет</p>
+                    </div>
+                    <span class="ml-auto text-[10px] font-bold px-2.5 py-1 rounded-full" style="background:#10b98120;color:#10b981;border:1px solid #10b98130">MOCKUP</span>
+                  </div>
+
+                  <div class="p-6 space-y-6">
+
+                    <!-- Сводка -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div class="bg-brand-bg/70 border border-brand-border/60 rounded-2xl p-4 flex flex-col gap-1">
+                        <p class="text-[10px] font-bold text-white/40 uppercase tracking-wide">Общий доход</p>
+                        <p class="text-2xl font-black text-emerald-400">124 800 ₽</p>
+                        <p class="text-[10px] text-emerald-400/60 flex items-center gap-1">
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 10l7-7 7 7M5 19l7-7 7 7"/></svg>
+                          +12% к прошлому
+                        </p>
+                      </div>
+                      <div class="bg-brand-bg/70 border border-brand-border/60 rounded-2xl p-4 flex flex-col gap-1">
+                        <p class="text-[10px] font-bold text-white/40 uppercase tracking-wide">Билеты</p>
+                        <p class="text-2xl font-black text-white">98 400 ₽</p>
+                        <p class="text-[10px] text-white/40">164 продано</p>
+                      </div>
+                      <div class="bg-brand-bg/70 border border-brand-border/60 rounded-2xl p-4 flex flex-col gap-1">
+                        <p class="text-[10px] font-bold text-white/40 uppercase tracking-wide">Донаты</p>
+                        <p class="text-2xl font-black text-purple-400">26 400 ₽</p>
+                        <p class="text-[10px] text-purple-400/60">от 43 человек</p>
+                      </div>
+                      <div class="bg-brand-bg/70 border border-brand-border/60 rounded-2xl p-4 flex flex-col gap-1">
+                        <p class="text-[10px] font-bold text-white/40 uppercase tracking-wide">Ожидается</p>
+                        <p class="text-2xl font-black text-amber-400">14 200 ₽</p>
+                        <p class="text-[10px] text-amber-400/60">3 ожидают оплаты</p>
+                      </div>
+                    </div>
+
+                    <!-- График доходов -->
+                    <div class="bg-brand-bg/50 border border-brand-border/60 rounded-2xl p-4">
+                      <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-white">Динамика продаж</h3>
+                        <span class="text-[10px] text-white/30 bg-white/5 px-2.5 py-1 rounded-full">последние 30 дней</span>
+                      </div>
+                      <div class="flex items-end gap-1.5 h-24">
+                        <div v-for="(bar, i) in [18,25,32,28,40,55,48,60,72,65,80,74,90,84,78,96,88,100,92,84,76,88,95,80,70,62,74,85,90,78]"
+                          :key="i"
+                          class="flex-1 rounded-t-sm transition-all"
+                          :style="`height:${bar}%;background:linear-gradient(to top,#10b981${i>=20?'99':'44'},#10b981${i>=20?'cc':'66'})`"
+                          :title="`День ${i+1}`"
+                        />
+                      </div>
+                      <div class="flex justify-between mt-2 text-[9px] text-white/25">
+                        <span>1 фев</span><span>8 фев</span><span>15 фев</span><span>22 фев</span><span>1 мар</span>
+                      </div>
+                    </div>
+
+                    <!-- Разбивка по типам билетов -->
+                    <div class="bg-brand-bg/50 border border-brand-border/60 rounded-2xl p-4">
+                      <h3 class="text-sm font-bold text-white mb-4">Продажи по категориям</h3>
+                      <div class="space-y-3">
+                        <div v-for="(tier, i) in [
+                          { name: 'Стандарт', sold: 100, total: 150, revenue: '60 000 ₽', pct: 67, color: '#34d399' },
+                          { name: 'Спонсор', sold: 40, total: 50, revenue: '28 000 ₽', pct: 80, color: '#a78bfa' },
+                          { name: 'VIP', sold: 24, total: 30, revenue: '36 000 ₽', pct: 80, color: '#fbbf24' },
+                        ]" :key="i" class="flex items-center gap-3">
+                          <div class="w-24 text-xs text-white/70 truncate font-medium">{{ tier.name }}</div>
+                          <div class="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full transition-all" :style="`width:${tier.pct}%;background:${tier.color}`" />
+                          </div>
+                          <div class="text-xs font-bold text-white/60 w-16 text-right">{{ tier.sold }}/{{ tier.total }}</div>
+                          <div class="text-xs font-bold w-24 text-right" :style="`color:${tier.color}`">{{ tier.revenue }}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Последние транзакции -->
+                    <div class="bg-brand-bg/50 border border-brand-border/60 rounded-2xl p-4">
+                      <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold text-white">Последние транзакции</h3>
+                        <button class="text-[11px] text-emerald-400/70 hover:text-emerald-400 transition-colors">Все →</button>
+                      </div>
+                      <div class="space-y-1">
+                        <div v-for="(tx, i) in [
+                          { user: 'Taffy', type: 'Билет: VIP', amount: '+1 500 ₽', time: '2 мин. назад', color: '#34d399', icon: '🎟️' },
+                          { user: 'FoxDev', type: 'Донат', amount: '+500 ₽', time: '15 мин. назад', color: '#a78bfa', icon: '💜' },
+                          { user: 'Wolfy', type: 'Билет: Стандарт', amount: '+600 ₽', time: '1 ч. назад', color: '#34d399', icon: '🎟️' },
+                          { user: 'DragonX', type: 'Билет: Спонсор', amount: '+700 ₽', time: '3 ч. назад', color: '#34d399', icon: '🎟️' },
+                          { user: 'SnowPaw', type: 'Донат', amount: '+200 ₽', time: 'вчера', color: '#a78bfa', icon: '💜' },
+                        ]" :key="i"
+                          class="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/5 transition-colors cursor-default">
+                          <span class="text-base">{{ tx.icon }}</span>
+                          <div class="flex-1 min-w-0">
+                            <p class="text-xs font-bold text-white truncate">{{ tx.user }}</p>
+                            <p class="text-[10px] text-white/40">{{ tx.type }}</p>
+                          </div>
+                          <div class="text-right flex-shrink-0">
+                            <p class="text-sm font-black" :style="`color:${tx.color}`">{{ tx.amount }}</p>
+                            <p class="text-[9px] text-white/25">{{ tx.time }}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Взаиморасчёты -->
+                    <div class="bg-brand-bg/50 border border-brand-border/60 rounded-2xl p-4">
+                      <h3 class="text-sm font-bold text-white mb-1">Взаиморасчёты</h3>
+                      <p class="text-[11px] text-white/35 mb-4">Кто что должен организаторам или фуреализует предоплату</p>
+                      <div class="space-y-2">
+                        <div v-for="(item, i) in [
+                          { user: 'Wolfy', status: 'ожидает', amount: '1 200 ₽', due: '15 мар', statusColor: '#fbbf24' },
+                          { user: 'KitsuFox', status: 'ожидает', amount: '700 ₽', due: '20 мар', statusColor: '#fbbf24' },
+                          { user: 'SnowPaw', status: 'просрочено', amount: '600 ₽', due: '1 мар', statusColor: '#f87171' },
+                          { user: 'BluePaw', status: 'оплачено', amount: '2 000 ₽', due: '28 фев', statusColor: '#34d399' },
+                          { user: 'NeonDeer', status: 'оплачено', amount: '1 500 ₽', due: '1 мар', statusColor: '#34d399' },
+                        ]" :key="i"
+                          class="flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all"
+                          :style="`border-color: ${item.statusColor}25; background: ${item.statusColor}08`">
+                          <div class="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black flex-shrink-0"
+                            :style="`background:${item.statusColor}20;color:${item.statusColor}`">
+                            {{ item.user[0] }}
+                          </div>
+                          <div class="flex-1 min-w-0">
+                            <p class="text-xs font-bold text-white">{{ item.user }}</p>
+                            <p class="text-[10px] text-white/40">до {{ item.due }}</p>
+                          </div>
+                          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                            :style="`background:${item.statusColor}20;color:${item.statusColor}`">
+                            {{ item.status }}
+                          </span>
+                          <p class="text-sm font-black text-white/80 w-20 text-right">{{ item.amount }}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Заглушка про реальные данные -->
+                    <div class="rounded-2xl p-4 flex items-start gap-3" style="background:rgba(16,185,129,0.06);border:1px dashed rgba(16,185,129,0.25)">
+                      <svg class="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                      </svg>
+                      <p class="text-[11px] text-emerald-400/70 leading-relaxed">
+                        Это предварительный макет раздела. Реальные данные будут подключены к платёжной системе на следующем этапе разработки.
+                      </p>
+                    </div>
+
                   </div>
                 </section>
 

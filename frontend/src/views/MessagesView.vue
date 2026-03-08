@@ -44,27 +44,111 @@
               </button>
             </div>
 
-            <!-- Conversation list (scrollable) -->
+            <!-- Tab switcher: Личные / Группы -->
+            <div class="flex gap-1 px-4 py-2 border-b border-brand-border flex-shrink-0">
+              <button @click="chatTab = 'dm'"
+                class="flex-1 py-1.5 rounded-xl text-xs font-bold transition-all"
+                :class="chatTab === 'dm' ? 'bg-brand-accent text-white' : 'text-white/50 hover:text-white hover:bg-white/5'">
+                Личные
+              </button>
+              <button @click="chatTab = 'groups'; loadGroupList()"
+                class="flex-1 py-1.5 rounded-xl text-xs font-bold transition-all"
+                :class="chatTab === 'groups' ? 'bg-brand-accent text-white' : 'text-white/50 hover:text-white hover:bg-white/5'">
+                Группы
+              </button>
+            </div>
+
+            <!-- DM conversations list -->
             <ConversationList
+              v-if="chatTab === 'dm'"
               :active-id="store.activeId"
               :hide-header="true"
               @select="onSelectConversation"
               @new-conversation="showNewDm = true"
             />
+
+            <!-- Group chat list -->
+            <div v-else class="flex-1 overflow-y-auto">
+              <div v-if="groupListLoading" class="flex items-center justify-center py-10">
+                <div class="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
+              </div>
+              <div v-else-if="!groupMemberships.length" class="flex flex-col items-center justify-center py-10 gap-3 text-center px-6">
+                <BIcon name="Users" class="w-10 h-10 text-white/20" />
+                <p class="text-sm text-white/40">Вы не состоите ни в одной группе</p>
+              </div>
+              <button v-for="m in groupMemberships" :key="m.group_id"
+                @click="openGroupChat(m.group_id, m.group.name, m.group.avatar_url)"
+                class="w-full flex items-center gap-3 px-4 py-3 hover:bg-brand-bg transition-colors text-left"
+                :class="activeGroupId === m.group_id ? 'bg-brand-bg border-r-2 border-brand-accent' : ''">
+                <div class="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-brand-accent/20 flex items-center justify-center">
+                  <img v-if="m.group.avatar_url" :src="m.group.avatar_url" class="w-full h-full object-cover" />
+                  <BIcon v-else name="Users" class="w-5 h-5 text-brand-accent/60" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-semibold text-white truncate">{{ m.group.name }}</p>
+                  <p class="text-xs text-white/40 truncate">@{{ m.group.slug }}</p>
+                </div>
+              </button>
+            </div>
           </div>
 
           <!-- ── Right panel: chat window or empty state ─────────────────── -->
           <div :class="[
             'flex-1 min-w-0 flex flex-col overflow-hidden',
-            !activeConvId && 'hidden sm:flex',
+            !activeConvId && !activeGroupId && 'hidden sm:flex',
           ]">
             <ChatWindow
-              v-if="activeConvId && activeOther"
-              :conv-id="activeConvId"
+              v-if="canShowChatWindow && chatTab === 'dm'"
+              :conv-id="activeConvId!"
               :other="activeOther"
               @back="store.closeConversation()"
               @archived="store.closeConversation()"
             />
+
+            <!-- Group chat window -->
+            <div v-else-if="activeGroupId && chatTab === 'groups'" class="flex flex-col flex-1 min-h-0">
+              <!-- Group chat header -->
+              <div class="flex items-center gap-3 px-4 py-3 border-b border-brand-border flex-shrink-0">
+                <button @click="activeGroupId = null" class="p-1.5 rounded-xl hover:bg-white/10 sm:hidden">
+                  <BIcon name="ArrowLeft" class="w-4 h-4" />
+                </button>
+                <div class="w-8 h-8 rounded-xl overflow-hidden bg-brand-accent/20 flex items-center justify-center flex-shrink-0">
+                  <img v-if="activeGroupAvatar" :src="activeGroupAvatar" class="w-full h-full object-cover" />
+                  <BIcon v-else name="Users" class="w-4 h-4 text-brand-accent/60" />
+                </div>
+                <span class="font-bold text-sm text-white">{{ activeGroupName }}</span>
+              </div>
+              <!-- Messages -->
+              <div ref="groupMsgContainer" class="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+                <div v-if="groupMsgLoading" class="flex justify-center py-6">
+                  <div class="w-5 h-5 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
+                </div>
+                <div v-for="msg in groupMessages" :key="msg.id"
+                  class="flex items-start gap-2"
+                  :class="msg.user_id === auth.user?.id ? 'flex-row-reverse' : ''">
+                  <div class="w-7 h-7 rounded-full overflow-hidden bg-brand-accent/20 flex items-center justify-center flex-shrink-0">
+                    <img v-if="msg.user.avatar_url" :src="msg.user.avatar_url" class="w-full h-full object-cover" />
+                    <span v-else class="text-[10px] font-bold text-brand-accent">{{ (msg.user.display_name || msg.user.username)[0].toUpperCase() }}</span>
+                  </div>
+                  <div :class="msg.user_id === auth.user?.id ? 'items-end' : 'items-start'" class="flex flex-col gap-0.5">
+                    <span class="text-[10px] text-white/40 px-1">{{ msg.user.display_name || msg.user.username }}</span>
+                    <div class="max-w-[260px] px-3 py-2 rounded-2xl text-sm"
+                      :class="msg.user_id === auth.user?.id ? 'bg-brand-accent text-white rounded-tr-sm' : 'bg-brand-card border border-brand-border text-white rounded-tl-sm'">
+                      {{ msg.text }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- Input -->
+              <form @submit.prevent="sendGroupMsg" class="flex items-center gap-2 px-4 py-3 border-t border-brand-border flex-shrink-0">
+                <input v-model="groupMsgInput" type="text" placeholder="Сообщение группе…"
+                  class="flex-1 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-brand-accent/60 transition-colors" />
+                <button type="submit" :disabled="!groupMsgInput.trim() || groupMsgSending"
+                  class="p-2.5 rounded-2xl bg-brand-accent text-white disabled:opacity-40 transition-all hover:bg-brand-accent-plus active:scale-95">
+                  <BIcon name="Send" class="w-4 h-4" />
+                </button>
+              </form>
+            </div>
 
             <!-- Empty state — no conversation selected -->
             <div
@@ -185,7 +269,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
@@ -194,10 +278,13 @@ import ConversationList from '@/components/ConversationList.vue'
 import ChatWindow from '@/components/ChatWindow.vue'
 import { useMessagesStore, type MsgSender } from '@/stores/messages'
 import { useAuthStore } from '@/stores/auth'
+import { useGroupsStore, type GroupMessage, type GroupMembership } from '@/stores/groups'
+import { wsClient } from '@/lib/wsClient'
 import api from '@/api'
 
 const store  = useMessagesStore()
 const auth   = useAuthStore()
+const groups = useGroupsStore()
 const route  = useRoute()
 const router = useRouter()
 
@@ -208,19 +295,104 @@ const dmResults  = ref<Array<{ id: string; username: string; display_name: strin
 
 let dmSearchTimer: ReturnType<typeof setTimeout> | null = null
 
+// ── Tab ──────────────────────────────────────────────────────────────────────
+const chatTab = ref<'dm' | 'groups'>('dm')
+
+// ── Group chat state ─────────────────────────────────────────────────────────
+const groupMemberships = ref<GroupMembership[]>([])
+const groupListLoading = ref(false)
+const activeGroupId    = ref<string | null>(null)
+const activeGroupName  = ref('')
+const activeGroupAvatar = ref<string | null>(null)
+const groupMessages    = ref<GroupMessage[]>([])
+const groupMsgLoading  = ref(false)
+const groupMsgInput    = ref('')
+const groupMsgSending  = ref(false)
+const groupMsgContainer = ref<HTMLElement | null>(null)
+
+async function loadGroupList() {
+  if (groupMemberships.value.length) return
+  groupListLoading.value = true
+  try {
+    await groups.loadMyGroups()
+    groupMemberships.value = groups.myGroups
+  } finally {
+    groupListLoading.value = false
+  }
+}
+
+async function openGroupChat(groupId: string, name: string, avatar: string | null) {
+  // Prefer community Conversation (Conversation type='community') over legacy GroupMessage
+  try {
+    const convId = await store.openGroupConversation(groupId)
+    if (convId) {
+      chatTab.value = 'dm'
+      return
+    }
+  } catch {}
+
+  // Fallback: legacy GroupMessage chat
+  activeGroupId.value = groupId
+  activeGroupName.value = name
+  activeGroupAvatar.value = avatar
+  groupMessages.value = []
+  groupMsgLoading.value = true
+  try {
+    groupMessages.value = await groups.loadGroupMessages(groupId)
+    await nextTick()
+    if (groupMsgContainer.value) groupMsgContainer.value.scrollTop = groupMsgContainer.value.scrollHeight
+  } finally {
+    groupMsgLoading.value = false
+  }
+}
+
+async function sendGroupMsg() {
+  if (!groupMsgInput.value.trim() || !activeGroupId.value || groupMsgSending.value) return
+  const text = groupMsgInput.value.trim()
+  groupMsgInput.value = ''
+  groupMsgSending.value = true
+  try {
+    wsClient.send({ type: 'group_message_send', groupId: activeGroupId.value, content: text })
+    // Optimistic: will be confirmed by incoming group_message WS event
+    // Fallback: if WS is not connected, use REST
+  } finally {
+    groupMsgSending.value = false
+  }
+}
+
 // ── Active conversation helpers ─────────────────────────────────────────────
-const activeConvId = computed(() => store.activeId)
+ const activeConvId = computed(() => store.activeId)
+
+const activeConv = computed(() =>
+  store.conversations.find((c) => c.id === activeConvId.value)
+)
 
 const activeOther = computed<MsgSender | undefined>(() => {
   if (!activeConvId.value) return undefined
-  const conv = store.conversations.find((c) => c.id === activeConvId.value)
-  return conv?.other_participants?.[0]?.user
+  return activeConv.value?.other_participants?.[0]?.user
 })
 
+// Show chat window when conv is a group/community (no single "other" needed) or when activeOther exists
+const canShowChatWindow = computed(() =>
+  !!activeConvId.value && (!!activeOther.value || !!(activeConv.value?.is_group))
+)
+
 // ── Lifecycle ───────────────────────────────────────────────────────────────
+let unsubGroupWs: (() => void) | null = null
+
 onMounted(async () => {
   store.startListening()
   await store.fetchConversations()
+
+  // Subscribe to incoming group messages
+  unsubGroupWs = wsClient.on('group_message', (payload) => {
+    if (payload.groupId === activeGroupId.value) {
+      groupMessages.value.push(payload.message as GroupMessage)
+      nextTick(() => {
+        if (groupMsgContainer.value) groupMsgContainer.value.scrollTop = groupMsgContainer.value.scrollHeight
+      })
+    }
+  })
 
   // Support ?userId=xxx deep link (e.g. "Send message" button on profile)
   const targetUser = route.query.userId as string | undefined
@@ -233,6 +405,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   store.stopListening()
+  if (unsubGroupWs) { unsubGroupWs(); unsubGroupWs = null }
 })
 
 watch(activeConvId, async (id) => {

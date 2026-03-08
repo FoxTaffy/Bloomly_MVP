@@ -21,7 +21,9 @@ import { groupsRoutes } from './modules/groups/routes.js';
 import { verificationRoutes } from './modules/verification/routes.js';
 import { dealersDenRoutes } from './modules/dealers-den/routes.js';
 import { stickersRoutes } from './modules/stickers/routes.js';
+import { activitiesRoutes } from './modules/activities/routes.js';
 import { messageService, messageSubscriptions } from './modules/messages/service.js';
+import { groupService } from './modules/groups/service.js';
 import { initCronJobs } from './cron.js';
 import prisma from './config/prisma.js';
 
@@ -46,9 +48,10 @@ fastify.register(cors, { origin: allowedOrigins, credentials: true });
 fastify.register(jwt, { secret: jwtSecret || 'bloomly_secret_dev_only' });
 fastify.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
 fastify.register(rateLimit, {
-  max: 100,
+  global: true,
+  max: 500,
   timeWindow: '1 minute',
-});
+} as any);
 fastify.register(websocket);
 
 fastify.decorate(
@@ -100,6 +103,7 @@ fastify.register(groupsRoutes, { prefix: '/api/groups' });
 fastify.register(verificationRoutes, { prefix: '/api/verification' });
 fastify.register(dealersDenRoutes, { prefix: '/api/dealers-den' });
 fastify.register(stickersRoutes, { prefix: '/api/stickers' });
+fastify.register(activitiesRoutes, { prefix: '/api/activities' });
 
 // ── In-memory online status tracking ─────────────────────────────────────
 // Use a Set per user so multiple browser tabs / pages work correctly
@@ -192,6 +196,22 @@ fastify.register(async function (fastify) {
             connection.socket.send(JSON.stringify({ type: 'error', message: (e as Error).message }))
           }
           return
+        }
+
+        // ── Client sends a group chat message ──────────────────────────────────
+        if (msg?.type === 'group_message_send' && authedUserId) {
+          const { groupId, content } = msg;
+          if (!groupId || !content) return;
+          try {
+            const saved = await groupService.sendGroupMessage(groupId as string, authedUserId, (content as string).trim());
+            const members = await prisma.groupMember.findMany({ where: { group_id: groupId as string }, select: { user_id: true } });
+            for (const m of members) {
+              messageSubscriptions.push(m.user_id, { type: 'group_message', groupId, message: saved });
+            }
+          } catch (e) {
+            connection.socket.send(JSON.stringify({ type: 'error', message: (e as Error).message }));
+          }
+          return;
         }
       } catch { /* non-JSON frame — ignore */ }
     })

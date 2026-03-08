@@ -372,8 +372,11 @@ const features = [
                 >
                   <div v-if="mode === 'register'" class="input-group overflow-hidden">
                     <User class="input-icon" />
-                    <input v-model="username" type="text" placeholder="Имя пользователя" required minlength="3" class="fld" />
+                    <input :value="username" @input="username = ($event.target as HTMLInputElement).value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 30)" type="text" placeholder="имя_пользователя" required minlength="3" maxlength="30" class="fld" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false" />
                   </div>
+                  <p v-if="mode === 'register' && username" class="text-[11px] text-white/30 pl-1 -mt-1">
+                    только a–z, 0–9, _ · будет: <span class="text-brand-accent/70 font-mono">{{ username }}</span>
+                  </p>
                 </Transition>
 
                 <!-- Password (login / register) -->
@@ -570,9 +573,9 @@ const features = [
               <!-- Footer links -->
               <p class="mt-6 text-center text-xs text-white/20 leading-relaxed">
                 Нажимая кнопку, ты принимаешь
-                <a href="#" class="text-white/40 hover:text-brand-accent-minus underline-offset-2 hover:underline transition-colors">Условия</a>
+                <a href="https://bloomly.fun/terms" target="_blank" rel="noopener" class="text-white/40 hover:text-brand-accent-minus underline-offset-2 hover:underline transition-colors">Условия&nbsp;использования</a>
                 и
-                <a href="#" class="text-white/40 hover:text-brand-accent-minus underline-offset-2 hover:underline transition-colors">Политику</a>
+                <a href="https://bloomly.fun/privacy" target="_blank" rel="noopener" class="text-white/40 hover:text-brand-accent-minus underline-offset-2 hover:underline transition-colors">Политику&nbsp;конфиденциальности</a>
               </p>
             </div>
           </div>

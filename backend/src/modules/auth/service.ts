@@ -39,7 +39,9 @@ async function verifyOtp(email: string, code: string, purpose: 'register' | 'res
 export class AuthService {
   /** Step 1 регистрации — создать пользователя + отправить OTP на email */
   async createUser(data: RegisterInput) {
-    const { password, username } = data;
+    const { password } = data;
+    const username = data.username.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    if (!username || username.length < 3) throw new Error('Имя пользователя должно содержать минимум 3 символа (только a-z, 0-9, _)');
     const email = data.email.toLowerCase().trim();
     const hashedPassword = await bcrypt.hash(password, 10);
 

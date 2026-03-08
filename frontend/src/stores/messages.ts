@@ -32,10 +32,12 @@ export interface Conversation {
   id: string
   created_at: string
   updated_at: string
+  type: 'direct' | 'group' | 'community'
+  group_id: string | null
   is_group: boolean
   name: string | null
   avatar_url: string | null
-  my_participant: { archived: boolean; hidden: boolean; last_read_at: string | null; role?: string }
+  my_participant: { archived: boolean; hidden: boolean; last_read_at: string | null; role?: string; label?: string }
   last_message: Message | null
   other_participants: Array<{ user_id: string; user: MsgSender; last_read_at?: string | null; role?: string }>
 }
@@ -292,6 +294,31 @@ export const useMessagesStore = defineStore('messages', () => {
     await api.patch(`/messages/conversations/${convId}/members/${userId}/role`, { role })
   }
 
+  // ── Community (group) conversation ─────────────────────────────────────
+  async function initGroupChat(groupId: string): Promise<{ conversation: Conversation; alreadyExists: boolean }> {
+    const res = await api.post(`/groups/${groupId}/init-chat`)
+    return res.data.data as { conversation: Conversation; alreadyExists: boolean }
+  }
+
+  async function getGroupChatInfo(groupId: string): Promise<Conversation | null> {
+    const res = await api.get(`/groups/${groupId}/chat-info`)
+    return (res.data.data?.conversation ?? null) as Conversation | null
+  }
+
+  async function openGroupConversation(groupId: string): Promise<string | null> {
+    const chatInfo = await getGroupChatInfo(groupId)
+    if (!chatInfo) return null
+    const convId = chatInfo.id
+    // Ensure full conversation data (with participants) is in the list
+    const existing = conversations.value.find(c => c.id === convId)
+    if (!existing || !existing.other_participants) {
+      // Reload all – this returns full participant data from the server
+      await fetchConversations()
+    }
+    activeId.value = convId
+    return convId
+  }
+
   function closeConversation() {
     activeId.value = null
   }
@@ -326,5 +353,8 @@ export const useMessagesStore = defineStore('messages', () => {
     addGroupMember,
     removeGroupMember,
     setGroupMemberRole,
+    initGroupChat,
+    getGroupChatInfo,
+    openGroupConversation,
   }
 })

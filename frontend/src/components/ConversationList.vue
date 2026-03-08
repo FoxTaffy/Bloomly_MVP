@@ -41,7 +41,7 @@
     </div>
 
     <!-- List -->
-    <div class="flex-1 overflow-y-auto min-h-0">
+    <div class="flex-1 overflow-y-auto min-h-0" @click="menuConvId = null">
       <template v-if="store.loading">
         <div v-for="i in 5" :key="i" class="flex items-center gap-3 px-3 py-3">
           <div class="w-10 h-10 rounded-full bg-brand-border animate-pulse flex-shrink-0" />
@@ -55,9 +55,16 @@
         <BIcon name="MessageCircle" class="w-8 h-8 opacity-40" />
         <span>{{ search ? 'Ничего не найдено' : 'Нет диалогов' }}</span>
       </div>
-      <button v-for="conv in filtered" :key="conv.id" @click="$emit('select', conv.id)"
-        :class="['w-full flex items-center gap-3 px-3 py-3 transition-all text-left border-b border-brand-border/30 last:border-0',
-          activeId === conv.id ? 'bg-brand-accent/12 border-l-2 border-l-brand-accent pl-2' : 'hover:bg-brand-bg/60 border-l-2 border-l-transparent']">
+      <button v-for="conv in filtered" :key="conv.id"
+        :class="['w-full flex items-center gap-3 px-3 py-3 transition-all text-left border-b border-brand-border/30 last:border-0 relative group/conv',
+          activeId === conv.id ? 'bg-brand-accent/12 border-l-2 border-l-brand-accent pl-2' : 'hover:bg-brand-bg/60 border-l-2 border-l-transparent']"
+        @click="$emit('select', conv.id)">
+        <!-- Customer badge -->
+        <div v-if="conv.my_participant?.label === 'customer'"
+          class="absolute top-2 right-24 flex items-center gap-0.5 bg-brand-accent/15 border border-brand-accent/30 rounded-full px-1.5 py-0.5 pointer-events-none">
+          <BIcon name="Briefcase" class="w-2.5 h-2.5 text-brand-accent" />
+          <span class="text-[9px] font-bold text-brand-accent">заказ</span>
+        </div>
         <!-- Avatar -->
         <div class="relative flex-shrink-0">
           <!-- Group: 2x2 grid or custom avatar -->
@@ -109,6 +116,25 @@
             </template>
             {{ previewText(conv.last_message?.text) || (conv.last_message?.file_url ? '📎 Медиафайл' : 'Нет сообщений') }}
           </p>
+        </div>
+        <!-- Context menu trigger -->
+        <div class="relative flex-shrink-0 opacity-0 group-hover/conv:opacity-100 transition-opacity" @click.stop>
+          <button @click.stop="menuConvId = menuConvId === conv.id ? null : conv.id"
+            class="p-1.5 rounded-xl hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors">
+            <BIcon name="MoreVertical" class="w-3.5 h-3.5" />
+          </button>
+          <!-- Dropdown -->
+          <div v-if="menuConvId === conv.id"
+            class="absolute right-0 top-8 z-50 bg-brand-card border border-brand-border rounded-2xl shadow-2xl py-1 w-44"
+            @click.stop>
+            <button
+              @click.stop="setLabel(conv, conv.my_participant?.label === 'customer' ? 'default' : 'customer')"
+              class="w-full flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-brand-bg transition-colors text-left"
+              :class="conv.my_participant?.label === 'customer' ? 'text-brand-accent' : 'text-white/80'">
+              <BIcon :name="conv.my_participant?.label === 'customer' ? 'BriefcaseOff' : 'Briefcase'" class="w-4 h-4" />
+              {{ conv.my_participant?.label === 'customer' ? 'Убрать метку' : 'Пометить как заказ' }}
+            </button>
+          </div>
         </div>
       </button>
     </div>
@@ -224,8 +250,10 @@ const emit = defineEmits<{
 const store = useMessagesStore()
 const auth  = useAuthStore()
 const search = ref('')
-const activeCategory = ref<'all' | 'personal' | 'groups'>('all')
+const activeCategory = ref<'all' | 'personal' | 'groups' | 'customer'>('all')
 const showArchived = ref(false)
+// Context menu for labeling
+const menuConvId = ref<string | null>(null)
 
 // ── Notes (DM with self) ──────────────────────────────────────────────────
 async function openNotes() {
@@ -290,27 +318,29 @@ async function createGroup() {
 
 // ── Filters ───────────────────────────────────────────────────────────────
 const CATEGORIES = [
-  { id: 'all' as const,      label: 'Все',    icon: 'MessagesSquare' },
+  { id: 'all'      as const, label: 'Все',    icon: 'MessagesSquare' },
   { id: 'personal' as const, label: 'Личные', icon: 'User' },
-  { id: 'groups' as const,   label: 'Группы', icon: 'Users' },
+  { id: 'groups'   as const, label: 'Группы', icon: 'Users' },
+  { id: 'customer' as const, label: 'Заказы', icon: 'Briefcase' },
 ]
 
-function getCategoryCount(cat: 'personal' | 'groups'): number {
+function getCategoryCount(cat: 'personal' | 'groups' | 'customer'): number {
   if (cat === 'personal') return store.conversations.filter((c) => !c.is_group).length
-  if (cat === 'groups')   return store.conversations.filter((c) => c.is_group).length
+  if (cat === 'groups')   return store.conversations.filter((c) =>  c.is_group).length
+  if (cat === 'customer') return store.conversations.filter((c) => c.my_participant?.label === 'customer').length
   return 0
 }
 
 const filtered = computed(() => {
   let list = store.conversations
-  // Filter by archive state
   if (!showArchived.value) {
     list = list.filter((c: any) => !c.archived_for_me && !c.is_archived)
   } else {
     list = list.filter((c: any) => c.archived_for_me || c.is_archived)
   }
   if (activeCategory.value === 'personal') list = list.filter((c) => !c.is_group)
-  else if (activeCategory.value === 'groups') list = list.filter((c) => c.is_group)
+  else if (activeCategory.value === 'groups')   list = list.filter((c) =>  c.is_group)
+  else if (activeCategory.value === 'customer') list = list.filter((c) => c.my_participant?.label === 'customer')
   const q = search.value.toLowerCase()
   if (!q) return list
   return list.filter((c) => {
@@ -353,6 +383,17 @@ function formatTime(iso: string | undefined): string {
   if (diffDay === 1) return 'вчера'
   if (diffDay < 7) return d.toLocaleDateString('ru', { weekday: 'short' })
   return d.toLocaleDateString('ru', { day: 'numeric', month: 'short' })
+}
+
+// ── CRM label ──────────────────────────────────────────────────────────────
+async function setLabel(conv: Conversation, label: string) {
+  menuConvId.value = null
+  try {
+    await api.patch(`/messages/conversations/${conv.id}/label`, { label })
+    // Update local state
+    const local = store.conversations.find((c) => c.id === conv.id)
+    if (local?.my_participant) (local.my_participant as any).label = label
+  } catch { /* silent */ }
 }
 </script>
 

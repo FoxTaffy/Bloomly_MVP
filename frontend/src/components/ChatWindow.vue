@@ -1339,8 +1339,26 @@ function openImageLightbox(url: string) {
 async function setupE2E() {
   sharedKey.value = null
   e2eActive.value = false
-  // E2E disabled — key exchange not yet stable
-  return
+  // Only DM conversations support E2E
+  if (props.conv?.is_group || !props.other?.id || !auth.user?.id) return
+  try {
+    // 1. Get or generate our key pair
+    const { privateKey, publicKeyJwk } = await getOrCreateKeyPair(auth.user.id)
+    // 2. Upload our public key to the server (idempotent PUT)
+    await api.put('/users/me/public-key', { public_key: JSON.stringify(publicKeyJwk) })
+    // 3. Fetch the partner's public key
+    const res = await api.get(`/users/${props.other.id}/public-key`)
+    const theirKeyRaw: string | null = res.data?.data?.public_key ?? null
+    if (!theirKeyRaw) return // partner has no key yet — E2E not possible
+    const theirKeyJwk = JSON.parse(theirKeyRaw) as JsonWebKey
+    // 4. Derive shared secret
+    sharedKey.value = await deriveSharedKey(privateKey, theirKeyJwk)
+    e2eActive.value = true
+  } catch {
+    // E2E setup failure is non-fatal — fall back to plain text
+    sharedKey.value = null
+    e2eActive.value = false
+  }
 }
 
 function getDisplayText(msg: Message): string {

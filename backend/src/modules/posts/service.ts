@@ -5,6 +5,14 @@ import type { CreatePostInput, GetPostsQuery } from './types.js';
 /** Reusable author select for posts — includes verification fields */
 const AUTHOR_SELECT = { id: true, username: true, display_name: true, avatar_url: true, is_verified: true, verification_type: true } as const;
 
+/** Reusable include for post queries */
+const POST_INCLUDE = {
+  author: { select: AUTHOR_SELECT },
+  rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+  tags: { include: { tag: true } },
+  _count: { select: { votes: true, repaws: true, comments: true } },
+} as const;
+
 export const postService = {
   async createPost(input: CreatePostInput) {
     const content = (input.content ?? '').trim();
@@ -12,6 +20,12 @@ export const postService = {
 
     const authorId = input.authorId;
     const isNsfw = input.isNsfw ?? false;
+    const subscriberOnly = input.subscriberOnly ?? false;
+    const isPaid = input.isPaid ?? false;
+    const price = input.price ?? null;
+    const rewardForUserId = input.rewardForUserId ?? null;
+    const videoTitle = input.videoTitle?.trim() || null;
+    const videoDescription = input.videoDescription?.trim() || null;
     const category = input.category?.trim() || undefined;
     const tags = Array.from(
       new Set(
@@ -28,6 +42,12 @@ export const postService = {
           content, 
           author_id: authorId, 
           is_nsfw: isNsfw,
+          subscriber_only: subscriberOnly,
+          is_paid: isPaid,
+          price: price ? price : undefined,
+          reward_for_user_id: rewardForUserId || undefined,
+          video_title: videoTitle || undefined,
+          video_description: videoDescription || undefined,
           category,
           media_urls: mediaUrls,
         },
@@ -54,23 +74,16 @@ export const postService = {
 
       return tx.post.findUnique({
         where: { id: post.id },
-        include: {
-          author: { select: AUTHOR_SELECT },
-          tags: { include: { tag: true } },
-          _count: { select: { votes: true, repaws: true, comments: true } },
-        },
+        include: POST_INCLUDE,
       });
     });
   },
 
+
   async getPostById(postId: string) {
     const post = await prisma.post.findUnique({
       where: { id: postId, deleted_at: null },
-      include: {
-        author: { select: AUTHOR_SELECT },
-        tags: { include: { tag: true } },
-        _count: { select: { votes: true, repaws: true, comments: true } },
-      },
+      include: POST_INCLUDE,
     });
     return post;
   },
@@ -109,8 +122,10 @@ export const postService = {
       take: limitNum,
       include: {
         author: { select: AUTHOR_SELECT },
+        rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
-        _count: { select: { votes: true, repaws: true, comments: true } }
+        _count: { select: { votes: true, repaws: true, comments: true } },
+        groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true } } } },
       },
     });
   },
@@ -118,8 +133,10 @@ export const postService = {
   async getPersonalizedPosts(userId: string, safeMode: boolean = false, pageNum: number = 1, limitNum: number = 30) {
     const postInclude = {
       author: { select: AUTHOR_SELECT },
+      rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
       tags: { include: { tag: true } },
       _count: { select: { votes: true, repaws: true, comments: true } },
+      groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true } } } },
     };
 
     // Analyse last 30 activity records
@@ -322,6 +339,7 @@ export const postService = {
       take,
       include: {
         author: { select: AUTHOR_SELECT },
+        rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: true } },
       },
@@ -335,6 +353,7 @@ export const postService = {
       take,
       include: {
         author: { select: AUTHOR_SELECT },
+        rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: true } },
       },
@@ -350,6 +369,7 @@ export const postService = {
         post: {
           include: {
             author: { select: AUTHOR_SELECT },
+            rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
             tags: { include: { tag: true } },
             _count: { select: { votes: true, repaws: true } },
           },
@@ -368,6 +388,7 @@ export const postService = {
         post: {
           include: {
             author: { select: AUTHOR_SELECT },
+            rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
             tags: { include: { tag: true } },
             _count: { select: { votes: true, repaws: true } },
           },
@@ -512,6 +533,7 @@ export const postService = {
       data: { content },
       include: {
         author: { select: AUTHOR_SELECT },
+        rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true } },
       },

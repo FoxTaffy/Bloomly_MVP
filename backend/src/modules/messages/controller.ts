@@ -8,7 +8,8 @@ export async function getConversationsHandler(req: FastifyRequest, reply: Fastif
   try {
     const { id: userId } = req.user as JwtUser;
     const archived = (req.query as any).archived === 'true';
-    const conversations = await messageService.getConversations(userId, archived);
+    const label    = (req.query as any).label as string | undefined;
+    const conversations = await messageService.getConversations(userId, archived, label);
     return reply.send({ success: true, data: { conversations }, error: null });
   } catch (e: any) {
     return reply.code(e.statusCode ?? 500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
@@ -204,6 +205,27 @@ export async function getGroupMembersHandler(
     const { id: userId } = req.user as JwtUser;
     const members = await messageService.getGroupMembers(req.params.id, userId);
     return reply.send({ success: true, data: { members }, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  }
+}
+
+// ── CRM label ─────────────────────────────────────────────────────────────────
+
+/**
+ * PATCH /conversations/:id/label
+ * Body: { label: 'default' | 'customer' }
+ */
+export async function setConversationLabelHandler(
+  req: FastifyRequest<{ Params: { id: string }; Body: { label: string } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = req.user as JwtUser;
+    const { label } = req.body as { label: string };
+    if (!label) return reply.code(400).send({ success: false, data: null, error: { code: 'VALIDATION', message: 'label is required' } });
+    await messageService.setConversationLabel(req.params.id, userId, label);
+    return reply.send({ success: true, data: { label }, error: null });
   } catch (e: any) {
     return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
   }

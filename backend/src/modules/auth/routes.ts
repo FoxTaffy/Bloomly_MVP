@@ -4,6 +4,7 @@ import {
   forgotPasswordHandler, resetPasswordHandler,
   verifyEmailHandler, resendOtpHandler,
   oauthRedirectHandler, oauthCallbackHandler,
+  linkInitHandler, getLinkedAccountsHandler, unlinkAccountHandler,
 } from './controller.js';
 import type { JwtPayload } from './types.js';
 import prisma from '../../config/prisma.js';
@@ -24,7 +25,7 @@ export async function authRoutes(fastify: FastifyInstance) {
       body: {
         type: 'object', required: ['username', 'email', 'password'],
         properties: {
-          username: { type: 'string', minLength: 3 },
+          username: { type: 'string', minLength: 3, maxLength: 30, pattern: '^[a-z0-9_]+$' },
           email:    { type: 'string', format: 'email' },
           password: { type: 'string', minLength: 6 },
         },
@@ -96,6 +97,12 @@ export async function authRoutes(fastify: FastifyInstance) {
   // ── OAuth ─────────────────────────────────────────────────────────────────────
   fastify.get('/oauth/:provider',     oauthRedirectHandler);
   fastify.get('/callback/:provider',  oauthCallbackHandler);
+
+  // ── Привязка OAuth-аккаунтов (требует JWT) ────────────────────────────────────
+  const auth: import('fastify').RouteShorthandOptions = { onRequest: [fastify.authenticate] };
+  fastify.get('/link-init/:provider',          auth, linkInitHandler as any);
+  fastify.get('/linked-accounts',              auth, getLinkedAccountsHandler as any);
+  fastify.delete('/linked-accounts/:provider', auth, unlinkAccountHandler as any);
 
   // ── Профиль (требует JWT) ─────────────────────────────────────────────────────
   fastify.get(

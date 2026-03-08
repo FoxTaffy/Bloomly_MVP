@@ -10,9 +10,10 @@ import SoonBadge from '@/components/groups/SoonBadge.vue'
 import CreateGroupModal from '@/components/groups/CreateGroupModal.vue'
 import { useGroupsStore, type GroupType } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
+import { useNsfwMode } from '@/composables/useNsfwMode'
 
 const router = useRouter()
-const nsfwMode = ref(localStorage.getItem('bloomly_nsfw') === 'true')
+const { nsfwEnabled: nsfwMode } = useNsfwMode()
 const activeNav = ref('groups')
 const showCreateModal = ref(false)
 const search = ref('')
@@ -58,7 +59,7 @@ const displayGroups = computed(() => {
 })
 
 const upcomingEvents = computed(() =>
-  groupsStore.events.filter(e => new Date(e.starts_at) > new Date()).slice(0, 4)
+  groupsStore.events.filter(e => new Date(e.starts_at) > new Date()).slice(0, 6)
 )
 
 const selectedCategoryLabel = computed(() =>
@@ -70,18 +71,22 @@ async function loadData() {
     event: 'event', creative: 'creative', static: 'static',
     news: 'news', shop: 'shop', community: 'community', brand: 'brand',
   }
+  await groupsStore.loadGroups({
+    type: selectedCategory.value !== 'all' ? typeMap[selectedCategory.value] : undefined,
+    search: search.value || undefined,
+  })
+}
+
+// Load stable data once (events, memberships, badges) — not on every filter change
+async function loadStaticData() {
   await Promise.all([
-    groupsStore.loadGroups({
-      type: selectedCategory.value !== 'all' ? typeMap[selectedCategory.value] : undefined,
-      search: search.value || undefined,
-    }),
     groupsStore.loadEvents({ upcoming: true, limit: 6 }),
     groupsStore.loadMyGroups(),
     authStore.user ? groupsStore.loadMySoonBadges(authStore.user.id) : Promise.resolve(),
   ])
 }
 
-onMounted(loadData)
+onMounted(async () => { await Promise.all([loadData(), loadStaticData()]) })
 
 function selectCategory(key: string) {
   selectedCategory.value = key
@@ -125,7 +130,6 @@ async function handleCreateGroup(input: any) {
   if (input.type === 'creative' && input.commissionStatus) {
     await groupsStore.updateCommission(group.id, {
       status: input.commissionStatus,
-      basePrice: input.commissionPrices || {},
       currency: input.commissionCurrency || 'USD',
       maxQueue: input.commissionMaxQueue || 5,
     })
@@ -180,7 +184,7 @@ function fmt(iso: string) {
             :key="badge.id"
             :short-code="badge.event.short_code"
             class="cursor-pointer hover:scale-105 transition-transform"
-            @click="router.push({ name: 'event-detail', params: { eventId: badge.event.id } })"
+            @click="router.push(`/events/${badge.event.id}`)"
           />
         </div>
 
@@ -293,18 +297,23 @@ function fmt(iso: string) {
                   class="flex gap-2.5 cursor-pointer hover:bg-brand-bg/40 rounded-xl p-2 -mx-1 transition-colors"
                   @click="router.push({ name: 'event-detail', params: { eventId: ev.id } })"
                 >
-                  <!-- Mini banner -->
+                  <!-- Mini banner: event banner, then group banner, then placeholder -->
                   <div class="w-14 h-14 rounded-xl overflow-hidden shrink-0">
-                    <img v-if="(ev as any).group?.banner_url" :src="(ev as any).group.banner_url" class="w-full h-full object-cover" />
-                    <div v-else class="w-full h-full bg-brand-accent/20 flex items-center justify-center">
+                    <img v-if="ev.banner_url || ev.group?.banner_url" :src="ev.banner_url || ev.group!.banner_url!" class="w-full h-full object-cover" />
+                    <div v-else class="w-full h-full bg-brand-accent/20 flex items-center justify-center"
+                      :style="ev.group?.accent_color ? `background:${ev.group.accent_color}22` : ''">
                       <BIcon name="CalendarDays" class="w-5 h-5 text-brand-accent" />
                     </div>
                   </div>
                   <div class="flex-1 min-w-0">
                     <p class="text-white text-xs font-bold truncate">{{ ev.title }}</p>
-                    <div v-if="(ev as any).location_name" class="flex items-center gap-1 text-white/40 text-[10px] mt-0.5">
+                    <p v-if="ev.group?.name" class="text-white/50 text-[10px] truncate flex items-center gap-1 mt-0.5">
+                      <BIcon name="Users" class="w-2.5 h-2.5 flex-shrink-0" />
+                      {{ ev.group.name }}
+                    </p>
+                    <div v-if="ev.location_name" class="flex items-center gap-1 text-white/40 text-[10px] mt-0.5">
                       <BIcon name="MapPin" class="w-2.5 h-2.5 shrink-0" />
-                      <span class="truncate">{{ (ev as any).location_name }}</span>
+                      <span class="truncate">{{ ev.location_name }}</span>
                     </div>
                     <p class="text-brand-accent text-[10px] font-semibold mt-0.5">{{ fmt(ev.starts_at) }}</p>
                   </div>
@@ -337,5 +346,12 @@ function fmt(iso: string) {
 .dropdown-leave-to {
   opacity: 0;
   transform: translateY(-4px);
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 </style>

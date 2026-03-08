@@ -1,14 +1,36 @@
 <template>
-  <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all group select-none">
+  <!-- Hidden state after "Не интересно" -->
+  <div v-if="isHidden" class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-sm">
+    <div class="flex items-center justify-between px-5 py-3.5">
+      <span class="text-sm text-white/35">Пост скрыт</span>
+      <button @click="isHidden = false" class="text-xs text-brand-accent/70 hover:text-brand-accent transition-colors">Отменить</button>
+    </div>
+  </div>
+
+  <div v-else class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all group select-none">
     <div class="p-5 md:p-6">
 
       <!-- ── Header ────────────────────────────────────────────────────── -->
       <div class="flex items-start justify-between gap-3 mb-4">
-        <div class="flex items-center gap-3 min-w-0 cursor-pointer" @click="router.push(`/profile/${post.author.id}`)">
+        <div class="flex items-center gap-3 min-w-0 cursor-pointer"
+          @click="groupContext ? router.push(`/groups/${groupContext.slug}`) : router.push(`/profile/${post.author.id}`)">
           <!-- Avatar -->
           <div class="relative flex-shrink-0">
             <img
-              v-if="post.author.avatar_url"
+              v-if="groupContext && groupContext.avatar_url"
+              :src="groupContext.avatar_url"
+              :alt="groupContext.name"
+              class="w-11 h-11 rounded-xl object-cover border border-brand-border"
+              width="44" height="44"
+            />
+            <div
+              v-else-if="groupContext && !groupContext.avatar_url"
+              class="w-11 h-11 rounded-xl border border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-base"
+            >
+              {{ avatarInitial(groupContext.name) }}
+            </div>
+            <img
+              v-else-if="!groupContext && post.author.avatar_url"
               :src="post.author.avatar_url"
               :alt="post.author.display_name || post.author.username"
               class="w-11 h-11 rounded-full object-cover border border-brand-border"
@@ -22,7 +44,7 @@
             </div>
             <!-- Follow quick-add button -->
             <button
-              v-if="showFollowButton && authStore.user && post.author.id !== authStore.user?.id && localFollowing === false"
+              v-if="!groupContext && showFollowButton && authStore.user && post.author.id !== authStore.user?.id && localFollowing === false"
               @click.stop="toggleFollow"
               class="absolute -bottom-1 -right-1 w-5 h-5 bg-brand-accent rounded-full flex items-center justify-center border-2 border-brand-card hover:bg-brand-accent-plus transition-colors"
               title="Подписаться"
@@ -35,20 +57,23 @@
             <!-- Display labels row -->
             <div class="flex items-center gap-1.5 flex-wrap">
               <h4 class="font-bold text-white truncate hover:text-brand-accent transition-colors">
-                {{ post.author.display_name || post.author.username }}
+                {{ groupContext ? groupContext.name : (post.author.display_name || post.author.username) }}
               </h4>
-              <!-- Verification badge -->
-              <img v-if="post.author.is_verified && post.author.verification_type"
-                :src="`/icons/badges/${post.author.verification_type}.svg`"
-                class="w-4 h-4 flex-shrink-0" :title="({ artist: 'Верифицированный художник', master: 'Верифицированный мастер', event: 'Мероприятие' } as Record<string, string>)[post.author.verification_type] || 'Верифицирован'" />
-              <img v-else-if="post.author.is_verified"
-                src="/icons/badges/verified.svg"
-                class="w-4 h-4 flex-shrink-0" title="Верифицирован" />
-              <!-- AD badge -->
-              <span v-if="post.author.role === 'ad'"
-                class="inline-flex items-center gap-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded-md">
-                AD
-              </span>
+              <!-- Verification badge — only for user posts -->
+              <template v-if="!groupContext">
+                <img v-if="post.author.is_verified && post.author.verification_type"
+                  :src="`/icons/badges/${post.author.verification_type}.svg`"
+                  class="w-4 h-4 flex-shrink-0" :title="({ artist: 'Верифицированный художник', master: 'Верифицированный мастер', event: 'Мероприятие' } as Record<string, string>)[post.author.verification_type] || 'Верифицирован'" />
+                <img v-else-if="post.author.is_verified"
+                  src="/icons/badges/verified.svg"
+                  class="w-4 h-4 flex-shrink-0" title="Верифицирован" />
+                <!-- AD badge -->
+                <span v-if="post.author.role === 'ad'"
+                  class="inline-flex items-center gap-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded-md">
+                  AD
+                </span>
+              </template>
+
               <span v-if="showRepawLabel"
                 class="inline-flex items-center gap-1 text-[10px] text-white/55 bg-brand-bg border border-brand-border px-1.5 py-0.5 rounded-md font-semibold">
                 <BIcon name="Repeat2" class="w-3 h-3" /> Репав
@@ -58,7 +83,8 @@
                 <BIcon name="Pin" class="w-3 h-3" /> Закреплён
               </span>
             </div>
-            <p class="text-xs text-white/55 truncate">@{{ post.author.username }} · {{ fmtDate(post.created_at) }}</p>
+            <p v-if="groupContext" class="text-xs text-white/55 truncate">@{{ groupContext.slug }} · {{ fmtDate(post.created_at) }}</p>
+            <p v-else class="text-xs text-white/55 truncate">@{{ post.author.username }} · {{ fmtDate(post.created_at) }}</p>
           </div>
         </div>
 
@@ -72,16 +98,22 @@
           <!-- Three-dot menu -->
           <div class="relative">
             <button
-              @click.stop="showMenu = !showMenu"
+              ref="menuBtnRef"
+              @click.stop="toggleMenu"
               class="text-white/55 hover:text-white p-2 rounded-full hover:bg-white/5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
             >
               <BIcon name="MoreHorizontal" class="w-5 h-5" />
             </button>
-            <div
-              v-if="showMenu"
-              v-click-outside="() => showMenu = false"
-              class="absolute right-0 top-10 z-30 w-48 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1"
-            >
+
+            <!-- Dropdown teleported to body to escape overflow:hidden -->
+            <Teleport to="body">
+              <div
+                v-if="showMenu"
+                v-click-outside="() => showMenu = false"
+                class="fixed z-[9998] w-56 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1"
+                :style="{ top: menuPos.top, right: menuPos.right }"
+              >
+              <!-- Owner actions -->
               <button v-if="canPin && !isPinnedThis" @click="emit('pin', post.id); showMenu = false"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5">
                 <BIcon name="Pin" class="w-4 h-4 text-brand-accent" /> Закрепить
@@ -98,74 +130,135 @@
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 disabled:opacity-50">
                 <BIcon name="Trash2" class="w-4 h-4" /> Удалить
               </button>
-              <button @click="doShare"
-                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/55 hover:bg-white/5 hover:text-white">
+
+              <!-- Divider if owner -->
+              <div v-if="isOwn" class="my-1 border-t border-brand-border/50" />
+
+              <!-- Copy link -->
+              <button @click="copyPostLink" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5 hover:text-white">
+                <BIcon :name="linkCopied ? 'CheckCheck' : 'Link'" class="w-4 h-4" />
+                {{ linkCopied ? 'Скопировано!' : 'Копировать ссылку' }}
+              </button>
+
+              <!-- Share -->
+              <button @click="doShare" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5 hover:text-white">
                 <BIcon name="Share2" class="w-4 h-4" /> Поделиться
               </button>
-            </div>
+
+              <!-- Non-owner actions -->
+              <template v-if="!isOwn">
+                <div class="my-1 border-t border-brand-border/50" />
+
+                <!-- Не интересно -->
+                <button @click="markNotInterested" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5 hover:text-white">
+                  <BIcon name="EyeOff" class="w-4 h-4" /> Не интересно
+                </button>
+
+                <!-- Уведомления о постах -->
+                <button @click="toggleNotify" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-white/5 transition-colors"
+                  :class="notifyPosts ? 'text-brand-accent' : 'text-white/70 hover:text-white'">
+                  <BIcon :name="notifyPosts ? 'BellOff' : 'Bell'" class="w-4 h-4" />
+                  {{ notifyPosts ? 'Откл. уведомления' : 'Уведомления о постах' }}
+                </button>
+
+                <!-- Пожаловаться -->
+                <button @click="showReportModal = true; showMenu = false" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-amber-400 hover:bg-amber-500/10">
+                  <BIcon name="Flag" class="w-4 h-4" /> Пожаловаться
+                </button>
+
+                <!-- Отправить в ЧС -->
+                <button @click="blockUser" :disabled="isBlocking" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 disabled:opacity-50">
+                  <BIcon name="UserX" class="w-4 h-4" /> {{ isBlocking ? 'Блокировка...' : 'Отправить в ЧС' }}
+                </button>
+              </template>
+              </div>
+            </Teleport>
           </div>
         </div>
       </div>
 
+      <!-- ── Reward for banner ───────────────────────────────────────── -->
+      <div v-if="post.rewardForUser" class="flex items-center gap-2 mb-3 mt-1">
+        <span class="text-xs text-white/40 font-medium">Reward for</span>
+        <button
+          @click.stop="router.push(`/profile/${post.rewardForUser.id}`)"
+          class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-brand-bg border border-brand-border hover:border-brand-accent/40 transition-colors"
+        >
+          <img v-if="post.rewardForUser.avatar_url" :src="post.rewardForUser.avatar_url" class="w-4 h-4 rounded-full object-cover" />
+          <div v-else class="w-4 h-4 rounded-full bg-brand-accent/20 flex items-center justify-center text-[8px] font-bold text-brand-accent">
+            {{ (post.rewardForUser.display_name || post.rewardForUser.username || '?')[0].toUpperCase() }}
+          </div>
+          <span class="text-xs text-white/80 font-semibold">{{ post.rewardForUser.display_name || post.rewardForUser.username }}</span>
+        </button>
+      </div>
+
       <!-- ── Content ───────────────────────────────────────────────────── -->
       <div class="space-y-3">
-        <!-- NSFW blur wrapper -->
-        <div :class="{ 'blur-md hover:blur-none cursor-pointer transition-all': post.is_nsfw }">
 
-          <!-- Inline edit form -->
-          <div v-if="isEditing" class="mb-1">
-            <textarea
-              v-model="editContent"
-              autofocus
-              rows="3"
-              class="w-full bg-brand-bg border border-brand-accent/50 rounded-2xl px-4 py-3 text-white text-[15px] leading-relaxed resize-none outline-none focus:border-brand-accent"
-            ></textarea>
-            <div class="flex gap-2 mt-2 justify-end">
-              <button @click="cancelEdit" class="px-4 py-1.5 text-sm text-white/55 hover:text-white hover:bg-white/5 rounded-xl">Отмена</button>
-              <button @click="saveEdit" :disabled="isSaving"
-                class="px-4 py-1.5 text-sm bg-brand-accent text-white font-bold rounded-xl hover:bg-brand-accent-plus disabled:opacity-50">
-                {{ isSaving ? 'Сохранение...' : 'Сохранить' }}
-              </button>
-            </div>
+        <!-- Inline edit form -->
+        <div v-if="isEditing" class="mb-1">
+          <textarea
+            v-model="editContent"
+            autofocus
+            rows="3"
+            class="w-full bg-brand-bg border border-brand-accent/50 rounded-2xl px-4 py-3 text-white text-[15px] leading-relaxed resize-none outline-none focus:border-brand-accent"
+          ></textarea>
+          <div class="flex gap-2 mt-2 justify-end">
+            <button @click="cancelEdit" class="px-4 py-1.5 text-sm text-white/55 hover:text-white hover:bg-white/5 rounded-xl">Отмена</button>
+            <button @click="saveEdit" :disabled="isSaving"
+              class="px-4 py-1.5 text-sm bg-brand-accent text-white font-bold rounded-xl hover:bg-brand-accent-plus disabled:opacity-50">
+              {{ isSaving ? 'Сохранение...' : 'Сохранить' }}
+            </button>
           </div>
+        </div>
 
-          <!-- Post text with mention highlighting -->
-          <p v-else class="text-white/95 text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap">
-            <template v-for="seg in parsedContent" :key="seg.key">
-              <span v-if="seg.type === 'text'">{{ seg.text }}</span>
-              <!-- ── MENTION PILL ── -->
-              <span v-else
-                class="mention-pill inline-flex items-center gap-1 pl-0.5 pr-2 py-0.5 bg-brand-accent/15 border border-brand-accent/30 rounded-full text-brand-accent text-[13px] font-semibold cursor-pointer hover:bg-brand-accent/25 transition-all align-middle"
-                style="vertical-align: middle; white-space: nowrap;"
-                @click.stop="goToMention(seg.username!)"
-                @mouseenter="onMentionEnter(seg.username!, $event)"
-                @mouseleave="onMentionLeave()"
+        <!-- Post text with mention highlighting -->
+        <p v-else class="text-white/95 text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap">
+          <template v-for="seg in parsedContent" :key="seg.key">
+            <span v-if="seg.type === 'text'">{{ seg.text }}</span>
+            <!-- ── MENTION PILL ── -->
+            <span v-else
+              class="mention-pill inline-flex items-center gap-1 pl-0.5 pr-2 py-0.5 bg-brand-accent/15 border border-brand-accent/30 text-brand-accent text-[13px] font-semibold cursor-pointer hover:bg-brand-accent/25 transition-all align-middle"
+              :class="mentionGroups[seg.username!] ? 'rounded-xl' : 'rounded-full'"
+              style="vertical-align: middle; white-space: nowrap;"
+              @click.stop="goToMention(seg.username!)"
+              @mouseenter="onMentionEnter(seg.username!, $event)"
+              @mouseleave="onMentionLeave()"
+            >
+              <!-- Avatar or initials -->
+              <span
+                class="flex-shrink-0 w-5 h-5 overflow-hidden border border-brand-accent/40 bg-brand-accent/20 flex items-center justify-center"
+                :class="mentionGroups[seg.username!] ? 'rounded-md' : 'rounded-full'"
               >
-                <!-- Avatar or initials -->
-                <span class="flex-shrink-0 w-5 h-5 rounded-full overflow-hidden border border-brand-accent/40 bg-brand-accent/20 flex items-center justify-center">
-                  <img
-                    v-if="mentionUsers[seg.username!]?.avatar_url"
-                    :src="mentionUsers[seg.username!]!.avatar_url!"
-                    class="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                  <span v-else class="text-[8px] font-bold text-brand-accent leading-none">
-                    {{ (seg.username ?? '?')[0].toUpperCase() }}
-                  </span>
+                <img
+                  v-if="(mentionGroups[seg.username!] ?? mentionUsers[seg.username!])?.avatar_url"
+                  :src="(mentionGroups[seg.username!] ?? mentionUsers[seg.username!])!.avatar_url!"
+                  class="w-full h-full object-cover"
+                  loading="lazy"
+                />
+                <span v-else class="text-[8px] font-bold text-brand-accent leading-none">
+                  {{ (seg.username ?? '?')[0].toUpperCase() }}
                 </span>
-                <span class="leading-none">{{ seg.username }}</span>
               </span>
-            </template>
-          </p>
+              <!-- Label: group name or @username -->
+              <span class="leading-none">{{ mentionGroups[seg.username!] ? mentionGroups[seg.username!]!.name : seg.username }}</span>
+            </span>
+          </template>
+        </p>
 
-          <!-- ── Media carousel ────────────────────────────────────── -->
+        <!-- ── Media carousel ────────────────────────────────────── -->
+        <div
+          v-if="post.media_urls && post.media_urls.length"
+          class="relative mt-3 rounded-2xl overflow-hidden bg-black/20 group/carousel"
+          :class="adMode ? 'select-none' : ''"
+          @contextmenu="adMode ? ($event as Event).preventDefault() : null"
+          @touchstart.passive="carouselTouchStart"
+          @touchend.passive="carouselTouchEnd"
+        >
+          <!-- Media content (blurred when restricted) -->
           <div
-            v-if="post.media_urls && post.media_urls.length"
-            class="relative mt-3 rounded-2xl overflow-hidden bg-black/20 group/carousel"
-            :class="adMode ? 'select-none' : ''"
-            @contextmenu="adMode ? ($event as Event).preventDefault() : null"
-            @touchstart.passive="carouselTouchStart"
-            @touchend.passive="carouselTouchEnd"
+            class="transition-all duration-300"
+            :class="(post.is_nsfw && !nsfwEnabled) || (isPaywalled && !paidRevealed) ? 'blur-xl scale-110 pointer-events-none select-none' : ''"
           >
             <!-- Slide -->
             <div class="carousel-track" :style="{ transform: `translateX(-${carouselIndex * 100}%)` }">
@@ -228,6 +321,57 @@
               <BIcon name="Expand" class="w-4 h-4" />
             </button>
           </div>
+
+          <!-- ── NSFW overlay ─────────────────────────────────── -->
+          <Transition name="fade">
+            <div
+              v-if="post.is_nsfw && !nsfwEnabled"
+              class="absolute inset-0 z-20 flex items-center justify-center"
+              style="background: rgba(0,0,0,0.55)"
+            >
+              <div class="bg-[#1a1a2e]/95 backdrop-blur-md border border-white/10 rounded-2xl px-8 py-7 text-center max-w-xs mx-4 shadow-2xl">
+                <!-- Warning triangle -->
+                <div class="w-14 h-14 rounded-full border-2 border-red-500/40 bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+                  <BIcon name="AlertTriangle" class="w-7 h-7 text-red-400" />
+                </div>
+                <h3 class="font-bold text-white text-lg mb-2">NSFW Контент</h3>
+                <p class="text-white/45 text-sm mb-5">Данный контент предназначен для пользователей старше 18 лет. Включите NSFW в верхней панели.</p>
+                <button
+                  @click.stop="enableNsfw()"
+                  class="w-full py-2.5 bg-red-500 hover:bg-red-400 active:bg-red-600 text-white font-bold text-sm rounded-xl transition-colors"
+                >
+                  Включить NSFW
+                </button>
+              </div>
+            </div>
+          </Transition>
+
+          <!-- ── Paid / subscriber-only overlay ──────────────── -->
+          <Transition name="fade">
+            <div
+              v-if="(!post.is_nsfw || nsfwEnabled) && isPaywalled && !paidRevealed"
+              class="absolute inset-0 z-20 flex flex-col items-center justify-center px-6 py-8"
+              style="background: rgba(0,0,0,0.6)"
+            >
+              <template v-if="post.video_title">
+                <h3 class="font-bold text-white text-lg mb-1 text-center">{{ post.video_title }}</h3>
+                <p v-if="post.video_description" class="text-white/55 text-sm mb-2 text-center">{{ post.video_description }}</p>
+              </template>
+              <div class="flex items-center gap-3 mt-4 flex-wrap justify-center">
+                <button
+                  class="inline-flex items-center gap-2 px-5 py-2.5 bg-black/55 border border-white/20 rounded-full text-white text-sm font-semibold hover:bg-black/75 transition-colors"
+                >
+                  <BIcon name="Lock" class="w-4 h-4" /> Подписаться
+                </button>
+                <button
+                  v-if="post.is_paid"
+                  class="inline-flex items-center gap-2 px-5 py-2.5 bg-black/55 border border-white/20 rounded-full text-white text-sm font-semibold hover:bg-black/75 transition-colors"
+                >
+                  <BIcon name="Lock" class="w-4 h-4" /> Купить видео
+                </button>
+              </div>
+            </div>
+          </Transition>
         </div>
 
         <!-- Category + tags -->
@@ -310,6 +454,10 @@
       </div>
     </div>
 
+    <!-- ── Share & Report modals ─────────────────────────────────────────── -->
+    <ShareModal v-model="showShareModal" :post-id="post.id" :post-url="postUrl" />
+    <ReportModal v-model="showReportModal" :post-id="post.id" />
+
     <!-- ── Repaw undo bar ────────────────────────────────────────────────── -->
     <Transition name="slide-up">
       <div v-if="!adMode && repawUndoVisible" class="flex items-center justify-between gap-3 px-5 py-2.5 bg-brand-accent/10 border-t border-brand-accent/25">
@@ -345,15 +493,15 @@
   <Teleport to="body">
     <Transition name="mention-popup">
       <div
-        v-if="hoveredMention && mentionUsers[hoveredMention]"
+        v-if="hoveredMention && (mentionUsers[hoveredMention] || mentionGroups[hoveredMention])"
         class="fixed z-[9999] w-52 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden pointer-events-none"
         :style="{ top: mentionPopupPos.top, left: mentionPopupPos.left, transform: 'translateY(calc(-100% - 6px))' }"
       >
         <!-- Banner -->
         <div class="w-full h-14 relative overflow-hidden bg-gradient-to-br from-brand-accent/30 to-brand-accent-plus/20">
           <img
-            v-if="mentionUsers[hoveredMention]?.banner_url"
-            :src="mentionUsers[hoveredMention]!.banner_url!"
+            v-if="(mentionGroups[hoveredMention] ?? mentionUsers[hoveredMention])?.banner_url"
+            :src="(mentionGroups[hoveredMention] ?? mentionUsers[hoveredMention])!.banner_url!"
             class="w-full h-full object-cover"
             loading="lazy"
           />
@@ -361,10 +509,13 @@
         </div>
         <!-- Avatar overlapping banner -->
         <div class="px-3 pb-3 -mt-5 relative">
-          <div class="w-10 h-10 rounded-full border-2 border-brand-card overflow-hidden bg-brand-accent/20 flex items-center justify-center">
+          <div
+            class="w-10 h-10 border-2 border-brand-card overflow-hidden bg-brand-accent/20 flex items-center justify-center"
+            :class="mentionGroups[hoveredMention] ? 'rounded-xl' : 'rounded-full'"
+          >
             <img
-              v-if="mentionUsers[hoveredMention]?.avatar_url"
-              :src="mentionUsers[hoveredMention]!.avatar_url!"
+              v-if="(mentionGroups[hoveredMention] ?? mentionUsers[hoveredMention])?.avatar_url"
+              :src="(mentionGroups[hoveredMention] ?? mentionUsers[hoveredMention])!.avatar_url!"
               class="w-full h-full object-cover"
               loading="lazy"
             />
@@ -373,10 +524,21 @@
             </span>
           </div>
           <div class="mt-1.5">
-            <div class="text-sm font-bold text-white leading-tight truncate">
-              {{ mentionUsers[hoveredMention]?.display_name || hoveredMention }}
-            </div>
-            <div class="text-xs text-white/55 truncate">@{{ hoveredMention }}</div>
+            <!-- Group popup -->
+            <template v-if="mentionGroups[hoveredMention]">
+              <div class="text-sm font-bold text-white leading-tight truncate">
+                {{ mentionGroups[hoveredMention]!.name }}
+              </div>
+              <div class="text-xs text-white/55 truncate">@{{ hoveredMention }}</div>
+              <div class="text-xs text-white/40 mt-0.5">{{ mentionGroups[hoveredMention]!.members_count }} участников</div>
+            </template>
+            <!-- User popup -->
+            <template v-else>
+              <div class="text-sm font-bold text-white leading-tight truncate">
+                {{ mentionUsers[hoveredMention]?.display_name || hoveredMention }}
+              </div>
+              <div class="text-xs text-white/55 truncate">@{{ hoveredMention }}</div>
+            </template>
           </div>
         </div>
       </div>
@@ -388,11 +550,14 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useNsfwMode } from '@/composables/useNsfwMode'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
 import PostComments from '@/components/PostComments.vue'
 import PostLightbox from '@/components/PostLightbox.vue'
+import ShareModal from '@/components/ShareModal.vue'
+import ReportModal from '@/components/ReportModal.vue'
 
 // ── Module-level mention user cache (shared across all PostCard instances) ──
 type MentionUser = { id: string; username: string; display_name: string | null; avatar_url: string | null; banner_url: string | null }
@@ -419,9 +584,34 @@ async function lookupMentionUser(username: string): Promise<MentionUser | null> 
   return promise
 }
 
+// ── Module-level group mention cache ─────────────────────────────────────────
+type MentionGroup = { id: string; slug: string; name: string; avatar_url: string | null; banner_url: string | null; members_count: number }
+const _mentionGroupCache = new Map<string, MentionGroup | null>()
+const _pendingGroupFetches = new Map<string, Promise<MentionGroup | null>>()
+
+async function lookupMentionGroup(slug: string): Promise<MentionGroup | null> {
+  if (_mentionGroupCache.has(slug)) return _mentionGroupCache.get(slug) ?? null
+  if (_pendingGroupFetches.has(slug)) return _pendingGroupFetches.get(slug)!
+  const promise = api.get(`/groups/${encodeURIComponent(slug)}`).then(r => {
+    const g = r.data.data?.group ?? null
+    const result: MentionGroup | null = g ? {
+      id: g.id, slug: g.slug, name: g.name,
+      avatar_url: g.avatar_url ?? null,
+      banner_url: g.banner_url ?? null,
+      members_count: g.members_count ?? 0,
+    } : null
+    _mentionGroupCache.set(slug, result)
+    _pendingGroupFetches.delete(slug)
+    return result
+  }).catch(() => { _mentionGroupCache.set(slug, null); _pendingGroupFetches.delete(slug); return null })
+  _pendingGroupFetches.set(slug, promise)
+  return promise
+}
+
 // ── Props & emits ─────────────────────────────────────────────────────────
 const props = defineProps<{
   post: any
+  groupContext?: { id: string; slug: string; name: string; avatar_url: string | null; accent_color?: string | null } | null
   isOwnProfile?: boolean
   isPinnedPostId?: string | null
   showRepawLabel?: boolean
@@ -458,11 +648,35 @@ watch(() => props.initialRepawed, (val) => { if (val !== undefined) localRepawed
 watch(() => props.initialFavourited, (val) => { if (val !== undefined) localFavourited.value = val })
 
 const showMenu    = ref(false)
+const menuBtnRef  = ref<HTMLElement | null>(null)
+const menuPos     = ref({ top: '0px', right: '0px' })
 const isExpanded  = ref(false)
+
+function toggleMenu(e: MouseEvent) {
+  e.stopPropagation()
+  if (!showMenu.value && menuBtnRef.value) {
+    const rect = menuBtnRef.value.getBoundingClientRect()
+    menuPos.value = {
+      top: `${rect.bottom + 6}px`,
+      right: `${window.innerWidth - rect.right}px`,
+    }
+  }
+  showMenu.value = !showMenu.value
+}
 const isEditing   = ref(false)
 const editContent = ref('')
 const isSaving    = ref(false)
 const isDeleting  = ref(false)
+const showShareModal = ref(false)
+const showReportModal = ref(false)
+const notifyPosts = ref(false)    // уведомления о постах
+const isBlocking  = ref(false)
+const isHidden    = ref(false)    // «не интересно» — скрыт из фида
+const linkCopied  = ref(false)
+
+// NSFW / paid reveal state
+const { nsfwEnabled, enableNsfw } = useNsfwMode()
+const paidRevealed = ref(false)
 
 const repawUndoVisible = ref(false)
 const repawCountdown = ref(5)
@@ -503,6 +717,7 @@ function onMentionLeave() { hoveredMention.value = null }
 // ── Mention user data ──────────────────────────────────────────────────────
 // reactive map so template updates when data arrives
 const mentionUsers = ref<Record<string, MentionUser | null>>({})
+const mentionGroups = ref<Record<string, MentionGroup | null>>({})
 
 async function loadMentionUsers() {
   const content = props.post.content ?? ''
@@ -511,6 +726,11 @@ async function loadMentionUsers() {
     if (!(username in mentionUsers.value)) {
       const user = await lookupMentionUser(username)
       mentionUsers.value = { ...mentionUsers.value, [username]: user }
+      // If no user found, try group lookup
+      if (!user && !(username in mentionGroups.value)) {
+        const group = await lookupMentionGroup(username)
+        mentionGroups.value = { ...mentionGroups.value, [username]: group }
+      }
     }
   }
 }
@@ -525,6 +745,11 @@ const isOwn = computed(() =>
 )
 const canPin = computed(() => props.isOwnProfile && isOwn.value)
 const isPinnedThis = computed(() => !!props.isPinnedPostId && props.isPinnedPostId === props.post.id)
+
+// Paywall: subscriber-only or paid, and not the author's own post
+const isPaywalled = computed(() =>
+  (props.post.subscriber_only || props.post.is_paid) && !isOwn.value
+)
 
 const lightboxUrls = computed<string[]>(() =>
   props.post.media_urls ?? []
@@ -647,11 +872,19 @@ async function toggleFollow() {
 }
 
 async function goToMention(username: string) {
+  // Check if it's a known group first (from already-loaded data)
+  if (mentionGroups.value[username]) {
+    router.push(`/groups/${mentionGroups.value[username]!.slug}`)
+    return
+  }
   try {
     const r = await api.get(`/users/search?q=${encodeURIComponent(username)}`)
     const users: any[] = r.data.data?.users ?? []
     const found = users.find((u: any) => u.username.toLowerCase() === username.toLowerCase())
-    if (found) router.push(`/profile/${found.id}`)
+    if (found) { router.push(`/profile/${found.id}`); return }
+    // Not a user — try group
+    const groupSlug = username.toLowerCase()
+    router.push(`/groups/${groupSlug}`)
   } catch {}
 }
 
@@ -708,13 +941,52 @@ async function doDelete() {
   }
 }
 
-async function doShare() {
+// ── Computed URLs ─────────────────────────────────────────────────────────
+const postUrl = computed(() => `${window.location.origin}/post/${props.post.id}`)
+
+function doShare() {
   showMenu.value = false
-  const url = `${window.location.origin}/post/${props.post.id}`
+  showShareModal.value = true
+}
+
+async function copyPostLink() {
   try {
-    if (navigator.share) await navigator.share({ url })
-    else await navigator.clipboard.writeText(url)
+    await navigator.clipboard.writeText(postUrl.value)
+    linkCopied.value = true
+    setTimeout(() => { linkCopied.value = false }, 2000)
   } catch {}
+  showMenu.value = false
+}
+
+function markNotInterested() {
+  showMenu.value = false
+  isHidden.value = true
+  // Optionally notify backend
+  api.post(`/posts/${props.post.id}/not-interested`).catch(() => {})
+}
+
+async function toggleNotify() {
+  notifyPosts.value = !notifyPosts.value
+  showMenu.value = false
+  try {
+    if (notifyPosts.value) {
+      await api.post(`/users/${props.post.author?.id}/follow-notifications`, { enabled: true })
+    } else {
+      await api.post(`/users/${props.post.author?.id}/follow-notifications`, { enabled: false })
+    }
+  } catch {}
+}
+
+async function blockUser() {
+  if (isBlocking.value || isOwn.value) return
+  isBlocking.value = true
+  showMenu.value = false
+  try {
+    await api.post('/blocks', { blocked_id: props.post.author_id || props.post.author?.id })
+    emit('deleted', props.post.id)
+  } catch {} finally {
+    isBlocking.value = false
+  }
 }
 
 // ── Click-outside directive ────────────────────────────────────────────────
@@ -871,5 +1143,15 @@ const vClickOutside = {
 .mention-popup-enter-to,
 .mention-popup-leave-from {
   opacity: 1;
+}
+
+/* NSFW / paid overlay fade */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

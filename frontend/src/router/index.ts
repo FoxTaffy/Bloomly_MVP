@@ -135,6 +135,18 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/StickerPackView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/to-go',
+    name: 'to-go',
+    component: () => import('@/views/ToGoView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/automation',
+    name: 'automation',
+    component: () => import('@/views/AutomationView.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

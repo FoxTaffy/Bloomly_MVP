@@ -5,7 +5,7 @@ export interface JwtUser {
 export type GroupType = 'event' | 'creative' | 'static' | 'news' | 'shop' | 'community' | 'brand';
 export type EventStatus = 'announced' | 'tickets_open' | 'sold_out' | 'active' | 'finished' | 'teaser';
 export type CommissionStatus = 'open' | 'closed' | 'waitlist';
-export type MemberRole = 'owner' | 'admin' | 'moderator' | 'member';
+export type MemberRole = 'owner' | 'admin' | 'moderator' | 'member' | 'dealer' | 'volunteer' | 'guest_of_honor';
 
 export interface CreateGroupInput {
   name: string;
@@ -22,6 +22,7 @@ export interface CreateGroupInput {
 
 export interface UpdateGroupInput {
   name?: string;
+  slug?: string;
   description?: string;
   avatarUrl?: string;
   bannerUrl?: string;
@@ -42,6 +43,8 @@ export interface UpdateGroupInput {
   completedWorks?: number;
   recentWorks?: Array<{ url: string; title?: string; count?: number }>;
   guaranteeText?: string;
+  category?: string;
+  isVerified?: boolean;
 }
 
 export interface CreateEventInput {
@@ -58,6 +61,7 @@ export interface CreateEventInput {
   isRecurring?: boolean;
   theme?: Record<string, any>;
   isTop?: boolean;
+  registrationUrl?: string;
 }
 
 export interface UpdateEventInput {
@@ -72,6 +76,8 @@ export interface UpdateEventInput {
   status?: EventStatus;
   theme?: Record<string, any>;
   isTop?: boolean;
+  registrationUrl?: string;
+  shortCode?: string;
 }
 
 export interface CreateTicketTierInput {
@@ -104,7 +110,7 @@ export interface GetGroupsQuery {
 }
 
 export interface RateGroupInput {
-  value: number; // 1-5
+  value: number; // -1 (downvote) or 1 (upvote)
 }
 
 export interface CreateGroupPostInput {
@@ -112,4 +118,30 @@ export interface CreateGroupPostInput {
   isNsfw?: boolean;
   mediaUrls?: string[];
   tags?: string[];
+}
+
+export type RsvpStatus = 'going' | 'maybe' | 'not_going';
+
+export interface RsvpEventInput {
+  status: RsvpStatus;
+}
+
+export interface SubEventInput {
+  title: string;
+  type?: string; // panel | workshop | dealer | performance | other
+  speaker?: string;
+  locationName?: string;
+  startsAt: string; // ISO
+  endsAt: string;
+  description?: string;
+}
+
+export interface UpdateSubEventInput {
+  title?: string;
+  type?: string;
+  speaker?: string;
+  locationName?: string;
+  startsAt?: string;
+  endsAt?: string;
+  description?: string;
 }

@@ -35,6 +35,8 @@ const isActive = (key: string): boolean => {
     subscriptions:'subscriptions',
     'dealers-den':'dealers-den',
     'stickers':   'stickers',
+    'to-go':      'to-go',
+    'automation': 'automation',
   }
   if (routeMap[key]) return route.name === routeMap[key]
   return props.activeNav === key
@@ -85,6 +87,13 @@ const navItems = computed(() => [
     action: () => router.push({ name: 'bookmarks' }),
   },
   {
+    key: 'to-go',
+    icon: 'ListTodo',
+    label: 'To-go List',
+    disabled: false,
+    action: () => router.push({ name: 'to-go' }),
+  },
+  {
     key: 'subscriptions',
     icon: 'Sparkles',
     label: langStore.t.premium,
@@ -98,10 +107,11 @@ const navItems = computed(() => [
 ])
 
 const categoryItems = computed(() => [
-  { key: 'stickers',    icon: 'Sticker',     label: langStore.t.stickers,  disabled: false, action: () => router.push({ name: 'stickers' }) },
-  { key: 'dealers-den', icon: 'ShoppingBag', label: langStore.t.dealersDen, disabled: false, action: () => router.push({ name: 'dealers-den' }) },
-  { key: 'gifts',       icon: 'Gift',        label: langStore.t.gifts,      disabled: true,  action: () => {} },
-  { key: 'help',        icon: 'HelpCircle',  label: langStore.t.help,       disabled: true,  action: () => {} },
+  { key: 'stickers',    icon: 'Sticker',     label: langStore.t.stickers,   disabled: false, action: () => router.push({ name: 'stickers' }) },
+  { key: 'dealers-den', icon: 'ShoppingBag', label: langStore.t.dealersDen,  disabled: false, action: () => router.push({ name: 'dealers-den' }) },
+  { key: 'automation',  icon: 'Zap',         label: 'Автоматизация',         disabled: false, action: () => router.push({ name: 'automation' }) },
+  { key: 'gifts',       icon: 'Gift',        label: langStore.t.gifts,       disabled: true,  action: () => {} },
+  { key: 'help',        icon: 'HelpCircle',  label: langStore.t.help,        disabled: true,  action: () => {} },
 ])
 </script>
 

@@ -2,7 +2,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { AuthService } from './service.js';
 import { buildOAuthUrl, handleOAuthCallback, findOrCreateOAuthUser, OAuthProvider } from './oauth.service.js';
 import prisma from '../../config/prisma.js';
-import type { RegisterInput, LoginInput } from './types.js';
+import type { RegisterInput, LoginInput, JwtPayload } from './types.js';
 
 const authService = new AuthService();
 
@@ -172,15 +172,83 @@ export const oauthCallbackHandler = async (
   }
 
   try {
-    const oauthUser = await handleOAuthCallback(provider, code, state);
-    const { user } = await findOrCreateOAuthUser(provider, oauthUser);
+    const { oauthUser, linkUserId } = await handleOAuthCallback(provider, code, state);
 
+    // ── РЕЖИМ ПРИВЯЗКИ (пользователь уже залогинен) ───────────────────────────
+    if (linkUserId) {
+      const conflict = await prisma.oAuthAccount.findUnique({
+        where: { provider_provider_id: { provider, provider_id: oauthUser.id } },
+      });
+      if (conflict && conflict.user_id !== linkUserId) {
+        return reply.redirect(302, `${FRONTEND_URL()}/settings/profile?section=sec-security&error=already_taken`);
+      }
+      await prisma.oAuthAccount.upsert({
+        where: { provider_provider_id: { provider, provider_id: oauthUser.id } },
+        create: { user_id: linkUserId, provider, provider_id: oauthUser.id },
+        update: {},
+      });
+      return reply.redirect(302, `${FRONTEND_URL()}/settings/profile?section=sec-security&linked=${provider}`);
+    }
+
+    // ── ОБЫЧНЫЙ ВХОД / РЕГИСТРАЦИЯ ────────────────────────────────────────────
+    const { user } = await findOrCreateOAuthUser(provider, oauthUser);
     const token = issueToken(request, user.id, user.role);
-    // Передаём токен через URL (frontend забирает его и кладёт в storage)
     return reply.redirect(302, `${FRONTEND_URL()}/auth/callback?token=${token}`);
   } catch (e: any) {
     console.error('[OAuth callback error]', e);
     return reply.redirect(302, `${FRONTEND_URL()}/auth?error=oauth_failed`);
   }
+};
+
+// ── OAuth: начало привязки аккаунта (требует JWT) ─────────────────────────────
+export const linkInitHandler = async (
+  request: FastifyRequest<{ Params: { provider: string } }>,
+  reply: FastifyReply,
+) => {
+  const provider = request.params.provider as OAuthProvider;
+  const validProviders: OAuthProvider[] = ['google', 'yandex', 'twitter', 'twitch'];
+  if (!validProviders.includes(provider)) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_PROVIDER', message: 'Unknown OAuth provider' } });
+  }
+  const { id } = request.user as JwtPayload;
+  const { url } = buildOAuthUrl(provider, id);
+  return reply.send({ success: true, data: { url }, error: null });
+};
+
+// ── Список привязанных OAuth-аккаунтов ────────────────────────────────────────
+export const getLinkedAccountsHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const { id } = request.user as JwtPayload;
+  const accounts = await prisma.oAuthAccount.findMany({
+    where: { user_id: id },
+    select: { provider: true, provider_id: true },
+  });
+  return reply.send({ success: true, data: { accounts }, error: null });
+};
+
+// ── Удаление привязки OAuth-провайдера ────────────────────────────────────────
+export const unlinkAccountHandler = async (
+  request: FastifyRequest<{ Params: { provider: string } }>,
+  reply: FastifyReply,
+) => {
+  const { id } = request.user as JwtPayload;
+  const provider = request.params.provider;
+
+  // Проверяем что останется хотя бы один способ входа
+  const [user, otherAccountsCount] = await Promise.all([
+    prisma.user.findUnique({ where: { id }, select: { password: true } }),
+    prisma.oAuthAccount.count({ where: { user_id: id, provider: { not: provider } } }),
+  ]);
+  if (!user?.password && otherAccountsCount === 0) {
+    return reply.code(400).send({
+      success: false, data: null,
+      error: { code: 'LAST_AUTH_METHOD', message: 'Нельзя отвязать единственный способ входа' },
+    });
+  }
+
+  await prisma.oAuthAccount.deleteMany({ where: { user_id: id, provider } });
+  return reply.send({ success: true, data: null, error: null });
 };
 

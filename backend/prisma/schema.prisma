@@ -66,7 +66,8 @@ model User {
   mediaHistory                 MediaHistory[]
   notifications                Notification[]        @relation("NotificationReceiver")
   sentNotifications            Notification[]        @relation("NotificationSender")
-  posts                        Post[]
+  posts                        Post[]                @relation("PostAuthor")
+  rewardPosts                  Post[]                @relation("PostRewardFor")
   sentRelationshipRequests     RelationshipRequest[] @relation("SentRelationshipRequests")
   receivedRelationshipRequests RelationshipRequest[] @relation("ReceivedRelationshipRequests")
   repaws                       Repaw[]
@@ -99,6 +100,13 @@ model User {
   frozen_at                    DateTime?
   frozen_reason                String?               @db.VarChar(500)
   oauthAccounts                OAuthAccount[]
+  eventAttendances             EventAttendee[]  @relation("UserEventAttendees")
+  groupMessages                GroupMessage[]   @relation("UserGroupMessages")
+  // Activity Engine
+  ownedActivities              Activity[]            @relation("ActivityOwner")
+  activityParticipations       ActivityParticipant[]
+  activityBlacklist            ActivityBlacklist?    @relation("ActivityBlacklistUser")
+  activityBlacklistsMade       ActivityBlacklist[]   @relation("ActivityBlacklistBanner")
 }
 
 model OAuthAccount {
@@ -125,25 +133,32 @@ model EmailOtp {
 }
 
 model Post {
-  id         String         @id @default(uuid()) @db.Uuid
-  content    String
-  author_id  String         @db.Uuid
-  rating     Int            @default(0)
-  is_nsfw    Boolean        @default(false)
-  created_at DateTime       @default(now())
-  updated_at DateTime       @updatedAt
-  deleted_at DateTime?
-  category   String?
-  media_urls String[]       @default([])
-  comments   Comment[]
-  favourites Favourite[]
-  author     User           @relation(fields: [author_id], references: [id])
-  tags       PostTag[]
-  repaws     Repaw[]
-  pinnedBy   User[]         @relation("UserPinnedPost")
-  groupPosts GroupPost[]
-  activities UserActivity[]
-  votes      Vote[]
+  id                  String         @id @default(uuid()) @db.Uuid
+  content             String
+  author_id           String         @db.Uuid
+  rating              Int            @default(0)
+  is_nsfw             Boolean        @default(false)
+  subscriber_only     Boolean        @default(false)
+  is_paid             Boolean        @default(false)
+  price               Decimal?       @db.Decimal(10, 2)
+  reward_for_user_id  String?        @db.Uuid
+  video_title         String?        @db.VarChar(255)
+  video_description   String?
+  created_at          DateTime       @default(now())
+  updated_at          DateTime       @updatedAt
+  deleted_at          DateTime?
+  category            String?
+  media_urls          String[]       @default([])
+  comments            Comment[]
+  favourites          Favourite[]
+  author              User           @relation("PostAuthor", fields: [author_id], references: [id])
+  rewardForUser       User?          @relation("PostRewardFor", fields: [reward_for_user_id], references: [id])
+  tags                PostTag[]
+  repaws              Repaw[]
+  pinnedBy            User[]         @relation("UserPinnedPost")
+  groupPosts          GroupPost[]
+  activities          UserActivity[]
+  votes               Vote[]
 }
 
 model Repaw {
@@ -385,11 +400,14 @@ model Conversation {
   created_at   DateTime                  @default(now())
   updated_at   DateTime                  @updatedAt
   deleted_at   DateTime?
-  is_group     Boolean                   @default(false)
+  type         String                    @default("direct") @db.VarChar(20) // direct | group | community
+  is_group     Boolean                   @default(false) // kept for back-compat; type='group'||'community' ⇒ is_group=true
   name         String?                   @db.VarChar(100)
   avatar_url   String?
+  group_id     String?                   @unique @db.Uuid  // set when type='community'
   participants ConversationParticipant[]
   messages     Message[]
+  group        Group?                    @relation("GroupCommunityChat", fields: [group_id], references: [id], onDelete: SetNull)
 }
 
 model Friendship {
@@ -439,11 +457,13 @@ model ConversationParticipant {
   hidden_at       DateTime?
   last_read_at    DateTime?
   role            String       @default("member") @db.VarChar(20)
+  label           String       @default("default") @db.VarChar(20) // default | customer
   conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
   user            User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@id([conversation_id, user_id])
   @@index([user_id])
+  @@index([user_id, label])
 }
 
 model Message {
@@ -506,6 +526,15 @@ model Group {
   recent_works      Json?         @default("[]")      // [{url, title, count}]
   guarantee_text    String?       @db.VarChar(300)
 
+  // Event-specific
+  sponsors          Json          @default("[]")      // [{name, logo_url, url, tier?}]
+  volunteers_info   String?                           // HTML/text description of volunteer program
+  is_looking_for_volunteers Boolean @default(false)
+
+  // Moderation / discovery
+  is_verified       Boolean         @default(false)   // Official / verified community
+  category          String?         @db.VarChar(50)   // art | cosplay | fandom | dev | music | etc.
+
   owner           User            @relation("GroupOwner", fields: [owner_id], references: [id], onDelete: Cascade)
   members         GroupMember[]
   events          Event[]
@@ -513,6 +542,9 @@ model Group {
   achievements    GroupAchievement[]
   posts           GroupPost[]
   ratings         GroupRating[]
+  groupMessages   GroupMessage[]
+  communityChat   Conversation?   @relation("GroupCommunityChat")
+  activities      Activity[]
 
   @@index([owner_id])
   @@index([type])
@@ -522,7 +554,7 @@ model GroupRating {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   group_id   String   @db.Uuid
   user_id    String   @db.Uuid
-  value      Int      // 1-5
+  value      Int      // -1 (downvote) or 1 (upvote) — Reddit-style
   created_at DateTime @default(now()) @db.Timestamp(6)
   updated_at DateTime @default(now()) @updatedAt @db.Timestamp(6)
 
@@ -536,7 +568,7 @@ model GroupRating {
 model GroupMember {
   group_id    String   @db.Uuid
   user_id     String   @db.Uuid
-  role        String   @default("member") @db.VarChar(20) // owner | admin | moderator | member
+  role        String   @default("member") @db.VarChar(20) // owner | admin | moderator | member | dealer | volunteer | guest_of_honor
   joined_at   DateTime @default(now())
 
   group       Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
@@ -586,14 +618,37 @@ model Event {
   what_to_bring   Json?           @default("[]")   // string[]
   rules_text      String?
   faq             Json?           @default("[]")   // [{q, a}]
+  registration_url String?        @db.VarChar(500) // External registration link
 
   group           Group           @relation(fields: [group_id], references: [id], onDelete: Cascade)
   tickets         TicketTier[]
   soonBadges      SoonBadge[]
+  attendees       EventAttendee[]
+  subEvents       SubEvent[]
 
   @@index([group_id])
   @@index([starts_at])
   @@index([status])
+}
+
+// ── Sub-events (panels, workshops within a main Event) ────────────────────────
+
+model SubEvent {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id      String    @db.Uuid
+  title         String    @db.VarChar(200)
+  type          String    @default("panel") @db.VarChar(50) // panel | workshop | performance | other
+  speaker       String?   @db.VarChar(200)
+  location_name String?   @db.VarChar(200)
+  starts_at     DateTime
+  ends_at       DateTime?
+  description   String?
+  created_at    DateTime  @default(now())
+
+  event         Event     @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@index([event_id])
+  @@index([starts_at])
 }
 
 model TicketTier {
@@ -606,6 +661,8 @@ model TicketTier {
   sold_count      Int      @default(0)
   sale_starts_at  DateTime?
   sale_ends_at    DateTime?
+  description     String?   // Short description of what's included
+  perks           String[]  @default([]) // ["Одноместный", "Разовое питание"]
   created_at      DateTime @default(now())
 
   event           Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
@@ -630,6 +687,23 @@ model SoonBadge {
   @@index([event_id])
 }
 
+// ── Event RSVP (Attendees) ───────────────────────────────────────────
+
+model EventAttendee {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id     String   @db.Uuid
+  user_id      String   @db.Uuid
+  status       String   @default("going") @db.VarChar(20) // going | maybe | not_going
+  confirmed_at DateTime @default(now())
+
+  event        Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user         User     @relation("UserEventAttendees", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([event_id, user_id])
+  @@index([event_id])
+  @@index([user_id])
+}
+
 // ── Commission Info (для Creative-групп) ──────────────────────────────────────
 
 model CommissionInfo {
@@ -650,6 +724,23 @@ model CommissionInfo {
   price_list       Json?    @default("[]")     // [{name, price, description}]
 
   group            Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+}
+
+// ── Group Messages (realtime group chat) ───────────────────────────────────
+
+model GroupMessage {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  group_id   String    @db.Uuid
+  user_id    String    @db.Uuid
+  text       String
+  created_at DateTime  @default(now())
+  deleted_at DateTime?
+
+  group      Group     @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  user       User      @relation("UserGroupMessages", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([group_id, created_at(sort: Desc)])
+  @@index([user_id])
 }
 
 // ── Group Achievements (медальки) ─────────────────────────────────────────────
@@ -765,6 +856,71 @@ model UserStickerPack {
   @@id([user_id, pack_id])
   @@index([user_id])
   @@index([pack_id])
+}
+
+// ── Activity Engine ──────────────────────────────────────────────────────────
+
+/// Интерактив: Тайный Санта, Коллаб, Сломанный планшет и т.д.
+model Activity {
+  id               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type             String               @db.VarChar(30) // collab | secret_santa | broken_tablet | other
+  owner_id         String               @db.Uuid
+  group_id         String?              @db.Uuid
+  title            String               @db.VarChar(200)
+  description      String?
+  deadline         DateTime?
+  max_participants Int?
+  status           String               @default("active") @db.VarChar(20) // draft | active | completed | cancelled
+  created_at       DateTime             @default(now())
+  updated_at       DateTime             @updatedAt
+  deleted_at       DateTime?
+
+  owner            User                 @relation("ActivityOwner", fields: [owner_id], references: [id], onDelete: Cascade)
+  group            Group?               @relation(fields: [group_id], references: [id], onDelete: SetNull)
+  participants     ActivityParticipant[]
+
+  @@index([owner_id])
+  @@index([group_id])
+  @@index([status])
+}
+
+/// Участник интерактива с полным lifecycle-статусом
+model ActivityParticipant {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  activity_id       String    @db.Uuid
+  user_id           String    @db.Uuid
+  // pending → approved → submitted → completed
+  // pending → withdrawn (grace period <3d)
+  // approved → delayed (organizer mark) → completed|fraud
+  status            String    @default("pending") @db.VarChar(20)
+  withdraw_deadline DateTime?  // 3 days after joining; after this WITHDRAWN costs reputation
+  submitted_at      DateTime?
+  notes             String?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+  deleted_at        DateTime? // soft delete
+
+  activity          Activity  @relation(fields: [activity_id], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([activity_id, user_id])
+  @@index([user_id])
+  @@index([activity_id, status])
+}
+
+/// Чёрный список: ручной (организатор/FRAUD) или авто (cron: 7д просрочка без DELAYED)
+model ActivityBlacklist {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String    @unique @db.Uuid
+  reason     String    @db.VarChar(500)
+  banned_by  String?   @db.Uuid  // NULL = авто-бан
+  banned_at  DateTime  @default(now())
+  expires_at DateTime?
+
+  user       User      @relation("ActivityBlacklistUser", fields: [user_id], references: [id], onDelete: Cascade)
+  banner     User?     @relation("ActivityBlacklistBanner", fields: [banned_by], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
 }
 
 model StickerBanner {

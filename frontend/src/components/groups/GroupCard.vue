@@ -44,47 +44,67 @@ function fmtMembers(n: number): string {
 
 <template>
   <div
-    class="bg-brand-card border border-brand-border rounded-2xl overflow-hidden hover:border-brand-accent/30 transition-all duration-300 cursor-pointer shadow-card group/card flex h-[88px]"
+    class="bg-brand-card border border-brand-border rounded-2xl overflow-hidden hover:border-brand-accent/30 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 cursor-pointer group/card flex flex-col"
     @click="emit('click')"
   >
-    <!-- Square avatar (left) -->
-    <div class="w-[88px] h-[88px] shrink-0 overflow-hidden relative">
+    <!-- Banner / Cover -->
+    <div class="relative h-24 overflow-hidden">
       <img
-        v-if="group.avatar_url"
-        :src="group.avatar_url"
+        v-if="group.banner_url"
+        :src="group.banner_url"
         :alt="group.name"
         class="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500"
       />
       <div
         v-else
-        class="w-full h-full flex items-center justify-center"
-        :style="{ background: `linear-gradient(135deg, ${group.accent_color || '#4C67CF'}33, ${group.accent_color || '#CD83F5'}22)` }"
+        class="w-full h-full"
+        :style="{ background: `linear-gradient(135deg, ${group.accent_color || '#4C67CF'}55, ${group.accent_color || '#CD83F5'}33)` }"
       >
-        <BIcon :name="typeIcon[group.type] ?? 'Grid'" class="w-8 h-8" :style="{ color: group.accent_color || '#4C67CF' }" />
+        <!-- subtle pattern -->
+        <div class="absolute inset-0 opacity-20" style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 14px 14px;" />
       </div>
-    </div>
 
-    <!-- Content (right) -->
-    <div class="flex-1 min-w-0 px-3 py-2.5 flex flex-col justify-center relative">
-      <!-- Type badge (top-right corner) -->
-      <span class="absolute top-2 right-2.5 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border"
-        :class="typeColor[group.type] ?? 'bg-brand-accent/15 text-brand-accent border-brand-accent/20'">
+      <!-- Type badge overlay -->
+      <span class="absolute top-2 left-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md border backdrop-blur-sm"
+        :class="typeColor[group.type] ?? 'bg-brand-accent/80 text-white border-brand-accent/30'">
         {{ typeLabel[group.type] ?? group.type }}
       </span>
 
-      <!-- Name -->
-      <h3 class="text-white font-extrabold text-sm truncate pr-20 leading-tight">{{ group.name }}</h3>
+      <!-- 18+ badge -->
+      <span v-if="group.is_nsfw" class="absolute top-2 right-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md bg-brand-error/80 text-white border border-brand-error/30 backdrop-blur-sm">18+</span>
+    </div>
 
-      <!-- Slug -->
-      <p class="text-white/35 text-xs truncate mt-0.5">@{{ group.slug }}</p>
+    <!-- Avatar floating on banner edge -->
+    <div class="px-3 flex items-end gap-3 -mt-5 mb-1.5">
+      <div class="w-10 h-10 rounded-xl overflow-hidden border-2 border-brand-card shrink-0 shadow">
+        <img
+          v-if="group.avatar_url"
+          :src="group.avatar_url"
+          :alt="group.name"
+          class="w-full h-full object-cover"
+        />
+        <div
+          v-else
+          class="w-full h-full flex items-center justify-center"
+          :style="{ background: `linear-gradient(135deg, ${group.accent_color || '#4C67CF'}44, ${group.accent_color || '#CD83F5'}33)` }"
+        >
+          <BIcon :name="typeIcon[group.type] ?? 'Grid'" class="w-5 h-5" :style="{ color: group.accent_color || '#a855f7' }" />
+        </div>
+      </div>
+    </div>
 
-      <!-- Members -->
-      <div class="flex items-center gap-3 mt-1.5 text-xs text-white/50">
-        <span class="flex items-center gap-1">
-          <BIcon name="Users" class="w-3 h-3" />
-          {{ fmtMembers(group.subscriber_count > 0 ? group.subscriber_count : group._count.members) }} участников
-        </span>
-        <span v-if="group.is_nsfw" class="text-[9px] font-bold uppercase px-1 py-0.5 rounded bg-brand-error/15 text-brand-error">18+</span>
+    <!-- Content -->
+    <div class="px-3 pb-3 flex flex-col gap-1 flex-1">
+      <h3 class="text-white font-bold text-sm leading-tight line-clamp-1">{{ group.name }}</h3>
+      <p class="text-white/35 text-xs truncate">@{{ group.slug }}</p>
+
+      <p v-if="group.description" class="text-white/50 text-xs line-clamp-2 mt-0.5">{{ group.description }}</p>
+
+      <div class="flex items-center gap-1.5 mt-auto pt-2 text-xs text-white/40">
+        <BIcon name="Users" class="w-3 h-3" />
+        <span>{{ fmtMembers(group.subscriber_count > 0 ? group.subscriber_count : group._count.members) }}</span>
+        <span class="text-white/20">·</span>
+        <span>участников</span>
       </div>
     </div>
   </div>
