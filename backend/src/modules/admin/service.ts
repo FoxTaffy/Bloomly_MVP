@@ -25,9 +25,9 @@ export const adminService = {
       prisma.comment.count({ where: { deleted_at: null } }),
       prisma.repaw.count(),
       prisma.follow.count(),
-      prisma.report.count({ where: { status: 'pending' } }),
-      prisma.advertisement.count({ where: { status: 'pending' } }),
-      prisma.advertisement.count({ where: { status: 'active' } }),
+      prisma.report.count({ where: { status: 'pending', deleted_at: null } }),
+      prisma.advertisement.count({ where: { status: 'pending', deleted_at: null } }),
+      prisma.advertisement.count({ where: { status: 'active',  deleted_at: null } }),
     ]);
 
     // Posts per day for last 14 days
@@ -156,7 +156,7 @@ export const adminService = {
   // ── Reports ────────────────────────────────────────────────────────────────
   async getReports(status?: string, page = 1, limit = 30) {
     const skip  = (page - 1) * limit;
-    const where: any = {};
+    const where: any = { deleted_at: null };
     if (status) where.status = status;
     const [reports, total] = await Promise.all([
       prisma.report.findMany({
@@ -188,7 +188,7 @@ export const adminService = {
   // ── Advertisements ─────────────────────────────────────────────────────────
   async getAds(status?: string) {
     return prisma.advertisement.findMany({
-      where:   status ? { status } : {},
+      where:   status ? { status, deleted_at: null } : { deleted_at: null },
       orderBy: { created_at: 'desc' },
       include: {
         requester: { select: { id: true, username: true, display_name: true } },
@@ -201,7 +201,8 @@ export const adminService = {
     const now = new Date();
     return prisma.advertisement.findMany({
       where: {
-        status: 'active',
+        status:     'active',
+        deleted_at: null,
         OR: [{ starts_at: null }, { starts_at: { lte: now } }],
         AND: [{ OR: [{ ends_at: null }, { ends_at: { gte: now } }] }],
       },

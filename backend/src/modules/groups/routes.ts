@@ -9,6 +9,7 @@ import {
   leaveGroupHandler,
   getMembersHandler,
   setMemberRoleHandler,
+  removeMemberHandler,
   createEventHandler,
   updateEventHandler,
   getEventHandler,
@@ -39,6 +40,15 @@ import {
   sendGroupMessageHandler,
   initGroupChatHandler,
   getGroupChatInfoHandler,
+  getGroupTodoHandler,
+  createGroupTodoHandler,
+  updateGroupTodoHandler,
+  deleteGroupTodoHandler,
+  reorderGroupTodoHandler,
+  getCustomRolesHandler,
+  createCustomRoleHandler,
+  updateCustomRoleHandler,
+  deleteCustomRoleHandler,
 } from './controller.js';
 
 declare module 'fastify' {
@@ -64,6 +74,13 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.post('/:id/leave', auth, leaveGroupHandler as any);
   fastify.get('/:id/members', getMembersHandler as any);
   fastify.patch('/:id/members/:userId/role', auth, setMemberRoleHandler as any);
+  fastify.delete('/:id/members/:userId', auth, removeMemberHandler as any);
+
+  // ── Custom Roles ────────────────────────────────────────────────────────
+  fastify.get('/:id/roles', auth, getCustomRolesHandler as any);
+  fastify.post('/:id/roles', auth, createCustomRoleHandler as any);
+  fastify.patch('/:id/roles/:roleId', auth, updateCustomRoleHandler as any);
+  fastify.delete('/:id/roles/:roleId', auth, deleteCustomRoleHandler as any);
 
   // ── Group posts ──────────────────────────────────────────────────────────
   fastify.get('/:id/posts', getGroupPostsHandler as any);
@@ -111,4 +128,11 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   // ── Community Conversation ────────────────────────────────────────────────────
   fastify.post('/:id/init-chat', auth, initGroupChatHandler as any);    // owner only
   fastify.get('/:id/chat-info', getGroupChatInfoHandler as any);          // public
+
+  // ── Artist Queue (Todo) ────────────────────────────────────────────────
+  fastify.get('/:id/todo', getGroupTodoHandler as any);
+  fastify.post('/:id/todo', auth, createGroupTodoHandler as any);
+  fastify.patch('/:id/todo/:itemId', auth, updateGroupTodoHandler as any);
+  fastify.delete('/:id/todo/:itemId', auth, deleteGroupTodoHandler as any);
+  fastify.put('/:id/todo/reorder', auth, reorderGroupTodoHandler as any);
 }

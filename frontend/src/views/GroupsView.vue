@@ -121,7 +121,7 @@ async function handleCreateGroup(input: any) {
       shortCode: input.eventShortCode,
       startsAt: input.eventStartsAt,
       endsAt: input.eventEndsAt,
-      location: input.eventLocation || undefined,
+      locationName: input.eventLocation || undefined,
       isRecurring: input.eventIsRecurring || false,
       isTop: input.eventIsTop || false,
     })
@@ -148,6 +148,12 @@ async function handleCreateGroup(input: any) {
 
 function fmt(iso: string) {
   return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+}
+
+function fmtMembers(n: number): string {
+  if (n >= 1000000) return (n / 1000000).toFixed(1).replace('.0', '') + 'M'
+  if (n >= 1000) return (n / 1000).toFixed(1).replace('.0', '') + 'K'
+  return String(n)
 }
 </script>
 
@@ -243,7 +249,7 @@ function fmt(iso: string) {
           <!-- Left: Groups Grid (2 columns) -->
           <div class="flex-1 min-w-0">
             <div v-if="groupsStore.isLoading" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div v-for="i in 6" :key="i" class="bg-brand-card border border-brand-border rounded-2xl h-[88px] animate-pulse" />
+              <div v-for="i in 6" :key="i" class="bg-brand-card border border-brand-border rounded-2xl h-[160px] animate-pulse" />
             </div>
             <div v-else-if="displayGroups.length" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <GroupCard
@@ -284,6 +290,28 @@ function fmt(iso: string) {
               </button>
             </div>
 
+            <!-- Category tags -->
+            <div class="bg-brand-card border border-brand-border rounded-2xl p-4">
+              <h3 class="text-sm font-extrabold text-white mb-3 flex items-center gap-2">
+                <BIcon name="Tag" class="w-4 h-4 text-brand-accent" />
+                Категории
+              </h3>
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  v-for="cat in categories.filter(c => c.key !== 'all')"
+                  :key="cat.key"
+                  class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors"
+                  :class="selectedCategory === cat.key
+                    ? 'bg-brand-accent text-white border-brand-accent'
+                    : 'bg-brand-bg/60 text-white/60 border-brand-border hover:border-brand-accent/40 hover:text-white/80'"
+                  @click="selectCategory(cat.key)"
+                >
+                  <BIcon :name="cat.icon" class="w-3 h-3" />
+                  {{ cat.label }}
+                </button>
+              </div>
+            </div>
+
             <!-- Upcoming events: Скоро! -->
             <div v-if="upcomingEvents.length" class="bg-brand-card border border-brand-border rounded-2xl p-4">
               <h3 class="text-sm font-extrabold text-white mb-3 flex items-center gap-2">
@@ -294,28 +322,34 @@ function fmt(iso: string) {
                 <div
                   v-for="ev in upcomingEvents"
                   :key="ev.id"
-                  class="flex gap-2.5 cursor-pointer hover:bg-brand-bg/40 rounded-xl p-2 -mx-1 transition-colors"
-                  @click="router.push({ name: 'event-detail', params: { eventId: ev.id } })"
+                  class="flex gap-3 cursor-pointer hover:bg-brand-bg/40 rounded-xl p-2 -mx-1 transition-colors items-center"
+                  @click="router.push({ name: 'group-detail', params: { slugOrId: ev.group?.slug || ev.group_id } })"
                 >
-                  <!-- Mini banner: event banner, then group banner, then placeholder -->
-                  <div class="w-14 h-14 rounded-xl overflow-hidden shrink-0">
-                    <img v-if="ev.banner_url || ev.group?.banner_url" :src="ev.banner_url || ev.group!.banner_url!" class="w-full h-full object-cover" />
-                    <div v-else class="w-full h-full bg-brand-accent/20 flex items-center justify-center"
-                      :style="ev.group?.accent_color ? `background:${ev.group.accent_color}22` : ''">
+                  <!-- Group avatar -->
+                  <div class="w-11 h-11 rounded-xl overflow-hidden shrink-0 border-2 border-brand-border">
+                    <img v-if="ev.group?.avatar_url" :src="ev.group.avatar_url" class="w-full h-full object-cover" />
+                    <div v-else class="w-full h-full flex items-center justify-center"
+                      :style="ev.group?.accent_color ? `background:${ev.group.accent_color}33` : 'background:#4C67CF33'">
                       <BIcon name="CalendarDays" class="w-5 h-5 text-brand-accent" />
                     </div>
                   </div>
                   <div class="flex-1 min-w-0">
-                    <p class="text-white text-xs font-bold truncate">{{ ev.title }}</p>
-                    <p v-if="ev.group?.name" class="text-white/50 text-[10px] truncate flex items-center gap-1 mt-0.5">
-                      <BIcon name="Users" class="w-2.5 h-2.5 flex-shrink-0" />
-                      {{ ev.group.name }}
-                    </p>
-                    <div v-if="ev.location_name" class="flex items-center gap-1 text-white/40 text-[10px] mt-0.5">
-                      <BIcon name="MapPin" class="w-2.5 h-2.5 shrink-0" />
-                      <span class="truncate">{{ ev.location_name }}</span>
+                    <!-- Event title -->
+                    <p class="text-white text-xs font-bold truncate leading-tight">{{ ev.title }}</p>
+                    <!-- Group name -->
+                    <p v-if="ev.group?.name" class="text-white/50 text-[10px] truncate mt-0.5">{{ ev.group.name }}</p>
+                    <!-- Date + members row -->
+                    <div class="flex items-center gap-2.5 mt-1">
+                      <span class="flex items-center gap-1 text-brand-accent text-[10px] font-semibold">
+                        <BIcon name="CalendarDays" class="w-2.5 h-2.5" />
+                        {{ fmt(ev.starts_at) }}
+                      </span>
+                      <span v-if="ev.group && (ev.group.subscriber_count > 0 || ev.group._count?.members > 0)"
+                        class="flex items-center gap-1 text-white/40 text-[10px]">
+                        <BIcon name="Users" class="w-2.5 h-2.5" />
+                        {{ fmtMembers(ev.group.subscriber_count > 0 ? ev.group.subscriber_count : ev.group._count?.members ?? 0) }}
+                      </span>
                     </div>
-                    <p class="text-brand-accent text-[10px] font-semibold mt-0.5">{{ fmt(ev.starts_at) }}</p>
                   </div>
                 </div>
               </div>

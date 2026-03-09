@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
@@ -7,10 +7,11 @@ import BIcon from '@/components/BIcon.vue'
 import PostCard from '@/components/PostCard.vue'
 import MentionTextarea from '@/components/MentionTextarea.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
-import EventCard from '@/components/groups/EventCard.vue'
-import TicketCard from '@/components/groups/TicketCard.vue'
-import AchievementBadge from '@/components/groups/AchievementBadge.vue'
 import AppBadge from '@/components/shared/AppBadge.vue'
+const EventCard = defineAsyncComponent(() => import('@/components/groups/EventCard.vue'))
+const TicketCard = defineAsyncComponent(() => import('@/components/groups/TicketCard.vue'))
+const AchievementBadge = defineAsyncComponent(() => import('@/components/groups/AchievementBadge.vue'))
+const TodoQueue = defineAsyncComponent(() => import('@/components/groups/TodoQueue.vue'))
 import { useGroupsStore } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useNsfwMode } from '@/composables/useNsfwMode'
@@ -122,6 +123,34 @@ function onPostUpdated(post: any) {
   if (idx !== -1) groupPosts.value[idx] = { ...groupPosts.value[idx], ...post }
 }
 
+// ── Group Media ──────────────────────────────────────────────────────────
+const groupMediaFilter = ref<'all' | 'photo' | 'video'>('all')
+const expandedGroupMediaPost = ref<any | null>(null)
+const groupMediaPostsList = ref<any[]>([])
+const isLoadingMedia = ref(false)
+const groupMediaLoaded = ref(false)
+
+async function loadGroupMediaPosts() {
+  if (!group.value?.id) return
+  isLoadingMedia.value = true
+  try {
+    const posts = await groupsStore.loadGroupPosts(group.value.id, 1, 100, true)
+    groupMediaPostsList.value = (posts || []).map((gp: any) => gp.post || gp)
+    groupMediaLoaded.value = true
+  } catch (e) { console.error('Failed to load group media', e) }
+  finally { isLoadingMedia.value = false }
+}
+
+function isGroupImage(url: string) {
+  return /\.(jpe?g|png|gif|webp|avif|svg)(\?|$)/i.test(url)
+}
+
+const filteredGroupMediaPosts = computed(() => {
+  if (groupMediaFilter.value === 'photo') return groupMediaPostsList.value.filter((p: any) => isGroupImage(p.media_urls?.[0] ?? ''))
+  if (groupMediaFilter.value === 'video') return groupMediaPostsList.value.filter((p: any) => !isGroupImage(p.media_urls?.[0] ?? ''))
+  return groupMediaPostsList.value
+})
+
 const activeEvent = computed(() =>
   group.value?.events?.find((e: any) => new Date(e.starts_at) > new Date()) || group.value?.events?.[0]
 )
@@ -158,7 +187,7 @@ async function submitReview() {
 }
 
 // ── About tab (inside the About tabs card) ──────────────────────────────
-const aboutTab = ref<'about' | 'rules' | 'faq' | 'nearest'>('about')
+const aboutTab = ref<'about' | 'rules' | 'faq' | 'nearest' | 'orders'>('about')
 
 const aboutNavs = computed(() => {
   const navs: { key: string; label: string; icon: string }[] = []
@@ -168,6 +197,8 @@ const aboutNavs = computed(() => {
   } else {
     navs.push({ key: 'about', label: 'О группе', icon: 'Info' })
   }
+  if (group.value?.type === 'creative' && group.value?.commissionInfo)
+    navs.push({ key: 'orders', label: 'Статус заказов', icon: 'ClipboardList' })
   if (group.value?.rules_text) navs.push({ key: 'rules', label: 'Правила', icon: 'Shield' })
   if ((group.value?.faq as any[])?.length) navs.push({ key: 'faq', label: 'FAQ', icon: 'HelpCircle' })
   return navs
@@ -175,6 +206,10 @@ const aboutNavs = computed(() => {
 
 // ── Content tabs (floating pills like profile) ─────────────────────────
 const activeContentTab = ref<'posts' | 'media' | 'archive'>('posts')
+
+watch(activeContentTab, (val) => {
+  if (val === 'media' && !groupMediaLoaded.value) loadGroupMediaPosts()
+})
 
 const contentTabs = computed(() => {
   const tabs: { key: string; label: string; icon: string }[] = [
@@ -226,6 +261,9 @@ const ticketStatusColor = computed(() => {
 })
 
 async function load() {
+  groupMediaLoaded.value = false
+  groupMediaPostsList.value = []
+  activeContentTab.value = 'posts'
   await groupsStore.loadGroup(route.params.slugOrId as string)
   loadMyRating()
   loadGroupPosts()
@@ -453,7 +491,7 @@ async function loadMoreMembers() {
                     <button v-if="group.type === 'event' && !isMember && !isOwner" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-success text-white text-sm font-bold hover:bg-brand-success/80 transition-all shadow-sm" @click="handleJoin">
                       <BIcon name="CalendarCheck" class="w-4 h-4" /> Я пойду!
                     </button>
-                    <button v-if="!isMember && !isOwner" @click="handleJoin"
+                    <button v-else-if="group.type !== 'event' && !isMember && !isOwner" @click="handleJoin"
                       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-all shadow-sm shadow-brand-accent/25">
                       <BIcon name="UserPlus" class="w-4 h-4" /> Подписаться
                     </button>
@@ -683,92 +721,6 @@ async function loadMoreMembers() {
                         </a>
                       </div>
                     </div>
-                    <div v-if="group.type === 'creative' && group.commissionInfo" class="space-y-3">
-                      <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5 px-1">
-                        <BIcon name="Clock" class="w-3.5 h-3.5 text-brand-accent" /> Статус заказов
-                      </p>
-                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div class="bg-brand-bg border border-brand-border rounded-2xl p-4 flex items-center justify-between">
-                          <span class="text-white/60 text-sm">Комишены</span>
-                          <span class="font-bold text-sm" :class="group.commissionInfo.status === 'open' ? 'text-brand-success' : group.commissionInfo.status === 'waitlist' ? 'text-brand-yellow' : 'text-brand-error'">
-                            {{ group.commissionInfo.status === 'open' ? 'Открыты' : group.commissionInfo.status === 'waitlist' ? 'Ожидание' : 'Закрыты' }}
-                          </span>
-                        </div>
-                        <div class="bg-brand-bg border border-brand-border rounded-2xl p-4 flex items-center justify-between">
-                          <span class="text-white/60 text-sm">Быстрые</span>
-                          <span class="font-bold text-sm" :class="(group.commissionInfo as any).rush_slots > 0 ? 'text-brand-success' : 'text-brand-error'">{{ (group.commissionInfo as any).rush_slots || 0 }} мест</span>
-                        </div>
-                        <div class="bg-brand-bg border border-brand-border rounded-2xl p-4 flex items-center justify-between">
-                          <span class="text-white/60 text-sm">Срок</span>
-                          <span class="text-white font-bold text-sm">{{ (group.commissionInfo as any).turnaround_days || '—' }}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <div class="flex justify-between text-xs text-white/50 mb-1"><span>Очередь</span><span>{{ group.commissionInfo.queue_count }} / {{ group.commissionInfo.max_queue }}</span></div>
-                        <div class="h-2 bg-brand-border rounded-full overflow-hidden">
-                          <div class="h-full rounded-full transition-all duration-500"
-                            :class="group.commissionInfo.queue_count >= group.commissionInfo.max_queue ? 'bg-brand-error' : 'bg-brand-accent'"
-                            :style="{ width: `${Math.min(100, (group.commissionInfo.queue_count / group.commissionInfo.max_queue) * 100)}%` }" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Creative: Prices -->
-                    <div v-if="group.type === 'creative' && group.commissionInfo && Object.keys(group.commissionInfo.base_prices || {}).length" class="space-y-2">
-                      <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5 px-1">
-                        <BIcon name="Wallet" class="w-3.5 h-3.5 text-brand-accent" /> Прайс-лист
-                      </p>
-                      <div class="space-y-2">
-                        <div v-for="(price, key) in (group.commissionInfo.base_prices as Record<string,number>)" :key="key"
-                          class="flex items-center justify-between bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
-                          <span class="text-white text-sm font-semibold capitalize">{{ String(key).replace(/_/g, ' ') }}</span>
-                          <span class="text-brand-accent font-extrabold">от {{ price }} {{ group.commissionInfo!.currency }}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Creative/Shop details -->
-                    <div v-if="(group.type === 'creative' || group.type === 'shop') && (group.delivery_info || group.production_time || group.guarantee_text || group.completed_works)" class="space-y-2">
-                      <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5 px-1">
-                        <BIcon name="Package" class="w-3.5 h-3.5 text-brand-accent" /> Детали
-                      </p>
-                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <div v-if="group.delivery_info" class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
-                          <BIcon name="Truck" class="w-4 h-4 text-brand-success shrink-0" />
-                          <span class="text-sm text-white/60">{{ group.delivery_info }}</span>
-                        </div>
-                        <div v-if="group.guarantee_text" class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
-                          <BIcon name="Shield" class="w-4 h-4 text-brand-success shrink-0" />
-                          <span class="text-sm text-white/60">{{ group.guarantee_text }}</span>
-                        </div>
-                        <div v-if="group.production_time" class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
-                          <BIcon name="Clock" class="w-4 h-4 text-brand-accent shrink-0" />
-                          <span class="text-sm text-white/60">Срок: {{ group.production_time }}</span>
-                        </div>
-                        <div v-if="group.completed_works" class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
-                          <BIcon name="Check" class="w-4 h-4 text-brand-success shrink-0" />
-                          <span class="text-sm text-white/60">{{ group.completed_works }} работ</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Creative: Recent works gallery -->
-                    <div v-if="group.type === 'creative' && (group.recent_works as any[])?.length" class="space-y-2">
-                      <p class="text-xs font-bold text-white/55 uppercase tracking-wider px-1">Последние работы</p>
-                      <div class="flex gap-3 overflow-x-auto no-scrollbar pb-2">
-                        <div v-for="(w, idx) in (group.recent_works as any[])" :key="idx"
-                          class="w-32 h-32 rounded-2xl overflow-hidden shrink-0 relative group/work cursor-pointer border border-brand-border/60 hover:border-brand-accent/60 transition-all">
-                          <img :src="w.url" class="w-full h-full object-cover group-hover/work:scale-105 transition-transform duration-300" />
-                          <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover/work:opacity-100 transition-opacity flex items-end p-2">
-                            <div>
-                              <p v-if="w.title" class="text-white text-xs font-bold leading-tight">{{ w.title }}</p>
-                              <p v-if="w.count" class="text-white/60 text-[10px]">{{ w.count }} фото</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
                     <!-- Owner info (same style as profile relationship card) -->
                     <div class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
                       <div class="w-10 h-10 rounded-xl bg-brand-accent/20 overflow-hidden shrink-0">
@@ -805,12 +757,100 @@ async function loadMoreMembers() {
                     </details>
                   </div>
 
-                  <!-- Ближайшее мероприятие (recurring / multi-event) -->
+                  <!-- Статус заказов -->
+                  <div v-else-if="aboutTab === 'orders'" class="space-y-4">
+                    <!-- Commission status -->
+                    <div v-if="group.commissionInfo" class="space-y-3">
+                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div class="bg-brand-bg border border-brand-border rounded-2xl p-4 flex items-center justify-between">
+                          <span class="text-white/60 text-sm">Комишены</span>
+                          <span class="font-bold text-sm" :class="group.commissionInfo.status === 'open' ? 'text-brand-success' : group.commissionInfo.status === 'waitlist' ? 'text-brand-yellow' : 'text-brand-error'">
+                            {{ group.commissionInfo.status === 'open' ? 'Открыты' : group.commissionInfo.status === 'waitlist' ? 'Ожидание' : 'Закрыты' }}
+                          </span>
+                        </div>
+                        <div class="bg-brand-bg border border-brand-border rounded-2xl p-4 flex items-center justify-between">
+                          <span class="text-white/60 text-sm">Быстрые</span>
+                          <span class="font-bold text-sm" :class="(group.commissionInfo as any).rush_slots > 0 ? 'text-brand-success' : 'text-brand-error'">{{ (group.commissionInfo as any).rush_slots || 0 }} мест</span>
+                        </div>
+                        <div class="bg-brand-bg border border-brand-border rounded-2xl p-4 flex items-center justify-between">
+                          <span class="text-white/60 text-sm">Срок</span>
+                          <span class="text-white font-bold text-sm">{{ (group.commissionInfo as any).turnaround_days || '—' }}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <div class="flex justify-between text-xs text-white/50 mb-1"><span>Очередь</span><span>{{ group.commissionInfo.queue_count }} / {{ group.commissionInfo.max_queue }}</span></div>
+                        <div class="h-2 bg-brand-border rounded-full overflow-hidden">
+                          <div class="h-full rounded-full transition-all duration-500"
+                            :class="group.commissionInfo.queue_count >= group.commissionInfo.max_queue ? 'bg-brand-error' : 'bg-brand-accent'"
+                            :style="{ width: `${Math.min(100, (group.commissionInfo.queue_count / group.commissionInfo.max_queue) * 100)}%` }" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Прайс-лист -->
+                    <div v-if="group.commissionInfo && Object.keys(group.commissionInfo.base_prices || {}).length" class="space-y-2">
+                      <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5 px-1">
+                        <BIcon name="Wallet" class="w-3.5 h-3.5 text-brand-accent" /> Прайс-лист
+                      </p>
+                      <div class="space-y-2">
+                        <div v-for="(price, key) in (group.commissionInfo.base_prices as Record<string,number>)" :key="key"
+                          class="flex items-center justify-between bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
+                          <span class="text-white text-sm font-semibold capitalize">{{ String(key).replace(/_/g, ' ') }}</span>
+                          <span class="text-brand-accent font-extrabold">от {{ price }} {{ group.commissionInfo!.currency }}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Детали -->
+                    <div v-if="group.delivery_info || group.production_time || group.guarantee_text || group.completed_works" class="space-y-2">
+                      <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5 px-1">
+                        <BIcon name="Package" class="w-3.5 h-3.5 text-brand-accent" /> Детали
+                      </p>
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div v-if="group.delivery_info" class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
+                          <BIcon name="Truck" class="w-4 h-4 text-brand-success shrink-0" />
+                          <span class="text-sm text-white/60">{{ group.delivery_info }}</span>
+                        </div>
+                        <div v-if="group.guarantee_text" class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
+                          <BIcon name="Shield" class="w-4 h-4 text-brand-success shrink-0" />
+                          <span class="text-sm text-white/60">{{ group.guarantee_text }}</span>
+                        </div>
+                        <div v-if="group.production_time" class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
+                          <BIcon name="Clock" class="w-4 h-4 text-brand-accent shrink-0" />
+                          <span class="text-sm text-white/60">Срок: {{ group.production_time }}</span>
+                        </div>
+                        <div v-if="group.completed_works" class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
+                          <BIcon name="Check" class="w-4 h-4 text-brand-success shrink-0" />
+                          <span class="text-sm text-white/60">{{ group.completed_works }} работ</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Последние работы -->
+                    <div v-if="(group.recent_works as any[])?.length" class="space-y-2">
+                      <p class="text-xs font-bold text-white/55 uppercase tracking-wider px-1">Последние работы</p>
+                      <div class="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+                        <div v-for="(w, idx) in (group.recent_works as any[])" :key="idx"
+                          class="w-32 h-32 rounded-2xl overflow-hidden shrink-0 relative group/work cursor-pointer border border-brand-border/60 hover:border-brand-accent/60 transition-all">
+                          <img :src="w.url" class="w-full h-full object-cover group-hover/work:scale-105 transition-transform duration-300" />
+                          <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover/work:opacity-100 transition-opacity flex items-end p-2">
+                            <div>
+                              <p v-if="w.title" class="text-white text-xs font-bold leading-tight">{{ w.title }}</p>
+                              <p v-if="w.count" class="text-white/60 text-[10px]">{{ w.count }} фото</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Очередь работ -->
+                    <TodoQueue :groupId="group.id" :isAdmin="isOwner" />
+                  </div>
                   <div v-else-if="aboutTab === 'nearest'" class="space-y-3">
                     <template v-if="group.events?.length">
                       <div v-for="ev in group.events?.filter((e: any) => new Date(e.starts_at) > new Date()).slice(0, 5)" :key="ev.id"
                         class="flex gap-3 bg-brand-bg border border-brand-border rounded-2xl p-4 hover:border-brand-accent/30 transition-all cursor-pointer group/ev"
-                        @click="router.push({ name: 'event-detail', params: { eventId: ev.id } })">
+                        @click="router.push({ name: 'group-detail', params: { slugOrId: group.slug } })">
                         <!-- Date box -->
                         <div class="w-12 h-12 rounded-xl bg-brand-accent/10 border border-brand-accent/20 flex flex-col items-center justify-center flex-shrink-0">
                           <span class="text-[10px] font-bold text-brand-accent/70 uppercase leading-none">{{ new Date(ev.starts_at).toLocaleDateString('ru-RU', { month: 'short' }) }}</span>
@@ -836,6 +876,7 @@ async function loadMoreMembers() {
                         class="text-center text-white/35 text-sm py-6">Ближайших мероприятий не запланировано</p>
                     </template>
                   </div>
+
                 </div>
               </div>
 
@@ -929,10 +970,57 @@ async function loadMoreMembers() {
 
                   <!-- MEDIA -->
                   <template v-else-if="activeContentTab === 'media'">
-                    <div class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl p-8 text-center">
+                    <!-- Filter tabs -->
+                    <div class="flex gap-2 mb-4">
+                      <button v-for="f in (['all','photo','video'] as const)" :key="f" @click="groupMediaFilter = f"
+                        class="px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all"
+                        :class="groupMediaFilter === f ? 'bg-brand-accent border-brand-accent text-white' : 'border-brand-border text-white/55 hover:text-white'">
+                        {{ f === 'all' ? `Всё · ${groupMediaPostsList.length}` : f === 'photo' ? `Фото · ${groupMediaPostsList.filter((p: any) => isGroupImage(p.media_urls[0])).length}` : `Видео · ${groupMediaPostsList.filter((p: any) => !isGroupImage(p.media_urls[0])).length}` }}
+                      </button>
+                    </div>
+
+                    <div v-if="isLoadingMedia" class="grid grid-cols-3 gap-1.5">
+                      <div v-for="n in 9" :key="n" class="aspect-square bg-brand-bg border border-brand-border rounded-xl animate-pulse"/>
+                    </div>
+                    <div v-else-if="!filteredGroupMediaPosts.length" class="py-14 text-center">
                       <BIcon name="Image" class="w-10 h-10 mx-auto mb-3 text-white/20" />
                       <p class="text-white/40 text-sm font-semibold">Медиа пока нет</p>
                     </div>
+                    <div v-else class="grid grid-cols-3 gap-1.5">
+                      <div v-for="post in filteredGroupMediaPosts" :key="post.id"
+                        @click="expandedGroupMediaPost = expandedGroupMediaPost?.id === post.id ? null : post"
+                        class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-brand-border/60 hover:border-brand-accent/60 bg-brand-bg transition-all">
+                        <img v-if="isGroupImage(post.media_urls[0])" :src="post.media_urls[0]" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        <div v-else class="w-full h-full flex items-center justify-center bg-brand-bg">
+                          <BIcon name="Play" class="w-8 h-8 text-white/55" />
+                        </div>
+                        <div v-if="post.media_urls.length > 1" class="absolute top-1.5 right-1.5 bg-black/70 rounded-lg px-1.5 py-0.5 text-[10px] text-white font-bold">+{{ post.media_urls.length - 1 }}</div>
+                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-end p-2 opacity-0 group-hover:opacity-100">
+                          <span class="flex items-center gap-1 text-white text-xs font-bold">
+                            <BIcon name="ChevronUp" class="w-3.5 h-3.5" />{{ post._count?.votes ?? 0 }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Expanded post preview -->
+                    <Transition name="slide-up">
+                      <div v-if="expandedGroupMediaPost" class="mt-3 bg-brand-bg border border-brand-border rounded-2xl p-4">
+                        <div class="flex items-center justify-between mb-3">
+                          <span class="text-sm font-bold text-white/70">{{ new Date(expandedGroupMediaPost.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) }}</span>
+                          <button @click="expandedGroupMediaPost = null" class="w-7 h-7 flex items-center justify-center rounded-lg text-white/55 hover:text-white hover:bg-brand-border/50 transition">
+                            <BIcon name="X" class="w-4 h-4" />
+                          </button>
+                        </div>
+                        <p v-if="expandedGroupMediaPost.content" class="text-sm text-white/80 mb-3 whitespace-pre-wrap">{{ expandedGroupMediaPost.content }}</p>
+                        <div class="grid gap-2" :class="expandedGroupMediaPost.media_urls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'">
+                          <template v-for="(url, i) in expandedGroupMediaPost.media_urls" :key="i">
+                            <img v-if="isGroupImage(url)" :src="url" class="w-full rounded-xl object-cover max-h-72" />
+                            <video v-else :src="url" controls class="w-full rounded-xl max-h-72" />
+                          </template>
+                        </div>
+                      </div>
+                    </Transition>
                   </template>
 
                   <!-- ARCHIVE OF PAST EVENTS -->
@@ -1342,7 +1430,7 @@ async function loadMoreMembers() {
                   <p class="text-sm font-semibold text-white truncate group-hover/card:text-brand-accent transition-colors">{{ m.user.display_name || m.user.username }}</p>
                   <p class="text-xs text-white/50 truncate">@{{ m.user.username }}</p>
                   <div class="flex gap-2 mt-2">
-                    <button @click.stop="router.push('/messages?to=' + m.user.id)"
+                    <button @click.stop="router.push({ name: 'messages', query: { userId: m.user.id } })"
                       class="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-brand-accent/15 hover:bg-brand-accent/30 text-brand-accent text-xs font-semibold transition-colors">
                       <BIcon name="MessageCircle" class="w-3.5 h-3.5" /> Написать
                     </button>

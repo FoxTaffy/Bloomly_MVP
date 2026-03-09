@@ -88,11 +88,12 @@ export const messageService = {
    * List conversations for a user, ordered by latest message.
    * @param label  If provided, filter by participant label ('customer' = Заказы tab)
    */
-  async getConversations(userId: string, archived = false, label?: string) {
+  async getConversations(userId: string, archived?: boolean, label?: string) {
     const participants = await prisma.conversationParticipant.findMany({
       where: {
         user_id: userId,
-        archived,
+        // archived filter removed — frontend handles filtering client-side
+        ...(archived !== undefined ? { archived } : {}),
         ...(label ? { label } : {}),
       },
       include: {
@@ -115,7 +116,7 @@ export const messageService = {
 
     return participants.map((p) => ({
       ...p.conversation,
-      my_participant: { archived: p.archived, hidden_at: p.hidden_at, last_read_at: p.last_read_at, label: p.label },
+      my_participant: { archived: p.archived, hidden_at: p.hidden_at, last_read_at: p.last_read_at, label: p.label, role: p.role },
       last_message: p.conversation.messages[0] ?? null,
       other_participants: p.conversation.participants
         .filter((cp) => cp.user_id !== userId)
@@ -319,8 +320,11 @@ export const messageService = {
         data: { hidden_at: new Date() },
       });
     }
-    // for 'all': hard-delete the conversation (cascade handles messages + participants)
-    return prisma.conversation.delete({ where: { id: conversationId } });
+    // for 'all': soft-delete the conversation
+    return prisma.conversation.update({
+      where: { id: conversationId },
+      data: { deleted_at: new Date() },
+    });
   },
 
   /** Return IDs of participants OTHER than the given user (for typing broadcasts). */
@@ -336,7 +340,7 @@ export const messageService = {
   /**
    * Create a group conversation with at least 2 other users (3 total).
    */
-  async createGroup(creatorId: string, name: string, userIds: string[]) {
+  async createGroup(creatorId: string, name: string, userIds: string[], opts?: { avatar_url?: string; banner_url?: string }) {
     const all = Array.from(new Set([creatorId, ...userIds]));
     if (all.length < 3) throw Object.assign(new Error('Group requires at least 3 participants'), { statusCode: 400 });
     if (!name?.trim()) throw Object.assign(new Error('Group name is required'), { statusCode: 400 });
@@ -346,6 +350,8 @@ export const messageService = {
         type: 'group',
         is_group: true,
         name: name.trim(),
+        ...(opts?.avatar_url ? { avatar_url: opts.avatar_url } : {}),
+        ...(opts?.banner_url ? { banner_url: opts.banner_url } : {}),
         participants: {
           create: all.map((uid) => ({
             user_id: uid,
@@ -364,13 +370,14 @@ export const messageService = {
   /**
    * Update group name / avatar (admin only).
    */
-  async updateGroup(conversationId: string, userId: string, data: { name?: string; avatar_url?: string }) {
+  async updateGroup(conversationId: string, userId: string, data: { name?: string; avatar_url?: string; banner_url?: string }) {
     await this._assertAdmin(conversationId, userId);
     return prisma.conversation.update({
       where: { id: conversationId },
       data: {
         ...(data.name !== undefined ? { name: data.name.trim() } : {}),
         ...(data.avatar_url !== undefined ? { avatar_url: data.avatar_url } : {}),
+        ...(data.banner_url !== undefined ? { banner_url: data.banner_url } : {}),
       },
     });
   },

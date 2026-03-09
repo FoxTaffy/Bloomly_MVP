@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
 import { useGroupsStore } from '@/stores/groups'
+import { useMobileHubStore } from '@/stores/mobileHub'
 import api from '@/api'
 import BIcon from './BIcon.vue'
 import AppHeader from './AppHeader.vue'
@@ -93,19 +94,10 @@ const closeCreateModal = () => {
 }
 
 // ── Mobile navigation ────────────────────────────────────────────────────────
-const mobileSearchOpen = ref(false)
-const mobileActiveTab = ref<'home' | 'friends' | 'search' | 'profile'>('home')
-const mobileHubOpen = ref(false)
-const closeMobileSearch = () => { mobileSearchOpen.value = false }
-const openMobileSearch = () => { mobileSearchOpen.value = true; mobileActiveTab.value = 'search' }
-
-// Sync mobile tab with current route
-watch(() => route.name, (name) => {
-  if (name === 'home') mobileActiveTab.value = 'home'
-  else if (name === 'friends') mobileActiveTab.value = 'friends'
-  else if (name === 'messages') mobileActiveTab.value = 'search'
-  else if (name === 'profile') mobileActiveTab.value = 'profile'
-}, { immediate: true })
+const mobileHub = useMobileHubStore()
+// Handle post/story triggers from MobileBottomNav (visible on all pages)
+watch(() => mobileHub.openPostForm, (v) => { if (v) { showPostForm.value = true; mobileHub.consumePost() } })
+watch(() => mobileHub.openStory,    (v) => { if (v) { showStoryModal.value = true; mobileHub.consumeStory() } })
 
 // Search handled by AppHeader component
 
@@ -1348,224 +1340,6 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
     <!-- Story Editor (full-screen, handles its own Teleport) -->
     <StoryEditor v-if="showStoryModal" @close="showStoryModal = false" @created="onStoryEditorCreated" />
 
-    <!-- ═══════════════════════════════════════════════════════════════════
-         MOBILE SEARCH / MENU PANEL (slide-up)
-    ═══════════════════════════════════════════════════════════════════ -->
-    <Teleport to="body">
-      <Transition name="mobile-panel">
-        <div v-if="mobileSearchOpen" class="fixed inset-0 z-[300] flex flex-col justify-end" @click.self="closeMobileSearch">
-          <!-- Backdrop -->
-          <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="closeMobileSearch"></div>
-
-          <!-- Panel -->
-          <div class="mobile-search-panel relative bg-brand-card rounded-t-3xl border-t border-brand-border shadow-2xl max-h-[88vh] flex flex-col overflow-hidden">
-            <!-- Handle + header -->
-            <div class="flex-shrink-0 px-5 pt-4 pb-3">
-              <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4"></div>
-              <h2 class="text-base font-bold text-white mb-3 flex items-center gap-2">
-                <BIcon name="Search" class="w-4 h-4 text-brand-accent" />
-                Поиск и фильтры
-              </h2>
-              <!-- Search input -->
-              <div class="relative">
-                <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/55" />
-                <input
-                  type="text"
-                  v-model="searchQuery"
-                  @input="onHeaderSearch"
-                  :placeholder="langStore.t.search"
-                  autofocus
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl py-3 pl-10 pr-4 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30"
-                />
-              </div>
-            </div>
-
-            <!-- Scrollable filter content -->
-            <div class="flex-1 overflow-y-auto px-5 pb-8 space-y-4">
-              <!-- Feed mode -->
-              <div class="flex flex-wrap gap-2">
-                <button @click="feedMode = 'for-you'"
-                  :class="feedMode === 'for-you' ? 'bg-brand-accent text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-white/55'"
-                  class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all">
-                  <BIcon name="Sparkles" class="w-4 h-4" />Для вас
-                </button>
-                <button @click="feedMode = 'subscriptions'"
-                  :class="feedMode === 'subscriptions' ? 'bg-brand-accent text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-white/55'"
-                  class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all">
-                  <BIcon name="Users" class="w-4 h-4" />Подписки
-                </button>
-                <button @click="feedMode = 'trending'"
-                  :class="feedMode === 'trending' ? 'bg-brand-yellow text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-white/55'"
-                  class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all">
-                  <BIcon name="TrendingUp" class="w-4 h-4" />В тренде
-                </button>
-                <button @click="feedMode = 'news'"
-                  :class="feedMode === 'news' ? 'bg-brand-success text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-white/55'"
-                  class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all">
-                  <BIcon name="Newspaper" class="w-4 h-4" />Новости
-                </button>
-                <button @click="feedMode = 'photos'"
-                  :class="feedMode === 'photos' ? 'bg-brand-pink text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-white/55'"
-                  class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all">
-                  <BIcon name="Image" class="w-4 h-4" />Фото
-                </button>
-                <button v-if="nsfwMode" @click="feedMode = 'nsfw'"
-                  :class="feedMode === 'nsfw' ? 'bg-brand-error text-white shadow-sm' : 'bg-brand-bg border border-brand-border text-brand-error'"
-                  class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all">
-                  <BIcon name="Eye" class="w-4 h-4" />NSFW
-                </button>
-              </div>
-
-              <!-- Recommended users in search panel -->
-              <div v-if="visibleRecommendedUsers.length">
-                <h3 class="text-xs font-bold text-white/55 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <BIcon name="UserPlus" class="w-3.5 h-3.5" />Рекомендуемые
-                </h3>
-                <div class="space-y-2">
-                  <div v-for="user in visibleRecommendedUsers" :key="user.id"
-                    class="flex items-center gap-3 p-3 rounded-2xl bg-brand-bg border border-brand-border hover:bg-brand-border cursor-pointer"
-                    @click="closeMobileSearch(); router.push(`/profile/${user.id}`)">
-                    <img v-if="user.avatar_url" :src="user.avatar_url"
-                      class="w-9 h-9 rounded-full object-cover border border-brand-border flex-shrink-0" />
-                    <div v-else class="w-9 h-9 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (user.display_name || user.username || '?')[0].toUpperCase() }}</div>
-                    <div class="flex-1 min-w-0">
-                      <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
-                      <p class="text-xs text-white/55">@{{ user.username }}</p>
-                    </div>
-                    <button class="px-3 py-1.5 text-xs font-bold bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-xl hover:bg-brand-accent/30 flex-shrink-0">
-                      + Follow
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Language selector (mobile) -->
-              <div>
-                <h3 class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2">Язык</h3>
-                <div class="flex gap-2 flex-wrap">
-                  <button v-for="lang in ['RU','EN','JP','CN']" :key="lang"
-                    @click="langStore.setLang(lang)"
-                    :class="langStore.currentLang === lang ? 'bg-brand-accent/20 border-brand-accent text-brand-accent' : 'bg-brand-bg border-brand-border text-white/55'"
-                    class="px-4 py-2 rounded-xl text-sm font-bold border transition-all">{{ lang }}</button>
-                </div>
-              </div>
-
-              <!-- Logout (mobile) -->
-              <button @click="handleLogout"
-                class="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-400 font-bold text-sm hover:bg-rose-500/20 transition-colors">
-                <BIcon name="LogOut" class="w-4 h-4" />Выйти
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- ═══════════════════════════════════════════════════════════════════
-         MOBILE BOTTOM NAV HUB (md:hidden)
-    ═══════════════════════════════════════════════════════════════════ -->
-    <nav class="fixed bottom-0 inset-x-0 z-[200] md:hidden">
-      <!-- Blur backdrop -->
-      <div class="absolute inset-0 bg-brand-bg/90 backdrop-blur-xl border-t border-brand-border"></div>
-
-      <div class="relative flex items-center justify-around px-2 py-2 safe-area-bottom">
-        <!-- Home -->
-        <button
-          @click="activeNav = 'home'; mobileActiveTab = 'home'; router.push({ name: 'home' })"
-          class="flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl transition-all duration-200 min-w-[64px]"
-          :class="mobileActiveTab === 'home' ? 'text-white' : 'text-white/55'">
-          <div class="relative">
-            <div v-if="mobileActiveTab === 'home'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-accent/30 blur-sm"></div>
-            <BIcon name="Home" class="w-6 h-6 relative transition-transform duration-200"
-              :class="mobileActiveTab === 'home' ? 'scale-110 text-white' : ''" />
-          </div>
-          <span class="text-[10px] font-semibold">{{ langStore.t.home }}</span>
-          <div v-if="mobileActiveTab === 'home'" class="w-1 h-1 rounded-full bg-brand-accent mt-0.5"></div>
-        </button>
-
-        <!-- Friends -->
-        <button
-          @click="mobileActiveTab = 'friends'; activeNav = 'friends'; router.push({ name: 'friends' })"
-          class="flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl transition-all duration-200 min-w-[64px]"
-          :class="mobileActiveTab === 'friends' ? 'text-white' : 'text-white/55'">
-          <div class="relative">
-            <div v-if="mobileActiveTab === 'friends'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-purple/30 blur-sm"></div>
-            <BIcon name="Users" class="w-6 h-6 relative transition-transform duration-200"
-              :class="mobileActiveTab === 'friends' ? 'scale-110 text-brand-purple' : ''" />
-          </div>
-          <span class="text-[10px] font-semibold">{{ langStore.t.friends }}</span>
-          <div v-if="mobileActiveTab === 'friends'" class="w-1 h-1 rounded-full bg-brand-purple mt-0.5"></div>
-        </button>
-
-        <!-- Mobile Hub (center FAB) -->
-        <div class="relative flex-shrink-0 -mt-2">
-          <!-- Hub backdrop -->
-          <Transition name="fade">
-            <div v-if="mobileHubOpen" class="fixed inset-0 z-[199] bg-black/50 backdrop-blur-sm" @click="mobileHubOpen = false"></div>
-          </Transition>
-
-          <!-- Hub menu -->
-          <Transition name="hub-pop">
-            <div v-if="mobileHubOpen" class="absolute bottom-[72px] left-1/2 -translate-x-1/2 z-[201] flex flex-col items-center gap-2 w-44">
-              <button @click="mobileHubOpen = false; showPostForm = true; createTab = 'post'"
-                class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-brand-card/95 backdrop-blur-xl border border-brand-border text-white text-sm font-semibold hover:bg-brand-accent/20 transition-all">
-                <BIcon name="Edit3" class="w-5 h-5 text-brand-accent" /> {{ langStore.t.newPost }}
-              </button>
-              <button @click="mobileHubOpen = false; showStoryModal = true"
-                class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-brand-card/95 backdrop-blur-xl border border-brand-border text-white text-sm font-semibold hover:bg-brand-purple/20 transition-all">
-                <BIcon name="Camera" class="w-5 h-5 text-brand-purple" /> {{ langStore.t.story }}
-              </button>
-              <button @click="mobileHubOpen = false; router.push({ name: 'groups' })"
-                class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-brand-card/95 backdrop-blur-xl border border-brand-border text-white text-sm font-semibold hover:bg-brand-success/20 transition-all">
-                <BIcon name="Grid" class="w-5 h-5 text-brand-success" /> {{ langStore.t.groups }}
-              </button>
-              <button @click="mobileHubOpen = false; router.push({ name: 'bookmarks' })"
-                class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-brand-card/95 backdrop-blur-xl border border-brand-border text-white text-sm font-semibold hover:bg-brand-yellow/20 transition-all">
-                <BIcon name="Bookmark" class="w-5 h-5 text-brand-yellow" /> {{ langStore.t.bookmarks }}
-              </button>
-            </div>
-          </Transition>
-
-          <!-- Hub trigger button -->
-          <button
-            @click="mobileHubOpen = !mobileHubOpen"
-            class="w-14 h-14 rounded-2xl bg-brand-accent flex items-center justify-center shadow-lg shadow-brand-accent/40 hover:bg-brand-accent-plus hover:shadow-brand-accent/60 active:scale-95 transition-all duration-150"
-            :class="mobileHubOpen ? 'rotate-45 bg-brand-error shadow-brand-error/40' : ''">
-            <BIcon name="Plus" class="w-7 h-7 text-white transition-transform duration-200" />
-          </button>
-        </div>
-
-        <!-- Messages -->
-        <button
-          @click="mobileActiveTab = 'search'; router.push({ name: 'messages' })"
-          class="flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl transition-all duration-200 min-w-[64px]"
-          :class="mobileActiveTab === 'search' ? 'text-white' : 'text-white/55'">
-          <div class="relative">
-            <div v-if="mobileActiveTab === 'search'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-success/30 blur-sm"></div>
-            <BIcon name="MessageCircle" class="w-6 h-6 relative transition-transform duration-200"
-              :class="mobileActiveTab === 'search' ? 'scale-110 text-brand-success' : ''" />
-          </div>
-          <span class="text-[10px] font-semibold">{{ langStore.t.chats }}</span>
-          <div v-if="mobileActiveTab === 'search'" class="w-1 h-1 rounded-full bg-brand-success mt-0.5"></div>
-        </button>
-
-        <!-- Profile -->
-        <button
-          @click="mobileActiveTab = 'profile'; activeNav = 'profile'; router.push(`/profile/${auth.user?.id}`)"
-          class="flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl transition-all duration-200 min-w-[64px]"
-          :class="mobileActiveTab === 'profile' ? 'text-white' : 'text-white/55'">
-          <div class="relative">
-            <div v-if="mobileActiveTab === 'profile'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-yellow/30 blur-sm"></div>
-            <img v-if="auth.avatarUrl" :src="auth.avatarUrl"
-              class="w-6 h-6 rounded-full object-cover border-2 transition-all duration-200 relative"
-              :class="mobileActiveTab === 'profile' ? 'border-brand-yellow scale-110' : 'border-white/20'" />
-            <BIcon v-else name="User" class="w-6 h-6 relative" :class="mobileActiveTab === 'profile' ? 'scale-110 text-brand-yellow' : ''" />
-          </div>
-          <span class="text-[10px] font-semibold">{{ langStore.t.profile }}</span>
-          <div v-if="mobileActiveTab === 'profile'" class="w-1 h-1 rounded-full bg-brand-yellow mt-0.5"></div>
-        </button>
-      </div>
-    </nav>
     <PostLightbox
       v-if="lightboxOpen"
       :images="lightboxImages"
@@ -1625,17 +1399,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
 .modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
 .modal-fade-enter-from .relative, .modal-fade-leave-to .relative { transform: translateY(-12px) scale(0.97); }
 
-/* Mobile slide-up panel */
-.mobile-panel-enter-active,
-.mobile-panel-leave-active { transition: opacity 0.25s ease; }
-.mobile-panel-enter-from, .mobile-panel-leave-to { opacity: 0; }
-.mobile-panel-enter-active .mobile-search-panel { transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1); }
-.mobile-panel-leave-active .mobile-search-panel { transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1); }
-.mobile-panel-enter-from .mobile-search-panel { transform: translateY(100%); }
-.mobile-panel-leave-to   .mobile-search-panel { transform: translateY(100%); }
 
-/* iOS safe area */
-.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 8px); }
 
 /* Create post/story modal */
 .create-modal-enter-active { transition: opacity 0.22s ease; }
@@ -1661,12 +1425,6 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
   transform: translateY(-1px);
   box-shadow: 0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(76,103,207,0.08);
 }
-
-/* Hub pop animation */
-.hub-pop-enter-active { transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.hub-pop-leave-active { transition: all 0.15s ease-in; }
-.hub-pop-enter-from { opacity: 0; transform: translateX(-50%) translateY(16px) scale(0.85); }
-.hub-pop-leave-to   { opacity: 0; transform: translateX(-50%) translateY(16px) scale(0.85); }
 
 /* Fade transition */
 .fade-enter-active { transition: opacity 0.2s ease; }

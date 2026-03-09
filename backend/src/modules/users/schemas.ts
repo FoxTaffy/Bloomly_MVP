@@ -37,7 +37,12 @@ export const updateUserSchema = {
       fursuit_description:  { type: 'string', nullable: true },
       fursuit_maker:        { type: 'string', maxLength: 200, nullable: true },
       birth_date:           { type: 'string', nullable: true },
-      social_links:         { type: 'object', nullable: true },
+      social_links:         {
+        type: 'object',
+        nullable: true,
+        maxProperties: 20,
+        additionalProperties: { type: 'string', maxLength: 500 },
+      },
       interests:            { type: 'array', items: { type: 'string' }, nullable: true },
       relationship_with:    { type: 'string', nullable: true },
       relationship_since:   { type: 'string', nullable: true },

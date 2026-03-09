@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import api from '../api'
+import api, { setupApiAuth } from '../api'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface User {
@@ -22,39 +22,33 @@ export interface User {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function loadToken(): string | null {
-  return localStorage.getItem('access_token') ?? sessionStorage.getItem('access_token')
-}
-
+// User profile cached in sessionStorage for faster display on reload (NOT for auth)
 function loadUser(): User | null {
   try {
-    const raw = localStorage.getItem('auth_user') ?? sessionStorage.getItem('auth_user')
+    const raw = sessionStorage.getItem('auth_user')
     return JSON.parse(raw ?? 'null')
   } catch {
     return null
   }
 }
 
-function saveSession(token: string, user: User, remember: boolean) {
-  const storage = remember ? localStorage : sessionStorage
-  storage.setItem('access_token', token)
-  storage.setItem('auth_user', JSON.stringify(user))
+function saveUser(u: User) {
+  sessionStorage.setItem('auth_user', JSON.stringify(u))
 }
 
-function clearSession() {
-  ;['access_token', 'auth_user'].forEach(k => {
-    localStorage.removeItem(k)
-    sessionStorage.removeItem(k)
-  })
+function clearUser() {
+  sessionStorage.removeItem('auth_user')
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 export const useAuthStore = defineStore('auth', () => {
   // ── State ────────────────────────────────────────────────────────────────
-  const token     = ref<string | null>(loadToken())
-  const user      = ref<User | null>(loadUser())
-  const isLoading = ref(false)
-  const error     = ref<string | null>(null)
+  // Access token lives ONLY in memory — never written to localStorage
+  const token         = ref<string | null>(null)
+  const user          = ref<User | null>(loadUser())
+  const isLoading     = ref(false)
+  const isInitialized = ref(false)
+  const error         = ref<string | null>(null)
 
   // ── Getters ──────────────────────────────────────────────────────────────
   const isAuthenticated = computed(() => !!token.value && !!user.value)
@@ -63,7 +57,24 @@ export const useAuthStore = defineStore('auth', () => {
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
-  async function login(email: string, password: string, remember = false): Promise<void> {
+  /** Restore session on page load by using the httpOnly refresh_token cookie */
+  async function tryRefresh(): Promise<boolean> {
+    try {
+      const res = await api.post('/auth/refresh')
+      if (res.data.success) {
+        token.value = res.data.data.token
+        user.value  = res.data.data.user
+        saveUser(res.data.data.user)
+        return true
+      }
+    } catch {
+      clearUser()
+      user.value = null
+    }
+    return false
+  }
+
+  async function login(email: string, password: string, _remember = false): Promise<void> {
     isLoading.value = true
     error.value = null
     try {
@@ -72,7 +83,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (!data.success) throw new Error(data.error?.message ?? 'Invalid email or password')
       token.value = data.data.token
       user.value  = data.data.user
-      saveSession(data.data.token, data.data.user, remember)
+      saveUser(data.data.user)
     } catch (e: any) {
       error.value = e.response?.data?.error?.message || e.message || 'Connection error'
       throw e
@@ -98,7 +109,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function verifyEmail(email: string, code: string, remember = false): Promise<void> {
+  async function verifyEmail(email: string, code: string, _remember = false): Promise<void> {
     isLoading.value = true
     error.value = null
     try {
@@ -107,7 +118,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (!data.success) throw new Error(data.error?.message ?? 'Verification failed')
       token.value = data.data.token
       user.value  = data.data.user
-      saveSession(data.data.token, data.data.user, remember)
+      saveUser(data.data.user)
     } catch (e: any) {
       error.value = e.response?.data?.error?.message || e.message || 'Connection error'
       throw e
@@ -129,11 +140,11 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /** Вход через токен (после OAuth redirect или /verify-email) */
-  function loginWithToken(jwtToken: string, savedUser: User, remember = true): void {
+  /** Вход через токен (после OAuth redirect) */
+  function loginWithToken(jwtToken: string, savedUser: User, _remember = true): void {
     token.value = jwtToken
     user.value  = savedUser
-    saveSession(jwtToken, savedUser, remember)
+    saveUser(savedUser)
   }
 
   async function forgotPassword(email: string): Promise<void> {
@@ -171,26 +182,41 @@ export const useAuthStore = defineStore('auth', () => {
       const data = res.data
       if (data.success) {
         user.value = data.data.user
-        const inLocal = !!localStorage.getItem('access_token')
-        saveSession(token.value!, data.data.user, inLocal)
+        saveUser(data.data.user)
       }
     } catch (e: any) {
       if (e?.response?.status === 401) logout()
     }
   }
 
-  function logout() {
+  async function logout(): Promise<void> {
+    try { await api.post('/auth/logout') } catch { /* best-effort */ }
     token.value = null
     user.value = null
-    clearSession()
+    clearUser()
   }
 
-  if (token.value) fetchMe()
+  // Wire up axios interceptors — no circular dep since api.ts no longer imports stores
+  setupApiAuth(
+    () => token.value,
+    async () => {
+      await logout()
+      const { default: router } = await import('../router')
+      router.push({ name: 'login' })
+    },
+    async () => {
+      const ok = await tryRefresh()
+      return ok ? token.value : null
+    },
+  )
+
+  // Restore session via httpOnly refresh_token cookie on page load
+  tryRefresh().finally(() => { isInitialized.value = true })
 
   return {
-    token, user, isLoading, error,
+    token, user, isLoading, isInitialized, error,
     isAuthenticated, displayName, avatarUrl,
     login, register, verifyEmail, resendOtp, loginWithToken,
-    forgotPassword, resetPassword, fetchMe, logout,
+    forgotPassword, resetPassword, fetchMe, logout, tryRefresh,
   }
 })

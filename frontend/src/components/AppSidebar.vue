@@ -35,7 +35,6 @@ const isActive = (key: string): boolean => {
     subscriptions:'subscriptions',
     'dealers-den':'dealers-den',
     'stickers':   'stickers',
-    'to-go':      'to-go',
     'automation': 'automation',
   }
   if (routeMap[key]) return route.name === routeMap[key]
@@ -85,13 +84,6 @@ const navItems = computed(() => [
     label: langStore.t.bookmarks,
     disabled: false,
     action: () => router.push({ name: 'bookmarks' }),
-  },
-  {
-    key: 'to-go',
-    icon: 'ListTodo',
-    label: 'To-go List',
-    disabled: false,
-    action: () => router.push({ name: 'to-go' }),
   },
   {
     key: 'subscriptions',

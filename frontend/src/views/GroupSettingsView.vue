@@ -5,7 +5,7 @@ import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import SoonBadge from '@/components/groups/SoonBadge.vue'
-import { useGroupsStore } from '@/stores/groups'
+import { useGroupsStore, type GroupMember, type CustomRole } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import api from '@/api'
@@ -60,6 +60,8 @@ const shopSections = [
 ]
 
 const tailSections = [
+  { id: 'sec-members',    label: 'Команда',       color: '#a78bfa', iconPath: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
+  { id: 'sec-roles',      label: 'Роли',          color: '#f59e0b', iconPath: 'M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z' },
   { id: 'sec-social',     label: 'Ссылки',        color: '#38bdf8', iconPath: 'M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z' },
   { id: 'sec-danger',     label: 'Опасная зона',  color: '#ef4444', iconPath: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
 ]
@@ -76,7 +78,195 @@ const sections = computed(() => {
 // ── Active section ──────────────────────────────────────────────────────────
 const openSection = ref<string>('sec-general')
 
-// ── SOON badge management state ────────────────────────────────────────────
+// ── Members management ──────────────────────────────────────────────────────
+const MEMBER_ROLES = [
+  { value: 'admin',         label: 'Администратор',  color: '#3b82f6',  icon: '🔧' },
+  { value: 'moderator',     label: 'Модератор',       color: '#a78bfa', icon: '🛡️' },
+  { value: 'member',        label: 'Участник',         color: '#9ca3af', icon: '👤' },
+  { value: 'dealer',        label: 'Дилер',            color: '#34d399', icon: '🏪' },
+  { value: 'volunteer',     label: 'Волонтёр',         color: '#fb923c', icon: '🙋' },
+  { value: 'guest_of_honor',label: 'Почётный гость',  color: '#fbbf24', icon: '⭐' },
+]
+const ROLE_META: Record<string, { label: string; color: string; icon: string }> = {
+  owner:          { label: 'Владелец',        color: '#f59e0b', icon: '👑' },
+  admin:          { label: 'Администратор',  color: '#3b82f6', icon: '🔧' },
+  moderator:      { label: 'Модератор',       color: '#a78bfa', icon: '🛡️' },
+  member:         { label: 'Участник',         color: '#9ca3af', icon: '👤' },
+  dealer:         { label: 'Дилер',            color: '#34d399', icon: '🏪' },
+  volunteer:      { label: 'Волонтёр',         color: '#fb923c', icon: '🙋' },
+  guest_of_honor: { label: 'Почётный гость',  color: '#fbbf24', icon: '⭐' },
+}
+const membersList = ref<GroupMember[]>([])
+const membersLoading = ref(false)
+const membersLoaded = ref(false)
+const roleDropdownFor = ref<string | null>(null)
+const memberSaving = ref<Record<string, boolean>>({})
+const memberKicking = ref<Record<string, boolean>>({})
+
+async function loadMembers() {
+  if (!group.value?.id) return
+  membersLoading.value = true
+  try {
+    membersList.value = await groupsStore.fetchMembers(group.value.id)
+    membersLoaded.value = true
+  } catch { /* ignore */ } finally {
+    membersLoading.value = false
+  }
+}
+
+async function doSetRole(userId: string, role: string) {
+  if (!group.value?.id) return
+  memberSaving.value[userId] = true
+  roleDropdownFor.value = null
+  try {
+    const updated = await groupsStore.changeMemberRole(group.value.id, userId, role as any)
+    const idx = membersList.value.findIndex(m => m.user_id === userId)
+    if (idx !== -1) membersList.value[idx] = { ...membersList.value[idx], role: updated.role }
+    showToast('success', 'Роль обновлена')
+  } catch (e: any) {
+    showToast('error', e.response?.data?.error?.message || e.message || 'Ошибка')
+  } finally {
+    delete memberSaving.value[userId]
+  }
+}
+
+async function doKickMember(userId: string) {
+  if (!group.value?.id) return
+  memberKicking.value[userId] = true
+  try {
+    await groupsStore.removeMember(group.value.id, userId)
+    membersList.value = membersList.value.filter(m => m.user_id !== userId)
+    showToast('success', 'Участник удалён')
+  } catch (e: any) {
+    showToast('error', e.response?.data?.error?.message || e.message || 'Ошибка')
+  } finally {
+    delete memberKicking.value[userId]
+  }
+}
+
+watch(openSection, (val) => {
+  if (val === 'sec-members' && !membersLoaded.value) loadMembers()
+  if (val === 'sec-roles' && !customRolesLoaded.value) loadCustomRoles()
+})
+
+const sortedMembers = computed(() => {
+  const ORDER: Record<string, number> = { owner: 0, admin: 1, moderator: 2, dealer: 3, volunteer: 4, guest_of_honor: 5, member: 99 }
+  return [...membersList.value].sort((a, b) => (ORDER[a.role] ?? 50) - (ORDER[b.role] ?? 50))
+})
+
+// ── Role dropdown (fixed positioning to escape overflow-hidden) ─────────────
+const dropdownY = ref(0)
+const dropdownX = ref(0)
+
+function openRoleDropdown(event: MouseEvent, userId: string) {
+  if (roleDropdownFor.value === userId) {
+    roleDropdownFor.value = null
+    return
+  }
+  const btn = event.currentTarget as HTMLElement
+  const rect = btn.getBoundingClientRect()
+  dropdownY.value = rect.bottom + 8
+  dropdownX.value = rect.right
+  roleDropdownFor.value = userId
+}
+
+const roleDropdownMember = computed(() => membersList.value.find(m => m.user_id === roleDropdownFor.value) ?? null)
+
+function closeRoleDropdown() { roleDropdownFor.value = null }
+
+// ── Custom Roles ─────────────────────────────────────────────────────────────
+const customRolesList   = ref<CustomRole[]>([])
+const customRolesLoading = ref(false)
+const customRolesLoaded  = ref(false)
+const customRoleSaving   = ref(false)
+const deletingRoleId     = ref<string | null>(null)
+const showRoleModal      = ref(false)
+const roleModalMode      = ref<'create' | 'edit'>('create')
+const editingRoleId      = ref<string | null>(null)
+const roleForm           = reactive({ name: '', color: '#a78bfa', icon: '🎖️', permissions: [] as string[] })
+
+const PERMISSIONS_LIST = [
+  { id: 'can_post',            label: 'Создавать посты',            icon: '📝', group: 'Контент' },
+  { id: 'can_comment',         label: 'Комментировать',             icon: '💬', group: 'Контент' },
+  { id: 'can_invite',          label: 'Приглашать участников',      icon: '📨', group: 'Участники' },
+  { id: 'can_moderate_posts',  label: 'Удалять посты/комментарии', icon: '🗑️', group: 'Модерация' },
+  { id: 'can_manage_members',  label: 'Управлять участниками',      icon: '👥', group: 'Управление' },
+  { id: 'can_manage_events',   label: 'Управлять событиями',        icon: '📅', group: 'Управление' },
+  { id: 'can_manage_roles',    label: 'Управлять ролями',           icon: '🎖️', group: 'Управление' },
+  { id: 'can_manage_settings', label: 'Изменять настройки группы',  icon: '⚙️', group: 'Управление' },
+]
+
+const SYSTEM_ROLE_PERMISSIONS: Record<string, string[]> = {
+  owner:     ['can_post', 'can_comment', 'can_invite', 'can_moderate_posts', 'can_manage_members', 'can_manage_events', 'can_manage_roles', 'can_manage_settings'],
+  admin:     ['can_post', 'can_comment', 'can_invite', 'can_moderate_posts', 'can_manage_members', 'can_manage_events', 'can_manage_roles', 'can_manage_settings'],
+  moderator: ['can_post', 'can_comment', 'can_invite', 'can_moderate_posts'],
+  member:    ['can_post', 'can_comment'],
+}
+
+const EMOJI_OPTIONS = ['🎖️', '⭐', '🌟', '💫', '🔥', '❄️', '🎨', '🎭', '🦸', '🛡️', '⚔️', '🔑', '💎', '🏆', '🎯', '🌸', '🦊', '🐺', '🐲', '🦋', '🌈', '🎪', '🚀', '💜', '🎵']
+
+async function loadCustomRoles() {
+  if (!group.value?.id) return
+  customRolesLoading.value = true
+  try {
+    customRolesList.value = await groupsStore.fetchCustomRoles(group.value.id)
+    customRolesLoaded.value = true
+  } catch { } finally { customRolesLoading.value = false }
+}
+
+function openCreateRole() {
+  roleModalMode.value = 'create'
+  editingRoleId.value = null
+  Object.assign(roleForm, { name: '', color: '#a78bfa', icon: '🎖️', permissions: [] })
+  showRoleModal.value = true
+}
+
+function openEditRole(role: CustomRole) {
+  roleModalMode.value = 'edit'
+  editingRoleId.value = role.id
+  Object.assign(roleForm, { name: role.name, color: role.color, icon: role.icon, permissions: [...role.permissions] })
+  showRoleModal.value = true
+}
+
+function togglePermission(p: string) {
+  const idx = roleForm.permissions.indexOf(p)
+  if (idx === -1) roleForm.permissions.push(p)
+  else roleForm.permissions.splice(idx, 1)
+}
+
+async function saveRole() {
+  if (!group.value?.id || !roleForm.name.trim()) return
+  customRoleSaving.value = true
+  try {
+    const payload = { name: roleForm.name.trim(), color: roleForm.color, icon: roleForm.icon, permissions: roleForm.permissions }
+    if (roleModalMode.value === 'create') {
+      const r = await groupsStore.createCustomRole(group.value.id, payload)
+      customRolesList.value.push(r)
+    } else if (editingRoleId.value) {
+      const r = await groupsStore.updateCustomRole(group.value.id, editingRoleId.value, payload)
+      const idx = customRolesList.value.findIndex(x => x.id === editingRoleId.value)
+      if (idx !== -1) customRolesList.value[idx] = r
+    }
+    showRoleModal.value = false
+    showToast('success', roleModalMode.value === 'create' ? 'Роль создана' : 'Роль обновлена')
+  } catch (e: any) {
+    showToast('error', e.response?.data?.error?.message || 'Ошибка сохранения роли')
+  } finally { customRoleSaving.value = false }
+}
+
+async function confirmDeleteRole(roleId: string) {
+  if (!group.value?.id) return
+  deletingRoleId.value = roleId
+  try {
+    await groupsStore.deleteCustomRole(group.value.id, roleId)
+    customRolesList.value = customRolesList.value.filter(r => r.id !== roleId)
+    showToast('success', 'Роль удалена')
+  } catch (e: any) {
+    showToast('error', e.response?.data?.error?.message || 'Ошибка')
+  } finally { deletingRoleId.value = null }
+}
+
+// ── SOON badge management state ─────────────────────────────────────────────
 const soonBadgesLoaded = ref(false)
 const soonBadgesLoading = ref(false)
 const eventSoonMap = ref<Record<string, any[]>>({}) // eventId → soonBadges[]
@@ -871,7 +1061,7 @@ async function deleteGroup() {
     <!-- ─── Floating save/reset bar (dirty) ──────────────────────────── -->
     <Transition name="floatbar">
       <div v-if="isDirty"
-        class="fixed bottom-6 right-6 z-50 flex items-center gap-2 p-1.5 rounded-2xl shadow-2xl border transition-all"
+        class="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-50 flex items-center gap-2 p-1.5 rounded-2xl shadow-2xl border transition-all"
         :class="[shaking ? 'animate-shake' : '', unsavedWarning ? 'bg-brand-error/15 border-brand-error/40 shadow-brand-error/20' : 'bg-brand-card/90 border-brand-border backdrop-blur-xl']">
         <div class="px-3 py-1.5 flex items-center gap-2" :class="unsavedWarning ? 'text-brand-error' : 'text-white/55'">
           <div class="w-2 h-2 rounded-full animate-pulse" :class="unsavedWarning ? 'bg-brand-error' : 'bg-amber-400'"></div>
@@ -967,7 +1157,7 @@ async function deleteGroup() {
     <input ref="avatarInput" type="file" accept="image/*" class="sr-only" @change="onAvatarChange" />
     <input ref="bannerInput" type="file" accept="image/*" class="sr-only" @change="onBannerChange" />
 
-    <div class="max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-6 pb-20">
+    <div class="max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-6 pb-28 md:pb-10">
       <AppSidebar v-model:activeNav="activeNav" />
 
       <!-- ─── Settings area ────────────────────────────────────────── -->
@@ -1987,16 +2177,207 @@ async function deleteGroup() {
                   </div>
                 </section>
 
+                <!-- ═══ § MEMBERS / КОМАНДА ══════════════════════════════ -->
+                <section v-show="openSection === 'sec-members'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl scroll-mt-28">
+                  <div class="px-6 py-4 border-b border-brand-border flex items-center justify-between rounded-tl-3xl rounded-tr-3xl overflow-hidden"
+                    :style="`background:linear-gradient(90deg,${tailSections[0].color}0c 0%,transparent 100%)`">
+                    <div class="flex items-center gap-3">
+                      <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${tailSections[0].color}1a`">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${tailSections[0].color}`">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="tailSections[0].iconPath"/>
+                        </svg>
+                      </div>
+                      <h2 class="font-bold text-white text-sm">{{ tailSections[0].label }}</h2>
+                    </div>
+                    <button @click="loadMembers" class="text-xs text-white/40 hover:text-white/70 transition-colors flex items-center gap-1">
+                      <svg class="w-3.5 h-3.5" :class="membersLoading ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                      </svg>
+                      Обновить
+                    </button>
+                  </div>
+
+                  <div class="p-6">
+                    <!-- Loading state -->
+                    <div v-if="membersLoading" class="flex items-center justify-center py-10">
+                      <div class="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"/>
+                    </div>
+
+                    <!-- Empty -->
+                    <div v-else-if="membersLoaded && !membersList.length" class="text-center py-10 text-white/40 text-sm">Участников не найдено</div>
+
+                    <!-- Members list -->
+                    <div v-else class="space-y-2">
+                      <!-- Role legend -->
+                      <div class="flex flex-wrap gap-1.5 mb-4">
+                        <span v-for="r in MEMBER_ROLES" :key="r.value"
+                          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-white/10"
+                          :style="`background:${r.color}15;color:${r.color}`">
+                          {{ r.icon }} {{ r.label }}
+                        </span>
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-white/10"
+                          style="background:#f59e0b15;color:#f59e0b">👑 Владелец</span>
+                      </div>
+
+                      <!-- Each member row -->
+                      <div v-for="m in sortedMembers" :key="m.user_id"
+                        class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-brand-bg/50 border border-brand-border hover:border-white/15 transition-colors group/row">
+                        <!-- Avatar -->
+                        <img v-if="m.user.avatar_url" :src="m.user.avatar_url" class="w-9 h-9 rounded-xl object-cover flex-shrink-0" />
+                        <div v-else class="w-9 h-9 rounded-xl bg-brand-border flex items-center justify-center flex-shrink-0 text-white/40 font-bold text-sm">
+                          {{ (m.user.display_name || m.user.username).charAt(0).toUpperCase() }}
+                        </div>
+
+                        <!-- Name -->
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-semibold text-white truncate">{{ m.user.display_name || m.user.username }}</p>
+                          <p class="text-xs text-white/40 truncate">@{{ m.user.username }}</p>
+                        </div>
+
+                        <!-- Current role badge -->
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-white/10 flex-shrink-0"
+                          :style="`background:${(ROLE_META[m.role] ?? ROLE_META.member).color}15;color:${(ROLE_META[m.role] ?? ROLE_META.member).color}`">
+                          {{ (ROLE_META[m.role] ?? ROLE_META.member).icon }} {{ (ROLE_META[m.role] ?? ROLE_META.member).label }}
+                        </span>
+
+                        <!-- Role changer (not for owner) -->
+                        <div v-if="m.role !== 'owner'" class="relative flex-shrink-0">
+                          <!-- Spinner while saving -->
+                          <div v-if="memberSaving[m.user_id]" class="w-5 h-5 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"/>
+                          <template v-else>
+                            <button @click="openRoleDropdown($event, m.user_id)"
+                              class="w-8 h-8 rounded-xl border border-brand-border bg-brand-bg hover:border-white/30 flex items-center justify-center transition-colors"
+                              :class="roleDropdownFor === m.user_id ? 'border-brand-accent bg-brand-accent/10' : ''"
+                              title="Изменить роль">
+                              <svg class="w-3.5 h-3.5 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                              </svg>
+                            </button>
+                          </template>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <!-- ═══ § ROLES / РОЛИ ═══════════════════════════════════ -->
+                <section v-show="openSection === 'sec-roles'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl scroll-mt-28">
+                  <div class="px-6 py-4 border-b border-brand-border flex items-center justify-between rounded-tl-3xl rounded-tr-3xl overflow-hidden"
+                    :style="`background:linear-gradient(90deg,${tailSections[1].color}0c 0%,transparent 100%)`">
+                    <div class="flex items-center gap-3">
+                      <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${tailSections[1].color}1a`">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${tailSections[1].color}`">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="tailSections[1].iconPath"/>
+                        </svg>
+                      </div>
+                      <h2 class="font-bold text-white text-sm">{{ tailSections[1].label }}</h2>
+                    </div>
+                    <button @click="openCreateRole"
+                      class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl transition-colors"
+                      :style="`background:${tailSections[1].color}20;color:${tailSections[1].color}`">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                      </svg>
+                      Создать роль
+                    </button>
+                  </div>
+
+                  <div class="p-6">
+                    <!-- Loading -->
+                    <div v-if="customRolesLoading" class="flex items-center justify-center py-10">
+                      <div class="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"/>
+                    </div>
+
+                    <div v-else>
+                      <!-- Системные роли (инфо) -->
+                      <div class="mb-6">
+                        <p class="text-xs font-semibold text-white/40 uppercase tracking-wider mb-3">Встроенные роли</p>
+                        <div class="space-y-2">
+                          <div v-for="(perms, rkey) in SYSTEM_ROLE_PERMISSIONS" :key="rkey"
+                            class="flex items-start gap-3 px-4 py-3 rounded-2xl bg-brand-bg/50 border border-brand-border">
+                            <span class="text-lg mt-0.5 flex-shrink-0">{{ (ROLE_META[rkey] ?? ROLE_META.member).icon }}</span>
+                            <div class="flex-1 min-w-0">
+                              <div class="flex items-center gap-2 mb-1.5">
+                                <span class="text-sm font-semibold text-white">{{ (ROLE_META[rkey] ?? ROLE_META.member).label }}</span>
+                                <span class="text-xs px-2 py-0.5 rounded-md border border-white/10 text-white/40">встроенная</span>
+                              </div>
+                              <div class="flex flex-wrap gap-1.5">
+                                <span v-for="p in PERMISSIONS_LIST" :key="p.id"
+                                  class="text-xs px-2 py-0.5 rounded-lg border"
+                                  :class="perms.includes(p.id) ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-white/8 text-white/20 bg-transparent'">
+                                  {{ p.icon }} {{ p.label }}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Кастомные роли -->
+                      <div>
+                        <p class="text-xs font-semibold text-white/40 uppercase tracking-wider mb-3">Пользовательские роли</p>
+                        <div v-if="!customRolesList.length" class="text-center py-8 text-white/30 text-sm border border-dashed border-white/10 rounded-2xl">
+                          Нет ролей. Нажмите «Создать роль» чтобы добавить.
+                        </div>
+                        <div v-else class="space-y-2 mb-4">
+                          <div v-for="role in customRolesList" :key="role.id"
+                            class="flex items-start gap-3 px-4 py-3 rounded-2xl bg-brand-bg/50 border border-brand-border hover:border-white/15 transition-colors">
+                            <span class="text-xl flex-shrink-0 mt-0.5">{{ role.icon }}</span>
+                            <div class="flex-1 min-w-0">
+                              <div class="flex items-center gap-2 mb-1.5">
+                                <span class="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" :style="`background:${role.color}`"/>
+                                <span class="text-sm font-semibold text-white">{{ role.name }}</span>
+                              </div>
+                              <div class="flex flex-wrap gap-1.5">
+                                <span v-for="p in PERMISSIONS_LIST" :key="p.id"
+                                  class="text-xs px-2 py-0.5 rounded-lg border"
+                                  :class="role.permissions.includes(p.id) ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-white/8 text-white/20'">
+                                  {{ p.icon }} {{ p.label }}
+                                </span>
+                              </div>
+                            </div>
+                            <div class="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
+                              <button @click="openEditRole(role)"
+                                class="w-8 h-8 rounded-xl border border-brand-border bg-brand-bg hover:border-white/30 flex items-center justify-center transition-colors text-white/50 hover:text-white"
+                                title="Редактировать">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                </svg>
+                              </button>
+                              <button @click="confirmDeleteRole(role.id)"
+                                :disabled="deletingRoleId === role.id"
+                                class="w-8 h-8 rounded-xl border border-red-500/20 bg-brand-bg hover:border-red-500/50 hover:bg-red-500/10 flex items-center justify-center transition-colors text-red-400/60 hover:text-red-400"
+                                title="Удалить">
+                                <svg v-if="deletingRoleId !== role.id" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                </svg>
+                                <div v-else class="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin"/>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <button @click="openCreateRole"
+                          class="w-full py-3 rounded-2xl border border-dashed border-white/15 text-sm text-white/40 hover:text-white/70 hover:border-white/30 transition-colors flex items-center justify-center gap-2">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                          </svg>
+                          Добавить роль
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
                 <!-- ═══ § SOCIAL LINKS ═══════════════════════════════════ -->
                 <section v-show="openSection === 'sec-social'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                   <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
-                    :style="`background:linear-gradient(90deg,${tailSections[0].color}0c 0%,transparent 100%)`">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${tailSections[0].color}1a`">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${tailSections[0].color}`">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="tailSections[0].iconPath"/>
+                    :style="`background:linear-gradient(90deg,${tailSections[2].color}0c 0%,transparent 100%)`">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${tailSections[2].color}1a`">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${tailSections[2].color}`">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="tailSections[2].iconPath"/>
                       </svg>
                     </div>
-                    <h2 class="font-bold text-white text-sm">{{ tailSections[0].label }}</h2>
+                    <h2 class="font-bold text-white text-sm">{{ tailSections[2].label }}</h2>
                   </div>
                   <div class="p-6 space-y-4">
                     <div v-for="link in [
@@ -2057,6 +2438,132 @@ async function deleteGroup() {
       </main>
     </div>
   </div>
+
+  <!-- ══ Dropdown роли (Teleport to body, fixes overflow-hidden clip) ══ -->
+  <Teleport to="body">
+    <div v-if="roleDropdownFor && roleDropdownMember"
+      class="fixed z-[999] bg-brand-card border border-brand-border rounded-2xl shadow-2xl py-1.5 w-56"
+      :style="`top:${dropdownY}px;right:${
+        typeof window !== 'undefined' ? window.innerWidth - dropdownX : 0
+      }px`"
+      @click.stop>
+      <div class="px-3 pb-1 pt-0.5 mb-1 border-b border-brand-border">
+        <p class="text-xs font-semibold text-white/40">Изменить роль</p>
+      </div>
+      <button v-for="r in MEMBER_ROLES" :key="r.value"
+        @click="doSetRole(roleDropdownMember!.user_id, r.value)"
+        class="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm hover:bg-white/5 transition-colors text-left"
+        :class="roleDropdownMember!.role === r.value ? 'text-white font-bold' : 'text-white/70'">
+        <span class="text-base leading-none flex-shrink-0">{{ r.icon }}</span>
+        <span class="flex-1">{{ r.label }}</span>
+        <svg v-if="roleDropdownMember!.role === r.value" class="w-3.5 h-3.5 flex-shrink-0" style="color:#a78bfa" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+        </svg>
+      </button>
+      <div class="border-t border-brand-border mt-1 pt-1">
+        <button @click="doKickMember(roleDropdownMember!.user_id); closeRoleDropdown()"
+          :disabled="memberKicking[roleDropdownMember!.user_id]"
+          class="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors text-left">
+          <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6m3-3l3 3-3 3"/>
+          </svg>
+          Кикнуть
+        </button>
+      </div>
+    </div>
+    <!-- Backdrop to close dropdown -->
+    <div v-if="roleDropdownFor" class="fixed inset-0 z-[998]" @click="closeRoleDropdown()"/>
+  </Teleport>
+
+  <!-- ══ Модалка создания/редактирования роли ═══════════════════════════ -->
+  <Teleport to="body">
+    <Transition name="modal-fade">
+      <div v-if="showRoleModal" class="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showRoleModal = false"/>
+        <div class="relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-lg p-6 z-10" @click.stop>
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-lg font-bold text-white">{{ roleModalMode === 'create' ? 'Новая роль' : 'Редактировать роль' }}</h2>
+            <button @click="showRoleModal = false" class="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+
+          <!-- Имя + цвет + иконка -->
+          <div class="flex items-end gap-3 mb-5">
+            <div class="flex-1">
+              <label class="text-xs font-semibold text-white/50 mb-1.5 block">Название роли <span class="text-brand-accent">*</span></label>
+              <input v-model="roleForm.name" maxlength="50" placeholder="Например: Художник" class="field-input" autofocus />
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-white/50 mb-1.5 block">Цвет</label>
+              <input type="color" v-model="roleForm.color" class="w-10 h-10 rounded-xl cursor-pointer bg-transparent border-0 p-0.5" />
+            </div>
+          </div>
+
+          <!-- Эмодзи-иконка -->
+          <div class="mb-5">
+            <label class="text-xs font-semibold text-white/50 mb-2 block">Иконка</label>
+            <div class="flex flex-wrap gap-2">
+              <button v-for="e in EMOJI_OPTIONS" :key="e"
+                type="button"
+                @click="roleForm.icon = e"
+                class="w-9 h-9 rounded-xl text-lg flex items-center justify-center transition-all border"
+                :class="roleForm.icon === e ? 'border-brand-accent bg-brand-accent/20 shadow-md scale-110' : 'border-white/10 bg-white/5 hover:bg-white/10'">
+                {{ e }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Разрешения -->
+          <div class="mb-6">
+            <label class="text-xs font-semibold text-white/50 mb-2 block">Разрешения</label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button v-for="p in PERMISSIONS_LIST" :key="p.id"
+                type="button"
+                @click="togglePermission(p.id)"
+                class="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all text-left"
+                :class="roleForm.permissions.includes(p.id)
+                  ? 'border-emerald-500/50 bg-emerald-500/10 text-white'
+                  : 'border-white/10 bg-white/5 text-white/50 hover:bg-white/8 hover:text-white/70'">
+                <span class="flex-shrink-0">{{ p.icon }}</span>
+                <span class="text-xs font-medium leading-tight">{{ p.label }}</span>
+                <svg v-if="roleForm.permissions.includes(p.id)" class="w-3.5 h-3.5 ml-auto text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Preview -->
+          <div class="mb-6 px-4 py-3 rounded-2xl bg-brand-bg/60 border border-brand-border flex items-center gap-3">
+            <span class="text-xl">{{ roleForm.icon }}</span>
+            <div class="flex-1">
+              <p class="text-sm font-semibold text-white">{{ roleForm.name || 'Название роли' }}</p>
+              <p class="text-xs text-white/40">{{ roleForm.permissions.length }} разрешений</p>
+            </div>
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-white/10"
+              :style="`background:${roleForm.color}15;color:${roleForm.color}`">
+              {{ roleForm.icon }} {{ roleForm.name || '...' }}
+            </span>
+          </div>
+
+          <!-- Кнопки -->
+          <div class="flex items-center justify-end gap-3">
+            <button @click="showRoleModal = false"
+              class="px-4 py-2 text-sm text-white/50 hover:text-white transition-colors rounded-xl hover:bg-white/5">
+              Отмена
+            </button>
+            <button @click="saveRole"
+              :disabled="customRoleSaving || !roleForm.name.trim()"
+              class="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-brand-accent hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors">
+              <div v-if="customRoleSaving" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"/>
+              {{ roleModalMode === 'create' ? 'Создать' : 'Сохранить' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -2083,4 +2590,6 @@ async function deleteGroup() {
   90%     { transform: translateX(3px); }
 }
 .animate-shake { animation: shake 0.55s ease; }
+.modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.2s, transform 0.2s; }
+.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; transform: scale(0.96); }
 </style>

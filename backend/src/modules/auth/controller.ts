@@ -1,4 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { createHash, randomBytes } from 'crypto';
 import { AuthService } from './service.js';
 import { buildOAuthUrl, handleOAuthCallback, findOrCreateOAuthUser, OAuthProvider } from './oauth.service.js';
 import prisma from '../../config/prisma.js';
@@ -15,8 +16,28 @@ const FULL_USER_SELECT = {
   badge_type: true, email_verified: true, onboarding_done: true,
 } as const;
 
-function issueToken(request: FastifyRequest, id: string, role: string) {
-  return request.server.jwt.sign({ id, role }, { expiresIn: '7d' });
+// ── 15-минутный access token ──────────────────────────────────────────────────
+function issueAccessToken(request: FastifyRequest, id: string, role: string) {
+  return request.server.jwt.sign({ id, role }, { expiresIn: '15m' });
+}
+
+// ── Выдача refresh token: запись в БД + httpOnly cookie ───────────────────────
+async function issueRefreshToken(reply: FastifyReply, userId: string): Promise<void> {
+  const raw    = randomBytes(40).toString('hex');
+  const hash   = createHash('sha256').update(raw).digest('hex');
+  const expiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  await prisma.refreshToken.create({
+    data: { user_id: userId, token_hash: hash, expires_at: expiry },
+  });
+
+  reply.setCookie('refresh_token', raw, {
+    httpOnly: true,
+    secure:   process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path:     '/api/auth',
+    maxAge:   7 * 24 * 60 * 60,
+  });
 }
 
 // ── Статистика ────────────────────────────────────────────────────────────────
@@ -63,7 +84,8 @@ export const verifyEmailHandler = async (
     });
     if (!user) return reply.code(400).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Пользователь не найден' } });
 
-    const token = issueToken(request, user.id, user.role);
+    const token = issueAccessToken(request, user.id, user.role);
+    await issueRefreshToken(reply, user.id);
     return reply.send({ success: true, data: { token, user }, error: null });
   } catch (e: any) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'VERIFY_ERROR', message: e.message } });
@@ -99,7 +121,8 @@ export const loginHandler = async (
       });
     }
 
-    const token = issueToken(request, user.id, user.role);
+    const token = issueAccessToken(request, user.id, user.role);
+    await issueRefreshToken(reply, user.id);
     const fullUser = await prisma.user.findUnique({ where: { id: user.id }, select: FULL_USER_SELECT });
 
     return reply.send({
@@ -192,7 +215,8 @@ export const oauthCallbackHandler = async (
 
     // ── ОБЫЧНЫЙ ВХОД / РЕГИСТРАЦИЯ ────────────────────────────────────────────
     const { user } = await findOrCreateOAuthUser(provider, oauthUser);
-    const token = issueToken(request, user.id, user.role);
+    const token = issueAccessToken(request, user.id, user.role);
+    await issueRefreshToken(reply, user.id);
     return reply.redirect(302, `${FRONTEND_URL()}/auth/callback?token=${token}`);
   } catch (e: any) {
     console.error('[OAuth callback error]', e);
@@ -249,6 +273,59 @@ export const unlinkAccountHandler = async (
   }
 
   await prisma.oAuthAccount.deleteMany({ where: { user_id: id, provider } });
+  return reply.send({ success: true, data: null, error: null });
+};
+
+// ── Обновление access token по refresh token ──────────────────────────────────
+export const refreshHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const raw = (request.cookies as any)?.refresh_token as string | undefined;
+  if (!raw) {
+    return reply.code(401).send({ success: false, data: null, error: { code: 'NO_REFRESH_TOKEN', message: 'Refresh token not provided' } });
+  }
+
+  const hash   = createHash('sha256').update(raw).digest('hex');
+  const record = await prisma.refreshToken.findUnique({ where: { token_hash: hash } });
+
+  if (!record || record.revoked || record.expires_at < new Date()) {
+    reply.clearCookie('refresh_token', { path: '/api/auth' });
+    return reply.code(401).send({ success: false, data: null, error: { code: 'INVALID_REFRESH_TOKEN', message: 'Refresh token invalid or expired' } });
+  }
+
+  // Ротация: инвалидируем старый, выдаём новый
+  await prisma.refreshToken.update({ where: { id: record.id }, data: { revoked: true } });
+
+  const user = await prisma.user.findUnique({
+    where: { id: record.user_id, deleted_at: null },
+    select: FULL_USER_SELECT,
+  });
+  if (!user) {
+    reply.clearCookie('refresh_token', { path: '/api/auth' });
+    return reply.code(401).send({ success: false, data: null, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+  }
+
+  const token = issueAccessToken(request, user.id, user.role);
+  await issueRefreshToken(reply, user.id);
+
+  return reply.send({ success: true, data: { token, user }, error: null });
+};
+
+// ── Выход (инвалидация refresh token) ────────────────────────────────────────
+export const logoutHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const raw = (request.cookies as any)?.refresh_token as string | undefined;
+  if (raw) {
+    const hash = createHash('sha256').update(raw).digest('hex');
+    await prisma.refreshToken.updateMany({
+      where: { token_hash: hash, revoked: false },
+      data:  { revoked: true },
+    });
+  }
+  reply.clearCookie('refresh_token', { path: '/api/auth' });
   return reply.send({ success: true, data: null, error: null });
 };
 

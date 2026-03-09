@@ -660,6 +660,13 @@ function toggleMenu(e: MouseEvent) {
       top: `${rect.bottom + 6}px`,
       right: `${window.innerWidth - rect.right}px`,
     }
+    // Ленивая загрузка статуса уведомлений при первом открытии меню
+    if (!isOwn.value && !notifyLoaded.value && authStore.isAuthenticated) {
+      notifyLoaded.value = true
+      api.get(`/users/${props.post.author?.id}/notify-status`)
+        .then(r => { if (r.data.success) notifyPosts.value = r.data.data.notifyPosts ?? false })
+        .catch(() => {})
+    }
   }
   showMenu.value = !showMenu.value
 }
@@ -669,7 +676,8 @@ const isSaving    = ref(false)
 const isDeleting  = ref(false)
 const showShareModal = ref(false)
 const showReportModal = ref(false)
-const notifyPosts = ref(false)    // уведомления о постах
+const notifyPosts   = ref(false)    // уведомления о постах
+const notifyLoaded  = ref(false)    // статус загружен с сервера?
 const isBlocking  = ref(false)
 const isHidden    = ref(false)    // «не интересно» — скрыт из фида
 const linkCopied  = ref(false)
@@ -961,19 +969,13 @@ async function copyPostLink() {
 function markNotInterested() {
   showMenu.value = false
   isHidden.value = true
-  // Optionally notify backend
-  api.post(`/posts/${props.post.id}/not-interested`).catch(() => {})
 }
 
 async function toggleNotify() {
-  notifyPosts.value = !notifyPosts.value
   showMenu.value = false
   try {
-    if (notifyPosts.value) {
-      await api.post(`/users/${props.post.author?.id}/follow-notifications`, { enabled: true })
-    } else {
-      await api.post(`/users/${props.post.author?.id}/follow-notifications`, { enabled: false })
-    }
+    const r = await api.post(`/users/${props.post.author?.id}/notify-toggle`)
+    if (r.data.success) notifyPosts.value = r.data.data.notifyPosts
   } catch {}
 }
 

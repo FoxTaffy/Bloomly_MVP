@@ -5,7 +5,7 @@ import {
   blockUserHandler, unblockUserHandler, getBlockStatusHandler,
   setPublicKeyHandler, getPublicKeyHandler,
   notifyStatusHandler, notifyToggleHandler,
-  updateSubscriptionHandler,
+  updateSubscriptionHandler, deleteAccountHandler,
 } from './controller.js';
 import { getUserParamsSchema, updateUserSchema, pinPostSchema } from './schemas.js';
 
@@ -60,6 +60,9 @@ export async function usersRoutes(fastify: FastifyInstance) {
 
   // POST /api/users/:id/notify-toggle — toggle notify_posts on Follow row
   fastify.post('/:id/notify-toggle', auth, notifyToggleHandler as any);
+
+  // DELETE /api/users/me/account — soft-delete own account
+  fastify.delete('/me/account', auth, deleteAccountHandler as any);
 
   // GET /api/users/:id — public profile (no auth required) — must be last
   fastify.get('/:id', { schema: getUserParamsSchema }, getUserHandler as any);

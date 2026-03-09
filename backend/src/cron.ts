@@ -42,6 +42,9 @@ export function initCronJobs() {
 
         // 5. Hard-delete the posts themselves (GroupPost rows cascade automatically)
         prisma.$executeRaw`DELETE FROM "Post" WHERE "deleted_at" <= ${thirtyDaysAgo}`,
+
+        // 6. Purge expired or revoked refresh tokens
+        prisma.$executeRaw`DELETE FROM "RefreshToken" WHERE "expires_at" < NOW() OR "revoked" = true`,
       ]);
 
       console.log('[CRON] DB Cleanup completed successfully.');

@@ -6,6 +6,21 @@ import api from '../api'
 export type GroupType = 'event' | 'creative' | 'static' | 'news' | 'shop' | 'community' | 'brand'
 export type EventStatus = 'announced' | 'tickets_open' | 'sold_out' | 'active' | 'finished' | 'teaser'
 
+export type MemberRole = 'owner' | 'admin' | 'moderator' | 'member' | 'dealer' | 'volunteer' | 'guest_of_honor'
+
+export interface GroupMember {
+  group_id: string
+  user_id: string
+  role: string
+  joined_at: string
+  user: {
+    id: string
+    username: string
+    display_name: string | null
+    avatar_url: string | null
+  }
+}
+
 export interface GroupOwner {
   id: string
   username: string
@@ -188,6 +203,41 @@ export interface GroupMessage {
   user: { id: string; username: string; display_name: string | null; avatar_url: string | null }
 }
 
+export type TodoStatus = 'WAITING' | 'SKETCH' | 'LINEART' | 'COLORING' | 'FINISHED'
+
+export interface ArtistQueueItem {
+  id: string
+  group_id: string
+  title: string
+  description: string | null
+  status: TodoStatus
+  position: number
+  created_at: string
+  updated_at: string
+}
+
+export type GroupPermission =
+  | 'can_post'
+  | 'can_comment'
+  | 'can_invite'
+  | 'can_moderate_posts'
+  | 'can_manage_members'
+  | 'can_manage_events'
+  | 'can_manage_roles'
+  | 'can_manage_settings'
+
+export interface CustomRole {
+  id: string
+  group_id: string
+  name: string
+  color: string
+  icon: string
+  permissions: GroupPermission[]
+  position: number
+  created_at: string
+  updated_at: string
+}
+
 // ── Store ─────────────────────────────────────────────────────────────────────
 export const useGroupsStore = defineStore('groups', () => {
   const groups = ref<Group[]>([])
@@ -356,8 +406,8 @@ export const useGroupsStore = defineStore('groups', () => {
 
   // ── Group Posts ───────────────────────────────────────────────────────────
 
-  async function loadGroupPosts(groupId: string, page = 1, limit = 20) {
-    const { data } = await api.get(`/groups/${groupId}/posts`, { params: { page, limit } })
+  async function loadGroupPosts(groupId: string, page = 1, limit = 20, hasMedia = false) {
+    const { data } = await api.get(`/groups/${groupId}/posts`, { params: { page, limit, hasMedia: hasMedia || undefined } })
     return data.data.posts
   }
 
@@ -450,6 +500,68 @@ export const useGroupsStore = defineStore('groups', () => {
     return data.data as { groups: Group[]; total: number }
   }
 
+  // ── Members management ─────────────────────────────────────────────────────
+
+  async function fetchMembers(groupId: string, page = 1, limit = 100): Promise<GroupMember[]> {
+    const { data } = await api.get(`/groups/${groupId}/members`, { params: { page, limit } })
+    return data.data.members as GroupMember[]
+  }
+
+  async function changeMemberRole(groupId: string, userId: string, role: MemberRole): Promise<GroupMember> {
+    const { data } = await api.patch(`/groups/${groupId}/members/${userId}/role`, { role })
+    return data.data.member as GroupMember
+  }
+
+  async function removeMember(groupId: string, userId: string): Promise<void> {
+    await api.delete(`/groups/${groupId}/members/${userId}`)
+  }
+
+  // ── Artist Queue (Todo) ───────────────────────────────────────────────────
+
+  async function fetchTodoItems(groupId: string) {
+    const { data } = await api.get(`/groups/${groupId}/todo`)
+    return data.data.items as ArtistQueueItem[]
+  }
+
+  async function createTodoItem(groupId: string, payload: { title: string; description?: string; status?: string }) {
+    const { data } = await api.post(`/groups/${groupId}/todo`, payload)
+    return data.data.item as ArtistQueueItem
+  }
+
+  async function updateTodoItem(groupId: string, itemId: string, payload: Partial<{ title: string; description: string; status: string; position: number }>) {
+    const { data } = await api.patch(`/groups/${groupId}/todo/${itemId}`, payload)
+    return data.data.item as ArtistQueueItem
+  }
+
+  async function deleteTodoItem(groupId: string, itemId: string) {
+    await api.delete(`/groups/${groupId}/todo/${itemId}`)
+  }
+
+  async function reorderTodoItems(groupId: string, orderedIds: string[]) {
+    await api.put(`/groups/${groupId}/todo/reorder`, { orderedIds })
+  }
+
+  // ── Custom Roles ────────────────────────────────────────────────────
+
+  async function fetchCustomRoles(groupId: string): Promise<CustomRole[]> {
+    const { data } = await api.get(`/groups/${groupId}/roles`)
+    return data.data.roles as CustomRole[]
+  }
+
+  async function createCustomRole(groupId: string, payload: { name: string; color?: string; icon?: string; permissions?: string[] }): Promise<CustomRole> {
+    const { data } = await api.post(`/groups/${groupId}/roles`, payload)
+    return data.data.role as CustomRole
+  }
+
+  async function updateCustomRole(groupId: string, roleId: string, payload: Partial<{ name: string; color: string; icon: string; permissions: string[] }>): Promise<CustomRole> {
+    const { data } = await api.patch(`/groups/${groupId}/roles/${roleId}`, payload)
+    return data.data.role as CustomRole
+  }
+
+  async function deleteCustomRole(groupId: string, roleId: string): Promise<void> {
+    await api.delete(`/groups/${groupId}/roles/${roleId}`)
+  }
+
   return {
     groups, currentGroup, myGroups, events, currentEvent, mySoonBadges,
     isLoading, total,
@@ -466,5 +578,8 @@ export const useGroupsStore = defineStore('groups', () => {
     discoverGroups,
     loadSubEvents, createSubEvent, updateSubEvent, deleteSubEvent,
     loadGroupMessages, sendGroupMessageRest,
+    fetchMembers, changeMemberRole, removeMember,
+    fetchTodoItems, createTodoItem, updateTodoItem, deleteTodoItem, reorderTodoItems,
+    fetchCustomRoles, createCustomRole, updateCustomRole, deleteCustomRole,
   }
 })

@@ -97,9 +97,13 @@ const connectNotifSSE = () => {
     notifEventSource.onerror = () => {
       notifEventSource?.close()
       notifEventSource = null
-      // Auto-reconnect after 5 seconds
-      if (auth.isAuthenticated) {
-        sseReconnectTimer = setTimeout(connectNotifSSE, 5000)
+      // Auto-reconnect after 5 seconds, refreshing the token first
+      if (auth.isAuthenticated || auth.user) {
+        sseReconnectTimer = setTimeout(async () => {
+          // Ensure we have a fresh access token (refresh if needed)
+          if (!auth.token) await auth.tryRefresh()
+          if (auth.token) connectNotifSSE()
+        }, 5000)
       }
     }
   } catch {}

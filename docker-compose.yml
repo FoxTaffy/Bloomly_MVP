@@ -45,7 +45,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-bloomly_secret_123}
       MINIO_BUCKET: bloomly
-      MINIO_PUBLIC_URL: https://bloomly.fun/s3
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-https://bloomly.fun/s3}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       FRONTEND_URL: ${FRONTEND_URL:-https://bloomly.fun}
       OAUTH_REDIRECT_BASE: ${OAUTH_REDIRECT_BASE:-https://bloomly.fun/api}

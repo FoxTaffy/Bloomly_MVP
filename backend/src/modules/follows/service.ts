@@ -102,7 +102,7 @@ export const followsService = {
     return { aFollowsB: !!aFollowsB, bFollowsA: !!bFollowsA, friends: !!aFollowsB && !!bFollowsA };
   },
 
-  async getSubscriptionFeed(userId: string, safeMode = false) {
+  async getSubscriptionFeed(userId: string, safeMode = false, page = 1, limit = 30) {
     const followingRows = await prisma.follow.findMany({
       where: { follower_id: userId },
       select: { following_id: true },
@@ -110,6 +110,7 @@ export const followsService = {
     const authorIds = followingRows.map((r) => r.following_id);
     if (!authorIds.length) return [];
 
+    const skip = (page - 1) * limit;
     return prisma.post.findMany({
       where: {
         deleted_at:  null,
@@ -117,7 +118,8 @@ export const followsService = {
         ...(safeMode ? { is_nsfw: false } : {}),
       },
       orderBy: { created_at: 'desc' },
-      take:    50,
+      skip,
+      take:    limit,
       include: {
         author: { select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true } },
         tags:   { include: { tag: true } },

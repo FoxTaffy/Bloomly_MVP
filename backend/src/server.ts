@@ -1,5 +1,6 @@
 import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
+import cookie from '@fastify/cookie';
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
@@ -22,6 +23,7 @@ import { verificationRoutes } from './modules/verification/routes.js';
 import { dealersDenRoutes } from './modules/dealers-den/routes.js';
 import { stickersRoutes } from './modules/stickers/routes.js';
 import { activitiesRoutes } from './modules/activities/routes.js';
+import { automodRoutes } from './modules/automod/routes.js';
 import { messageService, messageSubscriptions } from './modules/messages/service.js';
 import { groupService } from './modules/groups/service.js';
 import { initCronJobs } from './cron.js';
@@ -45,6 +47,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
   : true // dev fallback
 fastify.register(cors, { origin: allowedOrigins, credentials: true });
+fastify.register(cookie, { secret: process.env.COOKIE_SECRET || 'bloomly_cookie_secret_dev' });
 fastify.register(jwt, { secret: jwtSecret || 'bloomly_secret_dev_only' });
 fastify.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
 fastify.register(rateLimit, {
@@ -104,6 +107,7 @@ fastify.register(verificationRoutes, { prefix: '/api/verification' });
 fastify.register(dealersDenRoutes, { prefix: '/api/dealers-den' });
 fastify.register(stickersRoutes, { prefix: '/api/stickers' });
 fastify.register(activitiesRoutes, { prefix: '/api/activities' });
+fastify.register(automodRoutes,    { prefix: '/api/automod' });
 
 // ── In-memory online status tracking ─────────────────────────────────────
 // Use a Set per user so multiple browser tabs / pages work correctly

@@ -1,7 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { usersService } from './service.js';
 import type { UpdateUserInput, JwtPayload } from './types.js';
-import prisma from '../../config/prisma.js';
 
 
 export async function getUserHandler(
@@ -164,33 +163,39 @@ export async function notifyStatusHandler(
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) {
-  const { id: userId } = request.user as JwtPayload;
-  const targetId = request.params.id;
-  const follow = await prisma.follow.findUnique({
-    where: { follower_id_following_id: { follower_id: userId, following_id: targetId } },
-  });
-  return reply.send({
-    success: true,
-    data: { following: !!follow, notifyPosts: follow?.notify_posts ?? false },
-    error: null,
-  });
+  try {
+    const { id: userId } = request.user as JwtPayload;
+    const data = await usersService.getNotifyStatus(userId, request.params.id);
+    return reply.send({ success: true, data, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 500;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'NOTIFY_STATUS_ERROR', message: e.message } });
+  }
 }
 
 export async function notifyToggleHandler(
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) {
-  const { id: userId } = request.user as JwtPayload;
-  const targetId = request.params.id;
-  const follow = await prisma.follow.findUnique({
-    where: { follower_id_following_id: { follower_id: userId, following_id: targetId } },
-  });
-  if (!follow) {
-    return reply.code(404).send({ success: false, data: null, error: { code: 'NOT_FOLLOWING', message: 'Not following this user' } });
+  try {
+    const { id: userId } = request.user as JwtPayload;
+    const data = await usersService.toggleNotifyPosts(userId, request.params.id);
+    return reply.send({ success: true, data, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'NOTIFY_TOGGLE_ERROR', message: e.message } });
   }
-  const updated = await prisma.follow.update({
-    where: { id: follow.id },
-    data: { notify_posts: !follow.notify_posts },
-  });
-  return reply.send({ success: true, data: { notifyPosts: updated.notify_posts }, error: null });
+}
+
+export async function deleteAccountHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const { id: userId } = request.user as JwtPayload;
+  try {
+    await usersService.deleteAccount(userId);
+    return reply.send({ success: true, data: null, error: null });
+  } catch (e: any) {
+    return reply.code(500).send({ success: false, data: null, error: { code: 'DELETE_ACCOUNT_ERROR', message: e.message } });
+  }
 }

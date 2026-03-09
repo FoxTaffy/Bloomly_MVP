@@ -48,7 +48,7 @@ function formatPrice(price: string, currency: string) {
 
 function contactSeller() {
   if (!listing.value) return
-  router.push({ name: 'messages' })
+  router.push({ name: 'messages', query: { userId: listing.value.seller.id } })
 }
 
 function goToProfile() {

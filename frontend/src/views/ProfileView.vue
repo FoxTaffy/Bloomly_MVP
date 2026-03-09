@@ -491,9 +491,14 @@
                       </router-link>
                     </template>
                     <template v-else-if="authStore.isAuthenticated">
-                      <button class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg hover:border-brand-accent/60 hover:bg-brand-bg rounded-xl text-white/55 hover:text-brand-accent transition-all"
-                        title="Уведомления">
-                        <BIcon name="Bell" class="w-4 h-4" />
+                      <button
+                        @click="toggleNotify"
+                        :disabled="!relation.aFollowsB || notifyLoading"
+                        :title="!relation.aFollowsB ? 'Сначала подпишитесь' : notifyPosts ? 'Уведомления включены' : 'Уведомления выключены'"
+                        class="w-9 h-9 flex items-center justify-center border rounded-xl transition-all disabled:opacity-40"
+                        :class="notifyPosts && relation.aFollowsB ? 'border-brand-accent bg-brand-accent/15 text-brand-accent' : 'border-brand-border bg-brand-bg hover:border-brand-accent/60 text-white/55 hover:text-brand-accent'">
+                        <span v-if="notifyLoading" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        <BIcon v-else :name="notifyPosts && relation.aFollowsB ? 'BellRing' : 'Bell'" class="w-4 h-4" />
                       </button>
                       <button @click="openChat" class="inline-flex items-center gap-2 px-4 py-2 border border-brand-border bg-brand-bg hover:border-brand-accent/60 text-brand-offwhite hover:text-brand-accent rounded-xl text-sm font-bold transition-all">
                         <BIcon name="MessageSquare" class="w-4 h-4" /> Сообщение
@@ -1004,6 +1009,7 @@
                           :post="post" :is-own-profile="isOwnProfile"
                           :is-pinned-post-id="viewedProfile.pinned_post_id"
                           :show-repaw-label="true"
+                          :group-context="(post as any).groupPosts?.[0]?.group ?? null"
                           :ad-mode="false"
                           @pin="pinPost" @unpin="unpinPost" @deleted="onPostDeleted" @updated="onPostUpdated" />
                       </template>
@@ -1023,6 +1029,7 @@
                         :post="post" :is-own-profile="isOwnProfile"
                         :is-pinned-post-id="viewedProfile.pinned_post_id"
                         :show-repaw-label="activeContentTab === 'repaws'"
+                        :group-context="activeContentTab === 'repaws' ? ((post as any).groupPosts?.[0]?.group ?? null) : null"
                         :ad-mode="false"
                         @pin="pinPost" @unpin="unpinPost" @deleted="onPostDeleted" @updated="onPostUpdated" />
                     </template>
@@ -1450,10 +1457,9 @@ const hasStory = computed(() => profileStories.value.length > 0)
 
 async function fetchProfileStories(userId: string) {
   try {
-    const res = await api.get('/stories')
+    const res = await api.get(`/stories/user/${userId}`)
     if (res.data.success) {
-      const all: ProfileStory[] = res.data.data.stories
-      profileStories.value = all.filter(s => s.user.id === userId)
+      profileStories.value = res.data.data.stories as ProfileStory[]
     }
   } catch {}
 }
@@ -1481,6 +1487,8 @@ const pinnedPost = ref<any | null>(null)
 const mediaFilter = ref<'all' | 'photo' | 'video'>('all')
 
 const relation = reactive({ aFollowsB: false, bFollowsA: false, friends: false })
+const notifyPosts = ref(false)
+const notifyLoading = ref(false)
 const isTogglingFollow = ref(false)
 
 const newPostContent = ref('')
@@ -2067,13 +2075,29 @@ async function loadPartnerProfile(partnerId: string) {
 
 async function loadRelation(userId: string) {
   try {
-    const res = await api.get(`/follows/${userId}/relation`)
-    if (res.data.success) {
-      relation.aFollowsB = res.data.data.aFollowsB
-      relation.bFollowsA = res.data.data.bFollowsA
-      relation.friends = res.data.data.friends
+    const [relRes, notifyRes] = await Promise.all([
+      api.get(`/follows/${userId}/relation`),
+      api.get(`/users/${userId}/notify-status`).catch(() => null),
+    ])
+    if (relRes.data.success) {
+      relation.aFollowsB = relRes.data.data.aFollowsB
+      relation.bFollowsA = relRes.data.data.bFollowsA
+      relation.friends = relRes.data.data.friends
+    }
+    if (notifyRes?.data?.success) {
+      notifyPosts.value = notifyRes.data.data.notifyPosts
     }
   } catch {}
+}
+
+async function toggleNotify() {
+  if (!viewedProfile.value || !relation.aFollowsB || notifyLoading.value) return
+  notifyLoading.value = true
+  try {
+    const res = await api.post(`/users/${viewedProfile.value.id}/notify-toggle`)
+    if (res.data.success) notifyPosts.value = res.data.data.notifyPosts
+  } catch { /* silent */ }
+  finally { notifyLoading.value = false }
 }
 
 async function loadTabData(tab: string) {

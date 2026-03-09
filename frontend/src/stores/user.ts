@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useAuthStore } from './auth'
+import api from '@/api'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface UserProfile {
@@ -25,6 +26,8 @@ export interface UserProfile {
   country: string | null
   fursona_name: string | null
   fursona_color: string | null
+  fursona_gender: string | null
+  fursona_description: string | null
   fursona_photo_url: string | null
   has_fursuit: boolean
   fursuit_photo_url: string | null
@@ -35,15 +38,19 @@ export interface UserProfile {
   pinned_post_id: string | null
   role: string
   created_at: string
-  subscription_tier?: string
-  profile_theme?: string | null
-  profile_bg_url?: string | null
-  profile_frame?: string | null
+  social_links: Record<string, string> | null
+  interests: string[]
+  subscription_tier: string
+  profile_theme: string | null
+  profile_bg_url: string | null
+  profile_frame: string | null
+  is_verified: boolean
+  verified_at: string | null
+  verification_type: string | null
+  artist_since: string | null
+  onboarding_done: boolean
   _count?: { followers: number; following: number; posts: number }
   pinnedPost?: any | null
-  is_verified?: boolean
-  verified_at?: string | null
-  artist_since?: string | null
   badge_level?: string
 }
 
@@ -55,6 +62,8 @@ export interface UpdateProfileInput {
   status?: string
   persona?: string
   fursona_name?: string
+  fursona_gender?: string
+  fursona_description?: string
   likes?: string[]
   dislikes?: string[]
   accent_color?: string
@@ -72,10 +81,15 @@ export interface UpdateProfileInput {
   fursuit_description?: string | null
   fursuit_maker?: string | null
   birth_date?: string | null
+  relationship_since?: string | null
+  social_links?: Record<string, string> | null
+  interests?: string[]
   subscription_tier?: string
   profile_theme?: string | null
   profile_bg_url?: string | null
   profile_frame?: string | null
+  artist_since?: string | null
+  onboarding_done?: boolean
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -92,14 +106,11 @@ export const useUserStore = defineStore('user', () => {
     isLoading.value = true
     error.value = null
     try {
-      const res  = await fetch(`/api/users/${id}`)
-      const data = await res.json()
-      if (!res.ok || !data.success) {
-        throw new Error(data.error?.message ?? 'Failed to load profile')
-      }
-      return data.data.user as UserProfile
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Connection error'
+      const res = await api.get(`/users/${id}`)
+      if (!res.data.success) throw new Error(res.data.error?.message ?? 'Failed to load profile')
+      return res.data.data.user as UserProfile
+    } catch (e: any) {
+      error.value = e.response?.data?.error?.message ?? (e instanceof Error ? e.message : 'Connection error')
       return null
     } finally {
       isLoading.value = false
@@ -120,31 +131,19 @@ export const useUserStore = defineStore('user', () => {
     isLoading.value = true
     error.value = null
     try {
-      const res = await fetch('/api/users/me', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${auth.token}`,
-        },
-        body: JSON.stringify(input),
-      })
-      const data = await res.json()
-      if (!res.ok || !data.success) {
-        throw new Error(data.error?.message ?? 'Update failed')
-      }
-      profile.value = data.data.user as UserProfile
+      const res = await api.patch('/users/me', input)
+      if (!res.data.success) throw new Error(res.data.error?.message ?? 'Update failed')
+      profile.value = res.data.data.user as UserProfile
       // Sync key fields back to auth store so sidebar / AppHeader update immediately
-      const updated = data.data.user as UserProfile
+      const updated = res.data.data.user as UserProfile
       if (auth.user) {
-        if (updated.avatar_url !== undefined) auth.user.avatar_url = updated.avatar_url
+        if (updated.avatar_url  !== undefined) auth.user.avatar_url  = updated.avatar_url
         if (updated.display_name !== undefined) auth.user.display_name = updated.display_name
-        // Persist to whichever storage the session was originally saved in
-        const inLocal = !!localStorage.getItem('access_token')
-        const storage = inLocal ? localStorage : sessionStorage
-        storage.setItem('auth_user', JSON.stringify(auth.user))
+        // Persist to sessionStorage so sidebar / AppHeader update immediately
+        sessionStorage.setItem('auth_user', JSON.stringify(auth.user))
       }
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Connection error'
+    } catch (e: any) {
+      error.value = e.response?.data?.error?.message ?? (e instanceof Error ? e.message : 'Connection error')
       throw e
     } finally {
       isLoading.value = false

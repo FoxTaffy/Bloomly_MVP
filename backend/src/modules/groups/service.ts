@@ -24,7 +24,6 @@ const GROUP_SELECT = {
   avatar_url: true,
   banner_url: true,
   accent_color: true,
-  mascot_url: true,
   social_links: true,
   is_public: true,
   created_at: true,
@@ -38,16 +37,12 @@ const GROUP_SELECT = {
   is_nsfw: true,
   rating: true,
   rating_count: true,
-  subscriber_count: true,
   members_count: true,
   production_time: true,
   delivery_info: true,
   completed_works: true,
-  recent_works: true,
   guarantee_text: true,
   sponsors: true,
-  volunteers_info: true,
-  is_looking_for_volunteers: true,
   is_verified: true,
   category: true,
   _count: { select: { members: true, events: true, posts: { where: { post: { deleted_at: null } } } } },
@@ -65,7 +60,6 @@ const GROUP_LIST_SELECT = {
   avatar_url: true,
   banner_url: true,
   accent_color: true,
-  mascot_url: true,
   is_public: true,
   is_nsfw: true,
   is_verified: true,
@@ -73,7 +67,6 @@ const GROUP_LIST_SELECT = {
   rating: true,
   rating_count: true,
   members_count: true,
-  subscriber_count: true,
   created_at: true,
   communityChat: { select: { id: true } },
   _count: { select: { members: true, events: true } },
@@ -176,7 +169,6 @@ export const groupService = {
           avatar_url: input.avatarUrl,
           banner_url: input.bannerUrl,
           accent_color: input.accentColor,
-          mascot_url: input.mascotUrl,
           social_links: input.socialLinks ?? {},
           is_public: input.isPublic ?? true,
           members_count: 1, // owner is the first member
@@ -199,7 +191,6 @@ export const groupService = {
     if (input.avatarUrl !== undefined) data.avatar_url = input.avatarUrl;
     if (input.bannerUrl !== undefined) data.banner_url = input.bannerUrl;
     if (input.accentColor !== undefined) data.accent_color = input.accentColor;
-    if (input.mascotUrl !== undefined) data.mascot_url = input.mascotUrl;
     if (input.socialLinks !== undefined) data.social_links = input.socialLinks;
     if (input.isPublic !== undefined) data.is_public = input.isPublic;
     if (input.rulesText !== undefined) data.rules_text = input.rulesText;
@@ -213,7 +204,6 @@ export const groupService = {
     if (input.productionTime !== undefined) data.production_time = input.productionTime;
     if (input.deliveryInfo !== undefined) data.delivery_info = input.deliveryInfo;
     if (input.completedWorks !== undefined) data.completed_works = input.completedWorks;
-    if (input.recentWorks !== undefined) data.recent_works = input.recentWorks;
     if (input.guaranteeText !== undefined) data.guarantee_text = input.guaranteeText;
     if (input.slug !== undefined) {
       data.slug = input.slug.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
@@ -292,6 +282,71 @@ export const groupService = {
   async getMembership(groupId: string, userId: string) {
     return prisma.groupMember.findUnique({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+    });
+  },
+
+  async removeMember(groupId: string, requesterId: string, targetUserId: string) {
+    const target = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: targetUserId } },
+    });
+    if (!target) throw new Error('Member not found');
+    if (target.role === 'owner') throw new Error('Cannot remove the group owner');
+    const requester = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: requesterId } },
+    });
+    if (!requester || (requester.role !== 'owner' && requester.role !== 'admin')) {
+      throw new Error('Not authorized');
+    }
+    if (requester.role === 'admin' && target.role === 'admin') {
+      throw new Error('Admins cannot remove other admins');
+    }
+    const result = await prisma.groupMember.delete({
+      where: { group_id_user_id: { group_id: groupId, user_id: targetUserId } },
+    });
+    await prisma.group.update({
+      where: { id: groupId },
+      data: { members_count: { decrement: 1 } },
+    });
+    return result;
+  },
+
+  // ── Custom roles ──────────────────────────────────────────────────────────
+  async getCustomRoles(groupId: string) {
+    return prisma.groupCustomRole.findMany({
+      where: { group_id: groupId },
+      orderBy: { position: 'asc' },
+    });
+  },
+
+  async createCustomRole(groupId: string, data: { name: string; color?: string; icon?: string; permissions?: string[] }) {
+    const count = await prisma.groupCustomRole.count({ where: { group_id: groupId } });
+    return prisma.groupCustomRole.create({
+      data: {
+        group_id: groupId,
+        name: data.name,
+        color: data.color ?? '#9ca3af',
+        icon: data.icon ?? '🎖️',
+        permissions: data.permissions ?? [],
+        position: count,
+      },
+    });
+  },
+
+  async updateCustomRole(groupId: string, roleId: string, data: { name?: string; color?: string; icon?: string; permissions?: string[] }) {
+    return prisma.groupCustomRole.update({
+      where: { id: roleId, group_id: groupId },
+      data: {
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.color !== undefined && { color: data.color }),
+        ...(data.icon !== undefined && { icon: data.icon }),
+        ...(data.permissions !== undefined && { permissions: data.permissions }),
+      },
+    });
+  },
+
+  async deleteCustomRole(groupId: string, roleId: string) {
+    return prisma.groupCustomRole.delete({
+      where: { id: roleId, group_id: groupId },
     });
   },
 
@@ -497,12 +552,12 @@ export const groupService = {
   },
 
   // ── Group posts ──────────────────────────────────────────────────────────
-  async getGroupPosts(groupId: string, page = 1, limit = 20) {
+  async getGroupPosts(groupId: string, page = 1, limit = 20, hasMedia = false) {
     const skip = (page - 1) * limit;
     return prisma.groupPost.findMany({
       where: {
         group_id: groupId,
-        post: { deleted_at: null },
+        post: { deleted_at: null, ...(hasMedia ? { media_urls: { isEmpty: false } } : {}) },
       },
       include: {
         post: {
@@ -796,4 +851,75 @@ export const groupService = {
     ]);
     return { groups, total };
   },
-};
+
+  // ── Artist Queue (Todo) ───────────────────────────────────────────────────
+
+  async getTodoItems(groupId: string) {
+    return prisma.groupTodoItem.findMany({
+      where: { group_id: groupId, deleted_at: null },
+      orderBy: [{ position: 'asc' }, { created_at: 'asc' }],
+    });
+  },
+
+  async createTodoItem(groupId: string, data: { title: string; description?: string; status?: string; position?: number }) {
+    // Auto-assign position = max + 1 if not provided
+    if (data.position === undefined) {
+      const last = await prisma.groupTodoItem.findFirst({
+        where: { group_id: groupId, deleted_at: null },
+        orderBy: { position: 'desc' },
+        select: { position: true },
+      });
+      data.position = (last?.position ?? -1) + 1;
+    }
+    return prisma.groupTodoItem.create({
+      data: {
+        group_id: groupId,
+        title: data.title.trim(),
+        description: data.description?.trim() || null,
+        status: (data.status as any) ?? 'WAITING',
+        position: data.position,
+      },
+    });
+  },
+
+  async updateTodoItem(itemId: string, data: { title?: string; description?: string; status?: string; position?: number }) {
+    const update: any = {};
+    if (data.title !== undefined) update.title = data.title.trim();
+    if (data.description !== undefined) update.description = data.description?.trim() || null;
+    if (data.status !== undefined) update.status = data.status;
+    if (data.position !== undefined) update.position = data.position;
+    return prisma.groupTodoItem.update({ where: { id: itemId }, data: update });
+  },
+
+  async deleteTodoItem(itemId: string) {
+    return prisma.groupTodoItem.update({
+      where: { id: itemId },
+      data: { deleted_at: new Date() },
+    });
+  },
+
+  async reorderTodoItems(groupId: string, orderedIds: string[]) {
+    await Promise.all(
+      orderedIds.map((id, idx) =>
+        prisma.groupTodoItem.updateMany({
+          where: { id, group_id: groupId },
+          data: { position: idx },
+        })
+      )
+    );
+  },
+
+  // ── Ticket tier helpers ──────────────────────────────────────────────────
+  async getTicketTierWithGroupId(tierId: string) {
+    return prisma.ticketTier.findUnique({
+      where: { id: tierId },
+      include: { event: { select: { group_id: true } } },
+    });
+  },
+  // ── Ownership helper (used by sub-events + todo) ───────────────────────────
+  async getGroupOwner(groupId: string) {
+    return prisma.group.findUnique({
+      where: { id: groupId },
+      select: { owner_id: true },
+    });
+  },};

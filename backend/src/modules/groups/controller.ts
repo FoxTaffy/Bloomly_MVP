@@ -1,7 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { groupService } from './service.js';
 import { messageService } from '../messages/service.js';
-import prisma from '../../config/prisma.js';
 import type { JwtUser, GetGroupsQuery, CreateGroupInput, UpdateGroupInput, CreateEventInput, UpdateEventInput, CreateTicketTierInput, UpdateCommissionInput, RateGroupInput, CreateGroupPostInput, RsvpEventInput, SubEventInput, UpdateSubEventInput } from './types.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -145,6 +144,73 @@ export const setMemberRoleHandler = async (
   }
 };
 
+export const removeMemberHandler = async (
+  request: FastifyRequest<{ Params: { id: string; userId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: requesterId } = request.user as JwtUser;
+    await groupService.removeMember(request.params.id, requesterId, request.params.userId);
+    return ok(reply, { removed: true });
+  } catch (e: any) {
+    const status = e.message === 'Not authorized' ? 403 : 400;
+    return fail(reply, status, 'REMOVE_MEMBER_ERROR', e.message);
+  }
+};
+
+// ── Custom Roles ─────────────────────────────────────────────────────────────
+
+export const getCustomRolesHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const roles = await groupService.getCustomRoles(request.params.id);
+    return ok(reply, { roles });
+  } catch (e: any) {
+    return fail(reply, 500, 'GET_ROLES_ERROR', e.message);
+  }
+};
+
+export const createCustomRoleHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Body: { name: string; color?: string; icon?: string; permissions?: string[] } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    const role = await groupService.createCustomRole(request.params.id, request.body);
+    return ok(reply, { role }, 201);
+  } catch (e: any) {
+    return fail(reply, 400, 'CREATE_ROLE_ERROR', e.message);
+  }
+};
+
+export const updateCustomRoleHandler = async (
+  request: FastifyRequest<{ Params: { id: string; roleId: string }; Body: { name?: string; color?: string; icon?: string; permissions?: string[] } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    const role = await groupService.updateCustomRole(request.params.id, request.params.roleId, request.body);
+    return ok(reply, { role });
+  } catch (e: any) {
+    return fail(reply, 400, 'UPDATE_ROLE_ERROR', e.message);
+  }
+};
+
+export const deleteCustomRoleHandler = async (
+  request: FastifyRequest<{ Params: { id: string; roleId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    await groupService.deleteCustomRole(request.params.id, request.params.roleId);
+    return ok(reply, { deleted: true });
+  } catch (e: any) {
+    return fail(reply, 400, 'DELETE_ROLE_ERROR', e.message);
+  }
+};
+
 // ── Events ──────────────────────────────────────────────────────────────────
 
 export const createEventHandler = async (
@@ -231,10 +297,7 @@ export const updateTicketTierHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const tier = await prisma.ticketTier.findUnique({
-      where: { id: request.params.tierId },
-      include: { event: { select: { group_id: true } } },
-    });
+    const tier = await groupService.getTicketTierWithGroupId(request.params.tierId);
     if (!tier) return fail(reply, 404, 'NOT_FOUND', 'Ticket tier not found');
     if (!(await requireGroupAdmin(request, reply, tier.event.group_id))) return;
     const updated = await groupService.updateTicketTier(request.params.tierId, request.body);
@@ -249,10 +312,7 @@ export const deleteTicketTierHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const tier = await prisma.ticketTier.findUnique({
-      where: { id: request.params.tierId },
-      include: { event: { select: { group_id: true } } },
-    });
+    const tier = await groupService.getTicketTierWithGroupId(request.params.tierId);
     if (!tier) return fail(reply, 404, 'NOT_FOUND', 'Ticket tier not found');
     if (!(await requireGroupAdmin(request, reply, tier.event.group_id))) return;
     await groupService.deleteTicketTier(request.params.tierId);
@@ -320,13 +380,14 @@ export const upsertCommissionHandler = async (
 // ── Group posts ─────────────────────────────────────────────────────────────
 
 export const getGroupPostsHandler = async (
-  request: FastifyRequest<{ Params: { id: string }; Querystring: { page?: string; limit?: string } }>,
+  request: FastifyRequest<{ Params: { id: string }; Querystring: { page?: string; limit?: string; hasMedia?: string } }>,
   reply: FastifyReply,
 ) => {
   try {
     const page = parseInt(request.query.page ?? '1', 10);
     const limit = parseInt(request.query.limit ?? '20', 10);
-    const posts = await groupService.getGroupPosts(request.params.id, page, limit);
+    const hasMedia = request.query.hasMedia === 'true';
+    const posts = await groupService.getGroupPosts(request.params.id, page, limit, hasMedia);
     return ok(reply, { posts });
   } catch (e: any) {
     return fail(reply, 500, 'GROUP_POSTS_ERROR', e.message);
@@ -499,8 +560,7 @@ export const createSubEventHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    // Caller must be admin of the parent event's group
-    const event = await prisma.event.findUnique({ where: { id: request.params.eventId }, select: { group_id: true } });
+    const event = await groupService.getEvent(request.params.eventId);
     if (!event) return fail(reply, 404, 'NOT_FOUND', 'Event not found');
     if (!(await requireGroupAdmin(request, reply, event.group_id))) return;
     const sub = await groupService.createSubEvent(request.params.eventId, request.body);
@@ -515,7 +575,7 @@ export const updateSubEventHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const event = await prisma.event.findUnique({ where: { id: request.params.eventId }, select: { group_id: true } });
+    const event = await groupService.getEvent(request.params.eventId);
     if (!event) return fail(reply, 404, 'NOT_FOUND', 'Event not found');
     if (!(await requireGroupAdmin(request, reply, event.group_id))) return;
     const sub = await groupService.updateSubEvent(request.params.subId, request.body);
@@ -530,7 +590,7 @@ export const deleteSubEventHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const event = await prisma.event.findUnique({ where: { id: request.params.eventId }, select: { group_id: true } });
+    const event = await groupService.getEvent(request.params.eventId);
     if (!event) return fail(reply, 404, 'NOT_FOUND', 'Event not found');
     if (!(await requireGroupAdmin(request, reply, event.group_id))) return;
     await groupService.deleteSubEvent(request.params.subId);
@@ -578,10 +638,7 @@ export const initGroupChatHandler = async (
 ) => {
   try {
     const { id: userId } = request.user as JwtUser;
-    const group = await prisma.group.findUnique({
-      where: { id: request.params.id },
-      select: { owner_id: true },
-    });
+    const group = await groupService.getGroupOwner(request.params.id);
     if (!group) return fail(reply, 404, 'NOT_FOUND', 'Group not found');
     if (group.owner_id !== userId) return fail(reply, 403, 'FORBIDDEN', 'Only group owner can enable community chat');
     const result = await messageService.initCommunityChat(request.params.id, userId);
@@ -600,5 +657,85 @@ export const getGroupChatInfoHandler = async (
     return ok(reply, { conversation });
   } catch (e: any) {
     return fail(reply, 500, 'GET_CHAT_ERROR', e.message);
+  }
+};
+
+// ── Artist Queue (Todo) ───────────────────────────────────────────────────────
+
+export const getGroupTodoHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const items = await groupService.getTodoItems(request.params.id);
+    return ok(reply, { items });
+  } catch (e: any) {
+    return fail(reply, 500, 'GET_TODO_ERROR', e.message);
+  }
+};
+
+export const createGroupTodoHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Body: { title: string; description?: string; status?: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const group = await groupService.getGroupOwner(request.params.id);
+    if (!group) return fail(reply, 404, 'NOT_FOUND', 'Group not found');
+    if (group.owner_id !== userId) return fail(reply, 403, 'FORBIDDEN', 'Only group owner can manage the queue');
+    const { title, description, status } = request.body;
+    if (!title?.trim()) return fail(reply, 400, 'EMPTY_TITLE', 'Title is required');
+    const item = await groupService.createTodoItem(request.params.id, { title, description, status });
+    return ok(reply, { item }, 201);
+  } catch (e: any) {
+    return fail(reply, 500, 'CREATE_TODO_ERROR', e.message);
+  }
+};
+
+export const updateGroupTodoHandler = async (
+  request: FastifyRequest<{ Params: { id: string; itemId: string }; Body: { title?: string; description?: string; status?: string; position?: number } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const group = await groupService.getGroupOwner(request.params.id);
+    if (!group) return fail(reply, 404, 'NOT_FOUND', 'Group not found');
+    if (group.owner_id !== userId) return fail(reply, 403, 'FORBIDDEN', 'Only group owner can manage the queue');
+    const item = await groupService.updateTodoItem(request.params.itemId, request.body);
+    return ok(reply, { item });
+  } catch (e: any) {
+    return fail(reply, 500, 'UPDATE_TODO_ERROR', e.message);
+  }
+};
+
+export const deleteGroupTodoHandler = async (
+  request: FastifyRequest<{ Params: { id: string; itemId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const group = await groupService.getGroupOwner(request.params.id);
+    if (!group) return fail(reply, 404, 'NOT_FOUND', 'Group not found');
+    if (group.owner_id !== userId) return fail(reply, 403, 'FORBIDDEN', 'Only group owner can manage the queue');
+    await groupService.deleteTodoItem(request.params.itemId);
+    return ok(reply, { success: true });
+  } catch (e: any) {
+    return fail(reply, 500, 'DELETE_TODO_ERROR', e.message);
+  }
+};
+
+export const reorderGroupTodoHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Body: { orderedIds: string[] } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const group = await groupService.getGroupOwner(request.params.id);
+    if (!group) return fail(reply, 404, 'NOT_FOUND', 'Group not found');
+    if (group.owner_id !== userId) return fail(reply, 403, 'FORBIDDEN', 'Only group owner can manage the queue');
+    await groupService.reorderTodoItems(request.params.id, request.body.orderedIds);
+    return ok(reply, { success: true });
+  } catch (e: any) {
+    return fail(reply, 500, 'REORDER_TODO_ERROR', e.message);
   }
 };

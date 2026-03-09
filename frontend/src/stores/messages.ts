@@ -37,7 +37,8 @@ export interface Conversation {
   is_group: boolean
   name: string | null
   avatar_url: string | null
-  my_participant: { archived: boolean; hidden: boolean; last_read_at: string | null; role?: string; label?: string }
+  banner_url: string | null
+  my_participant: { archived: boolean; hidden_at: string | null; last_read_at: string | null; role: string; label?: string }
   last_message: Message | null
   other_participants: Array<{ user_id: string; user: MsgSender; last_read_at?: string | null; role?: string }>
 }
@@ -250,7 +251,8 @@ export const useMessagesStore = defineStore('messages', () => {
 
   async function setArchived(convId: string, archived: boolean) {
     await api.patch(`/messages/conversations/${convId}/archive`, { archived })
-    conversations.value = conversations.value.filter((c) => c.id !== convId)
+    const conv = conversations.value.find((c) => c.id === convId)
+    if (conv?.my_participant) conv.my_participant.archived = archived
   }
 
   async function deleteConversation(convId: string, scope: 'me' | 'all') {
@@ -260,20 +262,21 @@ export const useMessagesStore = defineStore('messages', () => {
   }
 
   // ── Group actions ──────────────────────────────────────────────────────
-  async function createGroup(name: string, userIds: string[]): Promise<string> {
-    const res = await api.post('/messages/groups', { name, userIds })
+  async function createGroup(name: string, userIds: string[], opts?: { avatar_url?: string; banner_url?: string }): Promise<string> {
+    const res = await api.post('/messages/groups', { name, userIds, ...opts })
     const conv: Conversation = res.data.data.conversation
     conversations.value.unshift(conv as any)
     activeId.value = conv.id
     return conv.id
   }
 
-  async function updateGroup(convId: string, data: { name?: string; avatar_url?: string }) {
+  async function updateGroup(convId: string, data: { name?: string; avatar_url?: string; banner_url?: string }) {
     await api.patch(`/messages/conversations/${convId}/group`, data)
     const conv = conversations.value.find((c) => c.id === convId)
     if (conv) {
       if (data.name !== undefined) conv.name = data.name
       if (data.avatar_url !== undefined) conv.avatar_url = data.avatar_url
+      if (data.banner_url !== undefined) (conv as any).banner_url = data.banner_url
     }
   }
 

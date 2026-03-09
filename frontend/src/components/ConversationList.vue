@@ -134,6 +134,12 @@
               <BIcon :name="conv.my_participant?.label === 'customer' ? 'BriefcaseOff' : 'Briefcase'" class="w-4 h-4" />
               {{ conv.my_participant?.label === 'customer' ? 'Убрать метку' : 'Пометить как заказ' }}
             </button>
+            <button
+              @click.stop="toggleArchive(conv); menuConvId = null"
+              class="w-full flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-brand-bg transition-colors text-left text-white/80">
+              <BIcon :name="conv.my_participant?.archived ? 'ArchiveX' : 'Archive'" class="w-4 h-4" />
+              {{ conv.my_participant?.archived ? 'Разархивировать' : 'Архивировать' }}
+            </button>
           </div>
         </div>
       </button>
@@ -165,24 +171,83 @@
     <Teleport to="body">
       <Transition name="fade">
         <div v-if="showCreateGroup" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="closeCreateGroup">
-          <div class="bg-brand-card border border-brand-border rounded-2xl shadow-2xl w-full max-w-sm flex flex-col" style="max-height:90vh">
+          <div class="bg-brand-card border border-brand-border rounded-2xl shadow-2xl w-full max-w-sm flex flex-col" style="max-height:92vh">
+
+            <!-- Header -->
             <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0">
-              <h3 class="text-base font-semibold text-white">Создать группу</h3>
+              <div class="flex items-center gap-2.5">
+                <!-- Step dots -->
+                <div class="flex items-center gap-1">
+                  <span v-for="s in 2" :key="s"
+                    :class="['w-5 h-1.5 rounded-full transition-all', s === createStep ? 'bg-brand-accent w-8' : 'bg-brand-border']" />
+                </div>
+                <h3 class="text-sm font-semibold text-white">{{ createStep === 1 ? 'Настройка беседы' : 'Добавить участников' }}</h3>
+              </div>
               <button @click="closeCreateGroup" class="p-1.5 rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-colors">
                 <BIcon name="X" class="w-4 h-4" />
               </button>
             </div>
-            <div class="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-              <div>
-                <label class="block text-xs text-white/55 mb-1.5 font-medium">Название группы</label>
-                <input v-model="groupName" type="text" maxlength="100" placeholder="Введите название..."
-                  class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent/60 transition-colors" />
+
+            <!-- ── Step 1: Name + Avatar + Banner ── -->
+            <div v-if="createStep === 1" class="flex-1 overflow-y-auto min-h-0">
+              <!-- Banner preview area -->
+              <div
+                class="relative w-full h-28 bg-gradient-to-br from-brand-accent/20 to-purple-900/40 overflow-hidden cursor-pointer group"
+                @click="cgBannerRef?.click()">
+                <img v-if="cgBanner" :src="cgBanner" class="w-full h-full object-cover" />
+                <div v-else class="w-full h-full flex flex-col items-center justify-center gap-1 text-white/30 group-hover:text-white/50 transition-colors">
+                  <BIcon name="Image" class="w-6 h-6" />
+                  <span class="text-xs">Нажмите, чтобы добавить баннер</span>
+                </div>
+                <div v-if="cgBanner" class="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <span class="text-xs text-white bg-black/50 px-2 py-1 rounded-lg">Изменить баннер</span>
+                </div>
+                <span v-if="uploadingCgBanner" class="absolute inset-0 flex items-center justify-center">
+                  <span class="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
+                </span>
               </div>
+              <input ref="cgBannerRef" type="file" accept="image/*" class="sr-only" @change="onCgBannerChange" />
+              <input ref="cgAvatarRef" type="file" accept="image/*" class="sr-only" @change="onCgAvatarChange" />
+
+              <!-- Avatar overlapping the banner -->
+              <div class="px-4 pb-4">
+                <div class="flex items-end gap-3 -mt-7 mb-4">
+                  <div
+                    class="w-14 h-14 rounded-2xl border-2 border-brand-card bg-brand-bg overflow-hidden cursor-pointer flex-shrink-0 relative group shadow-lg"
+                    @click="cgAvatarRef?.click()">
+                    <img v-if="cgAvatar" :src="cgAvatar" class="w-full h-full object-cover" />
+                    <div v-else class="w-full h-full flex items-center justify-center">
+                      <BIcon name="Camera" class="w-5 h-5 text-white/30 group-hover:text-white/60 transition-colors" />
+                    </div>
+                    <span v-if="uploadingCgAvatar" class="absolute inset-0 flex items-center justify-center bg-black/50">
+                      <span class="w-4 h-4 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
+                    </span>
+                  </div>
+                  <div class="flex-1 min-w-0 mb-1">
+                    <p class="text-xs text-white/40">{{ cgAvatar ? 'Аватар установлен' : 'Добавить аватар беседы' }}</p>
+                    <div class="flex items-center gap-2 mt-0.5">
+                      <button v-if="cgAvatar" type="button" @click="cgAvatar = ''" class="text-[10px] text-brand-error hover:underline">Удалить</button>
+                      <button v-if="cgBanner" type="button" @click="cgBanner = ''" class="text-[10px] text-white/40 hover:text-white/60 hover:underline">Убрать баннер</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Name field -->
+                <div>
+                  <label class="block text-xs text-white/55 mb-1.5 font-medium">Название беседы <span class="text-brand-accent">*</span></label>
+                  <input v-model="groupName" type="text" maxlength="100" placeholder="Введите название..."
+                    class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent/60 transition-colors" />
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Step 2: Participants ── -->
+            <div v-else class="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
               <div>
-                <label class="block text-xs text-white/55 mb-1.5 font-medium">Добавить участников (минимум 2)</label>
+                <label class="block text-xs text-white/55 mb-1.5 font-medium">Добавить участников <span class="text-white/30">(минимум 2)</span></label>
                 <div class="flex items-center gap-2 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 focus-within:border-brand-accent/60 transition-colors">
                   <BIcon name="Search" class="w-3.5 h-3.5 text-white/55 flex-shrink-0" />
-                  <input v-model="userSearch" type="text" placeholder="Поиск пользователей..."
+                  <input v-model="userSearch" type="text" placeholder="Поиск по имени или @нику..."
                     class="bg-transparent text-sm text-white placeholder-brand-muted outline-none w-full" @input="searchUsers" />
                 </div>
                 <div v-if="searchResults.length" class="mt-2 border border-brand-border rounded-xl overflow-hidden">
@@ -205,25 +270,56 @@
               </div>
               <div v-if="selectedUsers.length">
                 <p class="text-xs text-white/55 mb-2 font-medium">Выбрано: {{ selectedUsers.length }}</p>
-                <div class="flex flex-wrap gap-2">
+                <div class="flex flex-wrap gap-1.5">
                   <div v-for="u in selectedUsers" :key="u.id"
-                    class="flex items-center gap-1.5 bg-brand-accent/15 border border-brand-accent/30 rounded-full px-2.5 py-1">
+                    class="flex items-center gap-1.5 bg-brand-accent/15 border border-brand-accent/30 rounded-full pl-1 pr-2 py-0.5">
+                    <img v-if="u.avatar_url" :src="u.avatar_url" class="w-5 h-5 rounded-full object-cover" />
+                    <div v-else class="w-5 h-5 rounded-full bg-brand-accent/30 flex items-center justify-center text-brand-accent text-[10px] font-bold">
+                      {{ (u.display_name || u.username || '?')[0].toUpperCase() }}
+                    </div>
                     <span class="text-xs text-white">{{ u.display_name || u.username }}</span>
-                    <button @click="removeUser(u.id)" class="text-brand-accent/70 hover:text-brand-error transition-colors">
+                    <button @click="removeUser(u.id)" class="text-brand-accent/60 hover:text-brand-error transition-colors ml-0.5">
                       <BIcon name="X" class="w-3 h-3" />
                     </button>
                   </div>
                 </div>
               </div>
             </div>
+
+            <!-- Footer -->
             <div class="flex items-center gap-2 px-4 py-3 border-t border-brand-border flex-shrink-0">
-              <button @click="closeCreateGroup" class="flex-1 py-2 rounded-xl border border-brand-border text-sm text-white/55 hover:text-white hover:bg-brand-bg/50 transition-colors">Отмена</button>
-              <button @click="createGroup" :disabled="!canCreate || creating"
+              <button
+                v-if="createStep === 1"
+                @click="closeCreateGroup"
+                class="flex-1 py-2 rounded-xl border border-brand-border text-sm text-white/55 hover:text-white hover:bg-brand-bg/50 transition-colors">
+                Отмена
+              </button>
+              <button
+                v-else
+                @click="createStep = 1"
+                class="flex-1 py-2 rounded-xl border border-brand-border text-sm text-white/55 hover:text-white hover:bg-brand-bg/50 transition-colors flex items-center justify-center gap-1">
+                <BIcon name="ChevronLeft" class="w-3.5 h-3.5" />
+                Назад
+              </button>
+
+              <button
+                v-if="createStep === 1"
+                @click="createStep = 2"
+                :disabled="!groupName.trim()"
+                class="flex-1 py-2 rounded-xl bg-brand-accent text-white text-sm font-semibold hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-1">
+                Далее
+                <BIcon name="ChevronRight" class="w-3.5 h-3.5" />
+              </button>
+              <button
+                v-else
+                @click="createGroup"
+                :disabled="!canCreate || creating"
                 class="flex-1 py-2 rounded-xl bg-brand-accent text-white text-sm font-semibold hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
                 <BIcon v-if="creating" name="Loader2" class="w-3.5 h-3.5 animate-spin" />
-                {{ creating ? 'Создание...' : 'Создать' }}
+                {{ creating ? 'Создание...' : 'Создать беседу' }}
               </button>
             </div>
+
           </div>
         </div>
       </Transition>
@@ -264,11 +360,18 @@ async function openNotes() {
   } catch { /* silent */ }
 }
 
-const archivedCount = computed(() => store.conversations.filter((c: any) => c.archived_for_me || c.is_archived).length)
+const archivedCount = computed(() => store.conversations.filter((c) => c.my_participant?.archived).length)
 
 // ── Create group ─────────────────────────────────────────────────────────
 const showCreateGroup = ref(false)
+const createStep = ref(1)
 const groupName = ref('')
+const cgAvatar = ref('')
+const cgBanner = ref('')
+const cgAvatarRef = ref<HTMLInputElement | null>(null)
+const cgBannerRef = ref<HTMLInputElement | null>(null)
+const uploadingCgAvatar = ref(false)
+const uploadingCgBanner = ref(false)
 const userSearch = ref('')
 const searchResults = ref<Array<{ id: string; username: string; display_name: string | null; avatar_url: string | null }>>([])
 const selectedUsers = ref<Array<{ id: string; username: string; display_name: string | null; avatar_url: string | null }>>([])
@@ -277,10 +380,39 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 function closeCreateGroup() {
   showCreateGroup.value = false
+  createStep.value = 1
   groupName.value = ''
+  cgAvatar.value = ''
+  cgBanner.value = ''
   userSearch.value = ''
   searchResults.value = []
   selectedUsers.value = []
+}
+
+async function onCgAvatarChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  uploadingCgAvatar.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file, file.name)
+    const res = await api.post('/media/upload?folder=avatars', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    cgAvatar.value = res.data.data.url
+  } catch { /* silent */ }
+  finally { uploadingCgAvatar.value = false; if (cgAvatarRef.value) cgAvatarRef.value.value = '' }
+}
+
+async function onCgBannerChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  uploadingCgBanner.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file, file.name)
+    const res = await api.post('/media/upload?folder=banners', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    cgBanner.value = res.data.data.url
+  } catch { /* silent */ }
+  finally { uploadingCgBanner.value = false; if (cgBannerRef.value) cgBannerRef.value.value = '' }
 }
 
 async function searchUsers() {
@@ -309,7 +441,11 @@ async function createGroup() {
   if (!canCreate.value || creating.value) return
   creating.value = true
   try {
-    const convId = await store.createGroup(groupName.value, selectedUsers.value.map((u) => u.id))
+    const convId = await store.createGroup(
+      groupName.value,
+      selectedUsers.value.map((u) => u.id),
+      { avatar_url: cgAvatar.value || undefined, banner_url: cgBanner.value || undefined },
+    )
     emit('select', convId)
     closeCreateGroup()
   } catch { /* silent */ }
@@ -325,18 +461,19 @@ const CATEGORIES = [
 ]
 
 function getCategoryCount(cat: 'personal' | 'groups' | 'customer'): number {
-  if (cat === 'personal') return store.conversations.filter((c) => !c.is_group).length
-  if (cat === 'groups')   return store.conversations.filter((c) =>  c.is_group).length
-  if (cat === 'customer') return store.conversations.filter((c) => c.my_participant?.label === 'customer').length
+  const active = store.conversations.filter((c) => !c.my_participant?.archived)
+  if (cat === 'personal') return active.filter((c) => !c.is_group).length
+  if (cat === 'groups')   return active.filter((c) =>  c.is_group).length
+  if (cat === 'customer') return active.filter((c) => c.my_participant?.label === 'customer').length
   return 0
 }
 
 const filtered = computed(() => {
   let list = store.conversations
   if (!showArchived.value) {
-    list = list.filter((c: any) => !c.archived_for_me && !c.is_archived)
+    list = list.filter((c) => !c.my_participant?.archived)
   } else {
-    list = list.filter((c: any) => c.archived_for_me || c.is_archived)
+    list = list.filter((c) => c.my_participant?.archived)
   }
   if (activeCategory.value === 'personal') list = list.filter((c) => !c.is_group)
   else if (activeCategory.value === 'groups')   list = list.filter((c) =>  c.is_group)
@@ -393,6 +530,14 @@ async function setLabel(conv: Conversation, label: string) {
     // Update local state
     const local = store.conversations.find((c) => c.id === conv.id)
     if (local?.my_participant) (local.my_participant as any).label = label
+  } catch { /* silent */ }
+}
+
+async function toggleArchive(conv: Conversation) {
+  const newVal = !conv.my_participant?.archived
+  try {
+    await store.setArchived(conv.id, newVal)
+    if (newVal && !showArchived.value) emit('select', store.conversations[0]?.id ?? '')
   } catch { /* silent */ }
 }
 </script>

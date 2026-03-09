@@ -5,6 +5,7 @@ import {
   verifyEmailHandler, resendOtpHandler,
   oauthRedirectHandler, oauthCallbackHandler,
   linkInitHandler, getLinkedAccountsHandler, unlinkAccountHandler,
+  refreshHandler, logoutHandler,
 } from './controller.js';
 import type { JwtPayload } from './types.js';
 import prisma from '../../config/prisma.js';
@@ -126,4 +127,8 @@ export async function authRoutes(fastify: FastifyInstance) {
       return reply.send({ success: true, data: { user }, error: null });
     },
   );
+
+  // ── Token rotation ────────────────────────────────────────────────────────────
+  fastify.post('/refresh', refreshHandler);
+  fastify.post('/logout',  logoutHandler);
 }

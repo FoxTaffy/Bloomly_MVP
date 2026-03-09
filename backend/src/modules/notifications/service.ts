@@ -45,7 +45,7 @@ export const notificationService = {
 
   async getForUser(userId: string, limit = 50) {
     return prisma.notification.findMany({
-      where:   { receiver_id: userId },
+      where:   { receiver_id: userId, deleted_at: null },
       orderBy: { created_at: 'desc' },
       take:    limit,
       include: {
@@ -58,6 +58,7 @@ export const notificationService = {
     await prisma.notification.updateMany({
       where: {
         receiver_id: userId,
+        deleted_at:  null,
         ...(ids?.length ? { id: { in: ids } } : {}),
         read: false,
       },
@@ -67,11 +68,14 @@ export const notificationService = {
   },
 
   async unreadCount(userId: string) {
-    return prisma.notification.count({ where: { receiver_id: userId, read: false } });
+    return prisma.notification.count({ where: { receiver_id: userId, read: false, deleted_at: null } });
   },
 
   async deleteAll(userId: string) {
-    await prisma.notification.deleteMany({ where: { receiver_id: userId } });
+    await prisma.notification.updateMany({
+      where: { receiver_id: userId, deleted_at: null },
+      data:  { deleted_at: new Date() },
+    });
     return { ok: true };
   },
 };

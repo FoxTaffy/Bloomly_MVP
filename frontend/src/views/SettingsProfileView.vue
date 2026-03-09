@@ -20,7 +20,7 @@
     <Transition name="floatbar">
       <div
         v-if="isDirty"
-        class="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-50 flex items-center gap-2 p-1.5 rounded-2xl shadow-2xl border transition-all"
+        class="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-50 flex items-center gap-2 p-1.5 rounded-2xl shadow-2xl border transition-all"
         :class="[
           shaking ? 'animate-shake' : '',
           unsavedWarning
@@ -171,7 +171,7 @@
     <!-- ─── App Header ──────────────────────────────────────────────── -->
     <AppHeader />
 
-    <div class="max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-6 pb-20">
+    <div class="max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-6 pb-28 md:pb-10">
 
       <!-- ─── Left: App navigation hub ─────────────────────────────── -->
       <AppSidebar />
@@ -1534,8 +1534,8 @@ async function handleDeleteAccount() {
   if (deleteConfirmText.value !== 'УДАЛИТЬ') return
   isDeletingAccount.value = true
   try {
-    await api.delete('/auth/me')
-    authStore.logout()
+    await api.delete('/users/me/account')
+    await authStore.logout()
     router.replace({ name: 'login' })
   } catch (e: any) {
     showToast('error', e.response?.data?.error?.message ?? 'Ошибка удаления')
@@ -2414,7 +2414,7 @@ async function onEvidenceUpload(e: Event) {
     const fd = new FormData()
     fd.append('file', file)
     const res = await api.post('/media/upload?folder=evidence', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-    if (res.data?.url) evidenceUrls.value.push(res.data.url)
+    if (res.data?.data?.url) evidenceUrls.value.push(res.data.data.url)
   } catch (err: any) {
     showToast('error', 'Ошибка загрузки файла')
   } finally {

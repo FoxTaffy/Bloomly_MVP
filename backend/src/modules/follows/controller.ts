@@ -68,13 +68,14 @@ export const getFollowCountsHandler = async (
 };
 
 export const getSubscriptionFeedHandler = async (
-  req: FastifyRequest<{ Querystring: { safeMode?: string } }>,
+  req: FastifyRequest<{ Querystring: { safeMode?: string; page?: string } }>,
   reply: FastifyReply,
 ) => {
   try {
     const { id: userId } = req.user as JwtUser;
     const safeMode = req.query.safeMode === 'true';
-    const posts = await followsService.getSubscriptionFeed(userId, safeMode);
+    const page    = Math.max(1, parseInt(req.query.page ?? '1', 10) || 1);
+    const posts = await followsService.getSubscriptionFeed(userId, safeMode, page);
     return reply.send({ success: true, data: { posts }, error: null });
   } catch (e: any) {
     return reply.code(500).send({ success: false, data: null, error: { code: 'FEED_ERROR', message: e.message } });

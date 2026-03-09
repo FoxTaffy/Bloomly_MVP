@@ -37,7 +37,7 @@ onMounted(fetchPost)
   <div class="min-h-screen bg-brand-bg">
     <AppHeader :show-back="true" />
 
-    <main class="pt-16 md:pt-20 max-w-2xl mx-auto px-4 pb-16">
+    <main class="pt-16 md:pt-20 max-w-2xl mx-auto px-4 pb-28 md:pb-16">
 
       <!-- Loading skeleton -->
       <div v-if="loading" class="mt-6 space-y-4">

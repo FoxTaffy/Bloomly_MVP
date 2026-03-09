@@ -84,7 +84,6 @@ model User {
   blocksReceived               Block[]  @relation("Blocked")
   sentFriendRequests           Friendship[] @relation("FriendshipRequester")
   receivedFriendRequests       Friendship[] @relation("FriendshipAddressee")
-  subscriptionPlans            SubscriptionPlan[]
   is_verified                  Boolean               @default(false)
   verified_at                  DateTime?
   ownedGroups                  Group[]       @relation("GroupOwner")
@@ -100,6 +99,7 @@ model User {
   frozen_at                    DateTime?
   frozen_reason                String?               @db.VarChar(500)
   oauthAccounts                OAuthAccount[]
+  refreshTokens                RefreshToken[]
   eventAttendances             EventAttendee[]  @relation("UserEventAttendees")
   groupMessages                GroupMessage[]   @relation("UserGroupMessages")
   // Activity Engine
@@ -199,12 +199,17 @@ model PostTag {
 }
 
 model Story {
-  id         String   @id @default(uuid()) @db.Uuid
-  user_id    String   @db.Uuid
+  id         String    @id @default(uuid()) @db.Uuid
+  user_id    String    @db.Uuid
   image_url  String?
-  created_at DateTime @default(now())
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
   expires_at DateTime
-  user       User     @relation(fields: [user_id], references: [id])
+  user       User      @relation(fields: [user_id], references: [id])
+
+  @@index([user_id])
+  @@index([created_at])
 }
 
 model Vote {
@@ -294,20 +299,22 @@ model Follow {
 }
 
 model Notification {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  receiver_id String   @db.Uuid
-  sender_id   String?  @db.Uuid
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receiver_id String    @db.Uuid
+  sender_id   String?   @db.Uuid
   type        String
-  post_id     String?  @db.Uuid
-  comment_id  String?  @db.Uuid
-  read        Boolean  @default(false)
-  created_at  DateTime @default(now())
-  ref_id      String?  @db.Uuid
-  receiver    User     @relation("NotificationReceiver", fields: [receiver_id], references: [id], onDelete: Cascade)
-  sender      User?    @relation("NotificationSender", fields: [sender_id], references: [id])
+  post_id     String?   @db.Uuid
+  comment_id  String?   @db.Uuid
+  read        Boolean   @default(false)
+  created_at  DateTime  @default(now())
+  deleted_at  DateTime?
+  ref_id      String?   @db.Uuid
+  receiver    User      @relation("NotificationReceiver", fields: [receiver_id], references: [id], onDelete: Cascade)
+  sender      User?     @relation("NotificationSender", fields: [sender_id], references: [id])
 
   @@index([receiver_id])
   @@index([receiver_id, read], map: "Notification_receiver_read_idx")
+  @@index([receiver_id, deleted_at])
 }
 
 model Advertisement {
@@ -326,6 +333,7 @@ model Advertisement {
   ends_at      DateTime?
   created_at   DateTime  @default(now())
   updated_at   DateTime  @default(now()) @updatedAt
+  deleted_at   DateTime?
   requester    User?     @relation("AdRequester", fields: [requester_id], references: [id])
   reviewer     User?     @relation("AdReviewer", fields: [reviewed_by], references: [id])
 }
@@ -342,22 +350,22 @@ model MediaHistory {
 }
 
 model Report {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  reporter_id String   @db.Uuid
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reporter_id String    @db.Uuid
   target_type String
-  target_id   String   @db.Uuid
+  target_id   String    @db.Uuid
   reason      String
-  status      String   @default("pending")
-  resolved_by String?  @db.Uuid
+  status      String    @default("pending")
+  resolved_by String?   @db.Uuid
   note        String?
-  priority    Int      @default(0)
-  ai_category String?  @db.VarChar(50)
-  ai_score    Float    @default(0)
-  created_at  DateTime @default(now())
-  updated_at  DateTime @default(now()) @updatedAt
-  reporter    User     @relation("ReportReporter", fields: [reporter_id], references: [id])
-  resolver    User?    @relation("ReportResolver", fields: [resolved_by], references: [id])
-
+  priority    Int       @default(0)
+  ai_category String?   @db.VarChar(50)
+  ai_score    Float     @default(0)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @default(now()) @updatedAt
+  deleted_at  DateTime?
+  reporter    User      @relation("ReportReporter", fields: [reporter_id], references: [id])
+  resolver    User?     @relation("ReportResolver", fields: [resolved_by], references: [id])
   @@index([status])
   @@index([priority(sort: Desc), status])
 }
@@ -371,7 +379,6 @@ model AutoModLog {
   score      Float    @default(0)
   details    String?
   post_id    String?  @db.Uuid
-  report_id  String?  @db.Uuid
   created_at DateTime @default(now())
   user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
@@ -404,6 +411,7 @@ model Conversation {
   is_group     Boolean                   @default(false) // kept for back-compat; type='group'||'community' ⇒ is_group=true
   name         String?                   @db.VarChar(100)
   avatar_url   String?
+  banner_url   String?
   group_id     String?                   @unique @db.Uuid  // set when type='community'
   participants ConversationParticipant[]
   messages     Message[]
@@ -435,19 +443,6 @@ model Block {
 
   @@unique([blocker_id, blocked_id])
   @@index([blocker_id])
-}
-
-model SubscriptionPlan {
-  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id    String    @db.Uuid
-  tier       String    @default("free") @db.VarChar(20)
-  starts_at  DateTime  @default(now())
-  ends_at    DateTime?
-  created_at DateTime  @default(now())
-  updated_at DateTime  @default(now()) @updatedAt
-  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
-
-  @@index([user_id])
 }
 
 model ConversationParticipant {
@@ -498,7 +493,6 @@ model Group {
   avatar_url      String?
   banner_url      String?
   accent_color    String?         @db.VarChar(20)
-  mascot_url      String?
   social_links    Json?           @default("{}")
   is_public       Boolean         @default(true)
   created_at      DateTime        @default(now())
@@ -516,20 +510,16 @@ model Group {
   is_nsfw         Boolean         @default(false)
   rating          Float           @default(0)
   rating_count    Int             @default(0)
-  subscriber_count Int            @default(0)
   members_count   Int             @default(0)
 
   // Creative-specific
   production_time   String?       @db.VarChar(100)    // "2-3 месяца"
   delivery_info     String?       @db.VarChar(200)    // "Доставка по всему миру"
   completed_works   Int           @default(0)
-  recent_works      Json?         @default("[]")      // [{url, title, count}]
   guarantee_text    String?       @db.VarChar(300)
 
   // Event-specific
   sponsors          Json          @default("[]")      // [{name, logo_url, url, tier?}]
-  volunteers_info   String?                           // HTML/text description of volunteer program
-  is_looking_for_volunteers Boolean @default(false)
 
   // Moderation / discovery
   is_verified       Boolean         @default(false)   // Official / verified community
@@ -545,6 +535,8 @@ model Group {
   groupMessages   GroupMessage[]
   communityChat   Conversation?   @relation("GroupCommunityChat")
   activities      Activity[]
+  todoItems       GroupTodoItem[]
+  customRoles     GroupCustomRole[]
 
   @@index([owner_id])
   @@index([type])
@@ -562,6 +554,47 @@ model GroupRating {
   user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([group_id, user_id])
+  @@index([group_id])
+}
+
+enum TodoStatus {
+  WAITING
+  SKETCH
+  LINEART
+  COLORING
+  FINISHED
+}
+
+model GroupTodoItem {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  group_id    String      @db.Uuid
+  title       String      @db.VarChar(200)
+  description String?
+  status      TodoStatus  @default(WAITING)
+  position    Int         @default(0)
+  created_at  DateTime    @default(now())
+  updated_at  DateTime    @updatedAt
+  deleted_at  DateTime?
+
+  group       Group       @relation(fields: [group_id], references: [id], onDelete: Cascade)
+
+  @@index([group_id])
+  @@index([group_id, deleted_at])
+}
+
+model GroupCustomRole {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  group_id    String   @db.Uuid
+  name        String   @db.VarChar(50)
+  color       String   @default("#9ca3af") @db.VarChar(20)
+  icon        String   @default("🎖️") @db.VarChar(20)
+  permissions Json     @default("[]")
+  position    Int      @default(0)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  group       Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+
   @@index([group_id])
 }
 
@@ -713,7 +746,6 @@ model CommissionInfo {
   base_prices      Json?    @default("{}")
   currency         String   @default("USD") @db.VarChar(10)
   tos_text         String?
-  queue_count      Int      @default(0)
   max_queue        Int      @default(5)
   updated_at       DateTime @updatedAt
 
@@ -939,4 +971,20 @@ model StickerBanner {
 
   @@index([sort_order])
   @@index([is_active])
+}
+
+// ── Token rotation (15m access / 7d refresh) ─────────────────────────────────
+model RefreshToken {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String    @db.Uuid
+  token_hash String    @unique @db.VarChar(64)  // SHA-256 of raw token
+  expires_at DateTime  @db.Timestamptz(6)
+  revoked    Boolean   @default(false)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at DateTime  @updatedAt @db.Timestamptz(6)
+
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([token_hash])
 }

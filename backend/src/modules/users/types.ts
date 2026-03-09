@@ -72,11 +72,12 @@ export interface UpdateUserInput {
   birth_date?: string | null;
   social_links?: Record<string, string> | null;
   interests?: string[];
-  role?: string;
   profile_theme?: string | null;
   profile_bg_url?: string | null;
   profile_frame?: string | null;
   artist_since?: string | null;
+  relationship_since?: string | null;
+  onboarding_done?: boolean;
 }
 
 export interface JwtPayload {

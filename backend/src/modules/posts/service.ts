@@ -372,6 +372,7 @@ export const postService = {
             rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
             tags: { include: { tag: true } },
             _count: { select: { votes: true, repaws: true } },
+            groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
           },
         },
       },

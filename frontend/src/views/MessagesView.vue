@@ -7,7 +7,7 @@
       <AppSidebar />
 
       <!-- ── Main content ──────────────────────────────────────────────── -->
-      <main class="flex-1 min-w-0 pb-0 md:pb-6">
+      <main class="flex-1 min-w-0 pb-24 md:pb-6">
 
         <!-- Chat card — two-panel layout inside a rounded card -->
         <div
@@ -72,23 +72,49 @@
               <div v-if="groupListLoading" class="flex items-center justify-center py-10">
                 <div class="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
               </div>
-              <div v-else-if="!groupMemberships.length" class="flex flex-col items-center justify-center py-10 gap-3 text-center px-6">
-                <BIcon name="Users" class="w-10 h-10 text-white/20" />
-                <p class="text-sm text-white/40">Вы не состоите ни в одной группе</p>
-              </div>
-              <button v-for="m in groupMemberships" :key="m.group_id"
-                @click="openGroupChat(m.group_id, m.group.name, m.group.avatar_url)"
-                class="w-full flex items-center gap-3 px-4 py-3 hover:bg-brand-bg transition-colors text-left"
-                :class="activeGroupId === m.group_id ? 'bg-brand-bg border-r-2 border-brand-accent' : ''">
-                <div class="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-brand-accent/20 flex items-center justify-center">
-                  <img v-if="m.group.avatar_url" :src="m.group.avatar_url" class="w-full h-full object-cover" />
-                  <BIcon v-else name="Users" class="w-5 h-5 text-brand-accent/60" />
+              <template v-else>
+                <!-- Private group chats (created via "Создать группу") -->
+                <template v-if="privateGroupConvs.length">
+                  <div class="px-4 py-2 text-[10px] font-bold text-white/30 uppercase tracking-wider">Беседы</div>
+                  <button v-for="conv in privateGroupConvs" :key="conv.id"
+                    @click="openPrivateGroupConv(conv.id)"
+                    class="w-full flex items-center gap-3 px-4 py-3 hover:bg-brand-bg transition-colors text-left"
+                    :class="activeConvId === conv.id ? 'bg-brand-bg border-r-2 border-brand-accent' : ''">
+                    <div class="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-brand-accent/20 flex items-center justify-center">
+                      <img v-if="conv.avatar_url" :src="conv.avatar_url" class="w-full h-full object-cover" />
+                      <BIcon v-else name="MessagesSquare" class="w-5 h-5 text-brand-accent/60" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm font-semibold text-white truncate">{{ conv.name || 'Беседа' }}</p>
+                      <p class="text-xs text-white/40 truncate">{{ conv.other_participants.length + 1 }} участника(-ов)</p>
+                    </div>
+                  </button>
+                </template>
+
+                <!-- Community groups -->
+                <template v-if="groupMemberships.length">
+                  <div class="px-4 py-2 text-[10px] font-bold text-white/30 uppercase tracking-wider">Сообщества</div>
+                  <button v-for="m in groupMemberships" :key="m.group_id"
+                    @click="openGroupChat(m.group_id, m.group.name, m.group.avatar_url)"
+                    class="w-full flex items-center gap-3 px-4 py-3 hover:bg-brand-bg transition-colors text-left"
+                    :class="activeGroupId === m.group_id ? 'bg-brand-bg border-r-2 border-brand-accent' : ''">
+                    <div class="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-brand-accent/20 flex items-center justify-center">
+                      <img v-if="m.group.avatar_url" :src="m.group.avatar_url" class="w-full h-full object-cover" />
+                      <BIcon v-else name="Users" class="w-5 h-5 text-brand-accent/60" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm font-semibold text-white truncate">{{ m.group.name }}</p>
+                      <p class="text-xs text-white/40 truncate">@{{ m.group.slug }}</p>
+                    </div>
+                  </button>
+                </template>
+
+                <!-- Empty state -->
+                <div v-if="!privateGroupConvs.length && !groupMemberships.length" class="flex flex-col items-center justify-center py-10 gap-3 text-center px-6">
+                  <BIcon name="Users" class="w-10 h-10 text-white/20" />
+                  <p class="text-sm text-white/40">У вас нет групп и бесед</p>
                 </div>
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-semibold text-white truncate">{{ m.group.name }}</p>
-                  <p class="text-xs text-white/40 truncate">@{{ m.group.slug }}</p>
-                </div>
-              </button>
+              </template>
             </div>
           </div>
 
@@ -101,6 +127,7 @@
               v-if="canShowChatWindow && chatTab === 'dm'"
               :conv-id="activeConvId!"
               :other="activeOther"
+              :conv="activeConv"
               @back="store.closeConversation()"
               @archived="store.closeConversation()"
             />
@@ -360,6 +387,17 @@ async function sendGroupMsg() {
   }
 }
 
+// ── Private group conversations (from messages store) ───────────────────────
+const privateGroupConvs = computed(() =>
+  store.conversations.filter((c) => c.is_group && !c.my_participant?.archived)
+)
+
+async function openPrivateGroupConv(convId: string) {
+  chatTab.value = 'dm'
+  activeGroupId.value = null
+  await store.selectConversation(convId)
+}
+
 // ── Active conversation helpers ─────────────────────────────────────────────
  const activeConvId = computed(() => store.activeId)
 
@@ -413,7 +451,7 @@ watch(activeConvId, async (id) => {
     await store.fetchMessages(id)
     await store.markRead(id)
   }
-})
+}, { immediate: true })
 
 // ── Conversation selection ──────────────────────────────────────────────────
 async function onSelectConversation(id: string) {

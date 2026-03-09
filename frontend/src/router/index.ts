@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 
 // ── Расширяем RouteMeta ───────────────────────────────────────────────────────
@@ -136,12 +137,6 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
-    path: '/to-go',
-    name: 'to-go',
-    component: () => import('@/views/ToGoView.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
     path: '/automation',
     name: 'automation',
     component: () => import('@/views/AutomationView.vue'),
@@ -159,8 +154,19 @@ const router = createRouter({
 // Страницы, не требующие онбординга (публичные или сам онбординг)
 const ONBOARDING_BYPASS = new Set(['login', 'auth', 'oauth-callback', 'onboarding'])
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
+
+  // Wait for the initial refresh attempt to complete before making auth decisions
+  if (!auth.isInitialized) {
+    await new Promise<void>((resolve) => {
+      const stop = watch(
+        () => auth.isInitialized,
+        (val) => { if (val) { stop(); resolve() } },
+        { immediate: true },
+      )
+    })
+  }
 
   // Защищённый маршрут без токена → редирект на /login
   if (to.meta.requiresAuth && !auth.token) {

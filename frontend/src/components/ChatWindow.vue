@@ -109,6 +109,11 @@
                   <BIcon name="Users" class="w-4 h-4 text-white/55 flex-shrink-0" />
                   Участники
                 </button>
+                <button v-if="conv?.group_id" @click="router.push('/groups/' + conv.group_id); showMenu = false"
+                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
+                  <BIcon name="Users2" class="w-4 h-4 text-white/55 flex-shrink-0" />
+                  К группе
+                </button>
                 <button v-if="myRole === 'admin'" @click="showEditGroup = true; showMenu = false"
                   class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
                   <BIcon name="Settings" class="w-4 h-4 text-white/55 flex-shrink-0" />
@@ -126,8 +131,8 @@
 
               <button @click="archive(); showMenu = false"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
-                <BIcon name="Archive" class="w-4 h-4 text-white/55 flex-shrink-0" />
-                Архивировать
+                <BIcon :name="conv?.my_participant?.archived ? 'ArchiveX' : 'Archive'" class="w-4 h-4 text-white/55 flex-shrink-0" />
+                {{ conv?.my_participant?.archived ? 'Разархивировать' : 'Архивировать' }}
               </button>
               <div class="border-t border-brand-border my-1" />
 
@@ -216,48 +221,98 @@
     <Teleport to="body">
       <Transition name="fade">
         <div v-if="showEditGroup" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="showEditGroup = false">
-          <div class="bg-brand-card border border-brand-border rounded-2xl shadow-2xl w-full max-w-sm">
-            <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border">
-              <h3 class="text-base font-semibold text-white">Настройки группы</h3>
+          <div class="bg-brand-card border border-brand-border rounded-2xl shadow-2xl w-full max-w-sm flex flex-col" style="max-height:90vh">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0">
+              <h3 class="text-base font-semibold text-white">Настройки беседы</h3>
               <button @click="showEditGroup = false" class="p-1.5 rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-colors">
                 <BIcon name="X" class="w-4 h-4" />
               </button>
             </div>
-            <div class="p-4 space-y-3">
-              <div>
-                <label class="block text-xs text-white/55 mb-1.5 font-medium">Название группы</label>
-                <input v-model="editGroupName" type="text" maxlength="100"
-                  class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/60 transition-colors" />
+
+            <!-- Banner + Avatar visual block -->
+            <div class="flex-1 overflow-y-auto min-h-0">
+              <!-- Banner -->
+              <input ref="groupBannerRef" type="file" accept="image/*" class="sr-only" @change="onGroupBannerChange" />
+              <input ref="groupAvatarRef" type="file" accept="image/*" class="sr-only" @change="onGroupAvatarChange" />
+              <div
+                class="relative w-full h-28 bg-gradient-to-br from-brand-accent/20 to-purple-900/40 overflow-hidden cursor-pointer group"
+                @click="groupBannerRef?.click()">
+                <img v-if="editGroupBanner" :src="editGroupBanner" class="w-full h-full object-cover" />
+                <div v-else class="w-full h-full flex flex-col items-center justify-center gap-1 text-white/30 group-hover:text-white/50 transition-colors">
+                  <BIcon name="Image" class="w-5 h-5" />
+                  <span class="text-xs">Нажмите, чтобы добавить баннер</span>
+                </div>
+                <div v-if="editGroupBanner" class="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <span class="text-xs text-white bg-black/50 px-2 py-1 rounded-lg">Изменить баннер</span>
+                </div>
+                <span v-if="uploadingGroupBanner" class="absolute inset-0 flex items-center justify-center">
+                  <span class="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
+                </span>
               </div>
-              <div>
-                <label class="block text-xs text-white/55 mb-1.5 font-medium">Аватар группы</label>
-                <input ref="groupAvatarRef" type="file" accept="image/*" class="sr-only" @change="onGroupAvatarChange" />
-                <div class="flex items-center gap-3">
-                  <!-- Preview -->
+
+              <div class="px-4 pb-2">
+                <!-- Avatar + quick actions -->
+                <div class="flex items-end gap-3 -mt-7 mb-4">
                   <div
-                    class="w-14 h-14 rounded-2xl border-2 border-dashed border-brand-border/60 hover:border-brand-accent/40 flex items-center justify-center cursor-pointer transition-all flex-shrink-0 overflow-hidden relative"
+                    class="w-14 h-14 rounded-2xl border-2 border-brand-card bg-brand-bg overflow-hidden cursor-pointer flex-shrink-0 relative group shadow-lg"
                     @click="groupAvatarRef?.click()">
                     <img v-if="editGroupAvatar" :src="editGroupAvatar" class="w-full h-full object-cover" />
-                    <span v-else-if="uploadingGroupAvatar" class="w-5 h-5 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
-                    <BIcon v-else name="Image" class="w-6 h-6 text-white/30" />
+                    <div v-else class="w-full h-full flex items-center justify-center">
+                      <BIcon name="Camera" class="w-5 h-5 text-white/30 group-hover:text-white/60 transition-colors" />
+                    </div>
+                    <span v-if="uploadingGroupAvatar" class="absolute inset-0 flex items-center justify-center bg-black/50">
+                      <span class="w-4 h-4 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
+                    </span>
                   </div>
-                  <!-- Actions -->
-                  <div class="flex flex-col gap-1.5 flex-1 min-w-0">
-                    <button type="button" @click="groupAvatarRef?.click()" :disabled="uploadingGroupAvatar"
-                      class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-bg border border-brand-border text-xs font-semibold text-white/70 hover:text-white hover:border-brand-accent/40 transition-all disabled:opacity-40">
-                      <BIcon name="Upload" class="w-3 h-3" />
-                      {{ uploadingGroupAvatar ? 'Загрузка…' : 'Выбрать фото' }}
-                    </button>
+                  <div class="flex flex-col gap-1 mb-1">
                     <button v-if="editGroupAvatar" type="button" @click="editGroupAvatar = ''"
-                      class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs font-semibold text-rose-400 hover:bg-rose-500/20 transition-all">
-                      <BIcon name="Trash2" class="w-3 h-3" />
-                      Удалить
-                    </button>
+                      class="text-[10px] text-brand-error hover:underline text-left">Убрать аватар</button>
+                    <button v-if="editGroupBanner" type="button" @click="editGroupBanner = ''"
+                      class="text-[10px] text-white/40 hover:text-white/60 hover:underline text-left">Убрать баннер</button>
+                  </div>
+                </div>
+
+                <!-- Name -->
+                <div class="mb-3">
+                  <label class="block text-xs text-white/55 mb-1.5 font-medium">Название беседы</label>
+                  <input v-model="editGroupName" type="text" maxlength="100"
+                    class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/60 transition-colors" />
+                </div>
+
+                <!-- Members section: role management -->
+                <div v-if="groupMembers.length">
+                  <p class="text-xs text-white/55 font-medium mb-2">Участники ({{ groupMembers.length }})</p>
+                  <div class="space-y-1 max-h-44 overflow-y-auto">
+                    <div v-for="m in groupMembers" :key="m.user_id"
+                      class="flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-brand-bg/50 transition-colors">
+                      <img v-if="m.user?.avatar_url" :src="m.user.avatar_url" class="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                      <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold flex-shrink-0">
+                        {{ (m.user?.display_name || m.user?.username || '?')[0].toUpperCase() }}
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs text-white font-medium truncate leading-tight">{{ m.user?.display_name || m.user?.username }}</p>
+                        <p class="text-[10px] text-white/40 truncate">@{{ m.user?.username }}</p>
+                      </div>
+                      <!-- Role badge + toggle -->
+                      <div class="flex items-center gap-1 flex-shrink-0">
+                        <span :class="['text-[9px] px-1.5 py-0.5 rounded-full font-bold border',
+                          m.role === 'admin' ? 'bg-brand-accent/20 text-brand-accent border-brand-accent/30' : 'bg-brand-border/40 text-white/40 border-transparent']">{{ m.role === 'admin' ? 'ADMIN' : '' }}</span>
+                        <template v-if="m.user_id !== auth.user?.id">
+                          <button @click="toggleMemberRole(m)" class="p-1 rounded-lg text-white/40 hover:text-brand-accent transition-colors" :title="m.role === 'admin' ? 'Разжаловать' : 'Назначить админом'">
+                            <BIcon :name="m.role === 'admin' ? 'ShieldOff' : 'ShieldCheck'" class="w-3.5 h-3.5" />
+                          </button>
+                          <button @click="kickMember(m.user_id)" class="p-1 rounded-lg text-white/40 hover:text-brand-error transition-colors" title="Исключить">
+                            <BIcon name="UserX" class="w-3.5 h-3.5" />
+                          </button>
+                        </template>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-            <div class="flex items-center gap-2 px-4 py-3 border-t border-brand-border">
+
+            <div class="flex items-center gap-2 px-4 py-3 border-t border-brand-border flex-shrink-0">
               <button @click="showEditGroup = false" class="flex-1 py-2 rounded-xl border border-brand-border text-sm text-white/55 hover:text-white hover:bg-brand-bg/50 transition-colors">Отмена</button>
               <button @click="saveGroupEdit" :disabled="savingGroup"
                 class="flex-1 py-2 rounded-xl bg-brand-accent text-white text-sm font-semibold hover:bg-brand-accent-plus disabled:opacity-40 transition-all flex items-center justify-center gap-2">
@@ -1053,8 +1108,11 @@ const showMembersPanel = ref(false)
 const showEditGroup    = ref(false)
 const editGroupName    = ref('')
 const editGroupAvatar  = ref('')
+const editGroupBanner  = ref('')
 const groupAvatarRef   = ref<HTMLInputElement | null>(null)
+const groupBannerRef   = ref<HTMLInputElement | null>(null)
 const uploadingGroupAvatar = ref(false)
+const uploadingGroupBanner = ref(false)
 
 async function onGroupAvatarChange(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
@@ -1067,6 +1125,19 @@ async function onGroupAvatarChange(e: Event) {
     editGroupAvatar.value = res.data.data.url
   } catch (err) { console.error('Avatar upload failed:', err) }
   finally { uploadingGroupAvatar.value = false; if (groupAvatarRef.value) groupAvatarRef.value.value = '' }
+}
+
+async function onGroupBannerChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  uploadingGroupBanner.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file, file.name)
+    const res = await api.post('/media/upload?folder=banners', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    editGroupBanner.value = res.data.data.url
+  } catch (err) { console.error('Banner upload failed:', err) }
+  finally { uploadingGroupBanner.value = false; if (groupBannerRef.value) groupBannerRef.value.value = '' }
 }
 const savingGroup      = ref(false)
 const groupMembers     = ref<Array<{ user_id: string; role: string; user: MsgSender }>>([])
@@ -1141,7 +1212,11 @@ async function toggleMemberRole(m: { user_id: string; role: string; user: MsgSen
 async function saveGroupEdit() {
   savingGroup.value = true
   try {
-    await store.updateGroup(props.convId, { name: editGroupName.value, avatar_url: editGroupAvatar.value || undefined })
+    await store.updateGroup(props.convId, {
+      name: editGroupName.value,
+      avatar_url: editGroupAvatar.value || undefined,
+      banner_url: editGroupBanner.value || undefined,
+    })
     showEditGroup.value = false
   } catch { /* silent */ }
   finally { savingGroup.value = false }
@@ -1544,7 +1619,11 @@ function clearMedia() {
 async function deleteMsg(id: string) { await store.deleteMessage(id) }
 
 // ── Archive ─────────────────────────────────────────────────────────────────────
-async function archive() { await store.setArchived(props.convId, true); emit('archived') }
+async function archive() {
+  const isArchived = props.conv?.my_participant?.archived ?? false
+  await store.setArchived(props.convId, !isArchived)
+  if (!isArchived) emit('archived')
+}
 
 // ── Delete conversation ──────────────────────────────────────────────────────────
 async function deleteConversation(scope: 'me' | 'all') {
@@ -1687,8 +1766,10 @@ watch(showMembersPanel, (open) => {
 
 watch(showEditGroup, (open) => {
   if (open && props.conv) {
-    editGroupName.value  = props.conv.name ?? ''
+    editGroupName.value   = props.conv.name ?? ''
     editGroupAvatar.value = props.conv.avatar_url ?? ''
+    editGroupBanner.value = (props.conv as any).banner_url ?? ''
+    fetchGroupMembers()
   }
 })
 

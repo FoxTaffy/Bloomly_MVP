@@ -349,4 +349,35 @@ export const usersService = {
     return user?.public_key ?? null;
   },
 
+  async getNotifyStatus(viewerId: string, targetId: string) {
+    const follow = await prisma.follow.findUnique({
+      where: { follower_id_following_id: { follower_id: viewerId, following_id: targetId } },
+      select: { notify_posts: true },
+    });
+    return { following: !!follow, notifyPosts: follow?.notify_posts ?? false };
+  },
+
+  async toggleNotifyPosts(viewerId: string, targetId: string) {
+    const follow = await prisma.follow.findUnique({
+      where: { follower_id_following_id: { follower_id: viewerId, following_id: targetId } },
+    });
+    if (!follow) throw Object.assign(new Error('Not following this user'), { statusCode: 404 });
+    const updated = await prisma.follow.update({
+      where: { id: follow.id },
+      data: { notify_posts: !follow.notify_posts },
+    });
+    return { notifyPosts: updated.notify_posts };
+  },
+
+  /** Soft-delete account and revoke all refresh tokens */
+  async deleteAccount(userId: string) {
+    const now = new Date();
+    await prisma.$transaction([
+      // Revoke all refresh tokens
+      prisma.refreshToken.updateMany({ where: { user_id: userId, revoked: false }, data: { revoked: true } }),
+      // Soft-delete the user
+      prisma.user.update({ where: { id: userId }, data: { deleted_at: now } }),
+    ]);
+  },
+
 };

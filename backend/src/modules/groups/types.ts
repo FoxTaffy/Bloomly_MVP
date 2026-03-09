@@ -15,7 +15,6 @@ export interface CreateGroupInput {
   avatarUrl?: string;
   bannerUrl?: string;
   accentColor?: string;
-  mascotUrl?: string;
   socialLinks?: Record<string, string>;
   isPublic?: boolean;
 }
@@ -27,7 +26,6 @@ export interface UpdateGroupInput {
   avatarUrl?: string;
   bannerUrl?: string;
   accentColor?: string;
-  mascotUrl?: string;
   socialLinks?: Record<string, string>;
   isPublic?: boolean;
   rulesText?: string;
@@ -41,7 +39,6 @@ export interface UpdateGroupInput {
   productionTime?: string;
   deliveryInfo?: string;
   completedWorks?: number;
-  recentWorks?: Array<{ url: string; title?: string; count?: number }>;
   guaranteeText?: string;
   category?: string;
   isVerified?: boolean;

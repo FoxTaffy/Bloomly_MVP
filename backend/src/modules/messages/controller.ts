@@ -134,8 +134,8 @@ export async function setArchivedHandler(
 export async function createGroupHandler(req: FastifyRequest, reply: FastifyReply) {
   try {
     const { id: userId } = req.user as JwtUser;
-    const { name, userIds } = req.body as { name: string; userIds: string[] };
-    const conversation = await messageService.createGroup(userId, name, userIds);
+    const { name, userIds, avatar_url, banner_url } = req.body as { name: string; userIds: string[]; avatar_url?: string; banner_url?: string };
+    const conversation = await messageService.createGroup(userId, name, userIds, { avatar_url, banner_url });
     return reply.code(201).send({ success: true, data: { conversation }, error: null });
   } catch (e: any) {
     return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
@@ -143,13 +143,13 @@ export async function createGroupHandler(req: FastifyRequest, reply: FastifyRepl
 }
 
 export async function updateGroupHandler(
-  req: FastifyRequest<{ Params: { id: string }; Body: { name?: string; avatar_url?: string } }>,
+  req: FastifyRequest<{ Params: { id: string }; Body: { name?: string; avatar_url?: string; banner_url?: string } }>,
   reply: FastifyReply,
 ) {
   try {
     const { id: userId } = req.user as JwtUser;
-    const { name, avatar_url } = req.body;
-    await messageService.updateGroup(req.params.id, userId, { name, avatar_url });
+    const { name, avatar_url, banner_url } = req.body;
+    await messageService.updateGroup(req.params.id, userId, { name, avatar_url, banner_url });
     return reply.send({ success: true, data: null, error: null });
   } catch (e: any) {
     return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
