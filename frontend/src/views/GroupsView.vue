@@ -11,9 +11,11 @@ import CreateGroupModal from '@/components/groups/CreateGroupModal.vue'
 import { useGroupsStore, type GroupType } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useNsfwMode } from '@/composables/useNsfwMode'
+import { useLangStore } from '@/stores/lang'
 
 const router = useRouter()
 const { nsfwEnabled: nsfwMode } = useNsfwMode()
+const langStore = useLangStore()
 const activeNav = ref('groups')
 const showCreateModal = ref(false)
 const search = ref('')
@@ -23,29 +25,31 @@ const groupsStore = useGroupsStore()
 const authStore = useAuthStore()
 
 // Sidebar navigation
-const sidebarTab = ref<'all' | 'my' | 'for_you' | 'trending'>('all')
+const sidebarTab = ref<'my' | 'for_you' | 'managed'>('my')
 
 // Category filter (via dropdown)
 const selectedCategory = ref<string>('all')
-const categories = [
-  { key: 'all', label: 'Все категории', icon: 'Grid' },
-  { key: 'community', label: 'Сообщества', icon: 'Users' },
-  { key: 'event', label: 'Афиша', icon: 'CalendarDays' },
-  { key: 'creative', label: 'Творчество', icon: 'Palette' },
-  { key: 'news', label: 'Каналы', icon: 'Newspaper' },
-  { key: 'shop', label: 'Магазины', icon: 'ShoppingBag' },
-  { key: 'brand', label: 'Бренды', icon: 'Building2' },
-]
+const categories = computed(() => [
+  { key: 'all',       label: langStore.t.categoriesLabel, icon: 'Grid' },
+  { key: 'community', label: langStore.t.catCommunity,    icon: 'Users' },
+  { key: 'event',     label: langStore.t.catEvent,        icon: 'CalendarDays' },
+  { key: 'creative',  label: langStore.t.catCreative,     icon: 'Palette' },
+  { key: 'news',      label: langStore.t.catNews,         icon: 'Newspaper' },
+  { key: 'shop',      label: langStore.t.catShop,         icon: 'ShoppingBag' },
+  { key: 'brand',     label: langStore.t.catBrand,        icon: 'Building2' },
+])
 
 const displayGroups = computed(() => {
   let list: any[] = []
 
   if (sidebarTab.value === 'my') {
     list = groupsStore.myGroups.map(m => m.group)
-  } else if (sidebarTab.value === 'trending') {
-    // Sort by subscriber count (trending)
-    list = [...groupsStore.groups].sort((a, b) => (b.subscriber_count || b._count.members) - (a.subscriber_count || a._count.members))
+  } else if (sidebarTab.value === 'managed') {
+    list = groupsStore.myGroups
+      .filter(m => ['owner', 'admin'].includes(m.role))
+      .map(m => m.group)
   } else {
+    // for_you
     list = groupsStore.groups
   }
 
@@ -63,7 +67,7 @@ const upcomingEvents = computed(() =>
 )
 
 const selectedCategoryLabel = computed(() =>
-  categories.find(c => c.key === selectedCategory.value)?.label || 'Все категории'
+  categories.value.find(c => c.key === selectedCategory.value)?.label || langStore.t.categoriesLabel
 )
 
 async function loadData() {
@@ -96,9 +100,9 @@ function selectCategory(key: string) {
 
 function switchSidebarTab(tab: typeof sidebarTab.value) {
   sidebarTab.value = tab
-  if (tab === 'all' || tab === 'trending') {
+  if (tab === 'for_you') {
     loadData()
-  } else if (tab === 'my') {
+  } else {
     groupsStore.loadMyGroups()
   }
 }
@@ -111,6 +115,8 @@ async function handleCreateGroup(input: any) {
     description: input.description,
     isPublic: input.isPublic,
     accentColor: input.accentColor,
+    avatarUrl: input.avatarUrl || undefined,
+    bannerUrl: input.bannerUrl || undefined,
     socialLinks: input.socialLinks || undefined,
   })
   if (!group) return
@@ -166,32 +172,53 @@ function fmtMembers(n: number): string {
       <main class="flex-1 min-w-0 pb-28">
 
         <!-- ════════ AD BANNER PLACEHOLDER ════════ -->
-        <div class="mb-6 rounded-3xl overflow-hidden border border-brand-border bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-brand-card relative">
-          <div class="px-4 sm:px-6 py-4 sm:py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div class="flex items-center gap-4">
-              <div class="w-12 h-12 rounded-2xl bg-amber-500/20 flex items-center justify-center shrink-0">
-                <BIcon name="Megaphone" class="w-6 h-6 text-amber-400" />
+        <div class="mb-6 rounded-3xl overflow-hidden border border-brand-border relative"
+          style="background: linear-gradient(110deg, #0f0c29 0%, #1a0d35 35%, #0d1b35 65%, #0c1a0f 100%)">
+          <!-- Grid pattern overlay -->
+          <div class="absolute inset-0 opacity-[0.04] pointer-events-none"
+            style="background-image: linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px); background-size: 32px 32px" />
+          <!-- Glow effects -->
+          <div class="absolute top-0 left-1/4 w-64 h-32 rounded-full opacity-20 blur-3xl pointer-events-none"
+            style="background: radial-gradient(circle, #a855f7, transparent 70%)" />
+          <div class="absolute bottom-0 right-1/4 w-48 h-24 rounded-full opacity-15 blur-2xl pointer-events-none"
+            style="background: radial-gradient(circle, #3b82f6, transparent 70%)" />
+
+          <div class="relative z-10 px-6 py-7 flex flex-col sm:flex-row items-start sm:items-center gap-5 justify-between">
+            <div class="flex items-start gap-4">
+              <!-- Icon with glow -->
+              <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 mt-0.5"
+                style="background: linear-gradient(135deg, #a855f7 0%, #3b82f6 100%); box-shadow: 0 0 20px rgba(168,85,247,0.4)">
+                <BIcon name="Megaphone" class="w-7 h-7 text-white" />
               </div>
               <div>
-                <h3 class="text-white font-extrabold text-sm">Бизнес-тариф Bloomly</h3>
-                <p class="text-white/40 text-xs mt-0.5">Продвигайте свою группу с помощью рекламных баннеров</p>
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-[9px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-full"
+                    style="background: linear-gradient(90deg, #a855f7, #3b82f6); color: white">РЕКЛАМА</span>
+                </div>
+                <h3 class="text-white font-black text-base leading-snug">Bloomly Business — продвижение для брендов</h3>
+                <p class="text-white/50 text-xs mt-1.5 leading-relaxed">Рекламные баннеры · Продвижение группы · Аналитика аудитории</p>
+                <div class="flex items-center gap-3 mt-2.5">
+                  <span class="text-[10px] text-white/30 flex items-center gap-1">
+                    <BIcon name="Users" class="w-3 h-3" />
+                    1,200+ брендов
+                  </span>
+                  <span class="text-[10px] text-white/30 flex items-center gap-1">
+                    <BIcon name="TrendingUp" class="w-3 h-3" />
+                    До 5х больше охвата
+                  </span>
+                </div>
               </div>
             </div>
-            <button class="px-4 py-2 rounded-xl bg-amber-500/20 text-amber-400 text-xs font-bold border border-amber-400/20 hover:bg-amber-500/30 transition-colors">
-              Подробнее
-            </button>
+            <div class="flex items-center gap-2 sm:shrink-0">
+              <button class="px-4 py-2.5 rounded-xl text-xs font-bold border border-white/10 text-white/60 hover:text-white/80 hover:border-white/20 transition-colors">
+                Узнать больше
+              </button>
+              <button class="px-4 py-2.5 rounded-xl text-xs font-black text-white transition-all hover:brightness-110"
+                style="background: linear-gradient(90deg, #a855f7, #3b82f6); box-shadow: 0 0 16px rgba(168,85,247,0.35)">
+                Подключиться →
+              </button>
+            </div>
           </div>
-        </div>
-
-        <!-- ════════ SOON BADGES ════════ -->
-        <div v-if="groupsStore.mySoonBadges.length" class="flex flex-wrap gap-2 mb-5">
-          <SoonBadge
-            v-for="badge in groupsStore.mySoonBadges"
-            :key="badge.id"
-            :short-code="badge.event.short_code"
-            class="cursor-pointer hover:scale-105 transition-transform"
-            @click="router.push(`/events/${badge.event.id}`)"
-          />
         </div>
 
         <!-- ════════ SEARCH + CATEGORIES + CREATE ════════ -->
@@ -240,7 +267,7 @@ function fmtMembers(n: number): string {
             @click="showCreateModal = true"
           >
             <BIcon name="Plus" class="w-4 h-4" />
-            <span class="hidden sm:inline">Создать группу</span>
+            <span class="hidden sm:inline">{{ langStore.t.createGroup }}</span>
           </button>
         </div>
 
@@ -273,10 +300,9 @@ function fmtMembers(n: number): string {
             <div class="bg-brand-card border border-brand-border rounded-2xl p-3 space-y-1">
               <button
                 v-for="tab in [
-                  { key: 'all' as const, label: 'Все группы', icon: 'Grid' },
-                  { key: 'my' as const, label: 'Мои подписки', icon: 'Heart' },
-                  { key: 'for_you' as const, label: 'Для вас', icon: 'Sparkles' },
-                  { key: 'trending' as const, label: 'В тренде', icon: 'TrendingUp' },
+                  { key: 'my' as const,      label: langStore.t.mySubscriptions, icon: 'Heart' },
+                  { key: 'for_you' as const, label: langStore.t.forYou,          icon: 'Sparkles' },
+                  { key: 'managed' as const, label: langStore.t.managed,         icon: 'ShieldCheck' },
                 ]"
                 :key="tab.key"
                 class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all"
@@ -294,7 +320,7 @@ function fmtMembers(n: number): string {
             <div class="bg-brand-card border border-brand-border rounded-2xl p-4">
               <h3 class="text-sm font-extrabold text-white mb-3 flex items-center gap-2">
                 <BIcon name="Tag" class="w-4 h-4 text-brand-accent" />
-                Категории
+                {{ langStore.t.categoriesLabel }}
               </h3>
               <div class="flex flex-wrap gap-1.5">
                 <button
@@ -316,7 +342,7 @@ function fmtMembers(n: number): string {
             <div v-if="upcomingEvents.length" class="bg-brand-card border border-brand-border rounded-2xl p-4">
               <h3 class="text-sm font-extrabold text-white mb-3 flex items-center gap-2">
                 <BIcon name="Flame" class="w-4 h-4 text-amber-400" />
-                Скоро!
+                {{ langStore.t.upcoming }}
               </h3>
               <div class="space-y-2.5">
                 <div

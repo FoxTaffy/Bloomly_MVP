@@ -64,8 +64,14 @@ export interface Group {
   is_looking_for_volunteers: boolean
   is_verified: boolean
   category: string | null
+  group_bg_url: string | null
+  group_frame: string | null
+  group_theme: string | null
+  hide_admins: boolean
+  hidden_member_ids: string
   created_at: string
   owner: GroupOwner
+  communityChat?: { id: string } | null
   _count: { members: number; events: number; posts: number }
   events?: EventItem[]
   commissionInfo?: CommissionInfo | null
@@ -411,7 +417,7 @@ export const useGroupsStore = defineStore('groups', () => {
     return data.data.posts
   }
 
-  async function createGroupPost(groupId: string, input: { content: string; isNsfw?: boolean; mediaUrls?: string[]; tags?: string[] }) {
+  async function createGroupPost(groupId: string, input: { content: string; isNsfw?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; tags?: string[] }) {
     const { data } = await api.post(`/groups/${groupId}/posts`, input)
     return data.data.post
   }

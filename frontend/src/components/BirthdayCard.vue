@@ -34,7 +34,7 @@ const dateStr = computed(() => {
 <template>
   <div
     class="flex items-center gap-3 py-2.5 cursor-pointer hover:opacity-80 transition-opacity"
-    @click="router.push(`/profile/${birthday.id}`)"
+    @click="router.push(`/profile/${birthday.username}`)"
   >
     <!-- Avatar -->
     <div class="relative flex-shrink-0">

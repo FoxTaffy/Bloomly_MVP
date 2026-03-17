@@ -45,6 +45,11 @@ const GROUP_SELECT = {
   sponsors: true,
   is_verified: true,
   category: true,
+  group_bg_url: true,
+  group_frame: true,
+  group_theme: true,
+  hide_admins: true,
+  hidden_member_ids: true,
   _count: { select: { members: true, events: true, posts: { where: { post: { deleted_at: null } } } } },
   owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
   communityChat: { select: { id: true } },
@@ -55,6 +60,7 @@ const GROUP_LIST_SELECT = {
   id: true,
   slug: true,
   name: true,
+  description: true,
   type: true,
   owner_id: true,
   avatar_url: true,
@@ -140,7 +146,9 @@ export const groupService = {
     const raw = await prisma.group.findFirst({
       where: {
         deleted_at: null,
-        ...(isUuid ? { id: slugOrId } : { slug: slugOrId }),
+        ...(isUuid
+          ? { id: slugOrId }
+          : { OR: [{ slug: slugOrId }, { slug_aliases: { has: slugOrId } }] }),
       },
       select: {
         ...GROUP_SELECT,
@@ -206,10 +214,23 @@ export const groupService = {
     if (input.completedWorks !== undefined) data.completed_works = input.completedWorks;
     if (input.guaranteeText !== undefined) data.guarantee_text = input.guaranteeText;
     if (input.slug !== undefined) {
-      data.slug = input.slug.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+      const newSlug = input.slug.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+      // Fetch current slug to save as alias
+      const current = await prisma.group.findUnique({ where: { id: groupId }, select: { slug: true, slug_aliases: true } });
+      if (current && current.slug !== newSlug) {
+        // Append old slug to aliases (avoid duplicates and limit to 10)
+        const aliases = [...new Set([...current.slug_aliases, current.slug])].slice(-10);
+        data.slug_aliases = aliases;
+      }
+      data.slug = newSlug;
     }
     if (input.category !== undefined) data.category = input.category || null;
     if (input.isVerified !== undefined) data.is_verified = input.isVerified;
+    if (input.groupBgUrl !== undefined) data.group_bg_url = input.groupBgUrl || null;
+    if (input.groupFrame !== undefined) data.group_frame = input.groupFrame || null;
+    if (input.groupTheme !== undefined) data.group_theme = input.groupTheme || null;
+    if (input.hideAdmins !== undefined) data.hide_admins = input.hideAdmins;
+    if (input.hiddenMemberIds !== undefined) data.hidden_member_ids = JSON.stringify(input.hiddenMemberIds);
 
     return prisma.group.update({ where: { id: groupId }, data, select: GROUP_SELECT });
   },
@@ -242,15 +263,34 @@ export const groupService = {
   },
 
   async leave(groupId: string, userId: string) {
-    const result = await prisma.groupMember.deleteMany({
-      where: { group_id: groupId, user_id: userId, role: { not: 'owner' } },
+    // Allow owner to leave only if they are the LAST member (transfers to deletion)
+    const totalMembers = await prisma.groupMember.count({ where: { group_id: groupId } });
+    const membership = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
     });
-    // Decrement members_count only if a row was actually deleted
+
+    if (!membership) return { count: 0 };
+
+    const isOwner = membership.role === 'owner';
+    // Owner can only leave if they are the last member (group will be deleted)
+    if (isOwner && totalMembers > 1) {
+      throw new Error('Owner cannot leave while other members exist. Transfer ownership first.');
+    }
+
+    const result = await prisma.groupMember.deleteMany({
+      where: { group_id: groupId, user_id: userId },
+    });
+
     if (result.count > 0) {
-      await prisma.group.update({
+      const updated = await prisma.group.update({
         where: { id: groupId },
         data: { members_count: { decrement: result.count } },
+        select: { id: true, members_count: true },
       });
+      // Auto-delete (soft) group if no members remain
+      if (updated.members_count <= 0) {
+        await prisma.group.update({ where: { id: groupId }, data: { deleted_at: new Date() } });
+      }
     }
     return result;
   },
@@ -303,10 +343,15 @@ export const groupService = {
     const result = await prisma.groupMember.delete({
       where: { group_id_user_id: { group_id: groupId, user_id: targetUserId } },
     });
-    await prisma.group.update({
+    const updated = await prisma.group.update({
       where: { id: groupId },
       data: { members_count: { decrement: 1 } },
+      select: { id: true, members_count: true },
     });
+    // Auto-delete (soft) group if no members remain
+    if (updated.members_count <= 0) {
+      await prisma.group.update({ where: { id: groupId }, data: { deleted_at: new Date() } });
+    }
     return result;
   },
 
@@ -577,7 +622,7 @@ export const groupService = {
   // ── My groups ─────────────────────────────────────────────────────────────
   async getUserGroups(userId: string) {
     return prisma.groupMember.findMany({
-      where: { user_id: userId },
+      where: { user_id: userId, group: { deleted_at: null } },
       include: {
         group: {
           select: GROUP_LIST_SELECT,
@@ -640,7 +685,7 @@ export const groupService = {
   },
 
   // ── Create post in group ──────────────────────────────────────────────────
-  async createGroupPost(groupId: string, userId: string, input: { content: string; isNsfw?: boolean; mediaUrls?: string[]; tags?: string[] }) {
+  async createGroupPost(groupId: string, userId: string, input: { content: string; isNsfw?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; tags?: string[] }) {
     // Check user is admin/owner
     const member = await prisma.groupMember.findUnique({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
@@ -667,6 +712,7 @@ export const groupService = {
           content,
           author_id: userId,
           is_nsfw: input.isNsfw ?? false,
+          is_announcement: input.isAnnouncement ?? false,
           media_urls: mediaUrls,
         },
       });
@@ -829,6 +875,25 @@ export const groupService = {
     if (!msg) return;
     if (msg.user_id !== userId) throw new Error('Not the message author');
     await prisma.groupMessage.update({ where: { id: messageId }, data: { deleted_at: new Date() } });
+  },
+
+  // ── Search (for maker picker) ─────────────────────────────────────────────
+  async searchGroups(q: string, limit = 8) {
+    const query = q.trim();
+    if (!query) return [];
+    return prisma.group.findMany({
+      where: {
+        deleted_at: null,
+        is_public: true,
+        OR: [
+          { name: { contains: query, mode: 'insensitive' } },
+          { slug: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      select: { id: true, name: true, slug: true, avatar_url: true, type: true },
+      orderBy: [{ is_verified: 'desc' }, { members_count: 'desc' }],
+      take: limit,
+    });
   },
 
   // ── Discover ──────────────────────────────────────────────────────────────

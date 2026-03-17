@@ -63,8 +63,10 @@ const PACK_SELECT = {
   currency: true,
   tags: true,
   is_nsfw: true,
+  hide_author: true,
   status: true,
   downloads_count: true,
+  use_count: true,
   created_at: true,
   updated_at: true,
   author: {
@@ -79,6 +81,13 @@ const PACK_SELECT = {
   },
   _count: { select: { userCollections: true } },
 };
+
+// Mask author for non-admin viewers when hide_author=true
+function maskAuthor(pack: any, requestingUserId?: string, isAdmin = false): any {
+  if (!pack || !pack.hide_author) return pack
+  if (isAdmin || pack.author_id === requestingUserId) return pack
+  return { ...pack, author: null }
+}
 
 export const stickersService = {
   // ── list ─────────────────────────────────────────────────────────────────
@@ -97,6 +106,9 @@ export const stickersService = {
 
     if (query.authorId) where.author_id = query.authorId;
     if (query.free === '1') where.price = 0;
+    if (query.nsfw === '1' || query.nsfw === 'true') where.is_nsfw = true;
+    if (query.excludeNsfw === '1' || query.excludeNsfw === 'true') where.is_nsfw = false;
+    if (query.tag) where.tags = { has: query.tag.toLowerCase() };
 
     if (query.search) {
       where.OR = [
@@ -106,11 +118,16 @@ export const stickersService = {
       ];
     }
 
+    const orderBy: any =
+      query.sort === 'popular' ? { downloads_count: 'desc' } :
+      query.sort === 'new'     ? { created_at: 'desc' } :
+                                 { downloads_count: 'desc' };
+
     const [packs, total] = await Promise.all([
       prisma.stickerPack.findMany({
         where,
         select: PACK_SELECT,
-        orderBy: { created_at: 'desc' },
+        orderBy,
         skip,
         take: limit,
       }),
@@ -144,8 +161,10 @@ export const stickersService = {
         currency:          input.currency      ?? 'USD',
         tags:              input.tags          ?? [],
         is_nsfw:           input.isNsfw        ?? false,
+        hide_author:       input.hideAuthor    ?? false,
         status:            input.status        ?? 'published',
         downloads_count:   0,
+        use_count:         0,
       },
       select: PACK_SELECT,
     });
@@ -168,6 +187,7 @@ export const stickersService = {
     if (input.currency         !== undefined) data.currency          = input.currency;
     if (input.tags             !== undefined) data.tags              = input.tags;
     if (input.isNsfw           !== undefined) data.is_nsfw           = input.isNsfw;
+    if (input.hideAuthor       !== undefined) data.hide_author       = input.hideAuthor;
     if (input.status           !== undefined) data.status            = input.status;
 
     return prisma.stickerPack.update({ where: { id }, data, select: PACK_SELECT });
@@ -186,6 +206,14 @@ export const stickersService = {
       where: { author_id: authorId, deleted_at: null },
       select: PACK_SELECT,
       orderBy: { created_at: 'desc' },
+    });
+  },
+
+  // ── increment use count (called when sticker is sent in message) ──────────
+  async incrementUse(packId: string) {
+    await prisma.stickerPack.updateMany({
+      where: { id: packId, deleted_at: null },
+      data:  { use_count: { increment: 1 } },
     });
   },
 
@@ -224,12 +252,113 @@ export const stickersService = {
     return rows.map(r => ({ ...r.pack, added_at: r.added_at }));
   },
 
+  // ── find pack by sticker URL ─────────────────────────────────────────────
+  async findByUrl(url: string, requestingUserId?: string) {
+    const pack = await prisma.stickerPack.findFirst({
+      where: { deleted_at: null, stickers: { has: url } },
+      select: PACK_SELECT,
+    });
+    if (!pack) return null;
+    // If draft, only return full data to the author; otherwise mark as private
+    if (pack.status === 'draft' && pack.author_id !== requestingUserId) {
+      return { private: true as const, pack_id: pack.id, author_id: pack.author_id };
+    }
+    // Attach in_collection flag if user known
+    let in_collection = false;
+    if (requestingUserId) {
+      const row = await prisma.userStickerPack.findUnique({
+        where: { user_id_pack_id: { user_id: requestingUserId, pack_id: pack.id } },
+      });
+      in_collection = !!row;
+    }
+    return { private: false as const, pack: { ...pack, in_collection } };
+  },
+
   // ── check if user has pack ────────────────────────────────────────────────
   async hasInCollection(userId: string, packId: string) {
     const row = await prisma.userStickerPack.findUnique({
       where: { user_id_pack_id: { user_id: userId, pack_id: packId } },
     });
     return !!row;
+  },
+
+  // ── track per-sticker usage (real statistics) ──────────────────────────
+  async trackStickerUsage(userId: string, stickerUrl: string, packId?: string) {
+    await prisma.stickerUsage.upsert({
+      where:  { user_id_sticker_url: { user_id: userId, sticker_url: stickerUrl } },
+      create: { user_id: userId, sticker_url: stickerUrl, pack_id: packId ?? null, use_count: 1 },
+      update: { use_count: { increment: 1 }, last_used_at: new Date(), pack_id: packId ?? undefined },
+    });
+    // also bump pack-level use_count
+    if (packId) {
+      await prisma.stickerPack.updateMany({
+        where: { id: packId, deleted_at: null },
+        data:  { use_count: { increment: 1 } },
+      });
+    }
+  },
+
+  // ── get recent/frequent stickers for user ─────────────────────────────
+  async getRecentStickers(userId: string, limit = 30) {
+    const rows = await prisma.stickerUsage.findMany({
+      where:   { user_id: userId },
+      orderBy: { last_used_at: 'desc' },
+      take:    limit,
+      select:  { sticker_url: true, pack_id: true, use_count: true, last_used_at: true },
+    });
+    return rows.map(r => ({ url: r.sticker_url, packId: r.pack_id ?? undefined, use_count: r.use_count, last_used: r.last_used_at }));
+  },
+
+  async getFrequentStickers(userId: string, limit = 30) {
+    const rows = await prisma.stickerUsage.findMany({
+      where:   { user_id: userId },
+      orderBy: { use_count: 'desc' },
+      take:    limit,
+      select:  { sticker_url: true, pack_id: true, use_count: true },
+    });
+    return rows.map(r => ({ url: r.sticker_url, packId: r.pack_id ?? undefined, use_count: r.use_count }));
+  },
+
+  // ── server-side favorites ─────────────────────────────────────────────
+  async getFavoriteStickers(userId: string) {
+    const rows = await prisma.stickerFavorite.findMany({
+      where:   { user_id: userId },
+      orderBy: { added_at: 'desc' },
+      select:  { sticker_url: true, pack_id: true, added_at: true },
+    });
+    return rows.map(r => ({ url: r.sticker_url, packId: r.pack_id ?? undefined, added_at: r.added_at }));
+  },
+
+  async addFavoriteSticker(userId: string, stickerUrl: string, packId?: string) {
+    await prisma.stickerFavorite.upsert({
+      where:  { user_id_sticker_url: { user_id: userId, sticker_url: stickerUrl } },
+      create: { user_id: userId, sticker_url: stickerUrl, pack_id: packId ?? null },
+      update: { pack_id: packId ?? null },
+    });
+  },
+
+  async removeFavoriteSticker(userId: string, stickerUrl: string) {
+    await prisma.stickerFavorite.deleteMany({ where: { user_id: userId, sticker_url: stickerUrl } });
+  },
+
+  // ── add stickers to existing pack (append) ────────────────────────────
+  async addStickersToPack(packId: string, authorId: string, urls: string[]) {
+    const existing = await prisma.stickerPack.findFirst({ where: { id: packId, author_id: authorId, deleted_at: null } });
+    if (!existing) return null;
+    const merged = Array.from(new Set([...existing.stickers, ...urls]));
+    return prisma.stickerPack.update({
+      where:  { id: packId },
+      data:   { stickers: merged },
+      select: PACK_SELECT,
+    });
+  },
+
+  // ── popularity score for sorting (downloads + use_count weighted) ─────
+  async getPopularityStats(packIds: string[]) {
+    return prisma.stickerPack.findMany({
+      where:  { id: { in: packIds }, deleted_at: null },
+      select: { id: true, downloads_count: true, use_count: true },
+    });
   },
 
   // ── Telegram import ────────────────────────────────────────────────────

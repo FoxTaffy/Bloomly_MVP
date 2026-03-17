@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
 import { ref, computed, onMounted } from 'vue'
 import { useGroupsStore, type ArtistQueueItem, type TodoStatus } from '@/stores/groups'
 import BIcon from '@/components/BIcon.vue'

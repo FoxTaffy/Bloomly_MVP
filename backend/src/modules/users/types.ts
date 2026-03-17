@@ -84,3 +84,28 @@ export interface JwtPayload {
   id: string;
   role: string;
 }
+
+// ── Fursona ───────────────────────────────────────────────────────────────────
+
+export interface UpsertFursonaInput {
+  name?: string;
+  species?: string[];
+  colors?: string[];
+  likes_dislikes_visible?: boolean;
+  likes?: string[];
+  dislikes?: string[];
+  reference_image_url?: string | null;
+  reference_is_nsfw?: boolean;
+  reference_artist_name?: string | null;
+  reference_artist_url?: string | null;
+}
+
+// ── Fursuit ───────────────────────────────────────────────────────────────────
+
+export interface UpsertFursuitInput {
+  image_url?: string | null;
+  maker_id?: string | null;
+  external_maker_links?: string[];
+  description?: string | null;
+  is_nsfw?: boolean;
+}

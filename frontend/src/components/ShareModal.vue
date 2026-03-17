@@ -14,7 +14,7 @@
         <!-- Header with tabs -->
         <div class="flex items-center border-b border-white/10">
           <button
-            v-for="tab in ['Поделиться', 'Экспортировать']"
+            v-for="tab in [langStore.t.tabShare, langStore.t.tabExport]"
             :key="tab"
             @click="activeTab = tab"
             class="flex-1 py-4 text-sm font-semibold transition-colors"
@@ -31,7 +31,7 @@
         </div>
 
         <!-- Tab: Поделиться -->
-        <div v-if="activeTab === 'Поделиться'" class="p-5 space-y-3">
+        <div v-if="activeTab === langStore.t.tabShare" class="p-5 space-y-3">
 
           <!-- Share options -->
           <label
@@ -58,7 +58,7 @@
               <input
                 v-model="recipient"
                 type="text"
-                placeholder="Введите имя получателя или название чата"
+                :placeholder="langStore.t.recipientPlaceholder"
                 class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 pr-10 text-white text-sm placeholder-white/30 focus:outline-none focus:border-purple-500/60 focus:bg-white/8 transition-colors"
               />
               <BIcon name="ChevronDown" class="absolute right-3 top-2.5 w-4 h-4 text-white/30" />
@@ -89,14 +89,14 @@
               class="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-white/60 hover:text-white hover:bg-white/10 transition-colors"
             >
               <BIcon :name="copied ? 'CheckCheck' : 'Link'" class="w-4 h-4" />
-              {{ copied ? 'Скопировано!' : 'Ссылка' }}
+              {{ copied ? langStore.t.copiedBtn : langStore.t.copyLinkBtn }}
             </button>
             <button
               @click="doSend"
               :disabled="isSending || (shareTarget === 'dm' && !recipient.trim())"
               class="flex-1 py-2.5 bg-white text-black text-sm font-bold rounded-xl hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {{ isSending ? 'Отправка...' : 'Отправить' }}
+              {{ isSending ? langStore.t.sendingBtn : langStore.t.nextBtn }}
             </button>
           </div>
 
@@ -106,7 +106,7 @@
         </div>
 
         <!-- Tab: Экспортировать -->
-        <div v-if="activeTab === 'Экспортировать'" class="p-5 space-y-3">
+        <div v-if="activeTab === langStore.t.tabExport" class="p-5 space-y-3">
           <button
             v-for="exp in exportOptions"
             :key="exp.label"
@@ -124,7 +124,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
 import BIcon from './BIcon.vue'
 import api from '@/api'
 
@@ -138,7 +140,8 @@ const emit = defineEmits<{
   (e: 'update:modelValue', val: boolean): void
 }>()
 
-const activeTab = ref('Поделиться')
+const activeTab = ref('')
+watch(() => langStore.t.tabShare, (v) => { if (!activeTab.value) activeTab.value = v }, { immediate: true })
 const shareTarget = ref('wall')
 const recipient = ref('')
 const message = ref('')
@@ -146,18 +149,18 @@ const copied = ref(false)
 const isSending = ref(false)
 const sendResult = ref<{ ok: boolean; msg: string } | null>(null)
 
-const shareOptions = [
-  { value: 'wall',      label: 'На своей стене' },
-  { value: 'community', label: 'В сообществе' },
-  { value: 'story',     label: 'В истории',     desc: 'У репостов в историях теперь новое оформление' },
-  { value: 'dm',        label: 'В личном сообщении' },
-]
+const shareOptions = computed(() => [
+  { value: 'wall',      label: langStore.t.shareToWall },
+  { value: 'community', label: langStore.t.shareToWall },
+  { value: 'story',     label: langStore.t.shareToStory },
+  { value: 'dm',        label: langStore.t.shareToDm },
+])
 
-const exportOptions = [
-  { label: 'Скопировать ссылку',     icon: 'Link',       action: 'copy' },
-  { label: 'Скачать изображение',    icon: 'Download',   action: 'download' },
-  { label: 'Встроить на сайт',       icon: 'Code2',      action: 'embed' },
-]
+const exportOptions = computed(() => [
+  { label: langStore.t.exportCopyLink,  icon: 'Link',     action: 'copy' },
+  { label: langStore.t.exportDownload,  icon: 'Download', action: 'download' },
+  { label: langStore.t.exportEmbed,     icon: 'Code2',    action: 'embed' },
+])
 
 async function copyLink() {
   try {
@@ -178,15 +181,15 @@ async function doSend() {
         recipient: recipient.value.trim(),
         message: message.value.trim(),
       }).catch(() => null)
-      sendResult.value = { ok: !!res, msg: res ? 'Отправлено!' : 'Не удалось отправить' }
+      sendResult.value = { ok: !!res, msg: res ? langStore.t.sentResult : 'Error' }
     } else if (shareTarget.value === 'wall') {
       // Repost to own feed
       await api.post(`/posts/${props.postId}/repaw`).catch(() => null)
-      sendResult.value = { ok: true, msg: 'Добавлено на стену!' }
+      sendResult.value = { ok: true, msg: langStore.t.addedToWall }
     } else {
       // Other targets - just copy link for now
       await copyLink()
-      sendResult.value = { ok: true, msg: 'Ссылка скопирована!' }
+      sendResult.value = { ok: true, msg: langStore.t.linkCopied }
     }
     setTimeout(() => {
       emit('update:modelValue', false)
@@ -205,7 +208,7 @@ function doExport(action: string) {
   } else if (action === 'embed') {
     const embedCode = `<iframe src="${props.postUrl}" width="560" height="315" frameborder="0"></iframe>`
     navigator.clipboard.writeText(embedCode).catch(() => {})
-    sendResult.value = { ok: true, msg: 'Код встройки скопирован!' }
+    sendResult.value = { ok: true, msg: langStore.t.embedCopied }
   }
 }
 </script>

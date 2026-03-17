@@ -92,7 +92,7 @@ export const messageService = {
     const participants = await prisma.conversationParticipant.findMany({
       where: {
         user_id: userId,
-        // archived filter removed — frontend handles filtering client-side
+        hidden_at: null,
         ...(archived !== undefined ? { archived } : {}),
         ...(label ? { label } : {}),
       },
@@ -108,19 +108,33 @@ export const messageService = {
               take: 1,
               include: { sender: { select: senderSelect } },
             },
+            pinnedMessage: {
+              select: {
+                id: true, text: true, type: true, file_url: true, created_at: true,
+                sender: { select: { id: true, username: true, display_name: true } },
+              },
+            } as any,
           },
         },
       },
       orderBy: { conversation: { updated_at: 'desc' } },
     });
 
-    return participants.map((p) => ({
+    return participants.map((p: any) => ({
       ...p.conversation,
-      my_participant: { archived: p.archived, hidden_at: p.hidden_at, last_read_at: p.last_read_at, label: p.label, role: p.role },
+      pinned_message: p.conversation.pinnedMessage ?? null,
+      my_participant: {
+        archived: p.archived,
+        hidden_at: p.hidden_at,
+        last_read_at: p.last_read_at,
+        label: p.label,
+        role: p.role,
+        personal_pinned_message_id: p.personal_pinned_message_id ?? null,
+      },
       last_message: p.conversation.messages[0] ?? null,
       other_participants: p.conversation.participants
-        .filter((cp) => cp.user_id !== userId)
-        .map((cp) => ({ user_id: cp.user_id, user: cp.user, last_read_at: cp.last_read_at ?? null })),
+        .filter((cp: any) => cp.user_id !== userId)
+        .map((cp: any) => ({ user_id: cp.user_id, user: cp.user, last_read_at: cp.last_read_at ?? null })),
     }));
   },
 
@@ -504,5 +518,68 @@ export const messageService = {
     });
     if (!p) throw Object.assign(new Error('Not a participant'), { statusCode: 403 });
     if (p.role !== 'admin') throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
+  },
+
+  // ── Pin / Unpin message ─────────────────────────────────────────────────
+  async pinMessage(convId: string, userId: string, messageId: string, scope: 'all' | 'me') {
+    await this._assertParticipant(convId, userId);
+    const msg = await prisma.message.findFirst({ where: { id: messageId, conversation_id: convId, deleted_at: null } });
+    if (!msg) throw Object.assign(new Error('Message not found'), { statusCode: 404 });
+    if (scope === 'all') {
+      await (prisma.conversation as any).update({ where: { id: convId }, data: { pinned_message_id: messageId } });
+      // Broadcast system notification to all participants
+      const actor = await prisma.user.findUnique({ where: { id: userId }, select: { display_name: true, username: true } });
+      const actorName = actor?.display_name || actor?.username || '?';
+      const sysMsg = await prisma.message.create({
+        data: { conversation_id: convId, sender_id: userId, text: `\u{1F4CC} ${actorName} \u0437\u0430\u043a\u0440\u0435\u043f\u0438\u043b \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435`, type: 'system' },
+        include: { sender: { select: senderSelect } },
+      });
+      await prisma.conversation.update({ where: { id: convId }, data: { updated_at: new Date() } });
+      const parts = await prisma.conversationParticipant.findMany({ where: { conversation_id: convId }, select: { user_id: true } });
+      for (const { user_id } of parts) {
+        messageSubscriptions.push(user_id, { type: 'new_message', data: sysMsg });
+      }
+    } else {
+      await prisma.$executeRaw`UPDATE "ConversationParticipant" SET personal_pinned_message_id = ${messageId}::uuid WHERE conversation_id = ${convId}::uuid AND user_id = ${userId}::uuid`;
+    }
+    return msg;
+  },
+
+  async unpinMessage(convId: string, userId: string, scope: 'all' | 'me') {
+    await this._assertParticipant(convId, userId);
+    if (scope === 'all') {
+      await (prisma.conversation as any).update({ where: { id: convId }, data: { pinned_message_id: null } });
+    } else {
+      await prisma.$executeRaw`UPDATE "ConversationParticipant" SET personal_pinned_message_id = NULL WHERE conversation_id = ${convId}::uuid AND user_id = ${userId}::uuid`;
+    }
+  },
+
+  // ── Media stats ─────────────────────────────────────────────────────────
+  async getMediaStats(convId: string, userId: string) {
+    await this._assertParticipant(convId, userId);
+    type Row = { type: string; cnt: bigint };
+    const rows = await prisma.$queryRaw<Row[]>`
+      SELECT type, COUNT(*) as cnt
+      FROM "Message"
+      WHERE conversation_id = ${convId}::uuid
+        AND deleted_at IS NULL
+        AND file_url IS NOT NULL
+      GROUP BY type
+    `;
+    const stats: Record<string, number> = {};
+    for (const row of rows) stats[row.type] = Number(row.cnt);
+    // Count voice messages (no file_url needed, type='audio') + links in text
+    const voiceRows = await prisma.$queryRaw<Row[]>`
+      SELECT 'voice' as type, COUNT(*) as cnt FROM "Message"
+      WHERE conversation_id = ${convId}::uuid AND deleted_at IS NULL AND type = 'audio'
+    `;
+    if (voiceRows[0]) stats.voice = Number(voiceRows[0].cnt);
+    const linkRows = await prisma.$queryRaw<Row[]>`
+      SELECT 'link' as type, COUNT(*) as cnt FROM "Message"
+      WHERE conversation_id = ${convId}::uuid AND deleted_at IS NULL
+        AND text ~ 'https?://'
+    `;
+    if (linkRows[0]) stats.link = Number(linkRows[0].cnt);
+    return stats;
   },
 };

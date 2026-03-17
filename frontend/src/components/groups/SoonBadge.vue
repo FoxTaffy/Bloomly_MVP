@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
 import { computed } from 'vue'
 
 const props = defineProps<{

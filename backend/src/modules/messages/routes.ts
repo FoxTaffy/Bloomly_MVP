@@ -16,6 +16,9 @@ import {
   setMemberRoleHandler,
   getGroupMembersHandler,
   setConversationLabelHandler,
+  pinMessageHandler,
+  unpinMessageHandler,
+  getMediaStatsHandler,
 } from './controller.js';
 
 declare module 'fastify' {
@@ -49,6 +52,11 @@ export async function messagesRoutes(fastify: FastifyInstance) {
   fastify.patch('/conversations/:id/archive', auth, setArchivedHandler as any);
   fastify.patch('/conversations/:id/label', auth, setConversationLabelHandler as any);
   fastify.delete('/conversations/:id', auth, deleteConversationHandler as any);
+
+  // Pin / unpin
+  fastify.put('/conversations/:id/pin',    auth, pinMessageHandler   as any);
+  fastify.delete('/conversations/:id/pin', auth, unpinMessageHandler  as any);
+  fastify.get('/conversations/:id/media-stats', auth, getMediaStatsHandler as any);
 
   // Individual message actions
   fastify.delete('/messages/:msgId', auth, deleteMessageHandler as any);

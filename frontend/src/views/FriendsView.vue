@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
 import { useRouter } from 'vue-router'
 import { useFriendsStore } from '@/stores/friends'
 import type { FriendUser } from '@/stores/friends'
@@ -65,9 +67,9 @@ const onlineCount   = computed(() => friendsStore.friends.filter(f => f.online).
 
 // ── Tab configs ───────────────────────────────────────────────────────────────
 const tabs = computed(() => [
-  { key: 'friends'   as MainTab, icon: 'Users',      label: 'Друзья',      count: friendsStore.friends.length },
-  { key: 'followers' as MainTab, icon: 'UserCheck',  label: 'Подписчики',  count: friendsStore.followers.length },
-  { key: 'following' as MainTab, icon: 'UserPlus',   label: 'Подписки',    count: friendsStore.following.length },
+  { key: 'friends'   as MainTab, icon: 'Users',      label: langStore.t.tabFriends,      count: friendsStore.friends.length },
+  { key: 'followers' as MainTab, icon: 'UserCheck',  label: langStore.t.tabFollowers,  count: friendsStore.followers.length },
+  { key: 'following' as MainTab, icon: 'UserPlus',   label: langStore.t.tabFollowing,    count: friendsStore.following.length },
 ])
 
 // ── Actions ───────────────────────────────────────────────────────────────────
@@ -116,7 +118,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
                 <div class="w-10 h-10 rounded-2xl bg-brand-accent/15 flex items-center justify-center">
                   <BIcon name="Users" class="w-5 h-5 text-brand-accent" />
                 </div>
-                <h1 class="text-xl font-extrabold text-white">Люди</h1>
+                <h1 class="text-xl font-extrabold text-white">{{ langStore.t.pageTitle }}</h1>
               </div>
 
               <!-- Добавить по ID -->
@@ -124,7 +126,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
                 <input
                   v-model="addInput"
                   type="text"
-                  placeholder="ID или @username..."
+                  :placeholder="langStore.t.addPlaceholder"
                   class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-brand-offwhite placeholder-brand-muted focus:outline-none focus:border-brand-accent transition-colors min-w-0 flex-1 sm:w-40 sm:flex-initial"
                   @keydown.enter="handleSendRequest(addInput)"
                 />
@@ -134,13 +136,13 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
                   @click="handleSendRequest(addInput)"
                 >
                   <BIcon name="UserPlus" class="w-4 h-4" />
-                  Добавить
+                  {{ langStore.t.addButton }}
                 </button>
               </div>
             </div>
 
             <p v-if="addError"   class="text-xs text-brand-error   mb-3 -mt-2">{{ addError }}</p>
-            <p v-if="addSuccess" class="text-xs text-brand-success mb-3 -mt-2">Заявка отправлена!</p>
+            <p v-if="addSuccess" class="text-xs text-brand-success mb-3 -mt-2">{{ langStore.t.requestSent }}</p>
 
             <!-- Main tabs: Друзья / Подписчики / Подписки -->
             <div class="flex items-center gap-2 flex-wrap">
@@ -178,7 +180,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
                 @click="onlineFilter = !onlineFilter"
               >
                 <span :class="['w-2 h-2 rounded-full', onlineFilter ? 'bg-brand-success' : 'bg-brand-muted']" />
-                Онлайн
+                {{ langStore.t.onlineFilter }}
                 <span v-if="onlineCount" class="text-[10px] font-bold">{{ onlineCount }}</span>
               </button>
 
@@ -188,7 +190,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
                 <input
                   v-model="searchQuery"
                   type="text"
-                  :placeholder="`Поиск...`"
+                  :placeholder="langStore.t.searchPlaceholder"
                   class="w-full bg-brand-bg border border-brand-border rounded-xl pl-9 pr-3 py-2 text-sm text-brand-offwhite placeholder-brand-muted focus:outline-none focus:border-brand-accent transition-colors"
                 />
               </div>
@@ -219,9 +221,9 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
               class="w-12 h-12 text-white/35"
             />
             <p class="text-white/55 text-sm">
-              <template v-if="mainTab === 'friends'">{{ onlineFilter ? 'Никто из друзей не онлайн' : 'Список друзей пуст' }}</template>
-              <template v-else-if="mainTab === 'followers'">Нет подписчиков</template>
-              <template v-else>Нет подписок</template>
+              <template v-if="mainTab === 'friends'">{{ onlineFilter ? langStore.t.emptyNoOnlineFriends : langStore.t.emptyFriendsList }}</template>
+              <template v-else-if="mainTab === 'followers'">{{ langStore.t.emptyFollowers }}</template>
+              <template v-else>{{ langStore.t.emptyFollowing }}</template>
             </p>
           </div>
         </div>
@@ -237,7 +239,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
                 @click="rightPanel = 'requests'"
               >
                 <BIcon name="UserPlus" class="w-3.5 h-3.5" />
-                Заявки
+                {{ langStore.t.rightPanelRequests }}
                 <span v-if="friendsStore.requests.length" class="bg-white/20 rounded-full text-[10px] px-1.5">{{ friendsStore.requests.length }}</span>
               </button>
               <button
@@ -245,7 +247,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
                 @click="rightPanel = 'suggestions'"
               >
                 <BIcon name="Sparkles" class="w-3.5 h-3.5" />
-                Знакомые
+                {{ langStore.t.rightPanelSuggestions }}
               </button>
             </div>
 
@@ -255,20 +257,20 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
               </div>
               <div v-else class="flex flex-col items-center gap-2 py-6 text-white/55">
                 <BIcon name="UserCheck" class="w-8 h-8 opacity-30" />
-                <p class="text-sm">Нет входящих заявок</p>
+                <p class="text-sm">{{ langStore.t.noIncomingRequests }}</p>
               </div>
             </template>
 
             <template v-else>
               <div v-if="friendsStore.suggestions.length" class="flex flex-col gap-3">
                 <div v-for="user in friendsStore.suggestions.slice(0, 8)" :key="user.id" class="flex items-center gap-3 group">
-                  <div class="flex-shrink-0 cursor-pointer" @click="router.push(`/profile/${user.id}`)">
+                  <div class="flex-shrink-0 cursor-pointer" @click="router.push(`/profile/${user.username}`)">
                     <img v-if="user.avatar_url" :src="user.avatar_url" class="w-9 h-9 rounded-full object-cover border border-brand-border" />
                     <div v-else class="w-9 h-9 rounded-full border border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">
                       {{ avatarInitial(user.display_name || user.username) }}
                     </div>
                   </div>
-                  <div class="min-w-0 flex-1 cursor-pointer" @click="router.push(`/profile/${user.id}`)">
+                  <div class="min-w-0 flex-1 cursor-pointer" @click="router.push(`/profile/${user.username}`)">
                     <p class="text-sm font-semibold text-brand-offwhite truncate leading-tight">{{ user.display_name || user.username }}</p>
                     <p class="text-xs text-white/55 truncate">@{{ user.username }}</p>
                   </div>
@@ -279,7 +281,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
               </div>
               <div v-else class="flex flex-col items-center gap-2 py-6 text-white/55">
                 <BIcon name="Sparkles" class="w-8 h-8 opacity-30" />
-                <p class="text-sm">Нет предложений</p>
+                <p class="text-sm">{{ langStore.t.noSuggestions }}</p>
               </div>
             </template>
           </div>
@@ -288,15 +290,15 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
           <div class="bg-brand-card border border-brand-border rounded-3xl p-4">
             <h2 class="font-bold text-brand-offwhite text-sm mb-1 flex items-center gap-2">
               <BIcon name="Cake" class="w-4 h-4 text-brand-pink" />
-              Дни рождения
+              {{ langStore.t.birthdaysTitle }}
             </h2>
-            <p class="text-xs text-white/55 mb-3">Ближайшие 30 дней</p>
+            <p class="text-xs text-white/55 mb-3">{{ langStore.t.birthdaysSubtitle }}</p>
             <div v-if="friendsStore.birthdays.length" class="divide-y divide-brand-border">
               <BirthdayCard v-for="bd in friendsStore.birthdays" :key="bd.id" :birthday="bd" />
             </div>
             <div v-else class="flex flex-col items-center gap-2 py-4 text-white/55">
               <BIcon name="Cake" class="w-7 h-7 opacity-30" />
-              <p class="text-xs">Нет ближайших</p>
+              <p class="text-xs">{{ langStore.t.noBirthdays }}</p>
             </div>
           </div>
 
@@ -304,24 +306,24 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
           <div class="bg-brand-card border border-brand-border rounded-3xl p-4">
             <h2 class="font-bold text-brand-offwhite text-sm mb-3 flex items-center gap-2">
               <BIcon name="BarChart2" class="w-4 h-4 text-brand-accent" />
-              Статистика
+              {{ langStore.t.statsTitle }}
             </h2>
             <div class="grid grid-cols-2 gap-2">
               <div class="bg-brand-bg rounded-2xl p-3 text-center">
                 <p class="text-2xl font-bold text-brand-offwhite">{{ friendsStore.friends.length }}</p>
-                <p class="text-xs text-white/55 mt-0.5">Друзья</p>
+                <p class="text-xs text-white/55 mt-0.5">{{ langStore.t.tabFriends }}</p>
               </div>
               <div class="bg-brand-bg rounded-2xl p-3 text-center">
                 <p class="text-2xl font-bold text-brand-success">{{ onlineCount }}</p>
-                <p class="text-xs text-white/55 mt-0.5">Онлайн</p>
+                <p class="text-xs text-white/55 mt-0.5">{{ langStore.t.onlineFilter }}</p>
               </div>
               <div class="bg-brand-bg rounded-2xl p-3 text-center">
                 <p class="text-2xl font-bold text-brand-accent">{{ friendsStore.followers.length }}</p>
-                <p class="text-xs text-white/55 mt-0.5">Подписчики</p>
+                <p class="text-xs text-white/55 mt-0.5">{{ langStore.t.tabFollowers }}</p>
               </div>
               <div class="bg-brand-bg rounded-2xl p-3 text-center">
                 <p class="text-2xl font-bold text-brand-accent-minus">{{ friendsStore.following.length }}</p>
-                <p class="text-xs text-white/55 mt-0.5">Подписки</p>
+                <p class="text-xs text-white/55 mt-0.5">{{ langStore.t.tabFollowing }}</p>
               </div>
             </div>
           </div>
@@ -334,11 +336,11 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
     <Transition name="fade">
       <div v-if="confirmRemoveId" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="confirmRemoveId = null">
         <div class="bg-brand-card border border-brand-border rounded-3xl p-6 max-w-sm w-full shadow-card">
-          <h3 class="font-bold text-brand-offwhite text-lg mb-2">Удалить из друзей?</h3>
-          <p class="text-white/55 text-sm mb-5">Это действие нельзя отменить.</p>
+          <h3 class="font-bold text-brand-offwhite text-lg mb-2">{{ langStore.t.confirmRemoveTitle }}</h3>
+          <p class="text-white/55 text-sm mb-5">{{ langStore.t.confirmRemoveHint }}</p>
           <div class="flex gap-3">
-            <button class="flex-1 py-2 rounded-xl bg-brand-error hover:bg-brand-error/80 text-white font-semibold transition-colors" @click="confirmRemove">Удалить</button>
-            <button class="flex-1 py-2 rounded-xl bg-brand-muted/30 hover:bg-brand-muted/50 text-brand-offwhite font-semibold transition-colors" @click="confirmRemoveId = null">Отмена</button>
+            <button class="flex-1 py-2 rounded-xl bg-brand-error hover:bg-brand-error/80 text-white font-semibold transition-colors" @click="confirmRemove">{{ langStore.t.confirmRemoveBtn }}</button>
+            <button class="flex-1 py-2 rounded-xl bg-brand-muted/30 hover:bg-brand-muted/50 text-brand-offwhite font-semibold transition-colors" @click="confirmRemoveId = null">{{ langStore.t.cancelBtn }}</button>
           </div>
         </div>
       </div>

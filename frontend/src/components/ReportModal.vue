@@ -62,6 +62,8 @@
 </template>
 
 <script setup lang="ts">
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
 import { ref } from 'vue'
 import BIcon from './BIcon.vue'
 import api from '@/api'

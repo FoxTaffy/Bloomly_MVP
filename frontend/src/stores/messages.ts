@@ -28,6 +28,15 @@ export interface Message {
   _sending?: boolean   // optimistic flag
 }
 
+export interface PinnedMessage {
+  id: string
+  text: string | null
+  type: string
+  file_url: string | null
+  created_at: string
+  sender: { id: string; username: string; display_name: string | null }
+}
+
 export interface Conversation {
   id: string
   created_at: string
@@ -38,7 +47,8 @@ export interface Conversation {
   name: string | null
   avatar_url: string | null
   banner_url: string | null
-  my_participant: { archived: boolean; hidden_at: string | null; last_read_at: string | null; role: string; label?: string }
+  my_participant: { archived: boolean; hidden_at: string | null; last_read_at: string | null; role: string; label?: string; personal_pinned_message_id?: string | null }
+  pinned_message: PinnedMessage | null
   last_message: Message | null
   other_participants: Array<{ user_id: string; user: MsgSender; last_read_at?: string | null; role?: string }>
 }
@@ -322,6 +332,45 @@ export const useMessagesStore = defineStore('messages', () => {
     return convId
   }
 
+  // ── Pin / Unpin message ─────────────────────────────────────
+  async function pinMessage(convId: string, messageId: string, scope: 'all' | 'me') {
+    await api.put(`/messages/conversations/${convId}/pin`, { messageId, scope })
+    const msg = messages.value[convId]?.find(m => m.id === messageId)
+    if (!msg) return
+    const conv = conversations.value.find(c => c.id === convId)
+    if (!conv) return
+    const pinObj: PinnedMessage = {
+      id: msg.id, text: msg.text, type: msg.type, file_url: msg.file_url,
+      created_at: msg.created_at,
+      sender: { id: msg.sender.id, username: msg.sender.username, display_name: msg.sender.display_name },
+    }
+    if (scope === 'all') {
+      conv.pinned_message = pinObj
+    } else {
+      if (conv.my_participant) conv.my_participant.personal_pinned_message_id = messageId
+    }
+  }
+
+  async function unpinMessage(convId: string, scope: 'all' | 'me') {
+    await api.delete(`/messages/conversations/${convId}/pin`, { params: { scope } })
+    const conv = conversations.value.find(c => c.id === convId)
+    if (!conv) return
+    if (scope === 'all') {
+      conv.pinned_message = null
+    } else {
+      if (conv.my_participant) conv.my_participant.personal_pinned_message_id = null
+    }
+  }
+
+  async function getMediaStats(convId: string): Promise<Record<string, number>> {
+    try {
+      const res = await api.get(`/messages/conversations/${convId}/media-stats`)
+      return res.data.data.stats as Record<string, number>
+    } catch {
+      return {}
+    }
+  }
+
   function closeConversation() {
     activeId.value = null
   }
@@ -359,5 +408,8 @@ export const useMessagesStore = defineStore('messages', () => {
     initGroupChat,
     getGroupChatInfo,
     openGroupConversation,
+    pinMessage,
+    unpinMessage,
+    getMediaStats,
   }
 })

@@ -210,7 +210,49 @@ export async function getGroupMembersHandler(
   }
 }
 
-// ── CRM label ─────────────────────────────────────────────────────────────────
+// ── Pin / Unpin ────────────────────────────────────────────────────────────────
+
+export async function pinMessageHandler(
+  req: FastifyRequest<{ Params: { id: string }; Body: { messageId: string; scope: 'all' | 'me' } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = req.user as JwtUser;
+    const { messageId, scope } = req.body;
+    if (!messageId) return reply.code(400).send({ success: false, data: null, error: { code: 'VALIDATION', message: 'messageId is required' } });
+    const msg = await messageService.pinMessage(req.params.id, userId, messageId, scope ?? 'all');
+    return reply.send({ success: true, data: { message: msg }, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'PIN_ERROR', message: e.message } });
+  }
+}
+
+export async function unpinMessageHandler(
+  req: FastifyRequest<{ Params: { id: string }; Querystring: { scope: 'all' | 'me' } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = req.user as JwtUser;
+    const scope = (req.query as any).scope ?? 'all';
+    await messageService.unpinMessage(req.params.id, userId, scope);
+    return reply.send({ success: true, data: null, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'PIN_ERROR', message: e.message } });
+  }
+}
+
+export async function getMediaStatsHandler(
+  req: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = req.user as JwtUser;
+    const stats = await messageService.getMediaStats(req.params.id, userId);
+    return reply.send({ success: true, data: { stats }, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'STATS_ERROR', message: e.message } });
+  }
+}
 
 /**
  * PATCH /conversations/:id/label

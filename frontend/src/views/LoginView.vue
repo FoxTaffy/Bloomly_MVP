@@ -2,6 +2,8 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
 import { Mail, Lock, User, Eye, EyeOff, ArrowRight, KeyRound, CheckCircle2, Monitor, ShieldCheck } from 'lucide-vue-next'
 import api from '@/api'
 
@@ -68,9 +70,9 @@ async function loadStats() {
 }
 
 const stats = computed(() => [
-  { val: statsLoaded.value ? fmtNum(statsData.value.users)  : '…', label: 'участников' },
-  { val: statsLoaded.value ? fmtNum(statsData.value.posts)  : '…', label: 'постов' },
-  { val: statsLoaded.value ? fmtNum(statsData.value.online) : '…', label: 'онлайн' },
+  { val: statsLoaded.value ? fmtNum(statsData.value.users)  : '…', label: langStore.t.tabFollowers + '' },
+  { val: statsLoaded.value ? fmtNum(statsData.value.posts)  : '…', label: langStore.t.tabPosts + '' },
+  { val: statsLoaded.value ? fmtNum(statsData.value.online) : '…', label: langStore.t.onlineFilter + '' },
 ])
 
 // ── Mount ─────────────────────────────────────────────────────────────────────
@@ -229,9 +231,9 @@ const features = [
 
           <!-- Главный заголовок -->
           <h1 class="text-[72px] font-black leading-[0.9] tracking-tight mb-8">
-            <span class="block text-white">Живи.</span>
-            <span class="block hero-gradient">Общайся.</span>
-            <span class="block text-white/30">Расцветай.</span>
+            <span class="block text-white">{{ langStore.t.loginHeroLine1 }}</span>
+            <span class="block hero-gradient">{{ langStore.t.loginHeroLine2 }}</span>
+            <span class="block text-white/30">{{ langStore.t.loginHeroLine3 }}</span>
           </h1>
 
           <p class="text-lg text-white/45 leading-relaxed mb-12 max-w-sm font-medium">
@@ -307,8 +309,8 @@ const features = [
                 <Transition name="t-head" mode="out-in">
                   <div :key="mode">
                     <h2 class="text-2xl font-black text-white mb-1">
-                      {{ mode === 'login'    ? 'С возвращением 👋'
-                       : mode === 'register' ? 'Привет, новенький ✨'
+                      {{ mode === 'login'    ? langStore.t.loginHeading
+                       : mode === 'register' ? langStore.t.registerHeading
                        : mode === 'verify'   ? 'Подтверди email 📧'
                        : mode === 'forgot'   ? 'Сброс пароля 🔑'
                        :                      'Новый пароль 🛡️' }}
@@ -334,12 +336,12 @@ const features = [
                   @click="switchMode('login')"
                   class="tab-btn"
                   :class="mode === 'login' ? 'text-white' : 'text-white/35 hover:text-white/60'"
-                >Вход</button>
+                >{{ langStore.t.loginTab }}</button>
                 <button
                   @click="switchMode('register')"
                   class="tab-btn"
                   :class="mode === 'register' ? 'text-white' : 'text-white/35 hover:text-white/60'"
-                >Регистрация</button>
+                >{{ langStore.t.registerTab }}</button>
               </div>
 
               <!-- Кнопка назад для forgot/reset/verify -->
@@ -358,7 +360,7 @@ const features = [
                 <!-- Email (login / register / forgot / reset) -->
                 <div v-if="mode !== 'verify'" class="input-group">
                   <Mail class="input-icon" />
-                  <input v-model="email" type="email" placeholder="Email" required class="fld" />
+                  <input v-model="email" type="email" :placeholder="langStore.t.emailPlaceholder" required class="fld" />
                 </div>
 
                 <!-- Username (только register) -->
@@ -385,7 +387,7 @@ const features = [
                   <input
                     v-model="password"
                     :type="showPass ? 'text' : 'password'"
-                    placeholder="Пароль"
+                    :placeholder="langStore.t.passwordPlaceholder"
                     required minlength="6"
                     class="fld pr-12"
                   />
@@ -399,7 +401,7 @@ const features = [
                 <div v-if="mode === 'login'" class="flex justify-end -mt-1">
                   <button type="button" @click="switchMode('forgot')"
                     class="text-xs text-white/35 hover:text-brand-accent-minus transition-colors font-semibold">
-                    Забыл пароль?
+                    {{ langStore.t.forgotPassword }}
                   </button>
                 </div>
 
@@ -518,11 +520,11 @@ const features = [
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
                       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
                     </svg>
-                    Загрузка...
+                    {{ langStore.t.loadingBtn }}
                   </span>
                   <span v-else class="flex items-center justify-center gap-2.5 relative z-10">
-                    {{ mode === 'login'    ? 'Войти'
-                     : mode === 'register' ? 'Создать аккаунт'
+                    {{ mode === 'login'    ? langStore.t.submitLogin
+                     : mode === 'register' ? langStore.t.submitRegister
                      : mode === 'verify'   ? 'Подтвердить email'
                      : mode === 'forgot'   ? 'Отправить код'
                      :                      'Сменить пароль' }}

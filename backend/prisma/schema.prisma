@@ -92,8 +92,12 @@ model User {
   verificationRequests         VerificationRequest[]
   groupRatings                 GroupRating[]
   dealerListings               DealerListing[]
+  dealerBids                   DealerBid[]
+  dealerListingComments        DealerListingComment[]
   stickerPacks                 StickerPack[]
   stickerCollection            UserStickerPack[]
+  stickerUsages                StickerUsage[]
+  stickerFavorites             StickerFavorite[]
   autoModLogs                  AutoModLog[]
   warn_count                   Int                   @default(0)
   frozen_at                    DateTime?
@@ -107,6 +111,11 @@ model User {
   activityParticipations       ActivityParticipant[]
   activityBlacklist            ActivityBlacklist?    @relation("ActivityBlacklistUser")
   activityBlacklistsMade       ActivityBlacklist[]   @relation("ActivityBlacklistBanner")
+  // Fursona & Fursuit
+  fursona                      Fursona?
+  fursuits                     Fursuit[]
+  // Shop
+  shopItems                    UserShopItem[]
 }
 
 model OAuthAccount {
@@ -138,6 +147,7 @@ model Post {
   author_id           String         @db.Uuid
   rating              Int            @default(0)
   is_nsfw             Boolean        @default(false)
+  is_announcement     Boolean        @default(false)
   subscriber_only     Boolean        @default(false)
   is_paid             Boolean        @default(false)
   price               Decimal?       @db.Decimal(10, 2)
@@ -416,6 +426,9 @@ model Conversation {
   participants ConversationParticipant[]
   messages     Message[]
   group        Group?                    @relation("GroupCommunityChat", fields: [group_id], references: [id], onDelete: SetNull)
+
+  pinned_message_id String?  @db.Uuid
+  pinnedMessage     Message? @relation("ConvPinnedMessage", fields: [pinned_message_id], references: [id], onDelete: SetNull)
 }
 
 model Friendship {
@@ -453,6 +466,7 @@ model ConversationParticipant {
   last_read_at    DateTime?
   role            String       @default("member") @db.VarChar(20)
   label           String       @default("default") @db.VarChar(20) // default | customer
+  personal_pinned_message_id String? @db.Uuid
   conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
   user            User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
@@ -476,6 +490,7 @@ model Message {
   sender          User         @relation(fields: [sender_id], references: [id])
   reply_to        Message?     @relation("MessageReplies", fields: [reply_to_id], references: [id], onDelete: SetNull)
   replies         Message[]    @relation("MessageReplies")
+  pinnedInConvs   Conversation[] @relation("ConvPinnedMessage")
 
   @@index([conversation_id, created_at(sort: Desc)])
   @@index([reply_to_id])
@@ -486,6 +501,7 @@ model Message {
 model Group {
   id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   slug            String          @unique @db.VarChar(60)
+  slug_aliases    String[]        @default([])  // Old slugs kept for redirect
   name            String          @db.VarChar(120)
   description     String?
   type            String          @db.VarChar(20) // event | creative | static
@@ -520,6 +536,13 @@ model Group {
 
   // Event-specific
   sponsors          Json          @default("[]")      // [{name, logo_url, url, tier?}]
+
+  // Business customization
+  group_bg_url      String?
+  group_frame       String?         @db.VarChar(100)
+  group_theme       String?         @db.VarChar(100)
+  hide_admins       Boolean         @default(false)
+  hidden_member_ids String          @default("[]")
 
   // Moderation / discovery
   is_verified       Boolean         @default(false)   // Official / verified community
@@ -829,21 +852,72 @@ model DealerListing {
   currency      String    @default("USD") @db.VarChar(10)
   category      String    @default("other") @db.VarChar(50) // art | fursuit | badge | print | music | craft | merch | other
   type          String    @default("physical") @db.VarChar(20) // digital | physical | both
+  listing_kind  String    @default("fixed") @db.VarChar(20) // fixed | auction | ych | raffle
   images        String[]  @default([])
   status        String    @default("active") @db.VarChar(20) // active | sold | draft | archived
   quantity      Int       @default(1)
   quantity_sold Int       @default(0)
   is_nsfw       Boolean   @default(false)
   tags          String[]  @default([])
+  // ── Auction / YCH / Raffle fields ──────────────────────────────────────────
+  auction_ends_at      DateTime? @db.Timestamp(6)
+  current_bid          Decimal?  @db.Decimal(12, 2)
+  bid_count            Int       @default(0)
+  bid_increment        Decimal   @db.Decimal(12, 2) @default(1)
+  auto_buy_price       Decimal?  @db.Decimal(12, 2)
+  raffle_max_tickets   Int?
+  raffle_tickets_sold  Int       @default(0)
+  winner_id            String?   @db.Uuid
+  // ────────────────────────────────────────────────────────────────────────────
   created_at    DateTime  @default(now()) @db.Timestamp(6)
   updated_at    DateTime  @default(now()) @updatedAt @db.Timestamp(6)
   deleted_at    DateTime? @db.Timestamp(6)
 
   seller        User      @relation(fields: [seller_id], references: [id], onDelete: Cascade)
+  bids          DealerBid[]
+  comments      DealerListingComment[]
 
   @@index([seller_id])
   @@index([status])
   @@index([category])
+  @@index([listing_kind])
+  @@index([auction_ends_at])
+  @@index([created_at(sort: Desc)])
+}
+
+model DealerBid {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  listing_id  String   @db.Uuid
+  bidder_id   String   @db.Uuid
+  amount      Decimal  @db.Decimal(12, 2)
+  message     String?
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+
+  listing     DealerListing @relation(fields: [listing_id], references: [id], onDelete: Cascade)
+  bidder      User          @relation(fields: [bidder_id], references: [id], onDelete: Cascade)
+
+  @@index([listing_id])
+  @@index([bidder_id])
+  @@index([created_at(sort: Desc)])
+}
+
+model DealerListingComment {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  listing_id String   @db.Uuid
+  author_id  String   @db.Uuid
+  body       String   @db.VarChar(2000)
+  parent_id  String?  @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  deleted_at DateTime? @db.Timestamp(6)
+
+  listing    DealerListing         @relation(fields: [listing_id], references: [id], onDelete: Cascade)
+  author     User                  @relation(fields: [author_id],  references: [id], onDelete: Cascade)
+  parent     DealerListingComment? @relation("DealerCommentReplies", fields: [parent_id], references: [id])
+  replies    DealerListingComment[] @relation("DealerCommentReplies")
+
+  @@index([listing_id])
+  @@index([author_id])
+  @@index([parent_id])
   @@index([created_at(sort: Desc)])
 }
 
@@ -865,12 +939,16 @@ model StickerPack {
   is_nsfw           Boolean   @default(false)
   status            String    @default("published") @db.VarChar(20) // published | draft
   downloads_count Int       @default(0)
+  use_count       Int       @default(0)
+  hide_author     Boolean   @default(false)
   created_at      DateTime  @default(now()) @db.Timestamp(6)
   updated_at      DateTime  @default(now()) @updatedAt @db.Timestamp(6)
   deleted_at      DateTime? @db.Timestamp(6)
 
-  author          User              @relation(fields: [author_id], references: [id], onDelete: Cascade)
-  userCollections UserStickerPack[]
+  author           User              @relation(fields: [author_id], references: [id], onDelete: Cascade)
+  userCollections  UserStickerPack[]
+  stickerUsages    StickerUsage[]
+  stickerFavorites StickerFavorite[]
 
   @@index([author_id])
   @@index([status])
@@ -888,6 +966,35 @@ model UserStickerPack {
   @@id([user_id, pack_id])
   @@index([user_id])
   @@index([pack_id])
+}
+
+model StickerUsage {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String       @db.Uuid
+  sticker_url String
+  pack_id     String?      @db.Uuid
+  use_count   Int          @default(1)
+  last_used_at DateTime    @default(now()) @db.Timestamp(6)
+
+  user        User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  pack        StickerPack? @relation(fields: [pack_id], references: [id], onDelete: SetNull)
+
+  @@unique([user_id, sticker_url])
+  @@index([user_id, last_used_at(sort: Desc)])
+  @@index([user_id, use_count(sort: Desc)])
+}
+
+model StickerFavorite {
+  user_id     String   @db.Uuid
+  sticker_url String
+  pack_id     String?  @db.Uuid
+  added_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  user        User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  pack        StickerPack? @relation(fields: [pack_id], references: [id], onDelete: SetNull)
+
+  @@id([user_id, sticker_url])
+  @@index([user_id, added_at(sort: Desc)])
 }
 
 // ── Activity Engine ──────────────────────────────────────────────────────────
@@ -987,4 +1094,94 @@ model RefreshToken {
 
   @@index([user_id])
   @@index([token_hash])
+}
+
+// ── Fursona (1:1 with User) ──────────────────────────────────────────────────
+model Fursona {
+  id                     String    @id @default(uuid()) @db.Uuid
+  user_id                String    @unique @db.Uuid
+  name                   String    @default("") @db.VarChar(80)
+  /// Hardcoded species list — stored as text array for multi-species characters
+  species                String[]  @default([])
+  /// Hex color palette, e.g. ["#FF5733", "#C70039"]
+  colors                 String[]  @default([])
+  likes_dislikes_visible Boolean   @default(true)
+  likes                  String[]  @default([])
+  dislikes               String[]  @default([])
+  /// URL of the uploaded reference sheet (stored in MinIO/R2)
+  reference_image_url    String?
+  /// Mark reference sheet as NSFW / 18+
+  reference_is_nsfw      Boolean   @default(false)
+  /// Artist / author who created the reference sheet
+  reference_artist_name  String?   @db.VarChar(100)
+  reference_artist_url   String?   @db.VarChar(500)
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @updatedAt
+  deleted_at             DateTime?
+
+  user                   User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+// ── Fursuit (1:N with User) ──────────────────────────────────────────────────
+model Fursuit {
+  id                    String    @id @default(uuid()) @db.Uuid
+  user_id               String    @db.Uuid
+  image_url             String?
+  /// Optional link to a Bloomly Group (maker's studio) or User
+  maker_id              String?   @db.Uuid
+  /// Up to 3 external links for the maker (used when maker_id is absent)
+  external_maker_links  String[]  @default([])
+  description           String?
+  /// Mark fursuit reference/photo as NSFW / 18+
+  is_nsfw               Boolean   @default(false)
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+  deleted_at            DateTime?
+
+  user                  User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+// ── Bloomly Shop ─────────────────────────────────────────────────────────────
+model ShopItem {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type            String    @db.VarChar(20)      // sticker_pack | theme | background | frame
+  name            String    @db.VarChar(120)
+  description     String?
+  preview_url     String?
+  price           Decimal   @db.Decimal(10, 2) @default(0)
+  currency        String    @default("RUB") @db.VarChar(10)
+  is_free         Boolean   @default(false)
+  is_official     Boolean   @default(false)
+  is_nsfw         Boolean   @default(false)
+  tags            String[]  @default([])
+  content_data    Json      @default("{}")       // { css, url, pack_id, colors, etc. }
+  downloads_count Int       @default(0)
+  status          String    @default("published") @db.VarChar(20)
+  ref_id          String?   @db.Uuid
+  created_at      DateTime  @default(now()) @db.Timestamp(6)
+  updated_at      DateTime  @default(now()) @updatedAt @db.Timestamp(6)
+  deleted_at      DateTime? @db.Timestamp(6)
+
+  owners          UserShopItem[]
+
+  @@index([type])
+  @@index([status])
+  @@index([created_at(sort: Desc)])
+}
+
+model UserShopItem {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String    @db.Uuid
+  item_id      String    @db.Uuid
+  purchased_at DateTime  @default(now()) @db.Timestamp(6)
+
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  item         ShopItem  @relation(fields: [item_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, item_id])
+  @@index([user_id])
 }

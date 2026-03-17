@@ -22,8 +22,10 @@ import { groupsRoutes } from './modules/groups/routes.js';
 import { verificationRoutes } from './modules/verification/routes.js';
 import { dealersDenRoutes } from './modules/dealers-den/routes.js';
 import { stickersRoutes } from './modules/stickers/routes.js';
+import { shopRoutes } from './modules/shop/routes.js';
 import { activitiesRoutes } from './modules/activities/routes.js';
 import { automodRoutes } from './modules/automod/routes.js';
+import { seoRoutes } from './modules/seo/routes.js';
 import { messageService, messageSubscriptions } from './modules/messages/service.js';
 import { groupService } from './modules/groups/service.js';
 import { initCronJobs } from './cron.js';
@@ -106,8 +108,11 @@ fastify.register(groupsRoutes, { prefix: '/api/groups' });
 fastify.register(verificationRoutes, { prefix: '/api/verification' });
 fastify.register(dealersDenRoutes, { prefix: '/api/dealers-den' });
 fastify.register(stickersRoutes, { prefix: '/api/stickers' });
+fastify.register(shopRoutes,    { prefix: '/api/shop' });
 fastify.register(activitiesRoutes, { prefix: '/api/activities' });
 fastify.register(automodRoutes,    { prefix: '/api/automod' });
+// SEO: sitemap.xml and OG-proxy endpoints (no auth required, crawlers friendly)
+fastify.register(seoRoutes);
 
 // ── In-memory online status tracking ─────────────────────────────────────
 // Use a Set per user so multiple browser tabs / pages work correctly

@@ -700,272 +700,8 @@
                   <h2 class="font-bold text-white text-sm">{{ sections[2].label }}</h2>
                 </div>
                 <div class="p-6 space-y-5">
-
-                  <!-- Step indicators -->
-                  <div class="flex gap-2 mb-1">
-                    <div v-for="(step, i) in fursonaSteps" :key="i" class="flex-1 flex flex-col items-center gap-1">
-                      <div class="w-full h-1 rounded-full"
-                        :class="step.done ? 'bg-brand-accent' : step.locked ? 'bg-brand-border/30' : 'bg-brand-border'"></div>
-                      <span class="text-[10px] font-semibold"
-                        :class="step.done ? 'text-brand-accent' : step.locked ? 'text-white/35' : 'text-white/55'">
-                        {{ step.label }}
-                      </span>
-                    </div>
-                  </div>
-
-                  <!-- Step 1: Species + Name -->
-                  <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-4">
-                    <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[2].color}`">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                      </svg>
-                      Шаг 1 — Вид персонажа
-                    </p>
-
-                    <!-- Species multi-select grid -->
-                    <div>
-                      <label class="block text-xs font-semibold text-white/55 mb-2">Вид / порода (можно несколько)</label>
-                      <div class="flex flex-wrap gap-1.5">
-                        <button v-for="sp in fursonaSpeciesList" :key="sp" type="button"
-                          @click="toggleSpecies(sp)"
-                          class="px-2.5 py-1 rounded-xl text-xs font-semibold border transition-all"
-                          :class="selectedSpecies.includes(sp)
-                            ? 'text-white border-transparent'
-                            : 'bg-brand-bg border-brand-border text-white/55 hover:text-white hover:border-brand-accent/50'"
-                          :style="selectedSpecies.includes(sp)
-                            ? `background:${sections[2].color}35;border-color:${sections[2].color}60;color:${sections[2].color}`
-                            : ''">
-                          {{ sp }}
-                        </button>
-                      </div>
-                      <!-- Custom free-text add -->
-                      <div class="flex gap-2 mt-2">
-                        <input v-model="customSpeciesInput" type="text" placeholder="Свой вид…" maxlength="30"
-                          class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-brand-muted/50 focus:outline-none focus:border-brand-accent/60 transition-all"
-                          @keydown.enter.prevent="addCustomSpecies" />
-                        <button type="button" @click="addCustomSpecies"
-                          class="px-3 py-2 rounded-xl text-xs font-bold border transition-all"
-                          :style="`background:${sections[2].color}20;border-color:${sections[2].color}40;color:${sections[2].color}`">+</button>
-                      </div>
-                    </div>
-
-                    <!-- Primary color -->
-                    <div>
-                      <label class="block text-xs font-semibold text-white/55 mb-2">Основной окрас шерсти</label>
-                      <div class="flex flex-wrap gap-2">
-                        <button v-for="fc in fursonaColorSwatches" :key="fc.color" type="button"
-                          @click="form.fursona_color = form.fursona_color === fc.color ? '' : fc.color"
-                          class="relative flex flex-col items-center gap-1 p-1.5 rounded-xl border transition-all"
-                          :class="form.fursona_color === fc.color ? 'border-white/60 scale-105' : 'border-transparent hover:border-brand-border'"
-                          :title="fc.label">
-                          <span class="w-7 h-7 rounded-lg shadow-sm border border-black/20"
-                            :style="`background:${fc.color}`"></span>
-                          <span v-if="form.fursona_color === fc.color"
-                            class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full flex items-center justify-center shadow">
-                            <svg class="w-2 h-2 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-                          </span>
-                        </button>
-                        <!-- Custom hex color input -->
-                        <label class="relative flex flex-col items-center gap-1 p-1.5 cursor-pointer rounded-xl border border-brand-border hover:border-brand-accent/50 transition-all" title="Свой цвет">
-                          <span class="w-7 h-7 rounded-lg shadow-sm border border-black/20 flex items-center justify-center overflow-hidden"
-                            :style="form.fursona_color && !fursonaColorSwatches.some(s=>s.color===form.fursona_color) ? `background:${form.fursona_color}` : 'background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red)'">
-                          </span>
-                          <input type="color" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                            :value="form.fursona_color || '#ffffff'"
-                            @input="form.fursona_color = ($event.target as HTMLInputElement).value" />
-                        </label>
-                      </div>
-                      <p v-if="form.fursona_color" class="text-[11px] text-white/35 mt-1.5 flex items-center gap-1.5">
-                        <span class="w-3 h-3 rounded-sm inline-block border border-black/20" :style="`background:${form.fursona_color}`"></span>
-                        {{ fursonaColorSwatches.find(s=>s.color===form.fursona_color)?.label ?? form.fursona_color }}
-                      </p>
-                    </div>
-
-                    <!-- Character name -->
-                    <div>
-                      <label class="block text-xs font-semibold text-white/55 mb-1">Имя персонажа</label>
-                      <input v-model="form.fursona_name" type="text" placeholder="Как зовут фурсону…"
-                        class="field-input" :disabled="!form.persona"
-                        :class="!form.persona ? 'opacity-40 cursor-not-allowed' : ''"/>
-                    </div>
-                  </div>
-
-                  <!-- Step 2: Character (likes/dislikes) -->
-                  <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-4"
-                    :class="!form.persona ? 'opacity-40 pointer-events-none' : ''">
-                    <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#22c55e">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-                      </svg>
-                      Шаг 2 — Характер
-                    </p>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                      <!-- Likes -->
-                      <div>
-                        <label class="text-sm font-bold mb-2 flex items-center gap-1.5" style="color:#22c55e">
-                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-                          </svg>
-                          Нравится
-                        </label>
-                        <div class="flex flex-wrap gap-1.5 mb-2 min-h-[34px]">
-                          <span v-for="(item, idx) in form.likes" :key="idx"
-                            class="flex items-center gap-1 pl-3 pr-1.5 py-1 text-xs rounded-full font-bold"
-                            style="background:#22c55e18;border:1px solid #22c55e35;color:#22c55e">
-                            {{ item }}
-                            <button type="button" @click="removeTag('likes', idx)"
-                              class="w-4 h-4 flex items-center justify-center rounded-full transition-all text-xs leading-none hover:bg-green-500/20">×</button>
-                          </span>
-                        </div>
-                        <div class="flex gap-2">
-                          <input v-model="newLike" type="text" placeholder="Добавить…"
-                            class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-brand-muted/50 focus:outline-none focus:border-green-500/50 transition-all"
-                            @keydown.enter.prevent="addTagFromInput('likes')"/>
-                          <button type="button" @click="addTagFromInput('likes')"
-                            class="w-9 h-9 flex items-center justify-center rounded-xl text-lg font-bold transition-all border"
-                            style="background:#22c55e18;border-color:#22c55e35;color:#22c55e">+</button>
-                        </div>
-                      </div>
-                      <!-- Dislikes -->
-                      <div>
-                        <label class="text-sm font-bold mb-2 flex items-center gap-1.5" style="color:#ef4444">
-                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2"/>
-                          </svg>
-                          Не нравится
-                        </label>
-                        <div class="flex flex-wrap gap-1.5 mb-2 min-h-[34px]">
-                          <span v-for="(item, idx) in form.dislikes" :key="idx"
-                            class="flex items-center gap-1 pl-3 pr-1.5 py-1 text-xs rounded-full font-bold"
-                            style="background:#ef444418;border:1px solid #ef444435;color:#ef4444">
-                            {{ item }}
-                            <button type="button" @click="removeTag('dislikes', idx)"
-                              class="w-4 h-4 flex items-center justify-center rounded-full transition-all text-xs leading-none hover:bg-red-500/20">×</button>
-                          </span>
-                        </div>
-                        <div class="flex gap-2">
-                          <input v-model="newDislike" type="text" placeholder="Добавить…"
-                            class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-brand-muted/50 focus:outline-none focus:border-red-500/50 transition-all"
-                            @keydown.enter.prevent="addTagFromInput('dislikes')"/>
-                          <button type="button" @click="addTagFromInput('dislikes')"
-                            class="w-9 h-9 flex items-center justify-center rounded-xl text-lg font-bold transition-all border"
-                            style="background:#ef444418;border-color:#ef444435;color:#ef4444">+</button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Step 3: Fursona Photo + Step 4: Ref Sheet -->
-                  <div class="grid grid-cols-2 gap-3">
-                    <!-- Step 3 — Photo (unlocked) -->
-                    <div>
-                      <input ref="fursonaPhotoRef" type="file" accept="image/*" class="hidden"
-                        @change="onFursonaPhotoChange" />
-                      <div
-                        class="p-4 border-2 border-dashed rounded-2xl flex flex-col items-center gap-2 transition-all cursor-pointer"
-                        :class="uploadingFursonaPhoto ? 'border-brand-accent/40 bg-brand-accent/5' : 'border-brand-border/50 hover:border-brand-accent/40 hover:bg-brand-accent/5'"
-                        @click="fursonaPhotoRef?.click()">
-                        <!-- Preview or icon -->
-                        <div v-if="form.fursona_photo_url" class="relative group">
-                          <img :src="form.fursona_photo_url" class="w-14 h-14 rounded-xl object-cover border border-brand-border" />
-                          <div class="absolute inset-0 rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-                            </svg>
-                          </div>
-                        </div>
-                        <div v-else-if="uploadingFursonaPhoto" class="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
-                        <svg v-else class="w-6 h-6 text-white/55" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        </svg>
-                        <p class="text-xs font-semibold text-white/55">Шаг 3 — Фото</p>
-                        <span class="text-[10px] text-brand-accent/80 bg-brand-accent/10 px-2 py-0.5 rounded-full">
-                          {{ form.fursona_photo_url ? 'Сменить' : 'Загрузить' }}
-                        </span>
-                      </div>
-                      <!-- Remove button -->
-                      <button v-if="form.fursona_photo_url" type="button"
-                        @click.stop="form.fursona_photo_url = ''"
-                        class="mt-1.5 w-full text-[10px] text-white/55 hover:text-rose-400 transition-colors text-center">
-                        Удалить фото
-                      </button>
-                    </div>
-                    <!-- Step 4 — Ref Sheet (still coming soon) -->
-                    <div class="p-4 border-2 border-dashed border-brand-border/50 rounded-2xl flex flex-col items-center gap-2 opacity-40 cursor-not-allowed">
-                      <svg class="w-6 h-6 text-white/55" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                      </svg>
-                      <p class="text-xs font-semibold text-white/55">Шаг 4 — Реф</p>
-                      <span class="text-[10px] text-white/35 bg-brand-bg px-2 py-0.5 rounded-full">coming soon</span>
-                    </div>
-                  </div>
-
-                  <!-- 🐾 Фурсьют (выключен по умолчанию) -->
-                  <div class="border-t border-brand-border/60 pt-4 space-y-4">
-                    <div class="flex items-center justify-between">
-                      <div>
-                        <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
-                          <span class="text-base">🐾</span> Фурсьют
-                        </p>
-                        <p class="text-[10px] text-white/35 mt-1">Включает или скрывает вкладку «Фурсьют» в профиле</p>
-                      </div>
-                      <button type="button" @click="form.has_fursuit = !form.has_fursuit"
-                        class="relative w-11 h-6 rounded-full border transition-all flex-shrink-0"
-                        :class="form.has_fursuit ? 'bg-brand-accent/20 border-brand-accent/60' : 'bg-brand-bg border-brand-border'">
-                        <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-all"
-                          :class="form.has_fursuit ? 'translate-x-5 bg-brand-accent' : 'translate-x-0 bg-white/40'"></span>
-                      </button>
-                    </div>
-
-                    <div v-if="form.has_fursuit" class="space-y-3">
-                      <!-- Fursuit photo upload -->
-                      <input ref="fursuiPhotoRef" type="file" accept="image/*" class="hidden" @change="onFursuiPhotoChange" />
-                      <div
-                        class="p-4 border-2 border-dashed rounded-2xl flex flex-col items-center gap-2 transition-all cursor-pointer"
-                        :class="uploadingFursuiPhoto ? 'border-brand-accent/40 bg-brand-accent/5' : 'border-brand-border/50 hover:border-brand-accent/40 hover:bg-brand-accent/5'"
-                        @click="fursuiPhotoRef?.click()">
-                        <div v-if="form.fursuit_photo_url" class="relative group">
-                          <img :src="form.fursuit_photo_url" class="w-14 h-14 rounded-xl object-cover border border-brand-border" />
-                          <div class="absolute inset-0 rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-                            </svg>
-                          </div>
-                        </div>
-                        <div v-else-if="uploadingFursuiPhoto" class="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
-                        <svg v-else class="w-6 h-6 text-white/55" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        </svg>
-                        <p class="text-xs font-semibold text-white/55">Фото с фурсьютом</p>
-                        <span class="text-[10px] text-brand-accent/80 bg-brand-accent/10 px-2 py-0.5 rounded-full">
-                          {{ form.fursuit_photo_url ? 'Сменить' : 'Загрузить' }}
-                        </span>
-                      </div>
-                      <button v-if="form.fursuit_photo_url" type="button"
-                        @click.stop="form.fursuit_photo_url = ''"
-                        class="w-full text-[10px] text-white/55 hover:text-rose-400 transition-colors text-center">
-                        Удалить фото
-                      </button>
-
-                      <!-- Description -->
-                      <div>
-                        <label class="block text-xs font-semibold text-white/55 mb-1">Описание фурсьюта</label>
-                        <textarea v-model="form.fursuit_description"
-                          placeholder="Расскажи о своём фурсьюте…"
-                          class="field-input w-full resize-none h-20"
-                          maxlength="300"></textarea>
-                      </div>
-
-                      <!-- Maker -->
-                      <div>
-                        <label class="block text-xs font-semibold text-white/55 mb-1">Мастер (изготовитель)</label>
-                        <input v-model="form.fursuit_maker" type="text"
-                          placeholder="Имя или ник мастера…"
-                          class="field-input" maxlength="200" />
-                      </div>
-                    </div>
-                  </div>
-
+                  <FursonaSettings ref="fursonaRef" @dirty="fursonaIsDirty = $event" />
+                  <FursuitSettings />
                 </div>
               </section>
 
@@ -1347,6 +1083,90 @@
                 </div>
               </section>
 
+              <!-- ── § LANG: Язык интерфейса ───────────────────────── -->
+              <section v-show="openSection === 'sec-lang'" id="sec-lang" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3" style="background:linear-gradient(90deg,rgba(245,158,11,0.07) 0%,transparent 100%)">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(245,158,11,0.18)">
+                    <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 class="font-bold text-white text-sm">{{ langStore.t.interfaceLanguage }}</h2>
+                    <p class="text-xs text-white/40 mt-0.5">{{ langStore.t.chooseLanguage }}</p>
+                  </div>
+                </div>
+                <div class="p-6">
+                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <button
+                      v-for="opt in langOptions" :key="opt.code"
+                      @click="langStore.setLang(opt.code)"
+                      class="flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all"
+                      :class="langStore.currentLang === opt.code
+                        ? 'border-amber-400 bg-amber-400/10 shadow-lg shadow-amber-400/10'
+                        : 'border-brand-border bg-brand-bg/40 hover:border-amber-400/40 hover:bg-amber-400/5'">
+                      <span class="text-3xl leading-none">{{ opt.flag }}</span>
+                      <span class="text-sm font-bold" :class="langStore.currentLang === opt.code ? 'text-amber-400' : 'text-white/70'">{{ opt.name }}</span>
+                      <div v-if="langStore.currentLang === opt.code" class="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center">
+                        <BIcon name="Check" class="w-3 h-3 text-black" />
+                      </div>
+                      <div v-else class="w-5 h-5 rounded-full border-2 border-brand-border"></div>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- ── Автоперевод ── -->
+                <div class="px-6 pb-6">
+                  <div class="rounded-2xl border border-brand-border bg-brand-bg/40 overflow-hidden">
+                    <!-- Toggle row -->
+                    <div class="flex items-center justify-between p-4">
+                      <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(245,158,11,0.12)">
+                          <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
+                          </svg>
+                        </div>
+                        <div>
+                          <p class="text-sm font-semibold text-white">{{ langStore.t.autoTranslateSection }}</p>
+                          <p class="text-xs text-white/40 mt-0.5">{{ langStore.t.autoTranslateDesc }}</p>
+                        </div>
+                      </div>
+                      <!-- Toggle switch -->
+                      <button
+                        @click="langStore.setAutoTranslate(!langStore.autoTranslateEnabled)"
+                        class="relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200"
+                        :class="langStore.autoTranslateEnabled ? 'bg-amber-400' : 'bg-white/15'"
+                      >
+                        <span
+                          class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-200"
+                          :class="langStore.autoTranslateEnabled ? 'left-[22px]' : 'left-0.5'"
+                        />
+                      </button>
+                    </div>
+
+                    <!-- Target language selector (shown only when enabled) -->
+                    <Transition name="slide-down">
+                      <div v-if="langStore.autoTranslateEnabled" class="px-4 pb-4 border-t border-brand-border pt-3">
+                        <p class="text-xs text-white/40 mb-3">{{ langStore.t.autoTranslateTarget }}</p>
+                        <div class="grid grid-cols-4 sm:grid-cols-8 gap-2">
+                          <button
+                            v-for="opt in langOptions" :key="opt.code"
+                            @click="langStore.setAutoTranslateLang(opt.code)"
+                            class="flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all"
+                            :class="langStore.autoTranslateLang === opt.code
+                              ? 'border-amber-400 bg-amber-400/10'
+                              : 'border-brand-border bg-brand-bg/40 hover:border-amber-400/30'"
+                          >
+                            <span class="text-xl leading-none">{{ opt.flag }}</span>
+                            <span class="text-[11px] font-bold" :class="langStore.autoTranslateLang === opt.code ? 'text-amber-400' : 'text-white/50'">{{ opt.code }}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </Transition>
+                  </div>
+                </div>
+              </section>
+
               <!-- ── § 6: БЕЗОПАСНОСТЬ / Способы входа ─────────────── -->
               <section v-show="openSection === 'sec-security'" id="sec-security" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3" style="background:linear-gradient(90deg,rgba(16,185,129,0.07) 0%,transparent 100%)">
@@ -1447,7 +1267,7 @@
 
               <!-- ── Submit (mobile / tablet) ───────────────────────── -->
               <div class="flex items-center justify-between gap-4 pt-2 xl:hidden">
-                <router-link :to="`/profile/${authStore.user?.id}`"
+                <router-link :to="`/profile/${authStore.user?.username}`"
                   class="px-6 py-3 bg-brand-card border border-brand-border hover:border-brand-muted/40 text-white/55 hover:text-white rounded-2xl text-sm font-bold transition-all">
                   Отмена
                 </router-link>
@@ -1514,16 +1334,31 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
+import { useLangStore } from '@/stores/lang'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
+import FursonaSettings from '@/components/profile/FursonaSettings.vue'
+import FursuitSettings from '@/components/profile/FursuitSettings.vue'
 import api from '@/api'
 import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
 
 const userStore  = useUserStore()
 const authStore  = useAuthStore()
+const langStore  = useLangStore()
 const route      = useRoute()
 const router     = useRouter()
+
+const langOptions = [
+  { code: 'RU' as const, flag: '🇷🇺', name: 'Русский' },
+  { code: 'EN' as const, flag: '🇺🇸', name: 'English' },
+  { code: 'JP' as const, flag: '🇯🇵', name: '日本語' },
+  { code: 'CN' as const, flag: '🇨🇳', name: '中文' },
+  { code: 'DE' as const, flag: '🇩🇪', name: 'Deutsch' },
+  { code: 'FR' as const, flag: '🇫🇷', name: 'Français' },
+  { code: 'ES' as const, flag: '🇪🇸', name: 'Español' },
+  { code: 'PT' as const, flag: '🇧🇷', name: 'Português' },
+]
 
 // ── Delete account modal ─────────────────────────────────────────────────────
 const showDeleteModal    = ref(false)
@@ -1766,6 +1601,9 @@ function resetForm() {
 }
 
 // ── isDirty ────────────────────────────────────────────────────────────────
+const fursonaIsDirty = ref(false)
+const fursonaRef     = ref<{ save: () => Promise<void> } | null>(null)
+
 const isDirty = computed(() => {
   const fieldsChanged = (
     form.display_name        !== savedForm.display_name ||
@@ -1797,7 +1635,8 @@ const isDirty = computed(() => {
   return fieldsChanged ||
     JSON.stringify(form.likes)         !== JSON.stringify(savedForm.likes) ||
     JSON.stringify(form.dislikes)      !== JSON.stringify(savedForm.dislikes) ||
-    JSON.stringify(form.social_links)  !== JSON.stringify(savedForm.social_links)
+    JSON.stringify(form.social_links)  !== JSON.stringify(savedForm.social_links) ||
+    fursonaIsDirty.value
 })
 
 onMounted(async () => {
@@ -2355,6 +2194,10 @@ async function handleSubmit() {
   try {
     await userStore.updateProfile(payload)
     snapshotToSaved()
+    // Also save fursona if it has unsaved changes
+    if (fursonaIsDirty.value && fursonaRef.value) {
+      await fursonaRef.value.save()
+    }
     if (newPartner === savedPartner) showToast('success', 'Профиль успешно сохранён!')
   } catch {
     showToast('error', userStore.error ?? 'Ошибка сохранения')
@@ -2368,6 +2211,7 @@ const sections = [
   { id: 'sec-fursona',       label: 'Фурсона',        color: '#a78bfa', iconPath: 'M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
   { id: 'sec-profile-style', label: 'Стиль профиля',  color: '#f59e0b', iconPath: 'M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 2h14v14H5V5zm2 2v2h10V7H7zm0 4v2h7v-2H7z' },
   { id: 'sec-verification',  label: 'Верификация',    color: '#3b82f6', iconPath: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+  { id: 'sec-lang',          label: 'Язык',          color: '#f59e0b', iconPath: 'M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' },
   { id: 'sec-security',      label: 'Безопасность',      color: '#10b981', iconPath: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
   { id: 'sec-danger',        label: 'Аккаунт',        color: '#ef4444', iconPath: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
 ]
@@ -2754,6 +2598,11 @@ function openSec(id: string) {
 /* ── Floating bar ──────────────────────────────────────────────────────── */
 .floatbar-enter-active, .floatbar-leave-active { transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1); }
 .floatbar-enter-from, .floatbar-leave-to { opacity: 0; transform: translateY(20px) scale(0.92); }
+
+/* ── Slide down ────────────────────────────────────────────────────────── */
+.slide-down-enter-active, .slide-down-leave-active { transition: all 0.25s ease; overflow: hidden; }
+.slide-down-enter-from, .slide-down-leave-to { opacity: 0; max-height: 0; }
+.slide-down-enter-to, .slide-down-leave-from { opacity: 1; max-height: 300px; }
 
 /* ── Crop modal ────────────────────────────────────────────────────────── */
 .modal-fade-enter-active, .modal-fade-leave-active { transition: all 0.25s ease; }

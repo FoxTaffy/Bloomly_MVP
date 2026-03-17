@@ -50,6 +50,7 @@ import {
   updateCustomRoleHandler,
   deleteCustomRoleHandler,
 } from './controller.js';
+import { groupService } from './service.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -64,6 +65,11 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.get('/', listGroupsHandler as any);
   fastify.get('/me', auth, getMyGroupsHandler as any);
   fastify.get('/discover', discoverGroupsHandler as any);      // GET /groups/discover
+  fastify.get('/search', async (request, reply) => {           // GET /groups/search?q=
+    const q = ((request.query as any).q ?? '') as string;
+    const groups = await groupService.searchGroups(q);
+    return reply.send({ success: true, data: { groups }, error: null });
+  });
   fastify.get('/:slugOrId', getGroupHandler as any);
   fastify.post('/', auth, createGroupHandler as any);
   fastify.patch('/:id', auth, updateGroupHandler as any);

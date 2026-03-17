@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
 import { ref, computed, watch } from 'vue'
 import BIcon from '@/components/BIcon.vue'
 import type { GroupType } from '@/stores/groups'
+import api from '@/api'
 
 // ── Emit ─────────────────────────────────────────────────────────────────────
 export interface CreateGroupPayload {
@@ -32,6 +35,9 @@ export interface CreateGroupPayload {
   shopCurrency?: string
   // Brand
   brandCategory?: string
+  // Media
+  avatarUrl?: string
+  bannerUrl?: string
 }
 
 const emit = defineEmits<{
@@ -41,7 +47,7 @@ const emit = defineEmits<{
 
 // ── Steps ────────────────────────────────────────────────────────────────────
 const step = ref(1)
-const totalSteps = 3
+const totalSteps = 4
 
 // ── Step 1: Основа ──────────────────────────────────────────────────────────
 const name = ref('')
@@ -141,7 +147,45 @@ const socialTwitter = ref('')
 const socialVk = ref('')
 const socialWebsite = ref('')
 
-// ── Step 3: Визуал ──────────────────────────────────────────────────────────
+// ── Step 3: Медиа (аватар + баннер) ─────────────────────────────────────────
+const avatarUrl = ref<string | null>(null)
+const bannerUrl = ref<string | null>(null)
+const avatarPreview = ref<string | null>(null)
+const bannerPreview = ref<string | null>(null)
+const uploadingAvatar = ref(false)
+const uploadingBanner = ref(false)
+const avatarInputRef = ref<HTMLInputElement | null>(null)
+const bannerInputRef = ref<HTMLInputElement | null>(null)
+
+async function onAvatarChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  avatarPreview.value = URL.createObjectURL(file)
+  uploadingAvatar.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file, file.name)
+    const res = await api.post('/media/upload?folder=avatars', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    avatarUrl.value = res.data.data.url
+  } catch (err) { console.error('Avatar upload failed:', err); avatarPreview.value = null }
+  finally { uploadingAvatar.value = false; if (avatarInputRef.value) avatarInputRef.value.value = '' }
+}
+
+async function onBannerChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  bannerPreview.value = URL.createObjectURL(file)
+  uploadingBanner.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file, file.name)
+    const res = await api.post('/media/upload?folder=banners', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    bannerUrl.value = res.data.data.url
+  } catch (err) { console.error('Banner upload failed:', err); bannerPreview.value = null }
+  finally { uploadingBanner.value = false; if (bannerInputRef.value) bannerInputRef.value.value = '' }
+}
+
+// ── Step 4: Визуал ──────────────────────────────────────────────────────────
 const accentColor = ref('#4C67CF')
 const presetColors = ['#4C67CF', '#66C770', '#E14664', '#FFC01F', '#CD83F5', '#E76F51', '#F7A9E2', '#00D4AA']
 
@@ -166,7 +210,8 @@ const step2Meta = computed((): { label: string; icon: string } => {
 const stepLabels = computed(() => [
   { num: 1, label: 'Основа',       icon: 'FileText' },
   { num: 2, label: step2Meta.value.label, icon: step2Meta.value.icon },
-  { num: 3, label: 'Визуал',       icon: 'Sparkles' },
+  { num: 3, label: 'Медиа',        icon: 'Image' },
+  { num: 4, label: 'Визуал',       icon: 'Sparkles' },
 ])
 
 // ── Validation ──────────────────────────────────────────────────────────────
@@ -181,6 +226,7 @@ const step2Valid = computed(() => {
 const canNext = computed(() => {
   if (step.value === 1) return step1Valid.value
   if (step.value === 2) return step2Valid.value
+  // Steps 3 and 4 are always skippable
   return true
 })
 
@@ -202,6 +248,8 @@ function submit() {
     description: description.value.trim(),
     isPublic: isPublic.value,
     accentColor: accentColor.value,
+    avatarUrl: avatarUrl.value || undefined,
+    bannerUrl: bannerUrl.value || undefined,
   }
 
   if (type.value === 'event') {
@@ -710,16 +758,113 @@ function submit() {
         </div>
 
         <!-- ══════════════════════════════════════════════════════════════════
-             STEP 3: Визуал
+             STEP 3: Медиа — аватар и баннер
              ═══════════════════════════════════════════════════════════════ -->
-        <div v-show="step === 3" class="space-y-4">
+        <div v-show="step === 3" class="space-y-5">
+          <div class="bg-brand-bg/40 border border-brand-accent/20 rounded-2xl p-4 flex items-start gap-3">
+            <div class="w-9 h-9 rounded-xl bg-brand-accent/10 flex items-center justify-center shrink-0 mt-0.5">
+              <BIcon name="Image" class="w-5 h-5 text-brand-accent" />
+            </div>
+            <div>
+              <p class="text-white font-bold text-sm">Аватар и баннер</p>
+              <p class="text-white/40 text-xs">Необязательно — можно добавить позже в настройках группы.</p>
+            </div>
+          </div>
+
+          <!-- Banner upload -->
+          <div>
+            <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-2 block">Баннер группы</label>
+            <div
+              class="relative h-28 rounded-2xl border-2 border-dashed overflow-hidden cursor-pointer transition-colors group"
+              :class="bannerPreview ? 'border-transparent' : 'border-brand-border hover:border-brand-accent/50'"
+              @click="bannerInputRef?.click()"
+            >
+              <!-- Preview -->
+              <img v-if="bannerPreview" :src="bannerPreview" class="w-full h-full object-cover" />
+              <!-- Gradient placeholder -->
+              <div v-else class="w-full h-full flex flex-col items-center justify-center gap-2"
+                :style="{ background: `linear-gradient(135deg, ${accentColor}22, ${accentColor}08)` }">
+                <div class="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                  <BIcon name="ImagePlus" class="w-5 h-5 text-white/30" />
+                </div>
+                <p class="text-white/30 text-xs">Нажмите для загрузки баннера</p>
+                <p class="text-white/20 text-[10px]">PNG, JPG, WEBP · до 10 МБ · рекомендуется 1200×300</p>
+              </div>
+              <!-- Hover overlay on preview -->
+              <div v-if="bannerPreview"
+                class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                <BIcon name="ImagePlus" class="w-5 h-5 text-white" />
+                <span class="text-white text-sm font-semibold">Заменить</span>
+              </div>
+              <!-- Upload spinner -->
+              <div v-if="uploadingBanner" class="absolute inset-0 bg-black/60 flex items-center justify-center">
+                <div class="w-6 h-6 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+              </div>
+              <!-- Uploaded badge -->
+              <div v-if="bannerUrl && !uploadingBanner"
+                class="absolute top-2 right-2 bg-brand-success/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-lg flex items-center gap-1">
+                <BIcon name="Check" class="w-3 h-3" /> загружен
+              </div>
+            </div>
+            <input ref="bannerInputRef" type="file" accept="image/*" class="hidden" @change="onBannerChange" />
+          </div>
+
+          <!-- Avatar upload -->
+          <div>
+            <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-2 block">Аватар группы</label>
+            <div class="flex items-center gap-4">
+              <!-- Avatar circle -->
+              <div
+                class="w-20 h-20 rounded-2xl border-2 border-dashed overflow-hidden cursor-pointer flex-shrink-0 transition-colors group relative"
+                :class="avatarPreview ? 'border-transparent' : 'border-brand-border hover:border-brand-accent/50'"
+                :style="avatarPreview ? {} : { background: `${accentColor}15` }"
+                @click="avatarInputRef?.click()"
+              >
+                <img v-if="avatarPreview" :src="avatarPreview" class="w-full h-full object-cover" />
+                <div v-else class="w-full h-full flex flex-col items-center justify-center gap-1">
+                  <BIcon :name="types.find(t => t.value === type)?.icon ?? 'Grid'" class="w-7 h-7"
+                    :style="{ color: accentColor + '99' }" />
+                  <BIcon name="Plus" class="w-3.5 h-3.5 text-white/30" />
+                </div>
+                <!-- Hover overlay -->
+                <div v-if="avatarPreview"
+                  class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <BIcon name="ImagePlus" class="w-5 h-5 text-white" />
+                </div>
+                <!-- Upload spinner -->
+                <div v-if="uploadingAvatar" class="absolute inset-0 bg-black/60 flex items-center justify-center">
+                  <div class="w-5 h-5 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+                </div>
+              </div>
+              <div class="flex-1 space-y-1.5">
+                <p class="text-white/60 text-xs leading-relaxed">Квадратное изображение · PNG, JPG, WEBP<br/>Рекомендуется 400×400 пикселей</p>
+                <button
+                  class="px-3 py-1.5 rounded-xl border border-brand-border text-xs font-semibold text-white/60 hover:text-white hover:border-brand-accent/40 transition-colors"
+                  @click="avatarInputRef?.click()"
+                >
+                  <BIcon name="Upload" class="w-3 h-3 inline mr-1 -mt-0.5" />
+                  {{ avatarUrl ? 'Заменить аватар' : 'Загрузить аватар' }}
+                </button>
+                <p v-if="avatarUrl" class="text-brand-success text-[10px] flex items-center gap-1">
+                  <BIcon name="CheckCircle" class="w-3 h-3" /> Аватар загружен
+                </p>
+              </div>
+            </div>
+            <input ref="avatarInputRef" type="file" accept="image/*" class="hidden" @change="onAvatarChange" />
+          </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             STEP 4: Визуал — акцентный цвет
+             ═══════════════════════════════════════════════════════════════ -->
+        <div v-show="step === 4" class="space-y-4">
           <div class="bg-brand-bg/40 border border-brand-accent/20 rounded-2xl p-4 flex items-start gap-3">
             <div class="w-9 h-9 rounded-xl bg-brand-accent/10 flex items-center justify-center shrink-0 mt-0.5">
               <BIcon name="Sparkles" class="w-5 h-5 text-brand-accent" />
             </div>
             <div>
               <p class="text-white font-bold text-sm">Финальные штрихи</p>
-              <p class="text-white/40 text-xs">Аватар и баннер можно загрузить позже в настройках.</p>
+              <p class="text-white/40 text-xs">Выберите акцентный цвет группы.</p>
             </div>
           </div>
 

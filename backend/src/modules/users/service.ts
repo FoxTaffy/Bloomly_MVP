@@ -1,7 +1,8 @@
 import prisma from '../../config/prisma.js';
 import { deleteFileByUrl } from '../media/service.js';
 import { getUserBadgeLevel } from '../../lib/badges.js';
-import type { UpdateUserInput } from './types.js';
+import sharp from 'sharp';
+import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput } from './types.js';
 
 // Fields exposed in public profile responses (never email, password, role)
 const PUBLIC_SELECT = {
@@ -378,6 +379,147 @@ export const usersService = {
       // Soft-delete the user
       prisma.user.update({ where: { id: userId }, data: { deleted_at: now } }),
     ]);
+  },
+
+  // ── Fursona ────────────────────────────────────────────────────────────────
+
+  /** Return fursona for display. Strips likes/dislikes for non-owners when owner marked them private. */
+  async getFursona(userId: string, viewerId?: string) {
+    const fursona = await prisma.fursona.findUnique({
+      where: { user_id: userId },
+    });
+    if (!fursona || fursona.deleted_at) return null;
+
+    if (!fursona.likes_dislikes_visible && viewerId !== userId) {
+      return { ...fursona, likes: [], dislikes: [] };
+    }
+    return fursona;
+  },
+
+  /** Create or update the fursona for a user (upsert). */
+  async upsertFursona(userId: string, data: UpsertFursonaInput) {
+    // Track reference image replacement in MediaHistory
+    if (data.reference_image_url !== undefined) {
+      const existing = await prisma.fursona.findUnique({ where: { user_id: userId } });
+      if (existing?.reference_image_url && existing.reference_image_url !== data.reference_image_url) {
+        await prisma.mediaHistory.create({
+          data: { user_id: userId, type: 'fursona_reference', url: existing.reference_image_url },
+        });
+        deleteFileByUrl(existing.reference_image_url).catch(() => {});
+      }
+    }
+
+    return prisma.fursona.upsert({
+      where: { user_id: userId },
+      create: { user_id: userId, ...data },
+      update: { ...data, updated_at: new Date() },
+    });
+  },
+
+  /**
+   * Download the reference image from MinIO and composite a Bloomly watermark.
+   * The original URL is never returned to the client — only this
+   * protected stream is served through the authenticated endpoint.
+   */
+  async getWatermarkedReference(userId: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
+    const fursona = await prisma.fursona.findUnique({
+      where: { user_id: userId },
+      select: { reference_image_url: true, deleted_at: true },
+    });
+    if (!fursona?.reference_image_url || fursona.deleted_at) return null;
+
+    const owner = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } });
+    const username = owner?.username ?? 'unknown';
+
+    const response = await fetch(fursona.reference_image_url);
+    if (!response.ok) return null;
+    const srcBuffer = Buffer.from(await response.arrayBuffer());
+
+    const metadata = await sharp(srcBuffer).metadata();
+    const w = metadata.width  ?? 800;
+    const h = metadata.height ?? 600;
+    const fontSize = Math.max(14, Math.round(Math.min(w, h) * 0.035));
+    const padding  = fontSize + 4;
+    const text     = `bloomly.fun · @${username}`;
+
+    // SVG overlay: bottom-right corner with drop-shadow for readability
+    const svgOverlay = Buffer.from(
+      `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="sh">
+            <feDropShadow dx="1" dy="1" stdDeviation="1.5" flood-color="rgba(0,0,0,0.55)" />
+          </filter>
+        </defs>
+        <text x="${w - padding}" y="${h - padding}"
+          text-anchor="end"
+          font-family="Arial, sans-serif"
+          font-size="${fontSize}"
+          font-weight="bold"
+          fill="rgba(255,255,255,0.78)"
+          filter="url(#sh)"
+        >${text}</text>
+      </svg>`
+    );
+
+    const buffer = await sharp(srcBuffer)
+      .composite([{ input: svgOverlay, gravity: 'southeast' }])
+      .jpeg({ quality: 88 })
+      .toBuffer();
+
+    return { buffer, mimeType: 'image/jpeg' };
+  },
+
+  // ── Fursuit ────────────────────────────────────────────────────────────────
+
+  async getFursuits(userId: string) {
+    return prisma.fursuit.findMany({
+      where: { user_id: userId, deleted_at: null },
+      orderBy: { created_at: 'asc' },
+    });
+  },
+
+  async getFursuit(userId: string, fursuitId: string) {
+    return prisma.fursuit.findFirst({
+      where: { id: fursuitId, user_id: userId, deleted_at: null },
+    });
+  },
+
+  async createFursuit(userId: string, data: UpsertFursuitInput) {
+    return prisma.fursuit.create({
+      data: { user_id: userId, ...data },
+    });
+  },
+
+  async updateFursuit(userId: string, fursuitId: string, data: UpsertFursuitInput) {
+    const existing = await prisma.fursuit.findFirst({
+      where: { id: fursuitId, user_id: userId, deleted_at: null },
+    });
+    if (!existing) throw Object.assign(new Error('Fursuit not found'), { statusCode: 404 });
+
+    if (data.image_url !== undefined && existing.image_url && existing.image_url !== data.image_url) {
+      await prisma.mediaHistory.create({
+        data: { user_id: userId, type: 'fursuit_image', url: existing.image_url },
+      });
+      deleteFileByUrl(existing.image_url).catch(() => {});
+    }
+
+    return prisma.fursuit.update({
+      where: { id: fursuitId },
+      data: { ...data, updated_at: new Date() },
+    });
+  },
+
+  async deleteFursuit(userId: string, fursuitId: string) {
+    const existing = await prisma.fursuit.findFirst({
+      where: { id: fursuitId, user_id: userId, deleted_at: null },
+    });
+    if (!existing) throw Object.assign(new Error('Fursuit not found'), { statusCode: 404 });
+
+    return prisma.fursuit.update({
+      where: { id: fursuitId },
+      data: { deleted_at: new Date() },
+      select: { id: true },
+    });
   },
 
 };

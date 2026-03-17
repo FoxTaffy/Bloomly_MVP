@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
 import { ref, onMounted, computed, reactive, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
@@ -7,6 +9,7 @@ import BIcon from '@/components/BIcon.vue'
 import SoonBadge from '@/components/groups/SoonBadge.vue'
 import { useGroupsStore, type GroupMember, type CustomRole } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
+import { useShopStore } from '@/stores/shop'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import api from '@/api'
 
@@ -14,6 +17,7 @@ const route = useRoute()
 const router = useRouter()
 const groupsStore = useGroupsStore()
 const authStore = useAuthStore()
+const shopStore = useShopStore()
 
 const nsfwMode = useNsfwMode().nsfwEnabled
 const activeNav = ref('groups')
@@ -44,7 +48,7 @@ const baseSections = [
 
 const eventSections = [
   { id: 'sec-event',      label: 'Мероприятие',   color: '#34d399', iconPath: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
-  { id: 'sec-organizers', label: 'Организаторы',  color: '#38bdf8', iconPath: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
+  { id: 'sec-organizers', label: 'Организаторы',  color: '#38bdf8', iconPath: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', hidden: true },
   { id: 'sec-tickets',    label: 'Билеты',         color: '#a78bfa', iconPath: 'M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z' },
   { id: 'sec-soon',       label: 'SOON Беджи',      color: '#fbbf24', iconPath: 'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z' },
   { id: 'sec-finance',    label: 'Финансы',         color: '#10b981', iconPath: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z' },
@@ -61,17 +65,29 @@ const shopSections = [
 
 const tailSections = [
   { id: 'sec-members',    label: 'Команда',       color: '#a78bfa', iconPath: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
-  { id: 'sec-roles',      label: 'Роли',          color: '#f59e0b', iconPath: 'M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z' },
+  { id: 'sec-roles',      label: 'Роли',          color: '#f59e0b', iconPath: 'M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z', hidden: true },
   { id: 'sec-social',     label: 'Ссылки',        color: '#38bdf8', iconPath: 'M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z' },
+  { id: 'sec-customize',  label: 'Кастомизация',   color: '#a78bfa', iconPath: 'M4.098 19.902', hidden: true },
   { id: 'sec-danger',     label: 'Опасная зона',  color: '#ef4444', iconPath: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
 ]
 
+// teamTab: internal tabs for the merged Команда section
+const teamTab = ref<'members' | 'roles' | 'organizers'>('members')
+
+// ── Navigation search ───────────────────────────────────────────────────
+const settingsSearch = ref('')
+const filteredNavSections = computed(() => {
+  const q = settingsSearch.value.trim().toLowerCase()
+  if (!q) return sections.value
+  return sections.value.filter((s: any) => s.label.toLowerCase().includes(q))
+})
+
 const sections = computed(() => {
   const s = [...baseSections]
-  if (group.value?.type === 'event') s.push(...eventSections)
+  if (group.value?.type === 'event') s.push(...eventSections.filter((x: any) => !x.hidden))
   if (group.value?.type === 'creative') s.push(...creativeSections)
   if (group.value?.type === 'shop') s.push(...shopSections)
-  s.push(...tailSections)
+  s.push(...tailSections.filter((x: any) => !x.hidden))
   return s
 })
 
@@ -80,21 +96,21 @@ const openSection = ref<string>('sec-general')
 
 // ── Members management ──────────────────────────────────────────────────────
 const MEMBER_ROLES = [
-  { value: 'admin',         label: 'Администратор',  color: '#3b82f6',  icon: '🔧' },
-  { value: 'moderator',     label: 'Модератор',       color: '#a78bfa', icon: '🛡️' },
-  { value: 'member',        label: 'Участник',         color: '#9ca3af', icon: '👤' },
-  { value: 'dealer',        label: 'Дилер',            color: '#34d399', icon: '🏪' },
-  { value: 'volunteer',     label: 'Волонтёр',         color: '#fb923c', icon: '🙋' },
-  { value: 'guest_of_honor',label: 'Почётный гость',  color: '#fbbf24', icon: '⭐' },
+  { value: 'admin',         label: 'Администратор',  color: '#3b82f6',  iconPath: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
+  { value: 'moderator',     label: 'Модератор',       color: '#a78bfa', iconPath: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+  { value: 'member',        label: 'Участник',         color: '#9ca3af', iconPath: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+  { value: 'dealer',        label: 'Дилер',            color: '#34d399', iconPath: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z' },
+  { value: 'volunteer',     label: 'Волонтёр',         color: '#fb923c', iconPath: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
+  { value: 'guest_of_honor',label: 'Почётный гость',  color: '#fbbf24', iconPath: 'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z' },
 ]
-const ROLE_META: Record<string, { label: string; color: string; icon: string }> = {
-  owner:          { label: 'Владелец',        color: '#f59e0b', icon: '👑' },
-  admin:          { label: 'Администратор',  color: '#3b82f6', icon: '🔧' },
-  moderator:      { label: 'Модератор',       color: '#a78bfa', icon: '🛡️' },
-  member:         { label: 'Участник',         color: '#9ca3af', icon: '👤' },
-  dealer:         { label: 'Дилер',            color: '#34d399', icon: '🏪' },
-  volunteer:      { label: 'Волонтёр',         color: '#fb923c', icon: '🙋' },
-  guest_of_honor: { label: 'Почётный гость',  color: '#fbbf24', icon: '⭐' },
+const ROLE_META: Record<string, { label: string; color: string; iconPath: string }> = {
+  owner:          { label: 'Владелец',        color: '#f59e0b', iconPath: 'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z' },
+  admin:          { label: 'Администратор',   color: '#3b82f6', iconPath: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
+  moderator:      { label: 'Модератор',        color: '#a78bfa', iconPath: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+  member:         { label: 'Участник',          color: '#9ca3af', iconPath: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+  dealer:         { label: 'Дилер',             color: '#34d399', iconPath: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z' },
+  volunteer:      { label: 'Волонтёр',          color: '#fb923c', iconPath: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
+  guest_of_honor: { label: 'Почётный гость',   color: '#fbbf24', iconPath: 'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z' },
 }
 const membersList = ref<GroupMember[]>([])
 const membersLoading = ref(false)
@@ -102,6 +118,12 @@ const membersLoaded = ref(false)
 const roleDropdownFor = ref<string | null>(null)
 const memberSaving = ref<Record<string, boolean>>({})
 const memberKicking = ref<Record<string, boolean>>({})
+
+function toggleHideMember(userId: string) {
+  const idx = form.hiddenMemberIds.indexOf(userId)
+  if (idx >= 0) form.hiddenMemberIds.splice(idx, 1)
+  else form.hiddenMemberIds.push(userId)
+}
 
 async function loadMembers() {
   if (!group.value?.id) return
@@ -145,9 +167,15 @@ async function doKickMember(userId: string) {
 }
 
 watch(openSection, (val) => {
-  if (val === 'sec-members' && !membersLoaded.value) loadMembers()
+  if ((val === 'sec-members' || val === 'sec-organizers') && !membersLoaded.value) loadMembers()
   if (val === 'sec-roles' && !customRolesLoaded.value) loadCustomRoles()
+  if (val === 'sec-customize') shopStore.loadMyItems()
 })
+
+function getShopItemBgUrl(item: import('@/stores/shop').ShopItem): string {
+  const data = item.content_data as Record<string, unknown>
+  return String(data?.url || item.preview_url || '')
+}
 
 const sortedMembers = computed(() => {
   const ORDER: Record<string, number> = { owner: 0, admin: 1, moderator: 2, dealer: 3, volunteer: 4, guest_of_honor: 5, member: 99 }
@@ -186,14 +214,14 @@ const editingRoleId      = ref<string | null>(null)
 const roleForm           = reactive({ name: '', color: '#a78bfa', icon: '🎖️', permissions: [] as string[] })
 
 const PERMISSIONS_LIST = [
-  { id: 'can_post',            label: 'Создавать посты',            icon: '📝', group: 'Контент' },
-  { id: 'can_comment',         label: 'Комментировать',             icon: '💬', group: 'Контент' },
-  { id: 'can_invite',          label: 'Приглашать участников',      icon: '📨', group: 'Участники' },
-  { id: 'can_moderate_posts',  label: 'Удалять посты/комментарии', icon: '🗑️', group: 'Модерация' },
-  { id: 'can_manage_members',  label: 'Управлять участниками',      icon: '👥', group: 'Управление' },
-  { id: 'can_manage_events',   label: 'Управлять событиями',        icon: '📅', group: 'Управление' },
-  { id: 'can_manage_roles',    label: 'Управлять ролями',           icon: '🎖️', group: 'Управление' },
-  { id: 'can_manage_settings', label: 'Изменять настройки группы',  icon: '⚙️', group: 'Управление' },
+  { id: 'can_post',            label: 'Создавать посты',            iconPath: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z', group: 'Контент' },
+  { id: 'can_comment',         label: 'Комментировать',             iconPath: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z', group: 'Контент' },
+  { id: 'can_invite',          label: 'Приглашать участников',      iconPath: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z', group: 'Участники' },
+  { id: 'can_moderate_posts',  label: 'Удалять посты/комментарии', iconPath: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16', group: 'Модерация' },
+  { id: 'can_manage_members',  label: 'Управлять участниками',      iconPath: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', group: 'Управление' },
+  { id: 'can_manage_events',   label: 'Управлять событиями',        iconPath: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', group: 'Управление' },
+  { id: 'can_manage_roles',    label: 'Управлять ролями',           iconPath: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', group: 'Управление' },
+  { id: 'can_manage_settings', label: 'Изменять настройки группы',  iconPath: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z', group: 'Управление' },
 ]
 
 const SYSTEM_ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -442,6 +470,11 @@ const form = reactive({
   socialVk: '',
   socialWebsite: '',
   category: '',
+  hideAdmins: false,
+  hiddenMemberIds: [] as string[],
+  groupBgUrl: '',
+  groupFrame: '',
+  groupTheme: '',
 })
 
 // Slug: авто-санитизация ввода
@@ -470,6 +503,11 @@ const savedForm = reactive({
   productionTime: '', deliveryInfo: '', completedWorks: 0, guaranteeText: '',
   socialTelegram: '', socialDiscord: '', socialTwitter: '', socialVk: '', socialWebsite: '',
   category: '',
+  hideAdmins: false,
+  hiddenMemberIds: [] as string[],
+  groupBgUrl: '',
+  groupFrame: '',
+  groupTheme: '',
 })
 
 function snapshotToSaved() {
@@ -485,6 +523,11 @@ function snapshotToSaved() {
     socialTelegram: form.socialTelegram, socialDiscord: form.socialDiscord,
     socialTwitter: form.socialTwitter, socialVk: form.socialVk, socialWebsite: form.socialWebsite,
     category: form.category,
+    hideAdmins: form.hideAdmins,
+    hiddenMemberIds: [...form.hiddenMemberIds],
+    groupBgUrl: form.groupBgUrl,
+    groupFrame: form.groupFrame,
+    groupTheme: form.groupTheme,
   })
 }
 
@@ -501,6 +544,11 @@ function resetForm() {
     socialTelegram: savedForm.socialTelegram, socialDiscord: savedForm.socialDiscord,
     socialTwitter: savedForm.socialTwitter, socialVk: savedForm.socialVk, socialWebsite: savedForm.socialWebsite,
     category: savedForm.category,
+    hideAdmins: savedForm.hideAdmins,
+    hiddenMemberIds: [...savedForm.hiddenMemberIds],
+    groupBgUrl: savedForm.groupBgUrl,
+    groupFrame: savedForm.groupFrame,
+    groupTheme: savedForm.groupTheme,
   })
   avatarOriginalSrc.value = ''
   bannerOriginalSrc.value = ''
@@ -518,6 +566,9 @@ const isDirty = computed(() => {
     form.socialTelegram !== savedForm.socialTelegram || form.socialDiscord !== savedForm.socialDiscord ||
     form.socialTwitter !== savedForm.socialTwitter || form.socialVk !== savedForm.socialVk ||
     form.socialWebsite !== savedForm.socialWebsite || form.category !== savedForm.category ||
+    form.groupBgUrl !== savedForm.groupBgUrl || form.groupFrame !== savedForm.groupFrame ||
+    form.groupTheme !== savedForm.groupTheme || form.hideAdmins !== savedForm.hideAdmins ||
+    JSON.stringify(form.hiddenMemberIds) !== JSON.stringify(savedForm.hiddenMemberIds) ||
     JSON.stringify(form.faq) !== JSON.stringify(savedForm.faq) ||
     JSON.stringify(form.schedule) !== JSON.stringify(savedForm.schedule) ||
     JSON.stringify(form.whatToBring) !== JSON.stringify(savedForm.whatToBring)
@@ -921,6 +972,11 @@ async function load() {
   form.socialVk = sl.vk || ''
   form.socialWebsite = sl.website || ''
   form.category = g.category || ''
+  form.groupBgUrl = g.group_bg_url || ''
+  form.groupFrame = g.group_frame || ''
+  form.groupTheme = g.group_theme || ''
+  form.hideAdmins = g.hide_admins ?? false
+  form.hiddenMemberIds = JSON.parse(g.hidden_member_ids || '[]')
   if (g.commissionInfo) {
     const c = g.commissionInfo
     commForm.value.status = c.status || 'closed'
@@ -1010,6 +1066,11 @@ async function save() {
       completedWorks: form.completedWorks,
       guaranteeText: form.guaranteeText,
       category: form.category || undefined,
+      groupBgUrl: form.groupBgUrl || undefined,
+      groupFrame: form.groupFrame || undefined,
+      groupTheme: form.groupTheme || undefined,
+      hideAdmins: form.hideAdmins,
+      hiddenMemberIds: form.hiddenMemberIds,
     })
     if (group.value.type === 'creative') {
       await groupsStore.updateCommission(group.value.id, {
@@ -1196,11 +1257,23 @@ async function deleteGroup() {
 
               <!-- Section scroll-spy nav -->
               <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
-                <div class="px-4 py-3 border-b border-brand-border">
+                <div class="px-4 py-3 border-b border-brand-border space-y-2">
                   <h4 class="text-[11px] font-bold text-white/55 uppercase tracking-widest">Разделы</h4>
+                  <!-- Smart search -->
+                  <div class="relative">
+                    <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <input v-model="settingsSearch" type="text" placeholder="Поиск…"
+                      class="w-full bg-brand-bg border border-brand-border rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-white/25 focus:border-brand-accent focus:outline-none transition-colors" />
+                    <button v-if="settingsSearch" @click="settingsSearch = ''" class="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                  </div>
                 </div>
                 <nav class="p-2 space-y-0.5">
-                  <button v-for="sec in sections" :key="sec.id"
+                  <p v-if="filteredNavSections.length === 0" class="text-center text-white/30 text-xs py-4">Не найдено</p>
+                  <button v-for="sec in filteredNavSections" :key="sec.id"
                     @click="openSec(sec.id)"
                     class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all group"
                     :class="openSection === sec.id ? 'text-white' : 'text-white/55 hover:text-white'"
@@ -1298,19 +1371,26 @@ async function deleteGroup() {
                     </div>
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">Категория</label>
-                      <select v-model="form.category" class="field-input">
-                        <option value="">— Не выбрана —</option>
-                        <option value="art">Art (Арт, иллюстрации)</option>
-                        <option value="cosplay">Cosplay (Косплей, костюмы)</option>
-                        <option value="fandom">Fandom (Фандом, сообщество)</option>
-                        <option value="dev">Dev (Разработка, технологии)</option>
-                        <option value="music">Music (Музыка, аудио)</option>
-                        <option value="fursuit">Fursuit (Фурсьюты)</option>
-                        <option value="writing">Writing (Литература, тексты)</option>
-                        <option value="events">Events (Ивенты, слёты)</option>
-                        <option value="other">Other (Прочее)</option>
-                      </select>
-                      <p class="text-white/40 text-xs mt-1.5">Помогает другим находить вас через поиск и рекомендации.</p>
+                      <div class="field-input flex items-center justify-between cursor-not-allowed opacity-60 select-none">
+                        <span class="text-white/80">{{ {
+                          art: 'Art — Арт, иллюстрации',
+                          cosplay: 'Cosplay — Косплей, костюмы',
+                          fandom: 'Fandom — Фандом, сообщество',
+                          dev: 'Dev — Разработка, технологии',
+                          music: 'Music — Музыка, аудио',
+                          fursuit: 'Fursuit — Фурсьюты',
+                          writing: 'Writing — Литература, тексты',
+                          events: 'Events — Ивенты, слёты',
+                          other: 'Other — Прочее',
+                        }[form.category] || '— Не выбрана —' }}</span>
+                        <svg class="w-4 h-4 text-white/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                      </div>
+                      <p class="text-white/30 text-xs mt-1.5 flex items-center gap-1.5">
+                        <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        Категория задаётся при создании и не может быть изменена.
+                      </p>
                     </div>
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">Краткое описание</label>
@@ -1421,7 +1501,7 @@ async function deleteGroup() {
                       </div>
                     </div>
 
-                    <!-- Accent color -->
+                    <!-- Accent color + Customization -->
                     <div class="px-6 pb-6 space-y-5 border-t border-brand-border/40 pt-5 mt-2">
                       <div>
                         <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">Акцентный цвет</label>
@@ -1434,6 +1514,148 @@ async function deleteGroup() {
                             <input v-model="form.accentColor" type="color" class="sr-only" />
                           </label>
                         </div>
+                      </div>
+
+                      <!-- ── Кастомизация группы (Внешний вид) ── -->
+                      <div class="border-t border-brand-border/40 pt-5">
+                        <!-- Header -->
+                        <div class="flex items-center justify-between mb-4">
+                          <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:linear-gradient(135deg,#a78bfa20,#7c3aed20);border:1px solid #a78bfa25">
+                              <BIcon name="Palette" class="w-4 h-4 text-brand-purple" />
+                            </div>
+                            <div>
+                              <p class="text-sm font-bold text-white">Кастомизация</p>
+                              <p class="text-[11px] text-white/40">Персонализируй группу</p>
+                            </div>
+                          </div>
+                          <span class="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold flex-shrink-0" style="background:#a78bfa15;color:#a78bfa;border:1px solid #a78bfa30">
+                            <BIcon name="Star" class="w-2.5 h-2.5"/>Business
+                          </span>
+                        </div>
+
+                        <!-- Business-only upsell -->
+                        <div v-if="authStore.user?.subscription_tier !== 'business'"
+                          class="rounded-2xl overflow-hidden relative" style="background:linear-gradient(135deg,#1a163c,#16192F);border:1px solid #a78bfa20">
+                          <div class="absolute top-0 right-0 w-24 h-24 opacity-20 blur-2xl rounded-full pointer-events-none" style="background:#a78bfa"/>
+                          <div class="relative p-5">
+                            <div class="flex items-center gap-3 mb-3">
+                              <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background:linear-gradient(135deg,#a78bfa30,#7c3aed30);border:1px solid #a78bfa25">
+                                <BIcon name="Lock" class="w-4 h-4 text-brand-purple"/>
+                              </div>
+                              <div>
+                                <p class="font-bold text-white text-sm">Нужна подписка Business</p>
+                                <p class="text-[11px] text-white/40">Фоны, рамки и темы из Bloomly Shop</p>
+                              </div>
+                            </div>
+                            <button @click="$router.push('/subscription')" class="w-full py-2 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-90" style="background:linear-gradient(135deg,#a78bfa,#7c3aed);box-shadow:0 4px 16px #7c3aed35">
+                              Получить Business →
+                            </button>
+                          </div>
+                        </div>
+
+                        <template v-else>
+                          <!-- Background section -->
+                          <div class="mb-5">
+                            <div class="flex items-center justify-between mb-2.5">
+                              <div class="flex items-center gap-1.5">
+                                <BIcon name="Image" class="w-3.5 h-3.5 text-brand-accent"/>
+                                <span class="text-xs font-bold text-white/70">Фон группы</span>
+                              </div>
+                              <button @click="$router.push('/shop')" class="flex items-center gap-1 text-[10px] font-semibold text-brand-purple hover:underline">
+                                <BIcon name="ExternalLink" class="w-3 h-3"/> В магазин
+                              </button>
+                            </div>
+                            <div class="flex gap-2 flex-wrap">
+                              <!-- No background -->
+                              <button @click="form.groupBgUrl = ''" class="relative w-14 h-14 rounded-xl border-2 flex items-center justify-center transition-all"
+                                :class="!form.groupBgUrl ? 'border-brand-purple shadow-md shadow-brand-purple/20 bg-brand-purple/10' : 'border-brand-border/60 hover:border-brand-border bg-brand-bg/60'">
+                                <BIcon name="X" class="w-4 h-4" :class="!form.groupBgUrl ? 'text-brand-purple' : 'text-white/25'"/>
+                                <div v-if="!form.groupBgUrl" class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-brand-purple flex items-center justify-center shadow-md">
+                                  <BIcon name="Check" class="w-2.5 h-2.5 text-white"/>
+                                </div>
+                              </button>
+                              <!-- Owned backgrounds -->
+                              <div v-for="item in shopStore.myItems.filter(i => i.type === 'background')" :key="item.id"
+                                class="relative cursor-pointer group/bg" @click="form.groupBgUrl = getShopItemBgUrl(item)">
+                                <div class="w-20 h-14 rounded-xl border-2 overflow-hidden transition-all"
+                                  :class="form.groupBgUrl === getShopItemBgUrl(item) ? 'border-brand-purple shadow-md shadow-brand-purple/20 scale-105' : 'border-brand-border/60 hover:border-brand-border group-hover/bg:scale-105'">
+                                  <img v-if="item.preview_url" :src="item.preview_url" class="w-full h-full object-cover" :alt="item.name"/>
+                                  <div v-else class="w-full h-full bg-brand-bg flex items-center justify-center"><BIcon name="Image" class="w-4 h-4 text-white/20"/></div>
+                                </div>
+                                <div v-if="form.groupBgUrl === getShopItemBgUrl(item)" class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-brand-purple flex items-center justify-center shadow-md">
+                                  <BIcon name="Check" class="w-2.5 h-2.5 text-white"/>
+                                </div>
+                                <p class="text-[9px] text-center text-white/35 mt-1 truncate w-20">{{ item.name }}</p>
+                              </div>
+                              <!-- Buy bg button -->
+                              <button v-if="!shopStore.myItems.filter(i=>i.type==='background').length" @click="$router.push('/shop')"
+                                class="h-14 px-3 rounded-xl border border-dashed border-brand-border/50 text-[10px] text-white/25 hover:text-white/50 hover:border-brand-border flex items-center gap-1.5 transition-all">
+                                <BIcon name="Plus" class="w-3 h-3"/> Купить фон
+                              </button>
+                            </div>
+                          </div>
+
+                          <!-- Frame section -->
+                          <div class="mb-5">
+                            <div class="flex items-center justify-between mb-2.5">
+                              <div class="flex items-center gap-1.5">
+                                <BIcon name="CircleDot" class="w-3.5 h-3.5 text-brand-yellow"/>
+                                <span class="text-xs font-bold text-white/70">Рамка аватара</span>
+                              </div>
+                            </div>
+                            <div class="flex gap-2 flex-wrap">
+                              <button @click="form.groupFrame = ''" class="relative h-8 px-3 rounded-xl border-2 text-[11px] font-medium transition-all"
+                                :class="!form.groupFrame ? 'border-brand-purple text-brand-purple bg-brand-purple/10' : 'border-brand-border/60 text-white/40 hover:border-brand-border'">
+                                Нет
+                                <div v-if="!form.groupFrame" class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-brand-purple flex items-center justify-center">
+                                  <BIcon name="Check" class="w-2 h-2 text-white"/>
+                                </div>
+                              </button>
+                              <button v-for="item in shopStore.myItems.filter(i=>i.type==='frame')" :key="item.id"
+                                @click="form.groupFrame = item.id" class="relative h-8 px-3 rounded-xl border-2 text-[11px] font-medium transition-all"
+                                :class="form.groupFrame===item.id ? 'border-brand-purple text-brand-purple bg-brand-purple/10' : 'border-brand-border/60 text-white/40 hover:border-brand-border'">
+                                {{ item.name }}
+                                <div v-if="form.groupFrame===item.id" class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-brand-purple flex items-center justify-center">
+                                  <BIcon name="Check" class="w-2 h-2 text-white"/>
+                                </div>
+                              </button>
+                              <button v-if="!shopStore.myItems.filter(i=>i.type==='frame').length" @click="$router.push('/shop')"
+                                class="h-8 px-3 rounded-xl border border-dashed border-brand-border/50 text-[10px] text-white/25 hover:text-white/50 hover:border-brand-border flex items-center gap-1 transition-all">
+                                <BIcon name="Plus" class="w-3 h-3"/> Купить рамку
+                              </button>
+                            </div>
+                          </div>
+
+                          <!-- Theme section -->
+                          <div>
+                            <div class="flex items-center gap-1.5 mb-2.5">
+                              <BIcon name="Sparkles" class="w-3.5 h-3.5 text-brand-pink"/>
+                              <span class="text-xs font-bold text-white/70">Тема оформления</span>
+                            </div>
+                            <div class="flex gap-2 flex-wrap">
+                              <button @click="form.groupTheme = ''" class="relative h-8 px-3 rounded-xl border-2 text-[11px] font-medium transition-all"
+                                :class="!form.groupTheme ? 'border-brand-purple text-brand-purple bg-brand-purple/10' : 'border-brand-border/60 text-white/40 hover:border-brand-border'">
+                                По умолчанию
+                                <div v-if="!form.groupTheme" class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-brand-purple flex items-center justify-center">
+                                  <BIcon name="Check" class="w-2 h-2 text-white"/>
+                                </div>
+                              </button>
+                              <button v-for="item in shopStore.myItems.filter(i=>i.type==='theme')" :key="item.id"
+                                @click="form.groupTheme = item.id" class="relative h-8 px-3 rounded-xl border-2 text-[11px] font-medium transition-all"
+                                :class="form.groupTheme===item.id ? 'border-brand-purple text-brand-purple bg-brand-purple/10' : 'border-brand-border/60 text-white/40 hover:border-brand-border'">
+                                {{ item.name }}
+                                <div v-if="form.groupTheme===item.id" class="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full bg-brand-purple flex items-center justify-center">
+                                  <BIcon name="Check" class="w-2 h-2 text-white"/>
+                                </div>
+                              </button>
+                              <button v-if="!shopStore.myItems.filter(i=>i.type==='theme').length" @click="$router.push('/shop')"
+                                class="h-8 px-3 rounded-xl border border-dashed border-brand-border/50 text-[10px] text-white/25 hover:text-white/50 hover:border-brand-border flex items-center gap-1 transition-all">
+                                <BIcon name="Plus" class="w-3 h-3"/> Купить тему
+                              </button>
+                            </div>
+                          </div>
+                        </template>
                       </div>
                     </div>
                   </div>
@@ -1529,8 +1751,68 @@ async function deleteGroup() {
                     </div>
                     <h2 class="font-bold text-white text-sm">{{ eventSections[1].label }}</h2>
                   </div>
-                  <div class="p-6 space-y-5">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="p-5 space-y-5">
+
+                    <!-- Current admins/organizers -->
+                    <div>
+                      <div class="flex items-center justify-between mb-3">
+                        <p class="text-xs font-bold text-white/55 uppercase tracking-wider">Текущие организаторы</p>
+                        <span class="text-[10px] text-white/30">Роли: owner, admin, moderator</span>
+                      </div>
+                      <div v-if="membersLoading" class="flex items-center gap-2 py-4 text-white/40 text-sm">
+                        <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Загрузка участников…
+                      </div>
+                      <div v-else-if="!sortedMembers.filter(m => ['owner','admin','moderator'].includes(m.role)).length"
+                        class="py-4 text-center text-white/30 text-sm bg-brand-bg border border-dashed border-brand-border/60 rounded-2xl">
+                        Нет назначенных организаторов
+                      </div>
+                      <div v-else class="space-y-2">
+                        <div v-for="m in sortedMembers.filter(m => ['owner','admin','moderator'].includes(m.role))" :key="m.user_id"
+                          class="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-brand-bg border border-brand-border">
+                          <div class="w-9 h-9 rounded-xl bg-brand-accent/15 overflow-hidden flex-shrink-0">
+                            <img v-if="m.user.avatar_url" :src="m.user.avatar_url" class="w-full h-full object-cover" />
+                            <div v-else class="w-full h-full flex items-center justify-center text-brand-accent text-xs font-bold">{{ (m.user.display_name || m.user.username || '?')[0].toUpperCase() }}</div>
+                          </div>
+                          <div class="flex-1 min-w-0">
+                            <p class="text-sm font-bold text-white truncate">{{ m.user.display_name || m.user.username }}</p>
+                            <p class="text-[10px] mt-0.5 flex items-center gap-1" :style="`color: ${ROLE_META[m.role]?.color || '#9ca3af'}`"><svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="ROLE_META[m.role]?.iconPath ?? ROLE_META.member.iconPath"/></svg>{{ ROLE_META[m.role]?.label }}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Add organizer from members -->
+                    <div v-if="sortedMembers.filter(m => m.role === 'member').length">
+                      <p class="text-xs font-bold text-white/55 uppercase tracking-wider mb-3">Назначить из участников</p>
+                      <div class="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                        <div v-for="m in sortedMembers.filter(m => m.role === 'member').slice(0, 20)" :key="m.user_id"
+                          class="flex items-center gap-3 px-3 py-2 rounded-xl bg-brand-bg/60 border border-brand-border/60 hover:border-brand-border transition-colors">
+                          <div class="w-8 h-8 rounded-lg bg-brand-accent/10 overflow-hidden flex-shrink-0">
+                            <img v-if="m.user.avatar_url" :src="m.user.avatar_url" class="w-full h-full object-cover" />
+                            <div v-else class="w-full h-full flex items-center justify-center text-brand-accent/60 text-xs font-bold">{{ (m.user.display_name || m.user.username || '?')[0].toUpperCase() }}</div>
+                          </div>
+                          <div class="flex-1 min-w-0">
+                            <p class="text-sm text-white/80 truncate">{{ m.user.display_name || m.user.username }}</p>
+                          </div>
+                          <div class="flex gap-1.5">
+                            <button type="button" :disabled="!!memberSaving[m.user_id]"
+                              class="px-2.5 py-1 rounded-lg border border-[#a78bfa]/30 text-[#a78bfa] text-[10px] font-bold hover:bg-[#a78bfa]/10 transition-colors disabled:opacity-40"
+                              @click="doSetRole(m.user_id, 'moderator')">
+                              Модератор
+                            </button>
+                            <button type="button" :disabled="!!memberSaving[m.user_id]"
+                              class="px-2.5 py-1 rounded-lg border border-[#3b82f6]/30 text-[#3b82f6] text-[10px] font-bold hover:bg-[#3b82f6]/10 transition-colors disabled:opacity-40"
+                              @click="doSetRole(m.user_id, 'admin')">
+                              Админ
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Contact info -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-brand-border/30 pt-5">
                       <div>
                         <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">Телефон</label>
                         <input v-model="form.contactPhone" placeholder="+7 (999) 123-45-67" class="field-input" />
@@ -2177,9 +2459,10 @@ async function deleteGroup() {
                   </div>
                 </section>
 
-                <!-- ═══ § MEMBERS / КОМАНДА ══════════════════════════════ -->
-                <section v-show="openSection === 'sec-members'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl scroll-mt-28">
-                  <div class="px-6 py-4 border-b border-brand-border flex items-center justify-between rounded-tl-3xl rounded-tr-3xl overflow-hidden"
+                <!-- ═══ § КОМАНДА & РОЛИ ════════════════════════════════ -->
+                <section v-show="openSection === 'sec-members'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl scroll-mt-28 overflow-hidden">
+                  <!-- Header -->
+                  <div class="px-6 py-4 border-b border-brand-border flex items-center justify-between"
                     :style="`background:linear-gradient(90deg,${tailSections[0].color}0c 0%,transparent 100%)`">
                     <div class="flex items-center gap-3">
                       <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${tailSections[0].color}1a`">
@@ -2187,7 +2470,7 @@ async function deleteGroup() {
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="tailSections[0].iconPath"/>
                         </svg>
                       </div>
-                      <h2 class="font-bold text-white text-sm">{{ tailSections[0].label }}</h2>
+                      <h2 class="font-bold text-white text-sm">Команда</h2>
                     </div>
                     <button @click="loadMembers" class="text-xs text-white/40 hover:text-white/70 transition-colors flex items-center gap-1">
                       <svg class="w-3.5 h-3.5" :class="membersLoading ? 'animate-spin' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2197,7 +2480,30 @@ async function deleteGroup() {
                     </button>
                   </div>
 
-                  <div class="p-6">
+                  <!-- Tab pills -->
+                  <div class="flex gap-1 p-3 border-b border-brand-border bg-brand-bg/30">
+                    <button type="button" @click="teamTab = 'members'"
+                      class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
+                      :class="teamTab === 'members' ? 'bg-[#a78bfa]/15 text-[#a78bfa] border border-[#a78bfa]/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                      Команда
+                    </button>
+                    <button type="button" @click="teamTab = 'roles'"
+                      class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
+                      :class="teamTab === 'roles' ? 'bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                      Роли
+                    </button>
+                    <button type="button" @click="teamTab = 'organizers'"
+                      class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all"
+                      :class="teamTab === 'organizers' ? 'bg-[#38bdf8]/15 text-[#38bdf8] border border-[#38bdf8]/30' : 'text-white/40 hover:text-white/70 border border-transparent hover:bg-white/5'">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                      Организаторы
+                    </button>
+                  </div>
+
+                  <!-- ── Tab: Команда ── -->
+                  <div v-show="teamTab === 'members'" class="p-6">
                     <!-- Loading state -->
                     <div v-if="membersLoading" class="flex items-center justify-center py-10">
                       <div class="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"/>
@@ -2213,36 +2519,45 @@ async function deleteGroup() {
                         <span v-for="r in MEMBER_ROLES" :key="r.value"
                           class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-white/10"
                           :style="`background:${r.color}15;color:${r.color}`">
-                          {{ r.icon }} {{ r.label }}
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="r.iconPath"/></svg>
+                          {{ r.label }}
                         </span>
                         <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-white/10"
-                          style="background:#f59e0b15;color:#f59e0b">👑 Владелец</span>
+                          style="background:#f59e0b15;color:#f59e0b">
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+                          Владелец
+                        </span>
                       </div>
 
                       <!-- Each member row -->
                       <div v-for="m in sortedMembers" :key="m.user_id"
-                        class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-brand-bg/50 border border-brand-border hover:border-white/15 transition-colors group/row">
-                        <!-- Avatar -->
+                        class="flex items-center gap-3 px-4 py-3 rounded-2xl border transition-colors group/row"
+                        :class="form.hiddenMemberIds.includes(m.user_id) ? 'bg-brand-bg/20 border-brand-border/40 opacity-60' : 'bg-brand-bg/50 border-brand-border hover:border-white/15'">
                         <img v-if="m.user.avatar_url" :src="m.user.avatar_url" class="w-9 h-9 rounded-xl object-cover flex-shrink-0" />
                         <div v-else class="w-9 h-9 rounded-xl bg-brand-border flex items-center justify-center flex-shrink-0 text-white/40 font-bold text-sm">
                           {{ (m.user.display_name || m.user.username).charAt(0).toUpperCase() }}
                         </div>
-
-                        <!-- Name -->
                         <div class="flex-1 min-w-0">
                           <p class="text-sm font-semibold text-white truncate">{{ m.user.display_name || m.user.username }}</p>
                           <p class="text-xs text-white/40 truncate">@{{ m.user.username }}</p>
                         </div>
-
-                        <!-- Current role badge -->
                         <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-white/10 flex-shrink-0"
                           :style="`background:${(ROLE_META[m.role] ?? ROLE_META.member).color}15;color:${(ROLE_META[m.role] ?? ROLE_META.member).color}`">
-                          {{ (ROLE_META[m.role] ?? ROLE_META.member).icon }} {{ (ROLE_META[m.role] ?? ROLE_META.member).label }}
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="(ROLE_META[m.role] ?? ROLE_META.member).iconPath"/></svg>
+                          {{ (ROLE_META[m.role] ?? ROLE_META.member).label }}
                         </span>
-
+                        <!-- Eye toggle (hide/show from public) - for non-members only -->
+                        <button v-if="['owner','admin','moderator'].includes(m.role)"
+                          type="button"
+                          @click="toggleHideMember(m.user_id)"
+                          class="w-8 h-8 rounded-xl border flex items-center justify-center transition-all flex-shrink-0"
+                          :class="form.hiddenMemberIds.includes(m.user_id) ? 'border-brand-error/40 bg-brand-error/10 text-brand-error hover:bg-brand-error/20' : 'border-brand-border/60 bg-brand-bg text-white/30 hover:border-white/30 hover:text-white/60'"
+                          :title="form.hiddenMemberIds.includes(m.user_id) ? 'Показать публично' : 'Скрыть от публики'">
+                          <svg v-if="!form.hiddenMemberIds.includes(m.user_id)" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                          <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
+                        </button>
                         <!-- Role changer (not for owner) -->
                         <div v-if="m.role !== 'owner'" class="relative flex-shrink-0">
-                          <!-- Spinner while saving -->
                           <div v-if="memberSaving[m.user_id]" class="w-5 h-5 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"/>
                           <template v-else>
                             <button @click="openRoleDropdown($event, m.user_id)"
@@ -2258,44 +2573,34 @@ async function deleteGroup() {
                       </div>
                     </div>
                   </div>
-                </section>
 
-                <!-- ═══ § ROLES / РОЛИ ═══════════════════════════════════ -->
-                <section v-show="openSection === 'sec-roles'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl scroll-mt-28">
-                  <div class="px-6 py-4 border-b border-brand-border flex items-center justify-between rounded-tl-3xl rounded-tr-3xl overflow-hidden"
-                    :style="`background:linear-gradient(90deg,${tailSections[1].color}0c 0%,transparent 100%)`">
-                    <div class="flex items-center gap-3">
-                      <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${tailSections[1].color}1a`">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${tailSections[1].color}`">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="tailSections[1].iconPath"/>
+                  <!-- ── Tab: Роли ── -->
+                  <div v-show="teamTab === 'roles'" class="p-6">
+                    <div class="flex justify-end mb-4">
+                      <button @click="openCreateRole"
+                        class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl transition-colors"
+                        style="background:#f59e0b20;color:#f59e0b">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                         </svg>
-                      </div>
-                      <h2 class="font-bold text-white text-sm">{{ tailSections[1].label }}</h2>
+                        Создать роль
+                      </button>
                     </div>
-                    <button @click="openCreateRole"
-                      class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-xl transition-colors"
-                      :style="`background:${tailSections[1].color}20;color:${tailSections[1].color}`">
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                      </svg>
-                      Создать роль
-                    </button>
-                  </div>
 
-                  <div class="p-6">
-                    <!-- Loading -->
                     <div v-if="customRolesLoading" class="flex items-center justify-center py-10">
                       <div class="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"/>
                     </div>
 
                     <div v-else>
-                      <!-- Системные роли (инфо) -->
+                      <!-- Системные роли -->
                       <div class="mb-6">
                         <p class="text-xs font-semibold text-white/40 uppercase tracking-wider mb-3">Встроенные роли</p>
                         <div class="space-y-2">
                           <div v-for="(perms, rkey) in SYSTEM_ROLE_PERMISSIONS" :key="rkey"
                             class="flex items-start gap-3 px-4 py-3 rounded-2xl bg-brand-bg/50 border border-brand-border">
-                            <span class="text-lg mt-0.5 flex-shrink-0">{{ (ROLE_META[rkey] ?? ROLE_META.member).icon }}</span>
+                            <span class="mt-0.5 flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center" :style="`background:${(ROLE_META[rkey] ?? ROLE_META.member).color}15`">
+                              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${(ROLE_META[rkey] ?? ROLE_META.member).color}`"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="(ROLE_META[rkey] ?? ROLE_META.member).iconPath"/></svg>
+                            </span>
                             <div class="flex-1 min-w-0">
                               <div class="flex items-center gap-2 mb-1.5">
                                 <span class="text-sm font-semibold text-white">{{ (ROLE_META[rkey] ?? ROLE_META.member).label }}</span>
@@ -2305,7 +2610,8 @@ async function deleteGroup() {
                                 <span v-for="p in PERMISSIONS_LIST" :key="p.id"
                                   class="text-xs px-2 py-0.5 rounded-lg border"
                                   :class="perms.includes(p.id) ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-white/8 text-white/20 bg-transparent'">
-                                  {{ p.icon }} {{ p.label }}
+                                  <svg class="w-2.5 h-2.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="p.iconPath"/></svg>
+                                  {{ p.label }}
                                 </span>
                               </div>
                             </div>
@@ -2332,7 +2638,8 @@ async function deleteGroup() {
                                 <span v-for="p in PERMISSIONS_LIST" :key="p.id"
                                   class="text-xs px-2 py-0.5 rounded-lg border"
                                   :class="role.permissions.includes(p.id) ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-white/8 text-white/20'">
-                                  {{ p.icon }} {{ p.label }}
+                                  <svg class="w-2.5 h-2.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="p.iconPath"/></svg>
+                                  {{ p.label }}
                                 </span>
                               </div>
                             </div>
@@ -2366,6 +2673,79 @@ async function deleteGroup() {
                       </div>
                     </div>
                   </div>
+
+                  <!-- ── Tab: Организаторы ── -->
+                  <div v-show="teamTab === 'organizers'" class="p-5 space-y-5">
+                    <!-- Current admins/organizers -->
+                    <div>
+                      <div class="flex items-center justify-between mb-3">
+                        <p class="text-xs font-bold text-white/55 uppercase tracking-wider">Текущие организаторы</p>
+                        <span class="text-[10px] text-white/30">Роли: owner, admin, moderator</span>
+                      </div>
+                      <div v-if="membersLoading" class="flex items-center gap-2 py-4 text-white/40 text-sm">
+                        <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Загрузка участников…
+                      </div>
+                      <div v-else-if="!sortedMembers.filter(m => ['owner','admin','moderator'].includes(m.role)).length"
+                        class="py-4 text-center text-white/30 text-sm bg-brand-bg border border-dashed border-brand-border/60 rounded-2xl">
+                        Нет назначенных организаторов
+                      </div>
+                      <div v-else class="space-y-2">
+                        <div v-for="m in sortedMembers.filter(m => ['owner','admin','moderator'].includes(m.role))" :key="m.user_id"
+                          class="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-brand-bg border border-brand-border">
+                          <div class="w-9 h-9 rounded-xl bg-brand-accent/15 overflow-hidden flex-shrink-0">
+                            <img v-if="m.user.avatar_url" :src="m.user.avatar_url" class="w-full h-full object-cover" />
+                            <div v-else class="w-full h-full flex items-center justify-center text-brand-accent text-xs font-bold">{{ (m.user.display_name || m.user.username || '?')[0].toUpperCase() }}</div>
+                          </div>
+                          <div class="flex-1 min-w-0">
+                            <p class="text-sm font-bold text-white truncate">{{ m.user.display_name || m.user.username }}</p>
+                            <p class="text-[10px] mt-0.5 flex items-center gap-1" :style="`color: ${ROLE_META[m.role]?.color || '#9ca3af'}`"><svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="ROLE_META[m.role]?.iconPath ?? ROLE_META.member.iconPath"/></svg>{{ ROLE_META[m.role]?.label }}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Add organizer from members -->
+                    <div v-if="sortedMembers.filter(m => m.role === 'member').length">
+                      <p class="text-xs font-bold text-white/55 uppercase tracking-wider mb-3">Назначить из участников</p>
+                      <div class="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                        <div v-for="m in sortedMembers.filter(m => m.role === 'member').slice(0, 20)" :key="m.user_id"
+                          class="flex items-center gap-3 px-3 py-2 rounded-xl bg-brand-bg/60 border border-brand-border/60 hover:border-brand-border transition-colors">
+                          <div class="w-8 h-8 rounded-lg bg-brand-accent/10 overflow-hidden flex-shrink-0">
+                            <img v-if="m.user.avatar_url" :src="m.user.avatar_url" class="w-full h-full object-cover" />
+                            <div v-else class="w-full h-full flex items-center justify-center text-brand-accent/60 text-xs font-bold">{{ (m.user.display_name || m.user.username || '?')[0].toUpperCase() }}</div>
+                          </div>
+                          <div class="flex-1 min-w-0">
+                            <p class="text-sm text-white/80 truncate">{{ m.user.display_name || m.user.username }}</p>
+                          </div>
+                          <div class="flex gap-1.5">
+                            <button type="button" :disabled="!!memberSaving[m.user_id]"
+                              class="px-2.5 py-1 rounded-lg border border-[#a78bfa]/30 text-[#a78bfa] text-[10px] font-bold hover:bg-[#a78bfa]/10 transition-colors disabled:opacity-40"
+                              @click="doSetRole(m.user_id, 'moderator')">
+                              Модератор
+                            </button>
+                            <button type="button" :disabled="!!memberSaving[m.user_id]"
+                              class="px-2.5 py-1 rounded-lg border border-[#3b82f6]/30 text-[#3b82f6] text-[10px] font-bold hover:bg-[#3b82f6]/10 transition-colors disabled:opacity-40"
+                              @click="doSetRole(m.user_id, 'admin')">
+                              Админ
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Contact info -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-brand-border/30 pt-5">
+                      <div>
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">Телефон</label>
+                        <input v-model="form.contactPhone" placeholder="+7 (999) 123-45-67" class="field-input" />
+                      </div>
+                      <div>
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">Email</label>
+                        <input v-model="form.contactEmail" placeholder="event@example.com" class="field-input" />
+                      </div>
+                    </div>
+                  </div>
                 </section>
 
                 <!-- ═══ § SOCIAL LINKS ═══════════════════════════════════ -->
@@ -2395,6 +2775,108 @@ async function deleteGroup() {
                         <input v-model="(form as any)[link.key]" :placeholder="link.placeholder" class="field-input" />
                       </div>
                     </div>
+                  </div>
+                </section>
+
+                <!-- ═══ § CUSTOMIZE ═══════════════════════════════════════ -->
+                <section v-show="openSection === 'sec-customize'" class="bg-brand-card border border-border-default rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                  <div class="px-6 py-4 border-b border-border-default flex items-center gap-3"
+                    style="background:linear-gradient(90deg,rgba(167,139,250,0.05) 0%,transparent 100%)">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(167,139,250,0.12)">
+                      <BIcon name="Palette" class="w-4 h-4" style="color:#a78bfa" />
+                    </div>
+                    <h2 class="font-bold text-sm text-text-primary">Кастомизация группы</h2>
+                  </div>
+
+                  <div class="p-6">
+                    <!-- Business upsell -->
+                    <div v-if="authStore.user?.subscription_tier !== 'business'" class="rounded-2xl border border-violet-500/30 bg-violet-500/5 p-5 flex flex-col items-center gap-3 text-center">
+                      <div class="w-12 h-12 rounded-xl bg-violet-500/15 flex items-center justify-center">
+                        <BIcon name="Lock" class="w-6 h-6 text-violet-400" />
+                      </div>
+                      <div>
+                        <p class="font-semibold text-text-primary">Доступно для Business</p>
+                        <p class="text-sm text-text-muted mt-1">Кастомизация группы — приобретайте фоны, рамки и темы в магазине Bloomly. Требуется Business-подписка.</p>
+                      </div>
+                      <button @click="$router.push('/subscription')" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold transition-colors">
+                        Перейти к подпискам
+                      </button>
+                    </div>
+
+                    <!-- Customization editors (business only) -->
+                    <template v-else>
+                      <!-- My items from shop -->
+                      <div class="space-y-6">
+                        <!-- Background -->
+                        <div>
+                          <label class="block text-sm font-medium text-text-primary mb-2">Фон группы</label>
+                          <p class="text-xs text-text-muted mb-3">Купите фоны в <span class="text-violet-400 cursor-pointer hover:underline" @click="$router.push('/shop')">Bloomly Shop</span> и применяйте здесь</p>
+                          <div class="flex flex-wrap gap-2">
+                            <button
+                              @click="form.groupBgUrl = ''"
+                              :class="['h-16 w-16 rounded-xl border-2 transition-all flex items-center justify-center text-xs text-text-muted', !form.groupBgUrl ? 'border-violet-500 bg-violet-500/10' : 'border-border-default hover:border-border-hover bg-bg-elevated']"
+                            >Нет</button>
+                            <div
+                              v-for="item in shopStore.myItems.filter(i => i.type === 'background')"
+                              :key="item.id"
+                              class="relative cursor-pointer"
+                              @click="form.groupBgUrl = getShopItemBgUrl(item)"
+                            >
+                              <div
+                                :class="['h-16 w-24 rounded-xl border-2 transition-all overflow-hidden', form.groupBgUrl === getShopItemBgUrl(item) ? 'border-violet-500 scale-105 shadow-lg shadow-violet-500/20' : 'border-border-default hover:border-border-hover']"
+                              >
+                                <img v-if="item.preview_url" :src="item.preview_url" class="w-full h-full object-cover" :alt="item.name" />
+                                <div v-else class="w-full h-full bg-bg-elevated flex items-center justify-center"><BIcon name="Image" class="w-5 h-5 text-text-muted" /></div>
+                              </div>
+                              <p class="text-xs text-center text-text-muted mt-1 truncate w-24">{{ item.name }}</p>
+                            </div>
+                            <div v-if="shopStore.myItems.filter(i => i.type === 'background').length === 0" class="text-xs text-text-muted py-2 px-3 bg-bg-secondary rounded-lg border border-border-default">
+                              У вас нет купленных фонов
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- Frame -->
+                        <div>
+                          <label class="block text-sm font-medium text-text-primary mb-2">Рамка</label>
+                          <div class="flex flex-wrap gap-2">
+                            <button
+                              @click="form.groupFrame = ''"
+                              :class="['h-12 px-3 rounded-xl border-2 transition-all text-xs text-text-muted', !form.groupFrame ? 'border-violet-500 bg-violet-500/10' : 'border-border-default hover:border-border-hover bg-bg-elevated']"
+                            >Нет</button>
+                            <button
+                              v-for="item in shopStore.myItems.filter(i => i.type === 'frame')"
+                              :key="item.id"
+                              @click="form.groupFrame = item.id"
+                              :class="['h-12 px-3 rounded-xl border-2 transition-all text-xs font-medium', form.groupFrame === item.id ? 'border-violet-500 text-violet-300 bg-violet-500/10' : 'border-border-default text-text-muted hover:border-border-hover bg-bg-elevated']"
+                            >{{ item.name }}</button>
+                            <div v-if="shopStore.myItems.filter(i => i.type === 'frame').length === 0" class="text-xs text-text-muted py-2 px-3 bg-bg-secondary rounded-lg border border-border-default">
+                              У вас нет купленных рамок
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- Theme -->
+                        <div>
+                          <label class="block text-sm font-medium text-text-primary mb-2">Тема оформления</label>
+                          <div class="flex flex-wrap gap-2">
+                            <button
+                              @click="form.groupTheme = ''"
+                              :class="['h-12 px-3 rounded-xl border-2 transition-all text-xs text-text-muted', !form.groupTheme ? 'border-violet-500 bg-violet-500/10' : 'border-border-default hover:border-border-hover bg-bg-elevated']"
+                            >По умолчанию</button>
+                            <button
+                              v-for="item in shopStore.myItems.filter(i => i.type === 'theme')"
+                              :key="item.id"
+                              @click="form.groupTheme = item.id"
+                              :class="['h-12 px-3 rounded-xl border-2 transition-all text-xs font-medium', form.groupTheme === item.id ? 'border-violet-500 text-violet-300 bg-violet-500/10' : 'border-border-default text-text-muted hover:border-border-hover bg-bg-elevated']"
+                            >{{ item.name }}</button>
+                            <div v-if="shopStore.myItems.filter(i => i.type === 'theme').length === 0" class="text-xs text-text-muted py-2 px-3 bg-bg-secondary rounded-lg border border-border-default">
+                              У вас нет купленных тем
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
                   </div>
                 </section>
 
@@ -2454,7 +2936,9 @@ async function deleteGroup() {
         @click="doSetRole(roleDropdownMember!.user_id, r.value)"
         class="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm hover:bg-white/5 transition-colors text-left"
         :class="roleDropdownMember!.role === r.value ? 'text-white font-bold' : 'text-white/70'">
-        <span class="text-base leading-none flex-shrink-0">{{ r.icon }}</span>
+        <span class="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center" :style="`background:${r.color}20`">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${r.color}`"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="r.iconPath"/></svg>
+        </span>
         <span class="flex-1">{{ r.label }}</span>
         <svg v-if="roleDropdownMember!.role === r.value" class="w-3.5 h-3.5 flex-shrink-0" style="color:#a78bfa" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
@@ -2525,7 +3009,7 @@ async function deleteGroup() {
                 :class="roleForm.permissions.includes(p.id)
                   ? 'border-emerald-500/50 bg-emerald-500/10 text-white'
                   : 'border-white/10 bg-white/5 text-white/50 hover:bg-white/8 hover:text-white/70'">
-                <span class="flex-shrink-0">{{ p.icon }}</span>
+                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="p.iconPath"/></svg>
                 <span class="text-xs font-medium leading-tight">{{ p.label }}</span>
                 <svg v-if="roleForm.permissions.includes(p.id)" class="w-3.5 h-3.5 ml-auto text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>

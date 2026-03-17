@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import BIcon from './BIcon.vue'
@@ -374,7 +376,7 @@ onUnmounted(() => {
             <!-- Avatar -->
             <button
               class="flex-shrink-0 ring-2 ring-white/30 hover:ring-white/60 rounded-full transition-all"
-              @click.stop="emit('close'); router.push('/profile/' + currentStory.user.id)"
+              @click.stop="emit('close'); router.push('/profile/' + currentStory.user.username)"
             >
               <img
                 v-if="currentStory.user.avatar_url"
@@ -392,7 +394,7 @@ onUnmounted(() => {
             <div class="flex-1 min-w-0">
               <p
                 class="text-sm font-bold text-white leading-tight cursor-pointer hover:underline truncate"
-                @click.stop="emit('close'); router.push('/profile/' + currentStory.user.id)"
+                @click.stop="emit('close'); router.push('/profile/' + currentStory.user.username)"
               >
                 {{ currentStory.user.display_name || currentStory.user.username }}
               </p>

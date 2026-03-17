@@ -10,7 +10,10 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@unhead/vue": "^2.1.12",
     "axios": "^1.13.5",
+    "fflate": "^0.8.2",
+    "lottie-web": "^5.13.0",
     "lucide-vue-next": "^0.395.0",
     "pinia": "^2.1.0",
     "vue": "^3.4.0",

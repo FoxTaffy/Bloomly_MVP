@@ -34,7 +34,7 @@ const isActive = (key: string): boolean => {
     groups:       'groups',
     subscriptions:'subscriptions',
     'dealers-den':'dealers-den',
-    'stickers':   'stickers',
+    'shop':         'shop',
     'automation': 'automation',
   }
   if (routeMap[key]) return route.name === routeMap[key]
@@ -99,8 +99,8 @@ const navItems = computed(() => [
 ])
 
 const categoryItems = computed(() => [
-  { key: 'stickers',    icon: 'Sticker',     label: langStore.t.stickers,   disabled: false, action: () => router.push({ name: 'stickers' }) },
-  { key: 'dealers-den', icon: 'ShoppingBag', label: langStore.t.dealersDen,  disabled: false, action: () => router.push({ name: 'dealers-den' }) },
+  { key: 'shop',        icon: 'ShoppingBag', label: langStore.t.shop ?? 'Магазин', disabled: false, action: () => router.push({ name: 'shop' }) },
+  { key: 'dealers-den', icon: 'Tag',         label: langStore.t.dealersDen,  disabled: false, action: () => router.push({ name: 'dealers-den' }) },
   { key: 'automation',  icon: 'Zap',         label: 'Автоматизация',         disabled: false, action: () => router.push({ name: 'automation' }) },
   { key: 'gifts',       icon: 'Gift',        label: langStore.t.gifts,       disabled: true,  action: () => {} },
   { key: 'help',        icon: 'HelpCircle',  label: langStore.t.help,        disabled: true,  action: () => {} },
@@ -113,7 +113,7 @@ const categoryItems = computed(() => [
     <!-- User profile block -->
     <div
       class="flex items-center gap-3 cursor-pointer group"
-      @click="router.push(`/profile/${auth.user?.id}`)">
+      @click="router.push(`/profile/${auth.user?.username}`)">
       <img
         v-if="auth.avatarUrl"
         :src="auth.avatarUrl"

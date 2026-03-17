@@ -2,6 +2,21 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { stickersService } from './service.js';
 import type { GetPacksQuery, CreatePackInput, UpdatePackInput } from './types.js';
 
+export async function findByUrlHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { url } = req.query as { url?: string };
+  if (!url) return reply.status(400).send({ success: false, data: null, error: { code: 'MISSING_URL', message: 'url query param required' } });
+  try {
+    const userId = (req as any).user?.id as string | undefined;
+    const result = await stickersService.findByUrl(url, userId);
+    if (!result) return reply.send({ success: true, data: { found: false }, error: null });
+    if (result.private) return reply.send({ success: true, data: { found: true, private: true }, error: null });
+    return reply.send({ success: true, data: { found: true, private: false, pack: result.pack }, error: null });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ success: false, data: null, error: { code: 'SERVER_ERROR', message: 'Failed to find sticker pack' } });
+  }
+}
+
 export async function listPacksHandler(req: FastifyRequest, reply: FastifyReply) {
   try {
     const result = await stickersService.list(req.query as GetPacksQuery);
@@ -119,6 +134,97 @@ export async function checkCollectionHandler(req: FastifyRequest, reply: Fastify
   } catch (err) {
     req.log.error(err);
     return reply.status(500).send({ error: 'Failed to check collection' });
+  }
+}
+
+export async function usePackHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = req.params as { id: string };
+  try {
+    await stickersService.incrementUse(id);
+    return reply.send({ data: { ok: true } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ error: 'Failed to track sticker use' });
+  }
+}
+
+export async function trackUsageHandler(req: FastifyRequest, reply: FastifyReply) {
+  const user = (req as any).user as { id: string };
+  const { stickerUrl, packId } = req.body as { stickerUrl: string; packId?: string };
+  if (!stickerUrl) return reply.status(400).send({ error: 'stickerUrl required' });
+  try {
+    await stickersService.trackStickerUsage(user.id, stickerUrl, packId);
+    return reply.send({ data: { ok: true } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ error: 'Failed to track sticker usage' });
+  }
+}
+
+export async function getRecentUsedHandler(req: FastifyRequest, reply: FastifyReply) {
+  const user = (req as any).user as { id: string };
+  const { type, limit } = req.query as { type?: string; limit?: string };
+  const lim = Math.min(60, parseInt(limit ?? '50', 10));
+  try {
+    const stickers = type === 'frequent'
+      ? await stickersService.getFrequentStickers(user.id, lim)
+      : await stickersService.getRecentStickers(user.id, lim);
+    return reply.send({ data: { stickers } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ error: 'Failed to load usage history' });
+  }
+}
+
+export async function getFavoritesHandler(req: FastifyRequest, reply: FastifyReply) {
+  const user = (req as any).user as { id: string };
+  try {
+    const stickers = await stickersService.getFavoriteStickers(user.id);
+    return reply.send({ data: { stickers } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ error: 'Failed to load favorites' });
+  }
+}
+
+export async function addFavoriteHandler(req: FastifyRequest, reply: FastifyReply) {
+  const user = (req as any).user as { id: string };
+  const { stickerUrl, packId } = req.body as { stickerUrl: string; packId?: string };
+  if (!stickerUrl) return reply.status(400).send({ error: 'stickerUrl required' });
+  try {
+    await stickersService.addFavoriteSticker(user.id, stickerUrl, packId);
+    return reply.send({ data: { ok: true } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ error: 'Failed to add favorite' });
+  }
+}
+
+export async function removeFavoriteHandler(req: FastifyRequest, reply: FastifyReply) {
+  const user = (req as any).user as { id: string };
+  const { stickerUrl } = req.body as { stickerUrl: string };
+  if (!stickerUrl) return reply.status(400).send({ error: 'stickerUrl required' });
+  try {
+    await stickersService.removeFavoriteSticker(user.id, stickerUrl);
+    return reply.send({ data: { ok: true } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ error: 'Failed to remove favorite' });
+  }
+}
+
+export async function addStickersToPackHandler(req: FastifyRequest, reply: FastifyReply) {
+  const user = (req as any).user as { id: string };
+  const { id } = req.params as { id: string };
+  const { urls } = req.body as { urls: string[] };
+  if (!Array.isArray(urls) || urls.length === 0) return reply.status(400).send({ error: 'urls[] required' });
+  try {
+    const pack = await stickersService.addStickersToPack(id, user.id, urls);
+    if (!pack) return reply.status(404).send({ error: 'Pack not found or not yours' });
+    return reply.send({ data: { pack } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ error: 'Failed to add stickers to pack' });
   }
 }
 

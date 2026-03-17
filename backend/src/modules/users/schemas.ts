@@ -8,6 +8,16 @@ export const getUserParamsSchema = {
   },
 };
 
+// ── Hardcoded species list (multi-species fursonas supported) ─────────────────
+export const FURSONA_SPECIES = [
+  'Canine', 'Feline', 'Dragon', 'Protogen', 'Avian', 'Equine',
+  'Reptile', 'Rodent', 'Ursine', 'Bovine', 'Cervine', 'Mustelid',
+  'Sergal', 'Dutch Angel Dragon', 'Shark', 'Bat', 'Fox', 'Wolf',
+  'Rabbit', 'Tiger', 'Hyena', 'Synth', 'Wickerbeast', 'Other',
+] as const;
+
+export type FursonaSpecies = typeof FURSONA_SPECIES[number];
+
 export const updateUserSchema = {
   body: {
     type: 'object',
@@ -62,6 +72,74 @@ export const pinPostSchema = {
     required: ['postId'],
     properties: {
       postId: { type: 'string', format: 'uuid' },
+    },
+  },
+};
+
+// ── Fursona upsert schema ─────────────────────────────────────────────────────
+export const updateFursonaSchema = {
+  body: {
+    type: 'object',
+    properties: {
+      name: { type: 'string', maxLength: 80 },
+      species: {
+        type: 'array',
+        items: { type: 'string', enum: [...FURSONA_SPECIES] },
+        maxItems: 5,
+      },
+      colors: {
+        type: 'array',
+        // Each color must be a valid 6-digit hex
+        items: { type: 'string', pattern: '^#[0-9A-Fa-f]{6}$' },
+        maxItems: 10,
+      },
+      likes_dislikes_visible: { type: 'boolean' },
+      likes: {
+        type: 'array',
+        items: { type: 'string', maxLength: 100 },
+        maxItems: 30,
+      },
+      dislikes: {
+        type: 'array',
+        items: { type: 'string', maxLength: 100 },
+        maxItems: 30,
+      },
+      reference_image_url: { type: ['string', 'null'] },
+      reference_is_nsfw: { type: 'boolean' },
+      reference_artist_name: { type: ['string', 'null'], maxLength: 100 },
+      reference_artist_url:  { type: ['string', 'null'], maxLength: 500 },
+    },
+    additionalProperties: false,
+  },
+};
+
+// ── Fursuit create/update schema ──────────────────────────────────────────────
+export const updateFursuitSchema = {
+  body: {
+    type: 'object',
+    properties: {
+      image_url: { type: ['string', 'null'] },
+      // Internal Bloomly group/user UUID (the verified maker)
+      maker_id: { type: ['string', 'null'], format: 'uuid' },
+      // Up to 3 external social/shop links when maker is not on Bloomly
+      external_maker_links: {
+        type: 'array',
+        items: { type: 'string', maxLength: 500 },
+        maxItems: 3,
+      },
+      description: { type: 'string', maxLength: 2000, nullable: true },
+      is_nsfw: { type: 'boolean' },
+    },
+    additionalProperties: false,
+  },
+};
+
+export const fursuitIdParamSchema = {
+  params: {
+    type: 'object',
+    required: ['fursuitId'],
+    properties: {
+      fursuitId: { type: 'string', format: 'uuid' },
     },
   },
 };

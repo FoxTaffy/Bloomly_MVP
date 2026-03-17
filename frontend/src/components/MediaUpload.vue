@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { X } from 'lucide-vue-next'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { X, Image, Plus } from 'lucide-vue-next'
 import api from '@/api'
 
 const props = defineProps<{
@@ -14,6 +14,7 @@ type PreviewEntry = { localUrl: string; uploading: boolean; progress: number; fi
 
 const previews = ref<PreviewEntry[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
+const isDragging = ref(false)
 
 // ── Image compression ──────────────────────────────────────────────────────
 const MAX_PX = 1920
@@ -103,7 +104,28 @@ const remove = (idx: number) => { previews.value.splice(idx, 1); emitAll() }
 
 const clearAll = () => { previews.value = []; emit('uploaded', []) }
 
-const onDrop = (e: DragEvent) => { processFiles(e.dataTransfer?.files ?? null) }
+const onDrop = (e: DragEvent) => { isDragging.value = false; processFiles(e.dataTransfer?.files ?? null) }
+const onDragOver = (e: DragEvent) => { e.preventDefault(); isDragging.value = true }
+const onDragLeave = (e: DragEvent) => {
+  // Only hide if leaving the component entirely (not moving to a child)
+  if (!(e.currentTarget as Element)?.contains(e.relatedTarget as Node)) {
+    isDragging.value = false
+  }
+}
+
+// ── Paste (Ctrl+V) handler ─────────────────────────────────────────────────
+const onPaste = (e: ClipboardEvent) => {
+  const items = e.clipboardData?.items
+  if (!items) return
+  const imageFiles = Array.from(items)
+    .filter(i => i.kind === 'file' && i.type.startsWith('image/'))
+    .map(i => i.getAsFile())
+    .filter(Boolean) as File[]
+  if (imageFiles.length) processFiles(imageFiles)
+}
+
+onMounted(() => document.addEventListener('paste', onPaste))
+onUnmounted(() => document.removeEventListener('paste', onPaste))
 
 // Expose to parent
 defineExpose({
@@ -114,7 +136,11 @@ defineExpose({
 </script>
 
 <template>
-  <div>
+  <div
+    @drop.prevent="onDrop"
+    @dragover="onDragOver"
+    @dragleave="onDragLeave"
+  >
     <input
       ref="fileInput"
       type="file"
@@ -124,18 +150,30 @@ defineExpose({
       :multiple="multiple !== false"
     />
 
-    <!-- Thumbnail previews -->
-    <Transition name="thumb-list">
-      <div v-if="previews.length" class="grid grid-cols-4 gap-2 mt-3">
+    <!-- Drop zone: visible ONLY while dragging -->
+    <div
+      v-if="isDragging"
+      class="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-violet-500/70 bg-violet-500/10 py-8 px-4 select-none transition-all"
+    >
+      <div class="w-12 h-12 rounded-2xl bg-violet-500/30 flex items-center justify-center">
+        <Image class="w-5 h-5 text-violet-300" />
+      </div>
+      <p class="text-sm font-bold text-violet-300">Отпусти для загрузки</p>
+      <p class="text-xs text-white/30">JPG, PNG, WebP, GIF · до 50 МБ</p>
+    </div>
+
+    <!-- Thumbnails grid (shown when files exist and not dragging) -->
+    <div v-else-if="previews.length">
+      <div class="grid grid-cols-4 gap-2">
         <div
           v-for="(p, idx) in previews"
           :key="idx"
-          class="relative aspect-square rounded-xl overflow-hidden bg-brand-bg border border-brand-border group/thumb"
+          class="relative aspect-square rounded-xl overflow-hidden bg-white/5 border border-white/10 group/thumb"
         >
           <img :src="p.localUrl" class="w-full h-full object-cover transition-opacity duration-300" :class="p.uploading ? 'opacity-30' : 'opacity-100'" />
 
           <!-- Upload progress -->
-          <div v-if="p.uploading" class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/30 backdrop-blur-[2px]">
+          <div v-if="p.uploading" class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/40 backdrop-blur-[2px]">
             <svg viewBox="0 0 48 48" class="w-10 h-10 drop-shadow">
               <defs>
                 <clipPath :id="`pf-${idx}`">
@@ -174,8 +212,17 @@ defineExpose({
             <X class="w-3 h-3 text-white" />
           </button>
         </div>
+
+        <!-- Add more tile -->
+        <button
+          @click="fileInput?.click()"
+          class="aspect-square rounded-xl border-2 border-dashed border-white/15 hover:border-violet-500/50 hover:bg-violet-500/8 flex flex-col items-center justify-center gap-1 transition-all group/add"
+        >
+          <Plus class="w-5 h-5 text-white/30 group-hover/add:text-violet-400 transition-colors" />
+          <span class="text-[9px] font-bold text-white/25 group-hover/add:text-violet-400 transition-colors">Ещё</span>
+        </button>
       </div>
-    </Transition>
+    </div>
   </div>
 </template>
 

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
@@ -17,13 +19,13 @@ type SubTab = 'all' | 'posts' | 'accounts' | 'groups' | 'media'
 
 const activeTab = ref<SubTab>('all')
 
-const subTabs: { key: SubTab; icon: string; label: string; disabled?: boolean }[] = [
-  { key: 'all',      icon: 'Bookmark',    label: 'Все' },
-  { key: 'posts',    icon: 'FileText',    label: 'Посты' },
-  { key: 'accounts', icon: 'UserCircle',  label: 'Аккаунты', disabled: true },
-  { key: 'groups',   icon: 'Users',       label: 'Группы',   disabled: true },
-  { key: 'media',    icon: 'Image',       label: 'Медиа',    disabled: true },
-]
+const subTabs = computed(() => [
+  { key: 'all' as SubTab,      icon: 'Bookmark',    label: langStore.t.tabAll },
+  { key: 'posts' as SubTab,    icon: 'FileText',    label: langStore.t.tabPosts },
+  { key: 'accounts' as SubTab, icon: 'UserCircle',  label: langStore.t.tabAccounts, disabled: true },
+  { key: 'groups' as SubTab,   icon: 'Users',       label: langStore.t.bookmarksPageTitle, disabled: true },
+  { key: 'media' as SubTab,    icon: 'Image',       label: langStore.t.tabMedia, disabled: true },
+])
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 const allPosts     = ref<any[]>([])
@@ -72,9 +74,9 @@ onMounted(fetchBookmarks)
               <BIcon name="Bookmark" class="w-5 h-5 text-brand-yellow" />
             </div>
             <div>
-              <h1 class="text-xl font-extrabold text-white">Закладки</h1>
+              <h1 class="text-xl font-extrabold text-white">{{ langStore.t.bookmarksPageTitle }}</h1>
               <p class="text-xs text-white/55 mt-0.5">
-                {{ isLoading ? '…' : `${visiblePosts.length} сохранено` }}
+                {{ isLoading ? '…' : `${visiblePosts.length} ${langStore.t.bookmarksSaved}` }}
               </p>
             </div>
           </div>
@@ -116,15 +118,15 @@ onMounted(fetchBookmarks)
           <div class="w-20 h-20 bg-brand-border rounded-full flex items-center justify-center mx-auto mb-5">
             <BIcon name="Bookmark" class="w-10 h-10 text-white/55" />
           </div>
-          <h3 class="text-2xl font-bold text-white mb-2">Закладок пока нет</h3>
+          <h3 class="text-2xl font-bold text-white mb-2">{{ langStore.t.emptyBookmarksTitle }}</h3>
           <p class="text-white/55 text-sm mb-6">
-            Нажми на иконку закладки на любом посте, чтобы сохранить его здесь
+            {{ langStore.t.emptyBookmarksHint }}
           </p>
           <button
             @click="router.push({ name: 'home' })"
             class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-accent hover:bg-brand-accent-plus text-white text-sm font-bold rounded-xl transition-all">
             <BIcon name="Home" class="w-4 h-4" />
-            На главную
+            {{ langStore.t.goHome }}
           </button>
         </div>
 
@@ -147,7 +149,7 @@ onMounted(fetchBookmarks)
         <!-- Filter card -->
         <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
           <div class="px-4 py-3 border-b border-brand-border">
-            <h4 class="text-xs font-bold text-white/55 uppercase tracking-wider">Категория</h4>
+            <h4 class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.tabAll }}</h4>
           </div>
           <nav class="p-2 space-y-1">
             <button
@@ -169,14 +171,14 @@ onMounted(fetchBookmarks)
 
         <!-- Stats mini-card -->
         <div class="bg-brand-card border border-brand-border rounded-3xl p-4 shadow-xl">
-          <h4 class="text-xs font-bold text-white/55 uppercase tracking-wider mb-3">Статистика</h4>
+          <h4 class="text-xs font-bold text-white/55 uppercase tracking-wider mb-3">{{ langStore.t.statsTitle }}</h4>
           <div class="space-y-2">
             <div class="flex items-center justify-between">
-              <span class="text-xs text-white/55">Всего сохранено</span>
+              <span class="text-xs text-white/55">{{ langStore.t.statsTotalSaved }}</span>
               <span class="text-sm font-bold text-white">{{ allPosts.length }}</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-xs text-white/55">С медиа</span>
+              <span class="text-xs text-white/55">{{ langStore.t.statsWithMedia }}</span>
               <span class="text-sm font-bold text-white">
                 {{ allPosts.filter((p: any) => p.media_urls?.length).length }}
               </span>

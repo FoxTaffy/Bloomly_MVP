@@ -25,7 +25,7 @@ function avatarInitial(name: string | null | undefined) {
     <!-- Top row: avatar + info -->
     <div
       class="flex items-center gap-3 cursor-pointer"
-      @click="router.push(`/profile/${request.user.id}`)"
+      @click="router.push(`/profile/${request.user.username}`)"
     >
       <!-- Avatar -->
       <div class="relative flex-shrink-0">

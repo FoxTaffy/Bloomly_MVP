@@ -1,6 +1,13 @@
 <template>
     <AppHeader :show-back="true" v-model:nsfwMode="nsfwMode" />
 
+    <!-- ─── Page background (profile_bg_url) ──────────────────────────────── -->
+    <template v-if="(viewedProfile as any)?.profile_bg_url">
+      <div class="fixed inset-0 z-[-1] pointer-events-none"
+        :style="`background-image: url('${(viewedProfile as any).profile_bg_url}'); background-size: cover; background-position: center; background-attachment: fixed;`" />
+      <div class="fixed inset-0 z-[-1] pointer-events-none" style="background: rgba(22,25,47,0.78)" />
+    </template>
+
     <!-- ─── hidden file inputs for banner/avatar S3 upload ────────────────── -->
     <input ref="bannerFileInput" type="file" accept="image/*" class="sr-only" @change="onBannerFileChange" />
     <input ref="avatarFileInput" type="file" accept="image/*" class="sr-only" @change="onAvatarFileChange" />
@@ -337,7 +344,7 @@
       </div>
     </Transition>
 
-    <div class="max-w-7xl mx-auto flex pt-16 md:pt-24 px-3 md:px-4 gap-4 md:gap-8">
+    <div class="max-w-7xl mx-auto flex pt-16 md:pt-24 px-3 md:px-4 gap-4 md:gap-8 relative z-[1]">
 
       <!-- ─── Left Sidebar ──────────────────────────────────────── -->
       <AppSidebar>
@@ -451,12 +458,9 @@
                       :class="hasStory ? 'border-[4px] border-brand-card cursor-pointer hover:scale-105' : 'border-4 border-brand-card'"
                       :style="hasStory ? {} : [avatarRingStyle, { transitionTimingFunction: 'cubic-bezier(0.34,1.56,0.64,1)' }]"
                       @click="onAvatarClick">
-                      <img v-if="viewedProfile.avatar_url" :src="avatarSrc"
+                      <img :src="avatarSrc || '/icons/badges/NN.jpg'"
                         class="w-full h-full object-cover"
                         width="128" height="128" fetchpriority="high" />
-                      <div v-else class="w-full h-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-4xl">
-                        {{ (viewedProfile.display_name || viewedProfile.username || '?')[0].toUpperCase() }}
-                      </div>
                       <!-- Story tap affordance -->
                       <div v-if="hasStory"
                         class="absolute inset-0 rounded-full bg-black/0 hover:bg-black/30 transition-all flex items-center justify-center opacity-0 hover:opacity-100">
@@ -501,7 +505,7 @@
                         <BIcon v-else :name="notifyPosts && relation.aFollowsB ? 'BellRing' : 'Bell'" class="w-4 h-4" />
                       </button>
                       <button @click="openChat" class="inline-flex items-center gap-2 px-4 py-2 border border-brand-border bg-brand-bg hover:border-brand-accent/60 text-brand-offwhite hover:text-brand-accent rounded-xl text-sm font-bold transition-all">
-                        <BIcon name="MessageSquare" class="w-4 h-4" /> Сообщение
+                        <BIcon name="MessageSquare" class="w-4 h-4" /> {{ langStore.t.messageBtn }}
                       </button>
                       <button @click="toggleFollow" :disabled="isTogglingFollow"
                         class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-50 shadow-sm"
@@ -522,13 +526,9 @@
                 <div class="mt-3">
                   <div class="flex items-center flex-wrap gap-2 mb-1">
                     <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white">{{ profileDisplayName }}</h1>
-                    <!-- Verification type SVG badge -->
-                    <img v-if="(viewedProfile as any)?.is_verified && (viewedProfile as any)?.verification_type"
-                      :src="`/icons/badges/${(viewedProfile as any).verification_type}.svg`"
-                      class="w-6 h-6 flex-shrink-0"
-                      :title="({ artist: 'Верифицированный художник', master: 'Верифицированный мастер', event: 'Мероприятие' } as Record<string, string>)[(viewedProfile as any).verification_type] || 'Верифицирован'" />
-                    <img v-else-if="(viewedProfile as any)?.is_verified"
-                      src="/icons/badges/verified.svg"
+                    <!-- Verification badge -->
+                    <img v-if="(viewedProfile as any)?.is_verified"
+                      src="/icons/badges/paw_offical.svg"
                       class="w-6 h-6 flex-shrink-0"
                       title="Верифицирован" />
                     <span v-if="badgePillLabel" class="inline-flex items-center justify-center w-7 h-7 rounded-lg" :class="badgePillClass" :title="badgePillLabel">
@@ -545,7 +545,6 @@
                       <Sparkles class="w-2.5 h-2.5" />
                       {{ (viewedProfile as any).subscription_tier === 'lite' ? 'Lite' : (viewedProfile as any).subscription_tier === 'pro' ? 'Pro' : 'Business' }}
                     </span>
-                    <span v-if="viewedProfile.pronouns" class="px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-semibold text-white/55">{{ viewedProfile.pronouns }}</span>
                     <!-- Artist Badge -->
                     <AppBadge
                       v-if="(viewedProfile as any).badge_level && (viewedProfile as any).badge_level !== 'none'"
@@ -624,8 +623,6 @@
                   <!-- О себе -->
                   <div v-if="aboutTab === 'about'" class="space-y-4">
 
-                    <template>
-
                     <!-- Bio (с кнопкой редактирования) -->
                     <div class="relative group/bio">
                       <div v-if="viewedProfile.bio"
@@ -635,7 +632,7 @@
                       <div v-else-if="isOwnProfile" class="flex flex-col items-center gap-2 py-6 text-center bg-brand-bg/30 rounded-2xl border border-dashed border-brand-border/60 cursor-pointer hover:border-brand-accent/40 transition-all"
                         @click="openEditModal('bio')">
                         <BIcon name="FileText" class="w-7 h-7 text-white/25" />
-                        <p class="text-xs text-white/40">Добавить описание</p>
+                        <p class="text-xs text-white/40">{{ langStore.t.addDescription }}</p>
                       </div>
                       <button v-if="isOwnProfile && viewedProfile.bio" @click="openEditModal('bio')"
                         class="absolute top-2.5 right-2.5 w-7 h-7 flex items-center justify-center rounded-lg text-white/35 hover:text-brand-accent hover:bg-brand-card border border-transparent hover:border-brand-border opacity-0 group-hover/bio:opacity-100 transition-all">
@@ -721,189 +718,435 @@
                       </button>
                     </div>
 
-                    </template><!-- /v-else regular mode -->
                   </div>
 
-                  <!-- Фурсона -->
+                  <!-- ── ФУРСОНА (новый стиль) ────────────────────────── -->
                   <div v-else-if="aboutTab === 'fursona'" class="space-y-4">
-                    <div class="rounded-3xl border border-brand-border bg-brand-card shadow-xl overflow-hidden">
-                      <div class="px-5 py-4 border-b border-brand-border/70 bg-gradient-to-r from-brand-bg/70 to-transparent flex items-center justify-between gap-3">
-                        <div class="min-w-0">
-                          <p class="text-xs font-bold uppercase tracking-wider text-white/45 mb-1">Фурсона</p>
-                          <p class="text-2xl md:text-3xl font-extrabold text-white truncate">{{ (viewedProfile as any).fursona_name || viewedProfile.persona || viewedProfile.display_name }}</p>
-                          <div class="flex items-center gap-2 mt-1.5 flex-wrap">
-                            <span v-if="viewedProfile.persona" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-brand-bg border border-brand-border text-white/85">{{ viewedProfile.persona }}</span>
-                            <span v-if="viewedProfile.pronouns" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-brand-bg border border-brand-border text-white/75">{{ viewedProfile.pronouns }}</span>
-                            <span v-if="(viewedProfile as any).fursona_color" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-brand-bg border border-brand-border text-white/85 inline-flex items-center gap-1.5">
-                              <span class="w-3 h-3 rounded-sm border border-black/30" :style="`background:${(viewedProfile as any).fursona_color}`"></span>
-                              {{ (viewedProfile as any).fursona_color }}
-                            </span>
-                          </div>
-                        </div>
-                        <button v-if="isOwnProfile" @click="openEditModal('fursona')"
-                          class="w-9 h-9 flex items-center justify-center rounded-xl bg-brand-bg border border-brand-border hover:border-brand-accent text-white/55 hover:text-brand-accent transition-all flex-shrink-0">
-                          <BIcon name="Pencil" class="w-4 h-4" />
-                        </button>
-                      </div>
 
-                      <div class="p-4 grid grid-cols-1 xl:grid-cols-[1.05fr_1.2fr] gap-4">
-                        <div class="space-y-3">
-                          <button v-if="fursonaRefImages.length" type="button"
-                            class="w-full relative h-72 rounded-2xl overflow-hidden border border-brand-border/60 group shadow-lg"
-                            @click="openFursonaRef()">
-                            <img :src="activeFursonaRef" class="absolute inset-0 w-full h-full object-cover" alt="Референс фурсоны" />
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-black/15 group-hover:from-black/70 transition-all"></div>
-                            <div class="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-black/45 border border-white/15 text-[10px] font-bold text-white/85 uppercase tracking-wider">
-                              Reference
-                            </div>
-                            <div class="absolute bottom-4 left-4 right-4 text-left">
-                              <p class="text-white font-bold text-base">Референс персонажа</p>
-                              <p class="text-white/75 text-xs mt-1">Открыть в полном размере</p>
-                            </div>
-                          </button>
-                          <div v-else class="h-72 rounded-2xl border-2 border-dashed border-brand-border/40 flex flex-col items-center justify-center text-center opacity-65">
-                            <BIcon name="Image" class="w-8 h-8 text-white/55 mb-2" />
-                            <p class="text-sm font-semibold text-white/55">Референс пока не добавлен</p>
-                          </div>
-
-                          <div v-if="fursonaRefImages.length" class="grid grid-cols-4 gap-2">
-                            <button v-for="(img, idx) in fursonaRefImages" :key="img" type="button"
-                              @click="selectFursonaRef(img)"
-                              class="relative rounded-xl overflow-hidden border transition-all"
-                              :class="activeFursonaRef === img ? 'border-brand-accent ring-1 ring-brand-accent/40' : 'border-brand-border hover:border-white/30'">
-                              <img :src="img" class="w-full aspect-square object-cover" :alt="`Реф ${idx + 1}`" />
-                            </button>
-                          </div>
-
-                          <div v-if="fursonaOtherCount > 0" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-bg border border-brand-border">
-                            <div class="flex -space-x-2">
-                              <img v-for="img in fursonaRefImages.slice(1, 5)" :key="`other-${img}`" :src="img" class="w-6 h-6 rounded-full border border-brand-card object-cover" alt="Другой персонаж" />
-                            </div>
-                            <span class="text-sm font-semibold text-white/85">Другие персонажи ({{ fursonaOtherCount }})</span>
-                          </div>
-                        </div>
-
-                        <div class="rounded-2xl border border-brand-border/70 bg-brand-bg/40 p-4">
-                          <div class="flex items-center gap-2 border-b border-brand-border/70 pb-3 overflow-x-auto scrollbar-hide">
-                            <button v-for="tab in fursonaViewTabs" :key="tab.key" @click="fursonaSubTab = tab.key"
-                              class="px-3 py-1.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all border inline-flex items-center gap-1.5"
-                              :class="fursonaSubTab === tab.key
-                                ? 'bg-brand-card text-white border-brand-border shadow-sm'
-                                : tab.disabled
-                                  ? 'text-white/35 border-transparent'
-                                  : 'text-white/65 hover:text-white border-transparent hover:border-brand-border/50'">
-                              <span>{{ tab.label }}</span>
-                              <span v-if="tab.count !== undefined" class="text-[10px] px-1.5 py-0.5 rounded-md bg-black/20 border border-white/10">{{ tab.count }}</span>
-                            </button>
-                          </div>
-
-                          <div class="pt-4 min-h-[16rem]">
-                            <template v-if="fursonaSubTab === 'personality'">
-                              <h3 class="text-xl md:text-2xl font-extrabold text-white mb-3">Характер</h3>
-                              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div class="p-3 rounded-xl bg-brand-card border border-brand-success/25">
-                                  <p class="text-base md:text-lg font-extrabold text-brand-success mb-2">Любит</p>
-                                  <ul v-if="viewedProfile.likes.length" class="space-y-1.5">
-                                    <li v-for="item in viewedProfile.likes" :key="`like-${item}`" class="text-white/90 text-sm md:text-base leading-tight">• {{ item }}</li>
-                                  </ul>
-                                  <p v-else class="text-white/45 text-sm">Не заполнено</p>
-                                </div>
-                                <div class="p-3 rounded-xl bg-brand-card border border-brand-error/25">
-                                  <p class="text-base md:text-lg font-extrabold text-brand-error mb-2">Не любит</p>
-                                  <ul v-if="viewedProfile.dislikes.length" class="space-y-1.5">
-                                    <li v-for="item in viewedProfile.dislikes" :key="`dislike-${item}`" class="text-white/90 text-sm md:text-base leading-tight">• {{ item }}</li>
-                                  </ul>
-                                  <p v-else class="text-white/45 text-sm">Не заполнено</p>
-                                </div>
-                              </div>
-                            </template>
-
-                            <template v-else-if="fursonaSubTab === 'info'">
-                              <div class="space-y-2 text-sm">
-                                <div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-brand-card border border-brand-border">
-                                  <span class="text-white/55">Имя</span>
-                                  <span class="font-semibold text-white truncate">{{ (viewedProfile as any).fursona_name || '—' }}</span>
-                                </div>
-                                <div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-brand-card border border-brand-border">
-                                  <span class="text-white/55">Вид</span>
-                                  <span class="font-semibold text-white truncate">{{ viewedProfile.persona || '—' }}</span>
-                                </div>
-                                <div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-brand-card border border-brand-border">
-                                  <span class="text-white/55">Местоимения</span>
-                                  <span class="font-semibold text-white truncate">{{ viewedProfile.pronouns || '—' }}</span>
-                                </div>
-                              </div>
-                            </template>
-
-                            <template v-else-if="fursonaSubTab === 'features'">
-                              <div class="space-y-3">
-                                <p class="text-xs font-bold uppercase tracking-wider text-white/55">Цвета персонажа</p>
-                                <div v-if="fursonaRefPalette.length" class="flex flex-wrap gap-2">
-                                  <div v-for="c in fursonaRefPalette" :key="c" class="px-2 py-1 rounded-lg bg-brand-card border border-brand-border text-[11px] font-bold text-white/80 flex items-center gap-2">
-                                    <span class="w-3.5 h-3.5 rounded-sm border border-black/30" :style="`background:${c}`"></span>
-                                    {{ c }}
-                                  </div>
-                                </div>
-                                <p v-else class="text-white/45 text-sm">Цвета не указаны</p>
-                              </div>
-                            </template>
-
-                            <template v-else>
-                              <div class="space-y-3">
-                                <p class="text-xs font-bold uppercase tracking-wider text-white/55">Медиа</p>
-                                <button v-if="activeFursonaRef" @click="openFursonaRef()"
-                                  class="w-full h-40 rounded-2xl overflow-hidden border border-brand-border relative group">
-                                  <img :src="activeFursonaRef" class="absolute inset-0 w-full h-full object-cover" alt="Медиа фурсоны" />
-                                  <div class="absolute inset-0 bg-black/45 group-hover:bg-black/30 transition-all flex items-center justify-center">
-                                    <span class="px-3 py-1.5 rounded-xl bg-black/45 border border-white/20 text-xs font-bold text-white">Открыть</span>
-                                  </div>
-                                </button>
-                                <p v-else class="text-white/45 text-sm">Медиа не добавлено</p>
-                              </div>
-                            </template>
-                          </div>
-                        </div>
-                      </div>
+                    <!-- Загрузка -->
+                    <div v-if="profileFursonaLoading" class="flex items-center justify-center py-16">
+                      <div class="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
                     </div>
-                  </div>
 
-                  <!-- Фурсьют -->
-                  <div v-else-if="aboutTab === 'fursuit'" class="space-y-5">
-                    <div v-if="(viewedProfile as any).has_fursuit"
-                      class="p-4 bg-brand-bg border border-brand-border/60 rounded-2xl space-y-3">
-                      <div class="flex items-center justify-between gap-2">
-                        <p class="text-[11px] font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
-                          <span class="text-base">🐾</span> Фурсьют
-                        </p>
-                        <button v-if="isOwnProfile" @click="openEditModal('fursuit')"
-                          class="w-7 h-7 flex items-center justify-center rounded-lg text-white/35 hover:text-brand-accent hover:bg-brand-card border border-transparent hover:border-brand-border transition-all">
-                          <BIcon name="Pencil" class="w-3 h-3" />
-                        </button>
-                      </div>
-                      <div v-if="(viewedProfile as any).fursuit_photo_url"
-                        class="rounded-xl overflow-hidden border border-brand-border/60">
-                        <img :src="(viewedProfile as any).fursuit_photo_url"
-                          class="w-full max-h-72 object-cover" alt="Фото фурсьюта" />
-                      </div>
-                      <p v-if="(viewedProfile as any).fursuit_description"
-                        class="text-sm text-white/80 leading-relaxed whitespace-pre-wrap">
-                        {{ (viewedProfile as any).fursuit_description }}
-                      </p>
-                      <div v-if="(viewedProfile as any).fursuit_maker"
-                        class="flex items-center gap-2 text-xs text-white/55">
-                        <BIcon name="Scissors" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
-                        <span class="font-semibold">Мастер:</span>
-                        <span class="text-white/80">{{ (viewedProfile as any).fursuit_maker }}</span>
-                      </div>
-                    </div>
-                    <div v-else class="flex flex-col items-center gap-3 py-8 bg-brand-bg/30 rounded-2xl border border-dashed border-brand-border text-center">
-                      <span class="text-4xl opacity-30">🐾</span>
-                      <p class="text-sm font-semibold text-white/55">Фурсьют не добавлен</p>
-                      <button v-if="isOwnProfile" @click="openEditModal('fursuit')"
-                        class="inline-flex items-center gap-2 px-4 py-2 bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/30 text-brand-accent rounded-xl text-xs font-bold transition-all">
-                        <BIcon name="Plus" class="w-3 h-3" /> Добавить фурсьют
+                    <!-- Нет фурсоны -->
+                    <div v-else-if="!profileFursona" class="flex flex-col items-center gap-4 py-14 rounded-3xl border border-dashed border-brand-border text-center bg-brand-bg/30">
+                      <span class="text-5xl opacity-30">🦊</span>
+                      <p class="text-sm font-semibold text-white/55">Фурсона не добавлена</p>
+                      <button v-if="isOwnProfile" @click="openEditModal('fursona')"
+                        class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/30 text-brand-accent rounded-xl text-sm font-bold transition-all">
+                        <BIcon name="Plus" class="w-4 h-4" /> Создать фурсону
                       </button>
                     </div>
+
+                    <!-- Карточка фурсоны -->
+                    <template v-else>
+                      <!-- Шапка: имя + виды + редактирование -->
+                      <div class="rounded-3xl border border-brand-border bg-brand-card shadow-xl overflow-hidden">
+                        <!-- Gradient header -->
+                        <div class="relative px-5 py-5 border-b border-brand-border/60"
+                          :style="profileFursona.colors?.length
+                            ? `background:linear-gradient(135deg,${profileFursona.colors[0]}18 0%,${(profileFursona.colors[1] ?? profileFursona.colors[0])}0c 60%,transparent 100%)`
+                            : 'background:linear-gradient(135deg,#7c3aed18 0%,transparent 100%)'">
+                          <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0 flex-1">
+                              <p class="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1">Фурсона</p>
+                              <h2 class="text-2xl md:text-3xl font-extrabold text-white truncate leading-tight">
+                                {{ profileFursona.name || viewedProfile?.display_name || '—' }}
+                              </h2>
+                              <!-- Виды как чипы -->
+                              <div v-if="profileFursona.species?.length" class="flex flex-wrap gap-1.5 mt-2">
+                                <span v-for="sp in profileFursona.species" :key="sp"
+                                  class="px-2.5 py-1 rounded-lg text-xs font-bold border"
+                                  :style="profileFursona.colors?.length
+                                    ? `background:${profileFursona.colors[0]}20;border-color:${profileFursona.colors[0]}40;color:${profileFursona.colors[0]}`
+                                    : 'background:rgba(124,58,237,0.15);border-color:rgba(124,58,237,0.3);color:#a78bfa'">
+                                  {{ sp }}
+                                </span>
+                              </div>
+                            </div>
+                            <!-- Цветовая палитра -->
+                            <div class="flex flex-col items-end gap-2 flex-shrink-0">
+                              <button v-if="isOwnProfile" @click="openEditModal('fursona')"
+                                class="w-8 h-8 flex items-center justify-center rounded-xl bg-brand-bg border border-brand-border hover:border-brand-accent text-white/55 hover:text-brand-accent transition-all">
+                                <BIcon name="Pencil" class="w-3.5 h-3.5" />
+                              </button>
+                              <div v-if="profileFursona.colors?.length" class="flex gap-1">
+                                <div v-for="c in profileFursona.colors.slice(0,6)" :key="c"
+                                  class="w-5 h-5 rounded-md border border-black/20 shadow-sm cursor-pointer hover:scale-110 transition-transform"
+                                  :style="`background:${c}`"
+                                  :title="c"></div>
+                                <div v-if="profileFursona.colors.length > 6"
+                                  class="w-5 h-5 rounded-md border border-brand-border bg-brand-bg flex items-center justify-center text-[9px] font-bold text-white/60">
+                                  +{{ profileFursona.colors.length - 6 }}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- Тело: реф + инфо -->
+                        <div class="p-4 grid grid-cols-1 xl:grid-cols-[1fr_1.15fr] gap-4">
+                          <!-- Левая колонка: референс -->
+                          <div class="space-y-2">
+                            <!-- Референс изображение -->
+                            <button v-if="profileFursona.reference_image_url" type="button"
+                              class="w-full relative rounded-2xl overflow-hidden border border-brand-border/60 group shadow-lg"
+                              style="height:280px"
+                              @click="openFursonaRef(profileFursona!.reference_image_url!)">
+                              <img :src="profileFursona.reference_image_url"
+                                class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                :class="profileFursona.reference_is_nsfw && !nsfwMode ? 'blur-xl' : ''"
+                                alt="Референс фурсоны" />
+                              <div class="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent group-hover:from-black/60 transition-all"></div>
+                              <div v-if="profileFursona.reference_is_nsfw && !nsfwMode"
+                                class="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                                <span class="px-3 py-1.5 rounded-xl bg-black/70 border border-rose-500/50 text-rose-400 text-xs font-bold">18+ NSFW</span>
+                                <span class="text-white/60 text-xs">Скрыто</span>
+                              </div>
+                              <div v-else class="absolute top-3 left-3">
+                                <span class="px-2.5 py-1 rounded-lg bg-black/50 border border-white/15 text-[10px] font-bold text-white/85 uppercase tracking-wider backdrop-blur-sm">Reference</span>
+                              </div>
+                              <div class="absolute bottom-3 left-4 right-4 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span class="text-white text-sm font-bold">{{ profileFursona.name }}</span>
+                                <span class="px-2 py-1 rounded-lg bg-black/50 border border-white/20 text-[11px] font-bold text-white backdrop-blur-sm">Открыть</span>
+                              </div>
+                            </button>
+                            <div v-else class="rounded-2xl border-2 border-dashed border-brand-border/40 flex flex-col items-center justify-center text-center opacity-60 bg-brand-bg/30" style="height:200px">
+                              <BIcon name="Image" class="w-8 h-8 text-white/40 mb-2" />
+                              <p class="text-xs font-semibold text-white/40">Референс не добавлен</p>
+                            </div>
+
+                            <!-- Цвета - большие свотчи -->
+                            <div v-if="profileFursona.colors?.length" class="grid gap-1.5" :class="profileFursona.colors.length > 3 ? 'grid-cols-4' : 'grid-cols-3'">
+                              <div v-for="c in profileFursona.colors" :key="c"
+                                class="rounded-xl border border-black/20 shadow-sm relative group/swatch cursor-default"
+                                style="height:40px"
+                                :style="`background:${c}`">
+                                <span class="absolute inset-0 flex items-center justify-center opacity-0 group-hover/swatch:opacity-100 transition-opacity">
+                                  <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-black/60 text-white backdrop-blur-sm">{{ c }}</span>
+                                </span>
+                              </div>
+                            </div>
+
+                            <!-- Кредит художника референса -->
+                            <div v-if="profileFursona.reference_artist_name"
+                              class="flex items-center gap-2 px-2 py-1.5 rounded-xl bg-brand-bg/60 border border-brand-border/50 mt-1">
+                              <svg class="w-3 h-3 text-white/35 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                              </svg>
+                              <span class="text-[10px] text-white/35">Арт:</span>
+                              <a v-if="profileFursona.reference_artist_url"
+                                :href="profileFursona.reference_artist_url" target="_blank" rel="noopener noreferrer"
+                                class="text-[11px] font-semibold text-brand-accent hover:underline truncate"
+                                @click.stop>{{ profileFursona.reference_artist_name }}</a>
+                              <span v-else class="text-[11px] font-semibold text-white/60 truncate">{{ profileFursona.reference_artist_name }}</span>
+                            </div>
+                          </div>
+
+                          <!-- Правая колонка: табы с инфо -->
+                          <div class="rounded-2xl border border-brand-border/60 bg-brand-bg/40 overflow-hidden">
+                            <!-- Вкладки -->
+                            <div class="flex border-b border-brand-border/60">
+                              <button v-for="tab in fursonaViewTabs" :key="tab.key"
+                                @click="fursonaSubTab = tab.key"
+                                class="flex-1 px-3 py-2.5 text-xs font-bold transition-all border-b-2 -mb-px"
+                                :class="fursonaSubTab === tab.key
+                                  ? 'text-brand-accent border-brand-accent bg-brand-accent/5'
+                                  : 'text-white/45 border-transparent hover:text-white/70 hover:bg-white/4'">
+                                {{ tab.label }}
+                                <span v-if="tab.count" class="ml-1 text-[9px] opacity-60">({{ tab.count }})</span>
+                              </button>
+                            </div>
+
+                            <div class="p-4 min-h-[15rem]">
+                              <!-- Личность -->
+                              <template v-if="fursonaSubTab === 'personality'">
+                                <template v-if="profileFursona.likes_dislikes_visible || isOwnProfile">
+                                  <!-- Оба пустые → компактный плейсхолдер -->
+                                  <div v-if="!profileFursona.likes?.length && !profileFursona.dislikes?.length"
+                                    class="flex flex-col items-center justify-center gap-3 py-8 text-center">
+                                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center opacity-30"
+                                      style="background:rgba(167,139,250,0.15)">
+                                      <svg class="w-6 h-6 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
+                                      </svg>
+                                    </div>
+                                    <div>
+                                      <p class="text-sm font-semibold text-white/40">Предпочтения не указаны</p>
+                                      <p v-if="profileFursona.reference_artist_name" class="text-xs text-white/25 mt-1">
+                                        Реф нарисован:
+                                        <a v-if="profileFursona.reference_artist_url"
+                                          :href="profileFursona.reference_artist_url" target="_blank" rel="noopener noreferrer"
+                                          class="text-brand-accent hover:underline font-semibold">{{ profileFursona.reference_artist_name }}</a>
+                                        <span v-else class="text-white/50 font-semibold">{{ profileFursona.reference_artist_name }}</span>
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <!-- Есть хотя бы что-то → два блока -->
+                                  <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div class="p-3 rounded-xl border" style="background:rgba(34,197,94,0.06);border-color:rgba(34,197,94,0.2)">
+                                      <p class="text-xs font-extrabold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style="color:#4ade80">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                        Любит
+                                      </p>
+                                      <div v-if="profileFursona.likes?.length" class="flex flex-wrap gap-1.5">
+                                        <span v-for="item in profileFursona.likes" :key="`like-${item}`"
+                                          class="px-2 py-0.5 rounded-lg text-xs font-semibold" style="background:rgba(34,197,94,0.12);color:rgba(134,239,172,1)">
+                                          {{ item }}
+                                        </span>
+                                      </div>
+                                      <p v-else class="text-white/35 text-xs">Не заполнено</p>
+                                    </div>
+                                    <div class="p-3 rounded-xl border" style="background:rgba(239,68,68,0.06);border-color:rgba(239,68,68,0.2)">
+                                      <p class="text-xs font-extrabold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style="color:#f87171">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                                        Не любит
+                                      </p>
+                                      <div v-if="profileFursona.dislikes?.length" class="flex flex-wrap gap-1.5">
+                                        <span v-for="item in profileFursona.dislikes" :key="`dislike-${item}`"
+                                          class="px-2 py-0.5 rounded-lg text-xs font-semibold" style="background:rgba(239,68,68,0.12);color:rgba(252,165,165,1)">
+                                          {{ item }}
+                                        </span>
+                                      </div>
+                                      <p v-else class="text-white/35 text-xs">Не заполнено</p>
+                                    </div>
+                                  </div>
+                                </template>
+                                <div v-else class="flex flex-col items-center justify-center py-10 gap-2 text-center">
+                                  <BIcon name="EyeOff" class="w-8 h-8 text-white/25" />
+                                  <p class="text-sm font-semibold text-white/40">Скрыто владельцем</p>
+                                </div>
+                              </template>
+
+                              <!-- Информация -->
+                              <template v-else-if="fursonaSubTab === 'info'">
+                                <div class="space-y-2 text-sm">
+                                  <div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-brand-card border border-brand-border">
+                                    <span class="text-white/45 text-xs font-semibold uppercase tracking-wider">Имя</span>
+                                    <span class="font-bold text-white truncate">{{ profileFursona.name || '—' }}</span>
+                                  </div>
+                                  <div v-if="profileFursona.species?.length"
+                                    class="flex items-start justify-between gap-3 p-3 rounded-xl bg-brand-card border border-brand-border">
+                                    <span class="text-white/45 text-xs font-semibold uppercase tracking-wider flex-shrink-0">Вид</span>
+                                    <div class="flex flex-wrap gap-1 justify-end">
+                                      <span v-for="sp in profileFursona.species" :key="sp"
+                                        class="px-2 py-0.5 rounded-md text-xs font-bold"
+                                        style="background:rgba(124,58,237,0.2);color:#a78bfa">{{ sp }}</span>
+                                    </div>
+                                  </div>
+                                  <div v-if="profileFursona.colors?.length"
+                                    class="flex items-center justify-between gap-3 p-3 rounded-xl bg-brand-card border border-brand-border">
+                                    <span class="text-white/45 text-xs font-semibold uppercase tracking-wider">Цвета</span>
+                                    <div class="flex gap-1.5">
+                                      <div v-for="c in profileFursona.colors" :key="c"
+                                        class="w-5 h-5 rounded-md border border-black/20"
+                                        :style="`background:${c}`" :title="c"></div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <!-- Особенности (цвета крупно) -->
+                              <template v-else-if="fursonaSubTab === 'features'">
+                                <div class="space-y-3">
+                                  <p class="text-[10px] font-bold uppercase tracking-wider text-white/40">Цветовая палитра</p>
+                                  <div v-if="profileFursona.colors?.length" class="grid grid-cols-2 gap-2">
+                                    <div v-for="c in profileFursona.colors" :key="c"
+                                      class="rounded-xl border border-black/15 flex items-center gap-2.5 px-3"
+                                      style="height:44px"
+                                      :style="`background:${c}20;border-color:${c}30`">
+                                      <div class="w-6 h-6 rounded-lg border border-black/20 shadow-sm flex-shrink-0" :style="`background:${c}`"></div>
+                                      <span class="text-xs font-bold text-white/80 font-mono">{{ c }}</span>
+                                    </div>
+                                  </div>
+                                  <p v-else class="text-white/35 text-xs">Цвета не указаны</p>
+                                </div>
+                              </template>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+
+                  <!-- ── ФУРСЬЮТ (новый стиль) ─────────────────────────── -->
+                  <div v-else-if="aboutTab === 'fursuit'" class="space-y-4">
+
+                    <!-- Загрузка -->
+                    <div v-if="profileFursuitsLoading" class="flex items-center justify-center py-16">
+                      <div class="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+
+                    <!-- Нет фурсьютов -->
+                    <div v-else-if="!profileFursuits.length" class="flex flex-col items-center gap-4 py-14 rounded-3xl border border-dashed border-brand-border text-center bg-brand-bg/30">
+                      <span class="text-5xl opacity-30">🐾</span>
+                      <p class="text-sm font-semibold text-white/55">Фурсьют не добавлен</p>
+                      <button v-if="isOwnProfile" @click="openEditModal('fursuit')"
+                        class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/30 text-brand-accent rounded-xl text-sm font-bold transition-all">
+                        <BIcon name="Plus" class="w-4 h-4" /> Добавить фурсьют
+                      </button>
+                    </div>
+
+                    <!-- Список фурсьютов -->
+                    <template v-else>
+                      <div class="flex items-center justify-between mb-1 px-1">
+                        <p class="text-[10px] font-bold uppercase tracking-widest text-white/40">
+                          Фурсьюты · {{ profileFursuits.length }}
+                        </p>
+                        <button v-if="isOwnProfile" @click="openEditModal('fursuit')"
+                          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/30 text-brand-accent text-xs font-bold transition-all">
+                          <BIcon name="Settings" class="w-3.5 h-3.5" /> Управление
+                        </button>
+                      </div>
+
+                      <!-- ══ Hero card (1 fursuit) ════════════════════════════ -->
+                      <div v-if="profileFursuits.length === 1"
+                        class="rounded-3xl border border-brand-border bg-brand-card shadow-xl overflow-hidden group hover:border-brand-accent/40 transition-all">
+                        <!-- Большое фото -->
+                        <div class="relative bg-brand-bg overflow-hidden"
+                          :style="profileFursuits[0].image_url ? 'height:22rem' : 'height:10rem'">
+                          <template v-if="profileFursuits[0].image_url">
+                            <img :src="profileFursuits[0].image_url"
+                              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                              :class="profileFursuits[0].is_nsfw && !nsfwMode ? 'blur-xl scale-110' : ''"
+                              alt="Фурсьют" />
+                            <!-- NSFW overlay -->
+                            <div v-if="profileFursuits[0].is_nsfw && !nsfwMode"
+                              class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40">
+                              <span class="px-4 py-2 rounded-2xl bg-black/80 border border-rose-500/60 text-rose-400 text-sm font-bold">18+ NSFW</span>
+                            </div>
+                            <div v-else-if="profileFursuits[0].is_nsfw"
+                              class="absolute top-4 right-4 px-2.5 py-1 rounded-lg bg-rose-500/80 text-white text-xs font-bold backdrop-blur-sm">
+                              18+
+                            </div>
+                            <!-- Градиент снизу -->
+                            <div class="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-brand-card via-brand-card/60 to-transparent"></div>
+                          </template>
+                          <div v-else class="w-full h-full flex items-center justify-center opacity-20">
+                            <span class="text-7xl">🐾</span>
+                          </div>
+                        </div>
+
+                        <!-- Информация под фото -->
+                        <div class="p-5 -mt-2 space-y-3">
+                          <!-- Описание -->
+                          <p v-if="profileFursuits[0].description" class="text-sm text-white/80 leading-relaxed">
+                            {{ profileFursuits[0].description }}
+                          </p>
+
+                          <!-- Мастер (Bloomly группа) -->
+                          <div v-if="profileFursuits[0].maker_id && makerGroupCache[profileFursuits[0].maker_id]"
+                            class="flex items-center gap-2 flex-wrap">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-white/40 flex items-center gap-1">
+                              <BIcon name="Scissors" class="w-3 h-3" /> Мастер
+                            </span>
+                            <RouterLink
+                              :to="`/groups/${makerGroupCache[profileFursuits[0].maker_id].slug}`"
+                              class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-accent/10 border border-brand-accent/30 text-brand-accent text-xs font-bold hover:bg-brand-accent/20 hover:border-brand-accent/50 transition-all"
+                              @click.stop>
+                              <img v-if="makerGroupCache[profileFursuits[0].maker_id].avatar_url"
+                                :src="makerGroupCache[profileFursuits[0].maker_id].avatar_url!"
+                                class="w-4 h-4 rounded-full object-cover" />
+                              <BIcon v-else name="Users" class="w-3.5 h-3.5" />
+                              {{ makerGroupCache[profileFursuits[0].maker_id].name }}
+                            </RouterLink>
+                          </div>
+
+                          <!-- Внешние ссылки мастера -->
+                          <div v-if="profileFursuits[0].external_maker_links?.length" class="flex flex-wrap gap-1.5">
+                            <span v-if="!profileFursuits[0].maker_id || !makerGroupCache[profileFursuits[0].maker_id]"
+                              class="text-[10px] font-bold uppercase tracking-wider text-white/40 flex items-center gap-1 w-full">
+                              <BIcon name="Scissors" class="w-3 h-3" /> Мастер
+                            </span>
+                            <a v-for="link in profileFursuits[0].external_maker_links" :key="link"
+                              :href="link" target="_blank" rel="noopener noreferrer"
+                              class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-bg border border-brand-border text-white/70 hover:text-brand-accent hover:border-brand-accent/50 text-xs font-semibold transition-all"
+                              @click.stop>
+                              <BIcon name="ExternalLink" class="w-3 h-3" />
+                              {{ link.replace(/^https?:\/\/(?:www\.)?/, '').split('/')[0] }}
+                            </a>
+                          </div>
+
+                          <!-- Пустой placeholder -->
+                          <div v-if="!profileFursuits[0].description && !profileFursuits[0].external_maker_links?.length && !(profileFursuits[0].maker_id && makerGroupCache[profileFursuits[0].maker_id])">
+                            <p class="text-xs text-white/30 italic">Описание не добавлено</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- ══ Grid (2+ fursuits) ═══════════════════════════════ -->
+                      <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div v-for="suit in profileFursuits" :key="suit.id"
+                          class="rounded-3xl border border-brand-border bg-brand-card shadow-lg overflow-hidden group hover:border-brand-accent/40 transition-all">
+                          <!-- Фото -->
+                          <div class="relative h-56 bg-brand-bg overflow-hidden">
+                            <template v-if="suit.image_url">
+                              <img :src="suit.image_url"
+                                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                :class="suit.is_nsfw && !nsfwMode ? 'blur-xl scale-110' : ''"
+                                alt="Фото фурсьюта" />
+                              <div v-if="suit.is_nsfw && !nsfwMode"
+                                class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/30">
+                                <span class="px-3 py-1.5 rounded-xl bg-black/70 border border-rose-500/50 text-rose-400 text-xs font-bold">18+ NSFW</span>
+                              </div>
+                              <div v-else-if="suit.is_nsfw"
+                                class="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-rose-500/80 text-white text-[10px] font-bold">
+                                18+
+                              </div>
+                            </template>
+                            <div v-else class="w-full h-full flex items-center justify-center opacity-30">
+                              <span class="text-5xl">🐾</span>
+                            </div>
+                            <div v-if="suit.image_url" class="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-brand-card to-transparent"></div>
+                          </div>
+
+                          <!-- Информация -->
+                          <div class="p-4 space-y-2.5 -mt-1">
+                            <div v-if="suit.description" class="text-sm text-white/75 leading-relaxed line-clamp-3">
+                              {{ suit.description }}
+                            </div>
+
+                            <!-- Мастер — Bloomly группа -->
+                            <div v-if="suit.maker_id && makerGroupCache[suit.maker_id]" class="flex items-center gap-2 flex-wrap">
+                              <span class="text-[10px] font-bold uppercase tracking-wider text-white/40 flex items-center gap-1">
+                                <BIcon name="Scissors" class="w-3 h-3" /> Мастер
+                              </span>
+                              <RouterLink
+                                :to="`/groups/${makerGroupCache[suit.maker_id].slug}`"
+                                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-accent/10 border border-brand-accent/30 text-brand-accent text-xs font-bold hover:bg-brand-accent/20 transition-all"
+                                @click.stop>
+                                <img v-if="makerGroupCache[suit.maker_id].avatar_url"
+                                  :src="makerGroupCache[suit.maker_id].avatar_url!"
+                                  class="w-3.5 h-3.5 rounded-full object-cover" />
+                                <BIcon v-else name="Users" class="w-3 h-3" />
+                                {{ makerGroupCache[suit.maker_id].name }}
+                              </RouterLink>
+                            </div>
+
+                            <!-- Мастер — внешние ссылки -->
+                            <div v-if="suit.external_maker_links?.length" class="space-y-1">
+                              <p v-if="!suit.maker_id || !makerGroupCache[suit.maker_id]"
+                                class="text-[10px] font-bold uppercase tracking-wider text-white/40 flex items-center gap-1.5">
+                                <BIcon name="Scissors" class="w-3 h-3" /> Мастер
+                              </p>
+                              <div class="flex flex-wrap gap-1.5">
+                                <a v-for="link in suit.external_maker_links" :key="link"
+                                  :href="link" target="_blank" rel="noopener noreferrer"
+                                  class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-bg border border-brand-border text-white/70 hover:text-brand-accent hover:border-brand-accent/50 text-xs font-semibold transition-all"
+                                  @click.stop>
+                                  <BIcon name="ExternalLink" class="w-3 h-3" />
+                                  {{ link.replace(/^https?:\/\/(?:www\.)?/, '').split('/')[0] }}
+                                </a>
+                              </div>
+                            </div>
+
+                            <div v-if="!suit.external_maker_links?.length && !suit.description && !(suit.maker_id && makerGroupCache[suit.maker_id])" class="py-2">
+                              <p class="text-xs text-white/30 italic">Описание не добавлено</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
                   </div>
 
 
@@ -932,8 +1175,7 @@
                 <!-- Collapsed trigger -->
                 <button v-if="!showPostForm" @click="showPostForm = true"
                   class="w-full flex items-center gap-3 px-5 py-4 text-left group">
-                  <img v-if="ownAvatarSrc" :src="ownAvatarSrc" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" />
-                  <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">{{ (authStore.user?.display_name || authStore.user?.username || '?')[0].toUpperCase() }}</div>
+                  <img :src="ownAvatarSrc || '/icons/badges/NN.jpg'" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" />
                   <span class="flex-1 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">Что нового?</span>
                   <div class="flex items-center gap-2 text-white/55 group-hover:text-white transition-colors ml-1">
                     <BIcon name="ImagePlus" class="w-5 h-5" />
@@ -943,8 +1185,9 @@
                 <!-- Expanded composer -->
                 <div v-else class="p-5 space-y-4">
                   <div class="flex items-start gap-3">
-                    <img v-if="ownAvatarSrc" :src="ownAvatarSrc" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 mt-0.5" />
-                    <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold">{{ (authStore.user?.display_name || authStore.user?.username || '?')[0].toUpperCase() }}</div>
+                    <div class="relative flex-shrink-0 mt-0.5">
+                      <img :src="ownAvatarSrc || '/icons/badges/NN.jpg'" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover" />
+                    </div>
                     <div class="flex-1 min-w-0">
                       <MentionTextarea v-model="newPostContent" placeholder="Что у вас нового? Используйте @ для упоминаний" minHeight="90px" />
                     </div>
@@ -956,12 +1199,36 @@
                   </div>
                   <!-- Media previews -->
                   <MediaUpload ref="profileMediaUploadRef" type="posts" :multiple="true" @uploaded="onProfileMediaUploaded" />
+
+                  <!-- Tags row -->
+                  <div v-if="newPostTags.length" class="flex flex-wrap gap-1.5">
+                    <span v-for="tag in newPostTags" :key="tag"
+                      class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-brand-accent/15 border border-brand-accent/30 text-brand-accent text-xs font-semibold">
+                      #{{ tag }}
+                      <button @click="removeProfileTag(tag)" class="text-brand-accent/60 hover:text-brand-accent"><BIcon name="X" class="w-3 h-3" /></button>
+                    </span>
+                  </div>
+
                   <div class="border-t border-brand-border" />
                   <div class="flex items-center gap-2 flex-wrap">
                     <button @click="profileMediaUploadRef?.openPicker()"
                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white/55 hover:text-white hover:bg-brand-bg border border-transparent hover:border-brand-border transition-all">
                       <BIcon name="ImagePlus" class="w-4 h-4" /> Медиа
                     </button>
+                    <!-- Tag input -->
+                    <div class="relative inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-transparent hover:border-brand-border hover:bg-brand-bg transition-all">
+                      <BIcon name="Hash" class="w-4 h-4 text-white/55 flex-shrink-0" />
+                      <input type="text" v-model="newPostTagInput" @keydown.enter.prevent="addProfileTag"
+                        placeholder="тег + Enter"
+                        class="bg-transparent text-xs text-white placeholder-brand-muted outline-none w-24" />
+                    </div>
+                    <!-- Category -->
+                    <select v-model="newPostCategory"
+                      class="px-3 py-2 rounded-xl text-xs text-white/55 bg-transparent border border-transparent hover:border-brand-border hover:bg-brand-bg outline-none transition-all cursor-pointer">
+                      <template v-for="c in profilePostCategories" :key="c.id || 'empty-cat'">
+                        <option :value="c.id" class="bg-brand-card">{{ c.name }}</option>
+                      </template>
+                    </select>
                     <button @click="newPostIsNsfw = !newPostIsNsfw"
                       :disabled="!isNsfwAllowed"
                       :title="!isNsfwAllowed ? 'Недоступно до 18 лет' : ''"
@@ -970,7 +1237,40 @@
                       NSFW
                     </button>
                     <div class="flex-1" />
-                    <button @click="showPostForm = false; newPostContent = ''; newPostMediaUrls = []; profileMediaUploadRef?.clearAll()"
+                    <!-- Visibility -->
+                    <div class="relative">
+                      <button @click.stop="showProfileVisibilityMenu = !showProfileVisibilityMenu"
+                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all"
+                        :class="newPostVisibility !== 'public' ? 'border-brand-accent/50 text-brand-accent bg-brand-accent/10' : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'">
+                        <BIcon :name="newPostVisibility === 'subscriber_only' ? 'Users' : newPostVisibility === 'paid' ? 'DollarSign' : 'Globe2'" class="w-3.5 h-3.5" />
+                        {{ newPostVisibility === 'subscriber_only' ? 'Только Подписчикам' : newPostVisibility === 'paid' ? 'Платный пост' : 'Видно всем' }}
+                        <BIcon name="ChevronDown" class="w-3 h-3 opacity-60" />
+                      </button>
+                      <Transition name="slide">
+                        <div v-if="showProfileVisibilityMenu" v-click-outside="() => showProfileVisibilityMenu = false"
+                          class="absolute bottom-full left-0 mb-1.5 z-30 w-52 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1">
+                          <button @click="newPostVisibility = 'public'; showProfileVisibilityMenu = false"
+                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
+                            :class="newPostVisibility === 'public' ? 'text-brand-accent' : 'text-white'">
+                            <BIcon name="Globe2" class="w-4 h-4 flex-shrink-0" /> Видно всем
+                            <BIcon v-if="newPostVisibility === 'public'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
+                          </button>
+                          <button @click="newPostVisibility = 'subscriber_only'; showProfileVisibilityMenu = false"
+                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
+                            :class="newPostVisibility === 'subscriber_only' ? 'text-brand-accent' : 'text-white'">
+                            <BIcon name="Users" class="w-4 h-4 flex-shrink-0" /> Только Подписчикам
+                            <BIcon v-if="newPostVisibility === 'subscriber_only'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
+                          </button>
+                          <button @click="newPostVisibility = 'paid'; showProfileVisibilityMenu = false"
+                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
+                            :class="newPostVisibility === 'paid' ? 'text-brand-accent' : 'text-white'">
+                            <BIcon name="DollarSign" class="w-4 h-4 flex-shrink-0" /> Платный пост
+                            <BIcon v-if="newPostVisibility === 'paid'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
+                          </button>
+                        </div>
+                      </Transition>
+                    </div>
+                    <button @click="showPostForm = false; newPostContent = ''; newPostMediaUrls = []; newPostTags = []; newPostTagInput = ''; newPostCategory = ''; newPostVisibility = 'public'; profileMediaUploadRef?.clearAll()"
                       class="text-xs font-semibold text-white/55 hover:text-white transition-all">Отмена</button>
                   </div>
                 </div>
@@ -986,11 +1286,14 @@
                     <!-- Pinned post -->
                     <div v-if="pinnedPost && activeContentTab === 'posts'">
                       <div class="flex items-center gap-2 text-xs text-white/55 font-semibold mb-2 px-1">
-                        <BIcon name="Pin" class="w-3.5 h-3.5 text-brand-accent" /> Закреплённый пост
+                        <BIcon name="Pin" class="w-3.5 h-3.5 text-brand-accent" /> {{ langStore.t.pinnedPost }}
                       </div>
                       <PostCard :post="pinnedPost" :is-own-profile="isOwnProfile"
                         :is-pinned-post-id="viewedProfile.pinned_post_id"
                         :ad-mode="false"
+                        :initial-repawed="profilePostStatus[pinnedPost.id]?.repawed ?? false"
+                        :initial-favourited="profilePostStatus[pinnedPost.id]?.favourited ?? false"
+                        :initial-vote="profilePostStatus[pinnedPost.id]?.userVote ?? 0"
                         @pin="pinPost" @unpin="unpinPost" @deleted="onPostDeleted" @updated="onPostUpdated" />
                     </div>
 
@@ -1011,11 +1314,14 @@
                           :show-repaw-label="true"
                           :group-context="(post as any).groupPosts?.[0]?.group ?? null"
                           :ad-mode="false"
+                          :initial-repawed="profilePostStatus[post.id]?.repawed ?? false"
+                          :initial-favourited="profilePostStatus[post.id]?.favourited ?? false"
+                          :initial-vote="profilePostStatus[post.id]?.userVote ?? 0"
                           @pin="pinPost" @unpin="unpinPost" @deleted="onPostDeleted" @updated="onPostUpdated" />
                       </template>
                       <div v-else class="py-14 text-center text-white/55">
                         <BIcon name="FileText" class="w-10 h-10 mx-auto mb-3 opacity-30" />
-                        <p class="font-semibold text-sm mb-4">Постов пока нет</p>
+                        <p class="font-semibold text-sm mb-4">{{ langStore.t.noPostsLabel }}</p>
                         <button v-if="isOwnProfile" @click="showPostForm = true; $nextTick(() => window.scrollTo({top: 0, behavior: 'smooth'}))"
                           class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-accent hover:bg-brand-accent-plus text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-brand-accent/20">
                           <BIcon name="Plus" class="w-4 h-4" /> Создать первый пост
@@ -1031,62 +1337,151 @@
                         :show-repaw-label="activeContentTab === 'repaws'"
                         :group-context="activeContentTab === 'repaws' ? ((post as any).groupPosts?.[0]?.group ?? null) : null"
                         :ad-mode="false"
+                        :initial-repawed="profilePostStatus[post.id]?.repawed ?? false"
+                        :initial-favourited="profilePostStatus[post.id]?.favourited ?? false"
+                        :initial-vote="profilePostStatus[post.id]?.userVote ?? 0"
                         @pin="pinPost" @unpin="unpinPost" @deleted="onPostDeleted" @updated="onPostUpdated" />
                     </template>
                   </template>
 
                   <!-- MEDIA -->
-                  <div v-else-if="activeContentTab === 'media'">
-                    <div class="flex gap-2 mb-4">
+                  <div v-else-if="activeContentTab === 'media'" @click="mediaTagTarget = null">
+                    <!-- Панель фильтров + режим альбомов -->
+                    <div class="flex items-center gap-2 mb-4 flex-wrap">
                       <button v-for="f in (['all','photo','video'] as const)" :key="f" @click="mediaFilter = f"
                         class="px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all"
                         :class="mediaFilter === f ? 'bg-brand-accent border-brand-accent text-white' : 'border-brand-border text-white/55 hover:text-white'">
-                        {{ f === 'all' ? `Всё · ${tabPosts.length}` : f === 'photo' ? `Фото · ${tabPosts.filter((p: any) => isImage(p.media_urls[0])).length}` : `Видео · ${tabPosts.filter((p: any) => !isImage(p.media_urls[0])).length}` }}
+                        {{ f === 'all' ? `Все · ${filteredMediaPosts.length}` : f === 'photo' ? `Фото · ${tabPosts.filter((p: any) => isImage(p.media_urls?.[0] ?? '')).length}` : `Видео · ${tabPosts.filter((p: any) => !isImage(p.media_urls?.[0] ?? '')).length}` }}
+                      </button>
+                      <div class="flex-1" />
+                      <button @click.stop="mediaAlbumView = !mediaAlbumView"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all"
+                        :class="mediaAlbumView ? 'bg-brand-accent/15 border-brand-accent/60 text-brand-accent' : 'border-brand-border text-white/55 hover:text-white'">
+                        <BIcon name="FolderOpen" class="w-3.5 h-3.5" />
+                        Альбомы
                       </button>
                     </div>
 
+                    <!-- Скелетон при загрузке -->
                     <div v-if="isLoadingTab" class="grid grid-cols-3 gap-1.5">
                       <div v-for="n in 9" :key="n" class="aspect-square bg-brand-bg border border-brand-border rounded-xl animate-pulse"></div>
                     </div>
-                    <div v-else-if="!filteredMediaPosts.length" class="py-14 text-center text-white/55">
+
+                    <!-- Пусто -->
+                    <div v-else-if="!filteredMediaPosts.length && !specialAlbums.length" class="py-14 text-center text-white/55">
                       <BIcon name="Image" class="w-10 h-10 mx-auto mb-3 opacity-30" />
                       <p class="font-semibold text-sm">Медиа пока нет</p>
                     </div>
-                    <div v-else class="grid grid-cols-3 gap-1.5">
-                      <div v-for="post in filteredMediaPosts" :key="post.id"
-                        @click="expandedMediaPost = expandedMediaPost?.id === post.id ? null : post"
-                        class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-brand-border/60 hover:border-brand-accent/60 bg-brand-bg transition-all">
-                        <img v-if="isImage(post.media_urls[0])" :src="post.media_urls[0]" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                        <div v-else class="w-full h-full flex items-center justify-center bg-brand-bg">
-                          <BIcon name="Play" class="w-8 h-8 text-white/55" />
-                        </div>
-                        <div v-if="post.media_urls.length > 1" class="absolute top-1.5 right-1.5 bg-black/70 rounded-lg px-1.5 py-0.5 text-[10px] text-white font-bold">+{{ post.media_urls.length - 1 }}</div>
-                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-end p-2 opacity-0 group-hover:opacity-100">
-                          <span class="flex items-center gap-1 text-white text-xs font-bold">
-                            <BIcon name="ChevronUp" class="w-3.5 h-3.5" />{{ post.rating }}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
 
-                    <Transition name="fade">
-                      <div v-if="expandedMediaPost" class="mt-3 bg-brand-bg border border-brand-border rounded-2xl p-4">
-                        <div class="flex items-center justify-between mb-3">
-                          <span class="text-sm font-bold text-white/70">{{ formatDate(expandedMediaPost.created_at) }}</span>
-                          <button @click="expandedMediaPost = null" class="w-7 h-7 flex items-center justify-center rounded-lg text-white/55 hover:text-white hover:bg-brand-border/50 transition">
-                            <BIcon name="X" class="w-4 h-4" />
-                          </button>
-                        </div>
-                        <p v-if="expandedMediaPost.content" class="text-sm text-white/80 mb-3 whitespace-pre-wrap">{{ expandedMediaPost.content }}</p>
-                        <div class="grid gap-2" :class="expandedMediaPost.media_urls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'">
-                          <template v-for="(url, i) in expandedMediaPost.media_urls" :key="i">
-                            <div class="rounded-xl overflow-hidden">
-                              <CustomPlayer :src="url" />
+                    <template v-else>
+                      <!-- ══ Режим альбомов ══════════════════════════════════════ -->
+                      <template v-if="mediaAlbumView">
+
+                        <!-- Сетка карточек альбомов -->
+                        <div class="grid grid-cols-2 gap-3">
+                          <!-- Специальные альбомы (Фурсона / Фурсьют) -->
+                          <div v-for="sp in specialAlbums" :key="sp.id"
+                            @click.stop="openAlbum = sp"
+                            class="relative rounded-2xl overflow-hidden cursor-pointer group aspect-[4/3] border border-brand-border hover:border-brand-accent/60 transition-all shadow-md">
+                            <img v-if="sp.urls[0] && isImage(sp.urls[0].url)" :src="sp.urls[0].url"
+                              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                            <div v-else class="w-full h-full bg-brand-bg flex items-center justify-center text-4xl">{{ sp.emoji }}</div>
+                            <!-- Overlay -->
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+                            <!-- Info -->
+                            <div class="absolute bottom-0 left-0 right-0 p-3">
+                              <div class="flex items-center gap-1.5 mb-0.5">
+                                <span class="text-sm leading-none">{{ sp.emoji }}</span>
+                                <p class="text-xs font-bold text-white">{{ sp.label }}</p>
+                              </div>
+                              <p class="text-[10px] text-white/55 font-semibold">{{ sp.urls.length }} фото</p>
                             </div>
-                          </template>
+                            <!-- Hover icon -->
+                            <div class="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
+                              <BIcon name="FolderOpen" class="w-3.5 h-3.5 text-white" />
+                            </div>
+                          </div>
+                          <!-- Альбомы по месяцам -->
+                          <div v-for="album in mediaAlbums" :key="album.label"
+                            @click.stop="openAlbum = { ...album, emoji: undefined }"
+                            class="relative rounded-2xl overflow-hidden cursor-pointer group aspect-[4/3] border border-brand-border hover:border-brand-accent/60 transition-all shadow-md">
+                            <!-- Мозаика из первых 4 фото -->
+                            <div v-if="album.urls.length >= 4" class="grid grid-cols-2 gap-0.5 w-full h-full">
+                              <div v-for="(item, i) in album.urls.slice(0, 4)" :key="i" class="overflow-hidden">
+                                <img v-if="isImage(item.url)" :src="item.url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                                <div v-else class="w-full h-full bg-brand-bg/60 flex items-center justify-center"><BIcon name="Play" class="w-5 h-5 text-white/40" /></div>
+                              </div>
+                            </div>
+                            <div v-else-if="album.urls[0]" class="w-full h-full">
+                              <img v-if="isImage(album.urls[0].url)" :src="album.urls[0].url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                              <div v-else class="w-full h-full bg-brand-bg flex items-center justify-center"><BIcon name="Image" class="w-10 h-10 text-white/20" /></div>
+                            </div>
+                            <!-- Overlay -->
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent"></div>
+                            <!-- Info -->
+                            <div class="absolute bottom-0 left-0 right-0 p-3">
+                              <div class="flex items-center gap-1.5 mb-0.5">
+                                <BIcon name="CalendarDays" class="w-3 h-3 text-brand-accent/80" />
+                                <p class="text-xs font-bold text-white">{{ album.label }}</p>
+                              </div>
+                              <p class="text-[10px] text-white/55 font-semibold">{{ album.urls.length }} фото</p>
+                            </div>
+                            <!-- Hover icon -->
+                            <div class="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
+                              <BIcon name="FolderOpen" class="w-3.5 h-3.5 text-white" />
+                            </div>
+                          </div>
+                        </div>
+                      </template>
+
+                      <!-- ══ Обычная сетка ════════════════════════════════════════ -->
+                      <div v-else class="grid grid-cols-3 gap-1.5">
+                        <div v-for="(post, idx) in filteredMediaPosts" :key="post.id"
+                          class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-brand-border/60 hover:border-brand-accent/60 bg-brand-bg transition-all">
+                          <div @click.stop="openMediaLightbox(post.media_urls[0], filteredMediaPosts.map((p: any) => p.media_urls[0]), idx)"
+                            class="absolute inset-0">
+                            <img v-if="isImage(post.media_urls[0])" :src="post.media_urls[0]" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                            <div v-else class="w-full h-full flex items-center justify-center bg-brand-bg/60">
+                              <BIcon name="Play" class="w-8 h-8 text-white/55" />
+                            </div>
+                          </div>
+                          <!-- Тег-ярлык -->
+                          <div v-if="mediaPostLabels[post.id]"
+                            class="absolute top-1 left-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-brand-accent/80 text-white backdrop-blur-sm pointer-events-none">
+                            {{ mediaPostLabels[post.id] === 'fursona' ? '🐾' : '🦊' }}
+                          </div>
+                          <div v-if="post.media_urls.length > 1" class="absolute top-1.5 right-1.5 bg-black/70 rounded-lg px-1.5 py-0.5 text-[10px] text-white font-bold backdrop-blur-sm">+{{ post.media_urls.length - 1 }}</div>
+                          <!-- Кнопка добавить в альбом (только свой профиль) -->
+                          <button v-if="isOwnProfile" type="button"
+                            @click.stop="mediaTagTarget = mediaTagTarget === post.id ? null : post.id"
+                            class="absolute bottom-1 right-1 w-6 h-6 rounded-lg bg-black/60 border border-white/15 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-brand-accent/70">
+                            <BIcon name="FolderPlus" class="w-3 h-3 text-white" />
+                          </button>
+                          <!-- Попап выбора альбома -->
+                          <div v-if="mediaTagTarget === post.id"
+                            class="absolute bottom-8 right-1 z-20 flex flex-col gap-1 p-1.5 rounded-xl bg-brand-card border border-brand-border shadow-xl min-w-[100px]"
+                            @click.stop>
+                            <button @click.stop="setMediaLabel(post.id, 'fursona')"
+                              class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-bold text-white/80 hover:bg-brand-accent/15 hover:text-brand-accent transition-all"
+                              :class="mediaPostLabels[post.id] === 'fursona' ? 'bg-brand-accent/15 text-brand-accent' : ''">
+                              🐾 Фурсона
+                            </button>
+                            <button @click.stop="setMediaLabel(post.id, 'fursuit')"
+                              class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-bold text-white/80 hover:bg-brand-accent/15 hover:text-brand-accent transition-all"
+                              :class="mediaPostLabels[post.id] === 'fursuit' ? 'bg-brand-accent/15 text-brand-accent' : ''">
+                              🦊 Фурсьют
+                            </button>
+                            <button v-if="mediaPostLabels[post.id]" @click.stop="setMediaLabel(post.id, null)"
+                              class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-bold text-white/40 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
+                              <BIcon name="X" class="w-3 h-3" /> Убрать
+                            </button>
+                          </div>
+                          <div class="absolute inset-0 bg-black/0 group-hover:bg-black/45 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
+                            <BIcon name="ZoomIn" class="w-6 h-6 text-white" />
+                          </div>
                         </div>
                       </div>
-                    </Transition>
+                    </template>
                   </div>
 
                   <!-- FOLLOWERS (owner-only) -->
@@ -1100,14 +1495,13 @@
                     </div>
                     <div v-else-if="!followers.length" class="py-14 text-center text-white/55">
                       <BIcon name="Users" class="w-10 h-10 mx-auto mb-3 opacity-30" />
-                      <p class="font-semibold text-sm mb-1">Нет подписчиков</p>
+                      <p class="font-semibold text-sm mb-1">{{ langStore.t.noFollowersLabel }}</p>
                       <p class="text-xs opacity-70">Здесь появятся те, кто на тебя подписался</p>
                     </div>
                     <div v-else class="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                      <router-link v-for="follower in followers" :key="follower.id" :to="'/profile/' + follower.id"
+                      <router-link v-for="follower in followers" :key="follower.id" :to="'/profile/' + follower.username"
                         class="flex flex-col items-center gap-2 p-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/50 transition-all group">
-                        <img v-if="follower.avatar_url" :src="follower.avatar_url" class="w-12 h-12 rounded-full object-cover" />
-                        <div v-else class="w-12 h-12 rounded-full bg-brand-accent/20 border border-brand-border flex items-center justify-center text-brand-accent font-bold text-lg">{{ (follower.display_name || follower.username || '?')[0].toUpperCase() }}</div>
+                        <img :src="follower.avatar_url || '/icons/badges/NN.jpg'" class="w-12 h-12 rounded-full object-cover" />
                         <div class="text-center min-w-0 w-full">
                           <p class="text-xs font-bold text-white truncate group-hover:text-brand-accent transition-colors">{{ follower.display_name || follower.username }}</p>
                           <p class="text-[10px] text-white/55 truncate">@{{ follower.username }}</p>
@@ -1121,6 +1515,37 @@
 
             </div>
             <!-- / CENTER COLUMN -->
+
+            <!-- ── LIGHTBOX (глобальный) ──────────────────────────────── -->
+            <Teleport to="body">
+              <Transition name="lightbox-fade">
+                <div v-if="lightboxUrl" class="fixed inset-0 z-[9999] flex items-center justify-center"
+                  @click.self="closeLightbox" style="background:rgba(0,0,0,0.93)">
+                  <button @click="closeLightbox"
+                    class="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all z-10 backdrop-blur-sm border border-white/15">
+                    <BIcon name="X" class="w-5 h-5" />
+                  </button>
+                  <button v-if="lightboxIndex > 0" @click.stop="lightboxStep(-1)"
+                    class="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all z-10 backdrop-blur-sm border border-white/15">
+                    <BIcon name="ChevronLeft" class="w-5 h-5" />
+                  </button>
+                  <button v-if="lightboxIndex < lightboxList.length - 1" @click.stop="lightboxStep(1)"
+                    class="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all z-10 backdrop-blur-sm border border-white/15">
+                    <BIcon name="ChevronRight" class="w-5 h-5" />
+                  </button>
+                  <div class="max-w-[90vw] max-h-[90vh] flex items-center justify-center">
+                    <img v-if="isImage(lightboxUrl)" :src="lightboxUrl"
+                      class="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl select-none"
+                      style="box-shadow:0 0 80px rgba(0,0,0,0.8)" draggable="false" />
+                    <video v-else :src="lightboxUrl" controls class="max-w-full max-h-[90vh] rounded-2xl shadow-2xl"></video>
+                  </div>
+                  <div v-if="lightboxList.length > 1"
+                    class="absolute bottom-6 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-xl bg-black/50 border border-white/15 text-white/70 text-xs font-bold backdrop-blur-sm">
+                    {{ lightboxIndex + 1 }} / {{ lightboxList.length }}
+                  </div>
+                </div>
+              </Transition>
+            </Teleport>
 
             <!-- ── RIGHT SIDEBAR ────────────────────────────────────────── -->
             <div class="hidden xl:flex flex-col gap-3 w-60 flex-shrink-0 sticky top-24 self-start">
@@ -1280,20 +1705,6 @@
               <!-- TrustScore card (only for activity participants) -->
               <TrustScoreCard v-if="viewedProfile?.id" :user-id="viewedProfile.id" />
 
-              <!-- Mini media thumbnails -->
-              <div v-if="tabPosts.filter((p: any) => p.media_urls?.length).length" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl p-3">
-                <p class="text-[11px] font-bold uppercase tracking-widest text-white/55 mb-2 px-1">Медиа</p>
-                <div class="grid grid-cols-3 gap-1">
-                  <div v-for="p in tabPosts.filter((p: any) => p.media_urls?.length).slice(0, 9)" :key="p.id"
-                    class="aspect-square rounded-lg overflow-hidden bg-brand-bg cursor-pointer hover:opacity-75 transition-opacity">
-                    <img v-if="isImage(p.media_urls[0])" :src="p.media_urls[0]" class="w-full h-full object-cover" />
-                    <div v-else class="w-full h-full flex items-center justify-center bg-brand-border/20">
-                      <BIcon name="Play" class="w-4 h-4 text-white/55" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
             </div>
             <!-- / RIGHT SIDEBAR -->
 
@@ -1322,6 +1733,41 @@
           <BIcon name="X" class="w-5 h-5" />
         </button>
         <img :src="viewedProfile?.avatar_url" class="max-w-full max-h-[85vh] rounded-full object-cover shadow-2xl" />
+      </div>
+    </Transition>
+
+    <!-- ─── Album Modal ────────────────────────────────────────────── -->
+    <Transition name="fade">
+      <div v-if="openAlbum" class="fixed inset-0 z-[615] bg-black/95 flex flex-col" @click.self="openAlbum = null">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border/60 bg-brand-card/80 backdrop-blur-md flex-shrink-0">
+          <div class="flex items-center gap-2.5">
+            <span v-if="openAlbum.emoji" class="text-xl leading-none">{{ openAlbum.emoji }}</span>
+            <BIcon v-else name="CalendarDays" class="w-5 h-5 text-brand-accent" />
+            <h3 class="text-white font-bold text-lg">{{ openAlbum.label }}</h3>
+            <span class="text-xs text-white/40 font-semibold">· {{ openAlbum.urls.length }}</span>
+          </div>
+          <button @click="openAlbum = null"
+            class="w-9 h-9 flex items-center justify-center rounded-xl bg-brand-bg hover:bg-brand-border text-white/70 hover:text-white transition-all">
+            <BIcon name="X" class="w-4 h-4" />
+          </button>
+        </div>
+        <!-- Grid -->
+        <div class="flex-1 overflow-y-auto p-3">
+          <div class="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+            <div v-for="(item, idx) in openAlbum.urls" :key="idx"
+              @click.stop="openMediaLightbox(item.url, openAlbum!.urls.map(u => u.url), idx)"
+              class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-brand-border/60 hover:border-brand-accent/60 bg-brand-bg transition-all">
+              <img v-if="isImage(item.url)" :src="item.url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+              <div v-else class="w-full h-full flex items-center justify-center bg-brand-bg/60">
+                <BIcon name="Play" class="w-8 h-8 text-white/55" />
+              </div>
+              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                <BIcon name="ZoomIn" class="w-6 h-6 text-white" />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </Transition>
 
@@ -1377,10 +1823,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, reactive } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useHead } from '@unhead/vue'
 import { useAuthStore } from '@/stores/auth'
-import { useUserStore, type UserProfile } from '@/stores/user'
+import { useUserStore, type UserProfile, type Fursona, type Fursuit } from '@/stores/user'
 import { useLangStore } from '@/stores/lang'
 import PostComments from '@/components/PostComments.vue'
 import PostCard from '@/components/PostCard.vue'
@@ -1443,6 +1890,72 @@ const viewedProfile = ref<UserProfile | null>(null)
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 
+// ── SEO ───────────────────────────────────────────────────────────────────────
+const BASE = 'https://bloomly.fun'
+useHead({
+  title: () => {
+    if (!viewedProfile.value) return 'Bloomly'
+    const name = viewedProfile.value.display_name || viewedProfile.value.username
+    return `${name} (@${viewedProfile.value.username}) — Bloomly`
+  },
+  meta: [
+    { name: 'robots', content: 'index, follow' },
+    { name: 'description', content: () => {
+        if (!viewedProfile.value) return 'Bloomly — творческая социальная сеть.'
+        const name = viewedProfile.value.display_name || viewedProfile.value.username
+        return (viewedProfile.value.bio)
+          ? `${viewedProfile.value.bio.slice(0, 155)}…`
+          : `Профиль ${name} на Bloomly — творческой социальной сети.`
+      }
+    },
+    { property: 'og:type', content: 'profile' },
+    { property: 'og:site_name', content: 'Bloomly' },
+    { property: 'og:title', content: () => {
+        if (!viewedProfile.value) return 'Bloomly'
+        const name = viewedProfile.value.display_name || viewedProfile.value.username
+        return `${name} (@${viewedProfile.value.username})`
+      }
+    },
+    { property: 'og:description', content: () => {
+        if (!viewedProfile.value) return ''
+        const name = viewedProfile.value.display_name || viewedProfile.value.username
+        return viewedProfile.value.bio?.slice(0, 200) || `Профиль ${name} на Bloomly.`
+      }
+    },
+    { property: 'og:image', content: () => viewedProfile.value?.avatar_url || `${BASE}/og-default.png` },
+    { property: 'og:url', content: () => `${BASE}/profile/${viewedProfile.value?.username || route.params.username}` },
+    { name: 'twitter:card', content: 'summary' },
+    { name: 'twitter:title', content: () => {
+        if (!viewedProfile.value) return 'Bloomly'
+        return `${viewedProfile.value.display_name || viewedProfile.value.username} (@${viewedProfile.value.username})`
+      }
+    },
+    { name: 'twitter:image', content: () => viewedProfile.value?.avatar_url || `${BASE}/og-default.png` },
+  ],
+  link: [
+    { rel: 'canonical', href: () => `${BASE}/profile/${viewedProfile.value?.username || route.params.username}` },
+  ],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: () => {
+        if (!viewedProfile.value) return ''
+        const name = viewedProfile.value.display_name || viewedProfile.value.username
+        return JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'ProfilePage',
+          name,
+          url: `${BASE}/profile/${viewedProfile.value.username}`,
+          description: viewedProfile.value.bio || '',
+          ...(viewedProfile.value.avatar_url ? {
+            image: { '@type': 'ImageObject', url: viewedProfile.value.avatar_url },
+          } : {}),
+        })
+      },
+    },
+  ],
+})
+
 // ── Profile stories ───────────────────────────────────────────────────────────
 interface ProfileStory {
   id: string
@@ -1482,9 +1995,80 @@ const repawsFallback = ref<any[]>([])
 const followers = ref<any[]>([])
 const userHashtags = ref<{ name: string; count: number }[]>([])
 const isLoadingTab = ref(false)
+const profilePostStatus = reactive<Record<string, { repawed: boolean; favourited: boolean; userVote: 1 | -1 | 0 }>>({})
 const expandedMediaPost = ref<any | null>(null)
 const pinnedPost = ref<any | null>(null)
 const mediaFilter = ref<'all' | 'photo' | 'video'>('all')
+const mediaAlbumView = ref(false)
+// postId → 'fursona' | 'fursuit' | null  (ярлыки для ручных альбомов)
+const mediaPostLabels = ref<Record<string, 'fursona' | 'fursuit'>>({})
+const mediaTagTarget = ref<string | null>(null) // postId с открытым попапом тегов
+const openAlbum = ref<{ label: string; emoji?: string; urls: { url: string; postId?: string }[] } | null>(null)
+
+// ── Fursona / fursuit для просматриваемого профиля ───────────────────────────
+const profileFursona = ref<Fursona | null>(null)
+const profileFursuits = ref<Fursuit[]>([])
+const profileFursonaLoading = ref(false)
+const profileFursuitsLoading = ref(false)
+const makerGroupCache = ref<Record<string, { id: string; slug: string; name: string; avatar_url: string | null }>>({})
+
+
+async function loadProfileFursona(userId: string) {
+  profileFursonaLoading.value = true
+  try {
+    const res = await api.get(`/users/${userId}/fursona`)
+    if (res.data.success) profileFursona.value = res.data.data.fursona ?? null
+    else profileFursona.value = null
+  } catch { profileFursona.value = null }
+  finally { profileFursonaLoading.value = false }
+}
+
+async function loadProfileFursuits(userId: string) {
+  profileFursuitsLoading.value = true
+  try {
+    const res = await api.get(`/users/${userId}/fursuits`)
+    if (res.data.success) profileFursuits.value = res.data.data.fursuits ?? []
+    else profileFursuits.value = []
+    // Resolve maker_ids → group info (for pill badges)
+    const uniqueIds = [...new Set(profileFursuits.value.filter(s => s.maker_id).map(s => s.maker_id!))]
+    await Promise.all(uniqueIds.map(async (id) => {
+      if (makerGroupCache.value[id]) return
+      try {
+        const gr = await api.get(`/groups/${id}`)
+        if (gr.data.success && gr.data.data.group) {
+          makerGroupCache.value[id] = gr.data.data.group
+        }
+      } catch { /* not a group or no access, skip */ }
+    }))
+  } catch { profileFursuits.value = [] }
+  finally { profileFursuitsLoading.value = false }
+}
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+const lightboxUrl = ref<string>('')
+const lightboxList = ref<string[]>([])
+const lightboxIndex = ref(0)
+
+function openMediaLightbox(url: string, list: string[], idx: number) {
+  lightboxUrl.value = url
+  lightboxList.value = list
+  lightboxIndex.value = idx
+}
+function closeLightbox() { lightboxUrl.value = '' }
+function lightboxStep(dir: -1 | 1) {
+  const next = lightboxIndex.value + dir
+  if (next >= 0 && next < lightboxList.value.length) {
+    lightboxIndex.value = next
+    lightboxUrl.value = lightboxList.value[next]
+  }
+}
+// Клавиши для lightbox
+function onKeyDown(e: KeyboardEvent) {
+  if (!lightboxUrl.value) return
+  if (e.key === 'Escape') closeLightbox()
+  if (e.key === 'ArrowLeft') lightboxStep(-1)
+  if (e.key === 'ArrowRight') lightboxStep(1)
+}
 
 const relation = reactive({ aFollowsB: false, bFollowsA: false, friends: false })
 const notifyPosts = ref(false)
@@ -1494,8 +2078,29 @@ const isTogglingFollow = ref(false)
 const newPostContent = ref('')
 const newPostMediaUrls = ref<string[]>([])
 const newPostIsNsfw = ref(false)
+const newPostTags = ref<string[]>([])
+const newPostTagInput = ref('')
+const newPostCategory = ref('')
+const newPostVisibility = ref('public')
+const showProfileVisibilityMenu = ref(false)
 const isCreatingPost = ref(false)
 const profileMediaUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
+
+const profilePostCategories = [
+  { id: '', name: 'Категория' },
+  { id: 'digital_art', name: 'Digital Art' },
+  { id: 'photography', name: 'Photography' },
+  { id: '3d', name: '3D' },
+  { id: 'animation', name: 'Animation' },
+  { id: 'writing', name: 'Writing' },
+  { id: 'other', name: 'Other' },
+]
+function addProfileTag() {
+  const t = newPostTagInput.value.trim().replace(/^#/, '')
+  if (t && !newPostTags.value.includes(t)) newPostTags.value.push(t)
+  newPostTagInput.value = ''
+}
+function removeProfileTag(tag: string) { newPostTags.value = newPostTags.value.filter(t => t !== tag) }
 
 const partnerProfile = ref<{ id: string; username: string; display_name: string | null; avatar_url: string | null } | null>(null)
 
@@ -1522,7 +2127,7 @@ const showAvatarViewer = ref(false)
 const showBannerViewer = ref(false)
 const showFursonaRefViewer = ref(false)
 const selectedFursonaRef = ref('')
-const fursonaSubTab = ref<'info' | 'personality' | 'features' | 'media'>('personality')
+const fursonaSubTab = ref<'info' | 'personality' | 'features'>('personality')
 const editSection = ref<'basics' | 'bio' | 'fursona' | 'fursuit' | 'contacts' | 'socials'>('bio')
 const isSavingEdit = ref(false)
 const editForm = ref<{
@@ -1565,10 +2170,9 @@ const activeFursonaRef = computed(() => selectedFursonaRef.value || fursonaRefIm
 const fursonaOtherCount = computed(() => Math.max(0, fursonaRefImages.value.length - 1))
 
 const fursonaViewTabs = computed(() => [
+  { key: 'personality' as const, label: 'Личность', count: ((profileFursona.value?.likes?.length ?? 0) + (profileFursona.value?.dislikes?.length ?? 0)) },
   { key: 'info' as const,        label: 'Информация' },
-  { key: 'personality' as const, label: 'Личность', count: ((viewedProfile.value?.likes?.length ?? 0) + (viewedProfile.value?.dislikes?.length ?? 0)), disabled: false },
-  { key: 'features' as const,    label: 'Особенности', count: fursonaRefPalette.value.length, disabled: false },
-  { key: 'media' as const,       label: 'Медиа', count: fursonaRefImages.value.length, disabled: false },
+  { key: 'features' as const,    label: 'Особенности', count: profileFursona.value?.colors?.length ?? 0 },
 ])
 
 const fursonaRefPalette = computed(() => {
@@ -1721,8 +2325,6 @@ const avatarSrc = computed(() => {
 const bannerStyle = computed(() => {
   const p = viewedProfile.value
   if (!p) return {}
-  // Pro: custom background image from gallery
-  if ((p as any).profile_bg_url) return { backgroundImage: `url('${(p as any).profile_bg_url}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
   if (p.banner_url) return { backgroundImage: `url('${p.banner_url}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
   // Use theme accent if set, otherwise profile accent_color
   const themeId = (p as any).profile_theme as string | undefined
@@ -1802,36 +2404,22 @@ const badgePillMap: Record<string, { label: string; cls: string; icon: any }> = 
   admin:      { label: 'Администратор', cls: 'bg-amber-500/25 border border-amber-500/40 text-amber-300', icon: Crown },
   moderator:  { label: 'Модератор',     cls: 'bg-purple-500/25 border border-purple-500/40 text-purple-300', icon: Shield },
   creator:    { label: 'Криэйтор',      cls: 'bg-orange-500/25 border border-orange-500/40 text-orange-300', icon: Star },
-  verified:   { label: 'Верификация',   cls: 'bg-blue-500/25 border border-blue-500/40 text-blue-300', icon: BadgeCheck },
-  artist:     { label: 'Художник',      cls: 'bg-purple-500/25 border border-purple-500/40 text-purple-300', icon: BadgeCheck },
-  master:     { label: 'Мастер',        cls: 'bg-amber-500/25 border border-amber-500/40 text-amber-300', icon: BadgeCheck },
-  event:      { label: 'Мероприятие',   cls: 'bg-emerald-500/25 border border-emerald-500/40 text-emerald-300', icon: BadgeCheck },
   advertiser: { label: 'Рекламодатель', cls: 'bg-emerald-500/25 border border-emerald-500/40 text-emerald-300', icon: Megaphone },
   ad:         { label: 'Рекламодатель', cls: 'bg-amber-500/25 border border-amber-500/40 text-amber-400', icon: Megaphone },
 }
 
 const badgePillClass = computed(() => {
   const p = viewedProfile.value
-  // Check verification_type first for specific badge styles
-  const vt = (p as any)?.verification_type
-  if (vt && badgePillMap[vt]) return badgePillMap[vt].cls
-  if ((p as any)?.is_verified && !p?.badge_type) return badgePillMap['verified']?.cls ?? ''
   const bt = p?.badge_type ?? p?.role
   return badgePillMap[bt ?? '']?.cls ?? ''
 })
 const badgePillLabel = computed(() => {
   const p = viewedProfile.value
-  const vt = (p as any)?.verification_type
-  if (vt && badgePillMap[vt]) return badgePillMap[vt].label
-  if ((p as any)?.is_verified && !p?.badge_type) return badgePillMap['verified']?.label ?? ''
   const bt = p?.badge_type ?? p?.role
   return badgePillMap[bt ?? '']?.label ?? ''
 })
 const badgePillIcon = computed(() => {
   const p = viewedProfile.value
-  const vt = (p as any)?.verification_type
-  if (vt && badgePillMap[vt]) return badgePillMap[vt].icon
-  if ((p as any)?.is_verified && !p?.badge_type) return badgePillMap['verified']?.icon ?? User
   const bt = p?.badge_type ?? p?.role
   return badgePillMap[bt ?? '']?.icon ?? User
 })
@@ -1839,9 +2427,9 @@ const badgePillIcon = computed(() => {
 // Follow button
 const isMutual = computed(() => relation.aFollowsB && relation.bFollowsA)
 const followBtnLabel = computed(() => {
-  if (relation.aFollowsB) return 'Отписаться'
-  if (relation.bFollowsA) return 'Подписаться в ответ'
-  return 'Подписаться'
+  if (relation.aFollowsB) return langStore.t.unsubscribe
+  if (relation.bFollowsA) return langStore.t.subscribeBack
+  return langStore.t.subscribe
 })
 const followBtnIcon = computed(() => {
   if (relation.aFollowsB) return UserMinus
@@ -1858,11 +2446,11 @@ const followBtnClass = computed(() => {
 // About nav Items
 const aboutNavs = computed(() => {
   const navs = [
-    { key: 'about' as AboutTab,     label: 'О себе',    icon: User },
-    { key: 'fursona' as AboutTab,   label: 'Фурсона',   icon: Rabbit },
+    { key: 'about' as AboutTab,     label: langStore.t.aboutTab,    icon: User },
+    { key: 'fursona' as AboutTab,   label: langStore.t.fursonaTab,  icon: Rabbit },
   ]
   if ((viewedProfile.value as any)?.has_fursuit) {
-    navs.push({ key: 'fursuit' as AboutTab, label: 'Фурсьют', icon: PawPrint })
+    navs.push({ key: 'fursuit' as AboutTab, label: langStore.t.fursuitTab, icon: PawPrint })
   }
   return navs
 })
@@ -1874,12 +2462,12 @@ watch([aboutTab, viewedProfile], () => {
 })
 
 // Content tabs
-const contentTabs = [
-  { key: 'posts' as ContentTab,    label: 'Посты',    icon: FileText },
-  { key: 'repaws' as ContentTab,   label: 'RePaws',   icon: Repeat2 },
-  { key: 'media' as ContentTab,    label: 'Медиа',    icon: Image },
-  { key: 'followers' as ContentTab, label: 'Подписчики', icon: Users },
-]
+const contentTabs = computed(() => [
+  { key: 'posts' as ContentTab,     label: langStore.t.postsTab,     icon: FileText },
+  { key: 'repaws' as ContentTab,    label: langStore.t.repawsTab,    icon: Repeat2 },
+  { key: 'media' as ContentTab,     label: langStore.t.mediaTab,     icon: Image },
+  { key: 'followers' as ContentTab, label: langStore.t.followersTab, icon: Users },
+])
 
 const profileStats = computed(() => {
   const p = viewedProfile.value
@@ -1996,10 +2584,76 @@ const fursonaSteps = computed(() => {
 })
 
 const filteredMediaPosts = computed(() => {
-  if (mediaFilter.value === 'photo') return tabPosts.value.filter(p => isImage(p.media_urls?.[0] ?? ''))
-  if (mediaFilter.value === 'video') return tabPosts.value.filter(p => !isImage(p.media_urls?.[0] ?? ''))
+  if (mediaFilter.value === 'photo') return tabPosts.value.filter((p: any) => isImage(p.media_urls?.[0] ?? ''))
+  if (mediaFilter.value === 'video') return tabPosts.value.filter((p: any) => !isImage(p.media_urls?.[0] ?? ''))
   return tabPosts.value
 })
+
+// ── Альбомы медиа (группировка по месяцу) ────────────────────────────────────
+const mediaAlbums = computed(() => {
+  const map = new Map<string, { url: string; created_at: string; postId?: string }[]>()
+  for (const post of filteredMediaPosts.value as any[]) {
+    const dt = new Date(post.created_at)
+    const label = dt.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+    if (!map.has(label)) map.set(label, [])
+    for (const url of (post.media_urls ?? [])) {
+      map.get(label)!.push({ url, created_at: post.created_at, postId: post.id })
+    }
+  }
+  return Array.from(map.entries()).map(([label, urls]) => ({ label, urls }))
+})
+
+// ── Специальные альбомы (Фурсона, Фурсьют, + ярлыки из постов) ──────────────
+const specialAlbums = computed(() => {
+  const albums: { id: string; label: string; emoji: string; urls: { url: string; postId?: string }[] }[] = []
+
+  // Альбом Фурсона
+  const fursonaUrls: { url: string }[] = []
+  if (profileFursona.value?.reference_image_url) {
+    fursonaUrls.push({ url: profileFursona.value.reference_image_url })
+  }
+  // Посты помеченные как фурсона
+  for (const post of filteredMediaPosts.value as any[]) {
+    if (mediaPostLabels.value[post.id] === 'fursona') {
+      for (const url of (post.media_urls ?? [])) fursonaUrls.push({ url, postId: post.id })
+    }
+  }
+  if (fursonaUrls.length) albums.push({ id: 'fursona', label: 'Фурсона', emoji: '🐾', urls: fursonaUrls })
+
+  // Альбом Фурсьют
+  const fursuitUrls: { url: string }[] = []
+  for (const suit of profileFursuits.value) {
+    if (suit.image_url) fursuitUrls.push({ url: suit.image_url })
+  }
+  for (const post of filteredMediaPosts.value as any[]) {
+    if (mediaPostLabels.value[post.id] === 'fursuit') {
+      for (const url of (post.media_urls ?? [])) fursuitUrls.push({ url, postId: post.id })
+    }
+  }
+  if (fursuitUrls.length) albums.push({ id: 'fursuit', label: 'Фурсьют', emoji: '🦊', urls: fursuitUrls })
+
+  return albums
+})
+
+function loadMediaLabels(userId: string) {
+  try {
+    const raw = localStorage.getItem(`bloomly_mlabels_${userId}`)
+    if (raw) mediaPostLabels.value = JSON.parse(raw)
+  } catch { /* ignore */ }
+}
+
+function setMediaLabel(postId: string, label: 'fursona' | 'fursuit' | null) {
+  if (label === null) {
+    delete mediaPostLabels.value[postId]
+  } else {
+    mediaPostLabels.value[postId] = label
+  }
+  const uid = viewedProfile.value?.id
+  if (uid) {
+    try { localStorage.setItem(`bloomly_mlabels_${uid}`, JSON.stringify(mediaPostLabels.value)) } catch { /* ignore */ }
+  }
+  mediaTagTarget.value = null
+}
 
 const joinDate = computed(() => {
   if (!viewedProfile.value) return ''
@@ -2026,7 +2680,7 @@ function onProfileMediaUploaded(urls: string[]) {
 
 // ── Load profile ──────────────────────────────────────────────────────────────
 async function loadProfile() {
-  const id = route.params.id as string
+  const slug = route.params.username as string
   isLoading.value = true
   error.value = null
   viewedProfile.value = null
@@ -2037,16 +2691,20 @@ async function loadProfile() {
   Object.assign(relation, { aFollowsB: false, bFollowsA: false, friends: false })
 
   try {
-    const result = await userStore.fetchProfile(id)
+    const result = await userStore.fetchProfile(slug)
     viewedProfile.value = result
     if (result) {
+      const userId = result.id
+      loadMediaLabels(userId)
       await Promise.all([
-        loadFriends(id),
-        authStore.isAuthenticated && !isOwnProfile.value ? loadRelation(id) : Promise.resolve(),
-        fetchOnlineStatus(id),
+        loadFriends(userId),
+        authStore.isAuthenticated && !isOwnProfile.value ? loadRelation(userId) : Promise.resolve(),
+        fetchOnlineStatus(userId),
         (result as any).relationship_with ? loadPartnerProfile((result as any).relationship_with) : Promise.resolve(),
-        loadProfileSoonBadges(id),
-        fetchProfileStories(id),
+        loadProfileSoonBadges(userId),
+        fetchProfileStories(userId),
+        loadProfileFursona(userId),
+        loadProfileFursuits(userId),
       ])
       if (result.pinnedPost) pinnedPost.value = result.pinnedPost
       await loadTabData('posts')
@@ -2144,6 +2802,18 @@ async function loadTabData(tab: string) {
     } else if (tab === 'followers') {
       await loadFriends(uid)
     }
+    // Fetch repaw/vote/favourite status for loaded posts
+    if (['posts', 'repaws', 'media', 'likes'].includes(tab) && authStore.isAuthenticated && tabPosts.value.length) {
+      const ids = tabPosts.value.map((p: any) => p.id).join(',')
+      try {
+        const st = await api.get(`/posts/status?ids=${ids}`)
+        if (st.data.success) {
+          for (const s of st.data.data) {
+            profilePostStatus[s.id] = { repawed: s.repawed ?? false, favourited: s.favourited ?? false, userVote: s.userVote ?? 0 }
+          }
+        }
+      } catch { /* non-critical */ }
+    }
   } catch (e) {
     console.error('Failed to load tab', tab, e)
   } finally {
@@ -2189,12 +2859,23 @@ async function createPost() {
   if (!newPostContent.value.trim() || isCreatingPost.value) return
   isCreatingPost.value = true
   try {
-    const res = await api.post('/posts', { content: newPostContent.value.trim(), isNsfw: newPostIsNsfw.value, mediaUrls: newPostMediaUrls.value })
+    const res = await api.post('/posts', {
+      content: newPostContent.value.trim(),
+      isNsfw: newPostIsNsfw.value,
+      mediaUrls: newPostMediaUrls.value,
+      tags: newPostTags.value,
+      category: newPostCategory.value || undefined,
+      visibility: newPostVisibility.value,
+    })
     if (res.data.success) {
       tabPosts.value.unshift(res.data.data.post)
       newPostContent.value = ''
       newPostMediaUrls.value = []
       newPostIsNsfw.value = false
+      newPostTags.value = []
+      newPostTagInput.value = ''
+      newPostCategory.value = ''
+      newPostVisibility.value = 'public'
       profileMediaUploadRef.value?.clearAll()
       if (viewedProfile.value?._count) viewedProfile.value._count.posts++
     }
@@ -2214,8 +2895,14 @@ function onPostUpdated(post: any) {
   if (pinnedPost.value?.id === post.id) pinnedPost.value = { ...pinnedPost.value, ...post }
 }
 
-onMounted(() => { loadProfile() })
-watch(() => route.params.id, () => { aboutTab.value = 'about'; activeContentTab.value = 'posts'; loadProfile() })
+onMounted(() => {
+  loadProfile()
+  window.addEventListener('keydown', onKeyDown)
+})
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+})
+watch(() => route.params.username, () => { aboutTab.value = 'about'; activeContentTab.value = 'posts'; loadProfile() })
 // stories are loaded inside loadProfile via fetchProfileStories
 
 </script>
@@ -2223,6 +2910,10 @@ watch(() => route.params.id, () => { aboutTab.value = 'about'; activeContentTab.
 <style scoped>
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease, transform 0.2s ease }
 .fade-enter-from, .fade-leave-to { opacity: 0; transform: translateY(-4px) }
+
+/* Lightbox overlay transition */
+.lightbox-fade-enter-active, .lightbox-fade-leave-active { transition: opacity 0.2s ease }
+.lightbox-fade-enter-from, .lightbox-fade-leave-to { opacity: 0 }
 
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(-4px) }

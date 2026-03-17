@@ -8,43 +8,42 @@
   </div>
 
   <div v-else class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all group select-none">
+    <!-- Announcement banner -->
+    <div v-if="post.is_announcement" class="flex items-center gap-2 px-5 py-2.5 bg-brand-yellow/10 border-b border-brand-yellow/25">
+      <BIcon name="Megaphone" class="w-3.5 h-3.5 text-brand-yellow flex-shrink-0" />
+      <span class="text-[11px] font-bold uppercase tracking-wide text-brand-yellow">Анонс</span>
+    </div>
     <div class="p-5 md:p-6">
 
       <!-- ── Header ────────────────────────────────────────────────────── -->
       <div class="flex items-start justify-between gap-3 mb-4">
         <div class="flex items-center gap-3 min-w-0 cursor-pointer"
-          @click="groupContext ? router.push(`/groups/${groupContext.slug}`) : router.push(`/profile/${post.author.id}`)">
+          @click="effectiveGroupContext ? router.push(`/groups/${effectiveGroupContext.slug}`) : (post.author?.username ? router.push(`/profile/${post.author.username}`) : null)">
           <!-- Avatar -->
           <div class="relative flex-shrink-0">
             <img
-              v-if="groupContext && groupContext.avatar_url"
-              :src="groupContext.avatar_url"
-              :alt="groupContext.name"
+              v-if="effectiveGroupContext && effectiveGroupContext.avatar_url"
+              :src="effectiveGroupContext.avatar_url"
+              :alt="effectiveGroupContext.name"
               class="w-11 h-11 rounded-xl object-cover border border-brand-border"
               width="44" height="44"
             />
             <div
-              v-else-if="groupContext && !groupContext.avatar_url"
+              v-else-if="effectiveGroupContext && !effectiveGroupContext.avatar_url"
               class="w-11 h-11 rounded-xl border border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-base"
             >
-              {{ avatarInitial(groupContext.name) }}
+              {{ avatarInitial(effectiveGroupContext.name) }}
             </div>
             <img
-              v-else-if="!groupContext && post.author.avatar_url"
-              :src="post.author.avatar_url"
-              :alt="post.author.display_name || post.author.username"
+              v-else-if="!effectiveGroupContext"
+              :src="post.author?.avatar_url || '/icons/badges/NN.jpg'"
+              :alt="post.author?.display_name || post.author?.username"
               class="w-11 h-11 rounded-full object-cover border border-brand-border"
               width="44" height="44"
             />
-            <div
-              v-else
-              class="w-11 h-11 rounded-full border border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-base"
-            >
-              {{ avatarInitial(post.author.display_name || post.author.username) }}
-            </div>
             <!-- Follow quick-add button -->
             <button
-              v-if="!groupContext && showFollowButton && authStore.user && post.author.id !== authStore.user?.id && localFollowing === false"
+              v-if="!effectiveGroupContext && showFollowButton && authStore.user && post.author?.id !== authStore.user?.id && localFollowing === false"
               @click.stop="toggleFollow"
               class="absolute -bottom-1 -right-1 w-5 h-5 bg-brand-accent rounded-full flex items-center justify-center border-2 border-brand-card hover:bg-brand-accent-plus transition-colors"
               title="Подписаться"
@@ -57,18 +56,15 @@
             <!-- Display labels row -->
             <div class="flex items-center gap-1.5 flex-wrap">
               <h4 class="font-bold text-white truncate hover:text-brand-accent transition-colors">
-                {{ groupContext ? groupContext.name : (post.author.display_name || post.author.username) }}
+                {{ effectiveGroupContext ? effectiveGroupContext.name : (post.author?.display_name || post.author?.username || 'Аноним') }}
               </h4>
               <!-- Verification badge — only for user posts -->
-              <template v-if="!groupContext">
-                <img v-if="post.author.is_verified && post.author.verification_type"
-                  :src="`/icons/badges/${post.author.verification_type}.svg`"
-                  class="w-4 h-4 flex-shrink-0" :title="({ artist: 'Верифицированный художник', master: 'Верифицированный мастер', event: 'Мероприятие' } as Record<string, string>)[post.author.verification_type] || 'Верифицирован'" />
-                <img v-else-if="post.author.is_verified"
-                  src="/icons/badges/verified.svg"
+              <template v-if="!effectiveGroupContext && post.author">
+                <img v-if="post.author.is_verified"
+                  src="/icons/badges/paw_offical.svg"
                   class="w-4 h-4 flex-shrink-0" title="Верифицирован" />
                 <!-- AD badge -->
-                <span v-if="post.author.role === 'ad'"
+                <span v-if="post.author?.role === 'ad'"
                   class="inline-flex items-center gap-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded-md">
                   AD
                 </span>
@@ -83,7 +79,7 @@
                 <BIcon name="Pin" class="w-3 h-3" /> Закреплён
               </span>
             </div>
-            <p v-if="groupContext" class="text-xs text-white/55 truncate">@{{ groupContext.slug }} · {{ fmtDate(post.created_at) }}</p>
+            <p v-if="effectiveGroupContext" class="text-xs text-white/55 truncate">@{{ effectiveGroupContext.slug }} · {{ fmtDate(post.created_at) }}</p>
             <p v-else class="text-xs text-white/55 truncate">@{{ post.author.username }} · {{ fmtDate(post.created_at) }}</p>
           </div>
         </div>
@@ -181,7 +177,7 @@
       <div v-if="post.rewardForUser" class="flex items-center gap-2 mb-3 mt-1">
         <span class="text-xs text-white/40 font-medium">Reward for</span>
         <button
-          @click.stop="router.push(`/profile/${post.rewardForUser.id}`)"
+          @click.stop="router.push(`/profile/${post.rewardForUser.username}`)"
           class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-brand-bg border border-brand-border hover:border-brand-accent/40 transition-colors"
         >
           <img v-if="post.rewardForUser.avatar_url" :src="post.rewardForUser.avatar_url" class="w-4 h-4 rounded-full object-cover" />
@@ -213,38 +209,60 @@
         </div>
 
         <!-- Post text with mention highlighting -->
-        <p v-else class="text-white/95 text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap">
-          <template v-for="seg in parsedContent" :key="seg.key">
-            <span v-if="seg.type === 'text'">{{ seg.text }}</span>
-            <!-- ── MENTION PILL ── -->
-            <span v-else
-              class="mention-pill inline-flex items-center gap-1 pl-0.5 pr-2 py-0.5 bg-brand-accent/15 border border-brand-accent/30 text-brand-accent text-[13px] font-semibold cursor-pointer hover:bg-brand-accent/25 transition-all align-middle"
-              :class="mentionGroups[seg.username!] ? 'rounded-xl' : 'rounded-full'"
-              style="vertical-align: middle; white-space: nowrap;"
-              @click.stop="goToMention(seg.username!)"
-              @mouseenter="onMentionEnter(seg.username!, $event)"
-              @mouseleave="onMentionLeave()"
-            >
-              <!-- Avatar or initials -->
-              <span
-                class="flex-shrink-0 w-5 h-5 overflow-hidden border border-brand-accent/40 bg-brand-accent/20 flex items-center justify-center"
-                :class="mentionGroups[seg.username!] ? 'rounded-md' : 'rounded-full'"
-              >
-                <img
-                  v-if="(mentionGroups[seg.username!] ?? mentionUsers[seg.username!])?.avatar_url"
-                  :src="(mentionGroups[seg.username!] ?? mentionUsers[seg.username!])!.avatar_url!"
-                  class="w-full h-full object-cover"
-                  loading="lazy"
-                />
-                <span v-else class="text-[8px] font-bold text-brand-accent leading-none">
-                  {{ (seg.username ?? '?')[0].toUpperCase() }}
-                </span>
+        <div v-if="!isEditing && (post.content || '').trim()">
+          <p class="text-white/95 text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap">
+            <template v-if="postShowTranslation && postTranslating">
+              <span class="inline-flex items-center gap-1.5 text-white/40 text-sm">
+                <span class="w-3.5 h-3.5 border-2 border-brand-accent/60 border-t-transparent rounded-full animate-spin inline-block" />
+                {{ langStore.t.translating }}
               </span>
-              <!-- Label: group name or @username -->
-              <span class="leading-none">{{ mentionGroups[seg.username!] ? mentionGroups[seg.username!]!.name : seg.username }}</span>
-            </span>
-          </template>
-        </p>
+            </template>
+            <template v-else>
+              <template v-for="seg in displayContent" :key="seg.key">
+                <span v-if="seg.type === 'text'">{{ seg.text }}</span>
+                <!-- ── MENTION PILL ── -->
+                <span v-else
+                  class="mention-pill inline-flex items-center gap-1 pl-0.5 pr-2 py-0.5 bg-brand-accent/15 border border-brand-accent/30 text-brand-accent text-[13px] font-semibold cursor-pointer hover:bg-brand-accent/25 transition-all align-middle"
+                  :class="mentionGroups[seg.username!] ? 'rounded-xl' : 'rounded-full'"
+                  style="vertical-align: middle; white-space: nowrap;"
+                  @click.stop="goToMention(seg.username!)"
+                  @mouseenter="onMentionEnter(seg.username!, $event)"
+                  @mouseleave="onMentionLeave()"
+                >
+                  <!-- Avatar or initials -->
+                  <span
+                    class="flex-shrink-0 w-5 h-5 overflow-hidden border border-brand-accent/40 bg-brand-accent/20 flex items-center justify-center"
+                    :class="mentionGroups[seg.username!] ? 'rounded-md' : 'rounded-full'"
+                  >
+                    <img
+                      v-if="(mentionGroups[seg.username!] ?? mentionUsers[seg.username!])?.avatar_url"
+                      :src="(mentionGroups[seg.username!] ?? mentionUsers[seg.username!])!.avatar_url!"
+                      class="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                    <span v-else class="text-[8px] font-bold text-brand-accent leading-none">
+                      {{ (seg.username ?? '?')[0].toUpperCase() }}
+                    </span>
+                  </span>
+                  <!-- Label: group name or @username -->
+                  <span class="leading-none">{{ mentionGroups[seg.username!] ? mentionGroups[seg.username!]!.name : seg.username }}</span>
+                </span>
+              </template>
+            </template>
+          </p>
+          <!-- Translate button -->
+          <button
+            v-if="!isEditing"
+            @click.stop="togglePostTranslate"
+            class="mt-1.5 flex items-center gap-1 text-[11px] text-white/35 hover:text-brand-accent transition-colors"
+          >
+            <svg v-if="!postTranslating" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
+            </svg>
+            <span v-if="postTranslating" class="w-3 h-3 border border-brand-accent/60 border-t-transparent rounded-full animate-spin" />
+            {{ postShowTranslation ? langStore.t.showOriginal : langStore.t.autoTranslate }}
+          </button>
+        </div>
 
         <!-- ── Media carousel ────────────────────────────────────── -->
         <div
@@ -416,10 +434,15 @@
 
           <!-- Repaw -->
           <button v-if="!adMode" @click="toggleRepaw"
+            :disabled="authStore.user?.id === post.author?.id"
+            :title="authStore.user?.id === post.author?.id ? 'Нельзя репавсить свой пост' : undefined"
             class="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-semibold border transition-all"
-            :class="localRepawed
-              ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
-              : 'bg-brand-bg border-brand-border text-white/55 hover:text-brand-accent hover:border-brand-accent/30'">
+            :class="[
+              localRepawed
+                ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
+                : 'bg-brand-bg border-brand-border text-white/55 hover:text-brand-accent hover:border-brand-accent/30',
+              authStore.user?.id === post.author?.id ? 'opacity-40 cursor-not-allowed' : ''
+            ]">
             <BIcon name="Repeat2" class="w-4 h-4" />
             <span class="text-sm">{{ localRepaws }}</span>
           </button>
@@ -457,20 +480,6 @@
     <!-- ── Share & Report modals ─────────────────────────────────────────── -->
     <ShareModal v-model="showShareModal" :post-id="post.id" :post-url="postUrl" />
     <ReportModal v-model="showReportModal" :post-id="post.id" />
-
-    <!-- ── Repaw undo bar ────────────────────────────────────────────────── -->
-    <Transition name="slide-up">
-      <div v-if="!adMode && repawUndoVisible" class="flex items-center justify-between gap-3 px-5 py-2.5 bg-brand-accent/10 border-t border-brand-accent/25">
-        <div class="flex items-center gap-2 text-brand-accent text-xs font-bold">
-          <BIcon name="Repeat2" class="w-3.5 h-3.5" />
-          Репав через {{ repawCountdown }}с...
-        </div>
-        <button @click.stop="undoRepaw"
-          class="px-3 py-1 rounded-full bg-brand-card border border-brand-border hover:border-brand-accent/40 text-white/55 hover:text-white text-xs font-semibold transition-all">
-          Отменить
-        </button>
-      </div>
-    </Transition>
 
     <!-- ── Comments section ──────────────────────────────────────────────── -->
     <Transition name="slide">
@@ -550,7 +559,9 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useLangStore } from '@/stores/lang'
 import { useNsfwMode } from '@/composables/useNsfwMode'
+import { useAutoTranslate } from '@/composables/useAutoTranslate'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
@@ -633,6 +644,18 @@ const emit = defineEmits<{
 // ── Composables ───────────────────────────────────────────────────────────
 const router = useRouter()
 const authStore = useAuthStore()
+const langStore = useLangStore()
+
+// ── Auto-translate ────────────────────────────────────────────────────────
+const {
+  translatedText: postTranslated,
+  isTranslating: postTranslating,
+  showTranslation: postShowTranslation,
+  toggle: togglePostTranslate,
+} = useAutoTranslate(
+  () => props.post.id,
+  () => props.post.content ?? '',
+)
 
 // ── Local state ───────────────────────────────────────────────────────────
 const localRating    = ref<number>(props.post.rating ?? 0)
@@ -690,6 +713,7 @@ const repawUndoVisible = ref(false)
 const repawCountdown = ref(5)
 let repawTimer: ReturnType<typeof setTimeout> | null = null
 let repawCountdownTimer: ReturnType<typeof setInterval> | null = null
+const repawPending = ref(false)
 
 const lightboxOpen  = ref(false)
 const lightboxIndex = ref(0)
@@ -748,6 +772,13 @@ watch(() => props.post.content, () => { loadMentionUsers() })
 
 
 // ── Computed ──────────────────────────────────────────────────────────────
+
+// Auto-derive group context from post.groupPosts if not explicitly passed.
+// Group posts are always anonymous — shown as posted by the group, not the user.
+const effectiveGroupContext = computed(() =>
+  props.groupContext ?? (props.post.groupPosts?.[0]?.group ?? null)
+)
+
 const isOwn = computed(() =>
   !!authStore.user && (authStore.user.id === props.post.author_id || authStore.user.id === props.post.author?.id)
 )
@@ -764,13 +795,25 @@ const lightboxUrls = computed<string[]>(() =>
 )
 
 type Seg = { type: 'text' | 'mention'; key: number; text: string; username?: string }
-const parsedContent = computed<Seg[]>(() =>
-  (props.post.content ?? '').split(/(@\w+)/g).map((part: string, i: number) =>
+
+function parseSegments(text: string): Seg[] {
+  return text.split(/(@\w+)/g).map((part: string, i: number) =>
     /^@\w+$/.test(part)
       ? { type: 'mention' as const, key: i, text: part, username: part.slice(1) }
       : { type: 'text' as const, key: i, text: part }
   )
-)
+}
+
+const parsedContent = computed<Seg[]>(() => parseSegments(props.post.content ?? ''))
+
+// When showing a translation, parse the translated text the same way so
+// mention pills are preserved instead of showing raw "@username" text.
+const displayContent = computed<Seg[]>(() => {
+  const src = postShowTranslation.value && postTranslated.value
+    ? postTranslated.value
+    : (props.post.content ?? '')
+  return parseSegments(src)
+})
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function avatarInitial(name?: string): string {
@@ -804,55 +847,29 @@ async function vote(value: 1 | -1) {
 }
 
 async function toggleRepaw() {
-  if (!authStore.isAuthenticated) return
-
-  // If already repawed, undo immediately (no toast)
-  if (localRepawed.value) {
-    if (repawTimer) { clearTimeout(repawTimer); repawTimer = null }
-    if (repawCountdownTimer) { clearInterval(repawCountdownTimer); repawCountdownTimer = null }
-    repawUndoVisible.value = false
-    localRepawed.value = false
-    localRepaws.value = Math.max(0, localRepaws.value - 1)
-    try {
-      const r = await api.post(`/posts/${props.post.id}/repaw`, {})
-      if (r.data.success) {
-        localRepawed.value = r.data.data.repawed
-        localRepaws.value = r.data.data.repaw_count
-      }
-    } catch {}
-    return
+  if (!authStore.isAuthenticated || repawPending.value) return
+  if (authStore.user?.id && authStore.user.id === props.post.author?.id) return
+  repawPending.value = true
+  // Optimistic update
+  const wasRepawed = localRepawed.value
+  localRepawed.value = !wasRepawed
+  localRepaws.value += wasRepawed ? -1 : 1
+  try {
+    const r = await api.post(`/posts/${props.post.id}/repaw`, {})
+    if (r.data.success) {
+      localRepawed.value = r.data.data.repawed
+      localRepaws.value = r.data.data.repaw_count
+    } else {
+      // Revert on failure
+      localRepawed.value = wasRepawed
+      localRepaws.value += wasRepawed ? 1 : -1
+    }
+  } catch {
+    localRepawed.value = wasRepawed
+    localRepaws.value += wasRepawed ? 1 : -1
+  } finally {
+    repawPending.value = false
   }
-
-  // Optimistic update + show undo toast with countdown
-  localRepawed.value = true
-  localRepaws.value++
-  repawUndoVisible.value = true
-  repawCountdown.value = 5
-  if (repawTimer) clearTimeout(repawTimer)
-  if (repawCountdownTimer) clearInterval(repawCountdownTimer)
-  repawCountdownTimer = setInterval(() => {
-    repawCountdown.value--
-    if (repawCountdown.value <= 0 && repawCountdownTimer) {
-      clearInterval(repawCountdownTimer)
-      repawCountdownTimer = null
-    }
-  }, 1000)
-  repawTimer = setTimeout(async () => {
-    repawUndoVisible.value = false
-    repawTimer = null
-    if (repawCountdownTimer) { clearInterval(repawCountdownTimer); repawCountdownTimer = null }
-    // Commit: call API to actually create the repaw
-    try {
-      const r = await api.post(`/posts/${props.post.id}/repaw`, {})
-      if (r.data.success) {
-        localRepawed.value = r.data.data.repawed
-        localRepaws.value = r.data.data.repaw_count
-      }
-    } catch {
-      localRepawed.value = false
-      localRepaws.value = Math.max(0, localRepaws.value - 1)
-    }
-  }, 5000)
 }
 
 function undoRepaw() {
@@ -889,7 +906,7 @@ async function goToMention(username: string) {
     const r = await api.get(`/users/search?q=${encodeURIComponent(username)}`)
     const users: any[] = r.data.data?.users ?? []
     const found = users.find((u: any) => u.username.toLowerCase() === username.toLowerCase())
-    if (found) { router.push(`/profile/${found.id}`); return }
+    if (found) { router.push(`/profile/${found.username}`); return }
     // Not a user — try group
     const groupSlug = username.toLowerCase()
     router.push(`/groups/${groupSlug}`)

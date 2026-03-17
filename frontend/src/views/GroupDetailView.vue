@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
+import { ref, computed, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useHead } from '@unhead/vue'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
@@ -47,6 +50,61 @@ const isAdmin = computed(() => {
   return groupsStore.myGroups.some(m => m.group_id === group.value?.id && ['admin', 'owner'].includes(m.role))
 })
 
+// ── SEO ──────────────────────────────────────────────────────────────────────
+const BASE = 'https://bloomly.fun'
+useHead({
+  title: () => group.value ? `${group.value.name} — Bloomly` : 'Сообщество — Bloomly',
+  meta: [
+    { name: 'robots', content: 'index, follow' },
+    { name: 'description', content: () => {
+        if (!group.value) return 'Bloomly — творческая социальная сеть.'
+        const members = (group.value as any)._count?.members
+        const suffix = members ? ` · ${members} участников` : ''
+        return group.value.description
+          ? group.value.description.slice(0, 160)
+          : `Сообщество ${group.value.name} на Bloomly${suffix}.`
+      }
+    },
+    { property: 'og:type', content: 'website' },
+    { property: 'og:site_name', content: 'Bloomly' },
+    { property: 'og:title', content: () => group.value?.name || 'Сообщество — Bloomly' },
+    { property: 'og:description', content: () => {
+        if (!group.value) return ''
+        return group.value.description?.slice(0, 200) || `Сообщество ${group.value.name} на Bloomly.`
+      }
+    },
+    { property: 'og:image', content: () => (group.value as any)?.avatar_url || `${BASE}/og-default.png` },
+    { property: 'og:url', content: () => `${BASE}/groups/${(group.value as any)?.slug || group.value?.id || ''}` },
+    { name: 'twitter:card', content: 'summary_large_image' },
+    { name: 'twitter:title', content: () => group.value?.name || 'Bloomly' },
+    { name: 'twitter:image', content: () => (group.value as any)?.avatar_url || `${BASE}/og-default.png` },
+  ],
+  link: [
+    { rel: 'canonical', href: () => `${BASE}/groups/${(group.value as any)?.slug || group.value?.id || ''}` },
+  ],
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: () => {
+        if (!group.value) return ''
+        const seg = (group.value as any).slug || group.value.id
+        const members = (group.value as any)._count?.members
+        return JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'Organization',
+          name: group.value.name,
+          url: `${BASE}/groups/${seg}`,
+          description: group.value.description || '',
+          ...((group.value as any).avatar_url ? {
+            logo: { '@type': 'ImageObject', url: (group.value as any).avatar_url },
+          } : {}),
+          ...(members ? { numberOfEmployees: members } : {}),
+        })
+      },
+    },
+  ],
+})
+
 // ── Rating (Reddit-style) ────────────────────────────────────────────────────
 
 const myVote = ref<1 | -1 | 0>(0)
@@ -75,9 +133,31 @@ const isLoadingPosts = ref(false)
 const showPostForm = ref(false)
 const newPostContent = ref('')
 const newPostIsNsfw = ref(false)
+const newPostIsAnnouncement = ref(false)
 const newPostMediaUrls = ref<string[]>([])
+const newPostTags = ref<string[]>([])
+const newPostTagInput = ref('')
+const newPostCategory = ref('')
+const newPostVisibility = ref('public')
+const showGroupVisibilityMenu = ref(false)
 const isCreatingPost = ref(false)
 const groupMediaUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
+
+const groupPostCategories = [
+  { id: '', name: 'Категория' },
+  { id: 'digital_art', name: 'Digital Art' },
+  { id: 'photography', name: 'Photography' },
+  { id: '3d', name: '3D' },
+  { id: 'animation', name: 'Animation' },
+  { id: 'writing', name: 'Writing' },
+  { id: 'other', name: 'Other' },
+]
+function addGroupTag() {
+  const t = newPostTagInput.value.trim().replace(/^#/, '')
+  if (t && !newPostTags.value.includes(t)) newPostTags.value.push(t)
+  newPostTagInput.value = ''
+}
+function removeGroupTag(tag: string) { newPostTags.value = newPostTags.value.filter(t => t !== tag) }
 
 async function loadGroupPosts() {
   if (!group.value) return
@@ -96,12 +176,21 @@ async function createGroupPost() {
     const post = await groupsStore.createGroupPost(group.value.id, {
       content: newPostContent.value.trim(),
       isNsfw: newPostIsNsfw.value,
+      isAnnouncement: newPostIsAnnouncement.value,
       mediaUrls: newPostMediaUrls.value,
+      tags: newPostTags.value,
+      category: newPostCategory.value || undefined,
+      visibility: newPostVisibility.value,
     })
     if (post) groupPosts.value.unshift(post)
     newPostContent.value = ''
     newPostMediaUrls.value = []
     newPostIsNsfw.value = false
+    newPostIsAnnouncement.value = false
+    newPostTags.value = []
+    newPostTagInput.value = ''
+    newPostCategory.value = ''
+    newPostVisibility.value = 'public'
     groupMediaUploadRef.value?.clearAll()
     showPostForm.value = false
     if (group.value._count) group.value._count.posts++
@@ -125,6 +214,8 @@ function onPostUpdated(post: any) {
 
 // ── Group Media ──────────────────────────────────────────────────────────
 const groupMediaFilter = ref<'all' | 'photo' | 'video'>('all')
+const groupMediaAlbumView = ref(false)
+const groupOpenAlbum = ref<{ label: string; urls: { url: string; postId?: string }[] } | null>(null)
 const expandedGroupMediaPost = ref<any | null>(null)
 const groupMediaPostsList = ref<any[]>([])
 const isLoadingMedia = ref(false)
@@ -149,6 +240,19 @@ const filteredGroupMediaPosts = computed(() => {
   if (groupMediaFilter.value === 'photo') return groupMediaPostsList.value.filter((p: any) => isGroupImage(p.media_urls?.[0] ?? ''))
   if (groupMediaFilter.value === 'video') return groupMediaPostsList.value.filter((p: any) => !isGroupImage(p.media_urls?.[0] ?? ''))
   return groupMediaPostsList.value
+})
+
+const groupMediaAlbums = computed(() => {
+  const map = new Map<string, { url: string; postId?: string }[]>()
+  for (const post of filteredGroupMediaPosts.value as any[]) {
+    const dt = new Date(post.created_at)
+    const label = dt.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+    if (!map.has(label)) map.set(label, [])
+    for (const url of (post.media_urls ?? [])) {
+      map.get(label)!.push({ url, postId: post.id })
+    }
+  }
+  return Array.from(map.entries()).map(([label, urls]) => ({ label, urls }))
 })
 
 const activeEvent = computed(() =>
@@ -187,13 +291,15 @@ async function submitReview() {
 }
 
 // ── About tab (inside the About tabs card) ──────────────────────────────
-const aboutTab = ref<'about' | 'rules' | 'faq' | 'nearest' | 'orders'>('about')
+const aboutTab = ref<'about' | 'rules' | 'faq' | 'nearest' | 'orders' | 'schedule'>('about')
 
 const aboutNavs = computed(() => {
   const navs: { key: string; label: string; icon: string }[] = []
   if (group.value?.type === 'event') {
     navs.push({ key: 'about', label: 'О Мероприятии', icon: 'Info' })
     if (group.value?.events?.length > 1) navs.push({ key: 'nearest', label: 'Ближайшее', icon: 'CalendarCheck' })
+    const sched = (activeEvent.value?.schedule || (group.value as any)?.schedule) as any[]
+    if (sched?.length) navs.push({ key: 'schedule', label: 'Расписание', icon: 'Clock' })
   } else {
     navs.push({ key: 'about', label: 'О группе', icon: 'Info' })
   }
@@ -272,7 +378,14 @@ async function load() {
     loadMyRsvp()
   }
 }
-onMounted(load)
+const showScrollTop = ref(false)
+function handleScroll() { showScrollTop.value = window.scrollY > 500 }
+
+onMounted(() => {
+  load()
+  window.addEventListener('scroll', handleScroll, { passive: true })
+})
+onUnmounted(() => { window.removeEventListener('scroll', handleScroll) })
 watch(() => route.params.slugOrId, load)
 
 // ── RSVP ─────────────────────────────────────────────────────────────────
@@ -390,9 +503,15 @@ async function loadMoreMembers() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-brand-bg text-white font-nunito">
+  <div class="min-h-screen text-white font-nunito relative bg-brand-bg">
+    <!-- Shop bg wallpaper -->
+    <template v-if="group?.group_bg_url">
+      <div class="fixed inset-0 z-0 pointer-events-none"
+        :style="`background-image: url('${group.group_bg_url}'); background-size: cover; background-position: center; background-attachment: fixed;`" />
+      <div class="fixed inset-0 z-0 pointer-events-none" style="background: rgba(22,25,47,0.72)" />
+    </template>
     <AppHeader v-model:nsfwMode="nsfwMode" />
-    <div class="max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-8">
+    <div class="max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-8 relative z-10">
       <AppSidebar />
       <main class="flex-1 min-w-0 pb-28 md:pb-20 min-h-screen">
 
@@ -422,7 +541,10 @@ async function loadMoreMembers() {
           <div class="relative w-full h-52 md:h-64 rounded-3xl overflow-hidden cursor-pointer"
             @click="group.banner_url && (showBannerViewer = true)">
             <img v-if="group.banner_url" :src="group.banner_url" :alt="group.name" class="w-full h-full object-cover" />
+            <img v-else-if="group.group_bg_url" :src="group.group_bg_url" :alt="group.name" class="w-full h-full object-cover" />
             <div v-else class="w-full h-full" :style="{ background: `linear-gradient(135deg, ${group.accent_color || '#4C67CF'}55, ${group.accent_color || '#CD83F5'}22, #16192F)` }" />
+            <!-- group_bg_url indicator when banner overrides it -->
+            <div v-if="group.banner_url && group.group_bg_url" class="absolute top-2 left-2 z-10 text-[10px] text-white/50 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full hidden" />
             <!-- Gradient overlays -->
             <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
             <div class="absolute inset-0 bg-gradient-to-r from-black/30 to-transparent"></div>
@@ -639,9 +761,10 @@ async function loadMoreMembers() {
                   <button v-for="nav in aboutNavs" :key="nav.key"
                     @click="aboutTab = nav.key as any"
                     class="flex items-center gap-2 px-5 py-3.5 text-sm font-semibold whitespace-nowrap transition-all border-b-2 -mb-px flex-shrink-0"
-                    :class="aboutTab === nav.key
-                      ? 'border-brand-accent text-brand-accent'
-                      : 'border-transparent text-white/55 hover:text-white'">
+                    :class="aboutTab === nav.key ? 'border-current' : 'border-transparent text-white/55 hover:text-white'"
+                    :style="aboutTab === nav.key
+                      ? `color: ${group.accent_color || '#4C67CF'}; border-color: ${group.accent_color || '#4C67CF'}`
+                      : ''">
                     <BIcon :name="nav.icon" class="w-4 h-4" />{{ nav.label }}
                   </button>
                 </div>
@@ -676,18 +799,6 @@ async function loadMoreMembers() {
                         </div>
                       </div>
                     </template>
-
-                    <!-- Schedule -->
-                    <div v-if="((activeEvent?.schedule || group.schedule) as any[])?.length" class="space-y-2">
-                      <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5 px-1">
-                        <BIcon name="Clock" class="w-3.5 h-3.5 text-brand-accent" /> Расписание
-                      </p>
-                      <div v-for="(item, idx) in ((activeEvent?.schedule || group.schedule) as any[])" :key="idx"
-                        class="flex gap-3 text-sm bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
-                        <span class="text-brand-accent font-mono font-bold shrink-0 w-20">{{ item.time }}</span>
-                        <span class="text-white/60">{{ item.label }}</span>
-                      </div>
-                    </div>
 
                     <!-- What to bring -->
                     <div v-if="((activeEvent?.what_to_bring || group.what_to_bring) as any[])?.length" class="space-y-2">
@@ -731,7 +842,7 @@ async function loadMoreMembers() {
                         <p class="text-[10px] text-white/40 uppercase tracking-wide mb-0.5">{{ group.type === 'event' ? 'Организатор' : 'Создатель' }}</p>
                         <p class="text-sm text-white font-semibold truncate">{{ group.owner.display_name || group.owner.username }}</p>
                       </div>
-                      <router-link :to="`/profile/${group.owner.id}`"
+                      <router-link :to="`/profile/${group.owner.username}`"
                         class="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-white/35 hover:text-brand-accent hover:bg-brand-card border border-transparent hover:border-brand-border transition-all">
                         <BIcon name="ChevronRight" class="w-4 h-4" />
                       </router-link>
@@ -877,6 +988,53 @@ async function loadMoreMembers() {
                     </template>
                   </div>
 
+                  <!-- Schedule tab -->
+                  <div v-else-if="aboutTab === 'schedule'" class="space-y-1">
+                    <div v-if="!((activeEvent?.schedule || group.schedule) as any[])?.length" class="py-10 text-center text-white/30 text-sm">
+                      Расписание ещё не добавлено
+                    </div>
+                    <template v-else>
+                      <!-- Day header if present -->
+                      <div class="flex items-center gap-2 pb-3 px-1">
+                        <BIcon name="CalendarDays" class="w-4 h-4 shrink-0" :style="`color: ${group.accent_color || '#4C67CF'}`" />
+                        <p class="text-sm font-extrabold text-white">{{ activeEvent?.title || group.name }}</p>
+                        <div class="flex-1 h-px bg-brand-border/40 rounded ml-2" />
+                        <span class="text-[11px] text-white/30 tabular-nums">{{ ((activeEvent?.schedule || group.schedule) as any[]).length }} событий</span>
+                      </div>
+                      <!-- Timeline -->
+                      <div class="relative pl-5">
+                        <!-- Vertical accent line -->
+                        <div class="absolute left-[1.45rem] top-4 bottom-4 w-0.5 rounded-full"
+                          :style="`background: linear-gradient(to bottom, ${group.accent_color || '#4C67CF'}90, ${group.accent_color || '#4C67CF'}10)`" />
+
+                        <div v-for="(item, idx) in ((activeEvent?.schedule || group.schedule) as any[])" :key="idx"
+                          class="relative flex gap-4 pb-3 last:pb-0">
+                          <!-- Timeline dot -->
+                          <div class="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-1.5 z-10 border-2 border-brand-card"
+                            :style="`background: ${group.accent_color || '#4C67CF'}`">
+                            <span class="w-1.5 h-1.5 rounded-full bg-white/90 block" />
+                          </div>
+                          <!-- Content card -->
+                          <div class="flex-1 min-w-0 bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 transition-all group/sched"
+                            :style="idx === 0 ? `border-left: 2px solid ${group.accent_color || '#4C67CF'}` : ''">
+                            <div class="flex items-start justify-between gap-3">
+                              <div class="min-w-0">
+                                <p class="font-extrabold font-mono text-sm tabular-nums"
+                                  :style="`color: ${group.accent_color || '#4C67CF'}`">{{ item.time }}</p>
+                                <p class="text-sm text-white font-semibold leading-snug mt-0.5">{{ item.label }}</p>
+                                <p v-if="item.description" class="text-xs text-white/50 leading-relaxed mt-1">{{ item.description }}</p>
+                              </div>
+                              <span v-if="item.badge" class="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-lg border mt-0.5"
+                                :style="`background: ${group.accent_color || '#4C67CF'}15; color: ${group.accent_color || '#4C67CF'}; border-color: ${group.accent_color || '#4C67CF'}30`">
+                                {{ item.badge }}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+
                 </div>
               </div>
 
@@ -885,9 +1043,10 @@ async function loadMoreMembers() {
                 <button v-for="tab in contentTabs" :key="tab.key"
                   @click="activeContentTab = tab.key as any"
                   class="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold border transition-all duration-200 whitespace-nowrap"
-                  :class="activeContentTab === tab.key
-                    ? 'bg-brand-accent text-white border-brand-accent shadow-md shadow-brand-accent/25'
-                    : 'bg-brand-card text-white/55 border-brand-border hover:border-brand-accent/50 hover:text-white'">
+                  :class="activeContentTab === tab.key ? 'text-white' : 'bg-brand-card text-white/55 border-brand-border hover:text-white'"
+                  :style="activeContentTab === tab.key
+                    ? `background: ${group.accent_color || '#4C67CF'}; border-color: ${group.accent_color || '#4C67CF'}; box-shadow: 0 4px 14px ${group.accent_color || '#4C67CF'}40`
+                    : `--accent: ${group.accent_color || '#4C67CF'}`">
                   <BIcon :name="tab.icon" class="w-4 h-4" />{{ tab.label }}
                 </button>
               </div>
@@ -907,8 +1066,10 @@ async function loadMoreMembers() {
                 </button>
                 <div v-else class="p-5 space-y-4">
                   <div class="flex items-start gap-3">
-                    <img v-if="group.avatar_url" :src="group.avatar_url" class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover flex-shrink-0 mt-0.5" />
-                    <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold">{{ (group.name || '?')[0].toUpperCase() }}</div>
+                    <div class="relative flex-shrink-0 mt-0.5">
+                      <img v-if="group.avatar_url" :src="group.avatar_url" class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover" />
+                      <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold">{{ (group.name || '?')[0].toUpperCase() }}</div>
+                    </div>
                     <div class="flex-1 min-w-0">
                       <MentionTextarea v-model="newPostContent" placeholder="Что нового в группе? Используйте @ для упоминаний" minHeight="90px" />
                     </div>
@@ -919,19 +1080,82 @@ async function loadMoreMembers() {
                     </button>
                   </div>
                   <MediaUpload ref="groupMediaUploadRef" type="posts" :multiple="true" @uploaded="onGroupMediaUploaded" />
+
+                  <!-- Tags row -->
+                  <div v-if="newPostTags.length" class="flex flex-wrap gap-1.5">
+                    <span v-for="tag in newPostTags" :key="tag"
+                      class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-brand-accent/15 border border-brand-accent/30 text-brand-accent text-xs font-semibold">
+                      #{{ tag }}
+                      <button @click="removeGroupTag(tag)" class="text-brand-accent/60 hover:text-brand-accent"><BIcon name="X" class="w-3 h-3" /></button>
+                    </span>
+                  </div>
+
                   <div class="border-t border-brand-border" />
                   <div class="flex items-center gap-2 flex-wrap">
                     <button @click="groupMediaUploadRef?.openPicker()"
                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white/55 hover:text-white hover:bg-brand-bg border border-transparent hover:border-brand-border transition-all">
                       <BIcon name="ImagePlus" class="w-4 h-4" /> Медиа
                     </button>
+                    <!-- Tag input -->
+                    <div class="relative inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-transparent hover:border-brand-border hover:bg-brand-bg transition-all">
+                      <BIcon name="Hash" class="w-4 h-4 text-white/55 flex-shrink-0" />
+                      <input type="text" v-model="newPostTagInput" @keydown.enter.prevent="addGroupTag"
+                        placeholder="тег + Enter"
+                        class="bg-transparent text-xs text-white placeholder-brand-muted outline-none w-24" />
+                    </div>
+                    <!-- Category -->
+                    <select v-model="newPostCategory"
+                      class="px-3 py-2 rounded-xl text-xs text-white/55 bg-transparent border border-transparent hover:border-brand-border hover:bg-brand-bg outline-none transition-all cursor-pointer">
+                      <template v-for="c in groupPostCategories" :key="c.id || 'empty-cat'">
+                        <option :value="c.id" class="bg-brand-card">{{ c.name }}</option>
+                      </template>
+                    </select>
                     <button @click="newPostIsNsfw = !newPostIsNsfw"
                       class="px-3 py-2 rounded-xl text-xs font-bold border transition-all"
                       :class="newPostIsNsfw ? 'border-brand-error/60 text-brand-error bg-brand-error/10' : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'">
                       NSFW
                     </button>
+                    <button @click="newPostIsAnnouncement = !newPostIsAnnouncement"
+                      class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all"
+                      :class="newPostIsAnnouncement ? 'border-brand-yellow/60 text-brand-yellow bg-brand-yellow/10' : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'">
+                      <BIcon name="Megaphone" class="w-3.5 h-3.5" />
+                      Анонс
+                    </button>
                     <div class="flex-1" />
-                    <button @click="showPostForm = false; newPostContent = ''; newPostMediaUrls = []; groupMediaUploadRef?.clearAll()"
+                    <!-- Visibility -->
+                    <div class="relative">
+                      <button @click.stop="showGroupVisibilityMenu = !showGroupVisibilityMenu"
+                        class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all"
+                        :class="newPostVisibility !== 'public' ? 'border-brand-accent/50 text-brand-accent bg-brand-accent/10' : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'">
+                        <BIcon :name="newPostVisibility === 'subscriber_only' ? 'Users' : newPostVisibility === 'paid' ? 'DollarSign' : 'Globe2'" class="w-3.5 h-3.5" />
+                        {{ newPostVisibility === 'subscriber_only' ? 'Только Подписчикам' : newPostVisibility === 'paid' ? 'Платный пост' : 'Видно всем' }}
+                        <BIcon name="ChevronDown" class="w-3 h-3 opacity-60" />
+                      </button>
+                      <Transition name="slide">
+                        <div v-if="showGroupVisibilityMenu" v-click-outside="() => showGroupVisibilityMenu = false"
+                          class="absolute bottom-full left-0 mb-1.5 z-30 w-52 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1">
+                          <button @click="newPostVisibility = 'public'; showGroupVisibilityMenu = false"
+                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
+                            :class="newPostVisibility === 'public' ? 'text-brand-accent' : 'text-white'">
+                            <BIcon name="Globe2" class="w-4 h-4 flex-shrink-0" /> Видно всем
+                            <BIcon v-if="newPostVisibility === 'public'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
+                          </button>
+                          <button @click="newPostVisibility = 'subscriber_only'; showGroupVisibilityMenu = false"
+                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
+                            :class="newPostVisibility === 'subscriber_only' ? 'text-brand-accent' : 'text-white'">
+                            <BIcon name="Users" class="w-4 h-4 flex-shrink-0" /> Только Подписчикам
+                            <BIcon v-if="newPostVisibility === 'subscriber_only'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
+                          </button>
+                          <button @click="newPostVisibility = 'paid'; showGroupVisibilityMenu = false"
+                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
+                            :class="newPostVisibility === 'paid' ? 'text-brand-accent' : 'text-white'">
+                            <BIcon name="DollarSign" class="w-4 h-4 flex-shrink-0" /> Платный пост
+                            <BIcon v-if="newPostVisibility === 'paid'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
+                          </button>
+                        </div>
+                      </Transition>
+                    </div>
+                    <button @click="showPostForm = false; newPostContent = ''; newPostMediaUrls = []; newPostTags = []; newPostTagInput = ''; newPostCategory = ''; newPostVisibility = 'public'; newPostIsAnnouncement = false; groupMediaUploadRef?.clearAll()"
                       class="text-xs font-semibold text-white/55 hover:text-white transition-all">Отмена</button>
                   </div>
                 </div>
@@ -971,11 +1195,18 @@ async function loadMoreMembers() {
                   <!-- MEDIA -->
                   <template v-else-if="activeContentTab === 'media'">
                     <!-- Filter tabs -->
-                    <div class="flex gap-2 mb-4">
+                    <div class="flex gap-2 mb-4 flex-wrap">
                       <button v-for="f in (['all','photo','video'] as const)" :key="f" @click="groupMediaFilter = f"
                         class="px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all"
                         :class="groupMediaFilter === f ? 'bg-brand-accent border-brand-accent text-white' : 'border-brand-border text-white/55 hover:text-white'">
                         {{ f === 'all' ? `Всё · ${groupMediaPostsList.length}` : f === 'photo' ? `Фото · ${groupMediaPostsList.filter((p: any) => isGroupImage(p.media_urls[0])).length}` : `Видео · ${groupMediaPostsList.filter((p: any) => !isGroupImage(p.media_urls[0])).length}` }}
+                      </button>
+                      <div class="flex-1" />
+                      <button @click.stop="groupMediaAlbumView = !groupMediaAlbumView"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all"
+                        :class="groupMediaAlbumView ? 'bg-brand-accent/15 border-brand-accent/60 text-brand-accent' : 'border-brand-border text-white/55 hover:text-white'">
+                        <BIcon name="FolderOpen" class="w-3.5 h-3.5" />
+                        Альбомы
                       </button>
                     </div>
 
@@ -986,13 +1217,52 @@ async function loadMoreMembers() {
                       <BIcon name="Image" class="w-10 h-10 mx-auto mb-3 text-white/20" />
                       <p class="text-white/40 text-sm font-semibold">Медиа пока нет</p>
                     </div>
-                    <div v-else class="grid grid-cols-3 gap-1.5">
+                    <template v-else>
+                      <!-- Album view -->
+                      <template v-if="groupMediaAlbumView">
+                        <div class="grid grid-cols-2 gap-3">
+                          <div v-for="album in groupMediaAlbums" :key="album.label"
+                            @click.stop="groupOpenAlbum = album"
+                            class="relative rounded-2xl overflow-hidden cursor-pointer group aspect-[4/3] border border-brand-border hover:border-brand-accent/60 transition-all shadow-md">
+                            <div v-if="album.urls.length >= 4" class="grid grid-cols-2 gap-0.5 w-full h-full">
+                              <div v-for="(item, i) in album.urls.slice(0, 4)" :key="i" class="overflow-hidden">
+                                <img v-if="isGroupImage(item.url)" :src="item.url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                                <div v-else class="w-full h-full bg-brand-bg/60 flex items-center justify-center"><BIcon name="Play" class="w-5 h-5 text-white/40" /></div>
+                              </div>
+                            </div>
+                            <div v-else-if="album.urls[0]" class="w-full h-full">
+                              <img v-if="isGroupImage(album.urls[0].url)" :src="album.urls[0].url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                              <div v-else class="w-full h-full bg-brand-bg flex items-center justify-center"><BIcon name="Image" class="w-10 h-10 text-white/20" /></div>
+                            </div>
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent"/>
+                            <div class="absolute bottom-0 left-0 right-0 p-3">
+                              <div class="flex items-center gap-1.5 mb-0.5">
+                                <BIcon name="CalendarDays" class="w-3 h-3 text-brand-accent/80" />
+                                <p class="text-xs font-bold text-white">{{ album.label }}</p>
+                              </div>
+                              <p class="text-[10px] text-white/55 font-semibold">{{ album.urls.length }} фото</p>
+                            </div>
+                            <div class="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
+                              <BIcon name="FolderOpen" class="w-3.5 h-3.5 text-white" />
+                            </div>
+                          </div>
+                        </div>
+                      </template>
+
+                      <!-- Grid view -->
+                      <template v-else>
+                    <div class="grid grid-cols-3 gap-1.5">
                       <div v-for="post in filteredGroupMediaPosts" :key="post.id"
                         @click="expandedGroupMediaPost = expandedGroupMediaPost?.id === post.id ? null : post"
                         class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-brand-border/60 hover:border-brand-accent/60 bg-brand-bg transition-all">
-                        <img v-if="isGroupImage(post.media_urls[0])" :src="post.media_urls[0]" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        <img v-if="isGroupImage(post.media_urls[0])" :src="post.media_urls[0]"
+                          :class="['w-full h-full object-cover group-hover:scale-105 transition-transform duration-300', !nsfwMode && post.is_nsfw ? 'blur-lg' : '']" />
                         <div v-else class="w-full h-full flex items-center justify-center bg-brand-bg">
                           <BIcon name="Play" class="w-8 h-8 text-white/55" />
+                        </div>
+                        <!-- NSFW badge overlay -->
+                        <div v-if="!nsfwMode && post.is_nsfw" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <span class="bg-brand-error/90 text-white text-[11px] font-extrabold uppercase px-2 py-1 rounded-lg shadow-lg">18+</span>
                         </div>
                         <div v-if="post.media_urls.length > 1" class="absolute top-1.5 right-1.5 bg-black/70 rounded-lg px-1.5 py-0.5 text-[10px] text-white font-bold">+{{ post.media_urls.length - 1 }}</div>
                         <div class="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all flex items-end p-2 opacity-0 group-hover:opacity-100">
@@ -1015,12 +1285,22 @@ async function loadMoreMembers() {
                         <p v-if="expandedGroupMediaPost.content" class="text-sm text-white/80 mb-3 whitespace-pre-wrap">{{ expandedGroupMediaPost.content }}</p>
                         <div class="grid gap-2" :class="expandedGroupMediaPost.media_urls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'">
                           <template v-for="(url, i) in expandedGroupMediaPost.media_urls" :key="i">
-                            <img v-if="isGroupImage(url)" :src="url" class="w-full rounded-xl object-cover max-h-72" />
-                            <video v-else :src="url" controls class="w-full rounded-xl max-h-72" />
+                            <div class="relative">
+                              <img v-if="isGroupImage(url)" :src="url"
+                                :class="['w-full rounded-xl object-cover max-h-72', !nsfwMode && expandedGroupMediaPost.is_nsfw ? 'blur-lg' : '']" />
+                              <video v-else :src="url" controls class="w-full rounded-xl max-h-72" />
+                              <div v-if="!nsfwMode && expandedGroupMediaPost.is_nsfw && isGroupImage(url)"
+                                class="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none">
+                                <span class="bg-brand-error/90 text-white text-xs font-extrabold uppercase px-3 py-1.5 rounded-xl shadow-lg">18+</span>
+                                <span class="text-white/70 text-[11px]">Включите NSFW-режим для просмотра</span>
+                              </div>
+                            </div>
                           </template>
                         </div>
                       </div>
                     </Transition>
+                      </template>
+                    </template>
                   </template>
 
                   <!-- ARCHIVE OF PAST EVENTS -->
@@ -1076,7 +1356,7 @@ async function loadMoreMembers() {
               <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl p-3">
                 <div class="grid grid-cols-3 gap-1.5">
                   <div class="flex flex-col items-center gap-1 p-3 rounded-2xl bg-brand-bg/50 border border-brand-border/50">
-                    <span class="text-base font-extrabold text-white leading-none">{{ fmtNum(group._count.members) }}</span>
+                    <span class="text-base font-extrabold leading-none" :style="`color: ${group.accent_color || '#4C67CF'}`">{{ fmtNum(group._count.members) }}</span>
                     <span class="text-[10px] text-white/55 font-medium text-center leading-tight">Участ.</span>
                   </div>
                   <div class="flex flex-col items-center gap-1 p-3 rounded-2xl bg-brand-bg/50 border border-brand-border/50">
@@ -1093,18 +1373,22 @@ async function loadMoreMembers() {
               <!-- Rating -->
               <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                 <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
-                  <BIcon name="TrendingUp" class="w-3.5 h-3.5 text-brand-accent" />
+                  <BIcon name="TrendingUp" class="w-3.5 h-3.5" :style="`color: ${group.accent_color || '#4C67CF'}`" />
                   <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Рейтинг</p>
                 </div>
                 <div class="px-4 pb-3">
                   <div class="flex items-center justify-between gap-2 mb-1">
-                    <span class="text-2xl font-extrabold" :class="group.rating > 0 ? 'text-brand-accent' : group.rating < 0 ? 'text-brand-error' : 'text-white'">{{ group.rating >= 0 ? '+' : '' }}{{ Math.round(group.rating) }}</span>
+                    <span class="text-2xl font-extrabold" :style="group.rating > 0 ? `color: ${group.accent_color || '#4C67CF'}` : group.rating < 0 ? '' : ''"
+                      :class="group.rating < 0 ? 'text-brand-error' : group.rating === 0 ? 'text-white' : ''">{{ group.rating >= 0 ? '+' : '' }}{{ Math.round(group.rating) }}</span>
                     <p class="text-[10px] text-white/40">{{ group.rating_count }} голосов</p>
                   </div>
                   <div v-if="authStore.user && !isOwner" class="flex gap-2 mt-2">
                     <button @click="submitVote(1)" :disabled="ratingSubmitting"
                       class="flex-1 py-2 rounded-xl text-sm font-bold border transition-all"
-                      :class="myVote === 1 ? 'border-brand-accent/60 text-brand-accent bg-brand-accent/15' : 'border-brand-border text-white/55 hover:border-brand-accent/50 hover:text-brand-accent hover:bg-brand-accent/10'">▲ За</button>
+                      :class="myVote === 1 ? 'text-white' : 'border-brand-border text-white/55 hover:text-white'"
+                      :style="myVote === 1
+                        ? `background: ${group.accent_color || '#4C67CF'}25; color: ${group.accent_color || '#4C67CF'}; border-color: ${group.accent_color || '#4C67CF'}50`
+                        : `--tw-text-opacity:1`">▲ За</button>
                     <button @click="submitVote(-1)" :disabled="ratingSubmitting"
                       class="flex-1 py-2 rounded-xl text-sm font-bold border transition-all"
                       :class="myVote === -1 ? 'border-brand-error/60 text-brand-error bg-brand-error/15' : 'border-brand-border text-white/55 hover:border-brand-error/50 hover:text-brand-error hover:bg-brand-error/10'">▼ Против</button>
@@ -1114,28 +1398,56 @@ async function loadMoreMembers() {
 
               <!-- Event: RSVP -->
               <template v-if="group.type === 'event' && activeEvent && authStore.user">
-                <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
-                  <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
-                    <BIcon name="CalendarCheck" class="w-3.5 h-3.5 text-brand-accent" />
-                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Участие</p>
-                    <span v-if="activeEvent.attendee_count" class="ml-auto text-xs text-white/40">{{ fmtNum(activeEvent.attendee_count) }} чел.</span>
+                <div class="rounded-3xl shadow-xl overflow-hidden border"
+                  :style="`border-color: ${group.accent_color || '#4C67CF'}30; background: linear-gradient(160deg, ${group.accent_color || '#4C67CF'}0D 0%, transparent 60%)`">
+                  <!-- Header -->
+                  <div class="px-4 pt-4 pb-2 flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
+                      :style="`background: ${group.accent_color || '#4C67CF'}20`">
+                      <BIcon name="CalendarCheck" class="w-4 h-4" :style="`color: ${group.accent_color || '#4C67CF'}`" />
+                    </div>
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/65">Участие</p>
+                    <span v-if="activeEvent.attendee_count" class="ml-auto text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-full"
+                      :style="`background: ${group.accent_color || '#4C67CF'}20; color: ${group.accent_color || '#4C67CF'}`">
+                      {{ fmtNum(activeEvent.attendee_count) }} чел.
+                    </span>
                   </div>
-                  <div class="px-3 pb-3 flex gap-2">
+
+                  <div class="px-3 pb-4 space-y-2.5">
+                    <!-- Big "Пойду" button -->
                     <button @click="setRsvp('going')" :disabled="rsvpLoading"
-                      class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all border"
-                      :class="myRsvpStatus === 'going' ? 'bg-brand-success/20 text-brand-success border-brand-success/40' : 'bg-brand-bg border-brand-border text-white/55 hover:border-brand-success/40 hover:text-brand-success'">
-                      <BIcon name="Check" class="w-3.5 h-3.5" /> Пойду
+                      class="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-extrabold transition-all duration-200 disabled:opacity-60"
+                      :style="myRsvpStatus === 'going'
+                        ? `background: transparent; color: ${group.accent_color || '#4C67CF'}; border: 2px solid ${group.accent_color || '#4C67CF'}60; box-shadow: inset 0 0 24px ${group.accent_color || '#4C67CF'}15`
+                        : `background: ${group.accent_color || '#4C67CF'}; color: white; border: 2px solid transparent; box-shadow: 0 4px 18px ${group.accent_color || '#4C67CF'}40`">
+                      <BIcon :name="myRsvpStatus === 'going' ? 'CheckCircle2' : 'CalendarCheck'" class="w-4 h-4" />
+                      {{ myRsvpStatus === 'going' ? 'Вы идёте!' : 'Пойду' }}
                     </button>
-                    <button @click="setRsvp('maybe')" :disabled="rsvpLoading"
-                      class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all border"
-                      :class="myRsvpStatus === 'maybe' ? 'bg-brand-yellow/20 text-brand-yellow border-brand-yellow/40' : 'bg-brand-bg border-brand-border text-white/55 hover:border-brand-yellow/40 hover:text-brand-yellow'">
-                      <BIcon name="HelpCircle" class="w-3.5 h-3.5" /> Возможно
-                    </button>
-                    <button @click="setRsvp('not_going')" :disabled="rsvpLoading"
-                      class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all border"
-                      :class="myRsvpStatus === 'not_going' ? 'bg-brand-error/20 text-brand-error border-brand-error/40' : 'bg-brand-bg border-brand-border text-white/55 hover:border-brand-error/40 hover:text-brand-error'">
-                      <BIcon name="X" class="w-3.5 h-3.5" /> Не пойду
-                    </button>
+
+                    <!-- Secondary row -->
+                    <div class="grid grid-cols-2 gap-2">
+                      <button @click="setRsvp('maybe')" :disabled="rsvpLoading"
+                        class="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all border"
+                        :class="myRsvpStatus === 'maybe'
+                          ? 'bg-brand-yellow/20 text-brand-yellow border-brand-yellow/40'
+                          : 'bg-brand-bg border-brand-border text-white/55 hover:border-brand-yellow/40 hover:text-brand-yellow hover:bg-brand-yellow/5'">
+                        <BIcon name="HelpCircle" class="w-3.5 h-3.5" /> Возможно
+                      </button>
+                      <button @click="setRsvp('not_going')" :disabled="rsvpLoading"
+                        class="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all border"
+                        :class="myRsvpStatus === 'not_going'
+                          ? 'bg-brand-error/20 text-brand-error border-brand-error/40'
+                          : 'bg-brand-bg border-brand-border text-white/55 hover:border-brand-error/40 hover:text-brand-error hover:bg-brand-error/5'">
+                        <BIcon name="X" class="w-3.5 h-3.5" /> Не пойду
+                      </button>
+                    </div>
+
+                    <!-- Status hint -->
+                    <p v-if="myRsvpStatus" class="text-center text-[10px] text-white/30">
+                      <span v-if="myRsvpStatus === 'going'">🎉 Отлично! Вы добавлены в список участников</span>
+                      <span v-else-if="myRsvpStatus === 'maybe'">🤔 Ваш ответ «Возможно» записан</span>
+                      <span v-else>😔 Жаль! Отмена записана</span>
+                    </p>
                   </div>
                 </div>
               </template>
@@ -1217,14 +1529,14 @@ async function loadMoreMembers() {
               </div>
 
               <!-- Owner / Organizer (redesigned to match screenshot) -->
-              <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
+              <div v-if="!group.hide_admins && !JSON.parse(group.hidden_member_ids || '[]').includes(group.owner.id)" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                 <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
                   <BIcon name="Users" class="w-3.5 h-3.5 text-brand-purple" />
                   <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Организаторы</p>
                 </div>
                 <!-- Organizer card -->
                 <div class="px-3 pb-2">
-                  <router-link :to="`/profile/${group.owner.id}`"
+                  <router-link :to="`/profile/${group.owner.username}`"
                     class="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-brand-bg transition-all group cursor-pointer">
                     <div class="w-10 h-10 rounded-xl bg-brand-accent/20 overflow-hidden shrink-0 border border-brand-border/60">
                       <img v-if="group.owner.avatar_url" :src="group.owner.avatar_url" class="w-full h-full object-cover" />
@@ -1279,10 +1591,11 @@ async function loadMoreMembers() {
               <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden cursor-pointer" @click="openMembersModal">
                 <div class="px-4 pt-3.5 pb-2 flex items-center justify-between">
                   <div class="flex items-center gap-2">
-                    <BIcon name="Users" class="w-3.5 h-3.5 text-brand-accent" />
+                    <BIcon name="Users" class="w-3.5 h-3.5" :style="`color: ${group.accent_color || '#4C67CF'}`" />
                     <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ group.type === 'event' ? 'Пойдут' : 'Участники' }}</p>
                   </div>
-                  <span class="text-[11px] font-bold bg-brand-accent/15 text-brand-accent px-2 py-0.5 rounded-full">{{ group._count.members }}</span>
+                  <span class="text-[11px] font-bold px-2 py-0.5 rounded-full"
+                    :style="`background: ${group.accent_color || '#4C67CF'}20; color: ${group.accent_color || '#4C67CF'}`">{{ group._count.members }}</span>
                 </div>
                 <div class="px-3 pb-3">
                   <div class="flex -space-x-2">
@@ -1409,7 +1722,7 @@ async function loadMoreMembers() {
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <div v-for="m in allMembers.filter(m => m.role !== 'owner')" :key="m.user.id"
                 class="bg-brand-bg border border-brand-border rounded-2xl overflow-hidden hover:border-brand-accent/40 transition-all group/card cursor-pointer"
-                @click="router.push('/profile/' + m.user.id)">
+                @click="router.push('/profile/' + m.user.username)">
                 <!-- Mini banner -->
                 <div class="h-16 bg-gradient-to-br from-brand-accent/20 to-brand-purple/20 relative">
                   <span v-if="m.role === 'owner' || m.role === 'admin'"
@@ -1434,7 +1747,7 @@ async function loadMoreMembers() {
                       class="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-brand-accent/15 hover:bg-brand-accent/30 text-brand-accent text-xs font-semibold transition-colors">
                       <BIcon name="MessageCircle" class="w-3.5 h-3.5" /> Написать
                     </button>
-                    <button @click.stop="router.push('/profile/' + m.user.id)"
+                    <button @click.stop="router.push('/profile/' + m.user.username)"
                       class="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/55 hover:text-white text-xs font-semibold transition-colors">
                       <BIcon name="User" class="w-3.5 h-3.5" />
                     </button>
@@ -1456,6 +1769,45 @@ async function loadMoreMembers() {
         </div>
       </div>
     </Transition>
+
+    <!-- ── Album Modal ─────────────────────────────────────────────── -->
+    <Transition name="fade">
+      <div v-if="groupOpenAlbum" class="fixed inset-0 z-[615] bg-black/95 flex flex-col" @click.self="groupOpenAlbum = null">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border/60 bg-brand-card/80 backdrop-blur-md flex-shrink-0">
+          <div class="flex items-center gap-2.5">
+            <BIcon name="CalendarDays" class="w-5 h-5 text-brand-accent" />
+            <h3 class="text-white font-bold text-lg">{{ groupOpenAlbum.label }}</h3>
+            <span class="text-xs text-white/40 font-semibold">· {{ groupOpenAlbum.urls.length }}</span>
+          </div>
+          <button @click="groupOpenAlbum = null"
+            class="w-9 h-9 flex items-center justify-center rounded-xl bg-brand-bg hover:bg-brand-border text-white/70 hover:text-white transition-all">
+            <BIcon name="X" class="w-4 h-4" />
+          </button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-3">
+          <div class="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+            <div v-for="(item, idx) in groupOpenAlbum.urls" :key="idx"
+              class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-brand-border/60 hover:border-brand-accent/60 bg-brand-bg transition-all">
+              <img v-if="isGroupImage(item.url)" :src="item.url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+              <div v-else class="w-full h-full flex items-center justify-center bg-brand-bg/60">
+                <BIcon name="Play" class="w-8 h-8 text-white/55" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Scroll to top button -->
+    <Teleport to="body">
+      <Transition name="slide-up">
+        <button v-if="showScrollTop" @click="window.scrollTo({ top: 0, behavior: 'smooth' })"
+          class="fixed bottom-6 right-6 z-50 w-11 h-11 rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110"
+          style="background: linear-gradient(135deg,#CD83F5,#7C3AED)">
+          <BIcon name="ArrowUp" class="w-5 h-5 text-white" />
+        </button>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -1466,4 +1818,6 @@ async function loadMoreMembers() {
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+.slide-up-enter-active, .slide-up-leave-active { transition: all 0.25s ease; }
+.slide-up-enter-from, .slide-up-leave-to { opacity: 0; transform: translateY(16px); }
 </style>

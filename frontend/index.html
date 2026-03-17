@@ -3,10 +3,73 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="icon" type="image/png" href="/bloomly.png" />
-    <link rel="apple-touch-icon" href="/bloomly.png" />
-    <title>Bloomly</title>
+
+    <!-- ─── Primary Meta ──────────────────────────────────────────────────── -->
+    <title>Bloomly — творческая социальная сеть</title>
+    <meta name="description" content="Bloomly — социальная сеть для художников, фурри-сообщества и всех творческих людей. Публикуй арт, общайся, находи единомышленников." />
+    <meta name="keywords" content="bloomly, фурри, арт, творческая сеть, социальная сеть, художники, фурсона" />
+    <meta name="author" content="Bloomly" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://bloomly.fun/" />
+
+    <!-- ─── Open Graph ────────────────────────────────────────────────────── -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Bloomly" />
+    <meta property="og:title" content="Bloomly — творческая социальная сеть" />
+    <meta property="og:description" content="Bloomly — социальная сеть для художников, фурри-сообщества и всех творческих людей. Публикуй арт, общайся, находи единомышленников." />
+    <meta property="og:url" content="https://bloomly.fun/" />
+    <meta property="og:image" content="https://bloomly.fun/og-default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Bloomly — творческая социальная сеть" />
+    <meta property="og:locale" content="ru_RU" />
+
+    <!-- ─── Twitter Card ──────────────────────────────────────────────────── -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@bloomlyfun" />
+    <meta name="twitter:title" content="Bloomly — творческая социальная сеть" />
+    <meta name="twitter:description" content="Bloomly — социальная сеть для художников, фурри-сообщества и всех творческих людей." />
+    <meta name="twitter:image" content="https://bloomly.fun/og-default.png" />
+
+    <!-- ─── Favicon ───────────────────────────────────────────────────────── -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/bloomly.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/bloomly.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/bloomly.png" />
+    <meta name="theme-color" content="#7c3aed" />
+    <meta name="msapplication-TileColor" content="#7c3aed" />
+
+    <!-- ─── Preconnect ────────────────────────────────────────────────────── -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+    <!-- ─── JSON-LD: WebSite ──────────────────────────────────────────────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Bloomly",
+      "url": "https://bloomly.fun",
+      "description": "Bloomly — социальная сеть для художников, фурри-сообщества и всех творческих людей.",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://bloomly.fun/?q={search_term_string}"
+        },
+        "query-input": "required name=search_term_string"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Bloomly",
+        "url": "https://bloomly.fun",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://bloomly.fun/bloomly.png"
+        }
+      }
+    }
+    </script>
   </head>
   <body>
     <div id="app"></div>

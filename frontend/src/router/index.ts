@@ -41,7 +41,7 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
-    path: '/profile/:id',
+    path: '/profile/:username',
     name: 'profile',
     component: () => import('@/views/ProfileView.vue'),
     meta: { requiresAuth: true },
@@ -125,10 +125,14 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
-    path: '/stickers',
-    name: 'stickers',
-    component: () => import('@/views/StickersView.vue'),
+    path: '/shop',
+    name: 'shop',
+    component: () => import('@/views/ShopView.vue'),
     meta: { requiresAuth: true },
+  },
+  {
+    path: '/stickers',
+    redirect: '/shop',
   },
   {
     path: '/stickers/:id',

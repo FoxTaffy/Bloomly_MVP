@@ -94,6 +94,8 @@
 </template>
 
 <script setup lang="ts">
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
 import { ref, computed, onMounted, watch } from 'vue'
 import BIcon from '@/components/BIcon.vue'
 import api from '@/api'

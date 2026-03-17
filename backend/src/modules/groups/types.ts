@@ -42,6 +42,11 @@ export interface UpdateGroupInput {
   guaranteeText?: string;
   category?: string;
   isVerified?: boolean;
+  groupBgUrl?: string;
+  groupFrame?: string;
+  groupTheme?: string;
+  hideAdmins?: boolean;
+  hiddenMemberIds?: string[];
 }
 
 export interface CreateEventInput {
@@ -113,6 +118,7 @@ export interface RateGroupInput {
 export interface CreateGroupPostInput {
   content: string;
   isNsfw?: boolean;
+  isAnnouncement?: boolean;
   mediaUrls?: string[];
   tags?: string[];
 }

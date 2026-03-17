@@ -1,63 +1,304 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useDealersDenStore } from '@/stores/dealersDen'
+import { useDealersDenStore, type DealerListingComment } from '@/stores/dealersDen'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
+import api from '@/api'
 
 const router = useRouter()
 const route  = useRoute()
 const auth   = useAuthStore()
 const store  = useDealersDenStore()
 
-const listing = computed(() => store.currentListing)
+const listing    = computed(() => store.currentListing)
 const activeImage = ref(0)
 
-onMounted(async () => {
-  const id = route.params.id as string
-  await store.loadListing(id)
-  activeImage.value = 0
-})
+// ── Countdown ────────────────────────────────────────────────────────────────
+const now = ref(Date.now())
+let ticker: ReturnType<typeof setInterval> | null = null
 
-const TYPE_LABELS: Record<string, string> = {
-  digital: 'Цифровое', physical: 'Физическое', both: 'Оба варианта',
+onMounted(async () => {
+  await store.loadListing(route.params.id as string)
+  activeImage.value = 0
+  await loadBids()
+  await loadComments()
+  ticker = setInterval(() => { now.value = Date.now() }, 1000)
+})
+onUnmounted(() => { if (ticker) clearInterval(ticker) })
+
+function formatCountdown(iso: string | null | undefined) {
+  if (!iso) return null
+  const diff = new Date(iso).getTime() - now.value
+  if (diff <= 0) return 'Завершён'
+  const d = Math.floor(diff / 86400000)
+  const h = Math.floor((diff % 86400000) / 3600000)
+  const m = Math.floor((diff % 3600000)  / 60000)
+  const s = Math.floor((diff % 60000)    / 1000)
+  if (d > 0) return `${d}д ${h}ч`
+  if (h > 0) return `${h}ч ${m}м`
+  return `${m}:${s.toString().padStart(2, '0')}`
 }
-const CAT_LABELS: Record<string, string> = {
-  art: 'Арт', fursuit: 'Фурсьют', badge: 'Значок', print: 'Принт',
-  music: 'Музыка', craft: 'Handmade', merch: 'Мерч', other: 'Другое',
+
+function isHot(iso: string | null | undefined) {
+  if (!iso) return false
+  return new Date(iso).getTime() - now.value < 7200000
 }
-const STATUS_LABELS: Record<string, string> = {
-  active: 'В наличии', sold: 'Продано', draft: 'Черновик', archived: 'Архив',
+
+function formatPrice(p: string | number, c: string) {
+  const n = parseFloat(String(p))
+  if (c === 'RUB') return `${n.toLocaleString('ru-RU')} ₽`
+  if (c === 'USD') return `$${n.toLocaleString('en-US')}`
+  if (c === 'EUR') return `€${n.toLocaleString()}`
+  return `${n.toLocaleString()} ${c}`
 }
-const STATUS_COLOR: Record<string, string> = {
-  active: 'text-brand-success bg-brand-success/10 border-brand-success/30',
-  sold: 'text-brand-error bg-brand-error/10 border-brand-error/30',
-  draft: 'text-brand-warning bg-brand-warning/10 border-brand-warning/30',
-  archived: 'text-white/55 bg-white/5 border-white/10',
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 }
 
 function isSoldOut(l: any) {
   return l.status === 'sold' || (l.quantity > 0 && l.quantity_sold >= l.quantity)
 }
 
-function formatPrice(price: string, currency: string) {
-  return `${parseFloat(price).toLocaleString()} ${currency}`
+// ── Bids ─────────────────────────────────────────────────────────────────────
+const bids        = ref<any[]>([])
+const showBidForm = ref(false)
+const bidAmount   = ref(0)
+const bidMessage  = ref('')
+const isBidding   = ref(false)
+const bidError    = ref('')
+
+async function loadBids() {
+  if (!listing.value) return
+  if (listing.value.listing_kind !== 'auction' && listing.value.listing_kind !== 'ych') return
+  bids.value = await store.getBids(listing.value.id)
 }
+
+function openBidForm() {
+  if (!auth.user) { router.push({ name: 'login' }); return }
+  const cur = parseFloat(String(listing.value?.current_bid ?? listing.value?.price ?? 0))
+  const inc = parseFloat(String(listing.value?.bid_increment ?? 1))
+  bidAmount.value = parseFloat((cur + inc).toFixed(2))
+  bidMessage.value = ''
+  bidError.value = ''
+  showBidForm.value = true
+}
+
+async function submitBid() {
+  if (!listing.value) return
+  isBidding.value = true
+  bidError.value = ''
+  try {
+    await store.placeBid(listing.value.id, bidAmount.value, bidMessage.value || undefined)
+    await loadBids()
+    showBidForm.value = false
+  } catch (e: any) {
+    bidError.value = e?.response?.data?.error ?? 'Ошибка'
+  } finally {
+    isBidding.value = false
+  }
+}
+
+// ── Raffle ───────────────────────────────────────────────────────────────────
+const isBuyingTicket = ref(false)
+const ticketSuccess  = ref(false)
+
+async function buyTicket() {
+  if (!auth.user) { router.push({ name: 'login' }); return }
+  if (!listing.value) return
+  isBuyingTicket.value = true
+  try {
+    await store.buyRaffleTicket(listing.value.id)
+    ticketSuccess.value = true
+  } catch {} finally {
+    isBuyingTicket.value = false
+  }
+}
+
+// ── Comments ─────────────────────────────────────────────────────────────────
+const comments         = ref<DealerListingComment[]>([])
+const commentBody      = ref('')
+const replyTo          = ref<DealerListingComment | null>(null)
+const replyBody        = ref('')
+const isPostingComment = ref(false)
+
+async function loadComments() {
+  if (!listing.value) return
+  comments.value = await store.getComments(listing.value.id)
+}
+
+async function postComment() {
+  if (!commentBody.value.trim() || !listing.value) return
+  isPostingComment.value = true
+  try {
+    const c = await store.addComment(listing.value.id, commentBody.value.trim())
+    comments.value.unshift(c)
+    commentBody.value = ''
+  } catch {} finally {
+    isPostingComment.value = false
+  }
+}
+
+async function postReply(parent: DealerListingComment) {
+  if (!replyBody.value.trim() || !listing.value) return
+  const c = await store.addComment(listing.value.id, replyBody.value.trim(), parent.id)
+  parent.replies = [...(parent.replies ?? []), c]
+  replyTo.value  = null
+  replyBody.value = ''
+}
+
+async function removeComment(comment: DealerListingComment) {
+  await store.deleteComment(comment.id)
+  comments.value = comments.value.filter(c => c.id !== comment.id)
+}
+
+// ── Meta ─────────────────────────────────────────────────────────────────────
+const CAT_LABELS: Record<string, string> = {
+  art: 'Арт', fursuit: 'Фурсьют', sticker: 'Стикеры', badge: 'Значки',
+  print: 'Принты', music: 'Музыка', craft: 'Handmade', merch: 'Мерч', other: 'Другое',
+}
+const TYPE_LABELS: Record<string, string> = {
+  digital: 'Цифровое', physical: 'Физическое', both: 'Оба варианта',
+}
+const KIND_THEME = {
+  fixed:   { from: '#3148FF', to: '#4C67CF',  accent: '#93b4ff',  icon: 'Tag',        label: 'Фикс. цена' },
+  auction: { from: '#9c5700', to: '#5c2e00',  accent: '#FFC01F',  icon: 'Hammer',     label: 'Аукцион'    },
+  ych:     { from: '#4c1280', to: '#26094a',  accent: '#CD83F5',  icon: 'Paintbrush', label: 'YCH'        },
+  raffle:  { from: '#054d20', to: '#022b12',  accent: '#66C770',  icon: 'Gift',       label: 'Розыгрыш'   },
+}
+
+const kindTheme = computed(() => KIND_THEME[(listing.value?.listing_kind ?? 'fixed') as keyof typeof KIND_THEME] ?? KIND_THEME.fixed)
 
 function contactSeller() {
   if (!listing.value) return
   router.push({ name: 'messages', query: { userId: listing.value.seller.id } })
 }
 
-function goToProfile() {
+// ── Edit ─────────────────────────────────────────────────────────────────────
+const showEditModal = ref(false)
+const isUpdating    = ref(false)
+const editForm = ref({
+  title: '', description: '', price: 0, currency: 'USD',
+  quantity: 1, status: 'active' as 'active'|'draft'|'archived'|'sold',
+  images: [] as string[], tags: '', isNsfw: false,
+})
+
+function openEdit() {
   if (!listing.value) return
-  router.push(`/profile/${listing.value.seller.id}`)
+  editForm.value = {
+    title:       listing.value.title,
+    description: listing.value.description ?? '',
+    price:       parseFloat(String(listing.value.price)),
+    currency:    listing.value.currency,
+    quantity:    listing.value.quantity,
+    status:      listing.value.status as any,
+    images:      [...listing.value.images],
+    tags:        listing.value.tags.join(', '),
+    isNsfw:      listing.value.is_nsfw,
+  }
+  showEditModal.value = true
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+async function submitEdit() {
+  if (!listing.value || !editForm.value.title.trim()) return
+  isUpdating.value = true
+  try {
+    await store.updateListing(listing.value.id, {
+      title:       editForm.value.title,
+      description: editForm.value.description || undefined,
+      price:       editForm.value.price,
+      currency:    editForm.value.currency,
+      quantity:    editForm.value.quantity,
+      status:      editForm.value.status as any,
+      images:      editForm.value.images,
+      tags:        editForm.value.tags.split(',').map(t => t.trim()).filter(Boolean),
+      isNsfw:      editForm.value.isNsfw,
+    })
+    await store.loadListing(listing.value.id)
+    showEditModal.value = false
+  } catch {} finally {
+    isUpdating.value = false
+  }
+}
+
+async function deleteListing() {
+  if (!listing.value) return
+  if (!confirm('Удалить объявление? Это действие необратимо.')) return
+  await store.deleteListing(listing.value.id)
+  router.push({ name: 'dealers-den' })
+}
+
+function addImageUrl() {
+  editForm.value.images.push('')
+}
+function removeImage(i: number) {
+  editForm.value.images.splice(i, 1)
+}
+
+// ── Share ─────────────────────────────────────────────────────────────────────
+const shareToast = ref(false)
+let shareTimer: ReturnType<typeof setTimeout> | null = null
+
+function shareListing() {
+  const url = window.location.href
+  if (navigator.share) {
+    navigator.share({ title: listing.value?.title ?? '', url })
+  } else {
+    navigator.clipboard.writeText(url).then(() => {
+      shareToast.value = true
+      if (shareTimer) clearTimeout(shareTimer)
+      shareTimer = setTimeout(() => { shareToast.value = false }, 2500)
+    })
+  }
+}
+
+// ── Report ────────────────────────────────────────────────────────────────────
+const showReportModal  = ref(false)
+const reportReason     = ref('')
+const reportCustom     = ref('')
+const isReporting      = ref(false)
+const reportSuccess    = ref(false)
+
+const REPORT_REASONS = [
+  'Мошенничество / обман',
+  'Спам или реклама',
+  'Неверная категория',
+  'Запрещённый контент',
+  'Нарушение авторских прав',
+  'Другое',
+]
+
+async function submitReport() {
+  if (!listing.value || !reportReason.value) return
+  const reason = reportReason.value === 'Другое' && reportCustom.value.trim()
+    ? reportCustom.value.trim()
+    : reportReason.value
+  isReporting.value = true
+  try {
+    await api.post('/admin/reports', {
+      targetType: 'listing',
+      targetId:   listing.value.id,
+      reason,
+    })
+    reportSuccess.value = true
+    setTimeout(() => {
+      showReportModal.value  = false
+      reportSuccess.value    = false
+      reportReason.value     = ''
+      reportCustom.value     = ''
+    }, 2000)
+  } catch {} finally {
+    isReporting.value = false
+  }
 }
 </script>
 
@@ -68,22 +309,20 @@ function formatDate(iso: string) {
     <div class="max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-8">
       <AppSidebar />
 
-      <main class="flex-1 min-w-0 pb-28 md:pb-20">
+      <main class="flex-1 min-w-0 pb-28 md:pb-20 space-y-4">
 
-        <!-- Back button -->
-        <button
-          @click="router.push({ name: 'dealers-den' })"
-          class="flex items-center gap-2 text-white/55 hover:text-white text-sm font-semibold mb-4 transition-colors">
-          <BIcon name="ArrowLeft" class="w-4 h-4" />
-          Обратно в Dealers' Den
+        <!-- Back -->
+        <button @click="router.push({ name: 'dealers-den' })"
+          class="flex items-center gap-2 text-white/40 hover:text-white text-sm font-semibold transition-colors">
+          <BIcon name="ArrowLeft" class="w-4 h-4" /> Dealers&apos; Den
         </button>
 
-        <!-- Loading -->
+        <!-- Loading skeleton -->
         <div v-if="store.isLoading" class="space-y-4">
           <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden animate-pulse">
-            <div class="w-full h-72 bg-brand-border" />
+            <div class="w-full h-80 bg-brand-border" />
             <div class="p-6 space-y-4">
-              <div class="h-6 bg-brand-border rounded-full w-2/3" />
+              <div class="h-7 bg-brand-border rounded-full w-2/3" />
               <div class="h-4 bg-brand-border rounded-full w-full" />
               <div class="h-4 bg-brand-border rounded-full w-3/4" />
             </div>
@@ -91,185 +330,956 @@ function formatDate(iso: string) {
         </div>
 
         <!-- 404 -->
-        <div
-          v-else-if="!listing"
+        <div v-else-if="!listing"
           class="text-center py-20 bg-brand-card border border-brand-border rounded-3xl">
-          <BIcon name="PackageX" class="w-14 h-14 text-white/30 mx-auto mb-4" />
+          <BIcon name="PackageX" class="w-14 h-14 text-white/20 mx-auto mb-4" />
           <h2 class="text-2xl font-bold text-white mb-2">Объявление не найдено</h2>
-          <p class="text-white/55 text-sm mb-6">Оно могло быть удалено или перемещено</p>
-          <button
-            @click="router.push({ name: 'dealers-den' })"
-            class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-accent hover:bg-brand-accent-plus text-white text-sm font-bold rounded-xl transition-all">
-            <BIcon name="ShoppingBag" class="w-4 h-4" />
-            В Dealers' Den
+          <p class="text-white/35 text-sm mb-6">Оно могло быть удалено</p>
+          <button @click="router.push({ name: 'dealers-den' })"
+            class="inline-flex items-center gap-2 px-5 py-2.5 text-white text-sm font-bold rounded-2xl"
+            style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+            <BIcon name="ShoppingBag" class="w-4 h-4" /> В Dealers&apos; Den
           </button>
         </div>
 
-        <!-- Main card -->
-        <div v-else class="space-y-4">
-          <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
+        <template v-else>
 
-            <!-- Image gallery -->
-            <div class="relative">
-              <!-- Main image -->
-              <div class="w-full h-72 md:h-96 bg-brand-bg overflow-hidden">
-                <img
-                  v-if="listing.images[activeImage]"
-                  :src="listing.images[activeImage]"
-                  :alt="listing.title"
-                  class="w-full h-full object-contain" />
-                <div
-                  v-else
-                  class="w-full h-full flex items-center justify-center">
-                  <BIcon name="Image" class="w-20 h-20 text-brand-border" />
-                </div>
-
-                <!-- Sold out overlay -->
-                <div
-                  v-if="isSoldOut(listing)"
-                  class="absolute inset-0 bg-black/50 flex items-center justify-center">
-                  <span class="bg-brand-error text-white font-extrabold text-xl px-6 py-2 rounded-full">ПРОДАНО</span>
-                </div>
-
-                <!-- NSFW blur -->
-                <div
-                  v-else-if="listing.is_nsfw"
-                  class="absolute inset-0 backdrop-blur-2xl flex flex-col items-center justify-center gap-2">
-                  <BIcon name="EyeOff" class="w-12 h-12 text-white/50" />
-                  <span class="text-white/70 font-bold">Контент 18+</span>
-                </div>
+          <!-- ═══ TOP HERO BANNER ═══════════════════════════════════════════ -->
+          <div class="relative overflow-hidden rounded-3xl shadow-2xl" style="min-height: 72px">
+            <div class="absolute inset-0" :style="`background: linear-gradient(135deg, ${kindTheme.from}, ${kindTheme.to})`" />
+            <div class="absolute inset-0 opacity-[0.07]"
+              style="background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.1) 0, rgba(255,255,255,0.1) 1px, transparent 0, transparent 50%); background-size: 16px 16px" />
+            <div class="relative z-10 px-5 py-4 flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style="background: rgba(255,255,255,0.15)">
+                <BIcon :name="kindTheme.icon" class="w-5 h-5 text-white" />
               </div>
-
-              <!-- Thumbnails -->
-              <div
-                v-if="listing.images.length > 1"
-                class="flex gap-2 overflow-x-auto p-3 bg-brand-bg/50 hide-scrollbar">
-                <button
-                  v-for="(img, i) in listing.images"
-                  :key="i"
-                  @click="activeImage = i"
-                  class="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 border-2 transition-all"
-                  :class="activeImage === i ? 'border-brand-accent' : 'border-transparent opacity-60 hover:opacity-100'">
-                  <img :src="img" class="w-full h-full object-cover" />
-                </button>
+              <div class="flex-1 min-w-0">
+                <p class="text-[9px] font-bold uppercase tracking-widest" :style="`color: ${kindTheme.accent}`">
+                  {{ kindTheme.label }} · {{ CAT_LABELS[listing.category] ?? listing.category }}
+                </p>
+                <h1 class="text-lg font-black text-white leading-tight line-clamp-1">{{ listing.title }}</h1>
               </div>
+              <span v-if="isSoldOut(listing)"
+                class="flex-shrink-0 bg-brand-error text-white text-xs font-extrabold px-3 py-1.5 rounded-full">
+                ПРОДАНО
+              </span>
             </div>
+          </div>
 
-            <!-- Content -->
-            <div class="p-6 space-y-5">
+          <!-- ═══ ACTION BAR ══════════════════════════════════════════════ -->
+          <div class="flex items-center gap-2 flex-wrap">
+            <!-- Share toast -->
+            <Transition name="fade-up">
+              <div v-if="shareToast"
+                class="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-brand-success text-white text-sm font-bold px-5 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 pointer-events-none">
+                <BIcon name="Check" class="w-4 h-4" /> Ссылка скопирована!
+              </div>
+            </Transition>
 
-              <!-- Header row -->
-              <div class="flex flex-wrap items-start justify-between gap-4">
-                <div class="space-y-2 flex-1 min-w-0">
-                  <!-- Badges -->
-                  <div class="flex flex-wrap gap-2">
-                    <span class="bg-brand-border text-white/70 text-xs font-bold px-3 py-1 rounded-full capitalize">
-                      {{ CAT_LABELS[listing.category] ?? listing.category }}
-                    </span>
-                    <span :class="'border text-xs font-bold px-3 py-1 rounded-full ' + (
-                      listing.type === 'digital'  ? 'text-brand-accent bg-brand-accent/10 border-brand-accent/30' :
-                      listing.type === 'physical' ? 'text-brand-success bg-brand-success/10 border-brand-success/30' :
-                      'text-brand-yellow bg-brand-yellow/10 border-brand-yellow/30'
-                    )">
-                      {{ TYPE_LABELS[listing.type] }}
-                    </span>
-                    <span v-if="listing.is_nsfw" class="border border-brand-error/30 text-brand-error bg-brand-error/10 text-xs font-bold px-3 py-1 rounded-full">18+</span>
-                    <span :class="'border text-xs font-bold px-3 py-1 rounded-full ' + (STATUS_COLOR[listing.status] || '')">
-                      {{ STATUS_LABELS[listing.status] ?? listing.status }}
-                    </span>
+            <!-- Owner buttons -->
+            <template v-if="auth.user?.id === listing.seller_id">
+              <button @click="openEdit"
+                class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white rounded-2xl transition-all hover:opacity-90 shadow-sm"
+                style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+                <BIcon name="Pencil" class="w-3.5 h-3.5" /> Редактировать
+              </button>
+              <button @click="deleteListing"
+                class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-brand-error/80 bg-brand-error/10 border border-brand-error/20 rounded-2xl transition-all hover:bg-brand-error/20 hover:text-brand-error">
+                <BIcon name="Trash2" class="w-3.5 h-3.5" /> Удалить
+              </button>
+            </template>
+            <!-- Non-owner: report -->
+            <button v-else-if="auth.user" @click="showReportModal = true"
+              class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white/40 bg-brand-card border border-brand-border rounded-2xl transition-all hover:text-brand-error hover:border-brand-error/30">
+              <BIcon name="Flag" class="w-3.5 h-3.5" /> Пожаловаться
+            </button>
+
+            <!-- Share (always) -->
+            <button @click="shareListing"
+              class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white/40 bg-brand-card border border-brand-border rounded-2xl transition-all hover:text-white hover:border-white/20 ml-auto">
+              <BIcon name="Share2" class="w-3.5 h-3.5" /> Поделиться
+            </button>
+          </div>
+
+          <!-- ═══ MAIN LAYOUT ═══════════════════════════════════════════════ -->
+          <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+
+            <!-- Gallery (3/5) -->
+            <div class="lg:col-span-3 space-y-3">
+              <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
+                <!-- Main image -->
+                <div class="relative w-full" style="aspect-ratio: 4/3; background: #090d20">
+                  <img v-if="listing.images[activeImage]" :src="listing.images[activeImage]" :alt="listing.title"
+                    class="w-full h-full object-contain" />
+                  <div v-else class="w-full h-full flex items-center justify-center">
+                    <BIcon name="Image" class="w-20 h-20 text-brand-border" />
                   </div>
-
-                  <h1 class="text-2xl font-extrabold text-white leading-tight">{{ listing.title }}</h1>
+                  <div v-if="isSoldOut(listing)" class="absolute inset-0 bg-black/60 flex items-center justify-center">
+                    <span class="bg-brand-error text-white font-extrabold text-2xl px-8 py-3 rounded-full tracking-wide">ПРОДАНО</span>
+                  </div>
+                  <div v-else-if="listing.is_nsfw" class="absolute inset-0 backdrop-blur-2xl flex flex-col items-center justify-center gap-2">
+                    <BIcon name="EyeOff" class="w-14 h-14 text-white/40" />
+                    <span class="text-white/60 font-bold">Контент 18+</span>
+                  </div>
+                  <div v-if="listing.images.length > 1"
+                    class="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                    {{ activeImage + 1 }}/{{ listing.images.length }}
+                  </div>
                 </div>
-
-                <!-- Price block -->
-                <div class="text-right">
-                  <div class="text-3xl font-extrabold text-brand-yellow">
-                    {{ formatPrice(listing.price, listing.currency) }}
-                  </div>
-                  <div class="text-xs text-white/40 mt-1">
-                    <template v-if="listing.quantity > 0">
-                      {{ isSoldOut(listing) ? 'Нет в наличии' : `Осталось: ${listing.quantity - listing.quantity_sold}` }}
-                    </template>
-                  </div>
+                <!-- Thumbnails -->
+                <div v-if="listing.images.length > 1" class="flex gap-2 p-3 bg-black/20 overflow-x-auto scrollbar-none">
+                  <button v-for="(img, i) in listing.images" :key="i" @click="activeImage = i"
+                    class="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 border-2 transition-all"
+                    :class="activeImage === i ? 'border-brand-accent' : 'border-transparent opacity-55 hover:opacity-90'">
+                    <img :src="img" class="w-full h-full object-cover" />
+                  </button>
                 </div>
               </div>
 
               <!-- Description -->
-              <div v-if="listing.description">
-                <h3 class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2">Описание</h3>
-                <p class="text-sm text-white/80 leading-relaxed whitespace-pre-line">{{ listing.description }}</p>
+              <div v-if="listing.description"
+                class="bg-brand-card border border-brand-border rounded-3xl p-5 shadow-xl">
+                <h3 class="text-xs font-bold text-white/35 uppercase tracking-widest mb-3 flex items-center gap-2">
+                  <BIcon name="AlignLeft" class="w-3.5 h-3.5" /> Описание
+                </h3>
+                <p class="text-sm text-white/75 leading-relaxed whitespace-pre-line">{{ listing.description }}</p>
               </div>
 
               <!-- Tags -->
-              <div v-if="listing.tags.length">
-                <h3 class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2">Теги</h3>
-                <div class="flex flex-wrap gap-2">
-                  <span
-                    v-for="tag in listing.tags"
-                    :key="tag"
-                    class="text-xs text-brand-accent bg-brand-accent/10 border border-brand-accent/20 px-3 py-1 rounded-full">
-                    #{{ tag }}
-                  </span>
+              <div v-if="listing.tags.length" class="flex flex-wrap gap-2">
+                <span v-for="tag in listing.tags" :key="tag"
+                  class="text-xs text-brand-accent bg-brand-accent/8 border border-brand-accent/20 px-3 py-1 rounded-full">
+                  #{{ tag }}
+                </span>
+              </div>
+
+              <!-- Meta -->
+              <div class="grid grid-cols-3 gap-2">
+                <div v-for="m in [
+                  { icon: 'Tag',      label: 'Категория', val: CAT_LABELS[listing.category] ?? listing.category },
+                  { icon: 'Layers',   label: 'Формат',    val: TYPE_LABELS[listing.type] },
+                  { icon: 'Calendar', label: 'Добавлено', val: formatDate(listing.created_at) },
+                ]" :key="m.label"
+                  class="bg-brand-card border border-brand-border rounded-2xl px-3 py-3">
+                  <div class="flex items-center gap-1.5 mb-1">
+                    <BIcon :name="m.icon" class="w-3 h-3 text-white/30" />
+                    <p class="text-[9px] text-white/30 uppercase tracking-wider font-bold">{{ m.label }}</p>
+                  </div>
+                  <p class="text-xs text-white font-semibold">{{ m.val }}</p>
                 </div>
               </div>
 
-              <!-- Meta info -->
-              <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
-                  <p class="text-[10px] text-white/40 uppercase font-bold tracking-wider">Категория</p>
-                  <p class="text-sm text-white font-semibold mt-0.5">{{ CAT_LABELS[listing.category] ?? listing.category }}</p>
-                </div>
-                <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
-                  <p class="text-[10px] text-white/40 uppercase font-bold tracking-wider">Формат</p>
-                  <p class="text-sm text-white font-semibold mt-0.5">{{ TYPE_LABELS[listing.type] }}</p>
-                </div>
-                <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
-                  <p class="text-[10px] text-white/40 uppercase font-bold tracking-wider">Опубликовано</p>
-                  <p class="text-sm text-white font-semibold mt-0.5">{{ formatDate(listing.created_at) }}</p>
-                </div>
-              </div>
-
-              <!-- Seller section -->
-              <div class="bg-brand-bg border border-brand-border rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap">
-                <div
-                  class="flex items-center gap-3 cursor-pointer"
-                  @click="goToProfile">
-                  <img
-                    v-if="listing.seller.avatar_url"
-                    :src="listing.seller.avatar_url"
-                    class="w-12 h-12 rounded-full object-cover border-2 border-brand-border hover:border-brand-accent transition-colors" />
-                  <div
-                    v-else
-                    class="w-12 h-12 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-lg font-extrabold border-2 border-brand-border hover:border-brand-accent transition-colors">
+              <!-- Seller -->
+              <div class="bg-brand-card border border-brand-border rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap shadow-lg">
+                <div class="flex items-center gap-3 cursor-pointer" @click="router.push(`/profile/${listing.seller.username}`)">
+                  <img v-if="listing.seller.avatar_url" :src="listing.seller.avatar_url"
+                    class="w-11 h-11 rounded-full object-cover border-2 border-brand-border hover:border-brand-accent transition-colors" />
+                  <div v-else class="w-11 h-11 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-extrabold border-2 border-brand-border hover:border-brand-accent transition-colors">
                     {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
                   </div>
                   <div>
                     <div class="flex items-center gap-1.5">
-                      <span class="font-bold text-white hover:text-brand-accent transition-colors">
+                      <span class="font-bold text-white text-sm hover:text-brand-accent transition-colors">
                         {{ listing.seller.display_name ?? listing.seller.username }}
                       </span>
-                      <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-4 h-4 text-brand-accent" />
+                      <img v-if="listing.seller.is_verified" src="/icons/badges/paw_offical.svg" class="w-4 h-4 flex-shrink-0" title="Верифицирован" />
                     </div>
-                    <p class="text-xs text-white/40">@{{ listing.seller.username }}</p>
+                    <p class="text-xs text-white/35">@{{ listing.seller.username }}</p>
+                  </div>
+                </div>
+                <button v-if="auth.user && auth.user.id !== listing.seller_id"
+                  @click="contactSeller"
+                  class="flex items-center gap-2 px-4 py-2 text-white text-sm font-bold rounded-xl transition-all shadow-md hover:opacity-90"
+                  style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+                  <BIcon name="MessageCircle" class="w-4 h-4" /> Написать
+                </button>
+              </div>
+            </div>
+
+            <!-- ═══ Right panel (2/5) ══════════════════════════════════════ -->
+            <div class="lg:col-span-2 space-y-4">
+
+              <!-- ── AUCTION ──────────────────────────────────────────────── -->
+              <template v-if="listing.listing_kind === 'auction'">
+                <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
+                  <div class="relative overflow-hidden px-5 py-4" style="background: linear-gradient(135deg, #1c1200, #0e0900)">
+                    <div class="absolute -top-4 -right-4 w-24 h-24 rounded-full blur-2xl opacity-30" style="background: #FFC01F" />
+                    <div class="relative z-10">
+                      <div class="flex items-center gap-2 mb-1">
+                        <BIcon name="Hammer" class="w-4 h-4 text-brand-yellow" />
+                        <span class="text-xs font-extrabold text-brand-yellow uppercase tracking-widest">Аукцион</span>
+                        <span v-if="!isSoldOut(listing)" class="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-brand-error/20 text-brand-error animate-pulse">● LIVE</span>
+                      </div>
+                      <p class="text-[10px] text-white/35">Побеждает наибольшая ставка</p>
+                    </div>
+                  </div>
+                  <div class="p-5 space-y-4">
+                    <div class="flex items-end justify-between">
+                      <div>
+                        <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">Текущая ставка</p>
+                        <p class="text-3xl font-black text-brand-yellow tabular-nums leading-none">
+                          {{ formatPrice(listing.current_bid ?? listing.price, listing.currency) }}
+                        </p>
+                        <p class="text-xs text-white/30 mt-1">
+                          {{ listing.bid_count }} {{ listing.bid_count === 1 ? 'ставка' : listing.bid_count < 5 ? 'ставки' : 'ставок' }}
+                          · старт {{ formatPrice(listing.price, listing.currency) }}
+                        </p>
+                      </div>
+                      <div class="text-right">
+                        <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">Осталось</p>
+                        <p class="text-2xl font-black tabular-nums leading-none"
+                          :class="isHot(listing.auction_ends_at) ? 'text-brand-error' : 'text-white'">
+                          {{ formatCountdown(listing.auction_ends_at) ?? '—' }}
+                        </p>
+                        <p v-if="listing.auction_ends_at" class="text-[9px] text-white/25 mt-1">
+                          до {{ formatDate(listing.auction_ends_at) }}
+                        </p>
+                      </div>
+                    </div>
+                    <div v-if="listing.auto_buy_price"
+                      class="flex items-center justify-between bg-brand-yellow/8 border border-brand-yellow/15 rounded-2xl px-4 py-2.5">
+                      <div class="flex items-center gap-2">
+                        <BIcon name="Zap" class="w-4 h-4 text-brand-yellow" />
+                        <span class="text-xs font-bold text-white/70">Автовыкуп (AB)</span>
+                      </div>
+                      <span class="text-sm font-extrabold text-brand-yellow">{{ formatPrice(listing.auto_buy_price, listing.currency) }}</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-white/30">
+                      <span>Шаг ставки</span>
+                      <span class="font-bold text-white/50">+{{ formatPrice(listing.bid_increment, listing.currency) }}</span>
+                    </div>
+                    <!-- Bid CTA -->
+                    <div v-if="!isSoldOut(listing) && !showBidForm">
+                      <button @click="openBidForm"
+                        class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm"
+                        style="background: linear-gradient(135deg, #FFC01F, #E76F51)">
+                        <BIcon name="Hammer" class="w-4 h-4" /> Сделать ставку
+                      </button>
+                    </div>
+                    <!-- Bid form -->
+                    <div v-if="showBidForm && !isSoldOut(listing)" class="space-y-3">
+                      <div class="space-y-1.5">
+                        <label class="text-[9px] text-white/35 uppercase tracking-wider font-bold">Ваша ставка</label>
+                        <div class="relative">
+                          <input v-model.number="bidAmount" type="number" min="0" step="0.01"
+                            class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 pr-14 text-white text-sm outline-none focus:border-brand-yellow/40 transition-all" />
+                          <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/25 font-bold">{{ listing.currency }}</span>
+                        </div>
+                      </div>
+                      <div class="space-y-1.5">
+                        <label class="text-[9px] text-white/35 uppercase tracking-wider font-bold">Сообщение (необяз.)</label>
+                        <textarea v-model="bidMessage" rows="2" placeholder="Приложение к ставке…"
+                          class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm resize-none outline-none focus:border-brand-yellow/40 transition-all" />
+                      </div>
+                      <div v-if="bidError" class="text-brand-error text-xs bg-brand-error/8 border border-brand-error/15 rounded-xl px-4 py-2.5">{{ bidError }}</div>
+                      <div class="flex gap-2">
+                        <button @click="showBidForm = false"
+                          class="px-4 py-2.5 border border-white/10 text-white/40 text-sm font-bold rounded-2xl hover:bg-white/5 transition-all">Отмена</button>
+                        <button @click="submitBid" :disabled="isBidding || bidAmount <= 0"
+                          class="flex-1 flex items-center justify-center gap-2 py-2.5 disabled:opacity-30 text-white text-sm font-extrabold rounded-2xl transition-all hover:opacity-90"
+                          style="background: linear-gradient(135deg, #FFC01F, #E76F51)">
+                          <span v-if="isBidding" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <BIcon v-else name="Hammer" class="w-4 h-4" />
+                          {{ isBidding ? 'Отправка…' : 'Подтвердить ставку' }}
+                        </button>
+                      </div>
+                    </div>
+                    <div v-if="isSoldOut(listing)"
+                      class="flex items-center gap-2 bg-brand-success/10 border border-brand-success/20 rounded-2xl px-4 py-3">
+                      <BIcon name="Trophy" class="w-5 h-5 text-brand-success flex-shrink-0" />
+                      <div>
+                        <p class="text-xs font-bold text-brand-success">Аукцион завершён</p>
+                        <p class="text-[10px] text-white/35 mt-0.5">Финальная цена: {{ formatPrice(listing.current_bid ?? listing.price, listing.currency) }}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <!-- Contact button (not shown for own listings) -->
-                <button
-                  v-if="auth.user && auth.user.id !== listing.seller_id"
-                  @click="contactSeller"
-                  class="flex items-center gap-2 px-4 py-2 bg-brand-accent hover:bg-brand-accent-plus text-white text-sm font-bold rounded-xl transition-all shadow-md shadow-brand-accent/25">
-                  <BIcon name="MessageCircle" class="w-4 h-4" />
-                  Написать продавцу
-                </button>
-              </div>
+                <!-- Auction bid history -->
+                <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
+                  <div class="px-5 py-3.5 border-b border-brand-border flex items-center justify-between">
+                    <h3 class="text-xs font-extrabold text-white/50 uppercase tracking-widest flex items-center gap-2">
+                      <BIcon name="History" class="w-3.5 h-3.5 text-brand-yellow" /> История ставок
+                    </h3>
+                    <span class="text-xs text-white/30 font-medium">{{ bids.length }}</span>
+                  </div>
+                  <div class="divide-y divide-brand-border max-h-72 overflow-y-auto">
+                    <div v-if="bids.length === 0" class="py-8 text-center text-white/25 text-sm">Ставок пока нет</div>
+                    <div v-for="(bid, i) in bids" :key="bid.id"
+                      class="px-5 py-3 flex items-center gap-3"
+                      :class="i === 0 ? 'bg-brand-yellow/5' : 'hover:bg-white/[0.02]'">
+                      <div class="relative">
+                        <img v-if="bid.bidder.avatar_url" :src="bid.bidder.avatar_url"
+                          class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0" />
+                        <div v-else class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-extrabold border border-brand-border">
+                          {{ (bid.bidder.display_name ?? bid.bidder.username)[0].toUpperCase() }}
+                        </div>
+                        <BIcon v-if="i === 0" name="Crown" class="w-3 h-3 text-brand-yellow absolute -top-1 -right-1" />
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs font-bold text-white truncate">
+                          {{ bid.bidder.display_name ?? bid.bidder.username }}
+                          <span v-if="i === 0" class="text-brand-yellow ml-1 text-[9px]">● Лидер</span>
+                        </p>
+                        <p v-if="bid.message" class="text-[10px] text-white/30 truncate mt-0.5">{{ bid.message }}</p>
+                        <p class="text-[9px] text-white/25 mt-0.5">{{ formatDate(bid.created_at) }}, {{ formatTime(bid.created_at) }}</p>
+                      </div>
+                      <span class="text-sm font-extrabold flex-shrink-0"
+                        :class="i === 0 ? 'text-brand-yellow' : 'text-white/60'">
+                        {{ formatPrice(bid.amount, listing.currency) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- ── YCH ─────────────────────────────────────────────────── -->
+              <template v-else-if="listing.listing_kind === 'ych'">
+                <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
+                  <div class="relative overflow-hidden px-5 py-4" style="background: linear-gradient(135deg, #1c0840, #0d0420)">
+                    <div class="absolute -top-4 -right-4 w-24 h-24 rounded-full blur-2xl opacity-30" style="background: #CD83F5" />
+                    <div class="relative z-10">
+                      <div class="flex items-center gap-2 mb-1">
+                        <BIcon name="Paintbrush" class="w-4 h-4 text-brand-purple" />
+                        <span class="text-xs font-extrabold text-brand-purple uppercase tracking-widest">YCH — Your Character Here</span>
+                      </div>
+                      <p class="text-[10px] text-white/35">Займи слот — художник нарисует твоего персонажа</p>
+                    </div>
+                  </div>
+                  <div class="p-5 space-y-4">
+                    <!-- Slot grid -->
+                    <div>
+                      <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-2">Слоты</p>
+                      <div class="flex flex-wrap gap-1.5">
+                        <div v-for="s in (listing.quantity ?? 1)" :key="s"
+                          class="relative flex items-center justify-center rounded-lg text-[9px] font-extrabold transition-all"
+                          style="width: 32px; height: 32px"
+                          :style="s <= (listing.quantity_sold ?? 0)
+                            ? 'background: rgba(205,131,245,0.08); border: 1px solid rgba(205,131,245,0.12); color: rgba(255,255,255,0.2)'
+                            : 'background: linear-gradient(135deg, rgba(205,131,245,0.3), rgba(124,58,237,0.3)); border: 1px solid rgba(205,131,245,0.4); box-shadow: 0 0 8px rgba(205,131,245,0.15); color: white'">
+                          <BIcon v-if="s <= (listing.quantity_sold ?? 0)" name="X" class="w-3 h-3 text-white/20" />
+                          <span v-else>{{ s }}</span>
+                        </div>
+                      </div>
+                      <p class="text-[10px] text-white/35 mt-2">
+                        <span class="text-brand-purple font-bold">{{ (listing.quantity ?? 1) - (listing.quantity_sold ?? 0) }}</span>
+                        свободных из {{ listing.quantity ?? 1 }}
+                      </p>
+                    </div>
+                    <!-- Bid info -->
+                    <div class="flex items-end justify-between">
+                      <div>
+                        <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">Текущая ставка</p>
+                        <p class="text-3xl font-black text-brand-purple leading-none tabular-nums">
+                          {{ formatPrice(listing.current_bid ?? listing.price, listing.currency) }}
+                        </p>
+                        <p class="text-xs text-white/30 mt-1">
+                          {{ listing.bid_count }} {{ listing.bid_count === 1 ? 'ставка' : listing.bid_count < 5 ? 'ставки' : 'ставок' }}
+                        </p>
+                      </div>
+                      <div class="text-right">
+                        <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">До конца</p>
+                        <p class="text-xl font-black tabular-nums leading-none"
+                          :class="isHot(listing.auction_ends_at) ? 'text-brand-error' : 'text-white/80'">
+                          {{ formatCountdown(listing.auction_ends_at) ?? '—' }}
+                        </p>
+                      </div>
+                    </div>
+                    <div v-if="listing.auto_buy_price"
+                      class="flex items-center justify-between bg-brand-yellow/8 border border-brand-yellow/15 rounded-2xl px-4 py-2.5">
+                      <div class="flex items-center gap-2">
+                        <BIcon name="Zap" class="w-4 h-4 text-brand-yellow" />
+                        <span class="text-xs font-bold text-white/60">Автовыкуп — сразу занимает слот</span>
+                      </div>
+                      <span class="text-sm font-extrabold text-brand-yellow">{{ formatPrice(listing.auto_buy_price, listing.currency) }}</span>
+                    </div>
+                    <!-- Bid CTA -->
+                    <div v-if="!isSoldOut(listing) && !showBidForm">
+                      <button @click="openBidForm"
+                        class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm"
+                        style="background: linear-gradient(135deg, #CD83F5, #7C3AED)">
+                        <BIcon name="Paintbrush" class="w-4 h-4" /> Занять слот
+                      </button>
+                    </div>
+                    <!-- YCH bid form -->
+                    <div v-if="showBidForm && !isSoldOut(listing)" class="space-y-3">
+                      <div class="space-y-1.5">
+                        <label class="text-[9px] text-white/35 uppercase tracking-wider font-bold">Ваша ставка за слот</label>
+                        <div class="relative">
+                          <input v-model.number="bidAmount" type="number" min="0" step="0.01"
+                            class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 pr-14 text-white text-sm outline-none focus:border-brand-purple/40 transition-all" />
+                          <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/25 font-bold">{{ listing.currency }}</span>
+                        </div>
+                      </div>
+                      <div class="space-y-1.5">
+                        <label class="text-[9px] text-white/35 uppercase tracking-wider font-bold">Описание персонажа (необяз.)</label>
+                        <textarea v-model="bidMessage" rows="3" placeholder="Цвета, черты, ссылка на рефпак…"
+                          class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm resize-none outline-none focus:border-brand-purple/40 transition-all" />
+                      </div>
+                      <div v-if="bidError" class="text-brand-error text-xs bg-brand-error/8 border border-brand-error/15 rounded-xl px-4 py-2.5">{{ bidError }}</div>
+                      <div class="flex gap-2">
+                        <button @click="showBidForm = false"
+                          class="px-4 py-2.5 border border-white/10 text-white/40 text-sm font-bold rounded-2xl hover:bg-white/5 transition-all">Отмена</button>
+                        <button @click="submitBid" :disabled="isBidding || bidAmount <= 0"
+                          class="flex-1 flex items-center justify-center gap-2 py-2.5 disabled:opacity-30 text-white text-sm font-extrabold rounded-2xl hover:opacity-90"
+                          style="background: linear-gradient(135deg, #CD83F5, #7C3AED)">
+                          <span v-if="isBidding" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <BIcon v-else name="Paintbrush" class="w-4 h-4" />
+                          {{ isBidding ? 'Отправка…' : 'Подтвердить' }}
+                        </button>
+                      </div>
+                    </div>
+                    <div v-if="isSoldOut(listing)"
+                      class="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
+                      <BIcon name="CheckCircle2" class="w-5 h-5 text-brand-success" />
+                      <p class="text-xs font-bold text-white/60">Все слоты заняты</p>
+                    </div>
+                  </div>
+                </div>
+                <!-- YCH bid history -->
+                <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
+                  <div class="px-5 py-3.5 border-b border-brand-border flex items-center justify-between">
+                    <h3 class="text-xs font-extrabold text-white/50 uppercase tracking-widest flex items-center gap-2">
+                      <BIcon name="History" class="w-3.5 h-3.5 text-brand-purple" /> Ставки за слоты
+                    </h3>
+                    <span class="text-xs text-white/30">{{ bids.length }}</span>
+                  </div>
+                  <div class="divide-y divide-brand-border max-h-64 overflow-y-auto">
+                    <div v-if="bids.length === 0" class="py-8 text-center text-white/25 text-sm">Ставок пока нет</div>
+                    <div v-for="(bid, i) in bids" :key="bid.id" class="px-5 py-3 flex items-center gap-3">
+                      <img v-if="bid.bidder.avatar_url" :src="bid.bidder.avatar_url"
+                        class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0" />
+                      <div v-else class="w-8 h-8 rounded-full bg-brand-purple/20 flex items-center justify-center text-brand-purple text-xs font-extrabold flex-shrink-0">
+                        {{ (bid.bidder.display_name ?? bid.bidder.username)[0].toUpperCase() }}
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs font-bold text-white truncate">
+                          {{ bid.bidder.display_name ?? bid.bidder.username }}
+                          <span v-if="i === 0" class="text-brand-purple ml-1 text-[9px]">● Лидер</span>
+                        </p>
+                        <p v-if="bid.message" class="text-[10px] text-white/25 truncate mt-0.5 italic">{{ bid.message }}</p>
+                      </div>
+                      <span class="text-sm font-extrabold flex-shrink-0"
+                        :class="i === 0 ? 'text-brand-purple' : 'text-white/50'">
+                        {{ formatPrice(bid.amount, listing.currency) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- ── RAFFLE ──────────────────────────────────────────────── -->
+              <template v-else-if="listing.listing_kind === 'raffle'">
+                <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
+                  <div class="relative overflow-hidden px-5 py-4" style="background: linear-gradient(135deg, #041f10, #021509)">
+                    <div class="absolute -top-4 -right-4 w-24 h-24 rounded-full blur-2xl opacity-30" style="background: #66C770" />
+                    <div class="relative z-10">
+                      <div class="flex items-center gap-2 mb-1">
+                        <BIcon name="Gift" class="w-4 h-4 text-brand-success" />
+                        <span class="text-xs font-extrabold text-brand-success uppercase tracking-widest">Розыгрыш</span>
+                      </div>
+                      <p class="text-[10px] text-white/35">Купи билет — выиграй арт случайным числом</p>
+                    </div>
+                  </div>
+                  <div class="p-5 space-y-4">
+                    <!-- Progress -->
+                    <div>
+                      <div class="flex items-center justify-between mb-1.5">
+                        <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold">Продано билетов</p>
+                        <p class="text-xs font-bold text-brand-success tabular-nums">
+                          {{ listing.raffle_tickets_sold }}{{ listing.raffle_max_tickets ? ` / ${listing.raffle_max_tickets}` : '' }}
+                          <span class="text-white/30 font-normal ml-1">
+                            {{ listing.raffle_max_tickets
+                              ? `(${Math.round((listing.raffle_tickets_sold / listing.raffle_max_tickets) * 100)}%)`
+                              : 'билетов' }}
+                          </span>
+                        </p>
+                      </div>
+                      <div class="w-full h-3 bg-black/30 rounded-full overflow-hidden mb-3">
+                        <div class="h-full rounded-full transition-all duration-700"
+                          style="background: linear-gradient(90deg, #66C770, #059669)"
+                          :style="`width: ${listing.raffle_max_tickets
+                            ? Math.min(100, (listing.raffle_tickets_sold / listing.raffle_max_tickets) * 100)
+                            : Math.min(100, listing.raffle_tickets_sold * 5)}%`" />
+                      </div>
+                      <!-- Milestones -->
+                      <div class="flex gap-1.5 items-center">
+                        <template v-for="m in [25, 50, 75, 100]" :key="m">
+                          <div class="flex-1 h-1 rounded-full transition-all"
+                            :style="(listing.raffle_max_tickets
+                              ? (listing.raffle_tickets_sold / listing.raffle_max_tickets) * 100
+                              : listing.raffle_tickets_sold * 5) >= m
+                              ? 'background: rgba(102,199,112,0.5)'
+                              : 'background: rgba(255,255,255,0.06)'" />
+                          <span class="text-[8px] text-white/20 flex-shrink-0">{{ m }}%</span>
+                        </template>
+                      </div>
+                    </div>
+                    <!-- Ticket price -->
+                    <div class="flex items-end justify-between">
+                      <div>
+                        <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">Цена билета</p>
+                        <p class="text-3xl font-black text-brand-success leading-none tabular-nums">
+                          {{ listing.price === '0' || listing.price === 0 ? 'БЕСПЛАТНО' : formatPrice(listing.price, listing.currency) }}
+                        </p>
+                      </div>
+                      <div v-if="listing.raffle_max_tickets" class="text-right">
+                        <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">Осталось</p>
+                        <p class="text-2xl font-black text-white leading-none tabular-nums">
+                          {{ listing.raffle_max_tickets - listing.raffle_tickets_sold }}
+                        </p>
+                        <p class="text-[9px] text-white/25 mt-0.5">билетов</p>
+                      </div>
+                    </div>
+                    <!-- Success state -->
+                    <div v-if="ticketSuccess"
+                      class="flex items-center gap-3 bg-brand-success/12 border border-brand-success/25 rounded-2xl px-4 py-3">
+                      <BIcon name="Ticket" class="w-5 h-5 text-brand-success flex-shrink-0" />
+                      <div>
+                        <p class="text-xs font-bold text-brand-success">Билет приобретён!</p>
+                        <p class="text-[10px] text-white/40 mt-0.5">Следи за результатами розыгрыша</p>
+                      </div>
+                    </div>
+                    <!-- Buy CTA -->
+                    <template v-if="!isSoldOut(listing) && !ticketSuccess">
+                      <button v-if="auth.user" @click="buyTicket" :disabled="isBuyingTicket"
+                        class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm disabled:opacity-40"
+                        style="background: linear-gradient(135deg, #66C770, #059669)">
+                        <span v-if="isBuyingTicket" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <BIcon v-else name="Ticket" class="w-4 h-4" />
+                        {{ isBuyingTicket ? 'Покупка…' : 'Купить билет' }}
+                      </button>
+                      <button v-else @click="router.push({ name: 'login' })"
+                        class="w-full flex items-center justify-center gap-2 py-3.5 text-white/60 font-bold rounded-2xl border border-brand-border hover:border-brand-success/40 hover:text-white transition-all text-sm">
+                        <BIcon name="LogIn" class="w-4 h-4" /> Войти для участия
+                      </button>
+                    </template>
+                    <div v-else-if="isSoldOut(listing)"
+                      class="flex items-center gap-2 bg-brand-success/10 border border-brand-success/20 rounded-2xl px-4 py-3">
+                      <BIcon name="Trophy" class="w-5 h-5 text-brand-success" />
+                      <p class="text-xs font-bold text-brand-success">Розыгрыш завершён!</p>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- ── FIXED ───────────────────────────────────────────────── -->
+              <template v-else>
+                <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
+                  <div class="relative overflow-hidden px-5 py-4" style="background: linear-gradient(135deg, #071540, #040d28)">
+                    <div class="absolute -top-4 -right-4 w-24 h-24 rounded-full blur-2xl opacity-30" style="background: #3148FF" />
+                    <div class="relative z-10">
+                      <div class="flex items-center gap-2 mb-1">
+                        <BIcon name="Tag" class="w-4 h-4 text-brand-accent" />
+                        <span class="text-xs font-extrabold text-brand-accent uppercase tracking-widest">Фиксированная цена</span>
+                      </div>
+                      <p class="text-[10px] text-white/35">Покупай или договаривайся напрямую</p>
+                    </div>
+                  </div>
+                  <div class="p-5 space-y-4">
+                    <div class="flex items-end justify-between">
+                      <div>
+                        <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">Цена</p>
+                        <p class="text-4xl font-black leading-none tabular-nums"
+                          :class="isSoldOut(listing) ? 'text-white/30 line-through' : 'text-brand-yellow'">
+                          {{ listing.price === '0' || listing.price === 0 ? 'Бесплатно' : formatPrice(listing.price, listing.currency) }}
+                        </p>
+                      </div>
+                      <div v-if="listing.quantity > 1" class="text-right">
+                        <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">В наличии</p>
+                        <p class="text-2xl font-black text-white leading-none tabular-nums">
+                          {{ listing.quantity - (listing.quantity_sold ?? 0) }}
+                        </p>
+                        <p class="text-[9px] text-white/25 mt-0.5">из {{ listing.quantity }} шт.</p>
+                      </div>
+                    </div>
+                    <div v-if="isSoldOut(listing)"
+                      class="flex items-center gap-2 bg-brand-error/10 border border-brand-error/20 rounded-2xl px-4 py-3">
+                      <BIcon name="PackageX" class="w-5 h-5 text-brand-error" />
+                      <p class="text-xs font-bold text-brand-error">Нет в наличии</p>
+                    </div>
+                    <template v-else>
+                      <button v-if="auth.user && auth.user.id !== listing.seller_id"
+                        @click="contactSeller"
+                        class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm"
+                        style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+                        <BIcon name="MessageCircle" class="w-4 h-4" /> Написать продавцу
+                      </button>
+                      <button v-else-if="!auth.user" @click="router.push({ name: 'login' })"
+                        class="w-full flex items-center justify-center gap-2 py-3.5 text-white/60 font-bold rounded-2xl border border-brand-border hover:border-brand-accent/40 hover:text-white transition-all text-sm">
+                        <BIcon name="LogIn" class="w-4 h-4" /> Войти для покупки
+                      </button>
+                    </template>
+                    <div class="flex gap-2 flex-wrap">
+                      <span class="flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-full border"
+                        :class="listing.type === 'digital'  ? 'bg-brand-accent/10 border-brand-accent/25 text-brand-accent'
+                               : listing.type === 'physical' ? 'bg-brand-success/10 border-brand-success/25 text-brand-success'
+                               : 'bg-brand-yellow/10 border-brand-yellow/25 text-brand-yellow'">
+                        <BIcon :name="listing.type === 'digital' ? 'Download' : listing.type === 'physical' ? 'Package' : 'Layers'" class="w-3 h-3" />
+                        {{ TYPE_LABELS[listing.type] }}
+                      </span>
+                      <span v-if="listing.is_nsfw" class="flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-full border bg-brand-error/10 border-brand-error/25 text-brand-error">
+                        <BIcon name="EyeOff" class="w-3 h-3" /> 18+
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </template>
 
             </div>
           </div>
-        </div>
 
+          <!-- ═══ COMMENTS ══════════════════════════════════════════════════ -->
+          <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
+            <div class="px-6 py-4 border-b border-brand-border flex items-center justify-between">
+              <h3 class="text-sm font-extrabold text-white/60 uppercase tracking-widest flex items-center gap-2">
+                <BIcon name="MessageSquare" class="w-4 h-4" :style="`color: ${kindTheme.accent}`" />
+                Комментарии
+              </h3>
+              <span class="text-xs text-white/30 font-medium">{{ comments.length }}</span>
+            </div>
+
+            <!-- Comment form -->
+            <div v-if="auth.user" class="p-5 border-b border-brand-border">
+              <div class="flex gap-3">
+                <img v-if="auth.user.avatar_url" :src="auth.user.avatar_url"
+                  class="w-9 h-9 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5" />
+                <div v-else class="w-9 h-9 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-extrabold text-sm flex-shrink-0 mt-0.5 border border-brand-border">
+                  {{ (auth.user.display_name ?? auth.user.username ?? 'U')[0].toUpperCase() }}
+                </div>
+                <div class="flex-1 space-y-2">
+                  <textarea v-model="commentBody" rows="2" placeholder="Написать комментарий…"
+                    class="w-full bg-[#0a0a1a] border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-white/20 resize-none transition-all" />
+                  <button @click="postComment" :disabled="isPostingComment || !commentBody.trim()"
+                    class="flex items-center gap-2 px-4 py-2 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-30 hover:opacity-90"
+                    :style="`background: linear-gradient(135deg, ${kindTheme.from}, ${kindTheme.to})`">
+                    <BIcon name="Send" class="w-3.5 h-3.5" />
+                    {{ isPostingComment ? 'Отправка…' : 'Отправить' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div v-else class="px-6 py-4 border-b border-brand-border text-center">
+              <button @click="router.push({ name: 'login' })" class="text-sm text-brand-accent font-semibold hover:underline">Войдите</button>
+              <span class="text-sm text-white/30">, чтобы оставить комментарий</span>
+            </div>
+
+            <!-- Comments list -->
+            <div class="divide-y divide-brand-border">
+              <div v-if="comments.length === 0" class="py-12 text-center text-white/20 text-sm">
+                <BIcon name="MessageSquareDashed" class="w-10 h-10 mx-auto mb-3 opacity-30" />
+                Нет комментариев — напиши первым!
+              </div>
+
+              <div v-for="comment in comments" :key="comment.id" class="px-6 py-4 space-y-3">
+                <div class="flex gap-3">
+                  <div class="cursor-pointer flex-shrink-0" @click="router.push(`/profile/${comment.author.username}`)">
+                    <img v-if="comment.author.avatar_url" :src="comment.author.avatar_url"
+                      class="w-9 h-9 rounded-full object-cover border border-brand-border hover:border-brand-accent transition-colors" />
+                    <div v-else class="w-9 h-9 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-extrabold border border-brand-border hover:border-brand-accent transition-colors">
+                      {{ (comment.author.display_name ?? comment.author.username)[0].toUpperCase() }}
+                    </div>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1 flex-wrap">
+                      <span class="text-sm font-bold text-white hover:text-brand-accent transition-colors cursor-pointer"
+                        @click="router.push(`/profile/${comment.author.username}`)">
+                        {{ comment.author.display_name ?? comment.author.username }}
+                      </span>
+                      <img v-if="comment.author.is_verified" src="/icons/badges/paw_offical.svg" class="w-3.5 h-3.5 flex-shrink-0" title="Верифицирован" />
+                      <span class="text-[10px] text-white/25">{{ formatDate(comment.created_at) }}, {{ formatTime(comment.created_at) }}</span>
+                    </div>
+                    <p class="text-sm text-white/75 leading-relaxed whitespace-pre-line">{{ comment.body }}</p>
+                    <div class="flex items-center gap-3 mt-2">
+                      <button v-if="auth.user" @click="replyTo = replyTo?.id === comment.id ? null : comment"
+                        class="flex items-center gap-1 text-[10px] text-white/35 hover:text-white transition-colors font-medium">
+                        <BIcon name="CornerDownRight" class="w-3 h-3" /> Ответить
+                      </button>
+                      <button v-if="auth.user?.id === comment.author_id" @click="removeComment(comment)"
+                        class="flex items-center gap-1 text-[10px] text-brand-error/40 hover:text-brand-error transition-colors font-medium">
+                        <BIcon name="Trash2" class="w-3 h-3" /> Удалить
+                      </button>
+                    </div>
+
+                    <!-- Reply form -->
+                    <div v-if="replyTo?.id === comment.id" class="mt-3 flex gap-2">
+                      <textarea v-model="replyBody" rows="2" :placeholder="`Ответить ${comment.author.display_name ?? comment.author.username}…`"
+                        class="flex-1 bg-[#0a0a1a] border border-white/8 rounded-xl px-3 py-2.5 text-xs text-white placeholder-white/20 outline-none focus:border-white/15 resize-none transition-all" />
+                      <div class="flex flex-col gap-1.5 flex-shrink-0">
+                        <button @click="postReply(comment)" :disabled="!replyBody.trim()"
+                          class="px-3 py-2 text-white text-xs font-bold rounded-xl disabled:opacity-30 transition-all"
+                          :style="`background: linear-gradient(135deg, ${kindTheme.from}, ${kindTheme.to})`">
+                          <BIcon name="Send" class="w-3 h-3" />
+                        </button>
+                        <button @click="replyTo = null; replyBody = ''"
+                          class="px-3 py-2 border border-white/8 text-white/30 text-xs font-bold rounded-xl hover:bg-white/5 transition-all">
+                          <BIcon name="X" class="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Replies -->
+                <div v-if="comment.replies?.length" class="ml-12 space-y-3 border-l-2 border-brand-border pl-4">
+                  <div v-for="reply in comment.replies" :key="reply.id" class="flex gap-2.5">
+                    <div class="cursor-pointer flex-shrink-0" @click="router.push(`/profile/${reply.author.username}`)">
+                      <img v-if="reply.author.avatar_url" :src="reply.author.avatar_url"
+                        class="w-7 h-7 rounded-full object-cover border border-brand-border hover:border-brand-accent transition-colors" />
+                      <div v-else class="w-7 h-7 rounded-full bg-brand-accent/15 flex items-center justify-center text-brand-accent text-xs font-extrabold border border-brand-border">
+                        {{ (reply.author.display_name ?? reply.author.username)[0].toUpperCase() }}
+                      </div>
+                    </div>
+                    <div class="flex-1">
+                      <div class="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                        <span class="text-xs font-bold text-white/80 cursor-pointer hover:text-brand-accent transition-colors"
+                          @click="router.push(`/profile/${reply.author.username}`)">
+                          {{ reply.author.display_name ?? reply.author.username }}
+                        </span>
+                        <img v-if="reply.author.is_verified" src="/icons/badges/paw_offical.svg" class="w-3 h-3 flex-shrink-0" title="Верифицирован" />
+                        <span class="text-[9px] text-white/20">{{ formatTime(reply.created_at) }}</span>
+                      </div>
+                      <p class="text-xs text-white/65 leading-relaxed">{{ reply.body }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </template>
       </main>
     </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         EDIT MODAL
+    ═══════════════════════════════════════════════════════════ -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showEditModal = false" />
+          <div class="relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto scrollbar-none">
+            <!-- Header -->
+            <div class="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-card rounded-t-3xl">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+                  <BIcon name="Pencil" class="w-4 h-4 text-white" />
+                </div>
+                <h2 class="text-sm font-extrabold text-white uppercase tracking-widest">Редактировать</h2>
+              </div>
+              <button @click="showEditModal = false" class="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-all">
+                <BIcon name="X" class="w-4 h-4 text-white/60" />
+              </button>
+            </div>
+
+            <div class="p-5 space-y-4">
+              <!-- Title -->
+              <div class="space-y-1.5">
+                <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Название *</label>
+                <input v-model="editForm.title" type="text" placeholder="Название объявления"
+                  class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-brand-accent/50 transition-all" />
+              </div>
+
+              <!-- Description -->
+              <div class="space-y-1.5">
+                <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Описание</label>
+                <textarea v-model="editForm.description" rows="3" placeholder="Описание арта, условия, особенности…"
+                  class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-brand-accent/50 transition-all resize-none" />
+              </div>
+
+              <!-- Price + Currency -->
+              <div class="grid grid-cols-2 gap-3">
+                <div class="space-y-1.5">
+                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Цена</label>
+                  <input v-model.number="editForm.price" type="number" min="0" step="0.01"
+                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-none focus:border-brand-accent/50 transition-all" />
+                </div>
+                <div class="space-y-1.5">
+                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Валюта</label>
+                  <select v-model="editForm.currency"
+                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-none focus:border-brand-accent/50 transition-all appearance-none cursor-pointer">
+                    <option>USD</option><option>RUB</option><option>EUR</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Quantity + Status -->
+              <div class="grid grid-cols-2 gap-3">
+                <div class="space-y-1.5">
+                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Количество</label>
+                  <input v-model.number="editForm.quantity" type="number" min="1"
+                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-none focus:border-brand-accent/50 transition-all" />
+                </div>
+                <div class="space-y-1.5">
+                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Статус</label>
+                  <select v-model="editForm.status"
+                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm outline-none focus:border-brand-accent/50 transition-all appearance-none cursor-pointer"
+                    :class="editForm.status === 'active' ? 'text-brand-success'
+                           : editForm.status === 'draft' ? 'text-white/40'
+                           : editForm.status === 'archived' ? 'text-white/30'
+                           : 'text-brand-error'">
+                    <option value="active">Активно</option>
+                    <option value="draft">Черновик</option>
+                    <option value="archived">Архив</option>
+                    <option value="sold">Продано</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Tags -->
+              <div class="space-y-1.5">
+                <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Теги (через запятую)</label>
+                <input v-model="editForm.tags" type="text" placeholder="арт, цифровое, фантастика"
+                  class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-brand-accent/50 transition-all" />
+              </div>
+
+              <!-- Images -->
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Изображения (URL)</label>
+                  <button @click="addImageUrl" type="button"
+                    class="flex items-center gap-1 text-[10px] font-bold text-brand-accent hover:text-white transition-colors">
+                    <BIcon name="Plus" class="w-3 h-3" /> Добавить
+                  </button>
+                </div>
+                <div v-for="(img, i) in editForm.images" :key="i" class="flex gap-2 items-center">
+                  <input v-model="editForm.images[i]" type="url" placeholder="https://…"
+                    class="flex-1 bg-[#0a0a1a] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white placeholder-white/20 outline-none focus:border-brand-accent/40 transition-all" />
+                  <button @click="removeImage(i)" type="button"
+                    class="w-8 h-8 flex items-center justify-center rounded-xl bg-brand-error/10 text-brand-error/60 hover:bg-brand-error/20 hover:text-brand-error transition-all flex-shrink-0">
+                    <BIcon name="Trash2" class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div v-if="!editForm.images.length" class="text-xs text-white/20 italic">Нет изображений</div>
+              </div>
+
+              <!-- NSFW toggle -->
+              <div class="flex items-center justify-between bg-brand-bg/50 border border-brand-border rounded-2xl px-4 py-3">
+                <div class="flex items-center gap-2">
+                  <BIcon name="EyeOff" class="w-4 h-4 text-brand-error/60" />
+                  <span class="text-sm font-medium text-white/70">Контент 18+</span>
+                </div>
+                <button type="button" @click="editForm.isNsfw = !editForm.isNsfw"
+                  class="w-10 h-5.5 rounded-full transition-all relative flex-shrink-0"
+                  :class="editForm.isNsfw ? 'bg-brand-error' : 'bg-white/10'">
+                  <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all"
+                    :class="editForm.isNsfw ? 'left-5.5' : 'left-0.5'" />
+                </button>
+              </div>
+
+              <!-- Preview of first image -->
+              <div v-if="editForm.images[0]" class="rounded-2xl overflow-hidden aspect-video bg-black/40">
+                <img :src="editForm.images[0]" class="w-full h-full object-contain" />
+              </div>
+
+              <!-- Actions -->
+              <div class="flex gap-3 pt-1">
+                <button @click="showEditModal = false" type="button"
+                  class="flex-1 py-3 border border-brand-border text-white/40 text-sm font-bold rounded-2xl hover:bg-white/5 transition-all">
+                  Отмена
+                </button>
+                <button @click="submitEdit" :disabled="isUpdating || !editForm.title.trim()" type="button"
+                  class="flex-1 flex items-center justify-center gap-2 py-3 text-white text-sm font-extrabold rounded-2xl disabled:opacity-30 transition-all hover:opacity-90"
+                  style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+                  <span v-if="isUpdating" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <BIcon v-else name="Check" class="w-4 h-4" />
+                  {{ isUpdating ? 'Сохранение…' : 'Сохранить' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         REPORT MODAL
+    ═══════════════════════════════════════════════════════════ -->
+    <Teleport to="body">
+      <Transition name="modal">
+        <div v-if="showReportModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showReportModal = false" />
+          <div class="relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-xl bg-brand-error/15 flex items-center justify-center">
+                  <BIcon name="Flag" class="w-4 h-4 text-brand-error" />
+                </div>
+                <h2 class="text-sm font-extrabold text-white">Пожаловаться</h2>
+              </div>
+              <button @click="showReportModal = false" class="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-all">
+                <BIcon name="X" class="w-4 h-4 text-white/60" />
+              </button>
+            </div>
+
+            <!-- Success state -->
+            <div v-if="reportSuccess" class="p-8 text-center space-y-3">
+              <div class="w-14 h-14 rounded-full bg-brand-success/15 flex items-center justify-center mx-auto">
+                <BIcon name="CheckCircle2" class="w-8 h-8 text-brand-success" />
+              </div>
+              <p class="font-bold text-white">Жалоба отправлена</p>
+              <p class="text-sm text-white/40">Модераторы рассмотрят её в ближайшее время</p>
+            </div>
+
+            <!-- Form -->
+            <div v-else class="p-5 space-y-4">
+              <p class="text-xs text-white/50">На что хотите пожаловаться?</p>
+              <!-- Reason buttons -->
+              <div class="space-y-2">
+                <button v-for="r in REPORT_REASONS" :key="r" type="button"
+                  @click="reportReason = r"
+                  class="w-full text-left px-4 py-3 rounded-2xl text-sm transition-all border"
+                  :class="reportReason === r
+                    ? 'bg-brand-error/15 border-brand-error/40 text-white font-bold'
+                    : 'bg-brand-bg/50 border-brand-border text-white/50 hover:border-white/20 hover:text-white'">
+                  {{ r }}
+                </button>
+              </div>
+
+              <!-- Custom reason -->
+              <Transition name="fade">
+                <div v-if="reportReason === 'Другое'" class="space-y-1.5">
+                  <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Опишите проблему</label>
+                  <textarea v-model="reportCustom" rows="3" placeholder="Подробно опишите нарушение…"
+                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-brand-error/30 resize-none transition-all" />
+                </div>
+              </Transition>
+
+              <!-- Actions -->
+              <div class="flex gap-3">
+                <button @click="showReportModal = false" type="button"
+                  class="flex-1 py-3 border border-brand-border text-white/40 text-sm font-bold rounded-2xl hover:bg-white/5 transition-all">
+                  Отмена
+                </button>
+                <button @click="submitReport" :disabled="isReporting || !reportReason" type="button"
+                  class="flex-1 flex items-center justify-center gap-2 py-3 text-white text-sm font-extrabold rounded-2xl disabled:opacity-30 transition-all hover:opacity-90"
+                  style="background: linear-gradient(135deg, #c0392b, #922b21)">
+                  <span v-if="isReporting" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <BIcon v-else name="Flag" class="w-4 h-4" />
+                  {{ isReporting ? 'Отправка…' : 'Отправить' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
   </div>
 </template>
+
+<style scoped>
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
+.modal-enter-active, .modal-leave-active { transition: all 0.2s ease; }
+.modal-enter-from, .modal-leave-to { opacity: 0; transform: scale(0.96); }
+
+.fade-enter-active, .fade-leave-active { transition: all 0.2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; transform: translateY(-4px); }
+
+.fade-up-enter-active, .fade-up-leave-active { transition: all 0.3s ease; }
+.fade-up-enter-from, .fade-up-leave-to { opacity: 0; transform: translateX(-50%) translateY(12px); }
+</style>

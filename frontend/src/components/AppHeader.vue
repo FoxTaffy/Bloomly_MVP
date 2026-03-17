@@ -22,6 +22,24 @@ const router = useRouter()
 const auth = useAuthStore()
 const langStore = useLangStore()
 
+// ── Language picker ───────────────────────────────────────────────────────────
+const showLangDropdown = ref(false)
+const langOptions = [
+  { code: 'RU', flag: '🇷🇺', label: 'RU' },
+  { code: 'EN', flag: '🇺🇸', label: 'EN' },
+  { code: 'JP', flag: '🇯🇵', label: 'JP' },
+  { code: 'CN', flag: '🇨🇳', label: 'CN' },
+  { code: 'DE', flag: '🇩🇪', label: 'DE' },
+  { code: 'FR', flag: '🇫🇷', label: 'FR' },
+  { code: 'ES', flag: '🇪🇸', label: 'ES' },
+  { code: 'PT', flag: '🇧🇷', label: 'PT' },
+] as const
+const currentLangOption = () => langOptions.find(l => l.code === langStore.currentLang) ?? langOptions[0]
+function selectLang(code: typeof langOptions[number]['code']) {
+  langStore.setLang(code)
+  showLangDropdown.value = false
+}
+
 // ── NSFW ─────────────────────────────────────────────────────────────────────
 const { toggleNsfw: _nsfwToggle } = useNsfwMode()
 const toggleNsfw = () => {
@@ -219,9 +237,9 @@ const onNotifClick = async (n: any) => {
     return
   }
   // Open sender profile
-  if (PROFILE_TYPES.has(n.type) && n.sender?.id) {
+  if (PROFILE_TYPES.has(n.type) && n.sender?.username) {
     showNotifications.value = false
-    router.push(`/profile/${n.sender.id}`)
+    router.push(`/profile/${n.sender.username}`)
     return
   }
   // Fallback: navigate to post page
@@ -268,7 +286,7 @@ const onSearchModalInput = () => {
 }
 
 const searchGoToPost = (id: string) => { closeSearchModal(); router.push(`/post/${id}`) }
-const searchGoToUser = (id: string) => { closeSearchModal(); router.push(`/profile/${id}`) }
+const searchGoToUser = (username: string) => { closeSearchModal(); router.push(`/profile/${username}`) }
 
 // ── Stories (inside search modal) ─────────────────────────────────────────────
 const searchStories = ref<any[]>([])
@@ -322,12 +340,14 @@ function formatDate(d: string) {
 onMounted(() => {
   if (auth.isAuthenticated) { fetchUnreadCount(); connectNotifSSE(); fetchSearchStories() }
   window.addEventListener('keydown', onGlobalKeydown)
+  document.addEventListener('click', () => { showLangDropdown.value = false })
 })
 onUnmounted(() => {
   notifEventSource?.close()
   if (sseReconnectTimer) clearTimeout(sseReconnectTimer)
   if (storyTimerInterval) clearInterval(storyTimerInterval)
   window.removeEventListener('keydown', onGlobalKeydown)
+  document.removeEventListener('click', () => { showLangDropdown.value = false })
 })
 </script>
 
@@ -362,14 +382,29 @@ onUnmounted(() => {
 
     <!-- Right: Actions -->
     <div class="flex items-center gap-1.5 md:gap-3">
-      <!-- Language -->
-      <select v-model="langStore.currentLang" @change="langStore.setLang(langStore.currentLang)"
-        class="hidden md:block bg-brand-card border border-brand-border rounded-lg px-2 py-1 text-sm text-white outline-none focus:border-brand-accent">
-        <option value="RU">RU</option>
-        <option value="EN">EN</option>
-        <option value="JP">JP</option>
-        <option value="CN">CN</option>
-      </select>
+      <!-- Language picker -->
+      <div class="relative">
+        <button @click.stop="showLangDropdown = !showLangDropdown"
+          class="flex items-center gap-1.5 px-2.5 py-1.5 bg-brand-card border border-brand-border rounded-xl text-sm font-bold text-white/80 hover:text-white hover:border-brand-accent/50 transition-all">
+          <span class="text-base leading-none">{{ currentLangOption().flag }}</span>
+          <span class="hidden sm:inline text-xs">{{ currentLangOption().label }}</span>
+          <BIcon name="ChevronDown" class="w-3 h-3 text-white/40" />
+        </button>
+        <Transition name="filter-expand">
+          <div v-if="showLangDropdown" @click.stop
+            class="absolute right-0 top-10 z-50 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden min-w-[120px]">
+            <button
+              v-for="lang in langOptions" :key="lang.code"
+              @click="selectLang(lang.code)"
+              class="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold transition-colors hover:bg-brand-accent/10"
+              :class="langStore.currentLang === lang.code ? 'text-brand-accent bg-brand-accent/5' : 'text-white/70 hover:text-white'">
+              <span class="text-base leading-none">{{ lang.flag }}</span>
+              <span>{{ lang.label }}</span>
+              <BIcon v-if="langStore.currentLang === lang.code" name="Check" class="w-3.5 h-3.5 ml-auto" />
+            </button>
+          </div>
+        </Transition>
+      </div>
 
       <!-- Notifications -->
       <div class="relative">
@@ -411,14 +446,9 @@ onUnmounted(() => {
                            bg-brand-accent/5 hover:bg-brand-accent/10 cursor-pointer transition-colors"
                     @click="onNotifClick(n)">
                     <!-- Avatar + type badge -->
-                    <div class="relative flex-shrink-0 mt-0.5 cursor-pointer" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.id)">
-                      <img v-if="n.sender?.avatar_url" :src="n.sender.avatar_url"
+                    <div class="relative flex-shrink-0 mt-0.5 cursor-pointer" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">
+                      <img :src="n.sender?.avatar_url || '/icons/badges/NN.jpg'"
                         class="w-10 h-10 rounded-full object-cover border border-brand-border" />
-                      <div v-else
-                        class="w-10 h-10 rounded-full border border-brand-border bg-brand-accent/20
-                               flex items-center justify-center text-brand-accent font-bold text-sm">
-                        {{ (n.sender?.display_name || n.sender?.username || '?')[0].toUpperCase() }}
-                      </div>
                       <!-- Type icon badge -->
                       <div :class="['absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center', notifBadgeClass(n.type)]">
                         <BIcon :name="notifBadgeIcon(n.type)" class="w-2.5 h-2.5" />
@@ -427,7 +457,7 @@ onUnmounted(() => {
                     <!-- Text -->
                     <div class="min-w-0 flex-1">
                       <p class="text-sm text-white leading-snug">
-                        <span class="font-semibold cursor-pointer hover:underline" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.id)">{{ n.sender?.display_name || n.sender?.username }}</span>
+                        <span class="font-semibold cursor-pointer hover:underline" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">{{ n.sender?.display_name || n.sender?.username }}</span>
                         {{ ' ' }}{{ notifTypeLabel(n.type, n.sender?.pronouns) }}
                       </p>
                       <p class="text-xs text-white/40 mt-0.5">{{ formatDate(n.created_at) }}</p>
@@ -460,14 +490,9 @@ onUnmounted(() => {
                            hover:bg-white/5 cursor-pointer transition-colors"
                     @click="onNotifClick(n)">
                     <!-- Avatar + type badge -->
-                    <div class="relative flex-shrink-0 mt-0.5 cursor-pointer" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.id)">
-                      <img v-if="n.sender?.avatar_url" :src="n.sender.avatar_url"
+                    <div class="relative flex-shrink-0 mt-0.5 cursor-pointer" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">
+                      <img :src="n.sender?.avatar_url || '/icons/badges/NN.jpg'"
                         class="w-10 h-10 rounded-full object-cover border border-brand-border opacity-70" />
-                      <div v-else
-                        class="w-10 h-10 rounded-full border border-brand-border bg-white/5
-                               flex items-center justify-center text-white/40 font-bold text-sm">
-                        {{ (n.sender?.display_name || n.sender?.username || '?')[0].toUpperCase() }}
-                      </div>
                       <div :class="['absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center opacity-60', notifBadgeClass(n.type)]">
                         <BIcon :name="notifBadgeIcon(n.type)" class="w-2.5 h-2.5" />
                       </div>
@@ -475,7 +500,7 @@ onUnmounted(() => {
                     <!-- Text -->
                     <div class="min-w-0 flex-1">
                       <p class="text-sm text-white/65 leading-snug">
-                        <span class="font-semibold text-white/80 cursor-pointer hover:underline" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.id)">{{ n.sender?.display_name || n.sender?.username }}</span>
+                        <span class="font-semibold text-white/80 cursor-pointer hover:underline" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">{{ n.sender?.display_name || n.sender?.username }}</span>
                         {{ ' ' }}{{ notifTypeLabel(n.type, n.sender?.pronouns) }}
                       </p>
                       <p class="text-xs text-white/30 mt-0.5">{{ formatDate(n.created_at) }}</p>
@@ -580,9 +605,8 @@ onUnmounted(() => {
               </div>
               <button v-for="post in searchModalPosts" :key="post.id" @click="searchGoToPost(post.id)"
                 class="w-full flex items-start gap-3 px-5 py-3.5 hover:bg-white/5 transition-colors text-left border-b border-brand-border/50 last:border-0">
-                <img v-if="post.author?.avatar_url" :src="post.author.avatar_url"
+                <img :src="post.author?.avatar_url || '/icons/badges/NN.jpg'"
                   class="w-9 h-9 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5" />
-                <div v-else class="w-9 h-9 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (post.author?.display_name || post.author?.username || '?')[0].toUpperCase() }}</div>
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2 mb-0.5">
                     <span class="text-sm font-semibold text-white">{{ post.author?.display_name || post.author?.username }}</span>
@@ -601,11 +625,10 @@ onUnmounted(() => {
               <div v-if="searchModalUsers.length === 0" class="flex flex-col items-center justify-center py-14 text-white/55">
                 <BIcon name="UserSearch" class="h-8 w-8 mb-2 opacity-30" /><p class="text-sm">Аккаунты не найдены</p>
               </div>
-              <button v-for="user in searchModalUsers" :key="user.id" @click="searchGoToUser(user.id)"
+              <button v-for="user in searchModalUsers" :key="user.id" @click="searchGoToUser(user.username)"
                 class="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-white/5 transition-colors text-left border-b border-brand-border/50 last:border-0">
-                <img v-if="user.avatar_url" :src="user.avatar_url"
+                <img :src="user.avatar_url || '/icons/badges/NN.jpg'"
                   class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0" />
-                <div v-else class="w-10 h-10 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (user.display_name || user.username || '?')[0].toUpperCase() }}</div>
                 <div class="min-w-0 flex-1">
                   <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
                   <p class="text-xs text-white/55">@{{ user.username }}</p>
@@ -707,7 +730,7 @@ onUnmounted(() => {
         </div>
         <!-- User info -->
         <div class="absolute top-8 left-1/2 -translate-x-1/2 flex items-center gap-3 cursor-pointer"
-          @click="closeStory(); closeSearchModal(); router.push('/profile/' + activeStory.user.id)">
+          @click="closeStory(); closeSearchModal(); router.push('/profile/' + activeStory.user.username)">
           <img v-if="activeStory.user.avatar_url" :src="activeStory.user.avatar_url" class="w-9 h-9 rounded-full border-2 border-white/20 object-cover" />
           <div v-else class="w-9 h-9 rounded-full border-2 border-white/20 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (activeStory.user.username ?? '?')[0].toUpperCase() }}</div>
           <span class="text-white font-semibold text-sm">{{ activeStory.user.display_name || activeStory.user.username }}</span>

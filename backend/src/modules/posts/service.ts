@@ -13,6 +13,19 @@ const POST_INCLUDE = {
   _count: { select: { votes: true, repaws: true, comments: true } },
 } as const;
 
+/**
+ * Group posts are anonymous: author is hidden from the public.
+ * If the post belongs to a group (has groupPosts), null out `author`.
+ * Exception: author's own "my posts" endpoint does NOT call this.
+ */
+function maskGroupAuthor(post: any): any {
+  if (!post) return post;
+  if (post.groupPosts && post.groupPosts.length > 0) {
+    return { ...post, author: null };
+  }
+  return post;
+}
+
 export const postService = {
   async createPost(input: CreatePostInput) {
     const content = (input.content ?? '').trim();
@@ -20,6 +33,7 @@ export const postService = {
 
     const authorId = input.authorId;
     const isNsfw = input.isNsfw ?? false;
+    const isAnnouncement = input.isAnnouncement ?? false;
     const subscriberOnly = input.subscriberOnly ?? false;
     const isPaid = input.isPaid ?? false;
     const price = input.price ?? null;
@@ -42,6 +56,7 @@ export const postService = {
           content, 
           author_id: authorId, 
           is_nsfw: isNsfw,
+          is_announcement: isAnnouncement,
           subscriber_only: subscriberOnly,
           is_paid: isPaid,
           price: price ? price : undefined,
@@ -83,9 +98,12 @@ export const postService = {
   async getPostById(postId: string) {
     const post = await prisma.post.findUnique({
       where: { id: postId, deleted_at: null },
-      include: POST_INCLUDE,
+      include: {
+        ...POST_INCLUDE,
+        groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+      },
     });
-    return post;
+    return maskGroupAuthor(post);
   },
 
   async getPosts(query: GetPostsQuery = {}) {
@@ -115,7 +133,7 @@ export const postService = {
       };
     }
 
-    return prisma.post.findMany({
+    const posts = await prisma.post.findMany({
       where,
       orderBy: sort === 'hot' ? { rating: 'desc' } : { created_at: 'desc' },
       skip: (pageNum - 1) * limitNum,
@@ -125,9 +143,10 @@ export const postService = {
         rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: true } },
-        groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true } } } },
+        groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
       },
     });
+    return posts.map(maskGroupAuthor);
   },
 
   async getPersonalizedPosts(userId: string, safeMode: boolean = false, pageNum: number = 1, limitNum: number = 30) {
@@ -220,7 +239,7 @@ export const postService = {
       for (let i = 0; i < 2 && di < discoverPosts.length; i++, di++) result.push(discoverPosts[di]);
     }
 
-    return result;
+    return result.map(maskGroupAuthor);
   },
 
   async toggleVote(userId: string, postId: string, value: 1 | -1) {
@@ -333,8 +352,8 @@ export const postService = {
   },
 
   async getUserPosts(userId: string, take = 50) {
-    return prisma.post.findMany({
-      where: { author_id: userId, deleted_at: null },
+    const posts = await prisma.post.findMany({
+      where: { author_id: userId, deleted_at: null, groupPosts: { none: {} } },
       orderBy: { created_at: 'desc' },
       take,
       include: {
@@ -342,13 +361,15 @@ export const postService = {
         rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: true } },
+        groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
       },
     });
+    return posts.map(maskGroupAuthor);
   },
 
   async getUserMediaPosts(userId: string, take = 50) {
-    return prisma.post.findMany({
-      where: { author_id: userId, deleted_at: null, media_urls: { isEmpty: false } },
+    const posts = await prisma.post.findMany({
+      where: { author_id: userId, deleted_at: null, media_urls: { isEmpty: false }, groupPosts: { none: {} } },
       orderBy: { created_at: 'desc' },
       take,
       include: {
@@ -356,13 +377,15 @@ export const postService = {
         rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
         _count: { select: { votes: true, repaws: true, comments: true } },
+        groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
       },
     });
+    return posts.map(maskGroupAuthor);
   },
 
   async getUserRepawedPosts(userId: string, take = 50) {
     const repaws = await prisma.repaw.findMany({
-      where: { user_id: userId },
+      where: { user_id: userId, post: { groupPosts: { none: {} } } },
       orderBy: { created_at: 'desc' },
       take,
       include: {
@@ -377,12 +400,12 @@ export const postService = {
         },
       },
     });
-    return repaws.map((r) => ({ ...r.post, repawed_at: r.created_at }));
+    return repaws.map((r) => maskGroupAuthor({ ...r.post, repawed_at: r.created_at }));
   },
 
   async getUserFavouritePosts(userId: string, take = 50) {
     const favs = await prisma.favourite.findMany({
-      where: { user_id: userId },
+      where: { user_id: userId, post: { groupPosts: { none: {} } } },
       orderBy: { created_at: 'desc' },
       take,
       include: {
@@ -392,11 +415,12 @@ export const postService = {
             rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
             tags: { include: { tag: true } },
             _count: { select: { votes: true, repaws: true } },
+            groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
           },
         },
       },
     });
-    return favs.map((f) => ({ ...f.post, favourited_at: f.created_at }));
+    return favs.map((f) => maskGroupAuthor({ ...f.post, favourited_at: f.created_at }));
   },
 
   async getPostStatus(userId: string, postIds: string[]) {

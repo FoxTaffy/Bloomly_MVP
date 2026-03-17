@@ -192,7 +192,7 @@ const goToMention = async (username: string) => {
     const res = await api.get(`/users/search?q=${encodeURIComponent(username)}`)
     const users: any[] = res.data.data?.users ?? []
     const found = users.find((u) => u.username.toLowerCase() === username.toLowerCase())
-    if (found) router.push(`/profile/${found.id}`)
+    if (found) router.push(`/profile/${found.username}`)
   } catch {}
 }
 
@@ -323,6 +323,9 @@ const fetchPosts = async (loadMore = false) => {
       if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
     }
     
+    // Отфильтровываем посты с удалёнными/null авторами
+    loadedPosts = loadedPosts.filter((p: any) => p && p.author)
+
     if (loadedPosts.length === 0) {
       hasMorePosts.value = false;
     } else {
@@ -851,77 +854,79 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
 
           <!-- Expanded composer -->
           <div v-else class="p-5 space-y-4">
-            <!-- Entity selector (only if user has admin groups) -->
-            <div v-if="adminGroups.length" class="relative">
-              <button @click.stop="showEntityPicker = !showEntityPicker"
-                class="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-brand-bg border border-brand-border hover:border-brand-accent/40 transition-all text-sm">
-                <!-- Entity avatar -->
-                <template v-if="postAsEntity.type === 'group'">
-                  <img v-if="(postAsEntity as any).avatar_url" :src="(postAsEntity as any).avatar_url"
-                    class="w-6 h-6 rounded-lg object-cover flex-shrink-0" />
-                  <div v-else class="w-6 h-6 rounded-lg bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold flex-shrink-0">
-                    {{ ((postAsEntity as any).name || '?')[0].toUpperCase() }}
-                  </div>
-                  <span class="text-white font-semibold">{{ (postAsEntity as any).name }}</span>
-                  <span class="text-[10px] text-brand-accent bg-brand-accent/10 border border-brand-accent/25 px-1.5 py-0.5 rounded font-bold uppercase">Группа</span>
-                </template>
-                <template v-else>
-                  <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-6 h-6 rounded-full object-cover flex-shrink-0" />
-                  <div v-else class="w-6 h-6 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold flex-shrink-0">
-                    {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
-                  </div>
-                  <span class="text-white font-semibold">{{ auth.user?.display_name || auth.user?.username }}</span>
-                  <span class="text-[10px] text-white/40 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded font-bold uppercase">Я</span>
-                </template>
-                <BIcon name="ChevronDown" class="w-3.5 h-3.5 text-white/55 ml-auto" :class="{ 'rotate-180': showEntityPicker }" />
-              </button>
-              <!-- Dropdown -->
-              <Transition name="slide">
-                <div v-if="showEntityPicker" class="absolute top-full left-0 mt-1.5 z-30 min-w-[220px] bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1.5">
-                  <!-- User option -->
-                  <button class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
-                    :class="postAsEntity.type === 'user' ? 'text-brand-accent' : 'text-white'"
-                    @click="postAsEntity = { type: 'user' }; showEntityPicker = false">
-                    <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover flex-shrink-0" />
-                    <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
-                      {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
-                    </div>
-                    <span class="font-semibold truncate flex-1 text-left">{{ auth.user?.display_name || auth.user?.username }}</span>
-                    <span class="text-[9px] text-white/40 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">Я</span>
-                    <BIcon v-if="postAsEntity.type === 'user'" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
-                  </button>
-                  <div class="h-px bg-brand-border mx-3 my-1" />
-                  <!-- Admin groups -->
-                  <button v-for="grp in adminGroups" :key="grp.id"
-                    class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
-                    :class="postAsEntity.type === 'group' && (postAsEntity as any).id === grp.id ? 'text-brand-accent' : 'text-white'"
-                    @click="postAsEntity = { type: 'group', id: grp.id, slug: grp.slug, name: grp.name, avatar_url: grp.avatar_url }; showEntityPicker = false">
-                    <img v-if="grp.avatar_url" :src="grp.avatar_url" class="w-7 h-7 rounded-xl object-cover flex-shrink-0" />
-                    <div v-else class="w-7 h-7 rounded-xl bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
-                      {{ (grp.name || '?')[0].toUpperCase() }}
-                    </div>
-                    <span class="font-semibold truncate flex-1 text-left">{{ grp.name }}</span>
-                    <span class="text-[9px] text-white/40 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">Группа</span>
-                    <BIcon v-if="postAsEntity.type === 'group' && (postAsEntity as any).id === grp.id" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
-                  </button>
-                </div>
-              </Transition>
-            </div>
-
             <!-- Author + textarea + send -->
             <div class="flex items-start gap-3">
-              <!-- Entity avatar (large) -->
-              <template v-if="postAsEntity.type === 'group'">
-                <img v-if="(postAsEntity as any).avatar_url" :src="(postAsEntity as any).avatar_url"
-                  class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover flex-shrink-0 mt-0.5" />
-                <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold">
-                  {{ ((postAsEntity as any).name || '?')[0].toUpperCase() }}
-                </div>
-              </template>
-              <template v-else>
-                <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 mt-0.5" />
-                <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
-              </template>
+              <!-- Entity avatar — кликабельна если есть группы -->
+              <div class="relative flex-shrink-0 mt-0.5">
+                <!-- Clickable avatar -->
+                <button
+                  v-if="adminGroups.length"
+                  @click.stop="showEntityPicker = !showEntityPicker"
+                  class="flex items-center gap-1 focus:outline-none group/av"
+                >
+                  <template v-if="postAsEntity.type === 'group'">
+                    <img v-if="(postAsEntity as any).avatar_url" :src="(postAsEntity as any).avatar_url"
+                      class="w-10 h-10 rounded-xl border-2 object-cover transition-colors"
+                      :class="showEntityPicker ? 'border-brand-accent' : 'border-brand-border group-hover/av:border-brand-accent/60'" />
+                    <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border flex items-center justify-center text-brand-accent font-bold bg-brand-accent/20 transition-colors"
+                      :class="showEntityPicker ? 'border-brand-accent' : 'group-hover/av:border-brand-accent/60'">
+                      {{ ((postAsEntity as any).name || '?')[0].toUpperCase() }}
+                    </div>
+                  </template>
+                  <template v-else>
+                    <img v-if="auth.avatarUrl" :src="auth.avatarUrl"
+                      class="w-10 h-10 rounded-full border-2 object-cover transition-colors"
+                      :class="showEntityPicker ? 'border-brand-accent' : 'border-brand-border group-hover/av:border-brand-accent/60'" />
+                    <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex items-center justify-center text-brand-accent font-bold bg-brand-accent/20 transition-colors"
+                      :class="showEntityPicker ? 'border-brand-accent' : 'group-hover/av:border-brand-accent/60'">
+                      {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
+                    </div>
+                  </template>
+                  <!-- Chevron next to avatar -->
+                  <BIcon name="ChevronDown" class="w-3.5 h-3.5 text-white/50 group-hover/av:text-white/80 transition-all"
+                    :class="showEntityPicker ? 'rotate-180 text-brand-accent' : ''" />
+                </button>
+
+                <!-- Non-clickable avatar (no groups) -->
+                <template v-else>
+                  <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover" />
+                  <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex items-center justify-center text-brand-accent font-bold bg-brand-accent/20">
+                    {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
+                  </div>
+                </template>
+
+                <!-- Dropdown -->
+                <Transition name="slide">
+                  <div v-if="showEntityPicker" v-click-outside="() => showEntityPicker = false"
+                    class="absolute top-full left-0 mt-2 z-30 min-w-[220px] bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1.5">
+                    <!-- User option -->
+                    <button class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
+                      :class="postAsEntity.type === 'user' ? 'text-brand-accent' : 'text-white'"
+                      @click="postAsEntity = { type: 'user' }; showEntityPicker = false">
+                      <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                      <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
+                        {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
+                      </div>
+                      <span class="font-semibold truncate flex-1 text-left">{{ auth.user?.display_name || auth.user?.username }}</span>
+                      <BIcon v-if="postAsEntity.type === 'user'" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+                    </button>
+                    <div class="h-px bg-brand-border mx-3 my-1" />
+                    <!-- Admin groups -->
+                    <button v-for="grp in adminGroups" :key="grp.id"
+                      class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
+                      :class="postAsEntity.type === 'group' && (postAsEntity as any).id === grp.id ? 'text-brand-accent' : 'text-white'"
+                      @click="postAsEntity = { type: 'group', id: grp.id, slug: grp.slug, name: grp.name, avatar_url: grp.avatar_url }; showEntityPicker = false">
+                      <img v-if="grp.avatar_url" :src="grp.avatar_url" class="w-7 h-7 rounded-xl object-cover flex-shrink-0" />
+                      <div v-else class="w-7 h-7 rounded-xl bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
+                        {{ (grp.name || '?')[0].toUpperCase() }}
+                      </div>
+                      <span class="font-semibold truncate flex-1 text-left">{{ grp.name }}</span>
+                      <span class="text-[9px] text-brand-accent/70 bg-brand-accent/10 border border-brand-accent/25 px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">Группа</span>
+                      <BIcon v-if="postAsEntity.type === 'group' && (postAsEntity as any).id === grp.id" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+                    </button>
+                  </div>
+                </Transition>
+              </div>
               <div class="flex-1 min-w-0">
                 <MentionTextarea
                   v-model="newPost.content"
@@ -1221,7 +1226,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
             :post="post"
             :group-context="groupContextMap[post.id] ?? null"
             :show-follow-button="!groupContextMap[post.id]"
-            :initial-following="followStatus[post.author.id] ?? null"
+            :initial-following="followStatus[post.author?.id ?? ''] ?? null"
             :initial-vote="postStatus[post.id]?.userVote ?? 0"
             :initial-repawed="postStatus[post.id]?.repawed ?? false"
             :initial-favourited="postStatus[post.id]?.favourited ?? false"
@@ -1291,7 +1296,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
               v-for="user in visibleRecommendedUsers.slice(0, 5)"
               :key="user.id"
               class="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-brand-card/60 transition-colors group cursor-pointer"
-              @click="router.push(`/profile/${user.id}`)"
+              @click="router.push(`/profile/${user.username}`)"
             >
               <!-- Avatar -->
               <div class="relative flex-shrink-0">

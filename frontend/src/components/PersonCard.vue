@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
 import { useRouter } from 'vue-router'
 import { ref, onMounted, onUnmounted } from 'vue'
 import BIcon from './BIcon.vue'
@@ -33,7 +35,7 @@ function bannerGradient(id: string) {
   return `linear-gradient(135deg, hsl(${hue},50%,22%) 0%, hsl(${(hue + 40) % 360},60%,16%) 100%)`
 }
 
-function openProfile() { menuOpen.value = false; router.push(`/profile/${props.user.id}`) }
+function openProfile() { menuOpen.value = false; router.push(`/profile/${props.user.username}`) }
 function removeFriend() { menuOpen.value = false; emit('remove', props.user.id) }
 
 function onOutside(e: MouseEvent) {
@@ -140,7 +142,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
                 @click="openProfile"
               >
                 <BIcon name="User" class="w-4 h-4 text-brand-accent-minus" />
-                Посмотреть профиль
+                {{ langStore.t.viewProfileBtn }}
               </button>
               <button
                 class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white/80
@@ -148,7 +150,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
                 @click.stop="menuOpen = false"
               >
                 <BIcon name="Ban" class="w-4 h-4 text-brand-warning" />
-                Заблокировать
+                {{ langStore.t.blockUserBtn }}
               </button>
               <template v-if="isFriend">
                 <div class="border-t border-brand-border mx-3 my-1" />
@@ -158,7 +160,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
                   @click="removeFriend"
                 >
                   <BIcon name="UserMinus" class="w-4 h-4" />
-                  Удалить из друзей
+                  {{ langStore.t.removeFriendTitle }}
                 </button>
               </template>
             </div>
@@ -187,7 +189,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
           @click.stop="emit('message', user.id)"
         >
           <BIcon name="MessageCircle" class="w-4 h-4" />
-          Написать
+          {{ langStore.t.msgBtnTitle }}
         </button>
         <!-- Колокольчик уведомлений -->
         <button
@@ -198,7 +200,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
               : 'bg-white/5 hover:bg-brand-accent/15 text-white/55 hover:text-brand-accent-minus',
             notifyLoading ? 'opacity-60 pointer-events-none' : ''
           ]"
-          :title="notifyActive ? 'Отключить уведомления о постах' : 'Включить уведомления о постах'"
+          :title="notifyActive ? '{{ langStore.t.disableNotifyTitle }}' : '{{ langStore.t.enableNotifyTitle }}'"
           @click.stop="toggleNotify"
         >
           <BIcon :name="notifyActive ? 'BellRing' : 'Bell'" class="w-4 h-4" />

@@ -3,6 +3,68 @@ import { ref } from 'vue'
 import { useAuthStore } from './auth'
 import api from '@/api'
 
+// ── Static species list (must match backend FURSONA_SPECIES) ─────────────────
+export const FURSONA_SPECIES = [
+  'Canine', 'Feline', 'Dragon', 'Protogen', 'Avian', 'Equine',
+  'Reptile', 'Rodent', 'Ursine', 'Bovine', 'Cervine', 'Mustelid',
+  'Sergal', 'Dutch Angel Dragon', 'Shark', 'Bat', 'Fox', 'Wolf',
+  'Rabbit', 'Tiger', 'Hyena', 'Synth', 'Wickerbeast', 'Other',
+] as const
+
+export type FursonaSpecies = typeof FURSONA_SPECIES[number]
+
+// ── Fursona ───────────────────────────────────────────────────────────────────
+export interface Fursona {
+  id: string
+  user_id: string
+  name: string
+  species: string[]
+  colors: string[]
+  likes_dislikes_visible: boolean
+  likes: string[]
+  dislikes: string[]
+  reference_image_url: string | null
+  reference_is_nsfw: boolean
+  reference_artist_name: string | null
+  reference_artist_url: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface UpsertFursonaInput {
+  name?: string
+  species?: string[]
+  colors?: string[]
+  likes_dislikes_visible?: boolean
+  likes?: string[]
+  dislikes?: string[]
+  reference_image_url?: string | null
+  reference_is_nsfw?: boolean
+  reference_artist_name?: string | null
+  reference_artist_url?: string | null
+}
+
+// ── Fursuit ───────────────────────────────────────────────────────────────────
+export interface Fursuit {
+  id: string
+  user_id: string
+  image_url: string | null
+  maker_id: string | null
+  external_maker_links: string[]
+  description: string | null
+  is_nsfw: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface UpsertFursuitInput {
+  image_url?: string | null
+  maker_id?: string | null
+  external_maker_links?: string[]
+  description?: string | null
+  is_nsfw?: boolean
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface UserProfile {
   id: string
@@ -95,11 +157,19 @@ export interface UpdateProfileInput {
 // ── Store ─────────────────────────────────────────────────────────────────────
 export const useUserStore = defineStore('user', () => {
   // ── State ─────────────────────────────────────────────────────────────────
-  const profile   = ref<UserProfile | null>(null)
-  const isLoading = ref(false)
-  const error     = ref<string | null>(null)
+  const profile        = ref<UserProfile | null>(null)
+  const isLoading      = ref(false)
+  const error          = ref<string | null>(null)
 
-  // ── Actions ───────────────────────────────────────────────────────────────
+  // Fursona state
+  const fursona        = ref<Fursona | null>(null)
+  const fursonaLoading = ref(false)
+
+  // Fursuits state
+  const fursuits        = ref<Fursuit[]>([])
+  const fursuitsLoading = ref(false)
+
+
 
   /** Fetch any user's public profile by id. Returns the profile or null. */
   async function fetchProfile(id: string): Promise<UserProfile | null> {
@@ -150,6 +220,68 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  // ── Fursona actions ────────────────────────────────────────────────────────
+
+  async function fetchFursona(userId: string): Promise<void> {
+    fursonaLoading.value = true
+    try {
+      const res = await api.get(`/users/${userId}/fursona`)
+      if (res.data.success) fursona.value = res.data.data.fursona
+    } catch {
+      fursona.value = null
+    } finally {
+      fursonaLoading.value = false
+    }
+  }
+
+  async function saveFursona(input: UpsertFursonaInput): Promise<void> {
+    fursonaLoading.value = true
+    try {
+      const res = await api.put('/users/me/fursona', input)
+      if (!res.data.success) throw new Error(res.data.error?.message ?? 'Failed to save fursona')
+      fursona.value = res.data.data.fursona
+    } catch (e: any) {
+      throw e
+    } finally {
+      fursonaLoading.value = false
+    }
+  }
+
+  // ── Fursuit actions ────────────────────────────────────────────────────────
+
+  async function fetchFursuits(userId: string): Promise<void> {
+    fursuitsLoading.value = true
+    try {
+      const res = await api.get(`/users/${userId}/fursuits`)
+      if (res.data.success) fursuits.value = res.data.data.fursuits
+    } catch {
+      fursuits.value = []
+    } finally {
+      fursuitsLoading.value = false
+    }
+  }
+
+  async function createFursuit(input: UpsertFursuitInput): Promise<Fursuit> {
+    const res = await api.post('/users/me/fursuits', input)
+    if (!res.data.success) throw new Error(res.data.error?.message ?? 'Failed to create fursuit')
+    const created = res.data.data.fursuit as Fursuit
+    fursuits.value.push(created)
+    return created
+  }
+
+  async function updateFursuit(id: string, input: UpsertFursuitInput): Promise<void> {
+    const res = await api.put(`/users/me/fursuits/${id}`, input)
+    if (!res.data.success) throw new Error(res.data.error?.message ?? 'Failed to update fursuit')
+    const updated = res.data.data.fursuit as Fursuit
+    const idx = fursuits.value.findIndex((f) => f.id === id)
+    if (idx !== -1) fursuits.value[idx] = updated
+  }
+
+  async function deleteFursuit(id: string): Promise<void> {
+    await api.delete(`/users/me/fursuits/${id}`)
+    fursuits.value = fursuits.value.filter((f) => f.id !== id)
+  }
+
   return {
     profile,
     isLoading,
@@ -157,5 +289,17 @@ export const useUserStore = defineStore('user', () => {
     fetchProfile,
     fetchMyProfile,
     updateProfile,
+    // Fursona
+    fursona,
+    fursonaLoading,
+    fetchFursona,
+    saveFursona,
+    // Fursuit
+    fursuits,
+    fursuitsLoading,
+    fetchFursuits,
+    createFursuit,
+    updateFursuit,
+    deleteFursuit,
   }
 })

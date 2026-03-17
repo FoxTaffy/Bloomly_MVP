@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import api from '../api'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -26,12 +26,15 @@ export interface StickerPack {
   currency: string
   tags: string[]
   is_nsfw: boolean
+  hide_author: boolean
   status: 'published' | 'draft'
   downloads_count: number
+  use_count: number
   created_at: string
   updated_at: string
-  author: PackAuthor
+  author: PackAuthor | null
   _count: { userCollections: number }
+  in_collection?: boolean
 }
 
 export interface CreatePackInput {
@@ -46,7 +49,20 @@ export interface CreatePackInput {
   currency?: string
   tags?: string[]
   isNsfw?: boolean
+  hideAuthor?: boolean
   status?: 'published' | 'draft'
+}
+
+// ── LocalStorage keys ─────────────────────────────────────────────────────────
+const LS_RECENT   = 'bloomly_recent_stickers'
+const LS_FAVORITE = 'bloomly_favorite_stickers'
+const MAX_RECENT  = 30
+
+function lsLoad(key: string): string[] {
+  try { return JSON.parse(localStorage.getItem(key) ?? '[]') } catch { return [] }
+}
+function lsSave(key: string, arr: string[]) {
+  try { localStorage.setItem(key, JSON.stringify(arr)) } catch {}
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -58,9 +74,71 @@ export const useStickersStore = defineStore('stickers', () => {
   const isLoading      = ref(false)
   const total          = ref(0)
 
+  // ── Recent / Favorites (localStorage, fast + offline) ────────────────────
+  const recentStickers   = ref<string[]>(lsLoad(LS_RECENT))
+  const favoriteStickers = ref<string[]>(lsLoad(LS_FAVORITE))
+
+  // ── Frequent stickers (from server, sorted by use_count) ─────────────────
+  const frequentStickers = ref<string[]>([])
+
+  function trackRecent(url: string) {
+    const arr = recentStickers.value.filter(u => u !== url)
+    arr.unshift(url)
+    if (arr.length > MAX_RECENT) arr.length = MAX_RECENT
+    recentStickers.value = arr
+    lsSave(LS_RECENT, arr)
+  }
+
+  function toggleFavorite(url: string, packId?: string) {
+    const arr = favoriteStickers.value.filter(u => u !== url)
+    const wasPresent = arr.length < favoriteStickers.value.length
+    if (!wasPresent) arr.unshift(url)
+    favoriteStickers.value = arr
+    lsSave(LS_FAVORITE, arr)
+    // Sync to server in background (best-effort)
+    if (!wasPresent) {
+      api.post('/stickers/favorites', { stickerUrl: url, packId }).catch(() => {})
+    } else {
+      api.delete('/stickers/favorites', { data: { stickerUrl: url } }).catch(() => {})
+    }
+  }
+
+  const isFavorite = computed(() => (url: string) => favoriteStickers.value.includes(url))
+
+  // Load favorites from server and merge with localStorage
+  async function loadFavoritesFromServer() {
+    try {
+      const { data } = await api.get('/stickers/favorites')
+      const serverUrls: string[] = data.data.stickers.map((s: any) => s.url)
+      // Merge: server is source of truth, but keep any local ones not yet synced
+      const merged = Array.from(new Set([...serverUrls, ...favoriteStickers.value]))
+      favoriteStickers.value = merged
+      lsSave(LS_FAVORITE, merged)
+    } catch { /* server unavailable, keep localStorage */ }
+  }
+
+  // Load frequency data from server
+  async function loadFrequent() {
+    try {
+      const { data } = await api.get('/stickers/usage/recent', { params: { type: 'frequent', limit: 50 } })
+      frequentStickers.value = data.data.stickers.map((s: any) => s.url)
+    } catch { /* keep empty */ }
+  }
+
+  // Track sticker usage on server (best-effort)
+  async function trackUsageRemote(url: string, packId?: string) {
+    try { await api.post('/stickers/usage/track', { stickerUrl: url, packId }) } catch {}
+  }
+
+  // ── Increment use count ───────────────────────────────────────────────────
+  async function incrementUse(packId: string) {
+    try { await api.post(`/stickers/${packId}/use`) } catch {}
+  }
+
   async function loadPacks(params?: {
     page?: number; limit?: number; search?: string
-    authorId?: string; free?: boolean
+    authorId?: string; free?: boolean; nsfw?: string
+    excludeNsfw?: string; sort?: string; tag?: string; status?: string
   }) {
     isLoading.value = true
     try {
@@ -118,6 +196,15 @@ export const useStickersStore = defineStore('stickers', () => {
     return updated
   }
 
+  async function addStickersToPack(id: string, urls: string[]) {
+    const { data } = await api.post(`/stickers/${id}/stickers`, { urls })
+    const updated = data.data.pack as StickerPack
+    const midx = myPacks.value.findIndex(p => p.id === id)
+    if (midx !== -1) myPacks.value[midx] = updated
+    if (currentPack.value?.id === id) currentPack.value = updated
+    return updated
+  }
+
   async function deletePack(id: string) {
     await api.delete(`/stickers/${id}`)
     packs.value   = packs.value.filter(p => p.id !== id)
@@ -158,11 +245,29 @@ export const useStickersStore = defineStore('stickers', () => {
     }
   }
 
+  async function findPackByUrl(url: string): Promise<
+    | null
+    | { private: true }
+    | { private: false; pack: StickerPack }
+  > {
+    try {
+      const { data } = await api.get('/stickers/find-by-url', { params: { url } })
+      if (!data.success || !data.data.found) return null
+      if (data.data.private) return { private: true }
+      return { private: false, pack: data.data.pack as StickerPack }
+    } catch {
+      return null
+    }
+  }
+
   return {
     packs, currentPack, myPacks, myCollection, isLoading, total,
+    recentStickers, favoriteStickers, frequentStickers, isFavorite,
+    trackRecent, toggleFavorite, incrementUse,
+    loadFavoritesFromServer, loadFrequent, trackUsageRemote,
     loadPacks, loadPack, loadMyPacks, loadMyCollection,
-    createPack, updatePack, deletePack,
+    createPack, updatePack, addStickersToPack, deletePack,
     addToCollection, removeFromCollection, checkCollected,
-    importFromTelegram,
+    importFromTelegram, findPackByUrl,
   }
 })

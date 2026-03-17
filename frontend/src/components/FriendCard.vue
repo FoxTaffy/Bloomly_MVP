@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useLangStore } from '@/stores/lang'
+const langStore = useLangStore()
 import { useRouter } from 'vue-router'
 import BIcon from './BIcon.vue'
 import type { Friend } from '@/stores/friends'
@@ -24,7 +26,7 @@ function avatarInitial(name: string | null | undefined) {
     <!-- Avatar + online dot -->
     <div
       class="relative flex-shrink-0 cursor-pointer"
-      @click="router.push(`/profile/${friend.id}`)"
+      @click="router.push(`/profile/${friend.username}`)"
     >
       <img
         v-if="friend.avatar_url"
@@ -50,7 +52,7 @@ function avatarInitial(name: string | null | undefined) {
     <!-- Name -->
     <div
       class="min-w-0 flex-1 cursor-pointer"
-      @click="router.push(`/profile/${friend.id}`)"
+      @click="router.push(`/profile/${friend.username}`)"
     >
       <p class="font-semibold text-brand-offwhite truncate leading-tight text-sm">
         {{ friend.display_name || friend.username }}
@@ -62,14 +64,14 @@ function avatarInitial(name: string | null | undefined) {
     <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
       <button
         class="w-8 h-8 rounded-xl bg-brand-accent/15 hover:bg-brand-accent/30 flex items-center justify-center text-brand-accent transition-colors"
-        title="Написать"
+        :title="langStore.t.msgBtnTitle"
         @click.stop="emit('message', friend.id)"
       >
         <BIcon name="MessageCircle" class="w-4 h-4" />
       </button>
       <button
         class="w-8 h-8 rounded-xl bg-brand-error/10 hover:bg-brand-error/20 flex items-center justify-center text-brand-error transition-colors"
-        title="Удалить из друзей"
+        :title="langStore.t.removeFriendTitle"
         @click.stop="emit('remove', friend.id)"
       >
         <BIcon name="UserMinus" class="w-4 h-4" />

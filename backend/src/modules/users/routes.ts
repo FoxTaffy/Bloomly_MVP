@@ -6,8 +6,13 @@ import {
   setPublicKeyHandler, getPublicKeyHandler,
   notifyStatusHandler, notifyToggleHandler,
   updateSubscriptionHandler, deleteAccountHandler,
+  getFursonaHandler, upsertFursonaHandler, getReferenceImageHandler,
+  getFursuitsHandler, createFursuitHandler, updateFursuitHandler, deleteFursuitHandler,
 } from './controller.js';
-import { getUserParamsSchema, updateUserSchema, pinPostSchema } from './schemas.js';
+import {
+  getUserParamsSchema, updateUserSchema, pinPostSchema,
+  updateFursonaSchema, updateFursuitSchema, fursuitIdParamSchema,
+} from './schemas.js';
 
 export async function usersRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
@@ -63,6 +68,42 @@ export async function usersRoutes(fastify: FastifyInstance) {
 
   // DELETE /api/users/me/account — soft-delete own account
   fastify.delete('/me/account', auth, deleteAccountHandler as any);
+
+  // ── Fursona (1:1 per user) ────────────────────────────────────────────────
+  // PUT  /api/users/me/fursona  — create or update own fursona
+  fastify.put('/me/fursona', { schema: updateFursonaSchema, onRequest: [fastify.authenticate] }, upsertFursonaHandler as any);
+
+  // GET  /api/users/me/fursona/reference — serve own watermarked reference (auth)
+  fastify.get('/me/fursona/reference', auth, async (req, reply) => {
+    const { id: userId } = (req as any).user as { id: string };
+    const result = await import('./service.js').then((m) =>
+      m.usersService.getWatermarkedReference(userId),
+    );
+    if (!result) return reply.code(404).send({ success: false, data: null, error: { code: 'REFERENCE_NOT_FOUND', message: 'No reference image' } });
+    return reply
+      .header('Content-Type', result.mimeType)
+      .header('Cache-Control', 'private, no-store')
+      .send(result.buffer);
+  });
+
+  // GET  /api/users/:id/fursona — public fursona (likes/dislikes gated by owner setting)
+  fastify.get('/:id/fursona', getFursonaHandler as any);
+
+  // GET  /api/users/:id/fursona/reference — watermarked reference (auth required)
+  fastify.get('/:id/fursona/reference', auth, getReferenceImageHandler as any);
+
+  // ── Fursuits (1:N per user) ───────────────────────────────────────────────
+  // GET  /api/users/:id/fursuits
+  fastify.get('/:id/fursuits', getFursuitsHandler as any);
+
+  // POST /api/users/me/fursuits — create a new fursuit
+  fastify.post('/me/fursuits', { schema: updateFursuitSchema, onRequest: [fastify.authenticate] }, createFursuitHandler as any);
+
+  // PUT  /api/users/me/fursuits/:fursuitId
+  fastify.put('/me/fursuits/:fursuitId', { schema: { ...updateFursuitSchema, ...fursuitIdParamSchema }, onRequest: [fastify.authenticate] }, updateFursuitHandler as any);
+
+  // DELETE /api/users/me/fursuits/:fursuitId — soft delete
+  fastify.delete('/me/fursuits/:fursuitId', { schema: fursuitIdParamSchema, onRequest: [fastify.authenticate] }, deleteFursuitHandler as any);
 
   // GET /api/users/:id — public profile (no auth required) — must be last
   fastify.get('/:id', { schema: getUserParamsSchema }, getUserHandler as any);

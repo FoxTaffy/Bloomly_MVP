@@ -1,0 +1,29 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /post/
+Allow: /profile/
+Allow: /groups/
+Allow: /events/
+Allow: /dealers-den/
+
+# Закрытые разделы — не нужны в поиске
+Disallow: /messages
+Disallow: /bookmarks
+Disallow: /settings/
+Disallow: /admin
+Disallow: /onboarding
+Disallow: /auth/
+Disallow: /automation
+Disallow: /friends
+Disallow: /subscriptions
+Disallow: /stickers
+
+# API — не индексировать
+Disallow: /api/
+
+# Crawl delay
+Crawl-delay: 1
+
+# Sitemap
+Sitemap: https://bloomly.fun/sitemap.xml

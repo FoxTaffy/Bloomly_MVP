@@ -1,6 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { usersService } from './service.js';
-import type { UpdateUserInput, JwtPayload } from './types.js';
+import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, JwtPayload } from './types.js';
 
 
 export async function getUserHandler(
@@ -197,5 +197,107 @@ export async function deleteAccountHandler(
     return reply.send({ success: true, data: null, error: null });
   } catch (e: any) {
     return reply.code(500).send({ success: false, data: null, error: { code: 'DELETE_ACCOUNT_ERROR', message: e.message } });
+  }
+}
+
+// ── Fursona handlers ──────────────────────────────────────────────────────────
+
+export async function getFursonaHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) {
+  const viewer = (request as any).user as JwtPayload | undefined;
+  const fursona = await usersService.getFursona(request.params.id, viewer?.id);
+  if (!fursona) {
+    return reply.code(404).send({ success: false, data: null, error: { code: 'FURSONA_NOT_FOUND', message: 'Fursona not found' } });
+  }
+  return reply.send({ success: true, data: { fursona }, error: null });
+}
+
+export async function upsertFursonaHandler(
+  request: FastifyRequest<{ Body: UpsertFursonaInput }>,
+  reply: FastifyReply,
+) {
+  const { id: userId } = request.user as JwtPayload;
+  try {
+    const fursona = await usersService.upsertFursona(userId, request.body);
+    return reply.send({ success: true, data: { fursona }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'FURSONA_UPDATE_ERROR', message: e.message } });
+  }
+}
+
+/**
+ * Serve a watermarked reference image.
+ * Auth required so that only logged-in users can view it.
+ * The original MinIO URL is never returned to the browser.
+ */
+export async function getReferenceImageHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const result = await usersService.getWatermarkedReference(request.params.id);
+    if (!result) {
+      return reply.code(404).send({ success: false, data: null, error: { code: 'REFERENCE_NOT_FOUND', message: 'Reference image not found' } });
+    }
+    return reply
+      .header('Content-Type', result.mimeType)
+      .header('Cache-Control', 'private, no-store')
+      .header('X-Content-Options', 'nosniff')
+      .send(result.buffer);
+  } catch (e: any) {
+    return reply.code(500).send({ success: false, data: null, error: { code: 'REFERENCE_ERROR', message: e.message } });
+  }
+}
+
+// ── Fursuit handlers ──────────────────────────────────────────────────────────
+
+export async function getFursuitsHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) {
+  const fursuits = await usersService.getFursuits(request.params.id);
+  return reply.send({ success: true, data: { fursuits }, error: null });
+}
+
+export async function createFursuitHandler(
+  request: FastifyRequest<{ Body: UpsertFursuitInput }>,
+  reply: FastifyReply,
+) {
+  const { id: userId } = request.user as JwtPayload;
+  try {
+    const fursuit = await usersService.createFursuit(userId, request.body);
+    return reply.code(201).send({ success: true, data: { fursuit }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'FURSUIT_CREATE_ERROR', message: e.message } });
+  }
+}
+
+export async function updateFursuitHandler(
+  request: FastifyRequest<{ Params: { fursuitId: string }; Body: UpsertFursuitInput }>,
+  reply: FastifyReply,
+) {
+  const { id: userId } = request.user as JwtPayload;
+  try {
+    const fursuit = await usersService.updateFursuit(userId, request.params.fursuitId, request.body);
+    return reply.send({ success: true, data: { fursuit }, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSUIT_UPDATE_ERROR', message: e.message } });
+  }
+}
+
+export async function deleteFursuitHandler(
+  request: FastifyRequest<{ Params: { fursuitId: string } }>,
+  reply: FastifyReply,
+) {
+  const { id: userId } = request.user as JwtPayload;
+  try {
+    await usersService.deleteFursuit(userId, request.params.fursuitId);
+    return reply.send({ success: true, data: null, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSUIT_DELETE_ERROR', message: e.message } });
   }
 }

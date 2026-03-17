@@ -148,7 +148,7 @@ function handleNewStory() {
 
       <!-- Profile -->
       <button
-        @click="mobileHubOpen = false; router.push(`/profile/${auth.user?.id}`)"
+        @click="mobileHubOpen = false; router.push(`/profile/${auth.user?.username}`)"
         class="flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl transition-all duration-200 min-w-[64px]"
         :class="activeTab === 'profile' ? 'text-white' : 'text-white/55'">
         <div class="relative">

@@ -1,0 +1,2 @@
+-- AddColumn
+ALTER TABLE "groups" ADD COLUMN IF NOT EXISTS "hide_admins" BOOLEAN NOT NULL DEFAULT false;
