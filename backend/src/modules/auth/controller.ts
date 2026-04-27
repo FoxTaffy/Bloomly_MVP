@@ -219,7 +219,7 @@ export const oauthCallbackHandler = async (
     await issueRefreshToken(reply, user.id);
     return reply.redirect(302, `${FRONTEND_URL()}/auth/callback?token=${token}`);
   } catch (e: any) {
-    console.error('[OAuth callback error]', e);
+    console.error('[OAuth callback error]', e instanceof Error ? e.message : 'Unknown error');
     return reply.redirect(302, `${FRONTEND_URL()}/auth?error=oauth_failed`);
   }
 };

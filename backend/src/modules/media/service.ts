@@ -4,12 +4,21 @@ import path from 'path';
 import sharp from 'sharp';
 
 // ── MinIO (local S3-compatible storage) ───────────────────────────────────
+const minioPassword = process.env.MINIO_ROOT_PASSWORD;
+if (!minioPassword) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[FATAL] MINIO_ROOT_PASSWORD env variable is not set. Refusing to start in production.');
+    process.exit(1);
+  }
+  console.warn('[WARN] MINIO_ROOT_PASSWORD is not set. Using insecure fallback for development only.');
+}
+
 const minioClient = new Minio.Client({
   endPoint:  process.env.MINIO_ENDPOINT  || 'minio',
   port:      parseInt(process.env.MINIO_PORT || '9000'),
   useSSL:    process.env.MINIO_USE_SSL === 'true',
   accessKey: process.env.MINIO_ROOT_USER     || 'admin',
-  secretKey: process.env.MINIO_ROOT_PASSWORD || 'bloomly_secret_123',
+  secretKey: minioPassword                   || 'bloomly_secret_123',
 });
 
 const BUCKET     = process.env.MINIO_BUCKET     || 'bloomly';

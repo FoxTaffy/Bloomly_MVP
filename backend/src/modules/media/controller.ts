@@ -7,13 +7,11 @@ const ALLOWED_MIME_TYPES = new Set([
   'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/mp4',
 ]);
 
-const ALLOWED_MIME_PREFIXES = ['image/', 'video/', 'audio/'];
-
 const ALLOWED_FOLDERS = ['posts', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers'] as const;
 type Folder = typeof ALLOWED_FOLDERS[number];
 
 function isAllowedMime(mime: string): boolean {
-  return ALLOWED_MIME_TYPES.has(mime) || ALLOWED_MIME_PREFIXES.some((p) => mime.startsWith(p));
+  return ALLOWED_MIME_TYPES.has(mime);
 }
 
 export const uploadFileHandler = async (
