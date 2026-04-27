@@ -22,6 +22,8 @@ export interface Message {
   file_url: string | null
   reply_to_id?: string | null
   reply_to?: { id: string; text: string | null; type: string; file_url: string | null; sender: { id: string; username: string; display_name: string | null } } | null
+  reactions?: Record<string, string[]> | null   // emoji → list of userIds
+  edited_at?: string | null
   created_at: string
   deleted_at: string | null
   sender: MsgSender
@@ -73,6 +75,7 @@ export const useMessagesStore = defineStore('messages', () => {
   let unsubWs: (() => void) | null = null
   let unsubTyping: (() => void) | null = null
   let unsubReadReceipt: (() => void) | null = null
+  let unsubMessageUpdated: (() => void) | null = null
 
   // ── WebSocket ───────────────────────────────────────────────────────────
   function startListening() {
@@ -128,6 +131,17 @@ export const useMessagesStore = defineStore('messages', () => {
       }, 3500))
     })
 
+    unsubMessageUpdated = wsClient.on('message_updated', (frame) => {
+      const msg = (frame as any).data as Message
+      if (!msg?.conversation_id || !msg?.id) return
+      const list = messages.value[msg.conversation_id]
+      if (!list) return
+      const idx = list.findIndex((m) => m.id === msg.id)
+      if (idx === -1) return
+      // Preserve _sending flag (shouldn't be set on persisted msg, but be safe)
+      list.splice(idx, 1, { ...list[idx], ...msg, _sending: false })
+    })
+
     unsubReadReceipt = wsClient.on('read_receipt', (frame) => {
       const { conversationId, userId, last_read_at } = frame as {
         conversationId?: string; userId?: string; last_read_at?: string
@@ -147,9 +161,11 @@ export const useMessagesStore = defineStore('messages', () => {
     unsubWs?.()
     unsubTyping?.()
     unsubReadReceipt?.()
+    unsubMessageUpdated?.()
     unsubWs = null
     unsubTyping = null
     unsubReadReceipt = null
+    unsubMessageUpdated = null
   }
 
   // ── REST API ────────────────────────────────────────────────────────────
@@ -249,6 +265,46 @@ export const useMessagesStore = defineStore('messages', () => {
     await api.delete(`/messages/messages/${msgId}`)
     for (const convId of Object.keys(messages.value)) {
       messages.value[convId] = messages.value[convId].filter((m) => m.id !== msgId)
+    }
+  }
+
+  async function editMessage(msgId: string, text: string) {
+    const res = await api.patch(`/messages/messages/${msgId}`, { text })
+    const updated = res.data?.data?.message as Message | undefined
+    if (!updated) return
+    // Optimistic local update; WS broadcast will arrive shortly with same data
+    const list = messages.value[updated.conversation_id]
+    if (!list) return
+    const idx = list.findIndex((m) => m.id === updated.id)
+    if (idx !== -1) list.splice(idx, 1, { ...list[idx], ...updated, _sending: false })
+  }
+
+  async function toggleReaction(msgId: string, emoji: string) {
+    // Optimistic update — find the message and toggle locally
+    const auth = useAuthStore()
+    const myId = auth.user?.id
+    if (!myId) return
+    let convIdFound: string | null = null
+    for (const convId of Object.keys(messages.value)) {
+      const list = messages.value[convId]
+      const idx = list.findIndex((m) => m.id === msgId)
+      if (idx === -1) continue
+      convIdFound = convId
+      const msg = { ...list[idx] }
+      const reactions: Record<string, string[]> = { ...(msg.reactions ?? {}) }
+      const list2 = reactions[emoji] ? [...reactions[emoji]] : []
+      const i = list2.indexOf(myId)
+      if (i === -1) list2.push(myId); else list2.splice(i, 1)
+      if (list2.length) reactions[emoji] = list2; else delete reactions[emoji]
+      msg.reactions = Object.keys(reactions).length ? reactions : null
+      list.splice(idx, 1, msg)
+      break
+    }
+    try {
+      await api.post(`/messages/messages/${msgId}/reactions`, { emoji })
+    } catch {
+      // Revert by refetching the conversation slice if needed
+      if (convIdFound) await fetchMessages(convIdFound)
     }
   }
 
@@ -395,6 +451,8 @@ export const useMessagesStore = defineStore('messages', () => {
     loadMoreMessages,
     sendMessage,
     deleteMessage,
+    editMessage,
+    toggleReaction,
     markRead,
     setArchived,
     deleteConversation,

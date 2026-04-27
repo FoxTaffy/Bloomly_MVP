@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-full bg-brand-bg overflow-hidden">
+  <div class="flex flex-col h-full bg-brand-bg overflow-hidden relative">
 
     <!-- ── Header ─────────────────────────────────────────────────────────── -->
     <div class="flex items-center gap-3 px-4 py-3 border-b border-brand-border bg-brand-card flex-shrink-0">
@@ -634,7 +634,7 @@
     </Transition>
 
     <!-- ── Message list ────────────────────────────────────────────────────── -->
-    <div ref="scrollEl" class="flex-1 overflow-y-auto min-h-0 px-4 py-4 space-y-1" @scroll="onScroll" @click="onMsgListClick">
+    <div ref="scrollEl" class="flex-1 overflow-y-auto min-h-0 px-4 py-4 space-y-1 relative" @scroll="onScroll" @click="onMsgListClick">
 
       <!-- Notes banner -->
       <div v-if="!conv?.is_group && !other" class="flex flex-col items-center gap-3 py-6 px-4 mb-2">
@@ -677,7 +677,14 @@
 
       <!-- Messages -->
       <template v-else>
-        <div v-for="(msg, idx) in displayList" :key="msg.id"
+        <template v-for="(msg, idx) in displayList" :key="msg.id">
+        <!-- Date divider -->
+        <div v-if="shouldShowDateDivider(idx)" class="flex items-center justify-center my-3 select-none">
+          <span class="px-3 py-1 rounded-full bg-brand-bg/70 backdrop-blur-sm border border-white/8 text-[10px] font-bold text-white/55 tracking-wide uppercase">
+            {{ formatDateDivider(msg.created_at) }}
+          </span>
+        </div>
+        <div
           :id="'msg-' + msg.id"
           :class="msg.type === 'system'
             ? 'flex justify-center my-1 px-4'
@@ -860,9 +867,9 @@
             <div v-if="msg.type !== 'sticker' && !parseStoryReply(msg) && !/^\[story_reply:/u.test(msg.text || '') && (msg.text || !msg.file_url)"
               @click="tappedMsgId = tappedMsgId === msg.id ? null : msg.id"
               :class="[
-                'px-3.5 py-2 rounded-3xl text-sm leading-relaxed break-words min-w-[60px] shadow-sm',
+                'relative px-3.5 py-2 rounded-3xl text-sm leading-relaxed break-words min-w-[60px] shadow-sm transition-shadow',
                 isMine(msg)
-                  ? 'bg-brand-accent text-white rounded-br-md shadow-brand-accent/20'
+                  ? 'bg-gradient-to-br from-brand-accent to-brand-accent-plus text-white rounded-br-md shadow-brand-accent/25'
                   : 'bg-brand-card text-brand-offwhite border border-brand-border/60 rounded-bl-md',
                 msg._sending ? 'opacity-60' : '',
                 translateMode && translations[msg.id] && !isMine(msg) ? 'border-brand-accent/40' : '',
@@ -903,9 +910,26 @@
               </template>
             </div>
 
+            <!-- Reactions row -->
+            <div v-if="msg.reactions && Object.keys(msg.reactions).length"
+              class="flex flex-wrap gap-1 mt-1"
+              :class="isMine(msg) ? 'justify-end' : 'justify-start'">
+              <button v-for="(users, emoji) in msg.reactions" :key="emoji"
+                type="button" @click="store.toggleReaction(msg.id, emoji)"
+                :class="['flex items-center gap-1 px-2 py-0.5 rounded-full text-xs leading-none transition-all border active:scale-95',
+                  reactionHasMe(users)
+                    ? 'bg-brand-accent/20 border-brand-accent/50 text-white'
+                    : 'bg-brand-bg/80 border-brand-border/50 text-white/70 hover:border-brand-accent/30']"
+                :title="reactionHasMe(users) ? 'Убрать реакцию' : 'Добавить реакцию'">
+                <span class="text-[13px]">{{ emoji }}</span>
+                <span class="text-[10px] font-bold">{{ users.length }}</span>
+              </button>
+            </div>
+
             <!-- Time + status + actions -->
             <div class="flex items-center gap-1 mt-0.5">
               <span class="text-[10px] text-white/55">{{ formatMsgTime(msg.created_at) }}</span>
+              <span v-if="msg.edited_at" class="text-[10px] text-white/40 italic" title="Изменено">изм.</span>
 
               <!-- Read status icons (only on my messages) -->
               <template v-if="isMine(msg)">
@@ -919,7 +943,11 @@
               </template>
 
               <!-- Bubble action buttons (show on hover / tap) -->
-              <div class="items-center gap-0.5" :class="tappedMsgId === msg.id ? 'flex' : 'hidden group-hover:flex'">
+              <div class="items-center gap-0.5 relative" :class="tappedMsgId === msg.id ? 'flex' : 'hidden group-hover:flex'">
+                <button type="button" @click.stop="toggleReactionPicker(msg.id)"
+                  class="p-0.5 rounded hover:text-amber-400 text-white/55 transition-colors" title="Реакция">
+                  <BIcon name="SmilePlus" class="w-3 h-3" />
+                </button>
                 <button type="button" @click="replyTo = msg"
                   class="p-0.5 rounded hover:text-brand-accent text-white/55 transition-colors" title="Ответить">
                   <BIcon name="CornerUpLeft" class="w-3 h-3" />
@@ -932,15 +960,39 @@
                   class="p-0.5 rounded hover:text-brand-accent text-white/55 transition-colors" title="Переслать">
                   <BIcon name="Forward" class="w-3 h-3" />
                 </button>
+                <button v-if="msg.text" type="button" @click="copyMessageText(msg)"
+                  class="p-0.5 rounded hover:text-brand-accent text-white/55 transition-colors" title="Копировать">
+                  <BIcon name="Copy" class="w-3 h-3" />
+                </button>
+                <button v-if="isMine(msg) && msg.type === 'text' && !msg._sending" @click="startEdit(msg)"
+                  class="p-0.5 rounded hover:text-brand-accent text-white/55 transition-colors" title="Изменить">
+                  <BIcon name="Pencil" class="w-3 h-3" />
+                </button>
                 <button v-if="isMine(msg) && !msg._sending" @click="deleteMsg(msg.id)"
                   class="p-0.5 rounded hover:text-brand-error text-white/55 transition-colors" title="Удалить">
                   <BIcon name="Trash2" class="w-3 h-3" />
                 </button>
+
+                <!-- Reaction picker popover (anchored to action row) -->
+                <Transition name="mention-pop">
+                  <div v-if="reactionPickerFor === msg.id"
+                    class="absolute bottom-full mb-1.5 z-30 flex items-center gap-0.5 px-2 py-1.5 rounded-2xl bg-brand-card border border-brand-border shadow-2xl"
+                    :class="isMine(msg) ? 'right-0' : 'left-0'"
+                    @click.stop>
+                    <button v-for="e in QUICK_REACTIONS" :key="e"
+                      type="button"
+                      @click="pickReaction(msg, e)"
+                      class="w-7 h-7 flex items-center justify-center text-base rounded-full hover:bg-brand-accent/15 hover:scale-125 active:scale-95 transition-all">
+                      {{ e }}
+                    </button>
+                  </div>
+                </Transition>
               </div>
             </div>
           </div>
           </template><!-- /regular bubble -->
         </div>
+        </template>
       </template>
 
       <!-- Typing indicator -->
@@ -958,6 +1010,20 @@
       <!-- Scroll anchor -->
       <div ref="bottomEl" />
     </div>
+
+    <!-- ── Floating scroll-to-bottom button ───────────────────────────────── -->
+    <Transition name="scroll-btn">
+      <button v-if="showScrollDown" type="button"
+        @click="scrollToBottom(true); unreadInChat = 0"
+        class="absolute right-4 bottom-[88px] z-20 w-10 h-10 rounded-full bg-brand-card border border-brand-border shadow-xl flex items-center justify-center text-white hover:bg-brand-accent hover:border-brand-accent active:scale-95 transition-all"
+        title="Вниз">
+        <BIcon name="ChevronDown" class="w-5 h-5" />
+        <span v-if="unreadInChat > 0"
+          class="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-accent text-white text-[10px] font-bold flex items-center justify-center border-2 border-brand-card">
+          {{ unreadInChat > 99 ? '99+' : unreadInChat }}
+        </span>
+      </button>
+    </Transition>
 
     <!-- ── Media lightbox (PostLightbox) ───────────────────────────────────── -->
     <PostLightbox v-if="lightboxUrls.length"
@@ -1178,8 +1244,21 @@
               </button>
             </div>
           </Transition>
+          <!-- Edit bar -->
+          <div v-if="editingMsg" class="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-bg border border-amber-400/40">
+            <BIcon name="Pencil" class="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+            <div class="flex-1 min-w-0">
+              <p class="text-[10px] text-amber-400 font-semibold truncate leading-tight">Изменение сообщения</p>
+              <p class="text-[11px] text-white/55 truncate leading-tight">
+                {{ previewMsgText(editingMsg.text ?? undefined, 60) }}
+              </p>
+            </div>
+            <button type="button" @click="cancelEdit" class="flex-shrink-0 p-0.5 text-white/55 hover:text-brand-error transition-colors">
+              <BIcon name="X" class="w-3.5 h-3.5" />
+            </button>
+          </div>
           <!-- Reply bar -->
-          <div v-if="replyTo" class="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-bg border border-brand-accent/30">
+          <div v-if="replyTo && !editingMsg" class="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-bg border border-brand-accent/30">
             <div class="w-0.5 h-8 rounded-full bg-brand-accent flex-shrink-0" />
             <div class="flex-1 min-w-0">
               <p class="text-[10px] text-brand-accent font-semibold truncate leading-tight">
@@ -1531,6 +1610,17 @@ const forwardMsg   = ref<Message | null>(null)
 const tappedMsgId  = ref<string | null>(null)
 const mentionCard  = ref<{ username: string; display_name: string | null; avatar_url: string | null; id: string; x: number; y: number } | null>(null)
 
+// Edit mode
+const editingMsg = ref<Message | null>(null)
+
+// Reactions
+const QUICK_REACTIONS = ['👍','❤️','😂','😮','😢','🔥','🎉','🙏'] as const
+const reactionPickerFor = ref<string | null>(null)
+
+// Scroll-to-bottom button + unread-in-chat counter
+const showScrollDown = ref(false)
+const unreadInChat   = ref(0)
+
 // ── Computed ───────────────────────────────────────────────────────────────────
 const msgList = computed<Message[]>(() => store.messages[props.convId] ?? [])
 const filteredMsgList = computed(() => {
@@ -1786,7 +1876,10 @@ function onMsgListClick(e: MouseEvent) {
     if (username) showMentionCard(username, e)
   }
   // Clear tapped message actions when clicking outside a bubble
-  if (!target.closest('.group')) tappedMsgId.value = null
+  if (!target.closest('.group')) {
+    tappedMsgId.value = null
+    reactionPickerFor.value = null
+  }
 }
 async function showMentionCard(username: string, e: MouseEvent) {
   const rect = (e.target as HTMLElement).getBoundingClientRect()
@@ -1835,6 +1928,76 @@ function isRead(msg: Message): boolean {
 
 function formatMsgTime(iso: string) {
   return new Date(iso).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
+}
+
+// ── Date dividers ─────────────────────────────────────────────────────────────
+function startOfDay(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+}
+
+function shouldShowDateDivider(idx: number): boolean {
+  const cur = displayList.value[idx]
+  if (!cur) return false
+  if (idx === 0) return true
+  const prev = displayList.value[idx - 1]
+  if (!prev) return true
+  return startOfDay(new Date(cur.created_at)) !== startOfDay(new Date(prev.created_at))
+}
+
+function formatDateDivider(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const today = startOfDay(now)
+  const target = startOfDay(d)
+  const diffDays = Math.round((today - target) / 86_400_000)
+  if (diffDays === 0) return 'Сегодня'
+  if (diffDays === 1) return 'Вчера'
+  if (diffDays < 7) return d.toLocaleDateString('ru', { weekday: 'long' })
+  if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString('ru', { day: 'numeric', month: 'long' })
+  return d.toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+// ── Reactions helpers ─────────────────────────────────────────────────────────
+function reactionHasMe(users: string[] | undefined): boolean {
+  if (!users || !auth.user?.id) return false
+  return users.includes(auth.user.id)
+}
+
+function toggleReactionPicker(msgId: string) {
+  reactionPickerFor.value = reactionPickerFor.value === msgId ? null : msgId
+}
+
+function pickReaction(msg: Message, emoji: string) {
+  reactionPickerFor.value = null
+  store.toggleReaction(msg.id, emoji)
+}
+
+// ── Copy / edit helpers ───────────────────────────────────────────────────────
+async function copyMessageText(msg: Message) {
+  const txt = getDisplayText(msg).replace(FWD_RE, '').replace(STORY_REPLY_RE, '$2')
+  if (!txt) return
+  try {
+    await navigator.clipboard.writeText(txt)
+  } catch {
+    // Clipboard blocked — silent fallback
+  }
+}
+
+function startEdit(msg: Message) {
+  if (!msg.text) return
+  editingMsg.value = msg
+  draft.value = msg.text
+  replyTo.value = null
+  nextTick(() => {
+    inputEl.value?.focus()
+    autoResize()
+  })
+}
+
+function cancelEdit() {
+  editingMsg.value = null
+  draft.value = ''
+  resetTextarea()
 }
 
 function highlight(text: string): string {
@@ -1945,16 +2108,38 @@ watch(() => msgList.value.length, (newLen, oldLen) => {
   if (!scrollEl.value) return
   const el = scrollEl.value
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100
-  if (atBottom || newLen > (oldLen ?? 0)) scrollToBottom(newLen !== oldLen)
-})
+  const grew = newLen > (oldLen ?? 0)
+  if (atBottom) {
+    scrollToBottom(newLen !== oldLen)
+  } else if (grew) {
+    // New message arrived while scrolled up — increment in-chat counter
+    const newest = msgList.value[msgList.value.length - 1]
+    if (newest && newest.sender_id !== auth.user?.id) {
+      unreadInChat.value++
+    }
+  }
+}, { flush: 'post' })
 
-watch(() => props.convId, () => { scrollToBottom(); searchQuery.value = '' }, { immediate: true })
+watch(() => props.convId, () => {
+  scrollToBottom()
+  searchQuery.value = ''
+  showScrollDown.value = false
+  unreadInChat.value = 0
+  reactionPickerFor.value = null
+  cancelEdit()
+}, { immediate: true })
 
 let prevScrollHeight = 0
 async function onScroll() {
   if (!scrollEl.value) return
-  if (scrollEl.value.scrollTop < 80 && store.hasMoreMessages[props.convId] && !store.messagesLoading) {
-    prevScrollHeight = scrollEl.value.scrollHeight
+  const el = scrollEl.value
+  // Track distance from bottom for floating button
+  const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+  showScrollDown.value = distFromBottom > 240
+  if (distFromBottom < 100) unreadInChat.value = 0
+
+  if (el.scrollTop < 80 && store.hasMoreMessages[props.convId] && !store.messagesLoading) {
+    prevScrollHeight = el.scrollHeight
     await store.loadMoreMessages(props.convId)
     nextTick(() => {
       if (scrollEl.value) scrollEl.value.scrollTop = scrollEl.value.scrollHeight - prevScrollHeight
@@ -1989,6 +2174,21 @@ function onInput() {
 
 // ── Send ────────────────────────────────────────────────────────────────────────
 async function submit() {
+  // Edit mode — save instead of sending new message
+  if (editingMsg.value) {
+    const text = draft.value.trim()
+    if (!text || text === editingMsg.value.text) {
+      cancelEdit()
+      return
+    }
+    const target = editingMsg.value
+    cancelEdit()
+    try {
+      await store.editMessage(target.id, text)
+    } catch { /* silent */ }
+    return
+  }
+
   const text = draft.value.trim()
   if (!text && !pendingFileUrl.value) return
   const fileUrl = pendingFileUrl.value
@@ -2330,4 +2530,8 @@ watch(() => langStore.currentLang, (newLang) => {
 /* Emoji / sticker popover */
 .popover-up-enter-active, .popover-up-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
 .popover-up-enter-from, .popover-up-leave-to { opacity: 0; transform: translateY(8px) scale(0.95); }
+
+/* Floating scroll-to-bottom button */
+.scroll-btn-enter-active, .scroll-btn-leave-active { transition: opacity 0.18s ease, transform 0.18s ease; }
+.scroll-btn-enter-from, .scroll-btn-leave-to { opacity: 0; transform: translateY(12px) scale(0.85); }
 </style>

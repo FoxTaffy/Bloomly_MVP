@@ -7,6 +7,8 @@ import {
   sendMessageHandler,
   markReadHandler,
   deleteMessageHandler,
+  editMessageHandler,
+  toggleReactionHandler,
   deleteConversationHandler,
   setArchivedHandler,
   createGroupHandler,
@@ -60,6 +62,8 @@ export async function messagesRoutes(fastify: FastifyInstance) {
 
   // Individual message actions
   fastify.delete('/messages/:msgId', auth, deleteMessageHandler as any);
+  fastify.patch('/messages/:msgId', auth, editMessageHandler as any);
+  fastify.post('/messages/:msgId/reactions', auth, toggleReactionHandler as any);
 
   // Group endpoints
   fastify.post('/groups', auth, createGroupHandler as any);
