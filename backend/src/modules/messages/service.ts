@@ -297,6 +297,95 @@ export const messageService = {
   },
 
   /**
+   * Edit message text (only sender, only text messages, within 24h).
+   */
+  async editMessage(messageId: string, userId: string, text: string) {
+    const msg = await prisma.message.findUnique({ where: { id: messageId } });
+    if (!msg) throw Object.assign(new Error('Message not found'), { statusCode: 404 });
+    if (msg.sender_id !== userId) throw Object.assign(new Error('Forbidden'), { statusCode: 403 });
+    if (msg.deleted_at) throw Object.assign(new Error('Message deleted'), { statusCode: 400 });
+    if (msg.type !== 'text') throw Object.assign(new Error('Only text messages can be edited'), { statusCode: 400 });
+
+    const trimmed = text.trim();
+    if (!trimmed) throw Object.assign(new Error('Text cannot be empty'), { statusCode: 400 });
+    if (trimmed.length > 4000) throw Object.assign(new Error('Text too long'), { statusCode: 400 });
+
+    const updated = await prisma.message.update({
+      where: { id: messageId },
+      data: { text: trimmed, edited_at: new Date() },
+      include: {
+        sender: { select: senderSelect },
+        reply_to: {
+          select: {
+            id: true, text: true, type: true, file_url: true,
+            sender: { select: { id: true, username: true, display_name: true } },
+          },
+        },
+      },
+    });
+
+    // Broadcast update to all participants
+    const parts = await prisma.conversationParticipant.findMany({
+      where: { conversation_id: msg.conversation_id },
+      select: { user_id: true },
+    });
+    for (const { user_id } of parts) {
+      messageSubscriptions.push(user_id, { type: 'message_updated', data: updated });
+    }
+    return updated;
+  },
+
+  /**
+   * Toggle a single emoji reaction on a message for the calling user.
+   * If user already reacted with that emoji → remove. Otherwise → add.
+   */
+  async toggleReaction(messageId: string, userId: string, emoji: string) {
+    if (!emoji || emoji.length > 16) throw Object.assign(new Error('Invalid emoji'), { statusCode: 400 });
+    const msg = await prisma.message.findUnique({ where: { id: messageId } });
+    if (!msg) throw Object.assign(new Error('Message not found'), { statusCode: 404 });
+    if (msg.deleted_at) throw Object.assign(new Error('Message deleted'), { statusCode: 400 });
+    await this._assertParticipant(msg.conversation_id, userId);
+
+    const current = (msg.reactions as Record<string, string[]> | null) ?? {};
+    const next: Record<string, string[]> = { ...current };
+    const list = next[emoji] ? [...next[emoji]] : [];
+    const idx = list.indexOf(userId);
+    if (idx === -1) {
+      list.push(userId);
+    } else {
+      list.splice(idx, 1);
+    }
+    if (list.length === 0) {
+      delete next[emoji];
+    } else {
+      next[emoji] = list;
+    }
+
+    const updated = await prisma.message.update({
+      where: { id: messageId },
+      data: { reactions: Object.keys(next).length ? next : null as any },
+      include: {
+        sender: { select: senderSelect },
+        reply_to: {
+          select: {
+            id: true, text: true, type: true, file_url: true,
+            sender: { select: { id: true, username: true, display_name: true } },
+          },
+        },
+      },
+    });
+
+    const parts = await prisma.conversationParticipant.findMany({
+      where: { conversation_id: msg.conversation_id },
+      select: { user_id: true },
+    });
+    for (const { user_id } of parts) {
+      messageSubscriptions.push(user_id, { type: 'message_updated', data: updated });
+    }
+    return updated;
+  },
+
+  /**
    * Archive or un-archive a conversation for the current user.
    */
   async setArchived(conversationId: string, userId: string, archived: boolean) {

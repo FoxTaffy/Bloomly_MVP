@@ -101,6 +101,40 @@ export async function deleteMessageHandler(
   }
 }
 
+export async function editMessageHandler(
+  req: FastifyRequest<{ Params: { msgId: string }; Body: { text: string } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = req.user as JwtUser;
+    const { text } = req.body ?? {} as any;
+    if (typeof text !== 'string') {
+      return reply.code(400).send({ success: false, data: null, error: { code: 'VALIDATION', message: 'text is required' } });
+    }
+    const message = await messageService.editMessage(req.params.msgId, userId, text);
+    return reply.send({ success: true, data: { message }, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  }
+}
+
+export async function toggleReactionHandler(
+  req: FastifyRequest<{ Params: { msgId: string }; Body: { emoji: string } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = req.user as JwtUser;
+    const { emoji } = req.body ?? {} as any;
+    if (typeof emoji !== 'string' || !emoji.length) {
+      return reply.code(400).send({ success: false, data: null, error: { code: 'VALIDATION', message: 'emoji is required' } });
+    }
+    const message = await messageService.toggleReaction(req.params.msgId, userId, emoji);
+    return reply.send({ success: true, data: { message }, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  }
+}
+
 export async function deleteConversationHandler(
   req: FastifyRequest<{ Params: { id: string }; Querystring: { scope: 'me' | 'all' } }>,
   reply: FastifyReply,
