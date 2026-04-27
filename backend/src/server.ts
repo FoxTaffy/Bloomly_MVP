@@ -42,6 +42,20 @@ if (!jwtSecret) {
   console.warn('[WARN] JWT_SECRET is not set. Using insecure fallback for development only.');
 }
 
+const cookieSecret = process.env.COOKIE_SECRET;
+if (!cookieSecret) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[FATAL] COOKIE_SECRET env variable is not set. Refusing to start in production.');
+    process.exit(1);
+  }
+  console.warn('[WARN] COOKIE_SECRET is not set. Using insecure fallback for development only.');
+}
+
+if (!process.env.ALLOWED_ORIGINS && process.env.NODE_ENV === 'production') {
+  console.error('[FATAL] ALLOWED_ORIGINS env variable is not set. Refusing to start in production.');
+  process.exit(1);
+}
+
 const fastify = Fastify({ logger: true, bodyLimit: 26_214_400 }); // 25 MB
 
 // Allow specific origins in production; fall back to wildcard for development only
@@ -49,14 +63,27 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
   : true // dev fallback
 fastify.register(cors, { origin: allowedOrigins, credentials: true });
-fastify.register(cookie, { secret: process.env.COOKIE_SECRET || 'bloomly_cookie_secret_dev' });
+fastify.register(cookie, { secret: cookieSecret || 'bloomly_cookie_secret_dev' });
 fastify.register(jwt, { secret: jwtSecret || 'bloomly_secret_dev_only' });
 fastify.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
 fastify.register(rateLimit, {
   global: true,
-  max: 500,
+  max: 200,
   timeWindow: '1 minute',
 } as any);
+
+// HTTP security headers
+fastify.addHook('onSend', (_request, reply, _payload, done) => {
+  reply.header('X-Content-Type-Options', 'nosniff');
+  reply.header('X-Frame-Options', 'DENY');
+  reply.header('X-XSS-Protection', '1; mode=block');
+  reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (process.env.NODE_ENV === 'production') {
+    reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  done();
+});
 fastify.register(websocket);
 
 fastify.decorate(
@@ -133,6 +160,14 @@ fastify.register(async function (fastify) {
 
     // Track message subscription cleanup function
     let unsubscribeMessages: (() => void) | null = null
+
+    // Close unauthenticated connections after 30 seconds
+    const authTimeout = setTimeout(() => {
+      if (!authedUserId) {
+        connection.socket.send(JSON.stringify({ type: 'error', message: 'Authentication timeout' }))
+        connection.socket.close()
+      }
+    }, 30_000)
 
     connection.socket.on('message', async (raw: Buffer) => {
       try {
@@ -226,6 +261,7 @@ fastify.register(async function (fastify) {
     })
 
     connection.socket.on('close', () => {
+      clearTimeout(authTimeout)
       if (authedUserId) markOffline(authedUserId, connection.socket)
       if (unsubscribeMessages) { unsubscribeMessages(); unsubscribeMessages = null }
     })

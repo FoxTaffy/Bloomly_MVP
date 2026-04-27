@@ -80,6 +80,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         properties: { email: { type: 'string', format: 'email' } },
       },
     },
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
   }, forgotPasswordHandler);
 
   fastify.post('/reset-password', {
@@ -93,6 +94,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         },
       },
     },
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
   }, resetPasswordHandler);
 
   // ── OAuth ─────────────────────────────────────────────────────────────────────

@@ -36,16 +36,16 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Reports
   fastify.get('/reports',        auth, getReportsHandler as any);
-  fastify.post('/reports',       auth, submitReportHandler as any);
+  fastify.post('/reports',       { ...auth, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } } as RouteShorthandOptions, submitReportHandler as any);
   fastify.patch('/reports/:id',  auth, resolveReportHandler as any);
 
   // Ads
   fastify.get('/ads',              auth, getAdsHandler as any);
   fastify.get('/ads/active',       getActiveAdsHandler as any);
-  fastify.post('/ads',             submitAdHandler as any);
+  fastify.post('/ads',             { ...auth, config: { rateLimit: { max: 5, timeWindow: '1 hour' } } } as RouteShorthandOptions, submitAdHandler as any);
   fastify.patch('/ads/:id/review', auth, reviewAdHandler as any);
-  fastify.post('/ads/:id/impression', trackImpressionHandler as any);
-  fastify.post('/ads/:id/click',      trackClickHandler as any);
+  fastify.post('/ads/:id/impression', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, trackImpressionHandler as any);
+  fastify.post('/ads/:id/click',      { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, trackClickHandler as any);
 
   // Sticker Banners
   fastify.get('/sticker-banners',        getBannersHandler as any);          // admin: all

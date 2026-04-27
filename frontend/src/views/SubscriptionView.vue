@@ -142,8 +142,7 @@ async function selectPlan(planId: string) {
     // update local user state and persist
     if (auth.user) {
       ;(auth.user as any).subscription_tier = planId
-      const storage = localStorage.getItem('access_token') ? localStorage : sessionStorage
-      storage.setItem('auth_user', JSON.stringify(auth.user))
+      sessionStorage.setItem('auth_user', JSON.stringify(auth.user))
     }
     toast.value = `Подписка ${planId.charAt(0).toUpperCase() + planId.slice(1)} активирована!`
     setTimeout(() => { toast.value = '' }, 3000)
