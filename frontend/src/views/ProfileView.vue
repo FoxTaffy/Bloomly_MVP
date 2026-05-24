@@ -1158,7 +1158,6 @@
               <!-- ── Content tabs as floating pills ──────────────────────── -->
               <div class="flex flex-wrap gap-2">
                 <button v-for="tab in contentTabs" :key="tab.key"
-                  v-show="tab.key !== 'followers' || isOwnProfile"
                   @click="activeContentTab = tab.key; loadTabData(tab.key)"
                   class="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold border transition-all duration-200 whitespace-nowrap"
                   :class="activeContentTab === tab.key
@@ -1484,19 +1483,15 @@
                     </template>
                   </div>
 
-                  <!-- FOLLOWERS (owner-only) -->
+                  <!-- FOLLOWERS -->
                   <div v-else-if="activeContentTab === 'followers'">
-                    <div class="flex items-center gap-2 mb-3 px-1">
-                      <BIcon name="Lock" class="w-3.5 h-3.5 text-white/30" />
-                      <span class="text-xs text-white/30 font-semibold">Видно только тебе</span>
-                    </div>
                     <div v-if="isLoadingTab" class="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       <div v-for="n in 6" :key="n" class="h-24 bg-brand-bg border border-brand-border rounded-2xl animate-pulse"></div>
                     </div>
                     <div v-else-if="!followers.length" class="py-14 text-center text-white/55">
                       <BIcon name="Users" class="w-10 h-10 mx-auto mb-3 opacity-30" />
-                      <p class="font-semibold text-sm mb-1">{{ langStore.t.noFollowersLabel }}</p>
-                      <p class="text-xs opacity-70">Здесь появятся те, кто на тебя подписался</p>
+                      <p class="font-semibold text-sm mb-1">Нет подписчиков</p>
+                      <p class="text-xs opacity-70">Здесь появятся те, кто подписался</p>
                     </div>
                     <div v-else class="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       <router-link v-for="follower in followers" :key="follower.id" :to="'/profile/' + follower.username"
@@ -1505,6 +1500,53 @@
                         <div class="text-center min-w-0 w-full">
                           <p class="text-xs font-bold text-white truncate group-hover:text-brand-accent transition-colors">{{ follower.display_name || follower.username }}</p>
                           <p class="text-[10px] text-white/55 truncate">@{{ follower.username }}</p>
+                        </div>
+                      </router-link>
+                    </div>
+                  </div>
+
+                  <!-- FOLLOWING -->
+                  <div v-else-if="activeContentTab === 'following'">
+                    <div v-if="isLoadingTab" class="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                      <div v-for="n in 6" :key="n" class="h-24 bg-brand-bg border border-brand-border rounded-2xl animate-pulse"></div>
+                    </div>
+                    <div v-else-if="!following.length" class="py-14 text-center text-white/55">
+                      <BIcon name="UserPlus" class="w-10 h-10 mx-auto mb-3 opacity-30" />
+                      <p class="font-semibold text-sm mb-1">Нет подписок</p>
+                      <p class="text-xs opacity-70">Пользователь пока ни на кого не подписан</p>
+                    </div>
+                    <div v-else class="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                      <router-link v-for="user in following" :key="user.id" :to="'/profile/' + user.username"
+                        class="flex flex-col items-center gap-2 p-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/50 transition-all group">
+                        <img :src="user.avatar_url || '/icons/badges/NN.jpg'" class="w-12 h-12 rounded-full object-cover" />
+                        <div class="text-center min-w-0 w-full">
+                          <p class="text-xs font-bold text-white truncate group-hover:text-brand-accent transition-colors">{{ user.display_name || user.username }}</p>
+                          <p class="text-[10px] text-white/55 truncate">@{{ user.username }}</p>
+                        </div>
+                      </router-link>
+                    </div>
+                  </div>
+
+                  <!-- MUTUAL GROUPS -->
+                  <div v-else-if="activeContentTab === 'mutual_groups'">
+                    <div v-if="isLoadingTab" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div v-for="n in 4" :key="n" class="h-20 bg-brand-bg border border-brand-border rounded-2xl animate-pulse"></div>
+                    </div>
+                    <div v-else-if="!mutualGroups.length" class="py-14 text-center text-white/55">
+                      <BIcon name="Users" class="w-10 h-10 mx-auto mb-3 opacity-30" />
+                      <p class="font-semibold text-sm mb-1">Нет общих групп</p>
+                      <p class="text-xs opacity-70">Вы не состоите ни в одной общей группе</p>
+                    </div>
+                    <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <router-link v-for="group in mutualGroups" :key="group.id" :to="'/groups/' + group.slug"
+                        class="flex items-center gap-3 p-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/50 transition-all group">
+                        <img v-if="group.avatar_url" :src="group.avatar_url" class="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
+                        <div v-else class="w-10 h-10 rounded-xl bg-brand-accent/15 flex items-center justify-center flex-shrink-0">
+                          <BIcon name="Users" class="w-5 h-5 text-brand-accent" />
+                        </div>
+                        <div class="min-w-0">
+                          <p class="text-xs font-bold text-white truncate group-hover:text-brand-accent transition-colors">{{ group.name }}</p>
+                          <p class="text-[10px] text-white/55">{{ group.members_count }} участников</p>
                         </div>
                       </router-link>
                     </div>
@@ -1843,7 +1885,7 @@ import StoryViewer from '@/components/StoryViewer.vue'
 import api from '@/api'
 import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
 import {
-  User, Users, UserPlus, UserMinus, UserX,
+  User, Users, UserPlus, UserMinus, UserX, UsersRound,
   Bell, MessageSquare, Pencil, Pin, Trash2, MoreHorizontal,
   ChevronUp, ChevronDown, Repeat2, MessageCircle, Heart, HeartOff,
   Image, Hash, Search, MapPin, Calendar, Link, Briefcase,
@@ -1986,13 +2028,15 @@ function onAvatarClick() {
 }
 
 type AboutTab = 'about' | 'fursona' | 'fursuit'
-type ContentTab = 'posts' | 'repaws' | 'media' | 'followers'
+type ContentTab = 'posts' | 'repaws' | 'media' | 'followers' | 'following' | 'mutual_groups'
 
 const aboutTab = ref<AboutTab>('about')
 const activeContentTab = ref<ContentTab>('posts')
 const tabPosts = ref<any[]>([])
 const repawsFallback = ref<any[]>([])
 const followers = ref<any[]>([])
+const following = ref<any[]>([])
+const mutualGroups = ref<any[]>([])
 const userHashtags = ref<{ name: string; count: number }[]>([])
 const isLoadingTab = ref(false)
 const profilePostStatus = reactive<Record<string, { repawed: boolean; favourited: boolean; userVote: 1 | -1 | 0 }>>({})
@@ -2462,12 +2506,19 @@ watch([aboutTab, viewedProfile], () => {
 })
 
 // Content tabs
-const contentTabs = computed(() => [
-  { key: 'posts' as ContentTab,     label: langStore.t.postsTab,     icon: FileText },
-  { key: 'repaws' as ContentTab,    label: langStore.t.repawsTab,    icon: Repeat2 },
-  { key: 'media' as ContentTab,     label: langStore.t.mediaTab,     icon: Image },
-  { key: 'followers' as ContentTab, label: langStore.t.followersTab, icon: Users },
-])
+const contentTabs = computed(() => {
+  const tabs: { key: ContentTab; label: string; icon: any; visible?: boolean }[] = [
+    { key: 'posts',     label: langStore.t.postsTab,     icon: FileText },
+    { key: 'repaws',    label: langStore.t.repawsTab,    icon: Repeat2 },
+    { key: 'media',     label: langStore.t.mediaTab,     icon: Image },
+    { key: 'followers', label: 'Подписчики',             icon: Users },
+    { key: 'following', label: 'Подписки',               icon: UserPlus },
+  ]
+  if (!isOwnProfile.value && authStore.isAuthenticated) {
+    tabs.push({ key: 'mutual_groups', label: 'Общие группы', icon: UsersRound })
+  }
+  return tabs
+})
 
 const profileStats = computed(() => {
   const p = viewedProfile.value
@@ -2685,6 +2736,8 @@ async function loadProfile() {
   error.value = null
   viewedProfile.value = null
   followers.value = []
+  following.value = []
+  mutualGroups.value = []
   tabPosts.value = []
   pinnedPost.value = null
   partnerProfile.value = null
@@ -2801,6 +2854,12 @@ async function loadTabData(tab: string) {
       if (res.data.success) tabPosts.value = res.data.data.posts
     } else if (tab === 'followers') {
       await loadFriends(uid)
+    } else if (tab === 'following') {
+      const res = await api.get(`/follows/${uid}/following`)
+      if (res.data.success) following.value = res.data.data.users
+    } else if (tab === 'mutual_groups') {
+      const res = await api.get(`/groups/common/${uid}`)
+      if (res.data.success) mutualGroups.value = res.data.data.groups
     }
     // Fetch repaw/vote/favourite status for loaded posts
     if (['posts', 'repaws', 'media', 'likes'].includes(tab) && authStore.isAuthenticated && tabPosts.value.length) {

@@ -409,6 +409,31 @@ export const getMyGroupsHandler = async (
   }
 };
 
+export const getUserPublicGroupsHandler = async (
+  request: FastifyRequest<{ Params: { userId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const groups = await groupService.getUserPublicGroups(request.params.userId);
+    return ok(reply, { groups });
+  } catch (e: any) {
+    return fail(reply, 500, 'USER_GROUPS_ERROR', e.message);
+  }
+};
+
+export const getCommonGroupsHandler = async (
+  request: FastifyRequest<{ Params: { userId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: currentUserId } = request.user as JwtUser;
+    const groups = await groupService.getCommonGroups(request.params.userId, currentUserId);
+    return ok(reply, { groups });
+  } catch (e: any) {
+    return fail(reply, 500, 'COMMON_GROUPS_ERROR', e.message);
+  }
+};
+
 // ── Group Rating ────────────────────────────────────────────────────────────
 
 export const rateGroupHandler = async (

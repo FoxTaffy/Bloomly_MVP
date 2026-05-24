@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
 import { useNsfwMode } from '@/composables/useNsfwMode'
+import { useMobileSidebar } from '@/composables/useMobileSidebar'
 import api from '@/api'
 import BIcon from './BIcon.vue'
 import PostCard from './PostCard.vue'
@@ -21,6 +22,7 @@ const emit = defineEmits<{
 const router = useRouter()
 const auth = useAuthStore()
 const langStore = useLangStore()
+const mobileSidebar = useMobileSidebar()
 
 // ── Language picker ───────────────────────────────────────────────────────────
 const showLangDropdown = ref(false)
@@ -359,6 +361,12 @@ onUnmounted(() => {
 
     <!-- Left: Logo or Back -->
     <div class="flex items-center gap-2.5">
+      <!-- Mobile hamburger (only when sidebar is present, < lg) -->
+      <button v-if="auth.isAuthenticated && !showBack"
+        @click="mobileSidebar.toggle()"
+        class="lg:hidden p-2 rounded-xl text-white/55 hover:text-white hover:bg-white/5 transition-all flex-shrink-0">
+        <BIcon :name="mobileSidebar.isOpen.value ? 'X' : 'Menu'" class="w-5 h-5" />
+      </button>
       <button v-if="showBack" @click="router.back()"
         class="flex items-center gap-2 px-3 py-1.5 bg-brand-card border border-brand-border hover:border-brand-accent/50 rounded-xl text-sm font-semibold text-white/55 hover:text-white transition-all">
         <BIcon name="ArrowLeft" class="w-4 h-4" />

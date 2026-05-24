@@ -49,6 +49,8 @@ import {
   createCustomRoleHandler,
   updateCustomRoleHandler,
   deleteCustomRoleHandler,
+  getUserPublicGroupsHandler,
+  getCommonGroupsHandler,
 } from './controller.js';
 import { groupService } from './service.js';
 
@@ -64,7 +66,9 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   // ── Group CRUD ──────────────────────────────────────────────────────────
   fastify.get('/', listGroupsHandler as any);
   fastify.get('/me', auth, getMyGroupsHandler as any);
-  fastify.get('/discover', discoverGroupsHandler as any);      // GET /groups/discover
+  fastify.get('/discover', discoverGroupsHandler as any);
+  fastify.get('/user/:userId', getUserPublicGroupsHandler as any);
+  fastify.get('/common/:userId', auth, getCommonGroupsHandler as any);
   fastify.get('/search', async (request, reply) => {           // GET /groups/search?q=
     const q = ((request.query as any).q ?? '') as string;
     const groups = await groupService.searchGroups(q);

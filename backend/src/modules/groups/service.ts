@@ -632,6 +632,38 @@ export const groupService = {
     });
   },
 
+  // ── Public groups of another user ─────────────────────────────────────────
+  async getUserPublicGroups(userId: string) {
+    const memberships = await prisma.groupMember.findMany({
+      where: { user_id: userId, group: { deleted_at: null, is_public: true } },
+      include: { group: { select: GROUP_LIST_SELECT } },
+      orderBy: { joined_at: 'desc' },
+    });
+    return memberships.map((m) => ({ ...m.group, badge_level: getGroupBadgeLevel(m.group.members_count), role: m.role }));
+  },
+
+  // ── Groups shared between two users ──────────────────────────────────────
+  async getCommonGroups(userId: string, currentUserId: string) {
+    const [userGroupIds, myGroupIds] = await Promise.all([
+      prisma.groupMember.findMany({
+        where: { user_id: userId, group: { deleted_at: null, is_public: true } },
+        select: { group_id: true },
+      }),
+      prisma.groupMember.findMany({
+        where: { user_id: currentUserId, group: { deleted_at: null } },
+        select: { group_id: true },
+      }),
+    ]);
+    const theirSet = new Set(userGroupIds.map((m) => m.group_id));
+    const commonIds = myGroupIds.map((m) => m.group_id).filter((id) => theirSet.has(id));
+    if (!commonIds.length) return [];
+    const groups = await prisma.group.findMany({
+      where: { id: { in: commonIds }, deleted_at: null },
+      select: GROUP_LIST_SELECT,
+    });
+    return groups.map((g) => ({ ...g, badge_level: getGroupBadgeLevel(g.members_count) }));
+  },
+
   // ── Group Rating (Reddit-style: -1 / +1 toggle) ───────────────────────────
   async rateGroup(groupId: string, userId: string, value: number) {
     if (value !== 1 && value !== -1) throw new Error('value must be 1 or -1');
