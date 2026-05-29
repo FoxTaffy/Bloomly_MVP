@@ -428,12 +428,6 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
           </div>
         </div>
 
-        <!-- ══ Weekly Top ═══════════════════════════════════════════════ -->
-        <div v-if="activeTab === 'browse'" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div class="sm:col-span-2"><!-- placeholder for future banner --></div>
-          <DenWeeklyTop class="sm:col-span-1" />
-        </div>
-
         <!-- ═══════════════════════════════════════════
              KIND + CATEGORY FILTER PILLS
         ════════════════════════════════════════════ -->
@@ -882,9 +876,10 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
           <div v-for="k in [
             { key: '',        icon: 'LayoutGrid', label: 'Все',        from: '#3148FF', to: '#4C67CF' },
             { key: 'auction', icon: 'Hammer',     label: 'Аукционы',   from: '#FFC01F', to: '#E76F51' },
-            { key: 'ych',     icon: 'Paintbrush', label: 'YCH',        from: '#CD83F5', to: '#7C3AED' },
-            { key: 'raffle',  icon: 'Gift',       label: 'Розыгрыши',  from: '#66C770', to: '#059669' },
-            { key: 'fixed',   icon: 'Tag',        label: 'Фикс. цена', from: '#3148FF', to: '#2D3F9E' },
+            { key: 'ych',              icon: 'Paintbrush',  label: 'YCH',        from: '#CD83F5', to: '#7C3AED' },
+            { key: 'raffle',           icon: 'Gift',        label: 'Розыгрыши',  from: '#66C770', to: '#059669' },
+            { key: 'fixed',            icon: 'Tag',         label: 'Фикс. цена', from: '#3148FF', to: '#2D3F9E' },
+            { key: 'commission_queue', icon: 'ListOrdered', label: 'Комиссии',   from: '#a78bfa', to: '#7c3aed' },
           ]" :key="k.key"
             @click="selectKind(k.key)"
             class="relative overflow-hidden rounded-2xl cursor-pointer hover:scale-[1.02] transition-transform"
@@ -914,6 +909,9 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <span class="text-sm font-bold text-white">{{ store.myListings.length }}</span>
           </div>
         </div>
+
+        <!-- Weekly Top -->
+        <DenWeeklyTop />
 
       </aside>
     </div>

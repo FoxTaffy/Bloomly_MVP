@@ -1,53 +1,63 @@
 <template>
-  <div class="den-weekly-top">
-    <div class="wt-header">
-      <span class="wt-title">Топ недели</span>
-      <span class="wt-week">{{ weekLabel }}</span>
+  <div class="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
+    <div class="px-4 py-3 border-b border-brand-border flex items-center justify-between">
+      <h4 class="text-xs font-bold text-white/35 uppercase tracking-wider flex items-center gap-1.5">
+        <BIcon name="Trophy" class="w-3.5 h-3.5 text-brand-yellow" /> Топ недели
+      </h4>
+      <span v-if="weekStart" class="text-[10px] text-white/25">{{ weekStart }}</span>
     </div>
 
-    <div v-if="isLoading" class="wt-loading">Загрузка...</div>
+    <div v-if="isLoading" class="py-6 text-center text-white/25 text-xs">Загрузка...</div>
 
-    <div v-else-if="!top.length" class="wt-empty">Нет данных за эту неделю</div>
+    <div v-else-if="!top.length" class="py-6 text-center text-white/20 text-xs">
+      <BIcon name="TrophyOff" class="w-6 h-6 mx-auto mb-1.5 opacity-20" />
+      Нет данных за эту неделю
+    </div>
 
-    <div v-else class="wt-list">
+    <div v-else class="divide-y divide-brand-border">
       <RouterLink
         v-for="entry in top"
         :key="entry.id"
         :to="`/dealers-den/seller/${entry.user.username}`"
-        class="wt-entry"
-        :class="`rank-${entry.rank}`"
+        class="flex items-center gap-2.5 px-4 py-2.5 hover:bg-white/4 transition-colors"
+        :class="entry.rank === 1 ? 'bg-brand-yellow/4' : ''"
       >
-        <span class="rank-badge">{{ rankEmoji(entry.rank) }}</span>
-        <img v-if="entry.user.avatar_url" :src="entry.user.avatar_url" class="avatar" alt="" />
-        <div v-else class="avatar avatar-placeholder">{{ initials(entry.user) }}</div>
-        <div class="entry-info">
-          <span class="entry-name">{{ entry.user.display_name || entry.user.username }}</span>
-          <span class="entry-stats">{{ entry.sales_count }} продаж · {{ Number(entry.avg_rating).toFixed(1) }}★</span>
+        <span class="text-base w-5 text-center flex-shrink-0">{{ rankEmoji(entry.rank) }}</span>
+        <img v-if="entry.user.avatar_url" :src="entry.user.avatar_url"
+          class="w-7 h-7 rounded-full object-cover border border-brand-border flex-shrink-0" />
+        <div v-else
+          class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-[10px] font-extrabold border border-brand-border flex-shrink-0">
+          {{ (entry.user.display_name || entry.user.username).slice(0, 2).toUpperCase() }}
         </div>
-        <span class="entry-score">{{ Number(entry.score).toFixed(1) }}</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-bold text-white truncate leading-tight">
+            {{ entry.user.display_name || entry.user.username }}
+          </p>
+          <p class="text-[10px] text-white/35 leading-tight">
+            {{ entry.sales_count }} прод. · {{ Number(entry.avg_rating).toFixed(1) }}★
+          </p>
+        </div>
+        <span class="text-xs font-black text-brand-accent tabular-nums flex-shrink-0">
+          {{ Number(entry.score).toFixed(0) }}
+        </span>
       </RouterLink>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
+import BIcon from '@/components/BIcon.vue'
 import { useDealersDenStore, type DenWeeklyTopEntry } from '../stores/dealersDen'
 
-const store  = useDealersDenStore()
-const top    = ref<DenWeeklyTopEntry[]>([])
+const store     = useDealersDenStore()
+const top       = ref<DenWeeklyTopEntry[]>([])
 const weekStart = ref('')
 const isLoading = ref(false)
 
-const weekLabel = computed(() => weekStart.value ? `Неделя ${weekStart.value}` : '')
-
 function rankEmoji(rank: number) {
   return ['🥇', '🥈', '🥉'][rank - 1] ?? `#${rank}`
-}
-
-function initials(user: { display_name: string | null; username: string }) {
-  return (user.display_name || user.username).slice(0, 2).toUpperCase()
 }
 
 onMounted(async () => {
@@ -61,57 +71,3 @@ onMounted(async () => {
   }
 })
 </script>
-
-<style scoped>
-.den-weekly-top {
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  overflow: hidden;
-  background: #fff;
-}
-.wt-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px 10px;
-  border-bottom: 1px solid #f3f4f6;
-}
-.wt-title  { font-weight: 700; font-size: 15px; }
-.wt-week   { font-size: 12px; color: #9ca3af; }
-.wt-loading, .wt-empty { padding: 20px; text-align: center; color: #9ca3af; font-size: 14px; }
-.wt-list   { display: flex; flex-direction: column; }
-.wt-entry  {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  text-decoration: none;
-  color: inherit;
-  transition: background 0.15s;
-}
-.wt-entry:hover { background: #f9fafb; }
-.rank-badge { font-size: 18px; width: 24px; text-align: center; flex-shrink: 0; }
-.avatar {
-  width: 32px; height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-.avatar-placeholder {
-  background: #6366f1;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  border-radius: 50%;
-}
-.entry-info  { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.entry-name  { font-weight: 600; font-size: 13px; }
-.entry-stats { font-size: 11px; color: #9ca3af; }
-.entry-score { font-weight: 700; font-size: 14px; color: #6366f1; }
-.rank-1 { background: linear-gradient(90deg, #fef3c7 0%, transparent 100%); }
-.rank-2 { background: linear-gradient(90deg, #f3f4f6 0%, transparent 100%); }
-.rank-3 { background: linear-gradient(90deg, #fef9eb 0%, transparent 100%); }
-</style>

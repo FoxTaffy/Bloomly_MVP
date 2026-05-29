@@ -1,8 +1,9 @@
 <template>
-  <span v-if="trust" :class="['den-trust-badge', tierClass]" :title="`Den Trust: ${trust.score}/100`">
-    <span class="tier-icon">{{ tierIcon }}</span>
-    <span class="tier-label">{{ tierLabel }}</span>
-    <span class="score">{{ trust.score }}</span>
+  <span v-if="trust" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border"
+    :class="tierClass" :title="`Den Trust: ${trust.score}/100`">
+    <span>{{ tierIcon }}</span>
+    <span>{{ tierLabel }}</span>
+    <span class="opacity-60">{{ trust.score }}</span>
   </span>
 </template>
 
@@ -12,42 +13,19 @@ import type { DenTrustScore } from '../stores/dealersDen'
 
 const props = defineProps<{ trust: DenTrustScore | null | undefined }>()
 
-const tierClass = computed(() => {
-  if (!props.trust) return ''
-  return `tier-${props.trust.tier}`
-})
+const tierClass = computed(() => ({
+  new:      'bg-white/5 border-white/10 text-white/40',
+  reliable: 'bg-brand-success/10 border-brand-success/30 text-brand-success',
+  verified: 'bg-brand-purple/10 border-brand-purple/30 text-brand-purple',
+  master:   'bg-brand-yellow/10 border-brand-yellow/30 text-brand-yellow',
+  elite:    'bg-gradient-to-r from-brand-yellow/20 to-brand-accent/20 border-brand-yellow/40 text-brand-yellow',
+}[props.trust?.tier ?? 'new'] ?? 'bg-white/5 border-white/10 text-white/40'))
 
-const tierIcon = computed(() => {
-  const icons: Record<string, string> = {
-    new: '○', reliable: '◆', verified: '★', master: '◈', elite: '♛',
-  }
-  return icons[props.trust?.tier ?? 'new'] ?? '○'
-})
+const tierIcon = computed(() => ({
+  new: '○', reliable: '◆', verified: '★', master: '◈', elite: '♛',
+}[props.trust?.tier ?? 'new'] ?? '○'))
 
-const tierLabel = computed(() => {
-  const labels: Record<string, string> = {
-    new: 'Новый', reliable: 'Надёжный', verified: 'Проверен', master: 'Мастер', elite: 'Элита',
-  }
-  return labels[props.trust?.tier ?? 'new'] ?? ''
-})
+const tierLabel = computed(() => ({
+  new: 'Новый', reliable: 'Надёжный', verified: 'Проверен', master: 'Мастер', elite: 'Элита',
+}[props.trust?.tier ?? 'new'] ?? ''))
 </script>
-
-<style scoped>
-.den-trust-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.tier-new      { background: #e5e7eb; color: #6b7280; }
-.tier-reliable { background: #d1fae5; color: #065f46; }
-.tier-verified { background: #ede9fe; color: #5b21b6; }
-.tier-master   { background: #fef3c7; color: #92400e; }
-.tier-elite    { background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #1c1917; }
-.tier-icon     { font-size: 11px; }
-.score         { opacity: 0.75; }
-</style>

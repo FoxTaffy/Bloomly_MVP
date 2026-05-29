@@ -1,24 +1,34 @@
 <template>
-  <div class="den-review-card">
-    <div class="review-header">
-      <img v-if="review.reviewer.avatar_url" :src="review.reviewer.avatar_url" class="avatar" alt="" />
-      <div v-else class="avatar avatar-placeholder">{{ initials }}</div>
-      <div class="reviewer-info">
-        <span class="username">{{ review.reviewer.display_name || review.reviewer.username }}</span>
-        <span class="date">{{ formattedDate }}</span>
+  <div class="space-y-2">
+    <div class="flex items-center gap-2.5">
+      <img v-if="review.reviewer.avatar_url" :src="review.reviewer.avatar_url"
+        class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0" />
+      <div v-else
+        class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-extrabold border border-brand-border flex-shrink-0">
+        {{ initials }}
       </div>
-      <div class="stars">
-        <span v-for="i in 5" :key="i" :class="['star', { filled: i <= review.rating }]">★</span>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-sm font-bold text-white">{{ review.reviewer.display_name || review.reviewer.username }}</span>
+          <span class="text-[10px] text-white/25">{{ formattedDate }}</span>
+        </div>
+        <div class="flex items-center gap-0.5 mt-0.5">
+          <span v-for="i in 5" :key="i" class="text-sm" :class="i <= review.rating ? 'text-brand-yellow' : 'text-white/15'">★</span>
+        </div>
       </div>
     </div>
 
-    <div v-if="review.tags.length" class="review-tags">
-      <span v-for="tag in review.tags" :key="tag" class="tag">{{ tag }}</span>
+    <div v-if="review.tags.length" class="flex flex-wrap gap-1.5">
+      <span v-for="tag in review.tags" :key="tag"
+        class="px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-brand-accent/10 border border-brand-accent/20 text-brand-accent">
+        {{ tag }}
+      </span>
     </div>
 
-    <p v-if="review.text" class="review-text">{{ review.text }}</p>
+    <p v-if="review.text" class="text-sm text-white/65 leading-relaxed">{{ review.text }}</p>
 
-    <img v-if="review.photo_url" :src="review.photo_url" class="review-photo" alt="Review photo" />
+    <img v-if="review.photo_url" :src="review.photo_url"
+      class="w-full max-h-48 object-cover rounded-xl border border-brand-border" alt="" />
   </div>
 </template>
 
@@ -28,74 +38,10 @@ import type { DenReview } from '../stores/dealersDen'
 
 const props = defineProps<{ review: DenReview }>()
 
-const initials = computed(() => {
-  const name = props.review.reviewer.display_name || props.review.reviewer.username
-  return name.slice(0, 2).toUpperCase()
-})
-
+const initials = computed(() =>
+  (props.review.reviewer.display_name || props.review.reviewer.username).slice(0, 2).toUpperCase()
+)
 const formattedDate = computed(() =>
   new Date(props.review.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
 )
 </script>
-
-<style scoped>
-.den-review-card {
-  padding: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: #fff;
-}
-.review-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.avatar {
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-.avatar-placeholder {
-  background: #6366f1;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-}
-.reviewer-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.username { font-weight: 600; font-size: 14px; }
-.date     { font-size: 12px; color: #9ca3af; }
-.stars    { display: flex; gap: 2px; }
-.star     { color: #d1d5db; font-size: 16px; }
-.star.filled { color: #f59e0b; }
-.review-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.tag {
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: #eff6ff;
-  color: #2563eb;
-  font-size: 12px;
-}
-.review-text { font-size: 14px; color: #374151; margin: 0; line-height: 1.5; }
-.review-photo {
-  width: 100%;
-  max-height: 200px;
-  object-fit: cover;
-  border-radius: 8px;
-}
-</style>
