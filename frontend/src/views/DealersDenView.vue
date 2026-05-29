@@ -6,10 +6,11 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDealersDenStore, type DealerListing, type ListingKind } from '@/stores/dealersDen'
 import { useNsfwMode } from '@/composables/useNsfwMode'
-import AppHeader   from '@/components/AppHeader.vue'
-import AppSidebar  from '@/components/AppSidebar.vue'
-import BIcon       from '@/components/BIcon.vue'
-import MediaUpload from '@/components/MediaUpload.vue'
+import AppHeader    from '@/components/AppHeader.vue'
+import AppSidebar   from '@/components/AppSidebar.vue'
+import BIcon        from '@/components/BIcon.vue'
+import MediaUpload  from '@/components/MediaUpload.vue'
+import DenWeeklyTop from '@/components/DenWeeklyTop.vue'
 
 const router = useRouter()
 const auth   = useAuthStore()
@@ -44,11 +45,12 @@ const selectedCategory = ref('all')
 
 // ── Kind tabs ──────────────────────────────────────────────────────────────────
 const KINDS = [
-  { key: '',        label: 'Все',        icon: 'LayoutGrid' },
-  { key: 'fixed',   label: 'Фикс. цена', icon: 'Tag'        },
-  { key: 'auction', label: 'Аукцион',    icon: 'Hammer'     },
-  { key: 'ych',     label: 'YCH',        icon: 'Paintbrush' },
-  { key: 'raffle',  label: 'Розыгрыш',   icon: 'Gift'       },
+  { key: '',                  label: 'Все',        icon: 'LayoutGrid' },
+  { key: 'fixed',             label: 'Фикс. цена', icon: 'Tag'        },
+  { key: 'auction',           label: 'Аукцион',    icon: 'Hammer'     },
+  { key: 'ych',               label: 'YCH',        icon: 'Paintbrush' },
+  { key: 'raffle',            label: 'Розыгрыш',   icon: 'Gift'       },
+  { key: 'commission_queue',  label: 'Комиссии',   icon: 'ListOrdered'},
 ]
 const selectedKind = ref<'' | ListingKind>('')
 
@@ -146,10 +148,11 @@ const TYPE_COLOR: Record<string, string> = {
   both:     'text-brand-yellow  bg-brand-yellow/10  border-brand-yellow/30',
 }
 const KIND_META: Record<string, { label: string; icon: string; color: string; border: string; bg: string }> = {
-  fixed:   { label: 'Фикс. цена', icon: 'Tag',        color: 'text-brand-accent',   border: 'border-brand-accent/40',   bg: 'bg-brand-accent/15'   },
-  auction: { label: 'Аукцион',    icon: 'Hammer',     color: 'text-brand-yellow',   border: 'border-brand-yellow/40',   bg: 'bg-brand-yellow/15'   },
-  ych:     { label: 'YCH',        icon: 'Paintbrush', color: 'text-brand-purple',   border: 'border-brand-purple/40',   bg: 'bg-brand-purple/15'   },
-  raffle:  { label: 'Розыгрыш',   icon: 'Gift',       color: 'text-brand-success',  border: 'border-brand-success/40',  bg: 'bg-brand-success/15'  },
+  fixed:            { label: 'Фикс. цена', icon: 'Tag',         color: 'text-brand-accent',   border: 'border-brand-accent/40',   bg: 'bg-brand-accent/15'   },
+  auction:          { label: 'Аукцион',    icon: 'Hammer',      color: 'text-brand-yellow',   border: 'border-brand-yellow/40',   bg: 'bg-brand-yellow/15'   },
+  ych:              { label: 'YCH',        icon: 'Paintbrush',  color: 'text-brand-purple',   border: 'border-brand-purple/40',   bg: 'bg-brand-purple/15'   },
+  raffle:           { label: 'Розыгрыш',   icon: 'Gift',        color: 'text-brand-success',  border: 'border-brand-success/40',  bg: 'bg-brand-success/15'  },
+  commission_queue: { label: 'Комиссии',   icon: 'ListOrdered', color: 'text-violet-400',     border: 'border-violet-400/40',     bg: 'bg-violet-400/15'     },
 }
 
 function isSoldOut(l: DealerListing) {
@@ -386,9 +389,10 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <!-- Stats row -->
             <div class="flex gap-3 mt-5 flex-wrap">
               <div v-for="stat in [
-                { icon: 'ShoppingBag', label: 'Объявлений', value: store.listings.length },
-                { icon: 'Hammer',      label: 'Аукционов', value: store.listings.filter(l => l.listing_kind === 'auction' || l.listing_kind === 'ych').length },
-                { icon: 'Gift',        label: 'Розыгрышей', value: store.listings.filter(l => l.listing_kind === 'raffle').length },
+                { icon: 'ShoppingBag',  label: 'Объявлений', value: store.listings.length },
+                { icon: 'Hammer',       label: 'Аукционов',  value: store.listings.filter(l => l.listing_kind === 'auction' || l.listing_kind === 'ych').length },
+                { icon: 'Gift',         label: 'Розыгрышей', value: store.listings.filter(l => l.listing_kind === 'raffle').length },
+                { icon: 'ListOrdered',  label: 'Комиссий',   value: store.listings.filter(l => l.listing_kind === 'commission_queue').length },
               ]" :key="stat.label"
                 class="flex items-center gap-2 bg-white/8 backdrop-blur-sm border border-white/10 rounded-2xl px-4 py-2">
                 <BIcon :name="stat.icon" class="w-3.5 h-3.5 text-brand-accent" />
@@ -402,11 +406,12 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
         <!-- ═══════════════════════════════════════════
              PROMO TILES (только на browse)
         ════════════════════════════════════════════ -->
-        <div v-if="activeTab === 'browse'" class="grid grid-cols-3 gap-3">
+        <div v-if="activeTab === 'browse'" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div v-for="tile in [
-            { icon: 'Hammer',     label: 'Аукционы',  sub: 'Ставки в реальном времени', kind: 'auction', from: '#FFC01F', to: '#E76F51' },
-            { icon: 'Paintbrush', label: 'YCH',        sub: 'Твой персонаж в арте',     kind: 'ych',     from: '#CD83F5', to: '#7C3AED' },
-            { icon: 'Gift',       label: 'Розыгрыши',  sub: 'Купи билет — выиграй арт', kind: 'raffle',  from: '#66C770', to: '#059669' },
+            { icon: 'Hammer',      label: 'Аукционы',  sub: 'Ставки в реальном времени', kind: 'auction',          from: '#FFC01F', to: '#E76F51' },
+            { icon: 'Paintbrush',  label: 'YCH',        sub: 'Твой персонаж в арте',     kind: 'ych',              from: '#CD83F5', to: '#7C3AED' },
+            { icon: 'Gift',        label: 'Розыгрыши',  sub: 'Купи билет — выиграй арт', kind: 'raffle',           from: '#66C770', to: '#059669' },
+            { icon: 'ListOrdered', label: 'Комиссии',   sub: 'Займи место в очереди',    kind: 'commission_queue', from: '#a78bfa', to: '#7c3aed' },
           ]" :key="tile.kind"
             @click="selectKind(tile.kind)"
             class="relative overflow-hidden rounded-2xl cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
@@ -421,6 +426,12 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- ══ Weekly Top ═══════════════════════════════════════════════ -->
+        <div v-if="activeTab === 'browse'" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="sm:col-span-2"><!-- placeholder for future banner --></div>
+          <DenWeeklyTop class="sm:col-span-1" />
         </div>
 
         <!-- ═══════════════════════════════════════════

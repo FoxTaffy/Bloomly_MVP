@@ -4,10 +4,14 @@ const langStore = useLangStore()
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useDealersDenStore, type DealerListingComment } from '@/stores/dealersDen'
-import AppHeader from '@/components/AppHeader.vue'
-import AppSidebar from '@/components/AppSidebar.vue'
-import BIcon from '@/components/BIcon.vue'
+import { useDealersDenStore, type DealerListingComment, type DenReview, REVIEW_TAGS } from '@/stores/dealersDen'
+import AppHeader          from '@/components/AppHeader.vue'
+import AppSidebar         from '@/components/AppSidebar.vue'
+import BIcon              from '@/components/BIcon.vue'
+import DenTrustBadge      from '@/components/DenTrustBadge.vue'
+import DenWishlistButton  from '@/components/DenWishlistButton.vue'
+import CommissionQueueCard from '@/components/CommissionQueueCard.vue'
+import DenReviewCard      from '@/components/DenReviewCard.vue'
 import api from '@/api'
 
 const router = useRouter()
@@ -25,8 +29,11 @@ let ticker: ReturnType<typeof setInterval> | null = null
 onMounted(async () => {
   await store.loadListing(route.params.id as string)
   activeImage.value = 0
-  await loadBids()
-  await loadComments()
+  await Promise.all([loadBids(), loadComments(), loadReviews()])
+  if (listing.value) {
+    isWishlisted.value  = listing.value.is_wishlisted ?? false
+    wishlistCount.value = listing.value.wishlist_count ?? 0
+  }
   ticker = setInterval(() => { now.value = Date.now() }, 1000)
 })
 onUnmounted(() => { if (ticker) clearInterval(ticker) })
@@ -170,13 +177,67 @@ const TYPE_LABELS: Record<string, string> = {
   digital: 'Цифровое', physical: 'Физическое', both: 'Оба варианта',
 }
 const KIND_THEME = {
-  fixed:   { from: '#3148FF', to: '#4C67CF',  accent: '#93b4ff',  icon: 'Tag',        label: 'Фикс. цена' },
-  auction: { from: '#9c5700', to: '#5c2e00',  accent: '#FFC01F',  icon: 'Hammer',     label: 'Аукцион'    },
-  ych:     { from: '#4c1280', to: '#26094a',  accent: '#CD83F5',  icon: 'Paintbrush', label: 'YCH'        },
-  raffle:  { from: '#054d20', to: '#022b12',  accent: '#66C770',  icon: 'Gift',       label: 'Розыгрыш'   },
+  fixed:            { from: '#3148FF', to: '#4C67CF',  accent: '#93b4ff',  icon: 'Tag',         label: 'Фикс. цена' },
+  auction:          { from: '#9c5700', to: '#5c2e00',  accent: '#FFC01F',  icon: 'Hammer',      label: 'Аукцион'    },
+  ych:              { from: '#4c1280', to: '#26094a',  accent: '#CD83F5',  icon: 'Paintbrush',  label: 'YCH'        },
+  raffle:           { from: '#054d20', to: '#022b12',  accent: '#66C770',  icon: 'Gift',        label: 'Розыгрыш'   },
+  commission_queue: { from: '#3b1f7a', to: '#1e0f40',  accent: '#a78bfa',  icon: 'ListOrdered', label: 'Комиссия'   },
 }
 
 const kindTheme = computed(() => KIND_THEME[(listing.value?.listing_kind ?? 'fixed') as keyof typeof KIND_THEME] ?? KIND_THEME.fixed)
+
+// ── Wishlist ──────────────────────────────────────────────────────────────────
+const isWishlisted  = ref(false)
+const wishlistCount = ref(0)
+
+// ── Reviews ───────────────────────────────────────────────────────────────────
+const reviews         = ref<DenReview[]>([])
+const showReviewForm  = ref(false)
+const reviewRating    = ref(5)
+const reviewTags      = ref<string[]>([])
+const reviewText      = ref('')
+const isPostingReview = ref(false)
+const reviewError     = ref('')
+
+function toggleReviewTag(tag: string) {
+  const idx = reviewTags.value.indexOf(tag)
+  if (idx === -1) reviewTags.value.push(tag)
+  else reviewTags.value.splice(idx, 1)
+}
+
+async function loadReviews() {
+  if (!listing.value) return
+  reviews.value = await store.getListingReviews(listing.value.id)
+}
+
+async function submitReview() {
+  if (!listing.value || reviewRating.value < 1) return
+  isPostingReview.value = true
+  reviewError.value = ''
+  try {
+    const r = await store.createReview(listing.value.id, {
+      rating: reviewRating.value,
+      tags: reviewTags.value,
+      text: reviewText.value.trim() || undefined,
+    })
+    reviews.value.unshift(r)
+    showReviewForm.value = false
+    reviewText.value = ''
+    reviewTags.value = []
+    reviewRating.value = 5
+  } catch (e: any) {
+    reviewError.value = e?.response?.data?.error ?? 'Ошибка'
+  } finally {
+    isPostingReview.value = false
+  }
+}
+
+const canLeaveReview = computed(() =>
+  auth.user &&
+  listing.value?.status === 'sold' &&
+  auth.user.id !== listing.value?.seller_id &&
+  !reviews.value.some(r => r.reviewer_id === auth.user!.id)
+)
 
 function contactSeller() {
   if (!listing.value) return
@@ -471,29 +532,40 @@ async function submitReport() {
               </div>
 
               <!-- Seller -->
-              <div class="bg-brand-card border border-brand-border rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap shadow-lg">
-                <div class="flex items-center gap-3 cursor-pointer" @click="router.push(`/profile/${listing.seller.username}`)">
-                  <img v-if="listing.seller.avatar_url" :src="listing.seller.avatar_url"
-                    class="w-11 h-11 rounded-full object-cover border-2 border-brand-border hover:border-brand-accent transition-colors" />
-                  <div v-else class="w-11 h-11 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-extrabold border-2 border-brand-border hover:border-brand-accent transition-colors">
-                    {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
-                  </div>
-                  <div>
-                    <div class="flex items-center gap-1.5">
-                      <span class="font-bold text-white text-sm hover:text-brand-accent transition-colors">
-                        {{ listing.seller.display_name ?? listing.seller.username }}
-                      </span>
-                      <img v-if="listing.seller.is_verified" src="/icons/badges/paw_offical.svg" class="w-4 h-4 flex-shrink-0" title="Верифицирован" />
+              <div class="bg-brand-card border border-brand-border rounded-2xl p-4 space-y-3 shadow-lg">
+                <div class="flex items-center justify-between gap-4 flex-wrap">
+                  <div class="flex items-center gap-3 cursor-pointer" @click="router.push(`/dealers-den/seller/${listing.seller.username}`)">
+                    <img v-if="listing.seller.avatar_url" :src="listing.seller.avatar_url"
+                      class="w-11 h-11 rounded-full object-cover border-2 border-brand-border hover:border-brand-accent transition-colors" />
+                    <div v-else class="w-11 h-11 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-extrabold border-2 border-brand-border hover:border-brand-accent transition-colors">
+                      {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
                     </div>
-                    <p class="text-xs text-white/35">@{{ listing.seller.username }}</p>
+                    <div>
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="font-bold text-white text-sm hover:text-brand-accent transition-colors">
+                          {{ listing.seller.display_name ?? listing.seller.username }}
+                        </span>
+                        <img v-if="listing.seller.is_verified" src="/icons/badges/paw_offical.svg" class="w-4 h-4 flex-shrink-0" title="Верифицирован" />
+                      </div>
+                      <p class="text-xs text-white/35">@{{ listing.seller.username }}</p>
+                      <DenTrustBadge v-if="listing.seller.den_trust_score" :trust="listing.seller.den_trust_score" class="mt-1" />
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <DenWishlistButton
+                      :listingId="listing.id"
+                      :initialWishlisted="isWishlisted"
+                      :count="wishlistCount"
+                      @change="v => { isWishlisted = v; wishlistCount += v ? 1 : -1 }"
+                    />
+                    <button v-if="auth.user && auth.user.id !== listing.seller_id"
+                      @click="contactSeller"
+                      class="flex items-center gap-2 px-4 py-2 text-white text-sm font-bold rounded-xl transition-all shadow-md hover:opacity-90"
+                      style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+                      <BIcon name="MessageCircle" class="w-4 h-4" /> Написать
+                    </button>
                   </div>
                 </div>
-                <button v-if="auth.user && auth.user.id !== listing.seller_id"
-                  @click="contactSeller"
-                  class="flex items-center gap-2 px-4 py-2 text-white text-sm font-bold rounded-xl transition-all shadow-md hover:opacity-90"
-                  style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
-                  <BIcon name="MessageCircle" class="w-4 h-4" /> Написать
-                </button>
               </div>
             </div>
 
@@ -864,6 +936,14 @@ async function submitReport() {
                 </div>
               </template>
 
+              <!-- ── COMMISSION QUEUE ──────────────────────────────────── -->
+              <template v-else-if="listing.listing_kind === 'commission_queue'">
+                <CommissionQueueCard
+                  :listing="listing"
+                  @booked="({ queuePosition }) => { $nextTick(() => {}) }"
+                />
+              </template>
+
               <!-- ── FIXED ───────────────────────────────────────────────── -->
               <template v-else>
                 <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
@@ -927,6 +1007,66 @@ async function submitReport() {
                 </div>
               </template>
 
+            </div>
+          </div>
+
+          <!-- ═══ REVIEWS ══════════════════════════════════════════════════ -->
+          <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
+            <div class="px-6 py-4 border-b border-brand-border flex items-center justify-between">
+              <h3 class="text-sm font-extrabold text-white/60 uppercase tracking-widest flex items-center gap-2">
+                <BIcon name="Star" class="w-4 h-4 text-brand-yellow" /> Отзывы
+              </h3>
+              <div class="flex items-center gap-3">
+                <span v-if="reviews.length" class="text-xs text-white/30">{{ reviews.length }}</span>
+                <button v-if="canLeaveReview" @click="showReviewForm = !showReviewForm"
+                  class="text-xs px-3 py-1.5 rounded-lg font-bold transition-all"
+                  :style="`background: linear-gradient(135deg, ${kindTheme.from}, ${kindTheme.to}); color: #fff`">
+                  {{ showReviewForm ? 'Отмена' : '+ Оставить отзыв' }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Review form -->
+            <div v-if="showReviewForm" class="p-5 border-b border-brand-border space-y-4">
+              <!-- Stars -->
+              <div class="flex items-center gap-1">
+                <button v-for="s in 5" :key="s" @click="reviewRating = s"
+                  class="text-2xl transition-transform hover:scale-110">
+                  <span :class="s <= reviewRating ? 'text-brand-yellow' : 'text-white/20'">★</span>
+                </button>
+                <span class="text-xs text-white/40 ml-2">{{ reviewRating }}/5</span>
+              </div>
+              <!-- Tags -->
+              <div class="flex flex-wrap gap-2">
+                <button v-for="tag in REVIEW_TAGS" :key="tag" @click="toggleReviewTag(tag)"
+                  class="px-3 py-1 rounded-full text-xs font-medium border transition-all"
+                  :class="reviewTags.includes(tag)
+                    ? 'border-brand-accent bg-brand-accent/20 text-brand-accent'
+                    : 'border-white/10 text-white/40 hover:border-white/20'">
+                  {{ tag }}
+                </button>
+              </div>
+              <!-- Text -->
+              <textarea v-model="reviewText" rows="3" placeholder="Поделись впечатлением (необязательно)…"
+                class="w-full bg-[#0a0a1a] border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-white/20 resize-none" />
+              <div v-if="reviewError" class="text-xs text-brand-error">{{ reviewError }}</div>
+              <button @click="submitReview" :disabled="isPostingReview || reviewRating === 0"
+                class="flex items-center gap-2 px-5 py-2.5 text-white text-sm font-bold rounded-xl disabled:opacity-30 transition-all hover:opacity-90"
+                :style="`background: linear-gradient(135deg, ${kindTheme.from}, ${kindTheme.to})`">
+                <BIcon name="Send" class="w-3.5 h-3.5" />
+                {{ isPostingReview ? 'Отправка…' : 'Опубликовать' }}
+              </button>
+            </div>
+
+            <!-- Reviews list -->
+            <div class="divide-y divide-brand-border">
+              <div v-if="reviews.length === 0" class="py-10 text-center text-white/20 text-sm">
+                <BIcon name="Star" class="w-8 h-8 mx-auto mb-2 opacity-20" />
+                Отзывов пока нет
+              </div>
+              <div v-for="review in reviews" :key="review.id" class="px-6 py-4">
+                <DenReviewCard :review="review" />
+              </div>
             </div>
           </div>
 
