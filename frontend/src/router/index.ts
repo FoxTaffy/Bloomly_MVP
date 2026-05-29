@@ -119,6 +119,16 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/dealers-den/seller/:username',
+    name: 'den-seller',
+    component: () => import('@/views/DenSellerView.vue'),
+  },
+  {
+    path: '/dealers-den/fair/:id',
+    name: 'den-fair',
+    component: () => import('@/views/DenFairView.vue'),
+  },
+  {
     path: '/dealers-den/:id',
     name: 'dealer-listing',
     component: () => import('@/views/DealerListingView.vue'),

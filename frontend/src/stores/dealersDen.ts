@@ -6,7 +6,22 @@ import api from '../api'
 export type ListingStatus   = 'active' | 'sold' | 'draft' | 'archived'
 export type ListingCategory = 'art' | 'fursuit' | 'badge' | 'print' | 'music' | 'craft' | 'merch' | 'other'
 export type ListingType     = 'digital' | 'physical' | 'both'
-export type ListingKind     = 'fixed' | 'auction' | 'ych' | 'raffle'
+export type ListingKind     = 'fixed' | 'auction' | 'ych' | 'raffle' | 'commission_queue'
+
+export const REVIEW_TAGS = ['быстро', 'качество', 'вежливый', 'точно как описано', 'рекомендую'] as const
+export type ReviewTag = typeof REVIEW_TAGS[number]
+
+export interface DenTrustScore {
+  id: string
+  user_id: string
+  score: number
+  tier: 'new' | 'reliable' | 'verified' | 'master' | 'elite'
+  total_deals: number
+  completed_deals: number
+  disputes_lost: number
+  avg_rating: string
+  updated_at: string
+}
 
 export interface ListingSeller {
   id: string
@@ -15,6 +30,9 @@ export interface ListingSeller {
   avatar_url: string | null
   is_verified: boolean
   verification_type: string | null
+  den_trust_score?: DenTrustScore | null
+  avg_response_hours?: number | null
+  last_active_at?: string | null
 }
 
 export interface DealerBid {
@@ -36,6 +54,75 @@ export interface DealerListingComment {
   created_at: string
   author: Pick<ListingSeller, 'id' | 'username' | 'display_name' | 'avatar_url' | 'is_verified'>
   replies: DealerListingComment[]
+}
+
+export interface DenReview {
+  id: string
+  listing_id: string
+  reviewer_id: string
+  seller_id: string
+  rating: number
+  tags: string[]
+  text: string | null
+  photo_url: string | null
+  created_at: string
+  reviewer: Pick<ListingSeller, 'id' | 'username' | 'display_name' | 'avatar_url'>
+}
+
+export interface CommissionBooking {
+  id: string
+  listing_id: string
+  buyer_id: string
+  queue_position: number
+  form_data: Record<string, unknown> | null
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+  notes: string | null
+  created_at: string
+  updated_at: string
+  buyer: Pick<ListingSeller, 'id' | 'username' | 'display_name' | 'avatar_url'>
+}
+
+export interface DenDispute {
+  id: string
+  listing_id: string
+  buyer_id: string
+  seller_id: string
+  reason: string
+  status: string
+  seller_reply: string | null
+  resolution: string | null
+  opened_at: string
+  replied_at: string | null
+  resolved_at: string | null
+}
+
+export interface DenWeeklyTopEntry {
+  id: string
+  user_id: string
+  rank: number
+  week_start: string
+  sales_count: number
+  avg_rating: string
+  new_reviews: number
+  score: string
+  user: Pick<ListingSeller, 'id' | 'username' | 'display_name' | 'avatar_url'> & { badge_type?: string | null }
+}
+
+export interface DenFair {
+  id: string
+  title: string
+  description: string | null
+  theme: string | null
+  banner_url: string | null
+  starts_at: string
+  ends_at: string
+  status: string
+}
+
+export interface ReviewSummary {
+  avg_rating: number
+  total: number
+  tags: { tag: string; count: number }[]
 }
 
 export interface DealerListing {
@@ -64,9 +151,18 @@ export interface DealerListing {
   raffle_max_tickets: number | null
   raffle_tickets_sold: number
   winner_id: string | null
+  // Commission Queue
+  commission_slots_total: number | null
+  commission_slots_taken: number
+  commission_eta_days: number | null
+  commission_form_fields: { label: string; required: boolean; type: string }[] | null
   created_at: string
   updated_at: string
   seller: ListingSeller
+  // Extended (from getById)
+  wishlist_count?: number
+  is_wishlisted?: boolean
+  review_summary?: ReviewSummary
 }
 
 export interface CreateListingInput {
@@ -88,24 +184,29 @@ export interface CreateListingInput {
   autoBuyPrice?: number
   // raffle
   raffleMaxTickets?: number
+  // commission
+  commissionSlotsTotal?: number
+  commissionEtaDays?: number
+  commissionFormFields?: { label: string; required: boolean; type: string }[]
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 export const useDealersDenStore = defineStore('dealersDen', () => {
-  const listings      = ref<DealerListing[]>([])
+  const listings       = ref<DealerListing[]>([])
   const currentListing = ref<DealerListing | null>(null)
-  const myListings    = ref<DealerListing[]>([])
-  const isLoading     = ref(false)
-  const total         = ref(0)
+  const myListings     = ref<DealerListing[]>([])
+  const wishlist       = ref<DealerListing[]>([])
+  const weeklyTop      = ref<DenWeeklyTopEntry[]>([])
+  const isLoading      = ref(false)
+  const total          = ref(0)
 
-  // ── Actions ──────────────────────────────────────────────────────────────
+  // ── Listings ──────────────────────────────────────────────────────────────
 
   async function loadListings(params?: {
     page?: number; limit?: number; category?: string
     type?: string; search?: string; sellerId?: string
     minPrice?: number; maxPrice?: number; currency?: string
-    listingKind?: string; sort?: string
-    excludeNsfw?: string
+    listingKind?: string; sort?: string; excludeNsfw?: string
   }) {
     isLoading.value = true
     try {
@@ -154,10 +255,12 @@ export const useDealersDenStore = defineStore('dealersDen', () => {
 
   async function deleteListing(id: string) {
     await api.delete(`/dealers-den/${id}`)
-    listings.value    = listings.value.filter(l => l.id !== id)
-    myListings.value  = myListings.value.filter(l => l.id !== id)
+    listings.value   = listings.value.filter(l => l.id !== id)
+    myListings.value = myListings.value.filter(l => l.id !== id)
     if (currentListing.value?.id === id) currentListing.value = null
   }
+
+  // ── Auction / Raffle ──────────────────────────────────────────────────────
 
   async function placeBid(listingId: string, amount: number, message?: string) {
     const { data } = await api.post(`/dealers-den/${listingId}/bid`, { amount, message })
@@ -181,6 +284,8 @@ export const useDealersDenStore = defineStore('dealersDen', () => {
     return updated
   }
 
+  // ── Comments ──────────────────────────────────────────────────────────────
+
   async function getComments(listingId: string) {
     const { data } = await api.get(`/dealers-den/${listingId}/comments`)
     return data.data.comments as DealerListingComment[]
@@ -195,11 +300,145 @@ export const useDealersDenStore = defineStore('dealersDen', () => {
     await api.delete(`/dealers-den/comments/${commentId}`)
   }
 
+  // ── Trust ─────────────────────────────────────────────────────────────────
+
+  async function getTrust(userId: string) {
+    const { data } = await api.get(`/dealers-den/trust/${userId}`)
+    return data.data.trust as DenTrustScore | null
+  }
+
+  // ── Reviews ───────────────────────────────────────────────────────────────
+
+  async function createReview(listingId: string, input: { rating: number; tags?: string[]; text?: string; photoUrl?: string }) {
+    const { data } = await api.post(`/dealers-den/${listingId}/review`, input)
+    return data.data.review as DenReview
+  }
+
+  async function getListingReviews(listingId: string) {
+    const { data } = await api.get(`/dealers-den/${listingId}/reviews`)
+    return data.data.reviews as DenReview[]
+  }
+
+  async function getSellerReviews(userId: string) {
+    const { data } = await api.get(`/dealers-den/seller/${userId}/reviews`)
+    return data.data as { reviews: DenReview[]; avgRating: number; totalCount: number }
+  }
+
+  async function deleteReview(reviewId: string) {
+    await api.delete(`/dealers-den/reviews/${reviewId}`)
+  }
+
+  // ── Weekly Top ────────────────────────────────────────────────────────────
+
+  async function loadWeeklyTop() {
+    const { data } = await api.get('/dealers-den/weekly-top')
+    weeklyTop.value = data.data.top
+    return data.data as { top: DenWeeklyTopEntry[]; weekStart: string }
+  }
+
+  // ── Wishlist ──────────────────────────────────────────────────────────────
+
+  async function addToWishlist(listingId: string) {
+    const { data } = await api.post(`/dealers-den/${listingId}/wishlist`)
+    return data.data as { added: boolean }
+  }
+
+  async function removeFromWishlist(listingId: string) {
+    await api.delete(`/dealers-den/${listingId}/wishlist`)
+    wishlist.value = wishlist.value.filter(l => l.id !== listingId)
+  }
+
+  async function loadMyWishlist() {
+    const { data } = await api.get('/dealers-den/wishlist/my')
+    wishlist.value = data.data.listings
+    return wishlist.value
+  }
+
+  // ── Commission Bookings ───────────────────────────────────────────────────
+
+  async function createBooking(listingId: string, formData?: Record<string, unknown>) {
+    const { data } = await api.post(`/dealers-den/${listingId}/booking`, { formData })
+    return data.data as { booking: CommissionBooking; queuePosition: number }
+  }
+
+  async function getBookings(listingId: string) {
+    const { data } = await api.get(`/dealers-den/${listingId}/bookings`)
+    return data.data.bookings as CommissionBooking[]
+  }
+
+  async function updateBooking(bookingId: string, status: string, notes?: string) {
+    const { data } = await api.patch(`/dealers-den/bookings/${bookingId}`, { status, notes })
+    return data.data.booking as CommissionBooking
+  }
+
+  async function cancelBooking(bookingId: string) {
+    await api.delete(`/dealers-den/bookings/${bookingId}`)
+  }
+
+  // ── Disputes ──────────────────────────────────────────────────────────────
+
+  async function createDispute(listingId: string, reason: string) {
+    const { data } = await api.post(`/dealers-den/${listingId}/dispute`, { reason })
+    return data.data.dispute as DenDispute
+  }
+
+  async function replyDispute(disputeId: string, reply: string) {
+    const { data } = await api.post(`/dealers-den/disputes/${disputeId}/reply`, { reply })
+    return data.data.dispute as DenDispute
+  }
+
+  async function getMyDisputes() {
+    const { data } = await api.get('/dealers-den/disputes/my')
+    return data.data.disputes as DenDispute[]
+  }
+
+  // ── Seller page ───────────────────────────────────────────────────────────
+
+  async function getSellerPage(username: string) {
+    const { data } = await api.get(`/dealers-den/seller/${username}`)
+    return data.data
+  }
+
+  // ── Fairs ─────────────────────────────────────────────────────────────────
+
+  async function getCurrentFair() {
+    const { data } = await api.get('/dealers-den/fairs/current')
+    return data.data
+  }
+
+  async function getFair(fairId: string) {
+    const { data } = await api.get(`/dealers-den/fairs/${fairId}`)
+    return data.data
+  }
+
+  async function applyToFair(fairId: string, listingId?: string) {
+    const { data } = await api.post(`/dealers-den/fairs/${fairId}/apply`, { listingId })
+    return data.data
+  }
+
   return {
-    listings, currentListing, myListings, isLoading, total,
-    loadListings, loadListing, loadMyListings,
-    createListing, updateListing, deleteListing,
+    listings, currentListing, myListings, wishlist, weeklyTop, isLoading, total,
+    // Listings
+    loadListings, loadListing, loadMyListings, createListing, updateListing, deleteListing,
+    // Auction/Raffle
     placeBid, getBids, buyRaffleTicket,
+    // Comments
     getComments, addComment, deleteComment,
+    // Trust
+    getTrust,
+    // Reviews
+    createReview, getListingReviews, getSellerReviews, deleteReview,
+    // Weekly Top
+    loadWeeklyTop,
+    // Wishlist
+    addToWishlist, removeFromWishlist, loadMyWishlist,
+    // Bookings
+    createBooking, getBookings, updateBooking, cancelBooking,
+    // Disputes
+    createDispute, replyDispute, getMyDisputes,
+    // Seller page
+    getSellerPage,
+    // Fairs
+    getCurrentFair, getFair, applyToFair,
   }
 })
