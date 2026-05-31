@@ -8,6 +8,7 @@ import {
   trackImpressionHandler, trackClickHandler,
   getBannersHandler, getActiveBannersHandler, createBannerHandler, updateBannerHandler, deleteBannerHandler,
   getAutoModLogsHandler, unfreezeUserHandler, freezeUserHandler, clearWarnsHandler,
+  getStickerStatsHandler, getNetworkStatsHandler,
 } from './controller.js';
 
 declare module 'fastify' {
@@ -59,4 +60,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.post('/users/:id/unfreeze',       auth, unfreezeUserHandler as any);
   fastify.post('/users/:id/freeze',         auth, freezeUserHandler as any);
   fastify.post('/users/:id/clear-warns',    auth, clearWarnsHandler as any);
+
+  // Statistics
+  fastify.get('/stats/stickers', auth, getStickerStatsHandler as any);
+  fastify.get('/stats/network',  auth, getNetworkStatsHandler as any);
 }

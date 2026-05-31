@@ -278,3 +278,15 @@ export const clearWarnsHandler = async (req: FastifyRequest<{ Params: { id: stri
   });
   return reply.send({ success: true, data: null, error: null });
 };
+
+export const getStickerStatsHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+  if (!requireMod(req, reply)) return;
+  const data = await adminService.getStickerStats();
+  return reply.send({ success: true, data, error: null });
+};
+
+export const getNetworkStatsHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+  if (!requireMod(req, reply)) return;
+  const data = await adminService.getNetworkStats();
+  return reply.send({ success: true, data, error: null });
+};

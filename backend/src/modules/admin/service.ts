@@ -274,4 +274,233 @@ export const adminService = {
   async deleteBanner(id: string) {
     return prisma.stickerBanner.delete({ where: { id } });
   },
+
+  // ── Statistics ─────────────────────────────────────────────────────────────
+
+  async getStickerStats(filter?: { groupBy?: string; country?: string; ageGroup?: string; species?: string }) {
+    // Top 20 sticker packs by use_count
+    const topPacks = await prisma.stickerPack.findMany({
+      where: { deleted_at: null, status: 'published' },
+      orderBy: { use_count: 'desc' },
+      take: 20,
+      select: {
+        id: true, name: true, cover_url: true, cover_bg_color: true,
+        use_count: true, downloads_count: true, tags: true, is_nsfw: true,
+        author: { select: { username: true, display_name: true, avatar_url: true } },
+        _count: { select: { userCollections: true } },
+      },
+    });
+
+    // Usage by age group — join StickerUsage with User birth_date
+    type AgeRow = { age_group: string; total: bigint };
+    const byAge = await prisma.$queryRaw<AgeRow[]>`
+      SELECT
+        CASE
+          WHEN EXTRACT(YEAR FROM AGE(u.birth_date)) BETWEEN 13 AND 17 THEN '13–17'
+          WHEN EXTRACT(YEAR FROM AGE(u.birth_date)) BETWEEN 18 AND 24 THEN '18–24'
+          WHEN EXTRACT(YEAR FROM AGE(u.birth_date)) BETWEEN 25 AND 34 THEN '25–34'
+          WHEN EXTRACT(YEAR FROM AGE(u.birth_date)) BETWEEN 35 AND 44 THEN '35–44'
+          WHEN EXTRACT(YEAR FROM AGE(u.birth_date)) >= 45 THEN '45+'
+          ELSE 'Не указан'
+        END AS age_group,
+        SUM(su.use_count)::bigint AS total
+      FROM "StickerUsage" su
+      JOIN "User" u ON u.id = su.user_id
+      WHERE u.deleted_at IS NULL
+      GROUP BY 1
+      ORDER BY 2 DESC
+    `;
+
+    // Usage by country
+    type CountryRow = { country: string; total: bigint };
+    const byCountry = await prisma.$queryRaw<CountryRow[]>`
+      SELECT
+        COALESCE(u.country, 'Не указана') AS country,
+        SUM(su.use_count)::bigint AS total
+      FROM "StickerUsage" su
+      JOIN "User" u ON u.id = su.user_id
+      WHERE u.deleted_at IS NULL
+      GROUP BY 1
+      ORDER BY 2 DESC
+      LIMIT 20
+    `;
+
+    // Usage by fursona species
+    type SpeciesRow = { species: string; total: bigint };
+    const bySpecies = await prisma.$queryRaw<SpeciesRow[]>`
+      SELECT
+        COALESCE(fs.species_name, 'Не указан') AS species,
+        SUM(su.use_count)::bigint AS total
+      FROM "StickerUsage" su
+      JOIN "User" u ON u.id = su.user_id
+      LEFT JOIN LATERAL (
+        SELECT UNNEST(f.species) AS species_name
+        FROM "Fursona" f
+        WHERE f.user_id = u.id AND f.deleted_at IS NULL
+        LIMIT 1
+      ) fs ON TRUE
+      WHERE u.deleted_at IS NULL
+      GROUP BY 1
+      ORDER BY 2 DESC
+      LIMIT 20
+    `;
+
+    // Top individual stickers by global use_count
+    type StickerRow = { sticker_url: string; pack_id: string | null; total: bigint };
+    const topStickers = await prisma.$queryRaw<StickerRow[]>`
+      SELECT sticker_url, pack_id, SUM(use_count)::bigint AS total
+      FROM "StickerUsage"
+      GROUP BY sticker_url, pack_id
+      ORDER BY total DESC
+      LIMIT 30
+    `;
+
+    // Sticker sends per day — last 30 days
+    type DayStickerRow = { day: Date; total: bigint };
+    const dailyUsage = await prisma.$queryRaw<DayStickerRow[]>`
+      SELECT DATE_TRUNC('day', last_used_at) AS day, SUM(use_count)::bigint AS total
+      FROM "StickerUsage"
+      WHERE last_used_at >= NOW() - INTERVAL '30 days'
+      GROUP BY 1
+      ORDER BY 1
+    `;
+
+    return {
+      topPacks,
+      topStickers: topStickers.map(r => ({ url: r.sticker_url, packId: r.pack_id, total: Number(r.total) })),
+      byAge:     byAge.map(r => ({ label: r.age_group, value: Number(r.total) })),
+      byCountry: byCountry.map(r => ({ label: r.country, value: Number(r.total) })),
+      bySpecies: bySpecies.map(r => ({ label: r.species, value: Number(r.total) })),
+      dailyUsage: dailyUsage.map(r => ({ day: r.day, value: Number(r.total) })),
+    };
+  },
+
+  async getNetworkStats() {
+    // Users by species (Fursona.species array)
+    type SpeciesRow = { species: string; cnt: bigint };
+    const usersBySpecies = await prisma.$queryRaw<SpeciesRow[]>`
+      SELECT UNNEST(f.species) AS species, COUNT(*)::bigint AS cnt
+      FROM "Fursona" f
+      JOIN "User" u ON u.id = f.user_id
+      WHERE u.deleted_at IS NULL AND f.deleted_at IS NULL AND array_length(f.species, 1) > 0
+      GROUP BY 1
+      ORDER BY 2 DESC
+      LIMIT 20
+    `;
+
+    // Users by country
+    type CountryRow = { country: string; cnt: bigint };
+    const usersByCountry = await prisma.$queryRaw<CountryRow[]>`
+      SELECT COALESCE(country, 'Не указана') AS country, COUNT(*)::bigint AS cnt
+      FROM "User"
+      WHERE deleted_at IS NULL
+      GROUP BY 1
+      ORDER BY 2 DESC
+      LIMIT 20
+    `;
+
+    // Users by age group
+    type AgeRow = { age_group: string; cnt: bigint };
+    const usersByAge = await prisma.$queryRaw<AgeRow[]>`
+      SELECT
+        CASE
+          WHEN EXTRACT(YEAR FROM AGE(birth_date)) BETWEEN 13 AND 17 THEN '13–17'
+          WHEN EXTRACT(YEAR FROM AGE(birth_date)) BETWEEN 18 AND 24 THEN '18–24'
+          WHEN EXTRACT(YEAR FROM AGE(birth_date)) BETWEEN 25 AND 34 THEN '25–34'
+          WHEN EXTRACT(YEAR FROM AGE(birth_date)) BETWEEN 35 AND 44 THEN '35–44'
+          WHEN EXTRACT(YEAR FROM AGE(birth_date)) >= 45            THEN '45+'
+          ELSE 'Не указан'
+        END AS age_group,
+        COUNT(*)::bigint AS cnt
+      FROM "User"
+      WHERE deleted_at IS NULL
+      GROUP BY 1
+      ORDER BY 2 DESC
+    `;
+
+    // Users by pronouns
+    type PronounRow = { pronouns: string; cnt: bigint };
+    const usersByPronoun = await prisma.$queryRaw<PronounRow[]>`
+      SELECT COALESCE(pronouns, 'Не указаны') AS pronouns, COUNT(*)::bigint AS cnt
+      FROM "User"
+      WHERE deleted_at IS NULL
+      GROUP BY 1
+      ORDER BY 2 DESC
+      LIMIT 10
+    `;
+
+    // New user registrations per day — last 30 days
+    type DayRow = { day: Date; cnt: bigint };
+    const registrationsHistory = await prisma.$queryRaw<DayRow[]>`
+      SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*)::bigint AS cnt
+      FROM "User"
+      WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY 1
+      ORDER BY 1
+    `;
+
+    // Posts per day — last 30 days
+    const postsHistory = await prisma.$queryRaw<DayRow[]>`
+      SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*)::bigint AS cnt
+      FROM "Post"
+      WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY 1
+      ORDER BY 1
+    `;
+
+    // Top posting users
+    type TopUserRow = { user_id: string; username: string | null; display_name: string | null; avatar_url: string | null; cnt: bigint };
+    const topPosters = await prisma.$queryRaw<TopUserRow[]>`
+      SELECT p.user_id, u.username, u.display_name, u.avatar_url, COUNT(*)::bigint AS cnt
+      FROM "Post" p
+      JOIN "User" u ON u.id = p.user_id
+      WHERE p.deleted_at IS NULL AND u.deleted_at IS NULL
+      GROUP BY p.user_id, u.username, u.display_name, u.avatar_url
+      ORDER BY cnt DESC
+      LIMIT 10
+    `;
+
+    // Most followed users
+    type FollowRow = { user_id: string; username: string | null; display_name: string | null; avatar_url: string | null; cnt: bigint };
+    const mostFollowed = await prisma.$queryRaw<FollowRow[]>`
+      SELECT f.following_id AS user_id, u.username, u.display_name, u.avatar_url, COUNT(*)::bigint AS cnt
+      FROM "Follow" f
+      JOIN "User" u ON u.id = f.following_id
+      WHERE u.deleted_at IS NULL
+      GROUP BY f.following_id, u.username, u.display_name, u.avatar_url
+      ORDER BY cnt DESC
+      LIMIT 10
+    `;
+
+    // Groups by member count
+    type GroupRow = { id: string; name: string; avatar_url: string | null; member_count: bigint };
+    const topGroups = await prisma.$queryRaw<GroupRow[]>`
+      SELECT g.id, g.name, g.avatar_url, COUNT(gm.user_id)::bigint AS member_count
+      FROM "Group" g
+      LEFT JOIN "GroupMember" gm ON gm.group_id = g.id
+      WHERE g.deleted_at IS NULL
+      GROUP BY g.id, g.name, g.avatar_url
+      ORDER BY member_count DESC
+      LIMIT 10
+    `;
+
+    // Sticker pack count + total usage
+    const [packCount, totalStickerUses] = await Promise.all([
+      prisma.stickerPack.count({ where: { deleted_at: null, status: 'published' } }),
+      prisma.stickerUsage.aggregate({ _sum: { use_count: true } }),
+    ]);
+
+    return {
+      usersBySpecies: usersBySpecies.map(r => ({ label: r.species, value: Number(r.cnt) })),
+      usersByCountry: usersByCountry.map(r => ({ label: r.country, value: Number(r.cnt) })),
+      usersByAge:     usersByAge.map(r => ({ label: r.age_group, value: Number(r.cnt) })),
+      usersByPronoun: usersByPronoun.map(r => ({ label: r.pronouns, value: Number(r.cnt) })),
+      registrationsHistory: registrationsHistory.map(r => ({ day: r.day, value: Number(r.cnt) })),
+      postsHistory: postsHistory.map(r => ({ day: r.day, value: Number(r.cnt) })),
+      topPosters: topPosters.map(r => ({ userId: r.user_id, username: r.username, displayName: r.display_name, avatarUrl: r.avatar_url, count: Number(r.cnt) })),
+      mostFollowed: mostFollowed.map(r => ({ userId: r.user_id, username: r.username, displayName: r.display_name, avatarUrl: r.avatar_url, count: Number(r.cnt) })),
+      topGroups: topGroups.map(r => ({ id: r.id, name: r.name, avatarUrl: r.avatar_url, memberCount: Number(r.member_count) })),
+      stickers: { packCount, totalUses: totalStickerUses._sum.use_count ?? 0 },
+    };
+  },
 };

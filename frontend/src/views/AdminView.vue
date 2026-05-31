@@ -23,7 +23,7 @@ onMounted(async () => {
 })
 
 // ── Tabs ──────────────────────────────────────────────────────────────
-const activeTab = ref<'overview' | 'users' | 'archived' | 'posts' | 'reports' | 'ads' | 'verification' | 'banners' | 'automod'>('overview')
+const activeTab = ref<'overview' | 'users' | 'archived' | 'posts' | 'reports' | 'ads' | 'verification' | 'banners' | 'automod' | 'statistics'>('overview')
 
 // ── Stats ─────────────────────────────────────────────────────────────
 const stats = ref<any>(null)
@@ -372,6 +372,27 @@ const toggleBannerActive = async (b: any) => {
   } catch {}
 }
 
+// ── Statistics ────────────────────────────────────────────────────────
+const stickerStats    = ref<any>(null)
+const networkStats    = ref<any>(null)
+const isLoadingStatistics = ref(false)
+const statsSubTab = ref<'stickers' | 'network'>('stickers')
+
+const fetchStatistics = async () => {
+  if (stickerStats.value && networkStats.value) return
+  isLoadingStatistics.value = true
+  try {
+    const [s, n] = await Promise.all([
+      api.get('/admin/stats/stickers'),
+      api.get('/admin/stats/network'),
+    ])
+    if (s.data.success)  stickerStats.value  = s.data.data
+    if (n.data.success)  networkStats.value  = n.data.data
+  } catch {} finally { isLoadingStatistics.value = false }
+}
+
+const barMax = (arr: { value: number }[]) => Math.max(...arr.map(x => x.value), 1)
+
 // Tab switch data loading
 const switchTab = (tab: typeof activeTab.value) => {
   activeTab.value = tab
@@ -383,6 +404,7 @@ const switchTab = (tab: typeof activeTab.value) => {
   if (tab === 'verification' && !verRequests.value.length) fetchVerRequests()
   if (tab === 'banners' && !banners.value.length) fetchBanners()
   if (tab === 'automod') fetchAutoModLogs()
+  if (tab === 'statistics') fetchStatistics()
 }
 
 const formatNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
@@ -401,6 +423,7 @@ const navItems = computed(() => [
   { tab: 'verification' as const, label: 'Верификация',     icon: 'BadgeCheck',      color: '#06b6d4', badge: verRequests.value.filter((r:any) => r.status==='pending').length || null },
   { tab: 'banners'      as const, label: 'Баннеры',         icon: 'Image',           color: '#a855f7', badge: null },
   { tab: 'automod'      as const, label: 'AutoMod',          icon: 'ShieldAlert',     color: '#ef4444', badge: autoModTotal.value > 0 ? formatNum(autoModTotal.value) : null },
+  { tab: 'statistics'   as const, label: 'Статистика',       icon: 'BarChart2',       color: '#10b981', badge: null },
 ])
 
 const statCards = computed(() => stats.value ? [
@@ -1340,6 +1363,443 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
               <BIcon name="ChevronRight" class="w-4 h-4" />
             </button>
           </div>
+        </div>
+
+        <!-- ── STATISTICS ─────────────────────────────────────────────── -->
+        <div v-else-if="activeTab === 'statistics'">
+
+          <!-- Sub-tabs -->
+          <div class="flex gap-2 mb-6">
+            <button @click="statsSubTab='stickers'"
+              class="flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-bold transition-all"
+              :class="statsSubTab==='stickers'
+                ? 'text-white border border-emerald-500/30'
+                : 'text-white/40 hover:text-white/70 bg-white/3 border border-white/5'"
+              :style="statsSubTab==='stickers' ? 'background:rgba(16,185,129,0.12)' : ''">
+              <BIcon name="Sticker" class="w-4 h-4" /> Стикеры
+            </button>
+            <button @click="statsSubTab='network'"
+              class="flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-bold transition-all"
+              :class="statsSubTab==='network'
+                ? 'text-white border border-emerald-500/30'
+                : 'text-white/40 hover:text-white/70 bg-white/3 border border-white/5'"
+              :style="statsSubTab==='network' ? 'background:rgba(16,185,129,0.12)' : ''">
+              <BIcon name="Globe" class="w-4 h-4" /> Сеть
+            </button>
+            <button @click="stickerStats=null; networkStats=null; fetchStatistics()"
+              class="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs text-white/40 hover:text-white bg-white/3 border border-white/5 transition-all">
+              <BIcon name="RefreshCw" class="w-3.5 h-3.5" /> Обновить
+            </button>
+          </div>
+
+          <!-- Loading skeleton -->
+          <template v-if="isLoadingStatistics">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div v-for="n in 4" :key="n" class="rounded-3xl border border-white/5 p-6 animate-pulse" style="background:rgba(255,255,255,0.02)">
+                <div class="h-4 bg-white/8 rounded-full w-32 mb-4" />
+                <div class="space-y-2">
+                  <div v-for="i in 5" :key="i" class="h-6 bg-white/5 rounded-xl" :style="`width:${60+i*8}%`" />
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <!-- ─── STICKERS sub-tab ─────────────────────────────────── -->
+          <template v-else-if="statsSubTab === 'stickers' && stickerStats">
+
+            <!-- Top row summary -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              <div class="rounded-2xl border border-white/5 px-4 py-3" style="background:rgba(255,255,255,0.03)">
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Паков всего</p>
+                <p class="text-2xl font-black text-white">{{ stickerStats.topPacks.length }}+</p>
+              </div>
+              <div class="rounded-2xl border border-white/5 px-4 py-3" style="background:rgba(255,255,255,0.03)">
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Топ-1 использований</p>
+                <p class="text-2xl font-black text-emerald-400">{{ formatNum(stickerStats.topPacks[0]?.use_count ?? 0) }}</p>
+              </div>
+              <div class="rounded-2xl border border-white/5 px-4 py-3" style="background:rgba(255,255,255,0.03)">
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Топ-1 скачиваний</p>
+                <p class="text-2xl font-black text-indigo-400">{{ formatNum(stickerStats.topPacks[0]?.downloads_count ?? 0) }}</p>
+              </div>
+              <div class="rounded-2xl border border-white/5 px-4 py-3" style="background:rgba(255,255,255,0.03)">
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Уникальных стикеров</p>
+                <p class="text-2xl font-black text-white">{{ formatNum(stickerStats.topStickers.length) }}</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+              <!-- Top Packs list -->
+              <div class="rounded-3xl border border-white/5 overflow-hidden" style="background:rgba(255,255,255,0.02)">
+                <div class="px-5 py-4 border-b border-white/5 flex items-center gap-2">
+                  <BIcon name="TrendingUp" class="w-4 h-4 text-emerald-400" />
+                  <h3 class="font-extrabold text-sm text-white">Топ стикер-паков</h3>
+                  <span class="ml-auto text-[10px] font-bold text-white/30 bg-white/5 px-2 py-0.5 rounded-full">по использованию</span>
+                </div>
+                <div class="divide-y divide-white/5">
+                  <div v-for="(pack, idx) in stickerStats.topPacks.slice(0,10)" :key="pack.id"
+                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/2 transition-all">
+                    <span class="w-5 text-center text-xs font-black"
+                      :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">
+                      {{ idx+1 }}
+                    </span>
+                    <div class="w-9 h-9 rounded-xl flex-shrink-0 overflow-hidden border border-white/10"
+                      :style="pack.cover_bg_color ? `background:${pack.cover_bg_color}` : 'background:rgba(255,255,255,0.05)'">
+                      <img v-if="pack.cover_url" :src="pack.cover_url" class="w-full h-full object-cover" />
+                      <div v-else class="w-full h-full flex items-center justify-center text-lg">🎭</div>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm font-bold text-white truncate flex items-center gap-1.5">
+                        {{ pack.name }}
+                        <span v-if="pack.is_nsfw" class="text-[9px] font-extrabold px-1 py-0.5 rounded bg-rose-500/20 text-rose-400">18+</span>
+                      </p>
+                      <p class="text-xs text-white/35 truncate">@{{ pack.author?.username ?? '—' }}</p>
+                    </div>
+                    <div class="text-right flex-shrink-0">
+                      <p class="text-sm font-black text-emerald-400">{{ formatNum(pack.use_count) }}</p>
+                      <p class="text-[10px] text-white/25">{{ formatNum(pack.downloads_count) }} ск.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Daily usage chart -->
+              <div class="rounded-3xl border border-white/5 p-5" style="background:rgba(255,255,255,0.02)">
+                <div class="flex items-center gap-2 mb-4">
+                  <BIcon name="Activity" class="w-4 h-4 text-emerald-400" />
+                  <h3 class="font-extrabold text-sm text-white">Использование стикеров</h3>
+                  <span class="ml-auto text-[10px] text-white/30">30 дней</span>
+                </div>
+                <div v-if="stickerStats.dailyUsage.length" class="flex items-end gap-0.5 h-32">
+                  <div v-for="(point, idx) in stickerStats.dailyUsage" :key="idx"
+                    class="flex-1 flex flex-col items-center gap-1 group/bar cursor-default relative">
+                    <div class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/bar:opacity-100
+                      text-[9px] font-bold text-white bg-black/70 px-1.5 py-0.5 rounded-lg whitespace-nowrap transition-opacity pointer-events-none z-10">
+                      {{ point.value }}
+                    </div>
+                    <div class="w-full rounded-t transition-all hover:opacity-100 opacity-70 min-h-[2px]"
+                      :style="`height:${Math.max(2, (point.value / barMax(stickerStats.dailyUsage)) * 128)}px;
+                        background:linear-gradient(to top,#10b981,#34d399)`" />
+                  </div>
+                </div>
+                <p v-else class="text-center text-sm text-white/25 py-12">Нет данных</p>
+              </div>
+            </div>
+
+            <!-- By Age / Species / Country charts -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+              <!-- By Age -->
+              <div class="rounded-3xl border border-white/5 p-5" style="background:rgba(255,255,255,0.02)">
+                <div class="flex items-center gap-2 mb-4">
+                  <BIcon name="CalendarDays" class="w-4 h-4 text-indigo-400" />
+                  <h3 class="font-extrabold text-sm text-white">По возрасту</h3>
+                </div>
+                <div v-if="stickerStats.byAge.length" class="space-y-2">
+                  <div v-for="item in stickerStats.byAge" :key="item.label" class="group">
+                    <div class="flex items-center justify-between text-xs mb-1">
+                      <span class="text-white/60 font-semibold">{{ item.label }}</span>
+                      <span class="text-white font-black">{{ formatNum(item.value) }}</span>
+                    </div>
+                    <div class="h-2 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.06)">
+                      <div class="h-full rounded-full transition-all"
+                        :style="`width:${(item.value/barMax(stickerStats.byAge))*100}%;background:linear-gradient(to right,#6366f1,#8b5cf6)`" />
+                    </div>
+                  </div>
+                </div>
+                <p v-else class="text-center text-sm text-white/25 py-8">Нет данных</p>
+              </div>
+
+              <!-- By Species -->
+              <div class="rounded-3xl border border-white/5 p-5" style="background:rgba(255,255,255,0.02)">
+                <div class="flex items-center gap-2 mb-4">
+                  <BIcon name="PawPrint" class="w-4 h-4 text-amber-400" />
+                  <h3 class="font-extrabold text-sm text-white">По виду</h3>
+                </div>
+                <div v-if="stickerStats.bySpecies.length" class="space-y-2">
+                  <div v-for="item in stickerStats.bySpecies.slice(0,8)" :key="item.label" class="group">
+                    <div class="flex items-center justify-between text-xs mb-1">
+                      <span class="text-white/60 font-semibold capitalize truncate max-w-[120px]">{{ item.label }}</span>
+                      <span class="text-white font-black">{{ formatNum(item.value) }}</span>
+                    </div>
+                    <div class="h-2 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.06)">
+                      <div class="h-full rounded-full transition-all"
+                        :style="`width:${(item.value/barMax(stickerStats.bySpecies))*100}%;background:linear-gradient(to right,#f59e0b,#fbbf24)`" />
+                    </div>
+                  </div>
+                </div>
+                <p v-else class="text-center text-sm text-white/25 py-8">Нет данных</p>
+              </div>
+
+              <!-- By Country -->
+              <div class="rounded-3xl border border-white/5 p-5" style="background:rgba(255,255,255,0.02)">
+                <div class="flex items-center gap-2 mb-4">
+                  <BIcon name="MapPin" class="w-4 h-4 text-rose-400" />
+                  <h3 class="font-extrabold text-sm text-white">По стране</h3>
+                </div>
+                <div v-if="stickerStats.byCountry.length" class="space-y-2">
+                  <div v-for="item in stickerStats.byCountry.slice(0,8)" :key="item.label" class="group">
+                    <div class="flex items-center justify-between text-xs mb-1">
+                      <span class="text-white/60 font-semibold truncate max-w-[120px]">{{ item.label }}</span>
+                      <span class="text-white font-black">{{ formatNum(item.value) }}</span>
+                    </div>
+                    <div class="h-2 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.06)">
+                      <div class="h-full rounded-full transition-all"
+                        :style="`width:${(item.value/barMax(stickerStats.byCountry))*100}%;background:linear-gradient(to right,#ef4444,#f87171)`" />
+                    </div>
+                  </div>
+                </div>
+                <p v-else class="text-center text-sm text-white/25 py-8">Нет данных</p>
+              </div>
+            </div>
+
+          </template>
+
+          <!-- ─── NETWORK sub-tab ─────────────────────────────────── -->
+          <template v-else-if="statsSubTab === 'network' && networkStats">
+
+            <!-- Summary cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              <div class="rounded-2xl border border-white/5 px-4 py-3" style="background:rgba(255,255,255,0.03)">
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Стикер-паков</p>
+                <p class="text-2xl font-black text-white">{{ formatNum(networkStats.stickers.packCount) }}</p>
+              </div>
+              <div class="rounded-2xl border border-white/5 px-4 py-3" style="background:rgba(255,255,255,0.03)">
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Всего отправок</p>
+                <p class="text-2xl font-black text-emerald-400">{{ formatNum(Number(networkStats.stickers.totalUses)) }}</p>
+              </div>
+              <div class="rounded-2xl border border-white/5 px-4 py-3" style="background:rgba(255,255,255,0.03)">
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Топ страна</p>
+                <p class="text-lg font-black text-white truncate">{{ networkStats.usersByCountry[0]?.label ?? '—' }}</p>
+              </div>
+              <div class="rounded-2xl border border-white/5 px-4 py-3" style="background:rgba(255,255,255,0.03)">
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Топ вид</p>
+                <p class="text-lg font-black text-white truncate capitalize">{{ networkStats.usersBySpecies[0]?.label ?? '—' }}</p>
+              </div>
+            </div>
+
+            <!-- Charts row 1 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+              <!-- Registrations history -->
+              <div class="rounded-3xl border border-white/5 p-5" style="background:rgba(255,255,255,0.02)">
+                <div class="flex items-center gap-2 mb-4">
+                  <BIcon name="UserPlus" class="w-4 h-4 text-indigo-400" />
+                  <h3 class="font-extrabold text-sm text-white">Регистрации</h3>
+                  <span class="ml-auto text-[10px] text-white/30">30 дней</span>
+                </div>
+                <div v-if="networkStats.registrationsHistory.length" class="flex items-end gap-0.5 h-32">
+                  <div v-for="(point, idx) in networkStats.registrationsHistory" :key="idx"
+                    class="flex-1 flex flex-col items-center group/bar cursor-default relative">
+                    <div class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/bar:opacity-100
+                      text-[9px] font-bold text-white bg-black/70 px-1.5 py-0.5 rounded-lg whitespace-nowrap transition-opacity pointer-events-none z-10">
+                      {{ point.value }}
+                    </div>
+                    <div class="w-full rounded-t transition-all hover:opacity-100 opacity-70 min-h-[2px]"
+                      :style="`height:${Math.max(2,(point.value/barMax(networkStats.registrationsHistory))*128)}px;
+                        background:linear-gradient(to top,#6366f1,#8b5cf6)`" />
+                  </div>
+                </div>
+                <p v-else class="text-center text-sm text-white/25 py-12">Нет данных</p>
+              </div>
+
+              <!-- Posts history -->
+              <div class="rounded-3xl border border-white/5 p-5" style="background:rgba(255,255,255,0.02)">
+                <div class="flex items-center gap-2 mb-4">
+                  <BIcon name="FileText" class="w-4 h-4 text-sky-400" />
+                  <h3 class="font-extrabold text-sm text-white">Посты</h3>
+                  <span class="ml-auto text-[10px] text-white/30">30 дней</span>
+                </div>
+                <div v-if="networkStats.postsHistory.length" class="flex items-end gap-0.5 h-32">
+                  <div v-for="(point, idx) in networkStats.postsHistory" :key="idx"
+                    class="flex-1 flex flex-col items-center group/bar cursor-default relative">
+                    <div class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/bar:opacity-100
+                      text-[9px] font-bold text-white bg-black/70 px-1.5 py-0.5 rounded-lg whitespace-nowrap transition-opacity pointer-events-none z-10">
+                      {{ point.value }}
+                    </div>
+                    <div class="w-full rounded-t transition-all hover:opacity-100 opacity-70 min-h-[2px]"
+                      :style="`height:${Math.max(2,(point.value/barMax(networkStats.postsHistory))*128)}px;
+                        background:linear-gradient(to top,#0ea5e9,#38bdf8)`" />
+                  </div>
+                </div>
+                <p v-else class="text-center text-sm text-white/25 py-12">Нет данных</p>
+              </div>
+            </div>
+
+            <!-- Charts row 2: by species / country / age / pronouns -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
+              <!-- By Species -->
+              <div class="rounded-3xl border border-white/5 p-5" style="background:rgba(255,255,255,0.02)">
+                <div class="flex items-center gap-2 mb-4">
+                  <BIcon name="PawPrint" class="w-4 h-4 text-amber-400" />
+                  <h3 class="font-extrabold text-sm text-white">Пользователи по виду</h3>
+                </div>
+                <div v-if="networkStats.usersBySpecies.length" class="space-y-2.5">
+                  <div v-for="item in networkStats.usersBySpecies.slice(0,10)" :key="item.label">
+                    <div class="flex items-center justify-between text-xs mb-1">
+                      <span class="text-white/60 font-semibold capitalize truncate max-w-[140px]">{{ item.label }}</span>
+                      <span class="text-white font-black">{{ formatNum(item.value) }}</span>
+                    </div>
+                    <div class="h-2 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.06)">
+                      <div class="h-full rounded-full"
+                        :style="`width:${(item.value/barMax(networkStats.usersBySpecies))*100}%;background:linear-gradient(to right,#f59e0b,#fbbf24)`" />
+                    </div>
+                  </div>
+                </div>
+                <p v-else class="text-center text-sm text-white/25 py-8">Нет данных</p>
+              </div>
+
+              <!-- By Country -->
+              <div class="rounded-3xl border border-white/5 p-5" style="background:rgba(255,255,255,0.02)">
+                <div class="flex items-center gap-2 mb-4">
+                  <BIcon name="Globe" class="w-4 h-4 text-emerald-400" />
+                  <h3 class="font-extrabold text-sm text-white">Пользователи по стране</h3>
+                </div>
+                <div v-if="networkStats.usersByCountry.length" class="space-y-2.5">
+                  <div v-for="item in networkStats.usersByCountry.slice(0,10)" :key="item.label">
+                    <div class="flex items-center justify-between text-xs mb-1">
+                      <span class="text-white/60 font-semibold truncate max-w-[140px]">{{ item.label }}</span>
+                      <span class="text-white font-black">{{ formatNum(item.value) }}</span>
+                    </div>
+                    <div class="h-2 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.06)">
+                      <div class="h-full rounded-full"
+                        :style="`width:${(item.value/barMax(networkStats.usersByCountry))*100}%;background:linear-gradient(to right,#10b981,#34d399)`" />
+                    </div>
+                  </div>
+                </div>
+                <p v-else class="text-center text-sm text-white/25 py-8">Нет данных</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
+              <!-- By Age -->
+              <div class="rounded-3xl border border-white/5 p-5" style="background:rgba(255,255,255,0.02)">
+                <div class="flex items-center gap-2 mb-4">
+                  <BIcon name="CalendarDays" class="w-4 h-4 text-indigo-400" />
+                  <h3 class="font-extrabold text-sm text-white">Пользователи по возрасту</h3>
+                </div>
+                <div v-if="networkStats.usersByAge.length" class="space-y-2.5">
+                  <div v-for="item in networkStats.usersByAge" :key="item.label">
+                    <div class="flex items-center justify-between text-xs mb-1">
+                      <span class="text-white/60 font-semibold">{{ item.label }}</span>
+                      <span class="text-white font-black">{{ formatNum(item.value) }}</span>
+                    </div>
+                    <div class="h-2 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.06)">
+                      <div class="h-full rounded-full"
+                        :style="`width:${(item.value/barMax(networkStats.usersByAge))*100}%;background:linear-gradient(to right,#6366f1,#818cf8)`" />
+                    </div>
+                  </div>
+                </div>
+                <p v-else class="text-center text-sm text-white/25 py-8">Нет данных</p>
+              </div>
+
+              <!-- By Pronouns -->
+              <div class="rounded-3xl border border-white/5 p-5" style="background:rgba(255,255,255,0.02)">
+                <div class="flex items-center gap-2 mb-4">
+                  <BIcon name="Heart" class="w-4 h-4 text-pink-400" />
+                  <h3 class="font-extrabold text-sm text-white">Пользователи по местоимениям</h3>
+                </div>
+                <div v-if="networkStats.usersByPronoun.length" class="space-y-2.5">
+                  <div v-for="item in networkStats.usersByPronoun" :key="item.label">
+                    <div class="flex items-center justify-between text-xs mb-1">
+                      <span class="text-white/60 font-semibold truncate max-w-[140px]">{{ item.label }}</span>
+                      <span class="text-white font-black">{{ formatNum(item.value) }}</span>
+                    </div>
+                    <div class="h-2 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.06)">
+                      <div class="h-full rounded-full"
+                        :style="`width:${(item.value/barMax(networkStats.usersByPronoun))*100}%;background:linear-gradient(to right,#ec4899,#f472b6)`" />
+                    </div>
+                  </div>
+                </div>
+                <p v-else class="text-center text-sm text-white/25 py-8">Нет данных</p>
+              </div>
+            </div>
+
+            <!-- Top posters + most followed -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+              <!-- Top posters -->
+              <div class="rounded-3xl border border-white/5 overflow-hidden" style="background:rgba(255,255,255,0.02)">
+                <div class="px-5 py-4 border-b border-white/5 flex items-center gap-2">
+                  <BIcon name="Pencil" class="w-4 h-4 text-sky-400" />
+                  <h3 class="font-extrabold text-sm text-white">Самые активные авторы</h3>
+                </div>
+                <div class="divide-y divide-white/5">
+                  <div v-for="(u, idx) in networkStats.topPosters" :key="u.userId"
+                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/2 transition-all">
+                    <span class="w-5 text-center text-xs font-black"
+                      :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">{{ idx+1 }}</span>
+                    <img v-if="u.avatarUrl" :src="u.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-white/10 flex-shrink-0" />
+                    <div v-else class="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/15 flex items-center justify-center text-xs font-bold text-indigo-300 flex-shrink-0">
+                      {{ (u.displayName || u.username || '?')[0].toUpperCase() }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm font-bold text-white truncate">{{ u.displayName || u.username }}</p>
+                      <p class="text-xs text-white/35">@{{ u.username }}</p>
+                    </div>
+                    <span class="text-sm font-black text-sky-400">{{ formatNum(u.count) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Most followed -->
+              <div class="rounded-3xl border border-white/5 overflow-hidden" style="background:rgba(255,255,255,0.02)">
+                <div class="px-5 py-4 border-b border-white/5 flex items-center gap-2">
+                  <BIcon name="Star" class="w-4 h-4 text-yellow-400" />
+                  <h3 class="font-extrabold text-sm text-white">Самые популярные</h3>
+                  <span class="ml-auto text-[10px] text-white/30">по подписчикам</span>
+                </div>
+                <div class="divide-y divide-white/5">
+                  <div v-for="(u, idx) in networkStats.mostFollowed" :key="u.userId"
+                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/2 transition-all">
+                    <span class="w-5 text-center text-xs font-black"
+                      :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">{{ idx+1 }}</span>
+                    <img v-if="u.avatarUrl" :src="u.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-white/10 flex-shrink-0" />
+                    <div v-else class="w-8 h-8 rounded-full bg-yellow-500/20 border border-yellow-500/15 flex items-center justify-center text-xs font-bold text-yellow-300 flex-shrink-0">
+                      {{ (u.displayName || u.username || '?')[0].toUpperCase() }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm font-bold text-white truncate">{{ u.displayName || u.username }}</p>
+                      <p class="text-xs text-white/35">@{{ u.username }}</p>
+                    </div>
+                    <span class="text-sm font-black text-yellow-400">{{ formatNum(u.count) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Top groups -->
+            <div class="rounded-3xl border border-white/5 overflow-hidden" style="background:rgba(255,255,255,0.02)">
+              <div class="px-5 py-4 border-b border-white/5 flex items-center gap-2">
+                <BIcon name="Users" class="w-4 h-4 text-purple-400" />
+                <h3 class="font-extrabold text-sm text-white">Топ групп</h3>
+                <span class="ml-auto text-[10px] text-white/30">по участникам</span>
+              </div>
+              <div class="divide-y divide-white/5">
+                <div v-for="(g, idx) in networkStats.topGroups" :key="g.id"
+                  class="flex items-center gap-3 px-5 py-3 hover:bg-white/2 transition-all">
+                  <span class="w-5 text-center text-xs font-black"
+                    :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">{{ idx+1 }}</span>
+                  <img v-if="g.avatarUrl" :src="g.avatarUrl" class="w-8 h-8 rounded-xl object-cover border border-white/10 flex-shrink-0" />
+                  <div v-else class="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/15 flex items-center justify-center text-xs font-bold text-purple-300 flex-shrink-0">
+                    {{ g.name[0]?.toUpperCase() ?? '?' }}
+                  </div>
+                  <p class="flex-1 text-sm font-bold text-white truncate">{{ g.name }}</p>
+                  <span class="text-sm font-black text-purple-400">{{ formatNum(g.memberCount) }}</span>
+                </div>
+              </div>
+            </div>
+
+          </template>
+
+          <!-- Empty state when no data yet -->
+          <div v-else-if="!isLoadingStatistics" class="flex flex-col items-center gap-4 py-24 text-white/25">
+            <BIcon name="BarChart2" class="w-12 h-12 opacity-30" />
+            <p class="text-sm font-semibold">Нет данных</p>
+          </div>
+
         </div>
 
       </main>
