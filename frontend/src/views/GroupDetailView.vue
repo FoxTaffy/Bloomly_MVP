@@ -35,6 +35,8 @@ function parseAboutText(text: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
   const paras = safe.split(/\n{2,}/)
   return paras
     .map(p => `<p class="mb-3 last:mb-0">${p.replace(/\n/g, '<br />')}</p>`)

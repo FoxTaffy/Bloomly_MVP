@@ -2,9 +2,8 @@
     <AppHeader :show-back="true" v-model:nsfwMode="nsfwMode" />
 
     <!-- ─── Page background (profile_bg_url) ──────────────────────────────── -->
-    <template v-if="(viewedProfile as any)?.profile_bg_url">
-      <div class="fixed inset-0 z-[-1] pointer-events-none"
-        :style="`background-image: url('${(viewedProfile as any).profile_bg_url}'); background-size: cover; background-position: center; background-attachment: fixed;`" />
+    <template v-if="profileBgStyle.backgroundImage">
+      <div class="fixed inset-0 z-[-1] pointer-events-none" :style="profileBgStyle" />
       <div class="fixed inset-0 z-[-1] pointer-events-none" style="background: rgba(22,25,47,0.78)" />
     </template>
 
@@ -1931,6 +1930,21 @@ const closeMenu = () => {}
 const viewedProfile = ref<UserProfile | null>(null)
 const isLoading = ref(false)
 const error = ref<string | null>(null)
+
+const profileBgStyle = computed(() => {
+  const url = (viewedProfile.value as any)?.profile_bg_url as string | undefined
+  if (!url) return {}
+  try {
+    const parsed = new URL(url)
+    if (!['http:', 'https:'].includes(parsed.protocol)) return {}
+    return {
+      backgroundImage: `url('${url.replace(/'/g, '%27')}')`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundAttachment: 'fixed',
+    }
+  } catch { return {} }
+})
 
 // ── SEO ───────────────────────────────────────────────────────────────────────
 const BASE = 'https://bloomly.fun'

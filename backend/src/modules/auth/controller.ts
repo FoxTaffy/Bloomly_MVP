@@ -34,7 +34,7 @@ async function issueRefreshToken(reply: FastifyReply, userId: string): Promise<v
   reply.setCookie('refresh_token', raw, {
     httpOnly: true,
     secure:   process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: 'strict',
     path:     '/api/auth',
     maxAge:   7 * 24 * 60 * 60,
   });
@@ -312,7 +312,7 @@ export const refreshHandler = async (
   return reply.send({ success: true, data: { token, user }, error: null });
 };
 
-// ── Выход (инвалидация refresh token) ────────────────────────────────────────
+// ── Выход (инвалидация всех refresh token пользователя) ──────────────────────
 export const logoutHandler = async (
   request: FastifyRequest,
   reply: FastifyReply,
@@ -320,10 +320,13 @@ export const logoutHandler = async (
   const raw = (request.cookies as any)?.refresh_token as string | undefined;
   if (raw) {
     const hash = createHash('sha256').update(raw).digest('hex');
-    await prisma.refreshToken.updateMany({
-      where: { token_hash: hash, revoked: false },
-      data:  { revoked: true },
-    });
+    const token = await prisma.refreshToken.findFirst({ where: { token_hash: hash }, select: { user_id: true } });
+    if (token) {
+      await prisma.refreshToken.updateMany({
+        where: { user_id: token.user_id, revoked: false },
+        data:  { revoked: true },
+      });
+    }
   }
   reply.clearCookie('refresh_token', { path: '/api/auth' });
   return reply.send({ success: true, data: null, error: null });

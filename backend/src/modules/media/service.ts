@@ -142,12 +142,15 @@ export async function uploadFile(
  * Upload a raw buffer to MinIO without any processing (for trusted sources like Telegram).
  * The caller is responsible for ensuring the buffer is valid.
  */
+const RAW_UPLOAD_ALLOWED_FOLDERS = ['posts', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers'] as const;
+
 export async function uploadRawToMinIO(
   buffer: Buffer,
   ext: string,
   mimeType: string,
   folder: string = 'stickers',
 ): Promise<string> {
+  if (!(RAW_UPLOAD_ALLOWED_FOLDERS as readonly string[]).includes(folder)) throw new Error('INVALID_FOLDER');
   await bucketReady;
   const objectName = `${folder}/${randomUUID()}${ext}`;
   await minioClient.putObject(BUCKET, objectName, buffer, buffer.length, { 'Content-Type': mimeType });

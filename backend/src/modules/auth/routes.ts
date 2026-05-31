@@ -131,6 +131,6 @@ export async function authRoutes(fastify: FastifyInstance) {
   );
 
   // ── Token rotation ────────────────────────────────────────────────────────────
-  fastify.post('/refresh', refreshHandler);
-  fastify.post('/logout',  logoutHandler);
+  fastify.post('/refresh', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, refreshHandler);
+  fastify.post('/logout',  { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, logoutHandler);
 }

@@ -141,6 +141,9 @@ export const dealersDenService = {
 
   // ── create ─────────────────────────────────────────────────────────────────
   async create(sellerId: string, input: CreateListingInput) {
+    if (input.price !== undefined && input.price < 0) throw new Error('INVALID_PRICE');
+    if (input.quantity !== undefined && input.quantity < 1) throw new Error('INVALID_QUANTITY');
+    if (input.bidIncrement !== undefined && input.bidIncrement <= 0) throw new Error('INVALID_BID_INCREMENT');
     const kind = input.listingKind ?? 'fixed';
     return prisma.dealerListing.create({
       data: {
@@ -173,6 +176,8 @@ export const dealersDenService = {
 
   // ── update ──────────────────────────────────────────────────────────────────
   async update(id: string, sellerId: string, input: UpdateListingInput) {
+    if (input.price !== undefined && input.price < 0) throw new Error('INVALID_PRICE');
+    if (input.quantity !== undefined && input.quantity < 1) throw new Error('INVALID_QUANTITY');
     const existing = await prisma.dealerListing.findFirst({ where: { id, seller_id: sellerId, deleted_at: null } });
     if (!existing) return null;
 
@@ -243,6 +248,7 @@ export const dealersDenService = {
       ? parseFloat(listing.current_bid.toString()) + parseFloat(listing.bid_increment.toString())
       : parseFloat(listing.price.toString());
 
+    if (input.amount <= 0) throw new Error('INVALID_BID_AMOUNT');
     if (input.amount < minAmount) throw new Error(`MIN_BID:${minAmount}`);
 
     const bid = await prisma.dealerBid.create({

@@ -23,8 +23,6 @@ services:
         -c tcp_keepalives_count=5
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-bloomly}"]
       interval: 10s
@@ -71,9 +69,6 @@ services:
   minio:
     image: minio/minio
     container_name: bloomly-minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
     volumes:
       - minio_data:/data
     environment:
