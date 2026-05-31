@@ -509,20 +509,20 @@ export const dealersDenService = {
     if (listing.commission_slots_total !== null && listing.commission_slots_taken >= listing.commission_slots_total)
       throw new Error('SLOTS_FULL');
 
-    const lastBooking = await prisma.commissionBooking.findFirst({
-      where: { listing_id: listingId, deleted_at: null },
-      orderBy: { queue_position: 'desc' },
-      select: { queue_position: true },
-    });
-    const queuePosition = (lastBooking?.queue_position ?? 0) + 1;
-
-    const [booking] = await prisma.$transaction([
-      prisma.commissionBooking.create({
-        data: { listing_id: listingId, buyer_id: buyerId, queue_position: queuePosition, form_data: input.formData as any },
+    const { booking, queuePosition } = await prisma.$transaction(async (tx) => {
+      const lastBooking = await tx.commissionBooking.findFirst({
+        where: { listing_id: listingId, deleted_at: null },
+        orderBy: { queue_position: 'desc' },
+        select: { queue_position: true },
+      });
+      const pos = (lastBooking?.queue_position ?? 0) + 1;
+      const created = await tx.commissionBooking.create({
+        data: { listing_id: listingId, buyer_id: buyerId, queue_position: pos, form_data: input.formData as any },
         include: { buyer: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
-      }),
-      prisma.dealerListing.update({ where: { id: listingId }, data: { commission_slots_taken: { increment: 1 } } }),
-    ]);
+      });
+      await tx.dealerListing.update({ where: { id: listingId }, data: { commission_slots_taken: { increment: 1 } } });
+      return { booking: created, queuePosition: pos };
+    }, { isolationLevel: 'Serializable' });
 
     await notificationService.create({ receiverId: listing.seller_id, senderId: buyerId, type: 'den_commission_booked', refId: listingId });
 
@@ -617,17 +617,22 @@ export const dealersDenService = {
     if (!dispute) throw new Error('NOT_FOUND');
 
     const status = winner === 'buyer' ? 'resolved_buyer' : 'resolved_seller';
-    await prisma.denDispute.update({
-      where: { id: disputeId },
-      data: { status, resolved_by: adminId, resolution, resolved_at: new Date() },
+
+    await prisma.$transaction(async (tx) => {
+      await tx.denDispute.update({
+        where: { id: disputeId },
+        data: { status, resolved_by: adminId, resolution, resolved_at: new Date() },
+      });
+      if (winner === 'buyer') {
+        await tx.denTrustScore.upsert({
+          where: { user_id: dispute.seller_id },
+          create: { user_id: dispute.seller_id, disputes_lost: 1 },
+          update: { disputes_lost: { increment: 1 } },
+        });
+      }
     });
 
     if (winner === 'buyer') {
-      await prisma.denTrustScore.upsert({
-        where: { user_id: dispute.seller_id },
-        create: { user_id: dispute.seller_id, disputes_lost: 1 },
-        update: { disputes_lost: { increment: 1 } },
-      });
       await recalcDenTrust(dispute.seller_id);
     }
 
@@ -645,14 +650,16 @@ export const dealersDenService = {
     });
 
     for (const d of stale) {
-      await prisma.denDispute.update({
-        where: { id: d.id },
-        data: { status: 'auto_resolved', resolution: 'Продавец не ответил в течение 48 часов', resolved_at: new Date() },
-      });
-      await prisma.denTrustScore.upsert({
-        where: { user_id: d.seller_id },
-        create: { user_id: d.seller_id, disputes_lost: 1 },
-        update: { disputes_lost: { increment: 1 } },
+      await prisma.$transaction(async (tx) => {
+        await tx.denDispute.update({
+          where: { id: d.id },
+          data: { status: 'auto_resolved', resolution: 'Продавец не ответил в течение 48 часов', resolved_at: new Date() },
+        });
+        await tx.denTrustScore.upsert({
+          where: { user_id: d.seller_id },
+          create: { user_id: d.seller_id, disputes_lost: 1 },
+          update: { disputes_lost: { increment: 1 } },
+        });
       });
       await recalcDenTrust(d.seller_id);
       await Promise.all([

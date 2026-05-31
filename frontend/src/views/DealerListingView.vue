@@ -27,12 +27,16 @@ const now = ref(Date.now())
 let ticker: ReturnType<typeof setInterval> | null = null
 
 onMounted(async () => {
-  await store.loadListing(route.params.id as string)
-  activeImage.value = 0
-  await Promise.all([loadBids(), loadComments(), loadReviews()])
-  if (listing.value) {
-    isWishlisted.value  = listing.value.is_wishlisted ?? false
-    wishlistCount.value = listing.value.wishlist_count ?? 0
+  try {
+    await store.loadListing(route.params.id as string)
+    activeImage.value = 0
+    await Promise.all([loadBids(), loadComments(), loadReviews()])
+    if (listing.value) {
+      isWishlisted.value  = listing.value.is_wishlisted ?? false
+      wishlistCount.value = listing.value.wishlist_count ?? 0
+    }
+  } catch (err: any) {
+    console.error('[DealerListingView] load error:', err?.message)
   }
   ticker = setInterval(() => { now.value = Date.now() }, 1000)
 })

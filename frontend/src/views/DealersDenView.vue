@@ -181,6 +181,7 @@ const liveAuctions = computed(() =>
 // ── Create modal ───────────────────────────────────────────────────────────────
 const showCreateModal = ref(false)
 const isCreating      = ref(false)
+const createError     = ref('')
 const form = ref({
   title: '', description: '', price: 0, currency: 'USD',
   category: 'art' as any, type: 'digital' as any, listingKind: 'fixed' as ListingKind,
@@ -212,6 +213,7 @@ function tryCloseCreate() {
 async function submitCreate() {
   if (!form.value.title.trim()) return
   isCreating.value = true
+  createError.value = ''
   try {
     await store.createListing({
       title: form.value.title, description: form.value.description || undefined,
@@ -227,12 +229,15 @@ async function submitCreate() {
       raffleMaxTickets: form.value.raffleMaxTickets || undefined,
     })
     showCreateModal.value = false
+  } catch (err: any) {
+    createError.value = err?.response?.data?.message ?? err?.response?.data?.error ?? 'Не удалось создать объявление'
   } finally { isCreating.value = false }
 }
 
 // ── Edit modal ─────────────────────────────────────────────────────────────────
 const showEditModal = ref(false)
 const isUpdating    = ref(false)
+const editError     = ref('')
 const editingId     = ref('')
 const editForm      = ref({ title: '', description: '', price: 0, currency: 'USD', quantity: 1, status: 'active' as any })
 
@@ -251,6 +256,7 @@ function tryCloseEdit() {
 }
 async function submitEdit() {
   isUpdating.value = true
+  editError.value = ''
   try {
     await store.updateListing(editingId.value, {
       title: editForm.value.title, description: editForm.value.description,
@@ -258,11 +264,17 @@ async function submitEdit() {
       quantity: editForm.value.quantity,
     })
     showEditModal.value = false
+  } catch (err: any) {
+    editError.value = err?.response?.data?.message ?? err?.response?.data?.error ?? 'Не удалось сохранить изменения'
   } finally { isUpdating.value = false }
 }
 async function deleteListing(id: string) {
   if (!confirm('Удалить объявление?')) return
-  await store.deleteListing(id)
+  try {
+    await store.deleteListing(id)
+  } catch (err: any) {
+    alert(err?.response?.data?.error ?? 'Не удалось удалить объявление')
+  }
 }
 
 // ── Bid modal ──────────────────────────────────────────────────────────────────
@@ -1132,6 +1144,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
             <!-- Submit -->
             <div class="flex gap-3 pt-1">
+              <div v-if="createError" class="w-full text-red-400 text-xs font-medium bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">{{ createError }}</div>
               <button @click="tryCloseCreate()"
                 class="px-5 py-3 border border-white/8 text-white/40 text-sm font-bold rounded-2xl transition-all hover:bg-white/5 hover:text-white">
                 Отмена
@@ -1215,6 +1228,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               </div>
             </div>
             <div class="flex gap-3 pt-1">
+              <div v-if="editError" class="w-full text-red-400 text-xs font-medium bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">{{ editError }}</div>
               <button @click="tryCloseEdit()" class="px-5 py-3 border border-white/8 text-white/40 text-sm font-bold rounded-2xl transition-all hover:bg-white/5 hover:text-white">Отмена</button>
               <button @click="submitEdit" :disabled="isUpdating"
                 class="flex-1 flex items-center justify-center gap-2 py-3 disabled:opacity-35 text-white text-sm font-bold rounded-2xl transition-all hover:opacity-90"

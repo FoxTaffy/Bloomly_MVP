@@ -30,6 +30,7 @@
             {{ applying ? 'Подаём заявку...' : 'Подать заявку' }}
           </button>
         </div>
+        <div v-if="applyError" class="apply-error">{{ applyError }}</div>
         <div v-if="hasApplied" class="applied-note">Вы уже подали заявку на эту ярмарку.</div>
 
         <!-- Top listings -->
@@ -90,6 +91,7 @@ const myListings    = ref<any[]>([])
 const loading       = ref(false)
 const error         = ref('')
 const applying      = ref(false)
+const applyError    = ref('')
 const hasApplied    = ref(false)
 const selectedListing = ref('')
 
@@ -106,9 +108,12 @@ function formatDate(d: string) {
 
 async function apply() {
   applying.value = true
+  applyError.value = ''
   try {
     await store.applyToFair(fair.value.id, selectedListing.value || undefined)
     hasApplied.value = true
+  } catch (err: any) {
+    applyError.value = err?.response?.data?.message ?? err?.response?.data?.error ?? 'Не удалось подать заявку'
   } finally {
     applying.value = false
   }
@@ -207,6 +212,7 @@ onMounted(async () => {
 .apply-btn:hover:not(:disabled) { background: #4f46e5; }
 .apply-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .applied-note { color: #6b7280; font-size: 14px; }
+.apply-error { color: #ef4444; font-size: 13px; margin-top: 8px; }
 
 .section { display: flex; flex-direction: column; gap: 14px; }
 .section-title { font-size: 18px; font-weight: 700; margin: 0; }
