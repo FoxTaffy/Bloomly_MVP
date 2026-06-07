@@ -14,6 +14,9 @@ interface Story {
   image_url: string | null
   created_at: string
   expires_at: string
+  isBloomly?: boolean
+  title?: string
+  body?: string
   user: {
     id: string
     username: string
@@ -93,6 +96,7 @@ const hasPrevGroup  = computed(() => curGroupIdx.value > 0)
 const hasNextGroup  = computed(() => curGroupIdx.value < props.groups.length - 1)
 const hasPrevStory  = computed(() => curStoryIdx.value > 0 || hasPrevGroup.value)
 const hasNextStory  = computed(() => curStoryIdx.value < currentGroup.value.length - 1 || hasNextGroup.value)
+const isBloomlyGroup = computed(() => currentGroup.value[0]?.isBloomly === true)
 
 const timeLeft = computed(() => {
   if (!currentStory.value) return ''
@@ -169,6 +173,13 @@ watch(loaded, (v) => { if (v) startTimer() })
 function onImageLoad() {
   loaded.value = true
 }
+
+// For text-only Bloomly updates (no image), auto-start the timer
+watch(currentStory, (s) => {
+  if (s?.isBloomly && !s.image_url) {
+    loaded.value = true
+  }
+}, { immediate: true })
 
 // Preload next image
 function preloadNext() {
@@ -373,8 +384,12 @@ onUnmounted(() => {
 
           <!-- Top bar: user info + actions -->
           <div class="relative z-10 flex items-center gap-3 px-3 pt-2 pb-1">
-            <!-- Avatar -->
+            <!-- Bloomly avatar / regular avatar -->
+            <div v-if="isBloomlyGroup" class="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center ring-2 ring-brand-accent/60">
+              <span class="text-white font-black text-base select-none" style="letter-spacing:-1px">B</span>
+            </div>
             <button
+              v-else
               class="flex-shrink-0 ring-2 ring-white/30 hover:ring-white/60 rounded-full transition-all"
               @click.stop="emit('close'); router.push('/profile/' + currentStory.user.username)"
             >
@@ -392,7 +407,12 @@ onUnmounted(() => {
             </button>
             <!-- Name -->
             <div class="flex-1 min-w-0">
+              <div v-if="isBloomlyGroup" class="flex items-center gap-1.5">
+                <p class="text-sm font-bold text-white leading-tight truncate">Bloomly</p>
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-brand-accent/25 text-brand-accent border border-brand-accent/30">Официально</span>
+              </div>
               <p
+                v-else
                 class="text-sm font-bold text-white leading-tight cursor-pointer hover:underline truncate"
                 @click.stop="emit('close'); router.push('/profile/' + currentStory.user.username)"
               >
@@ -400,9 +420,10 @@ onUnmounted(() => {
               </p>
               <div class="flex items-center gap-1.5 text-[11px] text-white/55">
                 <span>{{ formatAgo(currentStory.created_at) }}</span>
-                <span v-if="timeLeft" class="flex items-center gap-0.5">
+                <span v-if="timeLeft && !isBloomlyGroup" class="flex items-center gap-0.5">
                   <BIcon name="Clock" class="w-3 h-3" />{{ timeLeft }}
                 </span>
+                <span v-if="isBloomlyGroup && currentStory.title" class="font-semibold text-white/80 truncate max-w-[160px]">{{ currentStory.title }}</span>
               </div>
             </div>
             <!-- Pause indicator -->
@@ -447,7 +468,19 @@ onUnmounted(() => {
                   @load="onImageLoad"
                   draggable="false"
                 />
-                <!-- No image placeholder -->
+                <!-- No image: Bloomly text card or generic placeholder -->
+                <div
+                  v-else-if="currentStory.isBloomly"
+                  class="w-full h-full flex flex-col items-center justify-center gap-6 px-8 bg-gradient-to-br from-[#1a1f4e] via-[#0f172a] to-[#1e1b4b]"
+                >
+                  <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center shadow-2xl shadow-brand-accent/30">
+                    <span class="text-white font-black text-3xl select-none" style="letter-spacing:-2px">B</span>
+                  </div>
+                  <div class="text-center space-y-3">
+                    <h2 class="text-xl font-extrabold text-white leading-tight">{{ currentStory.title }}</h2>
+                    <p v-if="currentStory.body" class="text-sm text-white/70 leading-relaxed">{{ currentStory.body }}</p>
+                  </div>
+                </div>
                 <div
                   v-else
                   class="flex flex-col items-center gap-3 text-white/30"
@@ -550,9 +583,22 @@ onUnmounted(() => {
 
             <!-- Reply row -->
             <div class="flex items-center gap-3">
+              <!-- Bloomly update: show branded label + body if has image -->
+              <div
+                v-if="isBloomlyGroup"
+                class="flex-1 flex flex-col gap-1 bg-white/6 border border-brand-accent/20 rounded-2xl px-4 py-2.5"
+              >
+                <div class="flex items-center gap-1.5">
+                  <div class="w-4 h-4 rounded-md bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center flex-shrink-0">
+                    <span class="text-white font-black text-[8px]">B</span>
+                  </div>
+                  <span class="text-xs font-bold text-brand-accent">Обновление Bloomly</span>
+                </div>
+                <p v-if="currentStory.body && currentStory.image_url" class="text-[11px] text-white/60 leading-snug line-clamp-2">{{ currentStory.body }}</p>
+              </div>
               <!-- Reply input — hidden when viewing own story -->
               <div
-                v-if="currentStory && currentStory.user.id !== (authStore.user as any)?.id"
+                v-else-if="currentStory && currentStory.user.id !== (authStore.user as any)?.id"
                 class="flex-1 flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-4 py-2.5"
                 :class="replyStatus === 'sent' ? 'border-green-500/30' : replyStatus === 'error' ? 'border-rose-500/30' : ''"
               >
@@ -585,8 +631,8 @@ onUnmounted(() => {
                 Ваша история
               </div>
 
-            <!-- Vote pill — same style as PostCard.vue -->
-            <div class="flex items-center gap-1 bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/20 flex-shrink-0">
+            <!-- Vote pill — hidden for Bloomly stories -->
+            <div v-if="!isBloomlyGroup" class="flex items-center gap-1 bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/20 flex-shrink-0">
               <button
                 @click.stop="castVote(1)"
                 class="p-1.5 rounded-full transition-all duration-150"
@@ -613,6 +659,7 @@ onUnmounted(() => {
               </button>
             </div>
             <button
+              v-if="!isBloomlyGroup"
               @click.stop
               class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center transition-all hover:scale-110 backdrop-blur-sm flex-shrink-0"
               aria-label="Поделиться"

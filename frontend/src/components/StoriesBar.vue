@@ -19,12 +19,24 @@ export interface Story {
   image_url: string | null
   created_at: string
   expires_at: string
+  isBloomly?: boolean
+  title?: string
+  body?: string
   user: {
     id: string
     username: string
     display_name: string | null
     avatar_url: string | null
   }
+}
+
+interface BloomlyUpdate {
+  id: string
+  title: string
+  body: string | null
+  image_url: string | null
+  created_at: string
+  is_active: boolean
 }
 
 // ── Props / Emits ────────────────────────────────────────────────────────────
@@ -38,6 +50,7 @@ const langStore = useLangStore()
 
 // ── State ────────────────────────────────────────────────────────────────────
 const stories = ref<Story[]>([])
+const bloomlyUpdates = ref<BloomlyUpdate[]>([])
 const loading = ref(true)
 const seenIds = ref<Set<string>>(new Set())
 
@@ -54,8 +67,41 @@ function markSeen(id: string) {
   try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seenIds.value])) } catch {}
 }
 
-// ── Grouped stories by user ──────────────────────────────────────────────────
-// Each bubble = one user's latest story
+// ── Bloomly Update group ─────────────────────────────────────────────────────
+const BLOOMLY_FAR_FUTURE = '2099-01-01T00:00:00.000Z'
+
+const bloomlyStoryGroup = computed<Story[]>(() => {
+  if (!bloomlyUpdates.value.length) return []
+  // Convert each update to a Story-shaped object
+  return bloomlyUpdates.value.map(u => ({
+    id: u.id,
+    image_url: u.image_url,
+    created_at: u.created_at,
+    expires_at: BLOOMLY_FAR_FUTURE,
+    isBloomly: true,
+    title: u.title,
+    body: u.body ?? undefined,
+    user: {
+      id: 'bloomly',
+      username: 'bloomly',
+      display_name: 'Bloomly',
+      avatar_url: null,
+    },
+  }))
+})
+
+const isBloomlyGroupSeen = computed(() =>
+  bloomlyStoryGroup.value.length > 0 &&
+  bloomlyStoryGroup.value.every(s => seenIds.value.has(s.id))
+)
+
+function openBloomlyGroup() {
+  if (!bloomlyStoryGroup.value.length) return
+  bloomlyStoryGroup.value.forEach(s => markSeen(s.id))
+  emit('open', bloomlyStoryGroup.value[0], bloomlyStoryGroup.value)
+}
+
+// ── Grouped user stories ─────────────────────────────────────────────────────
 const userStories = computed(() => {
   const map = new Map<string, Story[]>()
   for (const s of stories.value) {
@@ -63,20 +109,22 @@ const userStories = computed(() => {
     if (!map.has(uid)) map.set(uid, [])
     map.get(uid)!.push(s)
   }
-  // Sort each group by created_at asc
   map.forEach(arr => arr.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()))
   return [...map.values()]
 })
 
-// Is entire group seen?
 const isGroupSeen = (group: Story[]) => group.every(s => seenIds.value.has(s.id))
 
 // ── Fetch ───────────────────────────────────────────────────────────────────
 const fetchStories = async () => {
   loading.value = true
   try {
-    const res = await api.get('/stories')
-    if (res.data.success) stories.value = res.data.data.stories
+    const [storiesRes, updatesRes] = await Promise.all([
+      api.get('/stories'),
+      api.get('/updates'),
+    ])
+    if (storiesRes.data.success) stories.value = storiesRes.data.data.stories
+    if (updatesRes.data.success) bloomlyUpdates.value = updatesRes.data.data.updates
   } catch {}
   loading.value = false
 }
@@ -122,6 +170,40 @@ function openGroup(group: Story[]) {
     >
       <div class="flex gap-3 min-w-max items-end">
 
+        <!-- ── Bloomly Updates Bubble (always first) ──────────────────────── -->
+        <button
+          v-if="bloomlyStoryGroup.length > 0"
+          class="flex flex-col items-center gap-1.5 group flex-shrink-0"
+          @click="openBloomlyGroup"
+          aria-label="Обновления Bloomly"
+        >
+          <div class="h-[10px]" />
+          <!-- Ring + Icon -->
+          <div class="relative w-[68px] h-[68px]">
+            <!-- Animated gradient ring (unseen) or muted (seen) -->
+            <div
+              class="absolute inset-0 rounded-[20px] p-[2.5px] transition-all duration-300"
+              :class="isBloomlyGroupSeen
+                ? 'bg-white/20 group-hover:bg-white/35'
+                : 'bloomly-ring'"
+            >
+              <div class="w-full h-full rounded-[17px] border-[3px] border-brand-card overflow-hidden bg-gradient-to-br from-[#4C67CF] via-[#7c3aed] to-[#4C67CF] flex items-center justify-center">
+                <!-- Bloomly "B" logo -->
+                <span class="text-white font-black text-2xl select-none" style="font-family:system-ui,sans-serif;letter-spacing:-1px">B</span>
+              </div>
+            </div>
+            <!-- New indicator dot -->
+            <div
+              v-if="!isBloomlyGroupSeen"
+              class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-brand-accent border-2 border-brand-card animate-pulse"
+            />
+          </div>
+          <span
+            class="text-[10px] font-bold transition-colors max-w-[68px] truncate"
+            :class="isBloomlyGroupSeen ? 'text-white/40 group-hover:text-white/70' : 'text-brand-accent group-hover:text-white'"
+          >Bloomly</span>
+        </button>
+
         <!-- ── Add Story Button ───────────────────────────────────────────── -->
         <button
           class="flex flex-col items-center gap-1.5 group flex-shrink-0"
@@ -130,10 +212,8 @@ function openGroup(group: Story[]) {
         >
           <!-- Notes bubble above avatar -->
           <div v-if="statusNote" class="relative mb-1 overflow-hidden" style="width:100px">
-            <!-- Bubble body -->
             <div class="w-full px-2.5 py-2 rounded-[16px] text-white shadow-2xl overflow-hidden"
               :style="noteBubbleBg(statusNote)">
-              <!-- Text/emoji -->
               <div v-if="statusNote.text || statusNote.emoji"
                 class="flex gap-1 items-start"
                 :class="statusNote.music ? 'mb-1' : ''">
@@ -142,7 +222,6 @@ function openGroup(group: Story[]) {
                   class="text-[11px] font-semibold leading-snug"
                   style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;word-break:break-all">{{ statusNote.text }}</span>
               </div>
-              <!-- Music -->
               <div v-if="statusNote.music" class="flex items-center gap-1.5">
                 <div class="flex items-end gap-[2px] h-3 flex-shrink-0">
                   <span v-for="(h, i) in [50,100,65,85]" :key="i"
@@ -155,19 +234,14 @@ function openGroup(group: Story[]) {
                 </div>
               </div>
             </div>
-            <!-- Arrow tail pointing down -->
             <div class="absolute -bottom-[7px] left-4 w-0 h-0 pointer-events-none"
               :style="`border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${noteBubbleArrowColor(statusNote)}`" />
           </div>
 
-          <!-- Empty space to align with others when no bubble -->
           <div v-else class="h-[10px]" />
 
-          <!-- Avatar ring -->
           <div class="relative w-[68px] h-[68px]">
-            <!-- Dashed ring outer -->
             <div class="absolute inset-0 rounded-[20px] border-2 border-dashed border-white/20 group-hover:border-brand-accent/60 transition-colors duration-300"></div>
-            <!-- Inner card -->
             <div class="absolute inset-[4px] rounded-[15px] bg-brand-bg flex items-center justify-center overflow-hidden">
               <img
                 v-if="auth.avatarUrl"
@@ -181,7 +255,6 @@ function openGroup(group: Story[]) {
                 </span>
               </div>
             </div>
-            <!-- Plus badge -->
             <div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-brand-accent border-2 border-brand-card flex items-center justify-center shadow-lg shadow-brand-accent/40 group-hover:scale-110 transition-transform duration-200">
               <BIcon name="Plus" class="w-3 h-3 text-white" />
             </div>
@@ -213,11 +286,8 @@ function openGroup(group: Story[]) {
             class="flex flex-col items-center gap-1.5 group flex-shrink-0"
             @click="openGroup(group)"
           >
-            <!-- spacer so avatars align at bottom -->
             <div class="h-[10px]" />
-            <!-- Ring + Avatar -->
             <div class="relative w-[68px] h-[68px]">
-              <!-- Gradient ring (unseen) OR grey ring (seen) -->
               <div
                 class="absolute inset-0 rounded-[20px] p-[2.5px] transition-all duration-300"
                 :class="isGroupSeen(group)
@@ -242,7 +312,6 @@ function openGroup(group: Story[]) {
                 </div>
               </div>
 
-              <!-- Multi-story indicator (dots at bottom) -->
               <div
                 v-if="group.length > 1"
                 class="absolute -bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5"
@@ -256,7 +325,6 @@ function openGroup(group: Story[]) {
               </div>
             </div>
 
-            <!-- Username -->
             <span
               class="text-[10px] font-bold transition-colors max-w-[68px] truncate"
               :class="isGroupSeen(group) ? 'text-white/40 group-hover:text-white/70' : 'text-white/70 group-hover:text-white'"
@@ -267,7 +335,7 @@ function openGroup(group: Story[]) {
 
           <!-- Empty state -->
           <div
-            v-if="userStories.length === 0"
+            v-if="userStories.length === 0 && bloomlyStoryGroup.length === 0"
             class="flex items-center gap-3 text-white/30 px-4 py-2"
           >
             <BIcon name="PhoneOff" class="w-4 h-4" />
@@ -293,5 +361,17 @@ function openGroup(group: Story[]) {
 @keyframes noteBar {
   0%, 100% { transform: scaleY(0.35) }
   50%       { transform: scaleY(1) }
+}
+
+/* Bloomly animated gradient ring */
+.bloomly-ring {
+  background: linear-gradient(135deg, #4C67CF, #7c3aed, #4C67CF, #06b6d4);
+  background-size: 300% 300%;
+  animation: bloomlyRingAnim 3s ease infinite;
+}
+@keyframes bloomlyRingAnim {
+  0%   { background-position: 0% 50% }
+  50%  { background-position: 100% 50% }
+  100% { background-position: 0% 50% }
 }
 </style>

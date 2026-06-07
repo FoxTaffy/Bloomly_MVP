@@ -440,13 +440,15 @@ export const postService = {
     }));
   },
 
-  async createComment(userId: string, postId: string, content: string, parentId?: string) {
+  async createComment(userId: string, postId: string, content: string, parentId?: string, type?: string, file_url?: string) {
     const comment = await prisma.comment.create({
       data: {
         post_id: postId,
         author_id: userId,
-        content,
+        content: content || '',
         parent_id: parentId ?? null,
+        type: type ?? 'text',
+        file_url: file_url ?? null,
       },
       include: {
         author: { select: AUTHOR_SELECT },

@@ -62,12 +62,12 @@
                   <img v-if="pack.cover_url" :src="pack.cover_url" class="w-full h-full object-cover" />
 
                   <div v-else class="w-full h-full flex items-center justify-center gap-2 flex-wrap p-2">
-                    <img
+                    <div
                       v-for="(url, i) in pack.stickers.slice(0, 4)"
                       :key="i"
-                      :src="url"
-                      class="w-14 h-14 object-contain opacity-90"
-                    />
+                      class="w-14 h-14 opacity-90">
+                      <StickerImg :src="url" />
+                    </div>
                   </div>
                 </div>
 
@@ -106,8 +106,8 @@
 
               <!-- Clicked sticker highlight -->
               <div class="flex justify-center px-5 pb-3">
-                <div class="w-24 h-24 rounded-2xl bg-brand-bg border-2 border-brand-accent/40 flex items-center justify-center overflow-hidden shadow-lg">
-                  <img :src="stickerUrl" class="w-full h-full object-contain p-1" />
+                <div class="w-24 h-24 rounded-2xl bg-brand-bg border-2 border-brand-accent/40 overflow-hidden shadow-lg p-1">
+                  <StickerImg :src="stickerUrl" />
                 </div>
               </div>
 
@@ -119,12 +119,12 @@
                     v-for="(url, i) in pack.stickers.slice(0, 20)"
                     :key="i"
                     :class="[
-                      'aspect-square rounded-xl flex items-center justify-center p-1 overflow-hidden border transition-all',
+                      'aspect-square rounded-xl overflow-hidden border transition-all p-1',
                       url === stickerUrl
                         ? 'border-brand-accent/60 bg-brand-accent/10'
                         : 'border-brand-border/40 bg-white/5'
                     ]">
-                    <img :src="url" class="w-full h-full object-contain" loading="lazy" />
+                    <StickerImg :src="url" />
                   </div>
                   <div v-if="pack.stickers.length > 20"
                     class="aspect-square rounded-xl border border-brand-border/40 bg-white/5 flex items-center justify-center text-[10px] text-white/40 font-bold">
@@ -201,6 +201,7 @@ const langStore = useLangStore()
 import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import BIcon from '@/components/BIcon.vue'
+import StickerImg from '@/components/StickerImg.vue'
 import { useStickersStore, type StickerPack } from '@/stores/stickers'
 
 const props = defineProps<{

@@ -8,6 +8,7 @@ import { useStickersStore } from '@/stores/stickers'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
+import StickerImg from '@/components/StickerImg.vue'
 
 const router = useRouter()
 const route  = useRoute()
@@ -331,12 +332,9 @@ const chartData = computed(() => {
                     <div
                       v-for="(sticker, i) in pack.stickers"
                       :key="i"
-                      class="aspect-square rounded-2xl border border-brand-border bg-white/5 flex items-center justify-center cursor-zoom-in hover:border-brand-purple/40 hover:bg-brand-purple/5 transition-all p-1.5"
+                      class="aspect-square rounded-2xl border border-brand-border bg-white/5 overflow-hidden cursor-zoom-in hover:border-brand-purple/40 hover:bg-brand-purple/5 transition-all p-1.5"
                       @click="lightbox = sticker">
-                      <img
-                        :src="sticker"
-                        :alt="`Sticker ${i + 1}`"
-                        class="w-full h-full object-contain" />
+                      <StickerImg :src="sticker" :alt="`Sticker ${i + 1}`" />
                     </div>
                   </div>
                 </div>
@@ -466,7 +464,7 @@ const chartData = computed(() => {
                       <div
                         v-for="(sticker, i) in pack.stickers.slice(0, 5)" :key="i"
                         class="flex items-center gap-3">
-                        <img :src="sticker" class="w-9 h-9 object-contain shrink-0" />
+                        <div class="w-9 h-9 shrink-0"><StickerImg :src="sticker" /></div>
                         <div class="flex-1 min-w-0">
                           <div class="w-full h-2 bg-brand-border rounded-full overflow-hidden">
                             <div

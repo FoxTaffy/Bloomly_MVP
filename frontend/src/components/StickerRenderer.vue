@@ -1,20 +1,18 @@
 <template>
   <div :class="['sticker-renderer flex items-center justify-center', sizeClass, props.class]">
-    <!-- Lottie canvas (TGS / JSON) -->
-    <div v-if="isLottie" ref="lottieEl" class="w-full h-full" />
+    <!-- Lottie canvas (TGS / JSON) — shimmer fades when animation is ready -->
+    <div v-if="isLottie" class="relative w-full h-full">
+      <div v-if="!lottieLoaded" class="absolute inset-0 sticker-shimmer pointer-events-none" />
+      <div ref="lottieEl" class="w-full h-full" />
+    </div>
     <!-- Animated / static image (WebP, GIF, PNG, etc.) -->
-    <img
-      v-else
-      :src="src"
-      :alt="alt"
-      class="w-full h-full object-contain select-none"
-      loading="lazy"
-      draggable="false" />
+    <StickerImg v-else :src="src" :alt="alt" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import StickerImg from '@/components/StickerImg.vue'
 
 // lottie-web is a CommonJS module; use dynamic import to avoid SSR issues
 let lottie: any = null
@@ -34,8 +32,8 @@ const props = withDefaults(defineProps<{
 })
 
 // ── Detect type ────────────────────────────────────────────────────────────
-const isTgs  = computed(() => /\.tgs$/i.test(props.src))
-const isJson = computed(() => /\.json$/i.test(props.src))
+const isTgs    = computed(() => /\.tgs$/i.test(props.src))
+const isJson   = computed(() => /\.json$/i.test(props.src))
 const isLottie = computed(() => isTgs.value || isJson.value)
 
 const sizeClass = computed(() => ({
@@ -47,12 +45,14 @@ const sizeClass = computed(() => ({
 }[props.size]))
 
 // ── Lottie ─────────────────────────────────────────────────────────────────
-const lottieEl  = ref<HTMLElement | null>(null)
-let   anim: any = null
+const lottieEl    = ref<HTMLElement | null>(null)
+const lottieLoaded = ref(false)
+let   anim: any   = null
 
 async function initLottie() {
   if (!lottieEl.value) return
   destroyAnim()
+  lottieLoaded.value = false
 
   if (!lottie) {
     const mod = await import('lottie-web')
@@ -82,6 +82,8 @@ async function initLottie() {
       path: props.src,
     })
   }
+
+  anim.addEventListener('data_ready', () => { lottieLoaded.value = true })
 }
 
 function destroyAnim() {
@@ -96,3 +98,22 @@ watch(() => props.src, () => {
   else destroyAnim()
 })
 </script>
+
+<style scoped>
+.sticker-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.10) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: sticker-shimmer-anim 1.4s ease infinite;
+  transition: opacity 0.25s ease;
+}
+
+@keyframes sticker-shimmer-anim {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+</style>

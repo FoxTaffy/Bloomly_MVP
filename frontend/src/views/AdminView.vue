@@ -23,7 +23,7 @@ onMounted(async () => {
 })
 
 // ── Tabs ──────────────────────────────────────────────────────────────
-const activeTab = ref<'overview' | 'users' | 'archived' | 'posts' | 'reports' | 'ads' | 'verification' | 'banners' | 'automod' | 'statistics'>('overview')
+const activeTab = ref<'overview' | 'users' | 'archived' | 'posts' | 'reports' | 'ads' | 'verification' | 'banners' | 'automod' | 'statistics' | 'updates'>('overview')
 
 // ── Stats ─────────────────────────────────────────────────────────────
 const stats = ref<any>(null)
@@ -393,6 +393,58 @@ const fetchStatistics = async () => {
 
 const barMax = (arr: { value: number }[]) => Math.max(...arr.map(x => x.value), 1)
 
+// ── Bloomly Updates ───────────────────────────────────────────────────────────
+const updates = ref<any[]>([])
+const isLoadingUpdates = ref(false)
+const newUpdateTitle = ref('')
+const newUpdateBody = ref('')
+const newUpdateImageUrl = ref('')
+const isSavingUpdate = ref(false)
+
+const fetchUpdates = async () => {
+  isLoadingUpdates.value = true
+  try {
+    const res = await api.get('/updates/all')
+    if (res.data.success) updates.value = res.data.data.updates
+  } catch {} finally { isLoadingUpdates.value = false }
+}
+
+const createUpdate = async () => {
+  if (!newUpdateTitle.value.trim() || isSavingUpdate.value) return
+  isSavingUpdate.value = true
+  try {
+    const res = await api.post('/updates', {
+      title: newUpdateTitle.value.trim(),
+      body: newUpdateBody.value.trim() || undefined,
+      image_url: newUpdateImageUrl.value.trim() || undefined,
+    })
+    if (res.data.success) {
+      updates.value.unshift(res.data.data.update)
+      newUpdateTitle.value = ''
+      newUpdateBody.value = ''
+      newUpdateImageUrl.value = ''
+    }
+  } catch {} finally { isSavingUpdate.value = false }
+}
+
+const deleteUpdate = async (id: string) => {
+  if (!confirm('Удалить обновление?')) return
+  try {
+    await api.delete(`/updates/${id}`)
+    updates.value = updates.value.filter(u => u.id !== id)
+  } catch {}
+}
+
+const toggleUpdate = async (id: string, is_active: boolean) => {
+  try {
+    const res = await api.patch(`/updates/${id}/toggle`, { is_active })
+    if (res.data.success) {
+      const u = updates.value.find(u => u.id === id)
+      if (u) u.is_active = res.data.data.update.is_active
+    }
+  } catch {}
+}
+
 // Tab switch data loading
 const switchTab = (tab: typeof activeTab.value) => {
   activeTab.value = tab
@@ -405,6 +457,7 @@ const switchTab = (tab: typeof activeTab.value) => {
   if (tab === 'banners' && !banners.value.length) fetchBanners()
   if (tab === 'automod') fetchAutoModLogs()
   if (tab === 'statistics') fetchStatistics()
+  if (tab === 'updates' && !updates.value.length) fetchUpdates()
 }
 
 const formatNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
@@ -424,6 +477,7 @@ const navItems = computed(() => [
   { tab: 'banners'      as const, label: 'Баннеры',         icon: 'Image',           color: '#a855f7', badge: null },
   { tab: 'automod'      as const, label: 'AutoMod',          icon: 'ShieldAlert',     color: '#ef4444', badge: autoModTotal.value > 0 ? formatNum(autoModTotal.value) : null },
   { tab: 'statistics'   as const, label: 'Статистика',       icon: 'BarChart2',       color: '#10b981', badge: null },
+  { tab: 'updates'      as const, label: 'Обновления',       icon: 'Megaphone',       color: '#4C67CF', badge: updates.value.filter((u:any) => u.is_active).length || null },
 ])
 
 const statCards = computed(() => stats.value ? [
@@ -1798,6 +1852,100 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
           <div v-else-if="!isLoadingStatistics" class="flex flex-col items-center gap-4 py-24 text-white/25">
             <BIcon name="BarChart2" class="w-12 h-12 opacity-30" />
             <p class="text-sm font-semibold">Нет данных</p>
+          </div>
+
+        </div>
+
+        <!-- ── Bloomly Updates Tab ─────────────────────────────────────── -->
+        <div v-else-if="activeTab === 'updates'" class="space-y-6">
+
+          <!-- Create form -->
+          <div class="rounded-3xl border border-white/5 p-6 space-y-4" style="background:rgba(255,255,255,0.02)">
+            <div class="flex items-center gap-3 mb-2">
+              <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center flex-shrink-0">
+                <span class="text-white font-black text-sm select-none">B</span>
+              </div>
+              <h3 class="font-extrabold text-white">Новое обновление</h3>
+              <span class="text-xs text-white/30 ml-auto">Отображается в историях первым</span>
+            </div>
+
+            <input
+              v-model="newUpdateTitle"
+              class="adm-input"
+              placeholder="Заголовок (напр. «Версия 1.5 — новые стикеры»)"
+              maxlength="120"
+            />
+            <textarea
+              v-model="newUpdateBody"
+              class="adm-input resize-none"
+              rows="3"
+              placeholder="Описание изменений (необязательно)…"
+              maxlength="800"
+            />
+            <input
+              v-model="newUpdateImageUrl"
+              class="adm-input"
+              placeholder="URL обложки (необязательно)"
+            />
+            <button
+              @click="createUpdate"
+              :disabled="!newUpdateTitle.trim() || isSavingUpdate"
+              class="px-6 py-2.5 rounded-2xl font-bold text-sm text-white transition-all disabled:opacity-40"
+              style="background:linear-gradient(135deg,#4C67CF,#7c3aed)"
+            >
+              <span v-if="isSavingUpdate">Публикация…</span>
+              <span v-else>Опубликовать обновление</span>
+            </button>
+          </div>
+
+          <!-- Updates list -->
+          <div v-if="isLoadingUpdates" class="flex items-center justify-center py-16">
+            <BIcon name="Loader2" class="w-8 h-8 text-white/30 animate-spin" />
+          </div>
+          <div v-else-if="updates.length === 0" class="flex flex-col items-center gap-4 py-20 text-white/25">
+            <BIcon name="Megaphone" class="w-12 h-12 opacity-30" />
+            <p class="text-sm font-semibold">Обновлений ещё нет</p>
+          </div>
+          <div v-else class="space-y-3">
+            <div
+              v-for="u in updates"
+              :key="u.id"
+              class="rounded-2xl border p-4 flex gap-4 items-start transition-all"
+              :class="u.is_active ? 'border-brand-accent/20 bg-brand-accent/5' : 'border-white/5 opacity-50'"
+              style="background:rgba(255,255,255,0.02)"
+            >
+              <!-- Cover image or logo -->
+              <div class="flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden border border-white/10">
+                <img v-if="u.image_url" :src="u.image_url" class="w-full h-full object-cover" />
+                <div v-else class="w-full h-full bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center">
+                  <span class="text-white font-black text-xl select-none">B</span>
+                </div>
+              </div>
+              <!-- Content -->
+              <div class="flex-1 min-w-0">
+                <p class="font-bold text-white text-sm">{{ u.title }}</p>
+                <p v-if="u.body" class="text-xs text-white/50 mt-0.5 line-clamp-2">{{ u.body }}</p>
+                <p class="text-[11px] text-white/25 mt-1">{{ formatDate(u.created_at) }}</p>
+              </div>
+              <!-- Actions -->
+              <div class="flex flex-col gap-2 flex-shrink-0">
+                <button
+                  @click="toggleUpdate(u.id, !u.is_active)"
+                  class="px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all"
+                  :class="u.is_active
+                    ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
+                    : 'bg-white/6 text-white/40 hover:bg-white/10'"
+                >
+                  {{ u.is_active ? 'Активно' : 'Скрыто' }}
+                </button>
+                <button
+                  @click="deleteUpdate(u.id)"
+                  class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-all"
+                >
+                  Удалить
+                </button>
+              </div>
+            </div>
           </div>
 
         </div>

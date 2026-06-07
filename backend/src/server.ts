@@ -26,6 +26,7 @@ import { shopRoutes } from './modules/shop/routes.js';
 import { activitiesRoutes } from './modules/activities/routes.js';
 import { automodRoutes } from './modules/automod/routes.js';
 import { seoRoutes } from './modules/seo/routes.js';
+import { updatesRoutes } from './modules/updates/routes.js';
 import { messageService, messageSubscriptions } from './modules/messages/service.js';
 import { groupService } from './modules/groups/service.js';
 import { initCronJobs } from './cron.js';
@@ -139,6 +140,7 @@ fastify.register(stickersRoutes, { prefix: '/api/stickers' });
 fastify.register(shopRoutes,    { prefix: '/api/shop' });
 fastify.register(activitiesRoutes, { prefix: '/api/activities' });
 fastify.register(automodRoutes,    { prefix: '/api/automod' });
+fastify.register(updatesRoutes,    { prefix: '/api/updates' });
 // SEO: sitemap.xml and OG-proxy endpoints (no auth required, crawlers friendly)
 fastify.register(seoRoutes);
 

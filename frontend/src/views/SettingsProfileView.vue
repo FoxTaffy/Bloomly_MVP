@@ -570,6 +570,9 @@
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.birthdayLabel }}</label>
                       <input v-model="form.birth_date" type="date" class="field-input"
                         :max="new Date().toISOString().substring(0,10)" />
+                      <p v-if="savedForm.birth_date" class="text-[11px] text-white/35 mt-1.5 truncate">
+                        Сейчас: <span class="text-white/35 font-semibold">{{ formatBirthDate(savedForm.birth_date) }}</span>
+                      </p>
                       <p class="text-[11px] mt-1.5"
                         :class="birthAge !== null && birthAge < 18 ? 'text-brand-error/80' : 'text-white/35'">
                         <template v-if="birthAge !== null">
@@ -772,6 +775,35 @@
                           />
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  <!-- ── Донат ────────────────────────────── -->
+                  <div class="pt-2">
+                    <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Ссылка для доната</label>
+                    <div class="relative">
+                      <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400/70 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                      </svg>
+                      <input v-model="form.donate_url" type="url" placeholder="https://boosty.to/... или DonationAlerts, Ko-fi" class="field-input !pl-10"/>
+                    </div>
+                    <p class="text-[11px] text-white/35 mt-1.5">Ссылка появится кнопкой «Донат» на вашем профиле</p>
+                  </div>
+
+                  <!-- ── Приём личных сообщений ────────────── -->
+                  <div class="pt-2">
+                    <div class="flex items-center justify-between p-4 bg-brand-bg/60 border border-brand-border rounded-2xl">
+                      <div>
+                        <p class="text-sm font-semibold text-white">Личные сообщения</p>
+                        <p class="text-xs text-white/45 mt-0.5">{{ form.allow_messages ? 'Любой может написать вам' : 'Никто не может написать вам' }}</p>
+                      </div>
+                      <button type="button"
+                        @click="form.allow_messages = !form.allow_messages"
+                        class="relative w-11 h-6 rounded-full transition-colors flex-shrink-0"
+                        :class="form.allow_messages ? 'bg-brand-accent' : 'bg-white/15'">
+                        <span class="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all"
+                          :class="form.allow_messages ? 'left-[calc(100%-22px)]' : 'left-0.5'" />
+                      </button>
                     </div>
                   </div>
 
@@ -1640,6 +1672,8 @@ const form = reactive({
   profile_bg_url:      '' as string,
   profile_frame:       '' as string,
   social_links:        {} as Record<string, string>,
+  allow_messages:      true,
+  donate_url:          '' as string,
 })
 
 // ── Saved snapshot ─────────────────────────────────────────────────────────
@@ -1673,6 +1707,8 @@ const savedForm = reactive({
   profile_bg_url:      '' as string,
   profile_frame:       '' as string,
   social_links:        {} as Record<string, string>,
+  allow_messages:      true,
+  donate_url:          '' as string,
 })
 
 function snapshotToSaved() {
@@ -1705,6 +1741,8 @@ function snapshotToSaved() {
   savedForm.profile_bg_url      = form.profile_bg_url
   savedForm.profile_frame       = form.profile_frame
   savedForm.social_links        = { ...form.social_links }
+  savedForm.allow_messages      = form.allow_messages
+  savedForm.donate_url          = form.donate_url
 }
 
 function resetForm() {
@@ -1737,6 +1775,8 @@ function resetForm() {
   form.profile_bg_url      = savedForm.profile_bg_url
   form.profile_frame       = savedForm.profile_frame
   form.social_links        = { ...savedForm.social_links }
+  form.allow_messages      = savedForm.allow_messages
+  form.donate_url          = savedForm.donate_url
   // Clear originals so re-crop picks up the reverted server images
   avatarOriginalSrc.value = ''
   bannerOriginalSrc.value = ''
@@ -1773,7 +1813,9 @@ const isDirty = computed(() => {
     form.birth_date          !== savedForm.birth_date ||
     form.profile_theme       !== savedForm.profile_theme ||
     form.profile_bg_url      !== savedForm.profile_bg_url ||
-    form.profile_frame       !== savedForm.profile_frame
+    form.profile_frame       !== savedForm.profile_frame ||
+    form.allow_messages      !== savedForm.allow_messages ||
+    form.donate_url          !== savedForm.donate_url
   )
   return fieldsChanged ||
     JSON.stringify(form.likes)         !== JSON.stringify(savedForm.likes) ||
@@ -1815,6 +1857,8 @@ onMounted(async () => {
   form.profile_bg_url      = (p as any).profile_bg_url ?? ''
   form.profile_frame       = (p as any).profile_frame  ?? ''
   form.social_links        = { ...((p as any).social_links ?? {}) }
+  form.allow_messages      = (p as any).allow_messages ?? true
+  form.donate_url          = (p as any).donate_url ?? ''
   snapshotToSaved()
   // Pre-fill combobox search inputs with saved values
   countrySearch.value = form.country
@@ -2351,6 +2395,8 @@ async function handleSubmit() {
     profile_bg_url:      form.profile_bg_url || null,
     profile_frame:       form.profile_frame  || null,
     social_links:        form.social_links,
+    allow_messages:      form.allow_messages,
+    donate_url:          form.donate_url || null,
   }
   if (/^#[0-9A-Fa-f]{6}$/.test(form.accent_color)) payload.accent_color = form.accent_color
 
@@ -2481,13 +2527,19 @@ const completenessFields = computed(() => {
 // ── Birth date helpers ─────────────────────────────────────────────────────
 const birthAge = computed<number | null>(() => {
   if (!form.birth_date) return null
-  const birthYear  = new Date(form.birth_date)
-  const now        = new Date()
-  let age = now.getFullYear() - birthYear.getFullYear()
-  const m = now.getMonth() - birthYear.getMonth()
-  if (m < 0 || (m === 0 && now.getDate() < birthYear.getDate())) age--
+  const [y, mo, d] = form.birth_date.split('-').map(Number)
+  const now = new Date()
+  let age = now.getFullYear() - y
+  const m = now.getMonth() + 1 - mo
+  if (m < 0 || (m === 0 && now.getDate() < d)) age--
   return age
 })
+
+function formatBirthDate(date: string): string {
+  if (!date) return ''
+  const [y, m, d] = date.split('-')
+  return `${d}.${m}.${y}`
+}
 
 // ── Fursona species helpers ────────────────────────────────────────────────
 const fursonaSpeciesList = [

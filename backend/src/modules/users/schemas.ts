@@ -70,6 +70,8 @@ export const updateUserSchema = {
       profile_frame:        { type: 'string', nullable: true },
       artist_since:         { type: 'string', format: 'date', nullable: true },
       onboarding_done:     { type: 'boolean' },
+      allow_messages:      { type: 'boolean' },
+      donate_url:          { type: 'string', maxLength: 500, nullable: true },
     },
     additionalProperties: false,
   },

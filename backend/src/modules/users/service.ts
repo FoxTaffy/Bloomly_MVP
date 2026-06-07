@@ -50,6 +50,8 @@ const PUBLIC_SELECT = {
   verification_type:    true,
   artist_since:         true,
   onboarding_done:      true,
+  allow_messages:       true,
+  donate_url:           true,
 } as const;
 
 export const usersService = {

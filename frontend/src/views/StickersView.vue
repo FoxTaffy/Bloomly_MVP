@@ -13,6 +13,7 @@ import BIcon from '@/components/BIcon.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
 import StickerUpload from '@/components/StickerUpload.vue'
 import TelegramImportModal from '@/components/TelegramImportModal.vue'
+import StickerImg from '@/components/StickerImg.vue'
 
 const router = useRouter()
 const auth   = useAuthStore()
@@ -494,7 +495,7 @@ async function toggleCollection(pack: StickerPack) {
                   class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400" />
                 <div v-else-if="pack.stickers.length" class="w-full h-full grid grid-cols-3 gap-px p-1" style="background: rgba(255,255,255,0.02)">
                   <div v-for="(s, i) in pack.stickers.slice(0, 9)" :key="i" class="rounded-sm overflow-hidden">
-                    <img :src="s" class="w-full h-full object-contain" />
+                    <StickerImg :src="s" />
                   </div>
                 </div>
                 <div v-else class="w-full h-full flex items-center justify-center">
@@ -633,8 +634,8 @@ async function toggleCollection(pack: StickerPack) {
               <template v-else-if="pack.stickers.length">
                 <div class="w-full h-full grid grid-cols-3 gap-px p-1.5" style="background: rgba(255,255,255,0.02)">
                   <div v-for="(s, i) in pack.stickers.slice(0, 9)" :key="i"
-                    class="rounded-md overflow-hidden flex items-center justify-center">
-                    <img :src="s" class="w-full h-full object-contain" />
+                    class="rounded-md overflow-hidden">
+                    <StickerImg :src="s" />
                   </div>
                 </div>
               </template>

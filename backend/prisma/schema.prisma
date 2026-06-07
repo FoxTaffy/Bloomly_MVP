@@ -127,6 +127,8 @@ model User {
   disputesBuyer                DenDispute[]          @relation("DisputeBuyer")
   disputesSeller               DenDispute[]          @relation("DisputeSeller")
   denFairParticipations        DenFairParticipant[]
+  allow_messages               Boolean               @default(true)
+  donate_url                   String?               @db.VarChar(500)
 }
 
 model OAuthAccount {
@@ -277,6 +279,8 @@ model Comment {
   author_id  String        @db.Uuid
   parent_id  String?       @db.Uuid
   content    String
+  type       String        @default("text")
+  file_url   String?
   rating     Int           @default(0)
   created_at DateTime      @default(now())
   updated_at DateTime      @default(now()) @updatedAt
@@ -1349,4 +1353,16 @@ model UserShopItem {
 
   @@unique([user_id, item_id])
   @@index([user_id])
+}
+
+model BloomlyUpdate {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title      String
+  body       String?
+  image_url  String?
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([created_at(sort: Desc)])
 }

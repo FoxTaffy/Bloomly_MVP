@@ -41,6 +41,8 @@ export interface UserPublicProfile {
   verified_at: Date | null;
   verification_type: string | null;
   artist_since: Date | null;
+  allow_messages: boolean;
+  donate_url: string | null;
 }
 
 export interface UpdateUserInput {
@@ -78,6 +80,8 @@ export interface UpdateUserInput {
   artist_since?: string | null;
   relationship_since?: string | null;
   onboarding_done?: boolean;
+  allow_messages?: boolean;
+  donate_url?: string | null;
 }
 
 export interface JwtPayload {

@@ -168,14 +168,14 @@ export const getUserPostStatusHandler = async (
 };
 
 export const createCommentHandler = async (
-  request: FastifyRequest<{ Params: { id: string }; Body: { content: string; parentId?: string } }>,
+  request: FastifyRequest<{ Params: { id: string }; Body: { content: string; parentId?: string; type?: string; file_url?: string } }>,
   reply: FastifyReply,
 ) => {
   try {
     const { id: userId } = request.user as JwtUser;
     const { id: postId } = request.params;
-    const { content, parentId } = request.body;
-    const comment = await postService.createComment(userId, postId, content, parentId);
+    const { content, parentId, type, file_url } = request.body;
+    const comment = await postService.createComment(userId, postId, content, parentId, type, file_url);
     return reply.code(201).send({ success: true, data: { comment }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to create comment';

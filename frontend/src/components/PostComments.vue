@@ -5,6 +5,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
 import { useCollectionTranslate } from '@/composables/useAutoTranslate'
 import BIcon from './BIcon.vue'
+import StickerPanel from './StickerPanel.vue'
+import StickerRenderer from './StickerRenderer.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 
 const props = defineProps<{ postId: string }>()
@@ -13,7 +15,6 @@ const auth = useAuthStore()
 const langStore = useLangStore()
 const { enqueue: translateItem, getTranslation, isTranslating: isItemTranslating } = useCollectionTranslate()
 
-// Track which items are showing translation
 const showTranslationFor = ref<Set<string>>(new Set())
 
 function toggleCommentTranslate(id: string, content: string) {
@@ -35,18 +36,27 @@ function getCommentText(id: string, original: string): string {
 
 function autoEnqueueAll() {
   comments.value.forEach(c => {
-    translateItem(c.id, c.content)
-    c.replies?.forEach((r: any) => translateItem(r.id, r.content))
+    if (c.type !== 'sticker') translateItem(c.id, c.content)
+    c.replies?.forEach((r: any) => { if (r.type !== 'sticker') translateItem(r.id, r.content) })
   })
 }
 
-const comments = ref<any[]>([])
-const isLoading = ref(false)
-const commentText = ref('')
-const replyingTo = ref<{ id: string; username: string } | null>(null)
-const replyText = ref('')
-const submitting = ref(false)
+const comments       = ref<any[]>([])
+const isLoading      = ref(false)
+const commentText    = ref('')
+const replyingTo     = ref<{ id: string; username: string } | null>(null)
+const replyText      = ref('')
+const submitting     = ref(false)
 const expandedReplies = ref<Set<string>>(new Set())
+
+// Sticker panel state
+const showStickerPanel      = ref(false)
+const showReplyStickerPanel = ref(false)
+
+function closeStickerPanels() {
+  showStickerPanel.value = false
+  showReplyStickerPanel.value = false
+}
 
 const fetchComments = async () => {
   isLoading.value = true
@@ -60,7 +70,6 @@ const fetchComments = async () => {
   isLoading.value = false
 }
 
-// Auto-translate all comments when setting is toggled on
 watch(() => langStore.autoTranslateEnabled, (enabled) => {
   if (enabled) autoEnqueueAll()
 })
@@ -90,6 +99,27 @@ const submitComment = async () => {
   submitting.value = false
 }
 
+const submitCommentSticker = async (url: string) => {
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    const res = await api.post(`/posts/${props.postId}/comments`, {
+      content: '',
+      type: 'sticker',
+      file_url: url,
+    })
+    if (res.data.success) {
+      comments.value.unshift({ ...res.data.data.comment, replies: [], _count: { replies: 0 } })
+    }
+  } catch {}
+  submitting.value = false
+}
+
+function pickCommentSticker(url: string) {
+  closeStickerPanels()
+  submitCommentSticker(url)
+}
+
 const submitReply = async () => {
   if (!replyText.value.trim() || !replyingTo.value || submitting.value) return
   submitting.value = true
@@ -113,7 +143,37 @@ const submitReply = async () => {
   submitting.value = false
 }
 
-const cancelReply = () => { replyingTo.value = null; replyText.value = '' }
+const submitReplySticker = async (url: string) => {
+  if (!replyingTo.value || submitting.value) return
+  submitting.value = true
+  try {
+    const res = await api.post(`/posts/${props.postId}/comments`, {
+      content: '',
+      type: 'sticker',
+      file_url: url,
+      parentId: replyingTo.value.id,
+    })
+    if (res.data.success) {
+      const parent = comments.value.find(c => c.id === replyingTo.value!.id)
+      if (parent) {
+        if (!parent.replies) parent.replies = []
+        parent.replies.push(res.data.data.comment)
+        parent._count.replies++
+        expandedReplies.value.add(parent.id)
+      }
+      replyText.value = ''
+      replyingTo.value = null
+    }
+  } catch {}
+  submitting.value = false
+}
+
+function pickReplySticker(url: string) {
+  closeStickerPanels()
+  submitReplySticker(url)
+}
+
+const cancelReply = () => { replyingTo.value = null; replyText.value = ''; closeStickerPanels() }
 
 const toggleReplies = (commentId: string) => {
   if (expandedReplies.value.has(commentId)) expandedReplies.value.delete(commentId)
@@ -155,23 +215,44 @@ const deleteComment = async (commentId: string) => {
 <template>
   <div class="mt-4 space-y-3">
     <!-- Comment input -->
-    <div class="flex gap-3 items-start">
+    <div v-if="auth.user" class="flex gap-3 items-start">
       <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5" />
       <div v-else class="w-8 h-8 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
-      <div class="flex-1 flex gap-2">
-        <input
-          v-model="commentText"
-          @keydown.enter.prevent="submitComment"
-          :placeholder="langStore.t.writeComment"
-          class="flex-1 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
-        />
-        <button
-          @click="submitComment"
-          :disabled="!commentText.trim() || submitting"
-          class="px-4 py-2 bg-brand-accent text-white text-sm font-bold rounded-2xl disabled:opacity-40 flex-shrink-0">
-          <BIcon v-if="submitting" name="Loader2" class="w-4 h-4 animate-spin" />
-          <span v-else>{{ langStore.t.send }}</span>
-        </button>
+
+      <div class="flex-1 relative">
+        <!-- Sticker panel popover -->
+        <Transition name="popover-up">
+          <div v-if="showStickerPanel" class="absolute bottom-full mb-2 left-0 z-50">
+            <StickerPanel @pick="pickCommentSticker" />
+          </div>
+        </Transition>
+
+        <div class="flex gap-2">
+          <input
+            v-model="commentText"
+            @keydown.enter.prevent="submitComment"
+            @focus="showReplyStickerPanel = false"
+            :placeholder="langStore.t.writeComment"
+            class="flex-1 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
+          />
+          <!-- Sticker button -->
+          <button
+            type="button"
+            @click="showStickerPanel = !showStickerPanel; showReplyStickerPanel = false"
+            :class="['flex-shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center transition-all',
+              showStickerPanel ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/50 hover:text-brand-accent hover:bg-brand-bg border border-brand-border']"
+            title="Стикеры">
+            <BIcon name="Sticker" class="w-4 h-4" />
+          </button>
+          <!-- Send button -->
+          <button
+            @click="submitComment"
+            :disabled="!commentText.trim() || submitting"
+            class="px-4 py-2 bg-brand-accent text-white text-sm font-bold rounded-2xl disabled:opacity-40 flex-shrink-0">
+            <BIcon v-if="submitting" name="Loader2" class="w-4 h-4 animate-spin" />
+            <span v-else>{{ langStore.t.send }}</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -196,8 +277,22 @@ const deleteComment = async (commentId: string) => {
             @error="onAvatarError"
           />
           <div v-else class="w-8 h-8 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs">{{ (comment.author.display_name || comment.author.username || '?')[0].toUpperCase() }}</div>
+
           <div class="flex-1 min-w-0">
-            <div class="bg-brand-bg/50 rounded-2xl px-4 py-3 border border-brand-border/50">
+            <!-- Sticker comment — no bubble -->
+            <template v-if="comment.type === 'sticker' && comment.file_url">
+              <div class="flex items-center gap-2 mb-1 px-1">
+                <span class="font-bold text-white text-sm">{{ comment.author.display_name || comment.author.username }}</span>
+                <span class="text-white/55 text-xs">@{{ comment.author.username }}</span>
+                <span class="text-white/55 text-xs ml-auto">{{ formatDate(comment.created_at) }}</span>
+              </div>
+              <div class="cursor-pointer hover:scale-105 transition-transform active:scale-95 inline-block">
+                <StickerRenderer :src="comment.file_url" size="lg" :loop="true" :autoplay="true" />
+              </div>
+            </template>
+
+            <!-- Text comment — with bubble -->
+            <div v-else class="bg-brand-bg/50 rounded-2xl px-4 py-3 border border-brand-border/50">
               <div class="flex items-center gap-2 mb-1.5">
                 <span class="font-bold text-white text-sm">{{ comment.author.display_name || comment.author.username }}</span>
                 <span class="text-white/55 text-xs">@{{ comment.author.username }}</span>
@@ -205,6 +300,7 @@ const deleteComment = async (commentId: string) => {
               </div>
               <p class="text-white/85 text-sm leading-relaxed">{{ getCommentText(comment.id, comment.content) }}</p>
             </div>
+
             <!-- Actions row -->
             <div class="flex items-center gap-3 mt-1.5 pl-1">
               <!-- Vote -->
@@ -220,15 +316,16 @@ const deleteComment = async (commentId: string) => {
                   <BIcon name="ArrowDown" class="w-3.5 h-3.5" />
                 </button>
               </div>
-              <!-- Translate comment button -->
-              <button
+              <!-- Translate (only for text) -->
+              <button v-if="comment.type !== 'sticker'"
                 @click="toggleCommentTranslate(comment.id, comment.content)"
                 class="text-white/40 hover:text-brand-accent text-xs flex items-center gap-0.5 transition-colors"
                 :title="showTranslationFor.has(comment.id) ? langStore.t.showOriginal : langStore.t.autoTranslate">
                 <span v-if="isItemTranslating(comment.id)" class="w-3 h-3 border border-brand-accent/60 border-t-transparent rounded-full animate-spin" />
                 <svg v-else class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
               </button>
-              <button @click="replyingTo = { id: comment.id, username: comment.author.username }; replyText = ''"
+              <button v-if="auth.user"
+                @click="replyingTo = { id: comment.id, username: comment.author.username }; replyText = ''; closeStickerPanels()"
                 class="text-white/55 hover:text-brand-accent text-xs font-semibold flex items-center gap-1">
                 <BIcon name="CornerDownRight" class="w-3 h-3" />
                 {{ langStore.t.reply }}
@@ -246,23 +343,41 @@ const deleteComment = async (commentId: string) => {
             </div>
 
             <!-- Reply input for this comment -->
-            <div v-if="replyingTo?.id === comment.id" class="mt-2 flex gap-2 items-center pl-1">
-              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover border border-brand-border flex-shrink-0" />
-              <div v-else class="w-7 h-7 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px]">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
-              <input
-                v-model="replyText"
-                @keydown.enter.prevent="submitReply"
-                :placeholder="`@${replyingTo.username}...`"
-                autofocus
-                class="flex-1 bg-brand-bg border border-brand-border rounded-2xl px-3 py-1.5 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
-              />
-              <button @click="submitReply" :disabled="!replyText.trim() || submitting"
-                class="px-3 py-1.5 bg-brand-accent text-white text-xs font-bold rounded-xl disabled:opacity-40">
-                {{ langStore.t.send }}
-              </button>
-              <button @click="cancelReply" class="p-1.5 text-white/55 hover:text-white rounded-xl hover:bg-brand-border">
-                <BIcon name="X" class="w-4 h-4" />
-              </button>
+            <div v-if="replyingTo?.id === comment.id" class="mt-2 pl-1 relative">
+              <!-- Reply sticker panel -->
+              <Transition name="popover-up">
+                <div v-if="showReplyStickerPanel" class="absolute bottom-full mb-2 left-0 z-50">
+                  <StickerPanel @pick="pickReplySticker" />
+                </div>
+              </Transition>
+
+              <div class="flex gap-2 items-center">
+                <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover border border-brand-border flex-shrink-0" />
+                <div v-else class="w-7 h-7 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px]">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
+                <input
+                  v-model="replyText"
+                  @keydown.enter.prevent="submitReply"
+                  :placeholder="`@${replyingTo.username}...`"
+                  autofocus
+                  class="flex-1 bg-brand-bg border border-brand-border rounded-2xl px-3 py-1.5 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
+                />
+                <!-- Reply sticker button -->
+                <button
+                  type="button"
+                  @click="showReplyStickerPanel = !showReplyStickerPanel; showStickerPanel = false"
+                  :class="['flex-shrink-0 w-7 h-7 rounded-xl flex items-center justify-center transition-all',
+                    showReplyStickerPanel ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/50 hover:text-brand-accent hover:bg-brand-bg border border-brand-border']"
+                  title="Стикеры">
+                  <BIcon name="Sticker" class="w-3.5 h-3.5" />
+                </button>
+                <button @click="submitReply" :disabled="!replyText.trim() || submitting"
+                  class="px-3 py-1.5 bg-brand-accent text-white text-xs font-bold rounded-xl disabled:opacity-40">
+                  {{ langStore.t.send }}
+                </button>
+                <button @click="cancelReply" class="p-1.5 text-white/55 hover:text-white rounded-xl hover:bg-brand-border">
+                  <BIcon name="X" class="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <!-- Nested replies -->
@@ -275,13 +390,26 @@ const deleteComment = async (commentId: string) => {
                 />
                 <div v-else class="w-7 h-7 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px]">{{ (reply.author.display_name || reply.author.username || '?')[0].toUpperCase() }}</div>
                 <div class="flex-1 min-w-0">
-                  <div class="bg-brand-bg/50 rounded-2xl px-4 py-2.5 border border-brand-border/50">
+                  <!-- Sticker reply -->
+                  <template v-if="reply.type === 'sticker' && reply.file_url">
+                    <div class="flex items-center gap-2 mb-1 px-1">
+                      <span class="font-bold text-white text-xs">{{ reply.author.display_name || reply.author.username }}</span>
+                      <span class="text-white/55 text-[11px] ml-auto">{{ formatDate(reply.created_at) }}</span>
+                    </div>
+                    <div class="cursor-pointer hover:scale-105 transition-transform active:scale-95 inline-block">
+                      <StickerRenderer :src="reply.file_url" size="md" :loop="true" :autoplay="true" />
+                    </div>
+                  </template>
+
+                  <!-- Text reply -->
+                  <div v-else class="bg-brand-bg/50 rounded-2xl px-4 py-2.5 border border-brand-border/50">
                     <div class="flex items-center gap-2 mb-1">
                       <span class="font-bold text-white text-xs">{{ reply.author.display_name || reply.author.username }}</span>
                       <span class="text-white/55 text-[11px] ml-auto">{{ formatDate(reply.created_at) }}</span>
                     </div>
                     <p class="text-white/85 text-sm leading-relaxed">{{ getCommentText(reply.id, reply.content) }}</p>
                   </div>
+
                   <div class="flex items-center gap-3 mt-1 pl-1">
                     <div class="flex items-center gap-1">
                       <button @click="voteComment(reply.id, 1)" class="p-1 text-white/55 hover:text-emerald-400 rounded">
@@ -292,8 +420,8 @@ const deleteComment = async (commentId: string) => {
                         <BIcon name="ArrowDown" class="w-3 h-3" />
                       </button>
                     </div>
-                    <!-- Translate reply button -->
-                    <button
+                    <!-- Translate reply (only for text) -->
+                    <button v-if="reply.type !== 'sticker'"
                       @click="toggleCommentTranslate(reply.id, reply.content)"
                       class="text-white/40 hover:text-brand-accent text-xs flex items-center gap-0.5 transition-colors"
                       :title="showTranslationFor.has(reply.id) ? langStore.t.showOriginal : langStore.t.autoTranslate">
@@ -315,3 +443,12 @@ const deleteComment = async (commentId: string) => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.popover-up-enter-active,
+.popover-up-leave-active { transition: all 0.15s ease; }
+.popover-up-enter-from,
+.popover-up-leave-to    { opacity: 0; transform: translateY(6px) scale(0.97); }
+.popover-up-enter-to,
+.popover-up-leave-from  { opacity: 1; transform: translateY(0) scale(1); }
+</style>

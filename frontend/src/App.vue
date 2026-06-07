@@ -4,6 +4,7 @@ import { RouterView, useRoute } from 'vue-router'
 import { usePresence } from '@/composables/usePresence'
 import { useAuthStore } from '@/stores/auth'
 import MobileBottomNav from '@/components/MobileBottomNav.vue'
+import NotifToastContainer from '@/components/NotifToastContainer.vue'
 
 usePresence()
 
@@ -24,4 +25,5 @@ const showMobileNav = computed(() =>
 <template>
   <RouterView />
   <MobileBottomNav v-if="showMobileNav" />
+  <NotifToastContainer />
 </template>

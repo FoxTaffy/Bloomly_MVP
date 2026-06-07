@@ -547,7 +547,7 @@
                         <span v-if="notifyLoading" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         <BIcon v-else :name="notifyPosts && relation.aFollowsB ? 'BellRing' : 'Bell'" class="w-4 h-4" />
                       </button>
-                      <button @click="openChat" class="inline-flex items-center gap-2 px-4 py-2 border border-brand-border bg-brand-bg hover:border-brand-accent/60 text-brand-offwhite hover:text-brand-accent rounded-xl text-sm font-bold transition-all">
+                      <button v-if="(viewedProfile as any).allow_messages !== false" @click="openChat" class="inline-flex items-center gap-2 px-4 py-2 border border-brand-border bg-brand-bg hover:border-brand-accent/60 text-brand-offwhite hover:text-brand-accent rounded-xl text-sm font-bold transition-all">
                         <BIcon name="MessageSquare" class="w-4 h-4" /> {{ langStore.t.messageBtn }}
                       </button>
                       <button @click="toggleFollow" :disabled="isTogglingFollow"
@@ -558,6 +558,14 @@
                         {{ followBtnLabel }}
                         <span v-if="isMutual && !isTogglingFollow" class="text-[10px] font-bold ml-0.5 opacity-60">· Взаимно</span>
                       </button>
+                      <!-- Donate button -->
+                      <a v-if="(viewedProfile as any).donate_url"
+                        :href="(viewedProfile as any).donate_url"
+                        target="_blank" rel="noopener noreferrer"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/60">
+                        <BIcon name="HeartHandshake" class="w-4 h-4" />
+                        Донат
+                      </a>
                       <button class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg hover:border-brand-border/80 rounded-xl text-white/55 hover:text-white transition-all">
                         <BIcon name="MoreHorizontal" class="w-4 h-4" />
                       </button>

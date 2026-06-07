@@ -6,6 +6,7 @@ import { useLangStore } from '@/stores/lang'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useMobileSidebar } from '@/composables/useMobileSidebar'
 import { onAvatarError } from '@/composables/useAvatarFallback'
+import { useNotifToast } from '@/composables/useNotifToast'
 import api from '@/api'
 import BIcon from './BIcon.vue'
 import PostCard from './PostCard.vue'
@@ -52,6 +53,7 @@ const toggleNsfw = () => {
 }
 
 // ── Notifications ─────────────────────────────────────────────────────────────
+const { addToast } = useNotifToast()
 const showNotifications = ref(false)
 const notifications = ref<any[]>([])
 const unreadCount = ref(0)
@@ -112,6 +114,7 @@ const connectNotifSSE = () => {
           const notif = data.data ?? data
           notifications.value.unshift(normalizeNotif(notif))
           unreadCount.value++
+          addToast(notif)
         }
       } catch {}
     }
@@ -378,7 +381,7 @@ onUnmounted(() => {
           <img src="/bloomly.png?v=2" alt="Bloomly" class="w-full h-full object-contain" />
         </div>
         <span class="text-xl md:text-2xl font-extrabold tracking-tight text-white">Bloomly</span>
-        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-brand-accent/15 text-brand-accent border border-brand-accent/30 leading-none">бета · 0.4.14</span>
+        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-brand-accent/15 text-brand-accent border border-brand-accent/30 leading-none">бета · 0.4.16</span>
       </div>
     </div>
 
