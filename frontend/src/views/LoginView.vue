@@ -146,7 +146,16 @@ async function onSubmit() {
       await auth.resetPassword(email.value, resetCode.value, newPassword.value)
       switchMode('login')
     }
-  } catch { /* auth.error уже записан */ }
+  } catch (e: any) {
+    // Email зарегистрирован, но не подтверждён → переводим на OTP-экран
+    if (mode.value === 'login' && e?.response?.data?.error?.code === 'EMAIL_NOT_VERIFIED') {
+      mode.value = 'verify'
+      auth.error = null
+      startResendTimer()
+      auth.resendOtp(email.value, 'register').catch(() => {})
+    }
+    /* auth.error уже записан в остальных случаях */
+  }
 }
 
 // ── Сила пароля ───────────────────────────────────────────────────────────────

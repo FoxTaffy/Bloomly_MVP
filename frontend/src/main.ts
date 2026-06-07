@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import { createHead } from '@unhead/vue/legacy'
 import './assets/style.css'
+import 'flag-icons/css/flag-icons.min.css'
 import App from './App.vue'
 import router from './router'
 

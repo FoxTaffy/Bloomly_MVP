@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useLangStore } from '@/stores/lang'
+import { onAvatarError } from '@/composables/useAvatarFallback'
 const langStore = useLangStore()
 import { useRouter } from 'vue-router'
 import { ref, onMounted, onUnmounted } from 'vue'
@@ -104,6 +105,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
             :src="user.avatar_url"
             :alt="user.display_name || user.username"
             class="w-16 h-16 rounded-full object-cover border-[3px] border-brand-card"
+            @error="onAvatarError"
           />
           <div
             v-else

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useLangStore } from '@/stores/lang'
+import { onAvatarError } from '@/composables/useAvatarFallback'
 const langStore = useLangStore()
 import { useRouter } from 'vue-router'
 import BIcon from './BIcon.vue'
@@ -33,6 +34,7 @@ function avatarInitial(name: string | null | undefined) {
         :src="friend.avatar_url"
         :alt="friend.display_name || friend.username"
         class="w-11 h-11 rounded-full object-cover border border-brand-border"
+        @error="onAvatarError"
       />
       <div
         v-else

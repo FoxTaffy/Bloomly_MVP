@@ -8,7 +8,16 @@ export const FURSONA_SPECIES = [
   'Canine', 'Feline', 'Dragon', 'Protogen', 'Avian', 'Equine',
   'Reptile', 'Rodent', 'Ursine', 'Bovine', 'Cervine', 'Mustelid',
   'Sergal', 'Dutch Angel Dragon', 'Shark', 'Bat', 'Fox', 'Wolf',
-  'Rabbit', 'Tiger', 'Hyena', 'Synth', 'Wickerbeast', 'Other',
+  'Rabbit', 'Tiger', 'Hyena', 'Synth', 'Wickerbeast',
+  'Lion', 'Leopard', 'Snow Leopard', 'Cheetah', 'Lynx',
+  'Raccoon', 'Red Panda', 'Skunk', 'Opossum', 'Coyote',
+  'Jackal', 'Panda', 'Dolphin', 'Orca', 'Seal',
+  'Gryphon', 'Phoenix', 'Unicorn', 'Naga', 'Frog',
+  'Maned Wolf', 'African Wild Dog', 'Kitsune', 'Tanuki', 'Kirin',
+  'Wyvern', 'Kangaroo', 'Hedgehog', 'Otter', 'Ferret',
+  'Meerkat', 'Axolotl', 'Octopus', 'Salamander', 'Primate',
+  'Demon', 'Angel', 'Alien', 'Kobold', 'Sphinx',
+  'Other',
 ] as const
 
 export type FursonaSpecies = typeof FURSONA_SPECIES[number]

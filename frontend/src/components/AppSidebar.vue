@@ -6,6 +6,7 @@ import { useFriendsStore } from '@/stores/friends'
 import { useLangStore } from '@/stores/lang'
 import { useMobileSidebar } from '@/composables/useMobileSidebar'
 import BIcon from './BIcon.vue'
+import { onAvatarError } from '@/composables/useAvatarFallback'
 
 // kept for backward compat (MainLayout still passes it for home sub-views)
 const props = withDefaults(defineProps<{
@@ -148,7 +149,8 @@ const categoryItems = computed(() => [
             class="flex items-center gap-3 cursor-pointer group px-1"
             @click="navigate(() => router.push(`/profile/${auth.user?.username}`))">
             <img v-if="auth.avatarUrl" :src="auth.avatarUrl"
-              class="w-10 h-10 rounded-full object-cover border-2 border-brand-border group-hover:border-brand-accent transition-colors" />
+              class="w-10 h-10 rounded-full object-cover border-2 border-brand-border group-hover:border-brand-accent transition-colors"
+              @error="onAvatarError" />
             <div v-else
               class="w-10 h-10 rounded-full border-2 border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">
               {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
@@ -216,7 +218,8 @@ const categoryItems = computed(() => [
       <img
         v-if="auth.avatarUrl"
         :src="auth.avatarUrl"
-        class="w-12 h-12 rounded-full object-cover border-2 border-brand-border group-hover:border-brand-accent transition-colors" />
+        class="w-12 h-12 rounded-full object-cover border-2 border-brand-border group-hover:border-brand-accent transition-colors"
+        @error="onAvatarError" />
       <div
         v-else
         class="w-12 h-12 rounded-full border-2 border-brand-border group-hover:border-brand-accent bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-lg transition-colors">

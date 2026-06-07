@@ -5,6 +5,8 @@ import api from '@/api'
 
 const props = defineProps<{
   type?: 'posts' | 'avatars' | 'banners'
+  folder?: string
+  accept?: string
   multiple?: boolean
 }>()
 
@@ -77,7 +79,7 @@ const uploadFile = async (file: File, idx: number) => {
       }
     }, 150)
 
-    const res = await api.post(`/media/upload?folder=${props.type || 'posts'}`, formData, {
+    const res = await api.post(`/media/upload?folder=${props.folder || props.type || 'posts'}`, formData, {
       headers: { 'Content-Type': undefined },
       onUploadProgress: (p) => {
         if (p.total && p.total > 0) {
@@ -146,7 +148,7 @@ defineExpose({
       type="file"
       class="hidden"
       @change="(e) => { const el = e.target as HTMLInputElement; const snapshot = Array.from(el.files ?? []); el.value = ''; processFiles(snapshot) }"
-      accept="image/*,video/*,audio/*"
+      :accept="accept ?? 'image/*,video/*,audio/*'"
       :multiple="multiple !== false"
     />
 
@@ -161,6 +163,20 @@ defineExpose({
       <p class="text-sm font-bold text-violet-300">Отпусти для загрузки</p>
       <p class="text-xs text-white/30">JPG, PNG, WebP, GIF · до 50 МБ</p>
     </div>
+
+    <!-- Empty state — click to pick files -->
+    <button
+      v-else-if="!previews.length"
+      type="button"
+      @click="fileInput?.click()"
+      class="w-full flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-white/15 hover:border-violet-500/50 hover:bg-violet-500/8 py-6 px-4 transition-all group/empty"
+    >
+      <div class="w-10 h-10 rounded-2xl bg-white/8 group-hover/empty:bg-violet-500/20 flex items-center justify-center transition-colors">
+        <Image class="w-4 h-4 text-white/35 group-hover/empty:text-violet-400 transition-colors" />
+      </div>
+      <p class="text-xs font-bold text-white/35 group-hover/empty:text-violet-400 transition-colors">Нажми или перетащи файл</p>
+      <p class="text-[10px] text-white/20">JPG, PNG, WebP · до 50 МБ</p>
+    </button>
 
     <!-- Thumbnails grid (shown when files exist and not dragging) -->
     <div v-else-if="previews.length">

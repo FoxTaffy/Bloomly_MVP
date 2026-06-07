@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
 import { useCollectionTranslate } from '@/composables/useAutoTranslate'
 import BIcon from './BIcon.vue'
+import { onAvatarError } from '@/composables/useAvatarFallback'
 
 const props = defineProps<{ postId: string }>()
 
@@ -192,6 +193,7 @@ const deleteComment = async (commentId: string) => {
           <img v-if="comment.author.avatar_url"
             :src="comment.author.avatar_url"
             class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5"
+            @error="onAvatarError"
           />
           <div v-else class="w-8 h-8 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs">{{ (comment.author.display_name || comment.author.username || '?')[0].toUpperCase() }}</div>
           <div class="flex-1 min-w-0">
@@ -269,6 +271,7 @@ const deleteComment = async (commentId: string) => {
                 <img v-if="reply.author.avatar_url"
                   :src="reply.author.avatar_url"
                   class="w-7 h-7 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5"
+                  @error="onAvatarError"
                 />
                 <div v-else class="w-7 h-7 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px]">{{ (reply.author.display_name || reply.author.username || '?')[0].toUpperCase() }}</div>
                 <div class="flex-1 min-w-0">

@@ -56,7 +56,7 @@ if (!process.env.ALLOWED_ORIGINS && process.env.NODE_ENV === 'production') {
   process.exit(1);
 }
 
-const fastify = Fastify({ logger: true, bodyLimit: 26_214_400 }); // 25 MB
+const fastify = Fastify({ logger: true, bodyLimit: 26_214_400, trustProxy: true }); // 25 MB
 
 // Allow specific origins in production; fall back to wildcard for development only
 const allowedOrigins = process.env.ALLOWED_ORIGINS

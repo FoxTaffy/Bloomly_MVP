@@ -86,7 +86,7 @@
           <!-- Avatar -->
           <div class="relative flex-shrink-0">
             <img v-if="m.group.avatar_url" :src="m.group.avatar_url" :alt="m.group.name"
-              class="w-10 h-10 rounded-full object-cover border border-brand-border" />
+              class="w-10 h-10 rounded-full object-cover border border-brand-border" @error="onAvatarError" />
             <div v-else class="w-10 h-10 rounded-full bg-brand-accent/15 border border-brand-accent/30 flex items-center justify-center">
               <BIcon name="Globe" class="w-5 h-5 text-brand-accent" />
             </div>
@@ -145,10 +145,10 @@
           <!-- Group: 2x2 grid or custom avatar -->
           <template v-if="conv.is_group">
             <img v-if="conv.avatar_url" :src="conv.avatar_url" :alt="conv.name ?? langStore.t.tabCommunity"
-              class="w-10 h-10 rounded-full object-cover border border-brand-border" />
+              class="w-10 h-10 rounded-full object-cover border border-brand-border" @error="onAvatarError" />
             <div v-else class="grid grid-cols-2 gap-px w-10 h-10 rounded-full overflow-hidden border border-brand-border bg-brand-bg">
               <template v-for="(p, idx) in conv.other_participants.slice(0, 4)" :key="p.user_id">
-                <img v-if="p.user?.avatar_url" :src="p.user.avatar_url" class="w-full h-full object-cover" />
+                <img v-if="p.user?.avatar_url" :src="p.user.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
                 <div v-else class="w-full h-full flex items-center justify-center bg-brand-accent/20 text-brand-accent text-[8px] font-bold">
                   {{ (p.user?.display_name || p.user?.username || '?')[0].toUpperCase() }}
                 </div>
@@ -166,7 +166,7 @@
             </template>
             <template v-else>
               <img v-if="getOther(conv)?.avatar_url" :src="getOther(conv)!.avatar_url!" :alt="getOther(conv)?.username"
-                class="w-10 h-10 rounded-full object-cover border border-brand-border" />
+                class="w-10 h-10 rounded-full object-cover border border-brand-border" @error="onAvatarError" />
               <div v-else class="w-10 h-10 rounded-full bg-brand-accent/20 border border-brand-border flex items-center justify-center text-brand-accent font-bold text-sm">
                 {{ (getOther(conv)?.display_name || getOther(conv)?.username || '?')[0].toUpperCase() }}
               </div>
@@ -365,7 +365,7 @@
                 <div v-if="selectedUsers.length" class="flex flex-wrap gap-1.5">
                   <div v-for="u in selectedUsers" :key="u.id"
                     class="flex items-center gap-1.5 bg-brand-accent/10 border border-brand-accent/25 rounded-full pl-0.5 pr-2.5 py-0.5">
-                    <img v-if="u.avatar_url" :src="u.avatar_url" class="w-6 h-6 rounded-full object-cover" />
+                    <img v-if="u.avatar_url" :src="u.avatar_url" class="w-6 h-6 rounded-full object-cover" @error="onAvatarError" />
                     <div v-else class="w-6 h-6 rounded-full bg-brand-accent/30 flex items-center justify-center text-brand-accent text-[9px] font-bold">
                       {{ (u.display_name || u.username || '?')[0].toUpperCase() }}
                     </div>
@@ -391,7 +391,7 @@
                   <button v-for="u in searchResults" :key="u.id" @click="toggleUser(u)"
                     class="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-brand-bg transition-colors text-left">
                     <div class="relative flex-shrink-0">
-                      <img v-if="u.avatar_url" :src="u.avatar_url" class="w-9 h-9 rounded-full object-cover" />
+                      <img v-if="u.avatar_url" :src="u.avatar_url" class="w-9 h-9 rounded-full object-cover" @error="onAvatarError" />
                       <div v-else class="w-9 h-9 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold">
                         {{ (u.display_name || u.username || '?')[0].toUpperCase() }}
                       </div>
@@ -482,6 +482,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useLangStore } from '@/stores/lang'
+import { onAvatarError } from '@/composables/useAvatarFallback'
 const langStore = useLangStore()
 import { useRouter } from 'vue-router'
 import { useMessagesStore, type Conversation, type MsgSender } from '@/stores/messages'
@@ -650,8 +651,8 @@ function getCategoryCount(cat: 'personal' | 'groups' | 'community' | 'customer')
 }
 
 const filtered = computed(() => {
-  // Always hide self-DM (Notes) from main list — accessible via bottom bar
-  let list = store.conversations.filter((c) => !isNotes(c))
+  // Hide self-DM (Notes) from main list — but show them in archive view
+  let list = store.conversations.filter((c) => showArchived.value || !isNotes(c))
 
   if (!showArchived.value) {
     list = list.filter((c) => !c.my_participant?.archived)

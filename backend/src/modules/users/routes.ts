@@ -1,16 +1,17 @@
 import type { FastifyInstance, RouteShorthandOptions } from 'fastify';
 import {
-  getUserHandler, updateMeHandler, getRecommendedUsersHandler, searchUsersHandler,
+  getUserHandler, updateMeHandler, updateUsernameHandler, getRecommendedUsersHandler, searchUsersHandler,
   pinPostHandler, unpinPostHandler, getMediaHistoryHandler,
   blockUserHandler, unblockUserHandler, getBlockStatusHandler,
   setPublicKeyHandler, getPublicKeyHandler,
   notifyStatusHandler, notifyToggleHandler,
   updateSubscriptionHandler, deleteAccountHandler,
+  deleteAvatarHistoryHandler, restoreAvatarHistoryHandler,
   getFursonaHandler, upsertFursonaHandler, getReferenceImageHandler,
   getFursuitsHandler, createFursuitHandler, updateFursuitHandler, deleteFursuitHandler,
 } from './controller.js';
 import {
-  getUserParamsSchema, updateUserSchema, pinPostSchema,
+  getUserParamsSchema, updateUserSchema, updateUsernameSchema, pinPostSchema,
   updateFursonaSchema, updateFursuitSchema, fursuitIdParamSchema,
 } from './schemas.js';
 
@@ -24,6 +25,9 @@ export async function usersRoutes(fastify: FastifyInstance) {
 
   // PATCH /api/users/me — update own profile
   fastify.patch('/me', { schema: updateUserSchema, onRequest: [fastify.authenticate] }, updateMeHandler as any);
+
+  // PATCH /api/users/me/username — change username (unique check)
+  fastify.patch('/me/username', { schema: updateUsernameSchema, onRequest: [fastify.authenticate] }, updateUsernameHandler as any);
 
   // PUT /api/users/me/pin/:postId — pin a post
   fastify.put('/me/pin/:postId', { schema: pinPostSchema, onRequest: [fastify.authenticate] }, pinPostHandler as any);
@@ -59,6 +63,12 @@ export async function usersRoutes(fastify: FastifyInstance) {
 
   // GET /api/users/:id/media-history — past avatars/banners (public)
   fastify.get('/:id/media-history', getMediaHistoryHandler as any);
+
+  // DELETE /api/users/me/avatar-history/:historyId — remove a historical avatar (owner only)
+  fastify.delete('/me/avatar-history/:historyId', auth, deleteAvatarHistoryHandler as any);
+
+  // POST /api/users/me/avatar-history/:historyId/restore — promote historical avatar to current
+  fastify.post('/me/avatar-history/:historyId/restore', auth, restoreAvatarHistoryHandler as any);
 
   // GET /api/users/:id/notify-status — check if following + notify_posts
   fastify.get('/:id/notify-status', auth, notifyStatusHandler as any);

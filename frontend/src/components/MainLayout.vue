@@ -21,6 +21,7 @@ import StoryEditor from './StoryEditor.vue'
 import { useAnalytics } from '@/composables/useAnalytics'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { formatCount } from '@/lib/utils'
+import { onAvatarError } from '@/composables/useAvatarFallback'
 
 // MediaUpload component ref
 const mediaUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
@@ -766,7 +767,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
               <img v-if="ad.image_url" :src="ad.image_url" class="w-full object-cover max-h-28" />
               <div class="px-3 py-2.5">
                 <div class="flex items-center gap-1.5 mb-1">
-                  <span class="text-[9px] font-bold uppercase tracking-wider text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Реклама</span>
+                  <span class="text-[9px] font-bold uppercase tracking-wider text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">{{ langStore.t.adLabel }}</span>
                 </div>
                 <p class="text-xs font-bold text-white group-hover:text-brand-accent transition-colors leading-snug">{{ ad.title }}</p>
                 <p v-if="ad.description" class="text-[11px] text-white/55 mt-0.5 line-clamp-2">{{ ad.description }}</p>
@@ -834,17 +835,18 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
             <!-- Entity avatar -->
             <template v-if="postAsEntity.type === 'group'">
               <img v-if="(postAsEntity as any).avatar_url" :src="(postAsEntity as any).avatar_url"
-                class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" />
+                class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors"
+                @error="onAvatarError" />
               <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">
                 {{ ((postAsEntity as any).name || '?')[0].toUpperCase() }}
               </div>
             </template>
             <template v-else>
-              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" />
+              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" @error="onAvatarError" />
               <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
             </template>
             <span class="flex-1 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">
-              {{ postAsEntity.type === 'group' ? `Написать от имени «${(postAsEntity as any).name}»…` : 'Что нового?' }}
+              {{ postAsEntity.type === 'group' ? `${(postAsEntity as any).name}…` : langStore.t.whatsNew }}
             </span>
             <div class="flex items-center gap-2 text-white/55 group-hover:text-white transition-colors ml-1">
               <BIcon name="ImagePlus" class="w-4.5 h-4.5" />
@@ -867,7 +869,8 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
                   <template v-if="postAsEntity.type === 'group'">
                     <img v-if="(postAsEntity as any).avatar_url" :src="(postAsEntity as any).avatar_url"
                       class="w-10 h-10 rounded-xl border-2 object-cover transition-colors"
-                      :class="showEntityPicker ? 'border-brand-accent' : 'border-brand-border group-hover/av:border-brand-accent/60'" />
+                      :class="showEntityPicker ? 'border-brand-accent' : 'border-brand-border group-hover/av:border-brand-accent/60'"
+                      @error="onAvatarError" />
                     <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border flex items-center justify-center text-brand-accent font-bold bg-brand-accent/20 transition-colors"
                       :class="showEntityPicker ? 'border-brand-accent' : 'group-hover/av:border-brand-accent/60'">
                       {{ ((postAsEntity as any).name || '?')[0].toUpperCase() }}
@@ -876,7 +879,8 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
                   <template v-else>
                     <img v-if="auth.avatarUrl" :src="auth.avatarUrl"
                       class="w-10 h-10 rounded-full border-2 object-cover transition-colors"
-                      :class="showEntityPicker ? 'border-brand-accent' : 'border-brand-border group-hover/av:border-brand-accent/60'" />
+                      :class="showEntityPicker ? 'border-brand-accent' : 'border-brand-border group-hover/av:border-brand-accent/60'"
+                      @error="onAvatarError" />
                     <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex items-center justify-center text-brand-accent font-bold bg-brand-accent/20 transition-colors"
                       :class="showEntityPicker ? 'border-brand-accent' : 'group-hover/av:border-brand-accent/60'">
                       {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
@@ -889,7 +893,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
 
                 <!-- Non-clickable avatar (no groups) -->
                 <template v-else>
-                  <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover" />
+                  <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover" @error="onAvatarError" />
                   <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex items-center justify-center text-brand-accent font-bold bg-brand-accent/20">
                     {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
                   </div>
@@ -903,7 +907,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
                     <button class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
                       :class="postAsEntity.type === 'user' ? 'text-brand-accent' : 'text-white'"
                       @click="postAsEntity = { type: 'user' }; showEntityPicker = false">
-                      <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                      <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover flex-shrink-0" @error="onAvatarError" />
                       <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
                         {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
                       </div>
@@ -916,12 +920,12 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
                       class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
                       :class="postAsEntity.type === 'group' && (postAsEntity as any).id === grp.id ? 'text-brand-accent' : 'text-white'"
                       @click="postAsEntity = { type: 'group', id: grp.id, slug: grp.slug, name: grp.name, avatar_url: grp.avatar_url }; showEntityPicker = false">
-                      <img v-if="grp.avatar_url" :src="grp.avatar_url" class="w-7 h-7 rounded-xl object-cover flex-shrink-0" />
+                      <img v-if="grp.avatar_url" :src="grp.avatar_url" class="w-7 h-7 rounded-xl object-cover flex-shrink-0" @error="onAvatarError" />
                       <div v-else class="w-7 h-7 rounded-xl bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
                         {{ (grp.name || '?')[0].toUpperCase() }}
                       </div>
                       <span class="font-semibold truncate flex-1 text-left">{{ grp.name }}</span>
-                      <span class="text-[9px] text-brand-accent/70 bg-brand-accent/10 border border-brand-accent/25 px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">Группа</span>
+                      <span class="text-[9px] text-brand-accent/70 bg-brand-accent/10 border border-brand-accent/25 px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">{{ langStore.t.groups }}</span>
                       <BIcon v-if="postAsEntity.type === 'group' && (postAsEntity as any).id === grp.id" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
                     </button>
                   </div>
@@ -1006,7 +1010,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
                 v-model="newPost.category"
                 class="px-3 py-2 rounded-xl text-xs text-white/55 bg-transparent border border-transparent hover:border-brand-border hover:bg-brand-bg outline-none transition-all cursor-pointer"
               >
-                <option value="" class="bg-brand-card">Категория</option>
+                <option value="" class="bg-brand-card">{{ langStore.t.category }}</option>
                 <template v-for="c in allCategories" :key="c.id || 'empty-cat'">
                   <option v-if="c.id" :value="c.id" class="bg-brand-card">{{ c.name }}</option>
                 </template>
@@ -1116,22 +1120,22 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
           <button @click="feedMode = 'for-you'; selectedTag = ''"
             :class="feedMode === 'for-you' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
             class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
-            Для Вас
+            {{ langStore.t.forYou }}
           </button>
           <button @click="feedMode = 'subscriptions'; selectedTag = ''"
             :class="feedMode === 'subscriptions' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
             class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
-            Подписки
+            {{ langStore.t.feedFollowing }}
           </button>
           <button @click="feedMode = 'news'; selectedTag = ''"
             :class="feedMode === 'news' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
             class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
-            Общие новости
+            {{ langStore.t.feedGeneral }}
           </button>
           <button @click="feedMode = 'photos'; selectedTag = ''"
             :class="feedMode === 'photos' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
             class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
-            Фото
+            {{ langStore.t.feedPhoto }}
           </button>
           <button v-if="nsfwMode" @click="feedMode = 'nsfw'; selectedTag = ''"
             :class="feedMode === 'nsfw' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
@@ -1145,10 +1149,10 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
           <div class="flex items-center justify-between mb-4">
             <h3 class="font-bold text-white flex items-center gap-2">
               <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-              Ближайшие крупные мероприятия
+              {{ langStore.t.upcomingEvents }}
             </h3>
             <button class="text-xs text-brand-accent font-semibold hover:text-brand-accent-plus transition-colors"
-              @click="router.push('/groups?type=event')">Все →</button>
+              @click="router.push('/groups?type=event')">{{ langStore.t.seeAllBtn }}</button>
           </div>
           <!-- Loading skeleton -->
           <div v-if="isLoadingEvents" class="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
@@ -1184,7 +1188,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
                   <span class="truncate">{{ ev.location_name }}</span>
                 </div>
                 <div v-if="ev.group" class="flex items-center gap-1.5 mt-1 pt-1.5 border-t border-brand-border/40">
-                  <img v-if="ev.group.avatar_url" :src="ev.group.avatar_url" class="w-4 h-4 rounded-full object-cover" />
+                  <img v-if="ev.group.avatar_url" :src="ev.group.avatar_url" class="w-4 h-4 rounded-full object-cover" @error="onAvatarError" />
                   <div v-else class="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold" :style="`background:${ev.group.accent_color || '#4C67CF'}33;color:${ev.group.accent_color || '#4C67CF'}`">{{ (ev.group.name || '?')[0] }}</div>
                   <span class="text-[10px] text-white/40 truncate">{{ ev.group.name }}</span>
                 </div>
@@ -1198,7 +1202,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
           <div v-if="selectedTag" class="flex items-center gap-2 bg-brand-card border border-brand-accent/30 rounded-2xl px-4 py-2.5 shadow-xl">
             <BIcon name="Hash" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
             <span class="text-sm font-bold text-brand-accent flex-1">#{{ selectedTag }}</span>
-            <span class="text-[10px] text-white/55">фильтр по тегу</span>
+            <span class="text-[10px] text-white/55">{{ langStore.t.tagFilter }}</span>
             <button @click="selectedTag = ''" class="ml-1 p-1 text-white/55 hover:text-white hover:bg-white/8 rounded-lg transition-colors">
               <BIcon name="X" class="w-3.5 h-3.5" />
             </button>
@@ -1237,7 +1241,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
             <BIcon name="Loader2" class="animate-spin text-brand-accent w-6 h-6" />
           </div>
           <div v-if="!hasMorePosts && posts.length > 0" class="text-center text-white/55 text-sm p-4">
-            Это все посты.
+            {{ langStore.t.noPosts }}
           </div>
         </div>
 
@@ -1249,7 +1253,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
 
         <!-- Trending Hashtags -->
         <div>
-          <h3 class="font-bold text-white mb-4">Популярные Теги</h3>
+          <h3 class="font-bold text-white mb-4">{{ langStore.t.popularTags }}</h3>
           <div v-if="isFetchingTags" class="space-y-3">
             <div v-for="n in 5" :key="n" class="flex items-center justify-between animate-pulse">
               <div class="h-4 bg-white/5 rounded w-24"></div>
@@ -1257,7 +1261,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
             </div>
           </div>
           <div v-else-if="trendingTags.length === 0" class="text-center py-6">
-            <p class="text-xs text-white/55">Хештеги появятся после публикации постов</p>
+            <p class="text-xs text-white/55">{{ langStore.t.noHashtagsYet }}</p>
           </div>
           <div v-else class="space-y-3">
             <div v-for="tag in trendingTags.slice(0, 10)" :key="tag.name"
@@ -1275,7 +1279,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
         <!-- Recommended friends -->
         <div>
           <div class="flex items-center justify-between mb-3">
-            <h3 class="font-bold text-white text-sm">Возможно знакомы</h3>
+            <h3 class="font-bold text-white text-sm">{{ langStore.t.recommendedFriends }}</h3>
           </div>
 
           <!-- Skeletons -->

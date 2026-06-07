@@ -27,6 +27,7 @@
               :alt="effectiveGroupContext.name"
               class="w-11 h-11 rounded-xl object-cover border border-brand-border"
               width="44" height="44"
+              @error="onAvatarError"
             />
             <div
               v-else-if="effectiveGroupContext && !effectiveGroupContext.avatar_url"
@@ -40,6 +41,7 @@
               :alt="post.author?.display_name || post.author?.username"
               class="w-11 h-11 rounded-full object-cover border border-brand-border"
               width="44" height="44"
+              @error="onAvatarError"
             />
             <!-- Follow quick-add button -->
             <button
@@ -180,7 +182,7 @@
           @click.stop="router.push(`/profile/${post.rewardForUser.username}`)"
           class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-brand-bg border border-brand-border hover:border-brand-accent/40 transition-colors"
         >
-          <img v-if="post.rewardForUser.avatar_url" :src="post.rewardForUser.avatar_url" class="w-4 h-4 rounded-full object-cover" />
+          <img v-if="post.rewardForUser.avatar_url" :src="post.rewardForUser.avatar_url" class="w-4 h-4 rounded-full object-cover" @error="onAvatarError" />
           <div v-else class="w-4 h-4 rounded-full bg-brand-accent/20 flex items-center justify-center text-[8px] font-bold text-brand-accent">
             {{ (post.rewardForUser.display_name || post.rewardForUser.username || '?')[0].toUpperCase() }}
           </div>
@@ -239,6 +241,7 @@
                       :src="(mentionGroups[seg.username!] ?? mentionUsers[seg.username!])!.avatar_url!"
                       class="w-full h-full object-cover"
                       loading="lazy"
+                      @error="onAvatarError"
                     />
                     <span v-else class="text-[8px] font-bold text-brand-accent leading-none">
                       {{ (seg.username ?? '?')[0].toUpperCase() }}
@@ -479,7 +482,7 @@
 
     <!-- ── Share & Report modals ─────────────────────────────────────────── -->
     <ShareModal v-model="showShareModal" :post-id="post.id" :post-url="postUrl" />
-    <ReportModal v-model="showReportModal" :post-id="post.id" />
+    <ReportModal v-model="showReportModal" :target-id="post.id" target-type="post" />
 
     <!-- ── Comments section ──────────────────────────────────────────────── -->
     <Transition name="slide">
@@ -527,6 +530,7 @@
               :src="(mentionGroups[hoveredMention] ?? mentionUsers[hoveredMention])!.avatar_url!"
               class="w-full h-full object-cover"
               loading="lazy"
+              @error="onAvatarError"
             />
             <span v-else class="text-sm font-bold text-brand-accent">
               {{ (hoveredMention ?? '?')[0].toUpperCase() }}
@@ -562,6 +566,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useAutoTranslate } from '@/composables/useAutoTranslate'
+import { onAvatarError } from '@/composables/useAvatarFallback'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'

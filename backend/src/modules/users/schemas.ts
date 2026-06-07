@@ -13,7 +13,16 @@ export const FURSONA_SPECIES = [
   'Canine', 'Feline', 'Dragon', 'Protogen', 'Avian', 'Equine',
   'Reptile', 'Rodent', 'Ursine', 'Bovine', 'Cervine', 'Mustelid',
   'Sergal', 'Dutch Angel Dragon', 'Shark', 'Bat', 'Fox', 'Wolf',
-  'Rabbit', 'Tiger', 'Hyena', 'Synth', 'Wickerbeast', 'Other',
+  'Rabbit', 'Tiger', 'Hyena', 'Synth', 'Wickerbeast',
+  'Lion', 'Leopard', 'Snow Leopard', 'Cheetah', 'Lynx',
+  'Raccoon', 'Red Panda', 'Skunk', 'Opossum', 'Coyote',
+  'Jackal', 'Panda', 'Dolphin', 'Orca', 'Seal',
+  'Gryphon', 'Phoenix', 'Unicorn', 'Naga', 'Frog',
+  'Maned Wolf', 'African Wild Dog', 'Kitsune', 'Tanuki', 'Kirin',
+  'Wyvern', 'Kangaroo', 'Hedgehog', 'Otter', 'Ferret',
+  'Meerkat', 'Axolotl', 'Octopus', 'Salamander', 'Primate',
+  'Demon', 'Angel', 'Alien', 'Kobold', 'Sphinx',
+  'Other',
 ] as const;
 
 export type FursonaSpecies = typeof FURSONA_SPECIES[number];
@@ -61,6 +70,17 @@ export const updateUserSchema = {
       profile_frame:        { type: 'string', nullable: true },
       artist_since:         { type: 'string', format: 'date', nullable: true },
       onboarding_done:     { type: 'boolean' },
+    },
+    additionalProperties: false,
+  },
+};
+
+export const updateUsernameSchema = {
+  body: {
+    type: 'object',
+    required: ['username'],
+    properties: {
+      username: { type: 'string', minLength: 3, maxLength: 30, pattern: '^[a-z0-9_]+$' },
     },
     additionalProperties: false,
   },

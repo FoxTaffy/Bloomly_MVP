@@ -91,19 +91,16 @@ export const usersService = {
     if (current) {
       const historyEntries: { user_id: string; type: string; url: string }[] = [];
 
-      // If avatar is actually changing (new non-empty value, different from current)
+      // If avatar is actually changing — archive current, keep file in MinIO for history gallery
       const newAvatar = (data as any).avatar_url;
       if (typeof newAvatar === 'string' && newAvatar && newAvatar !== current.avatar_url && current.avatar_url) {
         historyEntries.push({ user_id: id, type: 'avatar', url: current.avatar_url });
-        // Delete old file from MinIO (best-effort, non-blocking)
-        deleteFileByUrl(current.avatar_url).catch(() => {});
       }
 
-      // If banner is actually changing
+      // If banner is actually changing — archive current, keep file
       const newBanner = (data as any).banner_url;
       if (typeof newBanner === 'string' && newBanner && newBanner !== current.banner_url && current.banner_url) {
         historyEntries.push({ user_id: id, type: 'banner', url: current.banner_url });
-        deleteFileByUrl(current.banner_url).catch(() => {});
       }
 
       if (historyEntries.length > 0) {
@@ -157,12 +154,69 @@ export const usersService = {
     });
   },
 
+  async updateUsername(id: string, username: string) {
+    const existing = await prisma.user.findFirst({
+      where: { username, deleted_at: null, NOT: { id } },
+      select: { id: true },
+    });
+    if (existing) throw new Error('Этот никнейм уже занят');
+    return prisma.user.update({
+      where: { id, deleted_at: null },
+      data: { username },
+      select: { id: true, username: true },
+    });
+  },
+
   async getMediaHistory(userId: string, type?: 'avatar' | 'banner', limit = 20) {
     return prisma.mediaHistory.findMany({
       where: { user_id: userId, ...(type ? { type } : {}) },
       orderBy: { created_at: 'desc' },
       take: limit,
       select: { id: true, type: true, url: true, created_at: true },
+    });
+  },
+
+  async deleteAvatarHistoryItem(userId: string, historyId: string) {
+    const item = await prisma.mediaHistory.findFirst({
+      where: { id: historyId, user_id: userId, type: 'avatar' },
+    });
+    if (!item) throw Object.assign(new Error('History item not found'), { statusCode: 404 });
+
+    await prisma.mediaHistory.delete({ where: { id: historyId } });
+    deleteFileByUrl(item.url).catch(() => {});
+  },
+
+  async restoreAvatarFromHistory(userId: string, historyId: string) {
+    const item = await prisma.mediaHistory.findFirst({
+      where: { id: historyId, user_id: userId, type: 'avatar' },
+    });
+    if (!item) throw Object.assign(new Error('History item not found'), { statusCode: 404 });
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId, deleted_at: null },
+      select: { avatar_url: true },
+    });
+    if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
+
+    await prisma.$transaction(async (tx) => {
+      // Archive current avatar into history (keep file in MinIO)
+      if (user.avatar_url && user.avatar_url !== item.url) {
+        await tx.mediaHistory.create({
+          data: { user_id: userId, type: 'avatar', url: user.avatar_url },
+        });
+      }
+      // Promote historical avatar to current
+      await tx.user.update({
+        where: { id: userId },
+        data: { avatar_url: item.url },
+      });
+      // Remove from history since it's now the current avatar
+      await tx.mediaHistory.delete({ where: { id: historyId } });
+    });
+
+    return prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatar_url: true },
     });
   },
 

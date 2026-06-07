@@ -11,6 +11,7 @@ import PostCard from '@/components/PostCard.vue'
 import MentionTextarea from '@/components/MentionTextarea.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
 import AppBadge from '@/components/shared/AppBadge.vue'
+import ReportModal from '@/components/ReportModal.vue'
 const EventCard = defineAsyncComponent(() => import('@/components/groups/EventCard.vue'))
 const TicketCard = defineAsyncComponent(() => import('@/components/groups/TicketCard.vue'))
 const AchievementBadge = defineAsyncComponent(() => import('@/components/groups/AchievementBadge.vue'))
@@ -18,6 +19,7 @@ const TodoQueue = defineAsyncComponent(() => import('@/components/groups/TodoQue
 import { useGroupsStore } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useNsfwMode } from '@/composables/useNsfwMode'
+import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useMessagesStore } from '@/stores/messages'
 import api from '@/api'
 
@@ -434,6 +436,26 @@ async function handleLeave() {
   }
 }
 
+// ── Group More Menu & Report ─────────────────────────────────────────────
+const showGroupMenu = ref(false)
+const showGroupReport = ref(false)
+
+function toggleGroupMenu() { showGroupMenu.value = !showGroupMenu.value }
+function closeGroupMenu() { showGroupMenu.value = false }
+
+async function copyGroupLink() {
+  const slug = (group.value as any)?.slug || group.value?.id
+  await navigator.clipboard.writeText(`${location.origin}/groups/${slug}`).catch(() => {})
+  showGroupMenu.value = false
+}
+
+async function shareGroup() {
+  closeGroupMenu()
+  if (navigator.share) {
+    await navigator.share({ title: group.value?.name, url: location.href }).catch(() => {})
+  }
+}
+
 // ── Community chat ──────────────────────────────────────────────────
 const initChatLoading = ref(false)
 
@@ -501,6 +523,14 @@ async function loadMoreMembers() {
     else membersPage.value++
   } catch {}
   finally { membersLoading.value = false }
+}
+
+const vClickOutside = {
+  mounted(el: HTMLElement, binding: { value: () => void }) {
+    ;(el as any)._clickOutside = (e: Event) => { if (!el.contains(e.target as Node)) binding.value() }
+    document.addEventListener('click', (el as any)._clickOutside)
+  },
+  unmounted(el: HTMLElement) { document.removeEventListener('click', (el as any)._clickOutside) },
 }
 </script>
 
@@ -594,7 +624,7 @@ async function loadMoreMembers() {
                     <div class="w-24 h-24 md:w-32 md:h-32 rounded-2xl border-4 border-brand-card overflow-hidden shadow-xl cursor-pointer transition-transform hover:scale-[1.02]"
                       :style="group.avatar_url ? {} : { backgroundColor: (group.accent_color || '#4C67CF') + '22' }"
                       @click="group.avatar_url && (showAvatarViewer = true)">
-                      <img v-if="group.avatar_url" :src="group.avatar_url" class="w-full h-full object-cover" />
+                      <img v-if="group.avatar_url" :src="group.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
                       <div v-else class="w-full h-full flex items-center justify-center">
                         <BIcon :name="{ event: 'CalendarDays', creative: 'Palette', static: 'Rss', news: 'Newspaper', shop: 'ShoppingBag', community: 'Users', brand: 'Building2' }[group.type] || 'Image'"
                           class="w-10 h-10" :style="{ color: group.accent_color || '#4C67CF' }" />
@@ -603,7 +633,7 @@ async function loadMoreMembers() {
                   </div>
 
                   <!-- Action buttons -->
-                  <div class="flex items-center gap-2 pt-3 md:pt-4 pr-1">
+                  <div class="flex items-center gap-2 pt-3 md:pt-4 pr-1 flex-wrap">
                     <button class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg hover:border-brand-accent/60 rounded-xl text-white/55 hover:text-brand-accent transition-all"
                       title="Донат">
                       <BIcon name="DollarSign" class="w-4 h-4" />
@@ -612,11 +642,14 @@ async function loadMoreMembers() {
                       title="Уведомления">
                       <BIcon name="Bell" class="w-4 h-4" />
                     </button>
-                    <button v-if="group.type === 'event' && !isMember && !isOwner" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-success text-white text-sm font-bold hover:bg-brand-success/80 transition-all shadow-sm" @click="handleJoin">
+                    <button v-if="group.type === 'event' && !isMember && !isOwner"
+                      class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-bold transition-all shadow-lg"
+                      :style="`background: ${group.accent_color || '#22c55e'}; box-shadow: 0 4px 14px ${group.accent_color || '#22c55e'}40`"
+                      @click="handleJoin">
                       <BIcon name="CalendarCheck" class="w-4 h-4" /> Я пойду!
                     </button>
                     <button v-else-if="group.type !== 'event' && !isMember && !isOwner" @click="handleJoin"
-                      class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-all shadow-sm shadow-brand-accent/25">
+                      class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-all shadow-lg shadow-brand-accent/25">
                       <BIcon name="UserPlus" class="w-4 h-4" /> Подписаться
                     </button>
                     <button v-else-if="isMember && !isOwner" @click="handleLeave"
@@ -641,16 +674,62 @@ async function loadMoreMembers() {
                       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-border bg-brand-bg text-white/55 text-sm font-bold hover:border-brand-accent/60 hover:text-brand-accent transition-all">
                       <BIcon name="Settings" class="w-4 h-4" /> Настройки
                     </button>
-                    <button class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg hover:border-brand-border/80 rounded-xl text-white/55 hover:text-white transition-all">
-                      <BIcon name="MoreHorizontal" class="w-4 h-4" />
-                    </button>
+                    <!-- More options menu -->
+                    <div class="relative" v-click-outside="closeGroupMenu">
+                      <button
+                        @click.stop="toggleGroupMenu"
+                        class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg hover:border-brand-border/80 rounded-xl text-white/55 hover:text-white transition-all"
+                        :class="showGroupMenu ? 'border-brand-accent/40 text-brand-accent bg-brand-accent/5' : ''"
+                      >
+                        <BIcon name="MoreHorizontal" class="w-4 h-4" />
+                      </button>
+
+                      <Transition name="group-menu">
+                        <div
+                          v-if="showGroupMenu"
+                          class="absolute right-0 top-full mt-2 z-50 w-52 bg-[#13131f] border border-white/8 rounded-2xl shadow-2xl overflow-hidden py-1.5"
+                          @click.stop
+                        >
+                          <!-- Copy link -->
+                          <button
+                            @click="copyGroupLink"
+                            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/65 hover:text-white hover:bg-white/5 transition-all"
+                          >
+                            <BIcon name="Link2" class="w-4 h-4 text-white/40" />
+                            Скопировать ссылку
+                          </button>
+
+                          <!-- Share -->
+                          <button
+                            @click="shareGroup"
+                            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/65 hover:text-white hover:bg-white/5 transition-all"
+                          >
+                            <BIcon name="Share2" class="w-4 h-4 text-white/40" />
+                            Поделиться
+                          </button>
+
+                          <!-- Divider -->
+                          <div v-if="authStore.user && !isOwner" class="my-1.5 border-t border-white/6" />
+
+                          <!-- Report group -->
+                          <button
+                            v-if="authStore.user && !isOwner"
+                            @click="showGroupReport = true; closeGroupMenu()"
+                            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400/80 hover:text-red-400 hover:bg-red-500/8 transition-all"
+                          >
+                            <BIcon name="Flag" class="w-4 h-4" />
+                            Пожаловаться
+                          </button>
+                        </div>
+                      </Transition>
+                    </div>
                   </div>
                 </div>
 
                 <!-- Name row -->
-                <div class="mt-3">
-                  <div class="flex items-center flex-wrap gap-2 mb-1">
-                    <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white">{{ group.name }}</h1>
+                <div class="mt-4">
+                  <div class="flex items-center flex-wrap gap-2 mb-2">
+                    <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white tracking-tight">{{ group.name }}</h1>
                     <!-- Badges -->
                     <span v-if="ticketStatusLabel"
                       class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase border"
@@ -677,51 +756,45 @@ async function loadMoreMembers() {
                     </span>
                   </div>
 
-                  <!-- Sub-info row -->
-                  <div class="flex items-center gap-3 flex-wrap text-sm">
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-bold tracking-wide"
+                  <!-- Sub-info chips row -->
+                  <div class="flex items-center gap-1.5 flex-wrap mt-1">
+                    <!-- Slug -->
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide"
                       :style="`background:${group.accent_color || '#4C67CF'}15;color:${group.accent_color || '#4C67CF'};border:1px solid ${group.accent_color || '#4C67CF'}25`">
                       <BIcon name="AtSign" class="w-3 h-3" />{{ group.slug }}
                     </span>
-                    <span class="flex items-center gap-0.5">
-                      <!-- Reddit-style vote buttons (inline) -->
+                    <!-- Rating chip -->
+                    <span class="inline-flex items-center gap-0.5 px-1.5 py-1 bg-brand-bg border border-brand-border rounded-lg">
                       <template v-if="authStore.user && !isOwner">
                         <button @click="submitVote(1)" :disabled="ratingSubmitting"
-                          class="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-xs font-bold transition-all"
-                          :class="myVote === 1 ? 'text-brand-accent bg-brand-accent/15' : 'text-white/40 hover:text-brand-accent hover:bg-brand-accent/10'">
-                          ▲
-                        </button>
+                          class="px-1 py-0.5 rounded text-xs font-bold transition-all"
+                          :class="myVote === 1 ? 'text-brand-accent' : 'text-white/40 hover:text-brand-accent'">▲</button>
                       </template>
-                      <span class="text-white/70 text-xs font-bold px-1">{{ group.rating >= 0 ? '+' : '' }}{{ Math.round(group.rating) }}</span>
+                      <span class="text-white/70 text-xs font-bold px-1 tabular-nums">{{ group.rating >= 0 ? '+' : '' }}{{ Math.round(group.rating) }}</span>
                       <template v-if="authStore.user && !isOwner">
                         <button @click="submitVote(-1)" :disabled="ratingSubmitting"
-                          class="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-xs font-bold transition-all"
-                          :class="myVote === -1 ? 'text-brand-error bg-brand-error/15' : 'text-white/40 hover:text-brand-error hover:bg-brand-error/10'">
-                          ▼
-                        </button>
+                          class="px-1 py-0.5 rounded text-xs font-bold transition-all"
+                          :class="myVote === -1 ? 'text-brand-error' : 'text-white/40 hover:text-brand-error'">▼</button>
                       </template>
                     </span>
-                    <span v-if="group.type === 'event' && activeEvent" class="flex items-center gap-1 text-white/55 text-xs">
-                      <BIcon name="Calendar" class="w-3.5 h-3.5" />{{ fmt(activeEvent.starts_at) }}
+                    <!-- Event date -->
+                    <span v-if="group.type === 'event' && activeEvent" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/65">
+                      <BIcon name="Calendar" class="w-3 h-3 text-white/40" />{{ fmt(activeEvent.starts_at) }}
                     </span>
-                    <span v-if="group.type === 'event' && activeEvent?.location_name" class="flex items-center gap-1 text-white/55 text-xs">
-                      <BIcon name="MapPin" class="w-3.5 h-3.5" />{{ activeEvent.location_name }}
+                    <!-- Location -->
+                    <span v-if="group.type === 'event' && activeEvent?.location_name" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/65">
+                      <BIcon name="MapPin" class="w-3 h-3 text-white/40" />{{ activeEvent.location_name }}
                     </span>
-                    <span class="flex items-center gap-1 text-white/55 text-xs">
-                      <BIcon name="Calendar" class="w-3.5 h-3.5" />{{ fmt(group.created_at) }}
+                    <!-- Created date -->
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/50">
+                      <BIcon name="Calendar" class="w-3 h-3 text-white/35" />{{ fmt(group.created_at) }}
                     </span>
-                  </div>
-
-                  <!-- Social links -->
-                  <div v-if="group.social_links && Object.keys(group.social_links as any).length" class="flex items-center gap-1.5 mt-2">
+                    <!-- Social links inline as icon chips -->
                     <a v-for="(url, p) in (group.social_links as Record<string,string>)" :key="p" :href="url" target="_blank"
-                      class="w-7 h-7 rounded-lg bg-brand-bg/80 border border-brand-border flex items-center justify-center hover:border-brand-accent/40 transition-colors">
+                      class="inline-flex items-center justify-center w-7 h-7 bg-brand-bg border border-brand-border rounded-lg hover:border-brand-accent/50 transition-colors">
                       <BIcon :name="socialIconMap[p as string] ?? 'Link'" class="w-3.5 h-3.5 text-white/50" />
                     </a>
                   </div>
-
-                  <!-- Description (short) -->
-                  <p v-if="group.description" class="mt-3 text-sm leading-relaxed max-w-2xl text-white/75" v-html="parseAboutText(group.description)" />
                 </div>
               </div>
             </div>
@@ -782,22 +855,22 @@ async function loadMoreMembers() {
 
                     <!-- Event-specific info -->
                     <template v-if="group.type === 'event' && activeEvent">
-                      <div class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
-                        <div class="w-8 h-8 rounded-xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center flex-shrink-0">
+                      <div class="flex items-center gap-3 px-4 py-3.5 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/30 transition-colors">
+                        <div class="w-9 h-9 rounded-xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center flex-shrink-0">
                           <BIcon name="Calendar" class="w-4 h-4 text-brand-accent" />
                         </div>
                         <div class="flex-1 min-w-0">
-                          <p class="text-[10px] text-white/40 uppercase tracking-wide mb-0.5">Дата</p>
-                          <p class="text-sm text-white font-semibold">{{ fmt(activeEvent.starts_at) }} · {{ fmtTime(activeEvent.starts_at) }}–{{ fmtTime(activeEvent.ends_at) }}</p>
+                          <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold mb-0.5">Дата</p>
+                          <p class="text-sm text-white font-bold">{{ fmt(activeEvent.starts_at) }} · {{ fmtTime(activeEvent.starts_at) }}–{{ fmtTime(activeEvent.ends_at) }}</p>
                         </div>
                       </div>
-                      <div v-if="activeEvent.location_name" class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
-                        <div class="w-8 h-8 rounded-xl bg-brand-success/10 border border-brand-success/20 flex items-center justify-center flex-shrink-0">
+                      <div v-if="activeEvent.location_name" class="flex items-center gap-3 px-4 py-3.5 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-success/30 transition-colors">
+                        <div class="w-9 h-9 rounded-xl bg-brand-success/10 border border-brand-success/20 flex items-center justify-center flex-shrink-0">
                           <BIcon name="MapPin" class="w-4 h-4 text-brand-success" />
                         </div>
                         <div class="flex-1 min-w-0">
-                          <p class="text-[10px] text-white/40 uppercase tracking-wide mb-0.5">Место</p>
-                          <p class="text-sm text-white font-semibold">{{ activeEvent.location_name }}</p>
+                          <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold mb-0.5">Место</p>
+                          <p class="text-sm text-white font-bold">{{ activeEvent.location_name }}</p>
                         </div>
                       </div>
                     </template>
@@ -834,21 +907,19 @@ async function loadMoreMembers() {
                         </a>
                       </div>
                     </div>
-                    <!-- Owner info (same style as profile relationship card) -->
-                    <div class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
-                      <div class="w-10 h-10 rounded-xl bg-brand-accent/20 overflow-hidden shrink-0">
-                        <img v-if="group.owner.avatar_url" :src="group.owner.avatar_url" class="w-full h-full object-cover" />
+                    <!-- Owner info -->
+                    <router-link :to="`/profile/${group.owner.username}`"
+                      class="flex items-center gap-3 px-4 py-3.5 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/30 transition-colors group">
+                      <div class="w-9 h-9 rounded-xl bg-brand-accent/20 overflow-hidden shrink-0 border border-brand-border/60">
+                        <img v-if="group.owner.avatar_url" :src="group.owner.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
                         <div v-else class="w-full h-full flex items-center justify-center"><BIcon name="User" class="w-5 h-5 text-brand-accent" /></div>
                       </div>
                       <div class="flex-1 min-w-0">
-                        <p class="text-[10px] text-white/40 uppercase tracking-wide mb-0.5">{{ group.type === 'event' ? 'Организатор' : 'Создатель' }}</p>
-                        <p class="text-sm text-white font-semibold truncate">{{ group.owner.display_name || group.owner.username }}</p>
+                        <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold mb-0.5">{{ group.type === 'event' ? 'Организатор' : 'Создатель' }}</p>
+                        <p class="text-sm text-white font-bold truncate group-hover:text-brand-accent transition-colors">{{ group.owner.display_name || group.owner.username }}</p>
                       </div>
-                      <router-link :to="`/profile/${group.owner.username}`"
-                        class="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-white/35 hover:text-brand-accent hover:bg-brand-card border border-transparent hover:border-brand-border transition-all">
-                        <BIcon name="ChevronRight" class="w-4 h-4" />
-                      </router-link>
-                    </div>
+                      <BIcon name="ChevronRight" class="w-4 h-4 text-white/25 group-hover:text-brand-accent transition-colors flex-shrink-0" />
+                    </router-link>
                   </div>
 
                   <!-- Rules -->
@@ -1059,7 +1130,7 @@ async function loadMoreMembers() {
                 :class="showPostForm ? 'border-brand-accent/30' : 'border-brand-border'">
                 <button v-if="!showPostForm" @click="showPostForm = true"
                   class="w-full flex items-center gap-3 px-5 py-4 text-left group">
-                  <img v-if="group.avatar_url" :src="group.avatar_url" class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" />
+                  <img v-if="group.avatar_url" :src="group.avatar_url" class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" @error="onAvatarError" />
                   <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">{{ (group.name || '?')[0].toUpperCase() }}</div>
                   <span class="flex-1 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">Написать пост от имени группы…</span>
                   <div class="flex items-center gap-2 text-white/55 group-hover:text-white transition-colors ml-1">
@@ -1069,7 +1140,7 @@ async function loadMoreMembers() {
                 <div v-else class="p-5 space-y-4">
                   <div class="flex items-start gap-3">
                     <div class="relative flex-shrink-0 mt-0.5">
-                      <img v-if="group.avatar_url" :src="group.avatar_url" class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover" />
+                      <img v-if="group.avatar_url" :src="group.avatar_url" class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover" @error="onAvatarError" />
                       <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold">{{ (group.name || '?')[0].toUpperCase() }}</div>
                     </div>
                     <div class="flex-1 min-w-0">
@@ -1355,42 +1426,53 @@ async function loadMoreMembers() {
             <div class="hidden xl:flex flex-col gap-3 w-60 flex-shrink-0 sticky top-24 self-start">
 
               <!-- Stats -->
-              <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl p-3">
-                <div class="grid grid-cols-3 gap-1.5">
-                  <div class="flex flex-col items-center gap-1 p-3 rounded-2xl bg-brand-bg/50 border border-brand-border/50">
-                    <span class="text-base font-extrabold leading-none" :style="`color: ${group.accent_color || '#4C67CF'}`">{{ fmtNum(group._count.members) }}</span>
-                    <span class="text-[10px] text-white/55 font-medium text-center leading-tight">Участ.</span>
+              <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
+                <div class="grid grid-cols-3 divide-x divide-brand-border/60">
+                  <div class="flex flex-col items-center gap-1 py-4 px-2">
+                    <span class="text-lg font-extrabold leading-none" :style="`color: ${group.accent_color || '#4C67CF'}`">{{ fmtNum(group._count.members) }}</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Участ.</span>
                   </div>
-                  <div class="flex flex-col items-center gap-1 p-3 rounded-2xl bg-brand-bg/50 border border-brand-border/50">
-                    <span class="text-base font-extrabold text-white leading-none">{{ fmtNum(group._count.posts) }}</span>
-                    <span class="text-[10px] text-white/55 font-medium text-center leading-tight">Постов</span>
+                  <div class="flex flex-col items-center gap-1 py-4 px-2">
+                    <span class="text-lg font-extrabold text-white leading-none">{{ fmtNum(group._count.posts) }}</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Постов</span>
                   </div>
-                  <div class="flex flex-col items-center gap-1 p-3 rounded-2xl bg-brand-bg/50 border border-brand-border/50">
-                    <span class="text-base font-extrabold text-white leading-none">{{ fmtNum(group._count.events) }}</span>
-                    <span class="text-[10px] text-white/55 font-medium text-center leading-tight">Событ.</span>
+                  <div class="flex flex-col items-center gap-1 py-4 px-2">
+                    <span class="text-lg font-extrabold text-white leading-none">{{ fmtNum(group._count.events) }}</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Событ.</span>
                   </div>
                 </div>
               </div>
 
               <!-- Rating -->
               <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
-                <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
-                  <BIcon name="TrendingUp" class="w-3.5 h-3.5" :style="`color: ${group.accent_color || '#4C67CF'}`" />
-                  <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Рейтинг</p>
-                </div>
-                <div class="px-4 pb-3">
-                  <div class="flex items-center justify-between gap-2 mb-1">
-                    <span class="text-2xl font-extrabold" :style="group.rating > 0 ? `color: ${group.accent_color || '#4C67CF'}` : group.rating < 0 ? '' : ''"
-                      :class="group.rating < 0 ? 'text-brand-error' : group.rating === 0 ? 'text-white' : ''">{{ group.rating >= 0 ? '+' : '' }}{{ Math.round(group.rating) }}</span>
-                    <p class="text-[10px] text-white/40">{{ group.rating_count }} голосов</p>
+                <div class="px-4 pt-3.5 pb-2 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <BIcon name="TrendingUp" class="w-3.5 h-3.5" :style="`color: ${group.accent_color || '#4C67CF'}`" />
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Рейтинг</p>
                   </div>
-                  <div v-if="authStore.user && !isOwner" class="flex gap-2 mt-2">
+                  <p class="text-[10px] text-white/35">{{ group.rating_count }} голосов</p>
+                </div>
+                <div class="px-4 pb-4">
+                  <div class="flex items-center gap-3 mb-3">
+                    <span class="text-3xl font-extrabold leading-none"
+                      :style="group.rating > 0 ? `color: ${group.accent_color || '#4C67CF'}` : ''"
+                      :class="group.rating < 0 ? 'text-brand-error' : group.rating === 0 ? 'text-white/60' : ''">{{ group.rating >= 0 ? '+' : '' }}{{ Math.round(group.rating) }}</span>
+                    <!-- Mini bar -->
+                    <div class="flex-1 h-1.5 bg-brand-bg rounded-full overflow-hidden">
+                      <div class="h-full rounded-full transition-all duration-500"
+                        :style="group.rating > 0
+                          ? `width: ${Math.min(100, (group.rating / Math.max(1, group.rating_count)) * 100)}%; background: ${group.accent_color || '#4C67CF'}`
+                          : group.rating < 0 ? `width: ${Math.min(100, Math.abs(group.rating / Math.max(1, group.rating_count)) * 100)}%; background: var(--color-brand-error)`
+                          : 'width: 0%'" />
+                    </div>
+                  </div>
+                  <div v-if="authStore.user && !isOwner" class="flex gap-2">
                     <button @click="submitVote(1)" :disabled="ratingSubmitting"
                       class="flex-1 py-2 rounded-xl text-sm font-bold border transition-all"
                       :class="myVote === 1 ? 'text-white' : 'border-brand-border text-white/55 hover:text-white'"
                       :style="myVote === 1
                         ? `background: ${group.accent_color || '#4C67CF'}25; color: ${group.accent_color || '#4C67CF'}; border-color: ${group.accent_color || '#4C67CF'}50`
-                        : `--tw-text-opacity:1`">▲ За</button>
+                        : ''">▲ За</button>
                     <button @click="submitVote(-1)" :disabled="ratingSubmitting"
                       class="flex-1 py-2 rounded-xl text-sm font-bold border transition-all"
                       :class="myVote === -1 ? 'border-brand-error/60 text-brand-error bg-brand-error/15' : 'border-brand-border text-white/55 hover:border-brand-error/50 hover:text-brand-error hover:bg-brand-error/10'">▼ Против</button>
@@ -1541,7 +1623,7 @@ async function loadMoreMembers() {
                   <router-link :to="`/profile/${group.owner.username}`"
                     class="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-brand-bg transition-all group cursor-pointer">
                     <div class="w-10 h-10 rounded-xl bg-brand-accent/20 overflow-hidden shrink-0 border border-brand-border/60">
-                      <img v-if="group.owner.avatar_url" :src="group.owner.avatar_url" class="w-full h-full object-cover" />
+                      <img v-if="group.owner.avatar_url" :src="group.owner.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
                       <div v-else class="w-full h-full flex items-center justify-center"><BIcon name="User" class="w-5 h-5 text-brand-accent" /></div>
                     </div>
                     <div class="min-w-0 flex-1">
@@ -1604,7 +1686,7 @@ async function loadMoreMembers() {
                     <div v-for="m in memberPreview" :key="m.user.id"
                       class="w-8 h-8 rounded-full bg-brand-bg border-2 border-brand-card overflow-hidden flex-shrink-0 hover:z-10 hover:scale-110 transition-transform"
                       :title="m.user.display_name || m.user.username">
-                      <img v-if="m.user.avatar_url" :src="m.user.avatar_url" class="w-full h-full object-cover" />
+                      <img v-if="m.user.avatar_url" :src="m.user.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
                       <div v-else class="w-full h-full flex items-center justify-center text-brand-accent text-[10px] font-bold bg-brand-accent/20">
                         {{ (m.user.display_name || m.user.username || '?')[0].toUpperCase() }}
                       </div>
@@ -1737,7 +1819,8 @@ async function loadMoreMembers() {
                 <div class="px-3 pb-3 -mt-6 relative z-10">
                   <div class="flex items-end gap-3 mb-2">
                     <img v-if="m.user.avatar_url" :src="m.user.avatar_url"
-                      class="w-12 h-12 rounded-full border-[3px] border-brand-bg object-cover flex-shrink-0" />
+                      class="w-12 h-12 rounded-full border-[3px] border-brand-bg object-cover flex-shrink-0"
+                      @error="onAvatarError" />
                     <div v-else class="w-12 h-12 rounded-full border-[3px] border-brand-bg bg-brand-accent/25 flex items-center justify-center text-brand-accent font-bold text-lg flex-shrink-0">
                       {{ (m.user.display_name || m.user.username || '?')[0].toUpperCase() }}
                     </div>
@@ -1810,6 +1893,14 @@ async function loadMoreMembers() {
         </button>
       </Transition>
     </Teleport>
+
+    <!-- Report group modal -->
+    <ReportModal
+      v-if="group"
+      v-model="showGroupReport"
+      :target-id="group.id"
+      target-type="group"
+    />
   </div>
 </template>
 
@@ -1822,4 +1913,7 @@ async function loadMoreMembers() {
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 .slide-up-enter-active, .slide-up-leave-active { transition: all 0.25s ease; }
 .slide-up-enter-from, .slide-up-leave-to { opacity: 0; transform: translateY(16px); }
+.group-menu-enter-active { transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.group-menu-leave-active { transition: all 0.12s ease; }
+.group-menu-enter-from, .group-menu-leave-to { opacity: 0; transform: translateY(-8px) scale(0.95); }
 </style>

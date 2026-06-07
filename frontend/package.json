@@ -1,6 +1,6 @@
 {
   "name": "bloomly-vue",
-  "version": "0.1.4",
+  "version": "0.4.14",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,7 @@
     "@unhead/vue": "^2.1.12",
     "axios": "^1.13.5",
     "fflate": "^0.8.2",
+    "flag-icons": "^7.5.0",
     "lottie-web": "^5.13.0",
     "lucide-vue-next": "^0.395.0",
     "pinia": "^2.1.0",

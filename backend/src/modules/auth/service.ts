@@ -112,11 +112,12 @@ export class AuthService {
 
   /** Сброс пароля Step 1 — отправить код */
   async requestPasswordReset(email: string) {
-    const user = await prisma.user.findFirst({ where: { email, deleted_at: null } });
+    const e = email.toLowerCase().trim();
+    const user = await prisma.user.findFirst({ where: { email: e, deleted_at: null } });
     if (!user) return; // silent
 
-    const code = await createOtp(email, 'reset');
-    await sendOtpEmail(email, code, 'reset');
+    const code = await createOtp(e, 'reset');
+    await sendOtpEmail(e, code, 'reset');
   }
 
   /** Сброс пароля Step 2 — установить новый пароль */

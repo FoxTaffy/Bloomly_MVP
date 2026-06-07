@@ -32,6 +32,21 @@ export async function updateMeHandler(
   return reply.send({ success: true, data: { user }, error: null });
 }
 
+export async function updateUsernameHandler(
+  request: FastifyRequest<{ Body: { username: string } }>,
+  reply: FastifyReply,
+) {
+  const payload = request.user as JwtPayload;
+  try {
+    const { username } = request.body;
+    const user = await usersService.updateUsername(payload.id, username);
+    return reply.send({ success: true, data: { user }, error: null });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Update failed';
+    return reply.code(409).send({ success: false, data: null, error: { code: 'USERNAME_TAKEN', message } });
+  }
+}
+
 export async function searchUsersHandler(
   request: FastifyRequest<{ Querystring: { q?: string } }>,
   reply: FastifyReply,
@@ -197,6 +212,34 @@ export async function deleteAccountHandler(
     return reply.send({ success: true, data: null, error: null });
   } catch (e: any) {
     return reply.code(500).send({ success: false, data: null, error: { code: 'DELETE_ACCOUNT_ERROR', message: e.message } });
+  }
+}
+
+export async function deleteAvatarHistoryHandler(
+  request: FastifyRequest<{ Params: { historyId: string } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = request.user as JwtPayload;
+    await usersService.deleteAvatarHistoryItem(userId, request.params.historyId);
+    return reply.send({ success: true, data: null, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'HISTORY_DELETE_ERROR', message: e.message } });
+  }
+}
+
+export async function restoreAvatarHistoryHandler(
+  request: FastifyRequest<{ Params: { historyId: string } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = request.user as JwtPayload;
+    const data = await usersService.restoreAvatarFromHistory(userId, request.params.historyId);
+    return reply.send({ success: true, data, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'HISTORY_RESTORE_ERROR', message: e.message } });
   }
 }
 

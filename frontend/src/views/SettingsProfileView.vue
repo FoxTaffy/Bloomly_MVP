@@ -150,7 +150,7 @@
               <div class="flex gap-3">
                 <button type="button" @click="cancelCrop"
                   class="px-4 py-2 text-xs font-bold rounded-xl border border-brand-border text-white/55 hover:text-white hover:border-brand-muted/40 transition-all">
-                  Отмена
+                  {{ langStore.t.cancel }}
                 </button>
                 <button type="button" @click="confirmCrop" :disabled="cropUploading"
                   class="px-4 py-2 text-xs font-bold rounded-xl text-white transition-all disabled:opacity-50 shadow-lg flex items-center gap-2"
@@ -207,7 +207,7 @@
             <!-- Section scroll-spy nav -->
             <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
               <div class="px-4 py-3 border-b border-brand-border">
-                <h4 class="text-[11px] font-bold text-white/55 uppercase tracking-widest">Разделы</h4>
+                <h4 class="text-[11px] font-bold text-white/55 uppercase tracking-widest">{{ langStore.t.sectionsHeader }}</h4>
               </div>
               <nav class="p-2 space-y-0.5">
                 <button
@@ -239,8 +239,8 @@
             <!-- Page header -->
             <div class="flex items-center gap-4">
               <div>
-                <h1 class="text-2xl font-extrabold text-white tracking-tight">Настройки</h1>
-                <p class="text-sm text-white/55 mt-0.5">{{ sections.find(s => s.id === openSection)?.label ?? 'Профиль' }}</p>
+                <h1 class="text-2xl font-extrabold text-white tracking-tight">{{ langStore.t.settings }}</h1>
+                <p class="text-sm text-white/55 mt-0.5">{{ sections.find(s => s.id === openSection)?.label ?? langStore.t.settings }}</p>
               </div>
             </div>
 
@@ -308,7 +308,7 @@
                         <span class="text-white text-xs font-bold">
                           {{ bannerDragOver ? 'Отпустите файл' : (form.banner_url ? 'Изменить баннер' : 'Добавить баннер') }}
                         </span>
-                        <span v-if="!bannerDragOver" class="text-white/50 text-[10px]">Клик или перетащите изображение</span>
+                        <span v-if="!bannerDragOver" class="text-white/50 text-[10px]">{{ langStore.t.bannerDragHint }}</span>
                       </div>
                       <!-- action buttons top-right -->
                       <div class="absolute top-3 right-3 flex gap-1.5">
@@ -399,14 +399,104 @@
                     </div>
                   </div>
 
+                  <!-- ── История аватаров ── -->
+                  <div class="border-t border-brand-border/40">
+                    <button type="button"
+                      @click="showAvatarHistory = !showAvatarHistory"
+                      class="w-full flex items-center justify-between px-6 py-3 text-xs font-bold text-white/45 hover:text-white/70 transition-colors">
+                      <span class="flex items-center gap-2">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        История аватаров
+                        <span v-if="avatarHistory.length" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10">{{ avatarHistory.length }}</span>
+                      </span>
+                      <svg class="w-3.5 h-3.5 transition-transform" :class="showAvatarHistory ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    </button>
+                    <Transition name="fade">
+                      <div v-if="showAvatarHistory" class="px-6 pb-5">
+                        <div v-if="avatarHistoryLoading" class="flex justify-center py-4">
+                          <span class="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin"></span>
+                        </div>
+                        <div v-else-if="!avatarHistory.length" class="text-xs text-white/35 text-center py-4">
+                          История аватаров пуста
+                        </div>
+                        <div v-else class="grid grid-cols-5 sm:grid-cols-8 gap-2">
+                          <div
+                            v-for="item in avatarHistory" :key="item.id"
+                            class="group relative aspect-square rounded-xl overflow-hidden border-2 transition-all"
+                            :class="form.avatar_url === item.url
+                              ? 'border-brand-accent shadow-lg shadow-brand-accent/30'
+                              : 'border-transparent hover:border-white/30'"
+                            :title="new Date(item.created_at).toLocaleDateString('ru-RU')">
+                            <img :src="item.url" class="w-full h-full object-cover cursor-pointer" loading="lazy" @click="applyHistoryAvatar(item.url)"/>
+                            <!-- Hover overlay: restore checkmark -->
+                            <button
+                              type="button"
+                              @click="applyHistoryAvatar(item.url)"
+                              class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+                              </svg>
+                            </button>
+                            <!-- Active checkmark badge -->
+                            <div v-if="form.avatar_url === item.url" class="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-brand-accent flex items-center justify-center pointer-events-none">
+                              <svg class="w-2 h-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                              </svg>
+                            </div>
+                            <!-- Delete button -->
+                            <button
+                              type="button"
+                              @click.stop="deleteHistoryAvatar(item.id)"
+                              class="absolute top-1 left-1 w-5 h-5 rounded-full bg-red-500/80 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                              title="Удалить из истории">
+                              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/>
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </Transition>
+                  </div>
+
                   <!-- ── Поля формы ── -->
                   <div class="p-6 space-y-5 border-t border-brand-border/40">
+
+                  <!-- Username -->
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">Никнейм</label>
+                      <span class="text-[11px] tabular-nums" :class="form.username.length > 27 ? 'text-brand-error/80' : 'text-white/35'">
+                        {{ form.username.length }}<span class="opacity-50">/30</span>
+                      </span>
+                    </div>
+                    <div class="relative">
+                      <span class="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 font-bold select-none pointer-events-none">@</span>
+                      <input
+                        :value="form.username"
+                        @input="onUsernameInput"
+                        type="text"
+                        maxlength="30"
+                        placeholder="твой_никнейм"
+                        class="field-input !pl-8"
+                        :class="usernameError ? '!border-brand-error/60 !ring-brand-error/20' : ''"
+                        autocomplete="username"
+                        spellcheck="false"
+                      />
+                    </div>
+                    <p v-if="usernameError" class="text-[11px] text-brand-error/80 mt-1.5">{{ usernameError }}</p>
+                    <p v-else class="text-[11px] text-white/35 mt-1.5">Только a–z, 0–9, _ · Без пробелов · Мин. 3 символа</p>
+                  </div>
 
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <!-- Display name -->
                     <div>
                       <div class="flex items-center justify-between mb-2">
-                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider">Отображаемое имя</label>
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.displayNameLabel }}</label>
                         <span class="text-[11px] tabular-nums" :class="(form.display_name?.length??0) > 45 ? 'text-brand-error/80' : 'text-white/35'">
                           {{ form.display_name?.length ?? 0 }}<span class="opacity-50">/50</span>
                         </span>
@@ -419,7 +509,7 @@
                     <!-- Status -->
                     <div>
                       <div class="flex items-center justify-between mb-2">
-                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider">Статус</label>
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.statusFieldLabel }}</label>
                         <span class="text-[11px] tabular-nums" :class="(form.status?.length??0) > 90 ? 'text-brand-error/80' : 'text-white/35'">
                           {{ form.status?.length ?? 0 }}<span class="opacity-50">/100</span>
                         </span>
@@ -434,7 +524,7 @@
                   <!-- Bio -->
                   <div>
                     <div class="flex items-center justify-between mb-2">
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">О себе</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.aboutLabel }}</label>
                       <span class="text-[11px] tabular-nums" :class="(form.bio?.length??0) > 270 ? 'text-brand-error/80' : 'text-white/35'">
                         {{ form.bio?.length ?? 0 }}<span class="opacity-50">/300</span>
                       </span>
@@ -448,7 +538,7 @@
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <!-- Job title -->
                     <div>
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Должность / Занятие</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.jobLabel }}</label>
                       <input v-model="form.job_title" type="text" placeholder="Напр. Цифровой художник" class="field-input"/>
                       <p v-if="savedForm.job_title" class="text-[11px] text-white/35 mt-1.5 truncate">
                         Сейчас: <span class="text-white/35 font-semibold">{{ savedForm.job_title }}</span>
@@ -456,7 +546,7 @@
                     </div>
                     <!-- Pronouns -->
                     <div>
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Местоимения</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.pronounsLabel }}</label>
                       <div class="flex gap-2">
                         <input v-model="form.pronouns" type="text" placeholder="он/его, она/её…" class="field-input flex-1"/>
                         <div class="flex gap-1.5 items-center flex-shrink-0">
@@ -477,7 +567,7 @@
                   <!-- Birth date + NSFW note -->
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Дата рождения</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.birthdayLabel }}</label>
                       <input v-model="form.birth_date" type="date" class="field-input"
                         :max="new Date().toISOString().substring(0,10)" />
                       <p class="text-[11px] mt-1.5"
@@ -486,7 +576,7 @@
                           {{ birthAge }} лет
                           <span v-if="birthAge < 18"> · NSFW-контент недоступен (менее 18 лет)</span>
                         </template>
-                        <template v-else>Используется для проверки доступа к NSFW-контенту</template>
+                        <template v-else>{{ langStore.t.nsfwBirthdayHint }}</template>
                       </p>
                     </div>
                   </div>
@@ -511,7 +601,7 @@
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <!-- Website -->
                     <div>
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Веб-сайт</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.websiteLabel }}</label>
                       <div class="relative">
                         <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/35 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
@@ -522,7 +612,7 @@
 
                     <!-- Country combobox -->
                     <div class="relative">
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Страна</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.countryLabel }}</label>
                       <div class="relative">
                         <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/35 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064"/>
@@ -555,7 +645,7 @@
 
                     <!-- City combobox -->
                     <div class="relative">
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Город</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.cityLabel }}</label>
                       <div class="relative">
                         <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/35 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
@@ -586,7 +676,7 @@
 
                     <!-- Relationship status -->
                     <div>
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Семейное положение</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.relationshipLabel }}</label>
                       <div class="grid grid-cols-2 gap-1.5">
                         <button v-for="rs in relationshipOptions" :key="rs.value" type="button"
                           @click="form.relationship_status = form.relationship_status === rs.value ? '' : rs.value"
@@ -654,17 +744,17 @@
                                 <p class="text-xs text-white/55 truncate">@{{ u.username }}</p>
                               </div>
                             </button>
-                            <p v-if="!filteredPartners.length" class="text-xs text-white/55 px-4 py-3">Никого не найдено</p>
+                            <p v-if="!filteredPartners.length" class="text-xs text-white/55 px-4 py-3">{{ langStore.t.noPersonFound }}</p>
                           </div>
                         </Transition>
                       </div>
-                      <p v-if="!followingList.length" class="text-xs text-white/35">Вы пока ни на кого не подписаны</p>
+                      <p v-if="!followingList.length" class="text-xs text-white/35">{{ langStore.t.noFollowingYet }}</p>
                     </div>
                   </Transition>
 
                   <!-- ── Соцсети ────────────────────────────── -->
                   <div class="pt-2">
-                    <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-3">Соцсети</label>
+                    <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-3">{{ langStore.t.socialNetworksLabel }}</label>
                     <div class="space-y-2">
                       <div v-for="net in socialNetworks" :key="net.key" class="flex items-center gap-3">
                         <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border"
@@ -734,13 +824,13 @@
                   <!-- ── Theme selector (Lite+) ────────────────────────── -->
                   <div>
                     <div class="flex items-center justify-between mb-3">
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">Тема профиля</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.profileThemeLabel }}</label>
                       <span class="text-[10px] text-amber-400 font-bold bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">Lite+</span>
                     </div>
                     <div v-if="['free'].includes((authStore.user as any)?.subscription_tier ?? 'free')"
                       class="rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 flex items-center gap-3">
                       <BIcon name="Lock" class="w-4 h-4 text-amber-400 flex-shrink-0" />
-                      <p class="text-xs text-white/55">Темы профиля доступны с подпиской <router-link to="/subscriptions" class="text-amber-400 hover:underline font-bold">Lite</router-link>.</p>
+                      <p class="text-xs text-white/55">{{ langStore.t.profileThemeLiteSub }} <router-link to="/subscriptions" class="text-amber-400 hover:underline font-bold">Lite</router-link>.</p>
                     </div>
                     <div v-else class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <button v-for="(theme, id) in PROFILE_THEMES" :key="id" type="button"
@@ -766,13 +856,13 @@
                   <!-- ── Avatar frame (Pro+) ────────────────────────────── -->
                   <div>
                     <div class="flex items-center justify-between mb-3">
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">Рамка аватара</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.avatarFrameLabel }}</label>
                       <span class="text-[10px] text-brand-accent font-bold bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Pro+</span>
                     </div>
                     <div v-if="!['pro', 'business'].includes((authStore.user as any)?.subscription_tier ?? 'free')"
                       class="rounded-2xl border border-brand-accent/20 bg-brand-accent/5 px-4 py-3 flex items-center gap-3">
                       <BIcon name="Lock" class="w-4 h-4 text-brand-accent flex-shrink-0" />
-                      <p class="text-xs text-white/55">Рамки аватара доступны с подпиской <router-link to="/subscriptions" class="text-brand-accent hover:underline font-bold">Pro</router-link>.</p>
+                      <p class="text-xs text-white/55">{{ langStore.t.avatarFrameProSub }} <router-link to="/subscriptions" class="text-brand-accent hover:underline font-bold">Pro</router-link>.</p>
                     </div>
                     <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <button v-for="(frame, id) in PROFILE_FRAMES" :key="id" type="button"
@@ -795,13 +885,13 @@
                   <!-- ── Custom background (Pro+) ──────────────────────── -->
                   <div>
                     <div class="flex items-center justify-between mb-3">
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">Фон профиля (URL)</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.profileBgLabel }}</label>
                       <span class="text-[10px] text-brand-accent font-bold bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Pro+</span>
                     </div>
                     <div v-if="!['pro', 'business'].includes((authStore.user as any)?.subscription_tier ?? 'free')"
                       class="rounded-2xl border border-brand-accent/20 bg-brand-accent/5 px-4 py-3 flex items-center gap-3">
                       <BIcon name="Lock" class="w-4 h-4 text-brand-accent flex-shrink-0" />
-                      <p class="text-xs text-white/55">Кастомный фон доступен с <router-link to="/subscriptions" class="text-brand-accent hover:underline font-bold">Pro</router-link>.</p>
+                      <p class="text-xs text-white/55">{{ langStore.t.customBgPro }} <router-link to="/subscriptions" class="text-brand-accent hover:underline font-bold">Pro</router-link>.</p>
                     </div>
                     <div v-else>
                       <input ref="bgFileRef" type="file" accept="image/*" class="hidden" @change="onBgChange" />
@@ -838,7 +928,7 @@
                   </div>
                   <div>
                     <h2 class="font-bold text-white text-sm">{{ sections[4].label }}</h2>
-                    <p class="text-[10px] text-white/40">Честная верификация — подтвердите свою деятельность</p>
+                    <p class="text-[10px] text-white/40">{{ langStore.t.verFairVerification }}</p>
                   </div>
                 </div>
 
@@ -857,8 +947,8 @@
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
                         </svg>
                       </div>
-                      <h3 class="text-lg font-bold text-white mb-1">Аккаунт верифицирован</h3>
-                      <p class="text-sm text-white/55">Подтверждено {{ verificationStatus.verifiedAt ? new Date(verificationStatus.verifiedAt).toLocaleDateString('ru-RU') : '' }}</p>
+                      <h3 class="text-lg font-bold text-white mb-1">{{ langStore.t.accountVerified }}</h3>
+                      <p class="text-sm text-white/55">{{ langStore.t.verifiedAt }} {{ verificationStatus.verifiedAt ? new Date(verificationStatus.verifiedAt).toLocaleDateString() : '' }}</p>
                       <div v-if="verificationStatus.verificationType" class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold"
                         :class="{
                           'bg-purple-500/10 border border-purple-500/20 text-purple-400': verificationStatus.verificationType === 'artist',
@@ -866,11 +956,11 @@
                           'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400': verificationStatus.verificationType === 'event',
                         }">
                         <img :src="`/icons/badges/${verificationStatus.verificationType}.svg`" class="w-4 h-4" />
-                        {{ { artist: 'Художник', master: 'Мастер', event: 'Мероприятие' }[verificationStatus.verificationType as string] }}
+                        {{ { artist: langStore.t.verTypeArtist, master: langStore.t.verTypeMaster, event: langStore.t.verTypeEvent }[verificationStatus.verificationType as string] }}
                       </div>
                       <div class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                        Донаты доступны
+                        {{ langStore.t.verDonationsAvailable }}
                       </div>
                     </div>
 
@@ -881,11 +971,11 @@
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                       </div>
-                      <h3 class="text-lg font-bold text-white mb-1">Заявка на рассмотрении</h3>
-                      <p class="text-sm text-white/55">Модераторы вручную проверяют вашу заявку. Обычно это занимает 1-3 дня.</p>
-                      <p class="text-xs text-white/40 mt-2">Отправлено {{ new Date(verificationStatus.latestRequest.created_at).toLocaleDateString('ru-RU') }}</p>
+                      <h3 class="text-lg font-bold text-white mb-1">{{ langStore.t.verPending }}</h3>
+                      <p class="text-sm text-white/55">{{ langStore.t.verPendingDesc }}</p>
+                      <p class="text-xs text-white/40 mt-2">{{ langStore.t.verSentLabel }} {{ new Date(verificationStatus.latestRequest.created_at).toLocaleDateString() }}</p>
                       <div v-if="verificationStatus.latestRequest.verification_type" class="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
-                        {{ { artist: 'Художник', master: 'Мастер', event: 'Мероприятие' }[verificationStatus.latestRequest.verification_type as string] }}
+                        {{ { artist: langStore.t.verTypeArtist, master: langStore.t.verTypeMaster, event: langStore.t.verTypeEvent }[verificationStatus.latestRequest.verification_type as string] }}
                       </div>
                     </div>
 
@@ -896,9 +986,9 @@
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/>
                         </svg>
                         <div>
-                          <p class="text-sm font-bold text-rose-400">Заявка отклонена</p>
+                          <p class="text-sm font-bold text-rose-400">{{ langStore.t.verRejected }}</p>
                           <p v-if="verificationStatus.latestRequest.reason" class="text-xs text-white/55 mt-1">{{ verificationStatus.latestRequest.reason }}</p>
-                          <p class="text-xs text-white/40 mt-1">Вы можете исправить замечания и подать заявку повторно.</p>
+                          <p class="text-xs text-white/40 mt-1">{{ langStore.t.verRejectedHint }}</p>
                         </div>
                       </div>
                     </div>
@@ -912,7 +1002,7 @@
                           <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                           </svg>
-                          Заполненность профиля
+                          {{ langStore.t.verProfileCompletenessTitle }}
                           <span class="ml-auto text-xs font-bold"
                             :class="profileCompleteness?.canSubmit ? 'text-emerald-400' : 'text-amber-400'">
                             {{ profileCompleteness?.percentage ?? 0 }}%
@@ -934,7 +1024,7 @@
                         </div>
                         <p v-if="!profileCompleteness?.canSubmit" class="text-xs text-amber-400/80 mt-2 flex items-center gap-1.5">
                           <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01"/></svg>
-                          Заполните профиль минимум на 80%, чтобы подать заявку
+                          {{ langStore.t.verFillProfile80 }}
                         </p>
                       </div>
 
@@ -944,7 +1034,7 @@
                           <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                           </svg>
-                          Критерии верификации
+                          {{ langStore.t.verCriteriaTitle }}
                         </h3>
                         <div class="space-y-2">
                           <div v-for="(cr, i) in verCriteriaList" :key="i"
@@ -971,7 +1061,7 @@
                           <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
                           </svg>
-                          Тип верификации
+                          {{ langStore.t.verTypeTitle }}
                         </h3>
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <!-- Artist -->
@@ -980,9 +1070,9 @@
                             :class="selectedVerType === 'artist' ? 'border-purple-500 bg-purple-500/10 shadow-lg shadow-purple-500/10' : 'border-brand-border bg-brand-bg hover:border-purple-500/40'">
                             <div class="flex items-center gap-2 mb-2">
                               <img src="/icons/badges/artist.svg" class="w-6 h-6" />
-                              <span class="font-bold text-sm" :class="selectedVerType === 'artist' ? 'text-purple-400' : 'text-white'">Художник</span>
+                              <span class="font-bold text-sm" :class="selectedVerType === 'artist' ? 'text-purple-400' : 'text-white'">{{ langStore.t.verTypeArtist }}</span>
                             </div>
-                            <p class="text-[11px] text-white/50 leading-relaxed">Скриншот слоёв или видео процесса рисования</p>
+                            <p class="text-[11px] text-white/50 leading-relaxed">{{ langStore.t.verTypeArtistHint }}</p>
                             <div v-if="selectedVerType === 'artist'" class="absolute top-2 right-2 w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center">
                               <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
                             </div>
@@ -993,9 +1083,9 @@
                             :class="selectedVerType === 'master' ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/10' : 'border-brand-border bg-brand-bg hover:border-amber-500/40'">
                             <div class="flex items-center gap-2 mb-2">
                               <img src="/icons/badges/master.svg" class="w-6 h-6" />
-                              <span class="font-bold text-sm" :class="selectedVerType === 'master' ? 'text-amber-400' : 'text-white'">Мастер</span>
+                              <span class="font-bold text-sm" :class="selectedVerType === 'master' ? 'text-amber-400' : 'text-white'">{{ langStore.t.verTypeMaster }}</span>
                             </div>
-                            <p class="text-[11px] text-white/50 leading-relaxed">Фото работы с сигной: «Bloomly», дата, ваш ID</p>
+                            <p class="text-[11px] text-white/50 leading-relaxed">{{ langStore.t.verTypeMasterHint }}</p>
                             <div v-if="selectedVerType === 'master'" class="absolute top-2 right-2 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
                               <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
                             </div>
@@ -1006,9 +1096,9 @@
                             :class="selectedVerType === 'event' ? 'border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10' : 'border-brand-border bg-brand-bg hover:border-emerald-500/40'">
                             <div class="flex items-center gap-2 mb-2">
                               <img src="/icons/badges/event.svg" class="w-6 h-6" />
-                              <span class="font-bold text-sm" :class="selectedVerType === 'event' ? 'text-emerald-400' : 'text-white'">Мероприятие</span>
+                              <span class="font-bold text-sm" :class="selectedVerType === 'event' ? 'text-emerald-400' : 'text-white'">{{ langStore.t.verTypeEvent }}</span>
                             </div>
-                            <p class="text-[11px] text-white/50 leading-relaxed">Фото билета или селфи на месте мероприятия</p>
+                            <p class="text-[11px] text-white/50 leading-relaxed">{{ langStore.t.verTypeEventHint }}</p>
                             <div v-if="selectedVerType === 'event'" class="absolute top-2 right-2 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
                               <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
                             </div>
@@ -1022,17 +1112,17 @@
                           <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                           </svg>
-                          Доказательства
+                          {{ langStore.t.verEvidenceTitle }}
                           <span class="text-[10px] text-white/40 font-normal ml-1">{{ evidenceUrls.length }}/5</span>
                         </h3>
 
                         <!-- Evidence description per type -->
                         <div class="bg-blue-500/5 border border-blue-500/15 rounded-2xl px-4 py-3 mb-3">
                           <p class="text-xs text-white/55">
-                            <span class="text-blue-400 font-bold">Требования:</span>
-                            <span v-if="selectedVerType === 'artist'"> Загрузите скриншот с видимыми слоями проекта или ссылку на видео процесса рисования. Это докажет, что работа создана вами, а не ИИ.</span>
-                            <span v-else-if="selectedVerType === 'master'"> Загрузите фото вашей работы рядом с бумажкой, на которой написано «Bloomly», текущая дата и ваш ID ({{ authStore.user?.id?.slice(0,8) }}).</span>
-                            <span v-else-if="selectedVerType === 'event'"> Загрузите фото билета/бейджа мероприятия или селфи на локации мероприятия.</span>
+                            <span class="text-blue-400 font-bold">{{ langStore.t.verRequirementsLabel }}</span>
+                            <span v-if="selectedVerType === 'artist'">{{ langStore.t.verEvidenceDescArtist }}</span>
+                            <span v-else-if="selectedVerType === 'master'">{{ langStore.t.verEvidenceDescMaster }} ({{ authStore.user?.id?.slice(0,8) }}).</span>
+                            <span v-else-if="selectedVerType === 'event'">{{ langStore.t.verEvidenceDescEvent }}</span>
                           </p>
                         </div>
 
@@ -1053,7 +1143,7 @@
                           class="w-full py-3 rounded-2xl border-2 border-dashed border-brand-border hover:border-blue-500/40 bg-brand-bg text-sm text-white/55 hover:text-white transition-all flex items-center justify-center gap-2">
                           <span v-if="isUploadingEvidence" class="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
                           <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                          {{ isUploadingEvidence ? 'Загрузка…' : 'Загрузить файл' }}
+                          {{ isUploadingEvidence ? langStore.t.verUploadingLabel : langStore.t.verUploadBtn }}
                         </button>
                         <input ref="evidenceInput" type="file" accept="image/*,video/*" class="hidden" @change="onEvidenceUpload" />
                       </div>
@@ -1061,8 +1151,7 @@
                       <!-- Anti-AI notice -->
                       <div class="bg-rose-500/5 border border-rose-500/15 rounded-2xl px-4 py-3">
                         <p class="text-xs text-white/55">
-                          <span class="text-rose-400 font-bold">Важно:</span>
-                          Все заявки проверяются модераторами вручную. Автоматическая верификация отсутствует. Использование AI-генераций в качестве доказательств запрещено и приведёт к отклонению заявки.
+                          <span class="text-rose-400 font-bold">{{ langStore.t.verImportantLabel }}</span>{{ langStore.t.verAntiAINotice }}
                         </p>
                       </div>
 
@@ -1075,7 +1164,7 @@
                         <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
                         </svg>
-                        {{ isRequestingVerification ? 'Отправка…' : !profileCompleteness?.canSubmit ? 'Заполните профиль (≥80%)' : !selectedVerType ? 'Выберите тип верификации' : evidenceUrls.length === 0 ? 'Загрузите доказательства' : 'Отправить на верификацию' }}
+                        {{ isRequestingVerification ? langStore.t.verSubmitSending : !profileCompleteness?.canSubmit ? langStore.t.verSubmitNoProfile : !selectedVerType ? langStore.t.verSubmitNoType : evidenceUrls.length === 0 ? langStore.t.verSubmitNoEvidence : langStore.t.verSubmitBtn }}
                       </button>
                     </template>
                   </template>
@@ -1105,7 +1194,7 @@
                       :class="langStore.currentLang === opt.code
                         ? 'border-amber-400 bg-amber-400/10 shadow-lg shadow-amber-400/10'
                         : 'border-brand-border bg-brand-bg/40 hover:border-amber-400/40 hover:bg-amber-400/5'">
-                      <span class="text-3xl leading-none">{{ opt.flag }}</span>
+                      <span :class="`fi fi-${opt.fi} rounded-sm`" style="font-size:2rem"></span>
                       <span class="text-sm font-bold" :class="langStore.currentLang === opt.code ? 'text-amber-400' : 'text-white/70'">{{ opt.name }}</span>
                       <div v-if="langStore.currentLang === opt.code" class="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center">
                         <BIcon name="Check" class="w-3 h-3 text-black" />
@@ -1157,7 +1246,7 @@
                               ? 'border-amber-400 bg-amber-400/10'
                               : 'border-brand-border bg-brand-bg/40 hover:border-amber-400/30'"
                           >
-                            <span class="text-xl leading-none">{{ opt.flag }}</span>
+                            <span :class="`fi fi-${opt.fi} rounded-sm`" style="font-size:1.25rem"></span>
                             <span class="text-[11px] font-bold" :class="langStore.autoTranslateLang === opt.code ? 'text-amber-400' : 'text-white/50'">{{ opt.code }}</span>
                           </button>
                         </div>
@@ -1175,7 +1264,7 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                     </svg>
                   </div>
-                  <h2 class="font-bold text-white text-sm">Безопасность и способы входа</h2>
+                  <h2 class="font-bold text-white text-sm">{{ langStore.t.securityLoginTitle }}</h2>
                 </div>
                 <div class="p-6 space-y-3">
                   <!-- Email/пароль -->
@@ -1187,11 +1276,11 @@
                         </svg>
                       </div>
                       <div>
-                        <p class="text-sm font-semibold text-white">Email и пароль</p>
+                        <p class="text-sm font-semibold text-white">{{ langStore.t.emailPasswordLabel }}</p>
                         <p class="text-xs text-white/45">{{ authStore.user?.email }}</p>
                       </div>
                     </div>
-                    <span class="px-2.5 py-1 rounded-lg text-xs font-bold" style="background:rgba(16,185,129,0.15);color:#34d399">Активен</span>
+                    <span class="px-2.5 py-1 rounded-lg text-xs font-bold" style="background:rgba(16,185,129,0.15);color:#34d399">{{ langStore.t.activeLabel }}</span>
                   </div>
 
                   <!-- OAuth провайдеры -->
@@ -1213,7 +1302,7 @@
                         </div>
                         <div>
                           <p class="text-sm font-semibold text-white">{{ p.label }}</p>
-                          <p class="text-xs text-white/45">{{ linkedAccounts.includes(p.key) ? 'Привязан' : 'Не привязан' }}</p>
+                          <p class="text-xs text-white/45">{{ linkedAccounts.includes(p.key) ? langStore.t.linkedLabel : langStore.t.notLinkedLabel }}</p>
                         </div>
                       </div>
                       <button
@@ -1223,9 +1312,9 @@
                         class="px-4 py-1.5 rounded-xl text-xs font-bold text-white border border-brand-border hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all disabled:opacity-50"
                       >
                         <span v-if="linkingProvider === p.key" class="flex items-center gap-1.5">
-                          <span class="w-3 h-3 border border-t-transparent border-white rounded-full animate-spin"></span>Подключение…
+                          <span class="w-3 h-3 border border-t-transparent border-white rounded-full animate-spin"></span>{{ langStore.t.linkingLabel }}
                         </span>
-                        <span v-else>Привязать</span>
+                        <span v-else>{{ langStore.t.linkBtn }}</span>
                       </button>
                       <button
                         v-else
@@ -1236,7 +1325,7 @@
                         <span v-if="unlinkingProvider === p.key" class="flex items-center gap-1.5">
                           <span class="w-3 h-3 border border-t-transparent border-red-400 rounded-full animate-spin"></span>
                         </span>
-                        <span v-else>Отвязать</span>
+                        <span v-else>{{ langStore.t.unlinkBtn }}</span>
                       </button>
                     </div>
                   </template>
@@ -1251,15 +1340,15 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                     </svg>
                   </div>
-                  <h2 class="font-bold text-white text-sm">Аккаунт</h2>
+                  <h2 class="font-bold text-white text-sm">{{ langStore.t.secAccount }}</h2>
                 </div>
                 <div class="p-6 space-y-4">
                   <div class="p-4 rounded-2xl border border-red-500/25 bg-red-500/5">
-                    <h3 class="text-sm font-bold text-red-400 mb-1">Удалить аккаунт</h3>
-                    <p class="text-xs text-white/50 mb-4">Все данные, посты, сообщения и подписки будут безвозвратно удалены. Это действие нельзя отменить.</p>
+                    <h3 class="text-sm font-bold text-red-400 mb-1">{{ langStore.t.deleteAccountTitle }}</h3>
+                    <p class="text-xs text-white/50 mb-4">{{ langStore.t.deleteAccountDesc }}</p>
                     <button type="button" @click="showDeleteModal = true"
                       class="px-5 py-2.5 rounded-2xl text-sm font-bold text-white bg-red-500/20 hover:bg-red-500/35 border border-red-500/40 hover:border-red-500/70 transition-all">
-                      Удалить мой аккаунт
+                      {{ langStore.t.deleteMyAccountBtn }}
                     </button>
                   </div>
                 </div>
@@ -1269,14 +1358,14 @@
               <div class="flex items-center justify-between gap-4 pt-2 xl:hidden">
                 <router-link :to="`/profile/${authStore.user?.username}`"
                   class="px-6 py-3 bg-brand-card border border-brand-border hover:border-brand-muted/40 text-white/55 hover:text-white rounded-2xl text-sm font-bold transition-all">
-                  Отмена
+                  {{ langStore.t.cancel }}
                 </router-link>
                 <button type="submit" :disabled="userStore.isLoading"
                   class="flex-1 max-w-xs py-3 text-sm font-bold text-white transition-all shadow-lg flex items-center justify-center gap-2 rounded-2xl disabled:opacity-50"
                   :style="`background:${form.accent_color};box-shadow:0 4px 24px ${form.accent_color}44`">
                   <span v-if="userStore.isLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                   <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                  {{ userStore.isLoading ? 'Сохранение…' : 'Сохранить профиль' }}
+                  {{ userStore.isLoading ? langStore.t.savingProfile : langStore.t.saveProfile }}
                 </button>
               </div>
 
@@ -1298,28 +1387,28 @@
             <div class="w-8 h-8 rounded-xl bg-red-500/20 flex items-center justify-center flex-shrink-0">
               <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             </div>
-            <h3 class="font-bold text-white text-sm">Удаление аккаунта</h3>
+            <h3 class="font-bold text-white text-sm">{{ langStore.t.deleteAccountModalTitle }}</h3>
           </div>
           <div class="p-6 space-y-4">
-            <p class="text-sm text-white/70">Это действие <strong class="text-red-400">необратимо</strong>. Все твои данные, посты, сообщения и подписки будут удалены навсегда.</p>
+            <p class="text-sm text-white/70">{{ langStore.t.deleteModalDescPre }} <strong class="text-red-400">{{ langStore.t.deleteModalDescHighlight }}</strong>{{ langStore.t.deleteModalDescPost }}</p>
             <div>
-              <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-2">Для подтверждения введи слово <span class="text-red-400 font-black">УДАЛИТЬ</span></label>
-              <input v-model="deleteConfirmText" type="text" placeholder="УДАЛИТЬ"
+              <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-2">{{ langStore.t.deleteConfirmLabel }} <span class="text-red-400 font-black">{{ langStore.t.deleteWord }}</span></label>
+              <input v-model="deleteConfirmText" type="text" :placeholder="langStore.t.deleteWord"
                 class="w-full bg-brand-bg border border-red-500/30 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-red-500/60 transition-all"
                 @keydown.enter="handleDeleteAccount" />
             </div>
             <div class="flex gap-3 pt-1">
               <button type="button" @click="showDeleteModal = false; deleteConfirmText = ''"
                 class="flex-1 py-2.5 rounded-2xl text-sm font-bold text-white/55 hover:text-white bg-brand-bg border border-brand-border hover:border-white/20 transition-all">
-                Отмена
+                {{ langStore.t.cancel }}
               </button>
-              <button type="button" @click="handleDeleteAccount" :disabled="deleteConfirmText !== 'УДАЛИТЬ' || isDeletingAccount"
+              <button type="button" @click="handleDeleteAccount" :disabled="deleteConfirmText !== langStore.t.deleteWord || isDeletingAccount"
                 class="flex-1 py-2.5 rounded-2xl text-sm font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style="background:rgba(239,68,68,0.8)" :class="deleteConfirmText === 'УДАЛИТЬ' ? 'hover:bg-red-600' : ''">
+                style="background:rgba(239,68,68,0.8)" :class="deleteConfirmText === langStore.t.deleteWord ? 'hover:bg-red-600' : ''">
                 <span v-if="isDeletingAccount" class="flex items-center justify-center gap-2">
-                  <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>Удаление…
+                  <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>{{ langStore.t.deletingLabel }}
                 </span>
-                <span v-else>Удалить навсегда</span>
+                <span v-else>{{ langStore.t.deleteForever }}</span>
               </button>
             </div>
           </div>
@@ -1350,14 +1439,14 @@ const route      = useRoute()
 const router     = useRouter()
 
 const langOptions = [
-  { code: 'RU' as const, flag: '🇷🇺', name: 'Русский' },
-  { code: 'EN' as const, flag: '🇺🇸', name: 'English' },
-  { code: 'JP' as const, flag: '🇯🇵', name: '日本語' },
-  { code: 'CN' as const, flag: '🇨🇳', name: '中文' },
-  { code: 'DE' as const, flag: '🇩🇪', name: 'Deutsch' },
-  { code: 'FR' as const, flag: '🇫🇷', name: 'Français' },
-  { code: 'ES' as const, flag: '🇪🇸', name: 'Español' },
-  { code: 'PT' as const, flag: '🇧🇷', name: 'Português' },
+  { code: 'RU' as const, fi: 'ru', name: 'Русский' },
+  { code: 'EN' as const, fi: 'us', name: 'English' },
+  { code: 'JP' as const, fi: 'jp', name: '日本語' },
+  { code: 'CN' as const, fi: 'cn', name: '中文' },
+  { code: 'DE' as const, fi: 'de', name: 'Deutsch' },
+  { code: 'FR' as const, fi: 'fr', name: 'Français' },
+  { code: 'ES' as const, fi: 'es', name: 'Español' },
+  { code: 'PT' as const, fi: 'br', name: 'Português' },
 ]
 
 // ── Delete account modal ─────────────────────────────────────────────────────
@@ -1366,7 +1455,7 @@ const deleteConfirmText  = ref('')
 const isDeletingAccount  = ref(false)
 
 async function handleDeleteAccount() {
-  if (deleteConfirmText.value !== 'УДАЛИТЬ') return
+  if (deleteConfirmText.value !== langStore.t.deleteWord) return
   isDeletingAccount.value = true
   try {
     await api.delete('/users/me/account')
@@ -1449,9 +1538,58 @@ async function unlinkProvider(provider: string) {
   }
 }
 
+// ── Username validation ────────────────────────────────────────────────────
+const usernameError = computed(() => {
+  const u = form.username
+  if (!u) return null
+  if (u.length < 3) return 'Минимум 3 символа'
+  if (u.length > 30) return 'Максимум 30 символов'
+  return null
+})
+
+function onUsernameInput(e: Event) {
+  const raw = (e.target as HTMLInputElement).value
+  form.username = raw.toLowerCase().replace(/[^a-z0-9_]/g, '')
+  ;(e.target as HTMLInputElement).value = form.username
+}
+
 // ── Tag inputs ──────────────────────────────────────────────────────────────
 const newLike    = ref('')
 const newDislike = ref('')
+
+// ── Avatar history ─────────────────────────────────────────────────────────
+interface MediaHistoryItem { id: string; type: string; url: string; created_at: string }
+const avatarHistory        = ref<MediaHistoryItem[]>([])
+const avatarHistoryLoading = ref(false)
+const showAvatarHistory    = ref(false)
+
+async function loadAvatarHistory() {
+  const userId = authStore.user?.id
+  if (!userId) return
+  avatarHistoryLoading.value = true
+  try {
+    const res = await api.get(`/users/${userId}/media-history?type=avatar`)
+    avatarHistory.value = res.data.data.history ?? []
+  } catch {
+    // silent
+  } finally {
+    avatarHistoryLoading.value = false
+  }
+}
+
+function applyHistoryAvatar(url: string) {
+  form.avatar_url = url
+  showAvatarHistory.value = false
+}
+
+async function deleteHistoryAvatar(id: string) {
+  try {
+    await api.delete(`/users/me/avatar-history/${id}`)
+    avatarHistory.value = avatarHistory.value.filter((h) => h.id !== id)
+  } catch {
+    // silent
+  }
+}
 
 // ── Media file refs + drag state ───────────────────────────────────────────
 const avatarFileRef       = ref<HTMLInputElement | null>(null)
@@ -1473,6 +1611,7 @@ const unsavedWarning = ref(false)
 
 // ── Form ───────────────────────────────────────────────────────────────────
 const form = reactive({
+  username:            '',
   display_name:        '',
   bio:                 '',
   status:              '',
@@ -1505,6 +1644,7 @@ const form = reactive({
 
 // ── Saved snapshot ─────────────────────────────────────────────────────────
 const savedForm = reactive({
+  username:            '',
   display_name:        '',
   bio:                 '',
   status:              '',
@@ -1536,6 +1676,7 @@ const savedForm = reactive({
 })
 
 function snapshotToSaved() {
+  savedForm.username            = form.username
   savedForm.display_name        = form.display_name
   savedForm.bio                 = form.bio
   savedForm.status              = form.status
@@ -1567,6 +1708,7 @@ function snapshotToSaved() {
 }
 
 function resetForm() {
+  form.username            = savedForm.username
   form.display_name        = savedForm.display_name
   form.bio                 = savedForm.bio
   form.status              = savedForm.status
@@ -1606,6 +1748,7 @@ const fursonaRef     = ref<{ save: () => Promise<void> } | null>(null)
 
 const isDirty = computed(() => {
   const fieldsChanged = (
+    form.username            !== savedForm.username ||
     form.display_name        !== savedForm.display_name ||
     form.bio                 !== savedForm.bio ||
     form.status              !== savedForm.status ||
@@ -1643,6 +1786,7 @@ onMounted(async () => {
   await userStore.fetchMyProfile()
   const p = userStore.profile
   if (!p) return
+  form.username            = authStore.user?.username ?? ''
   form.display_name        = p.display_name        ?? ''
   form.bio                 = p.bio                 ?? ''
   form.status              = p.status              ?? ''
@@ -1687,6 +1831,8 @@ onMounted(async () => {
       openSec(sectionParam)
     }
   }
+  // Загружаем историю аватаров
+  loadAvatarHistory()
   // Загружаем привязанные аккаунты
   loadLinkedAccounts()
   // Тосты после OAuth привязки
@@ -2160,6 +2306,23 @@ async function handleSubmit() {
     }
   }
 
+  // ── Username change (separate endpoint, uniqueness checked server-side) ──
+  if (form.username !== savedForm.username && form.username.length >= 3) {
+    try {
+      const res = await api.patch('/users/me/username', { username: form.username })
+      if (res.data.success && authStore.user) {
+        authStore.user.username = res.data.data.user.username
+        sessionStorage.setItem('auth_user', JSON.stringify(authStore.user))
+        savedForm.username = res.data.data.user.username
+        form.username = res.data.data.user.username
+      }
+    } catch (e: any) {
+      const msg = e?.response?.data?.error?.message ?? 'Никнейм уже занят'
+      showToast('error', msg)
+      return
+    }
+  }
+
   // ── Save all other profile fields (relationship_with excluded — managed by request system) ──
   const payload: Record<string, unknown> = {
     display_name:        form.display_name,
@@ -2205,23 +2368,23 @@ async function handleSubmit() {
 }
 
 // ── Sections ───────────────────────────────────────────────────────────────
-const sections = [
-  { id: 'sec-basic',         label: 'Основное',       color: '#60a5fa', iconPath: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
-  { id: 'sec-contacts',      label: 'Контакты',       color: '#34d399', iconPath: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
-  { id: 'sec-fursona',       label: 'Фурсона',        color: '#a78bfa', iconPath: 'M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-  { id: 'sec-profile-style', label: 'Стиль профиля',  color: '#f59e0b', iconPath: 'M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 2h14v14H5V5zm2 2v2h10V7H7zm0 4v2h7v-2H7z' },
-  { id: 'sec-verification',  label: 'Верификация',    color: '#3b82f6', iconPath: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
-  { id: 'sec-lang',          label: 'Язык',          color: '#f59e0b', iconPath: 'M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' },
-  { id: 'sec-security',      label: 'Безопасность',      color: '#10b981', iconPath: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
-  { id: 'sec-danger',        label: 'Аккаунт',        color: '#ef4444', iconPath: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
-]
+const sections = computed(() => [
+  { id: 'sec-basic',         label: langStore.t.secBasic,         color: '#60a5fa', iconPath: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+  { id: 'sec-contacts',      label: langStore.t.secContacts,      color: '#34d399', iconPath: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
+  { id: 'sec-fursona',       label: langStore.t.fursonaSettingsTitle, color: '#a78bfa', iconPath: 'M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+  { id: 'sec-profile-style', label: langStore.t.secProfileStyle,  color: '#f59e0b', iconPath: 'M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 2h14v14H5V5zm2 2v2h10V7H7zm0 4v2h7v-2H7z' },
+  { id: 'sec-verification',  label: langStore.t.secVerification,  color: '#3b82f6', iconPath: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+  { id: 'sec-lang',          label: langStore.t.secLang,          color: '#f59e0b', iconPath: 'M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' },
+  { id: 'sec-security',      label: langStore.t.secSecurity,      color: '#10b981', iconPath: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
+  { id: 'sec-danger',        label: langStore.t.secAccount,       color: '#ef4444', iconPath: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
+])
 
-const lockedSettings = [
-  { label: 'Уведомления', d: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
-  { label: 'Безопасность',  d: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
-  { label: 'Подписка',      d: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
-  { label: 'Приватность',   d: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
-]
+const lockedSettings = computed(() => [
+  { label: langStore.t.notifications ?? 'Notifications', d: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
+  { label: langStore.t.secSecurity, d: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+  { label: langStore.t.premium, d: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
+  { label: langStore.t.privacy ?? 'Privacy', d: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
+])
 
 const pronounPresets = ['он/его', 'она/её', 'они/их']
 
@@ -2289,27 +2452,29 @@ async function requestVerification() {
 const verCriteriaList = computed(() => {
   const c = verificationCriteria.value
   if (!c) return []
+  const t = langStore.t
   return [
-    { label: 'Аккаунт старше 14 дней', met: c.accountAgeDays >= 14, detail: `${c.accountAgeDays} дн.` },
-    { label: '3+ публикаций', met: c.postCount >= 3, detail: `${c.postCount} постов` },
-    { label: 'Аватар установлен', met: c.hasAvatar, detail: '' },
-    { label: 'Био заполнено', met: c.hasBio, detail: '' },
-    { label: 'Email привязан', met: c.hasEmail, detail: '' },
-    { label: '5+ подписчиков', met: c.followerCount >= 5, detail: `${c.followerCount} подписчиков` },
+    { label: t.verCriteriaAge, met: c.accountAgeDays >= 14, detail: `${c.accountAgeDays} ${t.verCriteriaDays}` },
+    { label: t.verCriteriaPosts3, met: c.postCount >= 3, detail: `${c.postCount} ${t.verCriteriaPostsCount}` },
+    { label: t.verCriteriaAvatar, met: c.hasAvatar, detail: '' },
+    { label: t.verCriteriaBio, met: c.hasBio, detail: '' },
+    { label: t.verCriteriaEmail, met: c.hasEmail, detail: '' },
+    { label: t.verCriteriaFollowers5, met: c.followerCount >= 5, detail: `${c.followerCount} ${t.verCriteriaFollowersCount}` },
   ]
 })
 
 const completenessFields = computed(() => {
   const c = profileCompleteness.value
   if (!c) return []
+  const t = langStore.t
   return [
-    { key: 'avatar', label: 'Аватар', met: c.hasAvatar },
+    { key: 'avatar', label: t.complAvatarLabel, met: c.hasAvatar },
     { key: 'email', label: 'Email', met: c.hasEmail },
-    { key: 'bio', label: 'Био', met: c.hasBio },
-    { key: 'fursonaName', label: 'Имя фурсоны', met: c.hasFursonaName },
-    { key: 'fursonaSpecies', label: 'Вид фурсоны', met: c.hasFursonaSpecies },
-    { key: 'fursonaGender', label: 'Пол фурсоны', met: c.hasFursonaGender },
-    { key: 'fursonaDesc', label: 'Описание фурсоны', met: c.hasFursonaDescription },
+    { key: 'bio', label: t.complBioLabel, met: c.hasBio },
+    { key: 'fursonaName', label: t.complFursonaNameLabel, met: c.hasFursonaName },
+    { key: 'fursonaSpecies', label: t.complFursonaSpeciesLabel, met: c.hasFursonaSpecies },
+    { key: 'fursonaGender', label: t.complFursonaGenderLabel, met: c.hasFursonaGender },
+    { key: 'fursonaDesc', label: t.complFursonaDescLabel, met: c.hasFursonaDescription },
   ]
 })
 

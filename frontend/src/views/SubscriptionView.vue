@@ -32,96 +32,53 @@ type Plan = {
   label:      string
   badge:      string
   badgeColor: string
-  priceM:     number      // месячная цена (оригинал)
-  priceY:     number      // годовая цена / мес
-  discount:   number      // скидка ранних пользователей %
-  color:      string      // accent CSS class
-  gradient:   string      // card gradient
+  priceM:     number
+  priceY:     number
+  discount:   number
+  color:      string
+  gradient:   string
   features:   string[]
   featured?:  boolean
 }
 
-const plans: Plan[] = [
-  {
-    id:         'free',
-    label:      'Free',
-    badge:      'Бесплатно',
-    badgeColor: 'text-white/55 bg-white/5 border-white/10',
-    priceM:     0,
-    priceY:     0,
-    discount:   0,
-    color:      'text-white/70',
-    gradient:   'from-white/5 to-white/2',
-    features: [
-      'Публикации без ограничений',
-      'Подписки на авторов',
-      'Базовые уведомления',
-      'Приват-сообщения (50/день)',
-    ],
-  },
-  {
-    id:         'lite',
-    label:      'Lite',
-    badge:      'Популярный',
-    badgeColor: 'text-sky-400 bg-sky-400/10 border-sky-400/20',
-    priceM:     149,
-    priceY:     99,
-    discount:   30,
-    color:      'text-sky-400',
-    gradient:   'from-sky-500/12 to-sky-500/3',
-    features: [
-      'Всё из Free',
-      'Тема профиля на выбор',
-      'Значок Lite',
-      'Приоритетный поиск',
-      'Сообщения без ограничений',
-      'Хранилище медиа 5 ГБ',
-    ],
-  },
-  {
-    id:         'pro',
-    label:      'Pro',
-    badge:      'Лучший выбор',
-    badgeColor: 'text-brand-accent bg-brand-accent/10 border-brand-accent/20',
-    priceM:     349,
-    priceY:     249,
-    discount:   40,
-    color:      'text-brand-accent',
-    gradient:   'from-brand-accent/15 to-brand-accent/3',
-    featured:   true,
-    features: [
-      'Всё из Lite',
-      'Кастомный фон профиля',
-      'Смена темы как в Steam',
-      'Рамки для аватара',
-      'Pro-значок + спецэффекты',
-      'Хранилище медиа 20 ГБ',
-      'Аналитика публикаций',
-      'Эксклюзивные стикеры',
-    ],
-  },
-  {
-    id:         'business',
-    label:      'Business',
-    badge:      'Для creatorов',
-    badgeColor: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
-    priceM:     899,
-    priceY:     649,
-    discount:   25,
-    color:      'text-amber-400',
-    gradient:   'from-amber-400/12 to-amber-400/3',
-    features: [
-      'Всё из Pro',
-      'AD-профиль (реклама ваших работ)',
-      'До 5 рекламных кампаний',
-      'Поднятие постов в топ',
-      'Расширенная аналитика',
-      'Хранилище медиа 100 ГБ',
-      'Приоритетная поддержка',
-      'Ранний доступ к новым функциям',
-    ],
-  },
-]
+const plans = computed<Plan[]>(() => {
+  const t = langStore.t
+  return [
+    {
+      id: 'free', label: 'Free',
+      badge: t.planBadgeFree,
+      badgeColor: 'text-white/55 bg-white/5 border-white/10',
+      priceM: 0, priceY: 0, discount: 0,
+      color: 'text-white/70', gradient: 'from-white/5 to-white/2',
+      features: [t.featUnlimitedPosts, t.featFollowAuthors, t.featBasicNotifs, t.featPrivateMsgs],
+    },
+    {
+      id: 'lite', label: 'Lite',
+      badge: t.planBadgePopular,
+      badgeColor: 'text-sky-400 bg-sky-400/10 border-sky-400/20',
+      priceM: 149, priceY: 99, discount: 30,
+      color: 'text-sky-400', gradient: 'from-sky-500/12 to-sky-500/3',
+      features: [t.featAllFree, t.featProfileTheme, t.featLiteBadge, t.featPrioritySearch, t.featUnlimitedMsgs, t.featStorage5gb],
+    },
+    {
+      id: 'pro', label: 'Pro',
+      badge: t.planBadgeBest,
+      badgeColor: 'text-brand-accent bg-brand-accent/10 border-brand-accent/20',
+      priceM: 349, priceY: 249, discount: 40,
+      color: 'text-brand-accent', gradient: 'from-brand-accent/15 to-brand-accent/3',
+      featured: true,
+      features: [t.featAllLite, t.featCustomBg, t.featSteamTheme, t.featAvatarFrames, t.featProBadge, t.featStorage20gb, t.featPostAnalytics, t.featExclStickers],
+    },
+    {
+      id: 'business', label: 'Business',
+      badge: t.planBadgeBusiness,
+      badgeColor: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
+      priceM: 899, priceY: 649, discount: 25,
+      color: 'text-amber-400', gradient: 'from-amber-400/12 to-amber-400/3',
+      features: [t.featAllPro, t.featAdProfile, t.featAdCampaigns, t.featBoostPosts, t.featAdvAnalytics, t.featStorage100gb, t.featPrioritySupport, t.featEarlyAccess],
+    },
+  ]
+})
 
 function effectivePrice(plan: Plan): number {
   const base = billing.value === 'yearly' ? plan.priceY : plan.priceM
@@ -144,10 +101,10 @@ async function selectPlan(planId: string) {
       ;(auth.user as any).subscription_tier = planId
       sessionStorage.setItem('auth_user', JSON.stringify(auth.user))
     }
-    toast.value = `Подписка ${planId.charAt(0).toUpperCase() + planId.slice(1)} активирована!`
+    toast.value = `${planId.charAt(0).toUpperCase() + planId.slice(1)} ${langStore.t.subToastSuccess}`
     setTimeout(() => { toast.value = '' }, 3000)
   } catch {
-    toast.value = 'Ошибка при активации подписки'
+    toast.value = langStore.t.subToastError
     setTimeout(() => { toast.value = '' }, 3000)
   } finally { upgrading.value = null }
 }
@@ -181,17 +138,17 @@ async function selectPlan(planId: string) {
             Bloomly Premium
           </div>
           <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight">
-            Раскрой свой потенциал
+            {{ langStore.t.subHeroTitle }}
           </h1>
           <p class="text-lg text-white/55 max-w-xl mx-auto">
-            Выбери план, который подойдёт тебе. Для творческих людей, которые хотят продвинуться.
+            {{ langStore.t.subHeroDesc }}
           </p>
 
           <!-- Early user badge -->
           <div v-if="isEarlyUser"
             class="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-full bg-amber-400/10 border border-amber-400/20 text-amber-400 text-sm font-bold">
             <BIcon name="Star" class="w-4 h-4 fill-amber-400" />
-            Ранний пользователь — скидка до 40%!
+            {{ langStore.t.subEarlyBadge }}
           </div>
 
           <!-- Billing toggle -->
@@ -199,12 +156,12 @@ async function selectPlan(planId: string) {
             <button @click="billing = 'monthly'"
               class="px-5 py-2.5 rounded-2xl text-sm font-bold transition-all"
               :class="billing === 'monthly' ? 'bg-brand-card text-white shadow-lg border border-brand-border' : 'text-white/55 hover:text-white'">
-              Ежемесячно
+              {{ langStore.t.subMonthly }}
             </button>
             <button @click="billing = 'yearly'"
               class="relative px-5 py-2.5 rounded-2xl text-sm font-bold transition-all"
               :class="billing === 'yearly' ? 'bg-brand-card text-white shadow-lg border border-brand-border' : 'text-white/55 hover:text-white'">
-              Ежегодно
+              {{ langStore.t.subYearly }}
               <span class="absolute -top-2 -right-2 text-[9px] font-black bg-brand-success text-white px-1.5 py-0.5 rounded-full">–29%</span>
             </button>
           </div>
@@ -247,7 +204,7 @@ async function selectPlan(planId: string) {
                   <div class="flex items-center gap-1.5">
                     <span v-if="currentTier === plan.id"
                       class="text-[10px] font-extrabold uppercase tracking-wider text-brand-success bg-brand-success/10 border border-brand-success/20 px-2.5 py-1 rounded-full flex items-center gap-1">
-                      <BIcon name="CheckCircle" class="w-3 h-3" /> Активен
+                      <BIcon name="CheckCircle" class="w-3 h-3" /> {{ langStore.t.subActive }}
                     </span>
                     <BIcon v-if="plan.featured" name="Sparkles" class="w-4 h-4 text-brand-accent" />
                   </div>
@@ -259,13 +216,13 @@ async function selectPlan(planId: string) {
                 <!-- Price -->
                 <div class="mb-4">
                   <template v-if="plan.priceM === 0">
-                    <p class="text-3xl font-extrabold text-white">Бесплатно</p>
-                    <p class="text-xs text-white/35 mt-0.5">навсегда</p>
+                    <p class="text-3xl font-extrabold text-white">{{ langStore.t.subFree }}</p>
+                    <p class="text-xs text-white/35 mt-0.5">{{ langStore.t.subForever }}</p>
                   </template>
                   <template v-else>
                     <div class="flex items-end gap-1.5">
                       <p class="text-3xl font-extrabold text-white">{{ effectivePrice(plan) }} ₽</p>
-                      <p class="text-sm text-white/55 mb-1">/ мес</p>
+                      <p class="text-sm text-white/55 mb-1">{{ langStore.t.subPerMonth }}</p>
                     </div>
                     <div class="flex items-center gap-2 mt-1">
                       <span v-if="isEarlyUser && plan.discount > 0"
@@ -275,7 +232,7 @@ async function selectPlan(planId: string) {
                         –{{ plan.discount }}%
                       </span>
                       <span v-if="billing === 'yearly'" class="text-[10px] text-white/35">
-                        {{ effectivePrice(plan) * 12 }} ₽/год
+                        {{ effectivePrice(plan) * 12 }} ₽{{ langStore.t.subYearlyTotal }}
                       </span>
                     </div>
                   </template>
@@ -326,7 +283,7 @@ async function selectPlan(planId: string) {
                   <BIcon v-else-if="currentTier === plan.id" name="CheckCircle" class="w-4 h-4" />
                   <BIcon v-else-if="plan.id !== 'free'" name="Ticket" class="w-4 h-4" />
                   <span>
-                    {{ upgrading === plan.id ? 'Активация…' : currentTier === plan.id ? 'Ваш план' : plan.id === 'free' ? 'Базовый' : `Активировать ${plan.label}` }}
+                    {{ upgrading === plan.id ? langStore.t.subActivating : currentTier === plan.id ? langStore.t.subYourPlan : plan.id === 'free' ? langStore.t.subBasic : `${langStore.t.subActivatePrefix} ${plan.label}` }}
                   </span>
                 </button>
               </div>
@@ -338,14 +295,14 @@ async function selectPlan(planId: string) {
         <div class="bg-brand-card border border-brand-border rounded-3xl p-8 mb-8">
           <h2 class="text-xl font-extrabold text-white mb-6 flex items-center gap-2">
             <BIcon name="HelpCircle" class="w-5 h-5 text-brand-accent" />
-            Часто задаваемые вопросы
+            {{ langStore.t.subFaqTitle }}
           </h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
             <div v-for="faq in [
-              { q: 'Могу ли я отменить подписку?', a: 'Да, в любой момент. Функции останутся до конца оплаченного периода.' },
-              { q: 'Что значит «ранний пользователь»?', a: 'Пользователи, зарегистрировавшиеся до 1 апреля 2026 года, получают постоянную скидку.' },
-              { q: 'Можно ли переключаться между планами?', a: 'Да, повысить план можно в любой момент. Понижение — со следующего расчётного периода.' },
-              { q: 'Что такое AD-профиль?', a: 'Business-аккаунт позволяет продвигать свои работы и услуги как рекламодатель внутри Bloomly.' },
+              { q: langStore.t.subFaqQ1, a: langStore.t.subFaqA1 },
+              { q: langStore.t.subFaqQ2, a: langStore.t.subFaqA2 },
+              { q: langStore.t.subFaqQ3, a: langStore.t.subFaqA3 },
+              { q: langStore.t.subFaqQ4, a: langStore.t.subFaqA4 },
             ]" :key="faq.q">
               <div>
                 <p class="font-bold text-white mb-1">{{ faq.q }}</p>
@@ -358,7 +315,7 @@ async function selectPlan(planId: string) {
         <!-- Back link -->
         <button @click="router.back()" class="flex items-center gap-2 text-sm text-white/55 hover:text-white transition-colors">
           <BIcon name="ArrowLeft" class="w-4 h-4" />
-          Назад
+          {{ langStore.t.backBtn2 }}
         </button>
 
       </main>

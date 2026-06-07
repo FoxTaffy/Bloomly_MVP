@@ -7,7 +7,8 @@ import type { JwtUser, GetMessagesQuery } from './types.js';
 export async function getConversationsHandler(req: FastifyRequest, reply: FastifyReply) {
   try {
     const { id: userId } = req.user as JwtUser;
-    const archived = (req.query as any).archived === 'true';
+    const archivedParam = (req.query as any).archived;
+    const archived = archivedParam !== undefined ? archivedParam === 'true' : undefined;
     const label    = (req.query as any).label as string | undefined;
     const conversations = await messageService.getConversations(userId, archived, label);
     return reply.send({ success: true, data: { conversations }, error: null });

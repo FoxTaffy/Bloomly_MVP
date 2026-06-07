@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import prisma from './config/prisma.js';
 import { patrolSuspiciousActivity } from './modules/automod/service.js';
 import { activityService } from './modules/activities/service.js';
-import { autoResolveDisputes } from './modules/dealers-den/service.js';
+import { dealersDenService } from './modules/dealers-den/service.js';
 
 export function initCronJobs() {
   console.log('[CRON] Initializing background tasks...');
@@ -79,7 +79,7 @@ export function initCronJobs() {
   // Den disputes: auto-resolve unanswered disputes every hour
   cron.schedule('0 * * * *', async () => {
     try {
-      await autoResolveDisputes();
+      await dealersDenService.autoResolveDisputes();
     } catch (err: any) {
       console.error('[CRON] autoResolveDisputes error:', err.message);
     }

@@ -67,6 +67,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         properties: {
           email:    { type: 'string', format: 'email' },
           password: { type: 'string', minLength: 1 },
+          remember: { type: 'boolean' },
         },
       },
     },
@@ -131,6 +132,6 @@ export async function authRoutes(fastify: FastifyInstance) {
   );
 
   // ── Token rotation ────────────────────────────────────────────────────────────
-  fastify.post('/refresh', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, refreshHandler);
-  fastify.post('/logout',  { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, logoutHandler);
+  fastify.post('/refresh', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, refreshHandler);
+  fastify.post('/logout',  { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, logoutHandler);
 }

@@ -74,11 +74,11 @@ export const useAuthStore = defineStore('auth', () => {
     return false
   }
 
-  async function login(email: string, password: string, _remember = false): Promise<void> {
+  async function login(email: string, password: string, remember = false): Promise<void> {
     isLoading.value = true
     error.value = null
     try {
-      const res = await api.post('/auth/login', { email, password })
+      const res = await api.post('/auth/login', { email, password, remember })
       const data = res.data
       if (!data.success) throw new Error(data.error?.message ?? 'Invalid email or password')
       token.value = data.data.token

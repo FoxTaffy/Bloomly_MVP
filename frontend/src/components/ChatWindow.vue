@@ -12,10 +12,10 @@
         <!-- Group -->
         <template v-if="conv?.is_group">
           <img v-if="conv.avatar_url" :src="conv.avatar_url" :alt="conv.name ?? 'Группа'"
-            class="w-10 h-10 rounded-full object-cover border-2 border-brand-border hover:border-brand-accent/60 transition-colors" />
+            class="w-10 h-10 rounded-full object-cover border-2 border-brand-border hover:border-brand-accent/60 transition-colors" @error="onAvatarError" />
           <div v-else class="grid grid-cols-2 gap-px w-10 h-10 rounded-full overflow-hidden border-2 border-brand-border hover:border-brand-accent/60 transition-colors bg-brand-bg">
             <template v-for="(p, idx) in conv.other_participants.slice(0, 4)" :key="p.user_id">
-              <img v-if="p.user?.avatar_url" :src="p.user.avatar_url" class="w-full h-full object-cover" />
+              <img v-if="p.user?.avatar_url" :src="p.user.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
               <div v-else class="w-full h-full flex items-center justify-center bg-brand-accent/20 text-brand-accent text-[7px] font-bold">
                 {{ (p.user?.display_name || p.user?.username || '?')[0].toUpperCase() }}
               </div>
@@ -33,7 +33,7 @@
           </template>
           <template v-else>
             <img v-if="other?.avatar_url" :src="other.avatar_url" :alt="other.username"
-              class="w-10 h-10 rounded-full object-cover border-2 border-brand-border hover:border-brand-accent/60 transition-colors" />
+              class="w-10 h-10 rounded-full object-cover border-2 border-brand-border hover:border-brand-accent/60 transition-colors" @error="onAvatarError" />
             <div v-else class="w-10 h-10 rounded-full bg-brand-accent/20 border-2 border-brand-border flex items-center justify-center text-brand-accent font-bold hover:border-brand-accent/60 transition-colors">
               {{ (other?.display_name || other?.username || '?')[0].toUpperCase() }}
             </div>
@@ -196,7 +196,7 @@
               <!-- Avatar → centered -->
               <div class="absolute -bottom-7 left-1/2 -translate-x-1/2">
                 <div class="w-14 h-14 rounded-2xl border-[3px] border-brand-card overflow-hidden shadow-xl">
-                  <img v-if="conv?.avatar_url" :src="conv.avatar_url" class="w-full h-full object-cover" />
+                  <img v-if="conv?.avatar_url" :src="conv.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
                   <div v-else class="w-full h-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xl">
                     {{ (conv?.name ?? 'G')[0].toUpperCase() }}
                   </div>
@@ -288,7 +288,7 @@
                             ? 'opacity-40 cursor-not-allowed'
                             : 'hover:bg-brand-accent/10 cursor-pointer']"
                       >
-                        <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                        <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover flex-shrink-0" @error="onAvatarError" />
                         <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold flex-shrink-0">
                           {{ (u.display_name || u.username || '?')[0].toUpperCase() }}
                         </div>
@@ -313,7 +313,7 @@
                 </p>
                 <div v-for="m in groupMembers" :key="m.user_id" class="flex items-center gap-3 px-4 py-2.5 hover:bg-brand-bg/40 transition-colors cursor-pointer" @click="goToProfile(m.user?.username)">
                   <div class="relative flex-shrink-0">
-                    <img v-if="m.user?.avatar_url" :src="m.user.avatar_url" class="w-8 h-8 rounded-full object-cover" />
+                    <img v-if="m.user?.avatar_url" :src="m.user.avatar_url" class="w-8 h-8 rounded-full object-cover" @error="onAvatarError" />
                     <div v-else class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold">
                       {{ (m.user?.display_name || m.user?.username || '?')[0].toUpperCase() }}
                     </div>
@@ -379,7 +379,7 @@
               <div class="absolute -bottom-8 left-1/2 -translate-x-1/2">
                 <div class="relative">
                   <img v-if="other?.avatar_url" :src="other.avatar_url" :alt="other.username"
-                    class="w-16 h-16 rounded-full object-cover border-[3px] border-brand-card shadow-xl" />
+                    class="w-16 h-16 rounded-full object-cover border-[3px] border-brand-card shadow-xl" @error="onAvatarError" />
                   <div v-else class="w-16 h-16 rounded-full bg-brand-accent/20 border-[3px] border-brand-card flex items-center justify-center text-brand-accent font-bold text-xl shadow-xl">
                     {{ (other?.display_name || other?.username || '?')[0].toUpperCase() }}
                   </div>
@@ -998,7 +998,7 @@
       <!-- Typing indicator -->
       <div v-if="isPartnerTyping && !searchQuery" class="flex items-end gap-2 justify-start mt-1">
         <div class="w-6 h-6 flex-shrink-0">
-          <img v-if="other?.avatar_url" :src="other.avatar_url" class="w-6 h-6 rounded-full object-cover border border-brand-border" />
+          <img v-if="other?.avatar_url" :src="other.avatar_url" class="w-6 h-6 rounded-full object-cover border border-brand-border" @error="onAvatarError" />
         </div>
         <div class="bg-brand-card border border-brand-border rounded-2xl rounded-bl-sm px-3 py-2.5 flex items-center gap-1">
           <span class="w-1.5 h-1.5 rounded-full bg-brand-muted animate-bounce [animation-delay:-0.3s]" />
@@ -1125,7 +1125,7 @@
                 <div class="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden bg-brand-accent/20 border border-brand-border">
                   <img v-if="c.is_group ? c.avatar_url : c.other_participants[0]?.user?.avatar_url"
                     :src="c.is_group ? c.avatar_url! : c.other_participants[0].user.avatar_url!"
-                    class="w-full h-full object-cover" />
+                    class="w-full h-full object-cover" @error="onAvatarError" />
                   <div v-else class="w-full h-full flex items-center justify-center text-brand-accent text-xs font-bold">
                     {{ (c.is_group ? c.name : (c.other_participants[0]?.user?.display_name || c.other_participants[0]?.user?.username) || '?')[0]?.toUpperCase() }}
                   </div>
@@ -1149,7 +1149,7 @@
           :style="{ top: mentionCard.y + 'px', left: mentionCard.x + 'px' }"
           @mouseleave="mentionCard = null">
           <div class="flex items-center gap-2.5 mb-3">
-            <img v-if="mentionCard.avatar_url" :src="mentionCard.avatar_url" class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0" />
+            <img v-if="mentionCard.avatar_url" :src="mentionCard.avatar_url" class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0" @error="onAvatarError" />
             <div v-else class="w-10 h-10 rounded-full bg-brand-accent/20 border border-brand-border flex items-center justify-center text-brand-accent font-bold flex-shrink-0">
               {{ (mentionCard.display_name || mentionCard.username || '?')[0].toUpperCase() }}
             </div>
@@ -1233,7 +1233,7 @@
               <div v-if="mentionLoading" class="px-4 py-3 text-xs text-white/55 text-center">Поиск...</div>
               <button v-for="u in mentionResults" :key="u.id" type="button" @click="selectMention(u.username)"
                 class="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-brand-bg transition-colors text-left">
-                <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover flex-shrink-0" @error="onAvatarError" />
                 <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold flex-shrink-0">
                   {{ (u.display_name || u.username || '?')[0].toUpperCase() }}
                 </div>
@@ -1446,6 +1446,7 @@ import type { Lang } from '@/locales/translations'
 import BIcon from '@/components/BIcon.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
 import MiniPlayer from '@/components/MiniPlayer.vue'
+import { onAvatarError } from '@/composables/useAvatarFallback'
 import PostLightbox from '@/components/PostLightbox.vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import StickerPanel from '@/components/StickerPanel.vue'

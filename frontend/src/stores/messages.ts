@@ -195,9 +195,26 @@ export const useMessagesStore = defineStore('messages', () => {
 
   async function openConversation(targetUserId: string): Promise<string> {
     const res = await api.post('/messages/conversations', { userId: targetUserId })
-    const conv: Conversation = res.data.data.conversation
+    const raw = res.data.data.conversation
+    const auth = useAuthStore()
+    const myId = auth.user?.id
+    // Map raw Prisma data → proper Conversation shape (other_participants, my_participant, etc.)
+    const conv: Conversation = {
+      ...raw,
+      my_participant: (() => {
+        const me = (raw.participants ?? []).find((p: any) => p.user_id === myId)
+        return me
+          ? { archived: me.archived ?? false, hidden_at: me.hidden_at ?? null, last_read_at: me.last_read_at ?? null, role: me.role ?? 'member', label: me.label ?? 'default', personal_pinned_message_id: me.personal_pinned_message_id ?? null }
+          : { archived: false, hidden_at: null, last_read_at: null, role: 'member', label: 'default', personal_pinned_message_id: null }
+      })(),
+      other_participants: (raw.participants ?? [])
+        .filter((p: any) => p.user_id !== myId)
+        .map((p: any) => ({ user_id: p.user_id, user: p.user, last_read_at: p.last_read_at ?? null })),
+      last_message: raw.last_message ?? null,
+      pinned_message: raw.pinned_message ?? null,
+    }
     const idx = conversations.value.findIndex((c) => c.id === conv.id)
-    if (idx === -1) conversations.value.unshift(conv as any)
+    if (idx === -1) conversations.value.unshift(conv)
     activeId.value = conv.id
     return conv.id
   }

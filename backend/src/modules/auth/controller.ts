@@ -22,22 +22,27 @@ function issueAccessToken(request: FastifyRequest, id: string, role: string) {
 }
 
 // ── Выдача refresh token: запись в БД + httpOnly cookie ───────────────────────
-async function issueRefreshToken(reply: FastifyReply, userId: string): Promise<void> {
-  const raw    = randomBytes(40).toString('hex');
-  const hash   = createHash('sha256').update(raw).digest('hex');
-  const expiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+// remember=true  → persistent 30-day cookie + 30-day DB token
+// remember=false → session cookie (no maxAge) + 24-hour DB token
+async function issueRefreshToken(reply: FastifyReply, userId: string, remember = false): Promise<void> {
+  const raw     = randomBytes(40).toString('hex');
+  const hash    = createHash('sha256').update(raw).digest('hex');
+  const ttlMs   = remember ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+  const expiry  = new Date(Date.now() + ttlMs);
 
   await prisma.refreshToken.create({
     data: { user_id: userId, token_hash: hash, expires_at: expiry },
   });
 
-  reply.setCookie('refresh_token', raw, {
+  const cookieOpts: Parameters<typeof reply.setCookie>[2] = {
     httpOnly: true,
     secure:   process.env.NODE_ENV === 'production',
     sameSite: 'strict',
     path:     '/api/auth',
-    maxAge:   7 * 24 * 60 * 60,
-  });
+  };
+  if (remember) cookieOpts.maxAge = 30 * 24 * 60 * 60;
+
+  reply.setCookie('refresh_token', raw, cookieOpts);
 }
 
 // ── Статистика ────────────────────────────────────────────────────────────────
@@ -111,7 +116,7 @@ export const loginHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const { email, password } = request.body;
+    const { email, password, remember = false } = request.body;
     const user = await authService.loginUser(email, password);
 
     if (!user) {
@@ -121,8 +126,15 @@ export const loginHandler = async (
       });
     }
 
+    if (!user.email_verified) {
+      return reply.code(403).send({
+        success: false, data: null,
+        error: { code: 'EMAIL_NOT_VERIFIED', message: 'Подтвердите email перед входом' },
+      });
+    }
+
     const token = issueAccessToken(request, user.id, user.role);
-    await issueRefreshToken(reply, user.id);
+    await issueRefreshToken(reply, user.id, remember);
     const fullUser = await prisma.user.findUnique({ where: { id: user.id }, select: FULL_USER_SELECT });
 
     return reply.send({

@@ -2,7 +2,8 @@
   <div class="space-y-2">
     <div class="flex items-center gap-2.5">
       <img v-if="review.reviewer.avatar_url" :src="review.reviewer.avatar_url"
-        class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0" />
+        class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0"
+        @error="onAvatarError" />
       <div v-else
         class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-extrabold border border-brand-border flex-shrink-0">
         {{ initials }}
@@ -35,6 +36,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { DenReview } from '../stores/dealersDen'
+import { onAvatarError } from '@/composables/useAvatarFallback'
 
 const props = defineProps<{ review: DenReview }>()
 

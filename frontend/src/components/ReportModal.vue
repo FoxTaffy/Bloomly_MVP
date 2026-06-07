@@ -1,91 +1,215 @@
 <template>
   <Teleport to="body">
-    <div
-      v-if="modelValue"
-      class="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4"
-    >
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="$emit('update:modelValue', false)" />
+    <Transition name="report-backdrop">
+      <div
+        v-if="modelValue"
+        class="fixed inset-0 z-[300] flex items-end sm:items-center justify-center sm:p-4"
+        @click.self="close"
+      >
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="close" />
 
-      <div class="relative w-full max-w-sm bg-[#1a1a2e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-
-        <!-- Header -->
-        <div class="flex items-center justify-between px-5 py-4 border-b border-white/10">
-          <h3 class="text-base font-bold text-white">Пожаловаться</h3>
-          <button @click="$emit('update:modelValue', false)" class="text-white/40 hover:text-white rounded-full hover:bg-white/5 p-1.5 transition-colors">
-            <BIcon name="X" class="w-4 h-4" />
-          </button>
-        </div>
-
-        <div class="p-5">
-          <div v-if="!sent" class="space-y-3">
-            <p class="text-sm text-white/50 mb-4">Выберите причину жалобы:</p>
-
-            <label
-              v-for="reason in reasons"
-              :key="reason"
-              class="flex items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-white/5 transition-colors"
-              :class="selected === reason ? 'bg-white/5 ring-1 ring-red-500/40' : ''"
-            >
-              <input type="radio" :value="reason" v-model="selected" class="accent-red-500 w-4 h-4" />
-              <span class="text-sm text-white">{{ reason }}</span>
-            </label>
-
-            <div v-if="selected === 'Другое'" class="mt-2">
-              <textarea
-                v-model="extra"
-                rows="3"
-                placeholder="Опишите причину..."
-                class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-white/30 resize-none focus:outline-none focus:border-red-500/50 transition-colors"
-              />
+        <Transition name="report-panel">
+          <div
+            v-if="modelValue"
+            class="relative w-full sm:max-w-sm bg-[#13131f] rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden"
+          >
+            <!-- drag handle (mobile) -->
+            <div class="sm:hidden flex justify-center pt-3 pb-1">
+              <div class="w-10 h-1 rounded-full bg-white/15" />
             </div>
 
-            <button
-              @click="submit"
-              :disabled="!selected || isSending"
-              class="w-full mt-2 py-2.5 bg-red-500 hover:bg-red-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm rounded-xl transition-colors"
-            >
-              {{ isSending ? 'Отправка...' : 'Отправить жалобу' }}
-            </button>
-          </div>
-
-          <div v-else class="text-center py-6">
-            <div class="w-12 h-12 bg-green-500/15 border border-green-500/30 rounded-full flex items-center justify-center mx-auto mb-3">
-              <BIcon name="Check" class="w-6 h-6 text-green-400" />
+            <!-- Header -->
+            <div class="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-xl bg-red-500/15 border border-red-500/20 flex items-center justify-center">
+                  <BIcon name="Flag" class="w-4 h-4 text-red-400" />
+                </div>
+                <div>
+                  <h3 class="text-sm font-extrabold text-white leading-none">Пожаловаться</h3>
+                  <p class="text-[11px] text-white/35 mt-0.5">
+                    {{ targetType === 'group' ? 'на сообщество' : 'на публикацию' }}
+                  </p>
+                </div>
+              </div>
+              <button
+                @click="close"
+                class="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-all"
+              >
+                <BIcon name="X" class="w-4 h-4" />
+              </button>
             </div>
-            <h4 class="text-white font-bold mb-1">Жалоба отправлена</h4>
-            <p class="text-white/45 text-sm">Мы рассмотрим её в ближайшее время</p>
+
+            <!-- Success state -->
+            <Transition name="fade" mode="out-in">
+              <div v-if="sent" key="success" class="p-8 text-center">
+                <div class="relative w-16 h-16 mx-auto mb-4">
+                  <div class="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping" style="animation-duration:1.5s" />
+                  <div class="relative w-16 h-16 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+                    <BIcon name="CheckCircle2" class="w-8 h-8 text-emerald-400" />
+                  </div>
+                </div>
+                <h4 class="text-white font-extrabold text-base mb-1">Жалоба отправлена</h4>
+                <p class="text-white/40 text-sm">Модераторы рассмотрят её в ближайшее время</p>
+              </div>
+
+              <!-- Form -->
+              <div v-else key="form" class="p-4 space-y-2 max-h-[70vh] overflow-y-auto overscroll-contain">
+                <p class="text-[11px] font-bold text-white/35 uppercase tracking-wider px-1 mb-3">Выберите причину</p>
+
+                <button
+                  v-for="item in REASONS"
+                  :key="item.value"
+                  type="button"
+                  @click="selected = item.value"
+                  class="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-left transition-all duration-150 group"
+                  :class="selected === item.value
+                    ? 'bg-red-500/10 ring-1 ring-red-500/30'
+                    : 'bg-white/[0.03] hover:bg-white/[0.06]'"
+                >
+                  <div
+                    class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all"
+                    :class="selected === item.value ? item.activeBg : 'bg-white/5'"
+                  >
+                    <BIcon :name="item.icon" class="w-4 h-4 transition-colors" :class="selected === item.value ? item.activeColor : 'text-white/40'" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-sm font-bold leading-none transition-colors" :class="selected === item.value ? 'text-white' : 'text-white/60 group-hover:text-white/80'">
+                      {{ item.label }}
+                    </p>
+                    <p class="text-[11px] text-white/30 mt-0.5 leading-tight">{{ item.desc }}</p>
+                  </div>
+                  <div
+                    class="w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-all"
+                    :class="selected === item.value ? 'border-red-400 bg-red-400' : 'border-white/20'"
+                  >
+                    <div v-if="selected === item.value" class="w-1.5 h-1.5 rounded-full bg-white" />
+                  </div>
+                </button>
+
+                <!-- Custom reason textarea -->
+                <Transition name="expand">
+                  <div v-if="selected === 'other'" class="pt-1">
+                    <textarea
+                      v-model="extra"
+                      rows="3"
+                      placeholder="Подробно опишите нарушение…"
+                      class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white text-sm placeholder-white/20 resize-none outline-none focus:border-red-500/30 focus:bg-white/6 transition-all"
+                    />
+                  </div>
+                </Transition>
+
+                <!-- Actions -->
+                <div class="flex gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    @click="close"
+                    class="flex-1 py-3 rounded-2xl border border-white/8 text-white/40 text-sm font-bold hover:bg-white/5 hover:text-white/60 transition-all"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="button"
+                    @click="submit"
+                    :disabled="!selected || isSending"
+                    class="flex-[2] flex items-center justify-center gap-2 py-3 rounded-2xl text-white text-sm font-extrabold disabled:opacity-30 transition-all hover:opacity-90 active:scale-[0.98]"
+                    style="background: linear-gradient(135deg, #dc2626, #991b1b)"
+                  >
+                    <span v-if="isSending" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <BIcon v-else name="Flag" class="w-4 h-4" />
+                    {{ isSending ? 'Отправка…' : 'Отправить жалобу' }}
+                  </button>
+                </div>
+              </div>
+            </Transition>
           </div>
-        </div>
+        </Transition>
       </div>
-    </div>
+    </Transition>
   </Teleport>
 </template>
 
 <script setup lang="ts">
-import { useLangStore } from '@/stores/lang'
-const langStore = useLangStore()
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import BIcon from './BIcon.vue'
 import api from '@/api'
 
 const props = defineProps<{
   modelValue: boolean
-  postId: string
+  targetId: string
+  targetType?: 'post' | 'group' | 'listing'
+  postId?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', val: boolean): void
 }>()
 
-const reasons = [
-  'Спам',
-  'Оскорбительный контент',
-  'Насилие или жестокость',
-  'Ненависть или дискриминация',
-  'Дезинформация',
-  'Нарушение авторских прав',
-  'Незаконный контент',
-  'Другое',
+interface Reason {
+  value: string
+  label: string
+  desc: string
+  icon: string
+  activeBg: string
+  activeColor: string
+}
+
+const REASONS: Reason[] = [
+  {
+    value: 'spam',
+    label: 'Спам или реклама',
+    desc: 'Нежелательные сообщения, массовые рассылки',
+    icon: 'AlertOctagon',
+    activeBg: 'bg-orange-500/15',
+    activeColor: 'text-orange-400',
+  },
+  {
+    value: 'fraud',
+    label: 'Мошенничество / обман',
+    desc: 'Ложная информация с целью наживы',
+    icon: 'ShieldAlert',
+    activeBg: 'bg-yellow-500/15',
+    activeColor: 'text-yellow-400',
+  },
+  {
+    value: 'adult',
+    label: 'Нежелательный контент',
+    desc: 'Оскорбительный, шокирующий или 18+ контент',
+    icon: 'EyeOff',
+    activeBg: 'bg-pink-500/15',
+    activeColor: 'text-pink-400',
+  },
+  {
+    value: 'violence',
+    label: 'Насилие или угрозы',
+    desc: 'Жестокость, агрессия, призывы к насилию',
+    icon: 'Swords',
+    activeBg: 'bg-red-500/15',
+    activeColor: 'text-red-400',
+  },
+  {
+    value: 'copyright',
+    label: 'Нарушение авторских прав',
+    desc: 'Контент без разрешения правообладателя',
+    icon: 'Copyright',
+    activeBg: 'bg-blue-500/15',
+    activeColor: 'text-blue-400',
+  },
+  {
+    value: 'misinformation',
+    label: 'Дезинформация',
+    desc: 'Намеренно ложные или вводящие в заблуждение факты',
+    icon: 'MessageSquareWarning',
+    activeBg: 'bg-amber-500/15',
+    activeColor: 'text-amber-400',
+  },
+  {
+    value: 'other',
+    label: 'Другое',
+    desc: 'Иная причина, не указанная выше',
+    icon: 'MoreHorizontal',
+    activeBg: 'bg-white/10',
+    activeColor: 'text-white/70',
+  },
 ]
 
 const selected = ref('')
@@ -93,23 +217,64 @@ const extra = ref('')
 const sent = ref(false)
 const isSending = ref(false)
 
+watch(() => props.modelValue, (v) => {
+  if (!v) {
+    setTimeout(() => {
+      selected.value = ''
+      extra.value = ''
+      sent.value = false
+    }, 300)
+  }
+})
+
+function close() {
+  emit('update:modelValue', false)
+}
+
 async function submit() {
-  if (!selected.value) return
+  if (!selected.value || isSending.value) return
   isSending.value = true
+  const reason = selected.value === 'other'
+    ? (extra.value.trim() || 'Другое')
+    : REASONS.find(r => r.value === selected.value)?.label ?? selected.value
+
   try {
+    const effectiveId = props.targetId || props.postId || ''
+    const effectiveType = props.targetType ?? 'post'
     await api.post('/reports', {
-      target_type: 'post',
-      target_id: props.postId,
-      reason: selected.value === 'Другое' ? extra.value || 'Другое' : selected.value,
+      target_type: effectiveType,
+      target_id: effectiveId,
+      reason,
     }).catch(() => null)
     sent.value = true
-    setTimeout(() => {
-      emit('update:modelValue', false)
-      sent.value = false
-      selected.value = ''
-    }, 2500)
+    setTimeout(() => close(), 2800)
   } finally {
     isSending.value = false
   }
 }
 </script>
+
+<style scoped>
+.report-backdrop-enter-active,
+.report-backdrop-leave-active { transition: opacity 0.25s ease; }
+.report-backdrop-enter-from,
+.report-backdrop-leave-to { opacity: 0; }
+
+.report-panel-enter-active { transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.report-panel-leave-active { transition: all 0.2s ease; }
+.report-panel-enter-from { opacity: 0; transform: translateY(24px) scale(0.96); }
+.report-panel-leave-to { opacity: 0; transform: translateY(12px) scale(0.98); }
+
+@media (max-width: 639px) {
+  .report-panel-enter-from { transform: translateY(100%); }
+  .report-panel-leave-to { transform: translateY(100%); }
+}
+
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.expand-enter-active { transition: all 0.2s ease; }
+.expand-leave-active { transition: all 0.15s ease; }
+.expand-enter-from, .expand-leave-to { opacity: 0; transform: translateY(-6px); max-height: 0; }
+.expand-enter-to, .expand-leave-from { max-height: 200px; }
+</style>

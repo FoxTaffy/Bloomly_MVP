@@ -1,8 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useLangStore } from '@/stores/lang'
 import api from '@/api'
 import BIcon from './BIcon.vue'
+import { onAvatarError } from '@/composables/useAvatarFallback'
+
+interface StatusNote {
+  emoji: string
+  text: string
+  color: string
+  music: null | { title: string; artist: string; artworkUrl: string }
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 export interface Story {
@@ -25,6 +34,7 @@ const emit = defineEmits<{
 }>()
 
 const auth = useAuthStore()
+const langStore = useLangStore()
 
 // ── State ────────────────────────────────────────────────────────────────────
 const stories = ref<Story[]>([])
@@ -72,7 +82,30 @@ const fetchStories = async () => {
 }
 defineExpose({ fetchStories, userStories })
 
-onMounted(() => { loadSeen(); fetchStories() })
+// ── Own status note ──────────────────────────────────────────────────────────
+const statusNote = ref<StatusNote | null>(null)
+
+function loadStatusNote() {
+  try {
+    const raw = localStorage.getItem('profile_status')
+    if (!raw) return
+    const d = JSON.parse(raw)
+    if (d.expiresAt && d.expiresAt < Date.now()) { localStorage.removeItem('profile_status'); return }
+    if (d.text || d.music) {
+      statusNote.value = { emoji: d.emoji ?? '', text: d.text ?? '', color: d.color ?? '', music: d.music ?? null }
+    }
+  } catch {}
+}
+
+function noteBubbleBg(note: StatusNote): string {
+  const c = note.color || (note.music ? '#c0392b' : '#4C67CF')
+  return `background:${c}`
+}
+function noteBubbleArrowColor(note: StatusNote): string {
+  return note.color || (note.music ? '#c0392b' : '#4C67CF')
+}
+
+onMounted(() => { loadSeen(); fetchStories(); loadStatusNote() })
 
 // ── Open story ───────────────────────────────────────────────────────────────
 function openGroup(group: Story[]) {
@@ -87,7 +120,7 @@ function openGroup(group: Story[]) {
     <div
       class="bg-brand-card border border-brand-border rounded-3xl p-4 shadow-xl overflow-x-auto stories-scrollbar"
     >
-      <div class="flex gap-3 min-w-max items-center">
+      <div class="flex gap-3 min-w-max items-end">
 
         <!-- ── Add Story Button ───────────────────────────────────────────── -->
         <button
@@ -95,6 +128,41 @@ function openGroup(group: Story[]) {
           @click="emit('create')"
           aria-label="Добавить историю"
         >
+          <!-- Notes bubble above avatar -->
+          <div v-if="statusNote" class="relative mb-1 overflow-hidden" style="width:100px">
+            <!-- Bubble body -->
+            <div class="w-full px-2.5 py-2 rounded-[16px] text-white shadow-2xl overflow-hidden"
+              :style="noteBubbleBg(statusNote)">
+              <!-- Text/emoji -->
+              <div v-if="statusNote.text || statusNote.emoji"
+                class="flex gap-1 items-start"
+                :class="statusNote.music ? 'mb-1' : ''">
+                <span v-if="statusNote.emoji" class="text-sm flex-shrink-0 leading-tight">{{ statusNote.emoji }}</span>
+                <span v-if="statusNote.text"
+                  class="text-[11px] font-semibold leading-snug"
+                  style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;word-break:break-all">{{ statusNote.text }}</span>
+              </div>
+              <!-- Music -->
+              <div v-if="statusNote.music" class="flex items-center gap-1.5">
+                <div class="flex items-end gap-[2px] h-3 flex-shrink-0">
+                  <span v-for="(h, i) in [50,100,65,85]" :key="i"
+                    class="w-[3px] rounded-full bg-white note-bar"
+                    :style="`height:${h}%; animation-delay:${i*0.08}s`" />
+                </div>
+                <div class="min-w-0 overflow-hidden">
+                  <p class="text-[10px] font-bold leading-tight truncate">{{ statusNote.music.artist }}</p>
+                  <p class="text-[9px] opacity-70 leading-tight truncate">{{ statusNote.music.title }}</p>
+                </div>
+              </div>
+            </div>
+            <!-- Arrow tail pointing down -->
+            <div class="absolute -bottom-[7px] left-4 w-0 h-0 pointer-events-none"
+              :style="`border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${noteBubbleArrowColor(statusNote)}`" />
+          </div>
+
+          <!-- Empty space to align with others when no bubble -->
+          <div v-else class="h-[10px]" />
+
           <!-- Avatar ring -->
           <div class="relative w-[68px] h-[68px]">
             <!-- Dashed ring outer -->
@@ -105,6 +173,7 @@ function openGroup(group: Story[]) {
                 v-if="auth.avatarUrl"
                 :src="auth.avatarUrl"
                 class="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity"
+                @error="onAvatarError"
               />
               <div v-else class="w-full h-full bg-gradient-to-br from-brand-accent/20 to-brand-purple/20 flex items-center justify-center">
                 <span class="text-brand-accent font-bold text-lg">
@@ -117,7 +186,7 @@ function openGroup(group: Story[]) {
               <BIcon name="Plus" class="w-3 h-3 text-white" />
             </div>
           </div>
-          <span class="text-[10px] font-bold text-white/55 group-hover:text-white transition-colors">История</span>
+          <span class="text-[10px] font-bold text-white/55 group-hover:text-white transition-colors">{{ langStore.t.story }}</span>
         </button>
 
         <!-- ── Divider ───────────────────────────────────────────────────── -->
@@ -130,6 +199,7 @@ function openGroup(group: Story[]) {
             :key="n"
             class="flex flex-col items-center gap-1.5 flex-shrink-0"
           >
+            <div class="h-[10px]" />
             <div class="w-[68px] h-[68px] rounded-[20px] bg-white/5 animate-pulse"></div>
             <div class="h-2.5 w-12 bg-white/5 rounded-full animate-pulse"></div>
           </div>
@@ -143,6 +213,8 @@ function openGroup(group: Story[]) {
             class="flex flex-col items-center gap-1.5 group flex-shrink-0"
             @click="openGroup(group)"
           >
+            <!-- spacer so avatars align at bottom -->
+            <div class="h-[10px]" />
             <!-- Ring + Avatar -->
             <div class="relative w-[68px] h-[68px]">
               <!-- Gradient ring (unseen) OR grey ring (seen) -->
@@ -157,6 +229,7 @@ function openGroup(group: Story[]) {
                     v-if="group[0].user.avatar_url"
                     :src="group[0].user.avatar_url"
                     class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    @error="onAvatarError"
                   />
                   <div
                     v-else
@@ -198,7 +271,7 @@ function openGroup(group: Story[]) {
             class="flex items-center gap-3 text-white/30 px-4 py-2"
           >
             <BIcon name="PhoneOff" class="w-4 h-4" />
-            <span class="text-xs">Пока нет историй</span>
+            <span class="text-xs">{{ langStore.t.noStoriesYet }}</span>
           </div>
         </template>
       </div>
@@ -213,5 +286,12 @@ function openGroup(group: Story[]) {
 }
 .stories-scrollbar::-webkit-scrollbar {
   display: none;
+}
+.note-bar {
+  animation: noteBar 0.6s ease-in-out infinite;
+}
+@keyframes noteBar {
+  0%, 100% { transform: scaleY(0.35) }
+  50%       { transform: scaleY(1) }
 }
 </style>

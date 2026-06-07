@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useMobileSidebar } from '@/composables/useMobileSidebar'
+import { onAvatarError } from '@/composables/useAvatarFallback'
 import api from '@/api'
 import BIcon from './BIcon.vue'
 import PostCard from './PostCard.vue'
@@ -27,14 +28,14 @@ const mobileSidebar = useMobileSidebar()
 // ── Language picker ───────────────────────────────────────────────────────────
 const showLangDropdown = ref(false)
 const langOptions = [
-  { code: 'RU', flag: '🇷🇺', label: 'RU' },
-  { code: 'EN', flag: '🇺🇸', label: 'EN' },
-  { code: 'JP', flag: '🇯🇵', label: 'JP' },
-  { code: 'CN', flag: '🇨🇳', label: 'CN' },
-  { code: 'DE', flag: '🇩🇪', label: 'DE' },
-  { code: 'FR', flag: '🇫🇷', label: 'FR' },
-  { code: 'ES', flag: '🇪🇸', label: 'ES' },
-  { code: 'PT', flag: '🇧🇷', label: 'PT' },
+  { code: 'RU', fi: 'ru', label: 'RU' },
+  { code: 'EN', fi: 'us', label: 'EN' },
+  { code: 'JP', fi: 'jp', label: 'JP' },
+  { code: 'CN', fi: 'cn', label: 'CN' },
+  { code: 'DE', fi: 'de', label: 'DE' },
+  { code: 'FR', fi: 'fr', label: 'FR' },
+  { code: 'ES', fi: 'es', label: 'ES' },
+  { code: 'PT', fi: 'br', label: 'PT' },
 ] as const
 const currentLangOption = () => langOptions.find(l => l.code === langStore.currentLang) ?? langOptions[0]
 function selectLang(code: typeof langOptions[number]['code']) {
@@ -377,7 +378,7 @@ onUnmounted(() => {
           <img src="/bloomly.png?v=2" alt="Bloomly" class="w-full h-full object-contain" />
         </div>
         <span class="text-xl md:text-2xl font-extrabold tracking-tight text-white">Bloomly</span>
-        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-brand-accent/15 text-brand-accent border border-brand-accent/30 leading-none">бета · 1.0.0</span>
+        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-brand-accent/15 text-brand-accent border border-brand-accent/30 leading-none">бета · 0.4.14</span>
       </div>
     </div>
 
@@ -395,7 +396,7 @@ onUnmounted(() => {
       <div class="relative">
         <button @click.stop="showLangDropdown = !showLangDropdown"
           class="flex items-center gap-1.5 px-2.5 py-1.5 bg-brand-card border border-brand-border rounded-xl text-sm font-bold text-white/80 hover:text-white hover:border-brand-accent/50 transition-all">
-          <span class="text-base leading-none">{{ currentLangOption().flag }}</span>
+          <span :class="`fi fi-${currentLangOption().fi} rounded-sm`" style="font-size:1.1rem"></span>
           <span class="hidden sm:inline text-xs">{{ currentLangOption().label }}</span>
           <BIcon name="ChevronDown" class="w-3 h-3 text-white/40" />
         </button>
@@ -407,7 +408,7 @@ onUnmounted(() => {
               @click="selectLang(lang.code)"
               class="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold transition-colors hover:bg-brand-accent/10"
               :class="langStore.currentLang === lang.code ? 'text-brand-accent bg-brand-accent/5' : 'text-white/70 hover:text-white'">
-              <span class="text-base leading-none">{{ lang.flag }}</span>
+              <span :class="`fi fi-${lang.fi} rounded-sm`" style="font-size:1.1rem"></span>
               <span>{{ lang.label }}</span>
               <BIcon v-if="langStore.currentLang === lang.code" name="Check" class="w-3.5 h-3.5 ml-auto" />
             </button>
@@ -457,7 +458,8 @@ onUnmounted(() => {
                     <!-- Avatar + type badge -->
                     <div class="relative flex-shrink-0 mt-0.5 cursor-pointer" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">
                       <img :src="n.sender?.avatar_url || '/icons/badges/NN.jpg'"
-                        class="w-10 h-10 rounded-full object-cover border border-brand-border" />
+                        class="w-10 h-10 rounded-full object-cover border border-brand-border"
+                        @error="onAvatarError" />
                       <!-- Type icon badge -->
                       <div :class="['absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center', notifBadgeClass(n.type)]">
                         <BIcon :name="notifBadgeIcon(n.type)" class="w-2.5 h-2.5" />
@@ -501,7 +503,8 @@ onUnmounted(() => {
                     <!-- Avatar + type badge -->
                     <div class="relative flex-shrink-0 mt-0.5 cursor-pointer" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">
                       <img :src="n.sender?.avatar_url || '/icons/badges/NN.jpg'"
-                        class="w-10 h-10 rounded-full object-cover border border-brand-border opacity-70" />
+                        class="w-10 h-10 rounded-full object-cover border border-brand-border opacity-70"
+                        @error="onAvatarError" />
                       <div :class="['absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center opacity-60', notifBadgeClass(n.type)]">
                         <BIcon :name="notifBadgeIcon(n.type)" class="w-2.5 h-2.5" />
                       </div>
@@ -590,7 +593,8 @@ onUnmounted(() => {
                     @click="openStory(story)">
                     <div class="w-14 h-14 rounded-2xl p-[2px] bg-gradient-to-tr from-brand-accent to-brand-purple">
                       <img v-if="story.user.avatar_url" :src="story.user.avatar_url"
-                        class="w-full h-full rounded-xl border-2 border-brand-card object-cover" />
+                        class="w-full h-full rounded-xl border-2 border-brand-card object-cover"
+                        @error="onAvatarError" />
                       <div v-else class="w-full h-full rounded-xl border-2 border-brand-card bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">
                         {{ (story.user.username ?? '?')[0].toUpperCase() }}
                       </div>
@@ -615,7 +619,8 @@ onUnmounted(() => {
               <button v-for="post in searchModalPosts" :key="post.id" @click="searchGoToPost(post.id)"
                 class="w-full flex items-start gap-3 px-5 py-3.5 hover:bg-white/5 transition-colors text-left border-b border-brand-border/50 last:border-0">
                 <img :src="post.author?.avatar_url || '/icons/badges/NN.jpg'"
-                  class="w-9 h-9 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5" />
+                  class="w-9 h-9 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5"
+                  @error="onAvatarError" />
                 <div class="min-w-0 flex-1">
                   <div class="flex items-center gap-2 mb-0.5">
                     <span class="text-sm font-semibold text-white">{{ post.author?.display_name || post.author?.username }}</span>
@@ -637,7 +642,8 @@ onUnmounted(() => {
               <button v-for="user in searchModalUsers" :key="user.id" @click="searchGoToUser(user.username)"
                 class="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-white/5 transition-colors text-left border-b border-brand-border/50 last:border-0">
                 <img :src="user.avatar_url || '/icons/badges/NN.jpg'"
-                  class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0" />
+                  class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0"
+                  @error="onAvatarError" />
                 <div class="min-w-0 flex-1">
                   <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
                   <p class="text-xs text-white/55">@{{ user.username }}</p>
@@ -740,7 +746,7 @@ onUnmounted(() => {
         <!-- User info -->
         <div class="absolute top-8 left-1/2 -translate-x-1/2 flex items-center gap-3 cursor-pointer"
           @click="closeStory(); closeSearchModal(); router.push('/profile/' + activeStory.user.username)">
-          <img v-if="activeStory.user.avatar_url" :src="activeStory.user.avatar_url" class="w-9 h-9 rounded-full border-2 border-white/20 object-cover" />
+          <img v-if="activeStory.user.avatar_url" :src="activeStory.user.avatar_url" class="w-9 h-9 rounded-full border-2 border-white/20 object-cover" @error="onAvatarError" />
           <div v-else class="w-9 h-9 rounded-full border-2 border-white/20 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">{{ (activeStory.user.username ?? '?')[0].toUpperCase() }}</div>
           <span class="text-white font-semibold text-sm">{{ activeStory.user.display_name || activeStory.user.username }}</span>
         </div>

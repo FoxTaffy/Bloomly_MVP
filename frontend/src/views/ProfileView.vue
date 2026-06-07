@@ -17,7 +17,7 @@
         <div class="w-full max-w-lg bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
           <div class="flex items-center justify-between px-6 py-4 border-b border-brand-border sticky top-0 bg-brand-card z-10">
             <h3 class="font-bold text-white text-lg">
-              {{ editSection === 'bio' ? 'О себе' : editSection === 'fursona' ? 'Фурсона' : editSection === 'fursuit' ? 'Фурсьют' : editSection === 'contacts' ? 'Контакты' : editSection === 'basics' ? 'Основное' : editSection === 'socials' ? 'Соцсети' : 'Изменить профиль' }}
+              {{ editSection === 'bio' ? langStore.t.aboutTab : editSection === 'fursona' ? langStore.t.fursonaSettingsTitle : editSection === 'fursuit' ? langStore.t.fursuitTitle : editSection === 'contacts' ? langStore.t.secContacts : editSection === 'basics' ? langStore.t.secBasic : editSection === 'socials' ? langStore.t.socialNetworksLabel : langStore.t.editProfileBtn }}
             </h3>
             <button @click="showEditModal = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
               <BIcon name="X" class="w-4 h-4" />
@@ -99,12 +99,12 @@
                     <label class="block text-xs font-semibold text-white/55 mb-1.5">Пол персонажа</label>
                     <select v-model="editForm.fursona_gender"
                       class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all appearance-none">
-                      <option value="">Не указан</option>
-                      <option value="male">Мужской</option>
-                      <option value="female">Женский</option>
-                      <option value="nonbinary">Небинарный</option>
-                      <option value="androgynous">Андрогин</option>
-                      <option value="other">Другой</option>
+                      <option value="">{{ langStore.t.genderNone }}</option>
+                      <option value="male">{{ langStore.t.genderMale }}</option>
+                      <option value="female">{{ langStore.t.genderFemale }}</option>
+                      <option value="nonbinary">{{ langStore.t.genderNonbinary }}</option>
+                      <option value="androgynous">{{ langStore.t.genderAndrogyne }}</option>
+                      <option value="other">{{ langStore.t.genderOther }}</option>
                     </select>
                   </div>
                   <div>
@@ -233,13 +233,13 @@
                 <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5">Статус отношений</label>
                 <select v-model="editForm.relationship_status"
                   class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-accent transition-all">
-                  <option value="">Не указано</option>
-                  <option value="single">Свободен/а</option>
-                  <option value="in_relationship">В отношениях</option>
-                  <option value="married">В браке</option>
-                  <option value="complicated">Всё сложно</option>
-                  <option value="open">Открытые отношения</option>
-                  <option value="looking">В поиске</option>
+                  <option value="">{{ langStore.t.relStatusNone }}</option>
+                  <option value="single">{{ langStore.t.relStatusSingle }}</option>
+                  <option value="in_relationship">{{ langStore.t.relStatusInRel }}</option>
+                  <option value="married">{{ langStore.t.relStatusMarried }}</option>
+                  <option value="complicated">{{ langStore.t.relStatusComplicated }}</option>
+                  <option value="open">{{ langStore.t.relStatusOpen }}</option>
+                  <option value="looking">{{ langStore.t.relStatusLooking }}</option>
                 </select>
               </div>
             </template>
@@ -297,7 +297,7 @@
                 <p class="text-xs text-white/55 mt-0.5">{{ badge.desc }}</p>
               </div>
             </div>
-            <div v-if="!achievementBadges.length" class="py-10 text-center text-white/35 text-sm">Пока нет значков</div>
+            <div v-if="!achievementBadges.length" class="py-10 text-center text-white/35 text-sm">{{ langStore.t.noAchievements }}</div>
           </div>
         </div>
       </div>
@@ -310,7 +310,7 @@
           <div class="flex items-center justify-between px-6 py-4 border-b border-brand-border">
             <div class="flex items-center gap-2.5">
               <BIcon name="Wallet" class="w-5 h-5 text-brand-accent" />
-              <h3 class="font-bold text-white text-lg">Кошелёк</h3>
+              <h3 class="font-bold text-white text-lg">{{ langStore.t.walletLabel }}</h3>
             </div>
             <button @click="showWalletModal = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
               <BIcon name="X" class="w-4 h-4" />
@@ -320,7 +320,7 @@
             <!-- Balance hero -->
             <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-accent/20 to-brand-accent-plus/20 border border-brand-accent/25 p-6 text-center">
               <div class="absolute inset-0 opacity-5" style="background-image:radial-gradient(circle at 30% 50%, #4C67CF 0%, transparent 60%), radial-gradient(circle at 70% 50%, #31458F 0%, transparent 60%)" />
-              <p class="text-xs font-bold text-brand-accent uppercase tracking-widest mb-2 relative">Баланс</p>
+              <p class="text-xs font-bold text-brand-accent uppercase tracking-widest mb-2 relative">{{ langStore.t.balanceLabel }}</p>
               <p class="text-4xl font-extrabold text-white leading-none relative">
                 {{ Number((viewedProfile as any)?.wallet?.balance ?? 0).toFixed(2) }}
               </p>
@@ -330,14 +330,14 @@
             <div class="grid grid-cols-2 gap-3">
               <button disabled class="flex flex-col items-center gap-1.5 p-4 rounded-2xl border border-brand-border bg-brand-bg/50 opacity-50 cursor-not-allowed">
                 <BIcon name="Plus" class="w-5 h-5 text-brand-accent" />
-                <span class="text-xs font-bold text-white">Пополнить</span>
+                <span class="text-xs font-bold text-white">{{ langStore.t.topUpBtn }}</span>
               </button>
               <button disabled class="flex flex-col items-center gap-1.5 p-4 rounded-2xl border border-brand-border bg-brand-bg/50 opacity-50 cursor-not-allowed">
                 <BIcon name="ArrowUpRight" class="w-5 h-5 text-white/55" />
-                <span class="text-xs font-bold text-white/55">Вывести</span>
+                <span class="text-xs font-bold text-white/55">{{ langStore.t.withdrawBtn }}</span>
               </button>
             </div>
-            <p class="text-center text-[11px] text-white/35">Транзакции и история скоро появятся</p>
+            <p class="text-center text-[11px] text-white/35">{{ langStore.t.transactionsComingSoon }}</p>
           </div>
         </div>
       </div>
@@ -349,7 +349,7 @@
       <AppSidebar>
         <template v-if="viewedProfile" #extra>
           <div>
-            <h4 class="px-4 text-xs font-bold text-white/55 mb-2 uppercase tracking-wider">О профиле</h4>
+            <h4 class="px-4 text-xs font-bold text-white/55 mb-2 uppercase tracking-wider">{{ langStore.t.aboutProfile }}</h4>
             <nav class="space-y-1">
               <button v-for="nav in aboutNavs" :key="nav.key"
                 @click="aboutTab = nav.key"
@@ -369,7 +369,7 @@
         <!-- Loading -->
         <div v-if="isLoading" class="flex flex-col items-center justify-center gap-4 py-32">
           <div class="w-12 h-12 border-[3px] border-brand-accent border-t-transparent rounded-full animate-spin"></div>
-          <p class="text-sm text-white/55 font-semibold">Загрузка профиля…</p>
+          <p class="text-sm text-white/55 font-semibold">{{ langStore.t.loadingProfile }}</p>
         </div>
 
         <!-- Error -->
@@ -377,9 +377,9 @@
           <div class="w-16 h-16 rounded-2xl bg-brand-error/10 flex items-center justify-center mx-auto mb-4">
             <BIcon name="AlertCircle" class="w-8 h-8 text-brand-error" />
           </div>
-          <p class="text-brand-error font-bold text-lg mb-2">Ошибка загрузки</p>
+          <p class="text-brand-error font-bold text-lg mb-2">{{ langStore.t.errorLabel ?? 'Error' }}</p>
           <p class="text-white/55 text-sm mb-6">{{ error }}</p>
-          <button @click="loadProfile" class="px-6 py-2.5 bg-brand-accent hover:bg-brand-accent-plus rounded-xl text-sm font-bold transition-all">Повторить</button>
+          <button @click="loadProfile" class="px-6 py-2.5 bg-brand-accent hover:bg-brand-accent-plus rounded-xl text-sm font-bold transition-all">{{ langStore.t.retryBtn }}</button>
         </div>
 
         <!-- Not found -->
@@ -387,8 +387,8 @@
           <div class="w-16 h-16 rounded-2xl bg-brand-bg border border-brand-border flex items-center justify-center mx-auto mb-4">
             <BIcon name="UserX" class="w-8 h-8 text-white/55" />
           </div>
-          <p class="text-white font-bold text-lg mb-2">Пользователь не найден</p>
-          <p class="text-white/55 text-sm mb-6">Возможно, аккаунт был удалён или ссылка неверна</p>
+          <p class="text-white font-bold text-lg mb-2">{{ langStore.t.userNotFound }}</p>
+          <p class="text-white/55 text-sm mb-6">{{ langStore.t.userNotFoundDesc }}</p>
           <button @click="router.push({ name: 'home' })" class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-card border border-brand-border hover:border-brand-accent text-sm font-bold rounded-xl transition-all">
             <BIcon name="ArrowLeft" class="w-4 h-4" /> На главную
           </button>
@@ -399,7 +399,7 @@
           <!-- ════════════════════════════════════════════════════════════════
                BANNER
           ════════════════════════════════════════════════════════════════ -->
-          <div class="relative w-full h-52 md:h-64 rounded-3xl overflow-hidden cursor-pointer" :style="bannerStyle"
+          <div class="relative w-full h-56 md:h-72 rounded-3xl overflow-hidden cursor-pointer" :style="bannerStyle"
             @click="viewedProfile.banner_url && (showBannerViewer = true)">
             <!-- Gradient overlays -->
             <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
@@ -411,12 +411,12 @@
                 :disabled="isUploadingBanner"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/50 hover:bg-black/70 border border-white/15 rounded-full text-xs font-semibold text-white/90 backdrop-blur-sm transition-all disabled:opacity-50">
                 <span v-if="isUploadingBanner" class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <BIcon v-else name="Image" class="w-3 h-3" /> Баннер
+                <BIcon v-else name="Image" class="w-3 h-3" /> {{ langStore.t.changeBanner }}
               </button>
             </div>
 
             <!-- Bottom-right: persona chip — raised so it doesn't hide behind the card overlap -->
-            <div class="absolute bottom-8 right-4 z-10 flex gap-2">
+            <div class="absolute bottom-8 right-4 z-20 flex gap-2">
               <span v-if="viewedProfile.persona"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm border"
                 :style="accentStyleSubtle">
@@ -431,7 +431,7 @@
           <div class="relative z-10 -mt-6 mx-0">
             <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl">
               <!-- Accent line top -->
-              <div class="h-px bg-gradient-to-r from-transparent via-brand-accent/60 to-transparent rounded-t-3xl"></div>
+              <div class="h-px bg-gradient-to-r from-transparent via-brand-accent/60 to-transparent"></div>
 
               <div class="px-6 pt-0 pb-5">
                 <div class="flex items-start justify-between gap-4">
@@ -442,7 +442,7 @@
                     Активная — translate-x-0/y-0 scale-100, спящая — translate-x-7/y-7 scale-[0.78].
                     Плавный spring-easing: cubic-bezier(0.34,1.56,0.64,1).
                   -->
-                  <div class="relative flex-shrink-0 -mt-12 md:-mt-16 w-24 h-24 md:w-32 md:h-32 overflow-visible">
+                  <div class="relative flex-shrink-0 -mt-14 md:-mt-20 w-24 h-24 md:w-32 md:h-32 overflow-visible mb-3">
 
                     <!-- ── Story ring: animated gradient, sits behind avatar ── -->
                     <div
@@ -459,13 +459,14 @@
                       @click="onAvatarClick">
                       <img :src="avatarSrc || '/icons/badges/NN.jpg'"
                         class="w-full h-full object-cover"
-                        width="128" height="128" fetchpriority="high" />
+                        width="128" height="128" fetchpriority="high"
+                        @error="onAvatarError" />
                       <!-- Story tap affordance -->
                       <div v-if="hasStory"
                         class="absolute inset-0 rounded-full bg-black/0 hover:bg-black/30 transition-all flex items-center justify-center opacity-0 hover:opacity-100">
                         <div class="flex flex-col items-center gap-0.5">
                           <BIcon name="Play" class="w-6 h-6 text-white drop-shadow" />
-                          <span class="text-[10px] font-bold text-white drop-shadow">История</span>
+                          <span class="text-[10px] font-bold text-white drop-shadow">{{ langStore.t.story }}</span>
                         </div>
                       </div>
                       <!-- upload camera: только для своего профиля без истории -->
@@ -481,6 +482,49 @@
                     <span v-if="isProfileOnline"
                       class="absolute bottom-1 right-1 md:bottom-1.5 md:right-1.5 w-4 h-4 md:w-5 md:h-5 rounded-full bg-brand-success border-[3px] border-brand-card shadow-sm z-30 transition-all duration-500"
                       title="Онлайн" />
+
+                    <!-- Status note bubble — IG Notes style above avatar -->
+                    <div v-if="isOwnProfile || profileStatus.text"
+                      class="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full z-30"
+                      style="width:120px">
+                      <button
+                        @click="isOwnProfile ? openStatusEdit() : null"
+                        :class="isOwnProfile ? 'cursor-pointer' : 'cursor-default'"
+                        class="relative block w-full hover:opacity-90 active:scale-95 transition-all">
+                        <!-- Bubble -->
+                        <div class="w-full px-2.5 py-2 rounded-[16px] text-white shadow-2xl overflow-hidden"
+                          :style="{ backgroundColor: statusBubbleColor }">
+                          <!-- Text/emoji -->
+                          <div v-if="profileStatus.text || profileStatus.emoji"
+                            class="flex gap-1 items-start"
+                            :class="profileStatus.music ? 'mb-1' : ''">
+                            <span v-if="profileStatus.emoji" class="text-sm flex-shrink-0 leading-tight">{{ profileStatus.emoji }}</span>
+                            <span v-if="profileStatus.text"
+                              class="text-[11px] font-semibold leading-snug"
+                              style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;word-break:break-all">{{ profileStatus.text }}</span>
+                          </div>
+                          <!-- Music -->
+                          <div v-if="profileStatus.music" class="flex items-center gap-1.5">
+                            <div class="flex items-end gap-[2px] h-3 flex-shrink-0">
+                              <span v-for="(h, i) in [50,100,65,85]" :key="i"
+                                class="w-[3px] rounded-full bg-white note-bar-profile"
+                                :style="`height:${h}%; animation-delay:${i*0.08}s`" />
+                            </div>
+                            <div class="min-w-0 overflow-hidden">
+                              <p class="text-[10px] font-bold leading-tight truncate">{{ profileStatus.music.artist }}</p>
+                              <p class="text-[9px] opacity-70 leading-tight truncate">{{ profileStatus.music.title }}</p>
+                            </div>
+                          </div>
+                          <!-- Empty own profile -->
+                          <span v-if="!profileStatus.text && !profileStatus.emoji && !profileStatus.music && isOwnProfile"
+                            class="text-[11px] text-white/80">+ Статус</span>
+                          <span v-if="statusTimeRemaining" class="block mt-0.5 text-[9px] opacity-40">{{ statusTimeRemaining }}</span>
+                        </div>
+                        <!-- Arrow tail -->
+                        <div class="absolute -bottom-[7px] left-4 w-0 h-0 pointer-events-none"
+                          :style="{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: `8px solid ${statusBubbleColor}` }" />
+                      </button>
+                    </div>
                   </div>
 
                   <!-- Action buttons (positioned to side of avatar) -->
@@ -490,7 +534,7 @@
                         class="relative inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand-accent to-brand-accent-plus text-white rounded-xl text-sm font-bold shadow-lg shadow-brand-accent/30 hover:shadow-brand-accent/50 hover:scale-[1.03] active:scale-[0.98] transition-all overflow-hidden group">
                         <span class="absolute inset-0 bg-white/0 group-hover:bg-white/8 transition-colors duration-200" />
                         <BIcon name="Pencil" class="w-4 h-4 relative z-10" />
-                        <span class="relative z-10">Изменить профиль</span>
+                        <span class="relative z-10">{{ langStore.t.editProfileBtn }}</span>
                       </router-link>
                     </template>
                     <template v-else-if="authStore.isAuthenticated">
@@ -522,9 +566,9 @@
                 </div>
 
                 <!-- Name row -->
-                <div class="mt-3">
-                  <div class="flex items-center flex-wrap gap-2 mb-1">
-                    <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white">{{ profileDisplayName }}</h1>
+                <div class="mt-4">
+                  <div class="flex items-center flex-wrap gap-2 mb-2">
+                    <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white tracking-tight">{{ profileDisplayName }}</h1>
                     <!-- Verification badge -->
                     <img v-if="(viewedProfile as any)?.is_verified"
                       src="/icons/badges/paw_offical.svg"
@@ -569,28 +613,24 @@
                       @click="$router.push(`/groups/${badge.event.group.slug}`)"
                     />
                   </div>
-                  <div class="flex items-center gap-3 flex-wrap text-sm">
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-accent/10 border border-brand-accent/25 rounded-lg text-xs font-bold text-brand-accent tracking-wide">
+                  <div class="flex items-center gap-1.5 flex-wrap mt-1">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-accent/10 border border-brand-accent/25 rounded-lg text-xs font-bold text-brand-accent tracking-wide">
                       <BIcon name="AtSign" class="w-3 h-3" />{{ viewedProfile.username }}
                     </span>
-                    <span v-if="viewedProfile.job_title" class="flex items-center gap-1 text-white/55 text-xs">
-                      <BIcon name="Briefcase" class="w-3.5 h-3.5" />{{ viewedProfile.job_title }}
+                    <span v-if="viewedProfile.job_title" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/65">
+                      <BIcon name="Briefcase" class="w-3 h-3 text-white/40" />{{ viewedProfile.job_title }}
                     </span>
-                    <span v-if="viewedProfile.location || (viewedProfile as any).country" class="flex items-center gap-1 text-white/55 text-xs">
-                      <BIcon name="MapPin" class="w-3.5 h-3.5" />{{ placeStr }}
+                    <span v-if="viewedProfile.location || (viewedProfile as any).country" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/65">
+                      <BIcon name="MapPin" class="w-3 h-3 text-white/40" />{{ placeStr }}
                     </span>
-                    <span class="flex items-center gap-1 text-white/55 text-xs">
-                      <BIcon name="Calendar" class="w-3.5 h-3.5" />{{ joinDate }}
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/50">
+                      <BIcon name="Calendar" class="w-3 h-3 text-white/35" />{{ joinDate }}
                     </span>
                     <a v-if="viewedProfile.website" :href="viewedProfile.website" target="_blank"
-                      class="flex items-center gap-1 text-brand-accent text-xs hover:underline">
-                      <BIcon name="Link" class="w-3.5 h-3.5" />{{ viewedProfile.website.replace(/^https?:\/\//, '') }}
+                      class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-accent/30 rounded-lg text-xs font-medium text-brand-accent hover:bg-brand-accent/10 transition-colors">
+                      <BIcon name="Link" class="w-3 h-3" />{{ viewedProfile.website.replace(/^https?:\/\//, '') }}
                     </a>
                   </div>
-
-                  <!-- Bio -->
-                  <p v-if="profileBio" class="mt-3 text-sm leading-relaxed max-w-2xl text-white/75">{{ profileBio }}</p>
-
 
                 </div>
               </div>
@@ -639,43 +679,87 @@
                       </button>
                     </div>
 
-                    <!-- Уникальные поля (не дублируются в шапке) -->
+                    <!-- Детали профиля -->
                     <div class="space-y-2">
 
                       <!-- Отношения + партнёр -->
                       <div v-if="viewedProfile.relationship_status"
-                        class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
-                        <div class="w-8 h-8 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center flex-shrink-0">
-                          <BIcon name="Heart" class="w-4 h-4 text-pink-400" />
-                        </div>
-                        <div class="flex-1 min-w-0">
-                          <p class="text-[10px] text-white/40 uppercase tracking-wide mb-0.5">Отношения</p>
-                          <p class="text-sm text-white font-semibold">{{ { single: 'Свободен/а', in_relationship: 'В отношениях', relationship: 'В отношениях', married: 'В браке', complicated: 'Всё сложно', open: 'Открытые', open_relationship: 'Открытые отношения', looking: 'В поиске', secret: 'Секрет' }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}</p>
-                          <div v-if="partnerProfile" class="flex items-center gap-2 mt-1.5">
-                            <img v-if="partnerProfile.avatar_url" :src="partnerProfile.avatar_url" class="w-5 h-5 rounded-full object-cover flex-shrink-0 border border-pink-500/30" />
-                            <div v-else class="w-5 h-5 rounded-full bg-pink-500/20 flex items-center justify-center text-[10px] font-bold text-pink-300 flex-shrink-0">{{ (partnerProfile.display_name ?? partnerProfile.username)[0] }}</div>
-                            <span class="text-xs text-pink-300 font-medium truncate">с {{ partnerProfile.display_name ?? partnerProfile.username }}</span>
-                            <span v-if="togetherSince" class="text-[10px] text-white/35 ml-auto flex-shrink-0">{{ togetherSince }}</span>
-                          </div>
+                        class="relative overflow-hidden rounded-2xl border transition-all group"
+                        :class="partnerProfile ? 'border-pink-500/30 hover:border-pink-500/50' : 'border-pink-500/20 hover:border-pink-500/35 bg-brand-bg'">
+                        <!-- Gradient background -->
+                        <div v-if="partnerProfile" class="absolute inset-0 bg-gradient-to-br from-pink-500/10 via-rose-500/6 to-purple-500/8 pointer-events-none" />
+                        <div v-else class="absolute inset-0 bg-gradient-to-r from-pink-500/6 to-transparent pointer-events-none" />
+
+                        <div class="relative px-3.5 py-3">
+                          <!-- Single-line status (no partner) -->
+                          <template v-if="!partnerProfile">
+                            <div class="flex items-center gap-2.5">
+                              <div class="w-8 h-8 rounded-xl bg-pink-500/15 border border-pink-500/25 flex items-center justify-center flex-shrink-0">
+                                <BIcon name="Heart" class="w-3.5 h-3.5 text-pink-400" />
+                              </div>
+                              <div>
+                                <p class="text-[10px] text-pink-300/60 uppercase tracking-widest font-bold">{{ langStore.t.relationsLabel }}</p>
+                                <p class="text-sm text-white font-bold">{{ { single: 'Свободен/а', in_relationship: 'В отношениях', relationship: 'В отношениях', married: 'В браке', complicated: 'Всё сложно', open: 'Открытые', open_relationship: 'Открытые отношения', looking: 'В поиске', secret: 'Секрет' }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}</p>
+                              </div>
+                            </div>
+                          </template>
+
+                          <!-- Partner card — romantic layout -->
+                          <template v-else>
+                            <p class="text-[10px] text-pink-300/60 uppercase tracking-widest font-bold mb-2 flex items-center gap-1.5">
+                              <BIcon name="Heart" class="w-3 h-3 text-pink-400" />
+                              {{ { single: 'Свободен/а', in_relationship: 'В отношениях', relationship: 'В отношениях', married: 'В браке', complicated: 'Всё сложно', open: 'Открытые', open_relationship: 'Открытые отношения', looking: 'В поиске', secret: 'Секрет' }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}
+                            </p>
+                            <!-- Two avatars with heart between -->
+                            <div class="flex items-center gap-2">
+                              <!-- Profile owner avatar -->
+                              <router-link :to="'/profile/' + viewedProfile.username" class="flex-shrink-0 group/av">
+                                <img :src="avatarSrc || '/icons/badges/NN.jpg'"
+                                  class="w-9 h-9 rounded-full object-cover border-2 border-pink-500/40 shadow-md shadow-pink-500/15 group-hover/av:scale-105 transition-transform"
+                                  @error="onAvatarError" />
+                              </router-link>
+                              <!-- Floating hearts -->
+                              <div class="flex flex-col items-center gap-0 flex-shrink-0">
+                                <span class="text-pink-300/35 text-[9px] animate-pulse leading-none">♥</span>
+                                <BIcon name="Heart" class="w-4 h-4 text-pink-400 drop-shadow-[0_0_5px_rgba(236,72,153,0.55)]" style="animation: pulse 2s ease-in-out infinite" />
+                                <span class="text-pink-300/35 text-[9px] animate-pulse leading-none" style="animation-delay:0.5s">♥</span>
+                              </div>
+                              <!-- Partner avatar + name -->
+                              <router-link :to="'/profile/' + partnerProfile.username" class="flex items-center gap-2 min-w-0 group/pav">
+                                <img v-if="partnerProfile.avatar_url" :src="partnerProfile.avatar_url"
+                                  class="w-9 h-9 rounded-full object-cover border-2 border-pink-500/40 shadow-md shadow-pink-500/15 flex-shrink-0 group-hover/pav:scale-105 transition-transform"
+                                  @error="onAvatarError" />
+                                <div v-else class="w-9 h-9 rounded-full bg-pink-500/20 border-2 border-pink-500/40 flex items-center justify-center text-sm font-bold text-pink-300 flex-shrink-0">
+                                  {{ (partnerProfile.display_name ?? partnerProfile.username)[0] }}
+                                </div>
+                                <div class="min-w-0">
+                                  <p class="text-xs font-bold text-white group-hover/pav:text-pink-300 transition-colors truncate leading-tight">{{ partnerProfile.display_name ?? partnerProfile.username }}</p>
+                                  <p class="text-[10px] text-white/40 truncate">@{{ partnerProfile.username }}</p>
+                                </div>
+                              </router-link>
+                              <!-- Together since -->
+                              <span v-if="togetherSince" class="ml-auto text-[10px] text-white/30 flex-shrink-0 self-end">{{ togetherSince }}</span>
+                            </div>
+                          </template>
                         </div>
                       </div>
 
                       <!-- Персонаж / фурсона с именем и цветом -->
                       <div v-if="viewedProfile.persona"
-                        class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
-                        <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-xl"
-                          :style="(viewedProfile as any).fursona_color ? `background:${(viewedProfile as any).fursona_color}20;border:1px solid ${(viewedProfile as any).fursona_color}30` : 'background:rgba(255,255,255,0.06)'">
+                        class="flex items-center gap-3 px-4 py-3.5 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/30 transition-colors group">
+                        <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-xl"
+                          :style="(viewedProfile as any).fursona_color ? `background:${(viewedProfile as any).fursona_color}20;border:1px solid ${(viewedProfile as any).fursona_color}35` : 'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1)'">
                           {{ personaEmoji(viewedProfile.persona) }}
                         </div>
                         <div class="flex-1 min-w-0">
-                          <p class="text-[10px] text-white/40 uppercase tracking-wide mb-0.5">Персонаж</p>
+                          <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold mb-0.5">{{ langStore.t.characterLabel }}</p>
                           <div class="flex items-center gap-2">
-                            <p class="text-sm text-white font-semibold truncate">{{ (viewedProfile as any).fursona_name || viewedProfile.persona }}</p>
-                            <span v-if="(viewedProfile as any).fursona_name" class="text-xs text-white/40">{{ viewedProfile.persona }}</span>
+                            <p class="text-sm text-white font-bold truncate">{{ (viewedProfile as any).fursona_name || viewedProfile.persona }}</p>
+                            <span v-if="(viewedProfile as any).fursona_name" class="text-xs text-white/45 font-medium">{{ viewedProfile.persona }}</span>
                           </div>
                           <div v-if="(viewedProfile as any).fursona_color" class="flex items-center gap-1.5 mt-1">
-                            <span class="w-3 h-3 rounded-sm border border-black/20 flex-shrink-0" :style="`background:${(viewedProfile as any).fursona_color}`"></span>
-                            <span class="text-[10px] text-white/35">{{ (viewedProfile as any).fursona_color }}</span>
+                            <span class="w-3.5 h-3.5 rounded-md border border-black/20 flex-shrink-0 shadow-sm" :style="`background:${(viewedProfile as any).fursona_color}`"></span>
+                            <span class="text-[10px] text-white/40 font-mono">{{ (viewedProfile as any).fursona_color }}</span>
                           </div>
                         </div>
                         <button v-if="isOwnProfile" @click="openEditModal('fursona')"
@@ -684,21 +768,59 @@
                         </button>
                       </div>
 
-                      <!-- Местоимения (только если есть, компактно) -->
+                      <!-- Местоимения -->
                       <div v-if="viewedProfile.pronouns"
-                        class="flex items-center gap-3 px-4 py-2.5 bg-brand-bg border border-brand-border rounded-2xl">
-                        <BIcon name="Quote" class="w-4 h-4 text-brand-accent/60 flex-shrink-0" />
+                        class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
+                        <div class="w-9 h-9 rounded-xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center flex-shrink-0">
+                          <BIcon name="Quote" class="w-4 h-4 text-brand-accent/70" />
+                        </div>
                         <div>
-                          <p class="text-[10px] text-white/40 uppercase tracking-wide">Местоимения</p>
-                          <p class="text-xs text-white/80 font-semibold">{{ viewedProfile.pronouns }}</p>
+                          <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">{{ langStore.t.pronounsLabel }}</p>
+                          <p class="text-sm text-white/85 font-semibold">{{ viewedProfile.pronouns }}</p>
                         </div>
                       </div>
 
                     </div>
 
+                    <!-- Местоположение + сайт -->
+                    <div v-if="viewedProfile.location || (viewedProfile as any).country || viewedProfile.website"
+                      class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
+                      <div class="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+                        <BIcon name="MapPin" class="w-4 h-4 text-white/50" />
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Местоположение</p>
+                        <p class="text-sm text-white/80 font-semibold truncate">{{ [viewedProfile.location, (viewedProfile as any).country].filter(Boolean).join(', ') }}</p>
+                        <a v-if="viewedProfile.website" :href="viewedProfile.website" target="_blank"
+                          class="text-xs text-brand-accent hover:underline truncate block mt-0.5">{{ viewedProfile.website.replace(/^https?:\/\//, '') }}</a>
+                      </div>
+                    </div>
+
+                  <!-- Хэштеги / интересы -->
+                  <div v-if="userHashtags.length" class="space-y-2">
+                    <p class="text-[10px] font-bold uppercase tracking-widest text-white/40">Частые теги</p>
+                    <div class="flex flex-wrap gap-1.5">
+                      <span v-for="tag in userHashtags.slice(0, 10)" :key="tag.name"
+                        class="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-accent/8 border border-brand-accent/20 rounded-xl text-xs font-semibold text-brand-accent/80">
+                        #{{ tag.name }}
+                        <span class="text-[10px] text-white/35">×{{ tag.count }}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Artist since -->
+                  <div v-if="(viewedProfile as any).artist_since"
+                    class="flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-amber-500/8 to-transparent border border-amber-500/20 rounded-2xl">
+                    <BIcon name="Palette" class="w-4 h-4 text-amber-400 flex-shrink-0" />
+                    <div>
+                      <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Творчество с</p>
+                      <p class="text-sm text-amber-300 font-bold">{{ new Date((viewedProfile as any).artist_since).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }) }}</p>
+                    </div>
+                  </div>
+
                     <!-- Пусто (только редактируемый профиль) -->
                     <div v-if="isOwnProfile && !viewedProfile.relationship_status && !viewedProfile.persona" class="pt-1">
-                      <p class="text-xs text-white/30 text-center">Добавь информацию в настройках ↗</p>
+                      <p class="text-xs text-white/30 text-center">{{ langStore.t.addInfoInSettings }}</p>
                     </div>
 
                     <!-- Edit shortcuts (own profile) -->
@@ -730,7 +852,7 @@
                     <!-- Нет фурсоны -->
                     <div v-else-if="!profileFursona" class="flex flex-col items-center gap-4 py-14 rounded-3xl border border-dashed border-brand-border text-center bg-brand-bg/30">
                       <span class="text-5xl opacity-30">🦊</span>
-                      <p class="text-sm font-semibold text-white/55">Фурсона не добавлена</p>
+                      <p class="text-sm font-semibold text-white/55">{{ langStore.t.noFursonaAdded }}</p>
                       <button v-if="isOwnProfile" @click="openEditModal('fursona')"
                         class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/30 text-brand-accent rounded-xl text-sm font-bold transition-all">
                         <BIcon name="Plus" class="w-4 h-4" /> Создать фурсону
@@ -979,7 +1101,7 @@
                     <!-- Нет фурсьютов -->
                     <div v-else-if="!profileFursuits.length" class="flex flex-col items-center gap-4 py-14 rounded-3xl border border-dashed border-brand-border text-center bg-brand-bg/30">
                       <span class="text-5xl opacity-30">🐾</span>
-                      <p class="text-sm font-semibold text-white/55">Фурсьют не добавлен</p>
+                      <p class="text-sm font-semibold text-white/55">{{ langStore.t.fursuitNotAdded }}</p>
                       <button v-if="isOwnProfile" @click="openEditModal('fursuit')"
                         class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/30 text-brand-accent rounded-xl text-sm font-bold transition-all">
                         <BIcon name="Plus" class="w-4 h-4" /> Добавить фурсьют
@@ -1045,7 +1167,8 @@
                               @click.stop>
                               <img v-if="makerGroupCache[profileFursuits[0].maker_id].avatar_url"
                                 :src="makerGroupCache[profileFursuits[0].maker_id].avatar_url!"
-                                class="w-4 h-4 rounded-full object-cover" />
+                                class="w-4 h-4 rounded-full object-cover"
+                                @error="onAvatarError" />
                               <BIcon v-else name="Users" class="w-3.5 h-3.5" />
                               {{ makerGroupCache[profileFursuits[0].maker_id].name }}
                             </RouterLink>
@@ -1116,7 +1239,8 @@
                                 @click.stop>
                                 <img v-if="makerGroupCache[suit.maker_id].avatar_url"
                                   :src="makerGroupCache[suit.maker_id].avatar_url!"
-                                  class="w-3.5 h-3.5 rounded-full object-cover" />
+                                  class="w-3.5 h-3.5 rounded-full object-cover"
+                                  @error="onAvatarError" />
                                 <BIcon v-else name="Users" class="w-3 h-3" />
                                 {{ makerGroupCache[suit.maker_id].name }}
                               </RouterLink>
@@ -1173,8 +1297,8 @@
                 <!-- Collapsed trigger -->
                 <button v-if="!showPostForm" @click="showPostForm = true"
                   class="w-full flex items-center gap-3 px-5 py-4 text-left group">
-                  <img :src="ownAvatarSrc || '/icons/badges/NN.jpg'" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" />
-                  <span class="flex-1 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">Что нового?</span>
+                  <img :src="ownAvatarSrc || '/icons/badges/NN.jpg'" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" @error="onAvatarError" />
+                  <span class="flex-1 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">{{ langStore.t.whatsNew }}</span>
                   <div class="flex items-center gap-2 text-white/55 group-hover:text-white transition-colors ml-1">
                     <BIcon name="ImagePlus" class="w-5 h-5" />
                     <BIcon name="Hash" class="w-5 h-5" />
@@ -1184,7 +1308,7 @@
                 <div v-else class="p-5 space-y-4">
                   <div class="flex items-start gap-3">
                     <div class="relative flex-shrink-0 mt-0.5">
-                      <img :src="ownAvatarSrc || '/icons/badges/NN.jpg'" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover" />
+                      <img :src="ownAvatarSrc || '/icons/badges/NN.jpg'" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover" @error="onAvatarError" />
                     </div>
                     <div class="flex-1 min-w-0">
                       <MentionTextarea v-model="newPostContent" placeholder="Что у вас нового? Используйте @ для упоминаний" minHeight="90px" />
@@ -1269,7 +1393,7 @@
                       </Transition>
                     </div>
                     <button @click="showPostForm = false; newPostContent = ''; newPostMediaUrls = []; newPostTags = []; newPostTagInput = ''; newPostCategory = ''; newPostVisibility = 'public'; profileMediaUploadRef?.clearAll()"
-                      class="text-xs font-semibold text-white/55 hover:text-white transition-all">Отмена</button>
+                      class="text-xs font-semibold text-white/55 hover:text-white transition-all">{{ langStore.t.cancel }}</button>
                   </div>
                 </div>
               </div>
@@ -1368,7 +1492,7 @@
                     <!-- Пусто -->
                     <div v-else-if="!filteredMediaPosts.length && !specialAlbums.length" class="py-14 text-center text-white/55">
                       <BIcon name="Image" class="w-10 h-10 mx-auto mb-3 opacity-30" />
-                      <p class="font-semibold text-sm">Медиа пока нет</p>
+                      <p class="font-semibold text-sm">{{ langStore.t.noMediaYet }}</p>
                     </div>
 
                     <template v-else>
@@ -1489,13 +1613,13 @@
                     </div>
                     <div v-else-if="!followers.length" class="py-14 text-center text-white/55">
                       <BIcon name="Users" class="w-10 h-10 mx-auto mb-3 opacity-30" />
-                      <p class="font-semibold text-sm mb-1">Нет подписчиков</p>
+                      <p class="font-semibold text-sm mb-1">{{ langStore.t.noFollowersLabel }}</p>
                       <p class="text-xs opacity-70">Здесь появятся те, кто подписался</p>
                     </div>
                     <div v-else class="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       <router-link v-for="follower in followers" :key="follower.id" :to="'/profile/' + follower.username"
                         class="flex flex-col items-center gap-2 p-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/50 transition-all group">
-                        <img :src="follower.avatar_url || '/icons/badges/NN.jpg'" class="w-12 h-12 rounded-full object-cover" />
+                        <img :src="follower.avatar_url || '/icons/badges/NN.jpg'" class="w-12 h-12 rounded-full object-cover" @error="onAvatarError" />
                         <div class="text-center min-w-0 w-full">
                           <p class="text-xs font-bold text-white truncate group-hover:text-brand-accent transition-colors">{{ follower.display_name || follower.username }}</p>
                           <p class="text-[10px] text-white/55 truncate">@{{ follower.username }}</p>
@@ -1517,7 +1641,7 @@
                     <div v-else class="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       <router-link v-for="user in following" :key="user.id" :to="'/profile/' + user.username"
                         class="flex flex-col items-center gap-2 p-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/50 transition-all group">
-                        <img :src="user.avatar_url || '/icons/badges/NN.jpg'" class="w-12 h-12 rounded-full object-cover" />
+                        <img :src="user.avatar_url || '/icons/badges/NN.jpg'" class="w-12 h-12 rounded-full object-cover" @error="onAvatarError" />
                         <div class="text-center min-w-0 w-full">
                           <p class="text-xs font-bold text-white truncate group-hover:text-brand-accent transition-colors">{{ user.display_name || user.username }}</p>
                           <p class="text-[10px] text-white/55 truncate">@{{ user.username }}</p>
@@ -1539,7 +1663,7 @@
                     <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <router-link v-for="group in mutualGroups" :key="group.id" :to="'/groups/' + group.slug"
                         class="flex items-center gap-3 p-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/50 transition-all group">
-                        <img v-if="group.avatar_url" :src="group.avatar_url" class="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
+                        <img v-if="group.avatar_url" :src="group.avatar_url" class="w-10 h-10 rounded-xl object-cover flex-shrink-0" @error="onAvatarError" />
                         <div v-else class="w-10 h-10 rounded-xl bg-brand-accent/15 flex items-center justify-center flex-shrink-0">
                           <BIcon name="Users" class="w-5 h-5 text-brand-accent" />
                         </div>
@@ -1589,18 +1713,67 @@
             </Teleport>
 
             <!-- ── RIGHT SIDEBAR ────────────────────────────────────────── -->
-            <div class="hidden xl:flex flex-col gap-3 w-60 flex-shrink-0 sticky top-24 self-start">
+            <div class="hidden xl:flex flex-col gap-3 w-72 flex-shrink-0 sticky top-24 self-start">
 
-              <!-- Stats -->
-              <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl p-3">
-                <div class="grid grid-cols-3 gap-1.5">
-                  <button v-for="stat in profileStats" :key="stat.key"
-                    @click="stat.tab ? (activeContentTab = stat.tab, loadTabData(stat.tab)) : null"
-                    class="flex flex-col items-center gap-1 p-3 rounded-2xl bg-brand-bg/50 hover:bg-brand-bg border border-brand-border/50 hover:border-brand-accent/30 transition-all group cursor-pointer">
-                    <span class="text-base font-extrabold text-white group-hover:text-brand-accent transition-colors leading-none">{{ stat.value }}</span>
-                    <span class="text-[10px] text-white/55 font-medium text-center leading-tight">{{ stat.label }}</span>
+              <!-- Stats: 3-column grid, clicks open modals -->
+              <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
+                <div class="grid grid-cols-3 divide-x divide-brand-border/60">
+                  <button @click="showFollowersModal = true"
+                    class="flex flex-col items-center gap-1 py-4 px-2 hover:bg-brand-bg/60 transition-all group cursor-pointer">
+                    <span class="text-lg font-extrabold text-white group-hover:text-brand-accent transition-colors leading-none">{{ followers.length }}</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Подписчики</span>
+                  </button>
+                  <div class="flex flex-col items-center gap-1 py-4 px-2">
+                    <span class="text-lg font-extrabold text-white leading-none">{{ groupsCount }}</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Группы</span>
+                  </div>
+                  <button @click="showFollowingModal = true"
+                    class="flex flex-col items-center gap-1 py-4 px-2 hover:bg-brand-bg/60 transition-all group cursor-pointer">
+                    <span class="text-lg font-extrabold text-white group-hover:text-brand-accent transition-colors leading-none">{{ following.length }}</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Подписки</span>
                   </button>
                 </div>
+              </div>
+
+              <!-- Status block -->
+              <div v-if="isOwnProfile || profileStatus.text" class="space-y-2">
+
+                <!-- Status -->
+                <div v-if="isOwnProfile || profileStatus.text"
+                  class="border rounded-2xl transition-all overflow-hidden"
+                  :class="isOwnProfile ? 'cursor-pointer group' : ''"
+                  :style="{ backgroundColor: `${statusBubbleColor}18`, borderColor: `${statusBubbleColor}50` }"
+                  @click="isOwnProfile ? openStatusEdit() : null">
+                  <div class="flex items-center gap-3 px-4 py-3">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
+                      :style="{ backgroundColor: `${statusBubbleColor}25`, border: `1px solid ${statusBubbleColor}50` }">
+                      <span v-if="profileStatus.emoji">{{ profileStatus.emoji }}</span>
+                      <BIcon v-else name="Smile" class="w-4 h-4 text-white/30" />
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-1.5">
+                        <p class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Статус</p>
+                        <span v-if="statusTimeRemaining" class="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-bg text-white/35 border border-brand-border">{{ statusTimeRemaining }}</span>
+                      </div>
+                      <p v-if="profileStatus.text" class="text-sm font-semibold text-white truncate">{{ profileStatus.text }}</p>
+                      <p v-else-if="isOwnProfile" class="text-sm text-white/30">Добавить статус…</p>
+                    </div>
+                    <button v-if="isOwnProfile"
+                      class="w-7 h-7 flex items-center justify-center rounded-lg text-white/25 group-hover:text-brand-accent transition-colors flex-shrink-0">
+                      <BIcon name="Pencil" class="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <!-- Music attached to status -->
+                  <div v-if="profileStatus.music" class="flex items-center gap-2.5 px-4 py-2.5 border-t border-brand-border/50 bg-brand-bg/30">
+                    <img :src="profileStatus.music.artworkUrl" class="w-8 h-8 rounded-lg object-cover flex-shrink-0 shadow" />
+                    <div class="min-w-0 flex-1">
+                      <p class="text-[10px] font-bold text-white/60 truncate">{{ profileStatus.music.title }}</p>
+                      <p class="text-[9px] text-white/35 truncate">{{ profileStatus.music.artist }}</p>
+                    </div>
+                    <BIcon name="Music" class="w-3.5 h-3.5 text-brand-accent/60 flex-shrink-0" />
+                  </div>
+                </div>
+
               </div>
 
               <!-- Wallet card (own profile only) -->
@@ -1611,7 +1784,7 @@
                     <div class="w-7 h-7 rounded-xl bg-brand-accent/20 flex items-center justify-center">
                       <BIcon name="Wallet" class="w-3.5 h-3.5 text-brand-accent" />
                     </div>
-                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Кошелёк</p>
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.walletLabel }}</p>
                   </div>
                   <BIcon name="ChevronRight" class="w-4 h-4 text-white/55 group-hover:text-brand-accent transition-colors" />
                 </div>
@@ -1621,15 +1794,15 @@
                   </span>
                   <span class="text-xs font-semibold text-brand-accent-minus">Blooms</span>
                 </div>
-                <p class="text-[10px] text-white/55 mt-1">🌸 внутренняя валюта</p>
+                <p class="text-[10px] text-white/55 mt-1">🌸 {{ langStore.t.internalCurrency }}</p>
               </div>
 
-              <!-- Info + Contacts merged card -->
+              <!-- Info card -->
               <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                 <div class="px-4 pt-3.5 pb-2 flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <BIcon name="Info" class="w-3.5 h-3.5 text-brand-accent" />
-                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Информация</p>
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.informationLabel }}</p>
                   </div>
                   <button v-if="isOwnProfile" @click="openEditModal('contacts')"
                     class="w-6 h-6 flex items-center justify-center rounded-lg text-white/55 hover:text-brand-accent hover:bg-brand-bg transition-all">
@@ -1637,45 +1810,55 @@
                   </button>
                 </div>
                 <div class="px-2 pb-2 space-y-0.5">
+                  <!-- Relationship status -->
                   <div v-if="viewedProfile.relationship_status" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
                     <BIcon name="Heart" class="w-4 h-4 text-pink-400 flex-shrink-0" />
                     <div class="min-w-0">
-                      <p class="text-[10px] text-white/55 uppercase tracking-wide">Отношения</p>
-                      <p class="text-xs text-brand-offwhite font-medium truncate">{{ { single: 'Свободен/а', in_relationship: 'В отношениях', relationship: 'В отношениях', married: 'В браке', complicated: 'Всё сложно', open: 'Открытые отношения', open_relationship: 'Открытые отношения', looking: 'В поиске', secret: 'Секрет' }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}</p>
-                      <div v-if="partnerProfile" class="flex items-center gap-1.5 mt-1">
-                        <img v-if="partnerProfile.avatar_url" :src="partnerProfile.avatar_url" class="w-4 h-4 rounded-full object-cover flex-shrink-0" />
-                        <span class="text-[10px] text-pink-300 truncate">с {{ partnerProfile.display_name ?? partnerProfile.username }}</span>
-                      </div>
-                      <p v-if="togetherSince" class="text-[10px] text-white/55 mt-0.5">вместе {{ togetherSince }}</p>
+                      <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.relationsLabel }}</p>
+                      <p class="text-xs text-brand-offwhite font-semibold truncate">{{ {
+                        single: langStore.t.relStatusSingle,
+                        in_relationship: langStore.t.relStatusInRel,
+                        relationship: langStore.t.relStatusInRel,
+                        married: langStore.t.relStatusMarried,
+                        complicated: langStore.t.relStatusComplicated,
+                        open: langStore.t.relStatusOpen,
+                        open_relationship: langStore.t.relStatusOpen,
+                        looking: langStore.t.relStatusLooking,
+                        secret: langStore.t.relStatusSecret,
+                      }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}</p>
                     </div>
                   </div>
+                  <!-- Fursona species -->
                   <div v-if="viewedProfile.persona" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
                     <span class="text-base leading-none flex-shrink-0">{{ personaEmoji(viewedProfile.persona) }}</span>
                     <div class="min-w-0">
-                      <p class="text-[10px] text-white/55 uppercase tracking-wide">Фурсона</p>
+                      <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.fursonaTab }}</p>
                       <p class="text-xs text-brand-offwhite font-semibold truncate">{{ viewedProfile.persona }}</p>
                     </div>
                   </div>
-                  <div v-if="viewedProfile.location || (viewedProfile as any).country" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
-                    <BIcon name="MapPin" class="w-4 h-4 text-brand-accent flex-shrink-0" />
+                  <!-- Pronouns -->
+                  <div v-if="viewedProfile.pronouns" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
+                    <BIcon name="Quote" class="w-4 h-4 text-brand-accent/60 flex-shrink-0" />
                     <div class="min-w-0">
-                      <p class="text-[10px] text-white/55 uppercase tracking-wide">Место</p>
-                      <p class="text-xs text-brand-offwhite truncate">{{ placeStr }}</p>
+                      <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.pronounsLabel }}</p>
+                      <p class="text-xs text-brand-offwhite font-semibold">{{ viewedProfile.pronouns }}</p>
                     </div>
                   </div>
+                  <!-- Join date -->
                   <div class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
-                    <BIcon name="Calendar" class="w-4 h-4 text-white/55 flex-shrink-0" />
+                    <BIcon name="Calendar" class="w-4 h-4 text-white/40 flex-shrink-0" />
                     <div class="min-w-0">
-                      <p class="text-[10px] text-white/55 uppercase tracking-wide">На платформе с</p>
+                      <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.memberSince }}</p>
                       <p class="text-xs text-white/55">{{ joinDate }}</p>
                     </div>
                   </div>
+                  <!-- Website -->
                   <a v-if="viewedProfile.website" :href="viewedProfile.website" target="_blank" rel="noopener noreferrer"
                     class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all group">
-                    <BIcon name="Link" class="w-4 h-4 text-brand-accent flex-shrink-0" />
+                    <BIcon name="Link" class="w-4 h-4 text-brand-accent/60 flex-shrink-0" />
                     <div class="min-w-0">
                       <p class="text-[10px] text-white/55 uppercase tracking-wide">Сайт</p>
-                      <p class="text-xs text-brand-accent group-hover:underline truncate">{{ viewedProfile.website.replace(/^https?:\/\//, '') }}</p>
+                      <p class="text-xs text-brand-accent font-medium truncate group-hover:underline">{{ viewedProfile.website.replace(/^https?:\/\//, '') }}</p>
                     </div>
                   </a>
                 </div>
@@ -1687,7 +1870,7 @@
                 <div class="px-4 pt-3.5 pb-2 flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <BIcon name="AtSign" class="w-3.5 h-3.5 text-brand-accent" />
-                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Соцсети</p>
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.socialNetworksLabel }}</p>
                   </div>
                   <button v-if="isOwnProfile" @click="openEditModal('socials')"
                     class="w-6 h-6 flex items-center justify-center rounded-lg text-white/55 hover:text-brand-accent hover:bg-brand-bg transition-all">
@@ -1709,7 +1892,7 @@
                   </a>
                 </div>
                 <div v-else class="px-4 pb-4 text-center">
-                  <p class="text-xs text-white/35">Соцсети не добавлены</p>
+                  <p class="text-xs text-white/35">{{ langStore.t.noSocialsAdded }}</p>
                   <button @click="openEditModal('socials')"
                     class="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-brand-accent/10 hover:bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-xl transition-all">
                     <BIcon name="Plus" class="w-3 h-3" /> Добавить
@@ -1766,14 +1949,100 @@
       @close="profileStoryViewerOpen = false"
     />
 
-    <!-- ─── Avatar Viewer Modal ─────────────────────────────────────── -->
+    <!-- ─── Avatar Gallery Modal ──────────────────────────────────────── -->
     <Transition name="fade">
-      <div v-if="showAvatarViewer" class="fixed inset-0 z-[600] bg-black/92 flex items-center justify-center p-4" @click.self="showAvatarViewer = false">
-        <button @click="showAvatarViewer = false"
-          class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all z-10">
-          <BIcon name="X" class="w-5 h-5" />
-        </button>
-        <img :src="viewedProfile?.avatar_url" class="max-w-full max-h-[85vh] rounded-full object-cover shadow-2xl" />
+      <div v-if="showAvatarViewer"
+        class="fixed inset-0 z-[600] bg-black/90 backdrop-blur-md flex flex-col"
+        @click.self="showAvatarViewer = false">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between px-5 py-4 flex-shrink-0">
+          <div class="flex items-center gap-3">
+            <span class="text-white font-bold text-base">
+              {{ viewedProfile?.display_name || viewedProfile?.username }}
+            </span>
+            <span v-if="avatarGallery.length > 1" class="text-white/40 text-sm tabular-nums">
+              {{ avatarGalleryIndex + 1 }} / {{ avatarGallery.length }}
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <!-- Restore button (owner only, not on current avatar) -->
+            <button
+              v-if="isOwnProfile && avatarGalleryIndex > 0 && !avatarGalleryRestoring"
+              @click="restoreGalleryAvatar"
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-accent/20 border border-brand-accent/40 text-brand-accent text-sm font-semibold hover:bg-brand-accent/30 transition-all">
+              <BIcon name="RotateCcw" class="w-4 h-4" />
+              Сделать текущей
+            </button>
+            <span v-if="avatarGalleryRestoring" class="w-5 h-5 border-2 border-white/20 border-t-white/70 rounded-full animate-spin" />
+            <!-- Delete button (owner only, not on current avatar) -->
+            <button
+              v-if="isOwnProfile && avatarGalleryIndex > 0"
+              @click="deleteGalleryAvatar"
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm font-semibold hover:bg-red-500/25 transition-all">
+              <BIcon name="Trash2" class="w-4 h-4" />
+              Удалить
+            </button>
+            <button @click="showAvatarViewer = false"
+              class="w-9 h-9 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all">
+              <BIcon name="X" class="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Main image area -->
+        <div class="flex-1 flex items-center justify-center relative min-h-0 px-16">
+          <!-- Prev -->
+          <button
+            v-if="avatarGallery.length > 1"
+            @click="avatarGalleryIndex = Math.max(0, avatarGalleryIndex - 1)"
+            :disabled="avatarGalleryIndex === 0"
+            class="absolute left-3 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-all disabled:opacity-20 disabled:cursor-not-allowed z-10">
+            <BIcon name="ChevronLeft" class="w-6 h-6" />
+          </button>
+
+          <div class="w-full h-full flex items-center justify-center">
+            <div v-if="avatarGalleryLoading" class="flex flex-col items-center gap-3">
+              <span class="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+              <span class="text-white/40 text-sm">Загрузка...</span>
+            </div>
+            <img
+              v-else-if="avatarGallery[avatarGalleryIndex]"
+              :src="avatarGallery[avatarGalleryIndex].url"
+              :key="avatarGallery[avatarGalleryIndex].url"
+              class="max-w-full max-h-full rounded-3xl object-contain shadow-2xl select-none"
+              style="max-height: calc(100vh - 200px)"
+              draggable="false"
+            />
+          </div>
+
+          <!-- Next -->
+          <button
+            v-if="avatarGallery.length > 1"
+            @click="avatarGalleryIndex = Math.min(avatarGallery.length - 1, avatarGalleryIndex + 1)"
+            :disabled="avatarGalleryIndex === avatarGallery.length - 1"
+            class="absolute right-3 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-all disabled:opacity-20 disabled:cursor-not-allowed z-10">
+            <BIcon name="ChevronRight" class="w-6 h-6" />
+          </button>
+        </div>
+
+        <!-- Thumbnail strip -->
+        <div v-if="avatarGallery.length > 1" class="flex-shrink-0 px-4 pb-5 pt-3">
+          <div class="flex gap-2 overflow-x-auto justify-center">
+            <button
+              v-for="(item, idx) in avatarGallery" :key="item.url"
+              @click="avatarGalleryIndex = idx"
+              class="flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden border-2 transition-all"
+              :class="idx === avatarGalleryIndex ? 'border-white scale-105' : 'border-transparent opacity-50 hover:opacity-80'">
+              <img :src="item.url" class="w-full h-full object-cover" loading="lazy" />
+            </button>
+          </div>
+          <!-- Date label -->
+          <p v-if="avatarGallery[avatarGalleryIndex]" class="text-center text-white/35 text-xs mt-2">
+            <span v-if="avatarGalleryIndex === 0">Текущая аватарка</span>
+            <span v-else>{{ new Date(avatarGallery[avatarGalleryIndex].created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) }}</span>
+          </p>
+        </div>
       </div>
     </Transition>
 
@@ -1852,7 +2121,7 @@
 
     <!-- ─── Banner Viewer Modal ─────────────────────────────────────── -->
     <Transition name="fade">
-      <div v-if="showBannerViewer" class="fixed inset-0 z-[600] bg-black/92 flex items-center justify-center p-4" @click.self="showBannerViewer = false">
+      <div v-if="showBannerViewer" class="fixed inset-0 z-[600] bg-black/75 backdrop-blur-md flex items-center justify-center p-4" @click.self="showBannerViewer = false">
         <button @click="showBannerViewer = false"
           class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all z-10">
           <BIcon name="X" class="w-5 h-5" />
@@ -1860,6 +2129,244 @@
         <img :src="viewedProfile?.banner_url" class="max-w-full max-h-[85vh] rounded-3xl object-contain shadow-2xl" />
       </div>
     </Transition>
+
+    <!-- ─── Followers Modal ───────────────────────────────────────────── -->
+    <Transition name="fade">
+      <div v-if="showFollowersModal" class="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4" @click.self="showFollowersModal = false">
+        <div class="w-full max-w-sm bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
+          <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0">
+            <div class="flex items-center gap-2.5">
+              <BIcon name="Users" class="w-5 h-5 text-brand-accent" />
+              <h3 class="font-bold text-white text-base">Подписчики</h3>
+              <span class="text-xs font-bold bg-brand-accent/15 text-brand-accent px-2 py-0.5 rounded-full">{{ followers.length }}</span>
+            </div>
+            <button @click="showFollowersModal = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
+              <BIcon name="X" class="w-4 h-4" />
+            </button>
+          </div>
+          <div class="overflow-y-auto flex-1 p-3 space-y-1.5">
+            <div v-if="!followers.length" class="py-12 text-center text-white/35 text-sm">Нет подписчиков</div>
+            <router-link v-for="u in followers" :key="u.id" :to="'/profile/' + u.username"
+              @click="showFollowersModal = false"
+              class="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-brand-bg border border-transparent hover:border-brand-border transition-all group">
+              <img :src="u.avatar_url || '/icons/badges/NN.jpg'" class="w-10 h-10 rounded-full object-cover flex-shrink-0" @error="onAvatarError" />
+              <div class="min-w-0">
+                <p class="text-sm font-bold text-white group-hover:text-brand-accent transition-colors truncate">{{ u.display_name || u.username }}</p>
+                <p class="text-xs text-white/45 truncate">@{{ u.username }}</p>
+              </div>
+            </router-link>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ─── Following Modal ───────────────────────────────────────────── -->
+    <Transition name="fade">
+      <div v-if="showFollowingModal" class="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4" @click.self="showFollowingModal = false">
+        <div class="w-full max-w-sm bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
+          <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0">
+            <div class="flex items-center gap-2.5">
+              <BIcon name="UserPlus" class="w-5 h-5 text-emerald-400" />
+              <h3 class="font-bold text-white text-base">Подписки</h3>
+              <span class="text-xs font-bold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full">{{ following.length }}</span>
+            </div>
+            <button @click="showFollowingModal = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
+              <BIcon name="X" class="w-4 h-4" />
+            </button>
+          </div>
+          <div class="overflow-y-auto flex-1 p-3 space-y-1.5">
+            <div v-if="followingLoading" class="py-12 flex justify-center">
+              <span class="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
+            </div>
+            <div v-else-if="!following.length" class="py-12 text-center text-white/35 text-sm">Нет подписок</div>
+            <router-link v-for="u in following" :key="u.id" :to="'/profile/' + u.username"
+              @click="showFollowingModal = false"
+              class="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-brand-bg border border-transparent hover:border-brand-border transition-all group">
+              <img :src="u.avatar_url || '/icons/badges/NN.jpg'" class="w-10 h-10 rounded-full object-cover flex-shrink-0" @error="onAvatarError" />
+              <div class="min-w-0">
+                <p class="text-sm font-bold text-white group-hover:text-brand-accent transition-colors truncate">{{ u.display_name || u.username }}</p>
+                <p class="text-xs text-white/45 truncate">@{{ u.username }}</p>
+              </div>
+            </router-link>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ─── Status Edit Modal ──────────────────────────────────────────── -->
+    <Transition name="fade">
+      <div v-if="showStatusEdit" class="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4" @click.self="showStatusEdit = false">
+        <div class="w-full max-w-sm bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+
+          <!-- Header -->
+          <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0">
+            <h3 class="font-bold text-white text-base">Статус</h3>
+            <button @click="showStatusEdit = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
+              <BIcon name="X" class="w-4 h-4" />
+            </button>
+          </div>
+
+          <div class="overflow-y-auto flex-1">
+            <div class="p-5 space-y-4">
+
+              <!-- Preview badge — IG Notes style -->
+              <div class="flex justify-center pt-2">
+                <div class="relative">
+                  <div class="px-3 py-2 rounded-[18px] text-white leading-snug shadow-2xl max-w-[130px]"
+                    :style="{ backgroundColor: statusEditBubbleColor }">
+                    <!-- music preview -->
+                    <template v-if="statusEditMusic">
+                      <div class="flex items-center gap-1.5 mb-0.5">
+                        <div class="flex items-end gap-[2px] h-3.5 flex-shrink-0">
+                          <span v-for="(h, i) in [50,100,65,85]" :key="i"
+                            class="w-[3px] rounded-full bg-white note-bar-profile"
+                            :style="`height:${h}%; animation-delay:${i*0.08}s`" />
+                        </div>
+                      </div>
+                      <p v-if="statusEditText || statusEditEmoji" class="text-[11px] font-semibold truncate mb-0.5">{{ statusEditEmoji }} {{ statusEditText }}</p>
+                      <p class="text-[10px] font-bold truncate leading-tight">{{ statusEditMusic.artist }}</p>
+                      <p class="text-[9px] opacity-70 truncate leading-tight">{{ statusEditMusic.title }}</p>
+                    </template>
+                    <!-- text preview -->
+                    <template v-else>
+                      <div class="flex gap-1 items-start">
+                        <span v-if="statusEditEmoji" class="text-sm flex-shrink-0 leading-tight">{{ statusEditEmoji }}</span>
+                        <span class="text-[11px] font-semibold line-clamp-3 break-words leading-snug">{{ statusEditText || 'Предпросмотр…' }}</span>
+                      </div>
+                    </template>
+                    <div v-if="statusEditDuration > 0" class="mt-0.5 text-[9px] opacity-40">
+                      {{ statusDurations.find(d => d.value === statusEditDuration)?.label }}
+                    </div>
+                  </div>
+                  <!-- Arrow -->
+                  <div class="absolute -bottom-[7px] left-4 w-0 h-0"
+                    :style="{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: `8px solid ${statusEditBubbleColor}` }" />
+                </div>
+              </div>
+
+              <!-- Emoji picker -->
+              <div class="space-y-2">
+                <!-- Category tabs -->
+                <div class="flex gap-1">
+                  <button v-for="(cat, i) in emojiCategories" :key="i"
+                    @click="statusEmojiTab = i"
+                    class="w-8 h-8 rounded-xl flex items-center justify-center text-base transition-all"
+                    :class="statusEmojiTab === i ? 'bg-brand-accent/20 border border-brand-accent/50' : 'hover:bg-brand-bg border border-transparent'">
+                    {{ cat.label }}
+                  </button>
+                </div>
+                <!-- Emoji grid -->
+                <div class="grid grid-cols-8 gap-1">
+                  <button v-for="e in emojiCategories[statusEmojiTab].emojis" :key="e"
+                    @click="statusEditEmoji = statusEditEmoji === e ? '' : e"
+                    class="w-full aspect-square rounded-xl flex items-center justify-center text-lg transition-all hover:bg-brand-bg"
+                    :class="statusEditEmoji === e ? 'bg-brand-accent/20 border border-brand-accent/50' : 'border border-transparent'">
+                    {{ e }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Text input -->
+              <input v-model="statusEditText" type="text" maxlength="60" placeholder="Что сейчас делаешь?…"
+                class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-brand-accent transition-all" />
+
+              <!-- Duration -->
+              <div class="space-y-1.5">
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Истекает через</p>
+                <div class="flex gap-1.5 flex-wrap">
+                  <button v-for="d in statusDurations" :key="d.value"
+                    @click="statusEditDuration = d.value"
+                    class="px-3 py-1.5 rounded-xl text-xs font-bold transition-all"
+                    :class="statusEditDuration === d.value
+                      ? 'bg-brand-accent text-white'
+                      : 'bg-brand-bg border border-brand-border text-white/55 hover:text-white hover:border-brand-accent/50'">
+                    {{ d.label }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Color accent -->
+              <div class="space-y-1.5">
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Цвет акцента</p>
+                <div class="flex gap-2 items-center">
+                  <button v-for="c in statusColors" :key="c.value"
+                    @click="pickStatusColor(c.value)"
+                    class="w-6 h-6 rounded-full transition-all flex items-center justify-center"
+                    :class="[c.dot, statusEditColor === c.value ? 'ring-2 ring-white/70 ring-offset-1 ring-offset-brand-card scale-110' : 'opacity-70 hover:opacity-100']">
+                  </button>
+                </div>
+              </div>
+
+              <!-- Music attachment toggle -->
+              <div class="space-y-2">
+                <button @click="statusShowMusicSearch = !statusShowMusicSearch; if(!statusShowMusicSearch){ statusEditMusic = null; statusMusicQuery = ''; statusMusicResults = [] }"
+                  class="flex items-center gap-2 w-full px-3 py-2.5 rounded-2xl border transition-all"
+                  :class="statusShowMusicSearch ? 'border-brand-accent/50 bg-brand-accent/10 text-brand-accent' : 'border-brand-border bg-brand-bg text-white/55 hover:text-white hover:border-brand-accent/30'">
+                  <BIcon name="Music" class="w-4 h-4 flex-shrink-0" />
+                  <span class="text-sm font-semibold flex-1 text-left">{{ statusEditMusic ? statusEditMusic.title : 'Прикрепить музыку' }}</span>
+                  <BIcon v-if="statusEditMusic" name="X" class="w-3.5 h-3.5 text-white/40 hover:text-white/80"
+                    @click.stop="statusEditMusic = null; statusMusicQuery = ''; statusMusicResults = []" />
+                  <BIcon v-else :name="statusShowMusicSearch ? 'ChevronUp' : 'ChevronDown'" class="w-3.5 h-3.5" />
+                </button>
+
+                <!-- Music search -->
+                <Transition name="slide-down">
+                  <div v-if="statusShowMusicSearch && !statusEditMusic" class="space-y-2">
+                    <div class="relative">
+                      <BIcon name="Search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none" />
+                      <input v-model="statusMusicQuery" @input="onStatusMusicSearch" type="text"
+                        placeholder="Найти трек…"
+                        class="w-full bg-brand-bg border border-brand-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-accent transition-all" />
+                    </div>
+                    <div v-if="statusMusicLoading" class="flex items-center justify-center py-3 text-white/40">
+                      <BIcon name="Loader" class="w-4 h-4 animate-spin mr-2" />
+                      <span class="text-xs">Ищем…</span>
+                    </div>
+                    <div v-else-if="statusMusicResults.length" class="space-y-1 max-h-48 overflow-y-auto">
+                      <button v-for="track in statusMusicResults" :key="track.trackId"
+                        @click="selectStatusTrack(track)"
+                        class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-brand-bg transition-all text-left group">
+                        <img :src="track.artworkUrl100" class="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                        <div class="min-w-0 flex-1">
+                          <p class="text-xs font-semibold text-white truncate group-hover:text-brand-accent transition-colors">{{ track.trackName }}</p>
+                          <p class="text-[10px] text-white/45 truncate">{{ track.artistName }}</p>
+                        </div>
+                        <BIcon name="Plus" class="w-3.5 h-3.5 text-white/25 group-hover:text-brand-accent transition-colors flex-shrink-0" />
+                      </button>
+                    </div>
+                  </div>
+                </Transition>
+
+                <!-- Selected track preview -->
+                <div v-if="statusEditMusic" class="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-brand-bg border border-brand-border">
+                  <img :src="statusEditMusic.artworkUrl || statusEditMusic.artworkUrl" class="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-md" />
+                  <div class="min-w-0 flex-1">
+                    <p class="text-xs font-bold text-white truncate">{{ statusEditMusic.title }}</p>
+                    <p class="text-[10px] text-white/50 truncate">{{ statusEditMusic.artist }}</p>
+                  </div>
+                  <BIcon name="Music" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Footer buttons -->
+          <div class="flex gap-2 px-5 py-4 border-t border-brand-border flex-shrink-0">
+            <button @click="saveLocalStatus"
+              class="flex-1 px-4 py-2.5 bg-brand-accent hover:bg-brand-accent-plus text-white text-sm font-bold rounded-xl transition-all">
+              Сохранить
+            </button>
+            <button v-if="profileStatus.text" @click="clearLocalStatus()"
+              class="px-4 py-2.5 bg-brand-bg border border-brand-border hover:border-brand-error text-white/55 hover:text-brand-error text-sm font-bold rounded-xl transition-all">
+              Убрать
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </Transition>
+
 
 </template>
 
@@ -1883,6 +2390,7 @@ import AppSidebar from '@/components/AppSidebar.vue'
 import StoryViewer from '@/components/StoryViewer.vue'
 import api from '@/api'
 import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
+import { onAvatarError } from '@/composables/useAvatarFallback'
 import {
   User, Users, UserPlus, UserMinus, UserX, UsersRound,
   Bell, MessageSquare, Pencil, Pin, Trash2, MoreHorizontal,
@@ -2037,12 +2545,156 @@ function onAvatarClick() {
   if (hasStory.value) {
     profileStoryViewerOpen.value = true
   } else if (avatarSrc.value) {
-    showAvatarViewer.value = true
+    openAvatarGallery()
   }
 }
 
 type AboutTab = 'about' | 'fursona' | 'fursuit'
 type ContentTab = 'posts' | 'repaws' | 'media' | 'followers' | 'following' | 'mutual_groups'
+
+// ── Social modals ─────────────────────────────────────────────────────────────
+const showFollowersModal = ref(false)
+const showFollowingModal = ref(false)
+const followingLoading = ref(false)
+
+// ── Profile status (temporary, localStorage) ──────────────────────────────────
+const profileStatus = reactive({ emoji: '', text: '', expiresAt: 0, color: '', music: null as null | { title: string; artist: string; artworkUrl: string; previewUrl: string } })
+const showStatusEdit = ref(false)
+const statusEditEmoji = ref('')
+const statusEditText = ref('')
+const statusEditDuration = ref(86400)
+const statusEditColor = ref('#4C67CF')
+const statusEditMusic = ref<null | { title: string; artist: string; artworkUrl: string; previewUrl: string }>(null)
+const statusEmojiTab = ref(0)
+const statusShowMusicSearch = ref(false)
+const statusMusicQuery = ref('')
+const statusMusicResults = ref<any[]>([])
+const statusMusicLoading = ref(false)
+let statusMusicTimer: ReturnType<typeof setTimeout> | null = null
+
+const emojiCategories = [
+  { label: '😊', emojis: ['😊','😎','😴','😤','🥺','😂','🥰','😈','🤔','😭','🫶','💀','👀','🫠','🥳','😶'] },
+  { label: '🎮', emojis: ['🎨','🎮','🎵','📚','💻','🏃','✈️','🎬','🎲','🎸','🏋️','🎯','🎤','🧩','🛹','🎭'] },
+  { label: '🍕', emojis: ['🍕','🍔','🍜','🍣','☕','🧋','🍺','🎂','🍎','🥐','🍦','🌮','🍩','🥗','🫐','🧁'] },
+  { label: '🦊', emojis: ['🐾','🦊','🐱','🐶','🦄','🌙','⭐','🌈','🔥','🌿','🌊','🦋','🐺','🦁','🐼','🌸'] },
+  { label: '💎', emojis: ['💎','⚡','🔑','💡','🏆','💰','❤️','💜','🖤','✅','⚠️','🔴','🟡','🟢','💬','📌'] },
+]
+
+const statusBubbleColor = computed(() =>
+  profileStatus.color || (profileStatus.music ? '#c0392b' : '#4C67CF')
+)
+const statusEditBubbleColor = computed(() =>
+  statusEditColor.value || (statusEditMusic.value ? '#c0392b' : '#4C67CF')
+)
+
+const statusDurations = [
+  { label: '30м', value: 1800 },
+  { label: '1ч', value: 3600 },
+  { label: '4ч', value: 14400 },
+  { label: '24ч', value: 86400 },
+  { label: '7д', value: 604800 },
+  { label: '∞', value: 0 },
+]
+
+const statusColors = [
+  { value: '#4C67CF', dot: 'bg-brand-accent' },
+  { value: '#7c3aed', dot: 'bg-[#7c3aed]' },
+  { value: '#ec4899', dot: 'bg-[#ec4899]' },
+  { value: '#f97316', dot: 'bg-[#f97316]' },
+  { value: '#22c55e', dot: 'bg-[#22c55e]' },
+  { value: '#ef4444', dot: 'bg-[#ef4444]' },
+  { value: '#2c2c2e', dot: 'bg-[#2c2c2e] border border-white/20' },
+]
+
+const statusTimeRemaining = computed(() => {
+  if (!profileStatus.expiresAt) return ''
+  const diff = profileStatus.expiresAt - Date.now()
+  if (diff <= 0) return ''
+  const h = Math.floor(diff / 3600000)
+  const m = Math.floor((diff % 3600000) / 60000)
+  if (h >= 24) return `${Math.floor(h / 24)}д`
+  if (h >= 1) return `${h}ч`
+  return `${m}м`
+})
+
+function loadLocalStatus() {
+  try {
+    const raw = localStorage.getItem('profile_status')
+    if (raw) {
+      const d = JSON.parse(raw)
+      if (d.expiresAt && d.expiresAt < Date.now()) {
+        localStorage.removeItem('profile_status')
+        return
+      }
+      profileStatus.emoji = d.emoji ?? ''
+      profileStatus.text = d.text ?? ''
+      profileStatus.expiresAt = d.expiresAt ?? 0
+      profileStatus.color = d.color ?? ''
+      profileStatus.music = d.music ?? null
+    }
+  } catch {}
+}
+function saveLocalStatus() {
+  const expiresAt = statusEditDuration.value > 0 ? Date.now() + statusEditDuration.value * 1000 : 0
+  profileStatus.emoji = statusEditEmoji.value
+  profileStatus.text = statusEditText.value
+  profileStatus.expiresAt = expiresAt
+  profileStatus.color = statusEditColor.value
+  profileStatus.music = statusEditMusic.value
+  localStorage.setItem('profile_status', JSON.stringify({
+    emoji: statusEditEmoji.value,
+    text: statusEditText.value,
+    expiresAt,
+    color: statusEditColor.value,
+    music: statusEditMusic.value,
+  }))
+  showStatusEdit.value = false
+}
+function openStatusEdit() {
+  statusEditEmoji.value = profileStatus.emoji
+  statusEditText.value = profileStatus.text
+  statusEditDuration.value = 86400
+  statusEditColor.value = profileStatus.color || '#4C67CF'
+  statusEditMusic.value = profileStatus.music
+  statusShowMusicSearch.value = !!profileStatus.music
+  statusMusicQuery.value = ''
+  statusMusicResults.value = []
+  showStatusEdit.value = true
+}
+function clearLocalStatus() {
+  profileStatus.emoji = ''; profileStatus.text = ''; profileStatus.expiresAt = 0; profileStatus.color = ''; profileStatus.music = null
+  statusEditEmoji.value = ''; statusEditText.value = ''
+  localStorage.removeItem('profile_status')
+  showStatusEdit.value = false
+}
+function pickStatusColor(hex: string) {
+  statusEditColor.value = hex
+}
+function onStatusMusicSearch() {
+  if (statusMusicTimer) clearTimeout(statusMusicTimer)
+  if (!statusMusicQuery.value.trim()) { statusMusicResults.value = []; statusMusicLoading.value = false; return }
+  statusMusicLoading.value = true
+  statusMusicTimer = setTimeout(async () => {
+    try {
+      const q = encodeURIComponent(statusMusicQuery.value.trim())
+      const res = await fetch(`https://itunes.apple.com/search?term=${q}&media=music&entity=song&limit=6`)
+      const data = await res.json()
+      statusMusicResults.value = data.results ?? []
+    } catch { statusMusicResults.value = [] }
+    finally { statusMusicLoading.value = false }
+  }, 420)
+}
+function selectStatusTrack(track: any) {
+  statusEditMusic.value = {
+    title: track.trackName ?? '',
+    artist: track.artistName ?? '',
+    artworkUrl: (track.artworkUrl100 ?? '').replace('100x100bb', '300x300bb'),
+    previewUrl: track.previewUrl ?? '',
+  }
+  statusMusicQuery.value = ''
+  statusMusicResults.value = []
+}
+
 
 const aboutTab = ref<AboutTab>('about')
 const activeContentTab = ref<ContentTab>('posts')
@@ -2183,6 +2835,77 @@ const showBadgesModal = ref(false)
 const showWalletModal = ref(false)
 const showAvatarViewer = ref(false)
 const showBannerViewer = ref(false)
+
+interface GalleryItem { url: string; created_at: string; id?: string }
+const avatarGallery        = ref<GalleryItem[]>([])
+const avatarGalleryIndex   = ref(0)
+const avatarGalleryLoading = ref(false)
+const avatarGalleryRestoring = ref(false)
+
+async function openAvatarGallery() {
+  if (!viewedProfile.value?.avatar_url) return
+  showAvatarViewer.value = true
+  avatarGalleryIndex.value = 0
+  avatarGalleryLoading.value = true
+
+  const current: GalleryItem = { url: viewedProfile.value.avatar_url, created_at: new Date().toISOString() }
+  avatarGallery.value = [current]
+
+  try {
+    const res = await api.get(`/users/${viewedProfile.value.id}/media-history?type=avatar`)
+    const history: GalleryItem[] = (res.data.data.history ?? []).filter((h: GalleryItem) => h.url !== current.url)
+    avatarGallery.value = [current, ...history]
+  } catch {
+    // show just current on error
+  } finally {
+    avatarGalleryLoading.value = false
+  }
+}
+
+async function restoreGalleryAvatar() {
+  const item = avatarGallery.value[avatarGalleryIndex.value]
+  if (!item?.id) return
+  avatarGalleryRestoring.value = true
+  try {
+    await api.post(`/users/me/avatar-history/${item.id}/restore`)
+    // Reload gallery from scratch after restore
+    if (viewedProfile.value) {
+      const res = await api.get(`/users/${viewedProfile.value.id}`)
+      viewedProfile.value = res.data.data.user
+    }
+    await openAvatarGallery()
+  } catch {
+    // silent
+  } finally {
+    avatarGalleryRestoring.value = false
+  }
+}
+
+async function deleteGalleryAvatar() {
+  const item = avatarGallery.value[avatarGalleryIndex.value]
+  if (!item?.id) return
+  try {
+    await api.delete(`/users/me/avatar-history/${item.id}`)
+    avatarGallery.value.splice(avatarGalleryIndex.value, 1)
+    if (avatarGalleryIndex.value >= avatarGallery.value.length) {
+      avatarGalleryIndex.value = Math.max(0, avatarGallery.value.length - 1)
+    }
+  } catch {
+    // silent
+  }
+}
+
+watch([showAvatarViewer, showBannerViewer], ([av, bv]) => {
+  document.body.style.overflow = (av || bv) ? 'hidden' : ''
+})
+
+function onGalleryKeydown(e: KeyboardEvent) {
+  if (!showAvatarViewer.value) return
+  if (e.key === 'ArrowLeft') avatarGalleryIndex.value = Math.max(0, avatarGalleryIndex.value - 1)
+  else if (e.key === 'ArrowRight') avatarGalleryIndex.value = Math.min(avatarGallery.value.length - 1, avatarGalleryIndex.value + 1)
+  else if (e.key === 'Escape') showAvatarViewer.value = false
+}
+
 const showFursonaRefViewer = ref(false)
 const selectedFursonaRef = ref('')
 const fursonaSubTab = ref<'info' | 'personality' | 'features'>('personality')
@@ -2229,8 +2952,8 @@ const fursonaOtherCount = computed(() => Math.max(0, fursonaRefImages.value.leng
 
 const fursonaViewTabs = computed(() => [
   { key: 'personality' as const, label: 'Личность', count: ((profileFursona.value?.likes?.length ?? 0) + (profileFursona.value?.dislikes?.length ?? 0)) },
-  { key: 'info' as const,        label: 'Информация' },
-  { key: 'features' as const,    label: 'Особенности', count: profileFursona.value?.colors?.length ?? 0 },
+  { key: 'info' as const,        label: langStore.t.informationLabel },
+  { key: 'features' as const,    label: langStore.t.colorPaletteLabel, count: profileFursona.value?.colors?.length ?? 0 },
 ])
 
 const fursonaRefPalette = computed(() => {
@@ -2360,7 +3083,15 @@ async function onFursonaRefUpload(e: Event) {
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const isOwnProfile = computed(() => !!authStore.user && authStore.user.id === viewedProfile.value?.id)
-const groupsCount = computed(() => 0)
+const userGroupsCount = ref(0)
+const groupsCount = computed(() => userGroupsCount.value)
+
+async function loadUserGroupsCount(userId: string) {
+  try {
+    const res = await api.get(`/groups/user/${userId}`)
+    userGroupsCount.value = Array.isArray(res.data) ? res.data.length : 0
+  } catch { userGroupsCount.value = 0 }
+}
 
 const profileDisplayName = computed(() => {
   return viewedProfile.value?.display_name || viewedProfile.value?.username || ''
@@ -2525,11 +3256,9 @@ const contentTabs = computed(() => {
     { key: 'posts',     label: langStore.t.postsTab,     icon: FileText },
     { key: 'repaws',    label: langStore.t.repawsTab,    icon: Repeat2 },
     { key: 'media',     label: langStore.t.mediaTab,     icon: Image },
-    { key: 'followers', label: 'Подписчики',             icon: Users },
-    { key: 'following', label: 'Подписки',               icon: UserPlus },
   ]
   if (!isOwnProfile.value && authStore.isAuthenticated) {
-    tabs.push({ key: 'mutual_groups', label: 'Общие группы', icon: UsersRound })
+    tabs.push({ key: 'mutual_groups', label: langStore.t.feedGeneral, icon: UsersRound })
   }
   return tabs
 })
@@ -2538,9 +3267,9 @@ const profileStats = computed(() => {
   const p = viewedProfile.value
   if (!p) return []
   return [
-    { key: 'followers', value: followers.value.length,   label: 'Подписчики', tab: null },
-    { key: 'groups',    value: groupsCount.value,         label: 'Группы', tab: null },
-    { key: 'followers', value: p._count?.followers ?? 0, label: 'Лайков', tab: null },
+    { key: 'followers', value: followers.value.length,   label: langStore.t.followersTab, tab: null },
+    { key: 'groups',    value: groupsCount.value,         label: langStore.t.groups, tab: null },
+    { key: 'likes',     value: p._count?.followers ?? 0, label: langStore.t.favourited, tab: null },
   ]
 })
 
@@ -2765,6 +3494,8 @@ async function loadProfile() {
       loadMediaLabels(userId)
       await Promise.all([
         loadFriends(userId),
+        loadFollowingList(userId),
+        loadUserGroupsCount(userId),
         authStore.isAuthenticated && !isOwnProfile.value ? loadRelation(userId) : Promise.resolve(),
         fetchOnlineStatus(userId),
         (result as any).relationship_with ? loadPartnerProfile((result as any).relationship_with) : Promise.resolve(),
@@ -2774,6 +3505,8 @@ async function loadProfile() {
         loadProfileFursuits(userId),
       ])
       if (result.pinnedPost) pinnedPost.value = result.pinnedPost
+      profileStatus.emoji = ''; profileStatus.text = ''; profileStatus.expiresAt = 0; profileStatus.color = ''; profileStatus.music = null
+      if (isOwnProfile.value) { loadLocalStatus() }
       await loadTabData('posts')
     }
   } catch {
@@ -2788,6 +3521,16 @@ async function loadFriends(userId: string) {
     const res = await api.get(`/follows/${userId}/followers`)
     if (res.data.success) followers.value = res.data.data.users
   } catch {}
+}
+
+async function loadFollowingList(userId: string) {
+  followingLoading.value = true
+  try {
+    const res = await api.get(`/follows/${userId}/following`)
+    if (res.data.success) following.value = res.data.data.users
+  } catch {} finally {
+    followingLoading.value = false
+  }
 }
 
 async function loadPartnerProfile(partnerId: string) {
@@ -2971,9 +3714,12 @@ function onPostUpdated(post: any) {
 onMounted(() => {
   loadProfile()
   window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keydown', onGalleryKeydown)
 })
 onUnmounted(() => {
+  document.body.style.overflow = ''
   window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keydown', onGalleryKeydown)
 })
 watch(() => route.params.username, () => { aboutTab.value = 'about'; activeContentTab.value = 'posts'; loadProfile() })
 // stories are loaded inside loadProfile via fetchProfileStories
@@ -2981,6 +3727,13 @@ watch(() => route.params.username, () => { aboutTab.value = 'about'; activeConte
 </script>
 
 <style scoped>
+.note-bar-profile {
+  animation: noteBarProfile 0.6s ease-in-out infinite;
+}
+@keyframes noteBarProfile {
+  0%, 100% { transform: scaleY(0.35) }
+  50%       { transform: scaleY(1) }
+}
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease, transform 0.2s ease }
 .fade-enter-from, .fade-leave-to { opacity: 0; transform: translateY(-4px) }
 
@@ -3003,4 +3756,9 @@ watch(() => route.params.username, () => { aboutTab.value = 'about'; activeConte
   background: conic-gradient(#4C67CF, #a855f7, #ec4899, #f97316, #4C67CF);
   animation: story-ring-spin 3s linear infinite;
 }
+
+
+.slide-down-enter-active, .slide-down-leave-active { transition: all 0.25s ease; overflow: hidden; }
+.slide-down-enter-from, .slide-down-leave-to { opacity: 0; max-height: 0; }
+.slide-down-enter-to, .slide-down-leave-from { opacity: 1; max-height: 300px; }
 </style>
