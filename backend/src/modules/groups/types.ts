@@ -47,6 +47,8 @@ export interface UpdateGroupInput {
   groupTheme?: string;
   hideAdmins?: boolean;
   hiddenMemberIds?: string[];
+  donationsEnabled?: boolean;
+  bankCardMasked?: string | null;
 }
 
 export interface CreateEventInput {
@@ -117,10 +119,14 @@ export interface RateGroupInput {
 
 export interface CreateGroupPostInput {
   content: string;
+  title?: string;
+  postType?: string;
   isNsfw?: boolean;
   isAnnouncement?: boolean;
   mediaUrls?: string[];
   tags?: string[];
+  visibility?: string;
+  category?: string;
 }
 
 export type RsvpStatus = 'going' | 'maybe' | 'not_going';

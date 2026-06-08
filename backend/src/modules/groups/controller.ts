@@ -476,6 +476,20 @@ export const createGroupPostHandler = async (
     return fail(reply, 400, 'CREATE_GROUP_POST_ERROR', e.message);
   }
 };
+// ── Creative Kanban ───────────────────────────────────────────────────────────
+
+export const getKanbanHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const columns = await groupService.getKanban(request.params.id);
+    return ok(reply, { columns });
+  } catch (e: any) {
+    return fail(reply, 500, 'KANBAN_ERROR', e.message);
+  }
+};
+
 // ── RSVP ─────────────────────────────────────────────────────────────────────────
 
 export const rsvpEventHandler = async (

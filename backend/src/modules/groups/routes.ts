@@ -51,6 +51,7 @@ import {
   deleteCustomRoleHandler,
   getUserPublicGroupsHandler,
   getCommonGroupsHandler,
+  getKanbanHandler,
 } from './controller.js';
 import { groupService } from './service.js';
 
@@ -95,6 +96,9 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   // ── Group posts ──────────────────────────────────────────────────────────
   fastify.get('/:id/posts', getGroupPostsHandler as any);
   fastify.post('/:id/posts', auth, createGroupPostHandler as any);
+
+  // ── Creative Kanban ────────────────────────────────────────────────────
+  fastify.get('/:id/kanban', getKanbanHandler as any);
 
   // ── Group rating ────────────────────────────────────────────────────────
   fastify.post('/:id/rate', auth, rateGroupHandler as any);

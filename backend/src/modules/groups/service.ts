@@ -50,6 +50,8 @@ const GROUP_SELECT = {
   group_theme: true,
   hide_admins: true,
   hidden_member_ids: true,
+  donations_enabled: true,
+  bank_card_masked: true,
   _count: { select: { members: true, events: true, posts: { where: { post: { deleted_at: null } } } } },
   owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
   communityChat: { select: { id: true } },
@@ -231,6 +233,8 @@ export const groupService = {
     if (input.groupTheme !== undefined) data.group_theme = input.groupTheme || null;
     if (input.hideAdmins !== undefined) data.hide_admins = input.hideAdmins;
     if (input.hiddenMemberIds !== undefined) data.hidden_member_ids = JSON.stringify(input.hiddenMemberIds);
+    if (input.donationsEnabled !== undefined) data.donations_enabled = input.donationsEnabled;
+    if (input.bankCardMasked !== undefined) data.bank_card_masked = input.bankCardMasked || null;
 
     return prisma.group.update({ where: { id: groupId }, data, select: GROUP_SELECT });
   },
@@ -619,6 +623,35 @@ export const groupService = {
     });
   },
 
+  // ── Creative Kanban ───────────────────────────────────────────────────────
+  async getKanban(groupId: string) {
+    const STAGES = ['скетч', 'линии', 'цвет', 'готово'] as const;
+
+    const pivots = await prisma.groupPost.findMany({
+      where: {
+        group_id: groupId,
+        post: { deleted_at: null, post_type: 'commission_update' },
+      },
+      include: {
+        post: {
+          include: {
+            author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+            _count: { select: { votes: true, comments: true } },
+          },
+        },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    const columns: Record<string, any[]> = { скетч: [], линии: [], цвет: [], готово: [], unstaged: [] };
+    for (const gp of pivots) {
+      const stage = (gp.post.category || '').toLowerCase();
+      if ((STAGES as readonly string[]).includes(stage)) columns[stage].push(gp.post);
+      else columns.unstaged.push(gp.post);
+    }
+    return columns;
+  },
+
   // ── My groups ─────────────────────────────────────────────────────────────
   async getUserGroups(userId: string) {
     return prisma.groupMember.findMany({
@@ -717,7 +750,7 @@ export const groupService = {
   },
 
   // ── Create post in group ──────────────────────────────────────────────────
-  async createGroupPost(groupId: string, userId: string, input: { content: string; isNsfw?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; tags?: string[] }) {
+  async createGroupPost(groupId: string, userId: string, input: { content: string; title?: string; postType?: string; isNsfw?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; tags?: string[]; visibility?: string; category?: string }) {
     // Check user is admin/owner
     const member = await prisma.groupMember.findUnique({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
@@ -746,6 +779,11 @@ export const groupService = {
           is_nsfw: input.isNsfw ?? false,
           is_announcement: input.isAnnouncement ?? false,
           media_urls: mediaUrls,
+          title: input.title?.trim() || null,
+          post_type: input.postType || 'general',
+          category: input.category || null,
+          subscriber_only: input.visibility === 'subscriber_only',
+          is_paid: input.visibility === 'paid',
         },
       });
 

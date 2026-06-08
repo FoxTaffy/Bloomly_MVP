@@ -417,9 +417,14 @@ export const useGroupsStore = defineStore('groups', () => {
     return data.data.posts
   }
 
-  async function createGroupPost(groupId: string, input: { content: string; isNsfw?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; tags?: string[] }) {
+  async function createGroupPost(groupId: string, input: { content: string; title?: string; postType?: string; isNsfw?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; tags?: string[]; visibility?: string; category?: string }) {
     const { data } = await api.post(`/groups/${groupId}/posts`, input)
     return data.data.post
+  }
+
+  async function loadKanban(groupId: string) {
+    const { data } = await api.get(`/groups/${groupId}/kanban`)
+    return data.data.columns as Record<string, any[]>
   }
 
   // ── Ticket Tiers ──────────────────────────────────────────────────────────
@@ -578,7 +583,7 @@ export const useGroupsStore = defineStore('groups', () => {
     toggleSoonBadge, toggleSoonBadgeVisibility, loadMySoonBadges,
     updateCommission,
     rateGroup, getMyRating,
-    loadGroupPosts, createGroupPost,
+    loadGroupPosts, createGroupPost, loadKanban,
     createTicketTier, updateTicketTier, deleteTicketTier,
     rsvpEvent, cancelRsvp, getEventAttendees, getMyRsvp,
     discoverGroups,

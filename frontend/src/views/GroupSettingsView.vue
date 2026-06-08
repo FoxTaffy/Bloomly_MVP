@@ -64,6 +64,7 @@ const shopSections = [
 ]
 
 const tailSections = [
+  { id: 'sec-donations',  label: 'Монетизация',   color: '#10b981', iconPath: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
   { id: 'sec-members',    label: 'Команда',       color: '#a78bfa', iconPath: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
   { id: 'sec-roles',      label: 'Роли',          color: '#f59e0b', iconPath: 'M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z', hidden: true },
   { id: 'sec-social',     label: 'Ссылки',        color: '#38bdf8', iconPath: 'M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z' },
@@ -475,6 +476,8 @@ const form = reactive({
   groupBgUrl: '',
   groupFrame: '',
   groupTheme: '',
+  donationsEnabled: false,
+  bankCardMasked: '',
 })
 
 // Slug: авто-санитизация ввода
@@ -508,6 +511,8 @@ const savedForm = reactive({
   groupBgUrl: '',
   groupFrame: '',
   groupTheme: '',
+  donationsEnabled: false,
+  bankCardMasked: '',
 })
 
 function snapshotToSaved() {
@@ -528,6 +533,8 @@ function snapshotToSaved() {
     groupBgUrl: form.groupBgUrl,
     groupFrame: form.groupFrame,
     groupTheme: form.groupTheme,
+    donationsEnabled: form.donationsEnabled,
+    bankCardMasked: form.bankCardMasked,
   })
 }
 
@@ -549,6 +556,8 @@ function resetForm() {
     groupBgUrl: savedForm.groupBgUrl,
     groupFrame: savedForm.groupFrame,
     groupTheme: savedForm.groupTheme,
+    donationsEnabled: savedForm.donationsEnabled,
+    bankCardMasked: savedForm.bankCardMasked,
   })
   avatarOriginalSrc.value = ''
   bannerOriginalSrc.value = ''
@@ -571,7 +580,9 @@ const isDirty = computed(() => {
     JSON.stringify(form.hiddenMemberIds) !== JSON.stringify(savedForm.hiddenMemberIds) ||
     JSON.stringify(form.faq) !== JSON.stringify(savedForm.faq) ||
     JSON.stringify(form.schedule) !== JSON.stringify(savedForm.schedule) ||
-    JSON.stringify(form.whatToBring) !== JSON.stringify(savedForm.whatToBring)
+    JSON.stringify(form.whatToBring) !== JSON.stringify(savedForm.whatToBring) ||
+    form.donationsEnabled !== savedForm.donationsEnabled ||
+    form.bankCardMasked !== savedForm.bankCardMasked
   )
 })
 
@@ -587,6 +598,33 @@ const commForm = ref({
   basePrices: {} as Record<string, number>,
   priceList: [] as { name: string; price: number; description: string }[],
 })
+
+// ── Donations card linking ────────────────────────────────────────────────────
+const cardInputRaw = ref('')
+const cardExpInput = ref('')
+const showCardForm = ref(false)
+
+function formatSettingsCard(e: Event) {
+  const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 16)
+  cardInputRaw.value = raw.replace(/(.{4})/g, '$1 ').trim()
+}
+function formatSettingsExp(e: Event) {
+  const raw = (e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 4)
+  cardExpInput.value = raw.length > 2 ? raw.slice(0, 2) + '/' + raw.slice(2) : raw
+}
+function linkCard() {
+  const digits = cardInputRaw.value.replace(/\s/g, '')
+  if (digits.length !== 16 || cardExpInput.value.length !== 5) return
+  const last4 = digits.slice(-4)
+  form.bankCardMasked = `**** **** **** ${last4}`
+  cardInputRaw.value = ''
+  cardExpInput.value = ''
+  showCardForm.value = false
+}
+function unlinkCard() {
+  form.bankCardMasked = ''
+  form.donationsEnabled = false
+}
 
 // ── Ticket Tiers ─────────────────────────────────────────────────────────────
 const ticketSaving = ref(false)
@@ -977,6 +1015,8 @@ async function load() {
   form.groupTheme = g.group_theme || ''
   form.hideAdmins = g.hide_admins ?? false
   form.hiddenMemberIds = JSON.parse(g.hidden_member_ids || '[]')
+  form.donationsEnabled = (g as any).donations_enabled ?? false
+  form.bankCardMasked = (g as any).bank_card_masked || ''
   if (g.commissionInfo) {
     const c = g.commissionInfo
     commForm.value.status = c.status || 'closed'
@@ -1071,6 +1111,8 @@ async function save() {
       groupTheme: form.groupTheme || undefined,
       hideAdmins: form.hideAdmins,
       hiddenMemberIds: form.hiddenMemberIds,
+      donationsEnabled: form.donationsEnabled,
+      bankCardMasked: form.bankCardMasked || null,
     })
     if (group.value.type === 'creative') {
       await groupsStore.updateCommission(group.value.id, {
@@ -2456,6 +2498,157 @@ async function deleteGroup() {
                         </div>
                       </div>
                     </div>
+                  </div>
+                </section>
+
+                <!-- ═══ § МОНЕТИЗАЦИЯ / ДОНАТЫ ════════════════════════ -->
+                <section v-show="openSection === 'sec-donations'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl scroll-mt-28 overflow-hidden">
+                  <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
+                    style="background:linear-gradient(90deg,#10b98112 0%,transparent 100%)">
+                    <div class="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+                      <BIcon name="Heart" class="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <div>
+                      <h2 class="font-bold text-white text-sm">Монетизация</h2>
+                      <p class="text-white/40 text-xs">Принимайте пожертвования от подписчиков</p>
+                    </div>
+                  </div>
+
+                  <div class="p-6 space-y-6">
+
+                    <!-- Card linking -->
+                    <div class="space-y-3">
+                      <div class="flex items-center gap-2">
+                        <BIcon name="CreditCard" class="w-4 h-4 text-white/40" />
+                        <p class="text-sm font-bold text-white">Карта для получения</p>
+                      </div>
+
+                      <!-- Card linked -->
+                      <template v-if="form.bankCardMasked && !showCardForm">
+                        <div class="flex items-center gap-4 px-4 py-3.5 bg-emerald-500/8 border border-emerald-500/20 rounded-2xl">
+                          <div class="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+                            <BIcon name="CreditCard" class="w-5 h-5 text-emerald-400" />
+                          </div>
+                          <div class="flex-1 min-w-0">
+                            <p class="text-xs text-white/40 uppercase tracking-wide font-bold mb-0.5">Привязана карта</p>
+                            <p class="text-sm font-bold text-white font-mono tracking-widest">{{ form.bankCardMasked }}</p>
+                          </div>
+                          <div class="flex gap-2 flex-shrink-0">
+                            <button @click="showCardForm = true"
+                              class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 hover:bg-white/10 text-white/55 hover:text-white transition-all border border-white/8">
+                              Заменить
+                            </button>
+                            <button @click="unlinkCard()"
+                              class="px-3 py-1.5 rounded-xl text-xs font-bold bg-brand-error/10 hover:bg-brand-error/20 text-brand-error transition-all border border-brand-error/20">
+                              Удалить
+                            </button>
+                          </div>
+                        </div>
+                      </template>
+
+                      <!-- No card / card form -->
+                      <template v-else>
+                        <div v-if="!form.bankCardMasked && !showCardForm"
+                          class="px-4 py-4 bg-brand-bg border border-dashed border-white/10 rounded-2xl text-center space-y-3">
+                          <BIcon name="CreditCard" class="w-8 h-8 mx-auto text-white/20" />
+                          <p class="text-sm text-white/40">Карта не привязана</p>
+                          <p class="text-xs text-white/25">Привяжите карту, чтобы включить донаты</p>
+                          <button @click="showCardForm = true"
+                            class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/25 transition-all">
+                            <BIcon name="Plus" class="w-4 h-4" /> Привязать карту
+                          </button>
+                        </div>
+
+                        <!-- Card input form -->
+                        <div v-if="showCardForm" class="space-y-3 bg-brand-bg border border-brand-border rounded-2xl p-4">
+                          <p class="text-xs font-bold text-white/40 uppercase tracking-wider">Реквизиты карты</p>
+                          <input
+                            type="text"
+                            inputmode="numeric"
+                            placeholder="0000 0000 0000 0000"
+                            :value="cardInputRaw"
+                            @input="formatSettingsCard"
+                            maxlength="19"
+                            class="w-full bg-brand-bg/0 border border-brand-border focus:border-emerald-500/40 rounded-xl px-4 py-3 text-white text-sm font-mono placeholder-white/20 outline-none transition-all" />
+                          <div class="grid grid-cols-2 gap-3">
+                            <input
+                              type="text"
+                              inputmode="numeric"
+                              placeholder="ММ/ГГ"
+                              :value="cardExpInput"
+                              @input="formatSettingsExp"
+                              maxlength="5"
+                              class="w-full bg-brand-bg/0 border border-brand-border focus:border-emerald-500/40 rounded-xl px-4 py-3 text-white text-sm font-mono placeholder-white/20 outline-none transition-all" />
+                            <div class="flex items-center justify-center text-xs text-white/25 bg-brand-bg border border-brand-border rounded-xl px-3">
+                              CVV не нужен
+                            </div>
+                          </div>
+                          <div class="flex gap-2 pt-1">
+                            <button @click="linkCard()"
+                              :disabled="cardInputRaw.replace(/\s/g,'').length !== 16 || cardExpInput.length !== 5"
+                              class="flex-1 py-2.5 rounded-xl text-sm font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/25 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                              Привязать
+                            </button>
+                            <button @click="showCardForm = false; cardInputRaw = ''; cardExpInput = ''"
+                              class="px-4 py-2.5 rounded-xl text-sm text-white/40 hover:text-white border border-brand-border hover:border-white/20 transition-all">
+                              Отмена
+                            </button>
+                          </div>
+                          <p class="text-[10px] text-white/20">Только номер и срок — для идентификации получателя. CVV не хранится.</p>
+                        </div>
+                      </template>
+                    </div>
+
+                    <!-- Donations toggle -->
+                    <div class="space-y-2">
+                      <div class="flex items-center gap-2">
+                        <BIcon name="Zap" class="w-4 h-4 text-white/40" />
+                        <p class="text-sm font-bold text-white">Включить донаты</p>
+                      </div>
+                      <div class="flex items-center justify-between px-4 py-3.5 bg-brand-bg border rounded-2xl transition-all"
+                        :class="form.bankCardMasked ? 'border-brand-border' : 'border-dashed border-white/8'">
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-semibold" :class="form.bankCardMasked ? 'text-white' : 'text-white/30'">
+                            {{ form.donationsEnabled ? 'Кнопка «Поддержать» видна всем' : 'Донаты отключены' }}
+                          </p>
+                          <p class="text-xs mt-0.5" :class="form.bankCardMasked ? 'text-white/40' : 'text-white/20'">
+                            {{ form.bankCardMasked ? 'Bloomly берёт 5% с каждой транзакции' : 'Сначала привяжите карту' }}
+                          </p>
+                        </div>
+                        <button
+                          :disabled="!form.bankCardMasked"
+                          @click="form.bankCardMasked && (form.donationsEnabled = !form.donationsEnabled)"
+                          class="relative w-12 h-6 rounded-full transition-all flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                          :style="form.donationsEnabled ? 'background: #10b981' : 'background: rgba(255,255,255,0.08)'">
+                          <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all"
+                            :class="form.donationsEnabled ? 'left-[calc(100%-1.375rem)]' : 'left-0.5'" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Info block -->
+                    <div v-if="form.donationsEnabled" class="bg-emerald-500/8 border border-emerald-500/15 rounded-2xl px-4 py-3.5 space-y-2">
+                      <div class="flex items-center gap-2">
+                        <BIcon name="Info" class="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                        <p class="text-xs font-bold text-emerald-400">Донаты активны</p>
+                      </div>
+                      <ul class="space-y-1 text-[11px] text-white/40">
+                        <li class="flex gap-1.5"><span class="text-emerald-500 mt-0.5 flex-shrink-0">✓</span> Кнопка «Поддержать» появляется в шапке группы</li>
+                        <li class="flex gap-1.5"><span class="text-emerald-500 mt-0.5 flex-shrink-0">✓</span> Посетители видят донат-модал с выбором суммы</li>
+                        <li class="flex gap-1.5"><span class="text-emerald-500 mt-0.5 flex-shrink-0">✓</span> Деньги поступают на привязанную карту</li>
+                        <li class="flex gap-1.5"><span class="text-white/25 mt-0.5 flex-shrink-0">•</span> Bloomly берёт комиссию 5% за обработку платежа</li>
+                      </ul>
+                    </div>
+
+                    <div class="pt-2">
+                      <button @click="handleSave" :disabled="saving || !isDirty"
+                        class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                        <BIcon v-if="saving" name="Loader2" class="w-4 h-4 animate-spin" />
+                        <BIcon v-else name="Check" class="w-4 h-4" />
+                        {{ saving ? 'Сохраняем…' : 'Сохранить настройки' }}
+                      </button>
+                    </div>
+
                   </div>
                 </section>
 

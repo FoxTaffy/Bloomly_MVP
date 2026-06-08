@@ -13,6 +13,31 @@
       <BIcon name="Megaphone" class="w-3.5 h-3.5 text-brand-yellow flex-shrink-0" />
       <span class="text-[11px] font-bold uppercase tracking-wide text-brand-yellow">Анонс</span>
     </div>
+    <!-- Post type badge (artwork / article / commission_update) -->
+    <div v-else-if="post.post_type && post.post_type !== 'general' && post.post_type !== 'announcement'"
+      class="flex items-center gap-2 px-5 py-2 border-b border-brand-border/60"
+      :class="{
+        'bg-rose-500/6': post.post_type === 'artwork',
+        'bg-blue-500/6': post.post_type === 'article',
+        'bg-violet-500/6': post.post_type === 'commission_update',
+      }">
+      <BIcon
+        :name="post.post_type === 'artwork' ? 'Palette' : post.post_type === 'article' ? 'Newspaper' : 'Scissors'"
+        class="w-3.5 h-3.5 flex-shrink-0"
+        :class="{
+          'text-rose-400': post.post_type === 'artwork',
+          'text-blue-400': post.post_type === 'article',
+          'text-violet-400': post.post_type === 'commission_update',
+        }" />
+      <span class="text-[11px] font-bold uppercase tracking-wide"
+        :class="{
+          'text-rose-400': post.post_type === 'artwork',
+          'text-blue-400': post.post_type === 'article',
+          'text-violet-400': post.post_type === 'commission_update',
+        }">
+        {{ post.post_type === 'artwork' ? 'Новая работа' : post.post_type === 'article' ? 'Статья' : 'Обновление заказа' }}
+      </span>
+    </div>
     <div class="p-5 md:p-6">
 
       <!-- ── Header ────────────────────────────────────────────────────── -->
@@ -192,6 +217,9 @@
 
       <!-- ── Content ───────────────────────────────────────────────────── -->
       <div class="space-y-3">
+
+        <!-- Article title (news/article post_type) -->
+        <h3 v-if="post.title" class="text-white font-extrabold text-lg leading-tight">{{ post.title }}</h3>
 
         <!-- Inline edit form -->
         <div v-if="isEditing" class="mb-1">

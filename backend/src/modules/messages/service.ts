@@ -51,6 +51,13 @@ export const messageService = {
       })
     }
 
+    const target = await prisma.user.findUnique({
+      where: { id: userB },
+      select: { allow_messages: true },
+    });
+    if (!target) throw Object.assign(new Error('User not found'), { statusCode: 404 });
+    if (!target.allow_messages) throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
+
     // Find an existing 1-to-1 (non-group) conversation where BOTH users participate
     const existing = await prisma.conversation.findFirst({
       where: {
@@ -194,6 +201,23 @@ export const messageService = {
    */
   async sendMessage({ conversationId, senderId, content, file_url, media_type, reply_to_id }: SendMessageInput) {
     await this._assertParticipant(conversationId, senderId);
+
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { type: true, participants: { select: { user_id: true } } },
+    });
+    if (conv?.type === 'direct') {
+      const recipientId = conv.participants.find((p: any) => p.user_id !== senderId)?.user_id;
+      if (recipientId) {
+        const recipient = await prisma.user.findUnique({
+          where: { id: recipientId },
+          select: { allow_messages: true },
+        });
+        if (recipient && !recipient.allow_messages) {
+          throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
+        }
+      }
+    }
 
     const text = content?.trim() ?? '';
     if (!text && !file_url) throw new Error('Message must have text or media');

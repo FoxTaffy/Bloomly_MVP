@@ -171,6 +171,8 @@ model Post {
   updated_at          DateTime       @updatedAt
   deleted_at          DateTime?
   category            String?
+  title               String?        @db.VarChar(200)
+  post_type           String         @default("general") @db.VarChar(30)
   media_urls          String[]       @default([])
   comments            Comment[]
   favourites          Favourite[]
@@ -560,6 +562,10 @@ model Group {
   group_theme       String?         @db.VarChar(100)
   hide_admins       Boolean         @default(false)
   hidden_member_ids String          @default("[]")
+
+  // Donations
+  donations_enabled Boolean         @default(false)
+  bank_card_masked  String?         @db.VarChar(25)   // e.g. "**** **** **** 4242"
 
   // Moderation / discovery
   is_verified       Boolean         @default(false)   // Official / verified community

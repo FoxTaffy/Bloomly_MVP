@@ -16,12 +16,14 @@ const EventCard = defineAsyncComponent(() => import('@/components/groups/EventCa
 const TicketCard = defineAsyncComponent(() => import('@/components/groups/TicketCard.vue'))
 const AchievementBadge = defineAsyncComponent(() => import('@/components/groups/AchievementBadge.vue'))
 const TodoQueue = defineAsyncComponent(() => import('@/components/groups/TodoQueue.vue'))
+const GroupKanban = defineAsyncComponent(() => import('@/components/groups/GroupKanban.vue'))
 import { useGroupsStore } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useMessagesStore } from '@/stores/messages'
 import api from '@/api'
+const DonateModal = defineAsyncComponent(() => import('@/components/groups/DonateModal.vue'))
 
 const route = useRoute()
 const router = useRouter()
@@ -30,6 +32,7 @@ const authStore = useAuthStore()
 const messagesStore = useMessagesStore()
 
 const nsfwMode = useNsfwMode().nsfwEnabled
+const showDonateModal = ref(false)
 
 // Преобразует \n в HTML-параграфы (в защищённом виде)
 function parseAboutText(text: string): string {
@@ -136,6 +139,7 @@ const groupPosts = ref<any[]>([])
 const isLoadingPosts = ref(false)
 const showPostForm = ref(false)
 const newPostContent = ref('')
+const newPostTitle = ref('')
 const newPostIsNsfw = ref(false)
 const newPostIsAnnouncement = ref(false)
 const newPostMediaUrls = ref<string[]>([])
@@ -146,6 +150,19 @@ const newPostVisibility = ref('public')
 const showGroupVisibilityMenu = ref(false)
 const isCreatingPost = ref(false)
 const groupMediaUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
+
+// Archetype-aware composer config
+const archetypeComposer = computed(() => {
+  const t = group.value?.type
+  if (t === 'news') return { postType: 'article', showTitle: true, placeholder: 'Текст статьи…', label: 'Новая статья', icon: 'Newspaper' }
+  if (t === 'artist') return { postType: 'artwork', showTitle: false, placeholder: 'Расскажи о новой работе…', label: 'Новая работа', icon: 'Palette' }
+  if (t === 'creative') return { postType: 'commission_update', showTitle: false, placeholder: 'Обновление по заказу или WIP…', label: 'Обновление', icon: 'Scissors' }
+  if (t === 'event') return { postType: 'announcement', showTitle: false, placeholder: 'Объявление для участников…', label: 'Объявление', icon: 'Megaphone' }
+  return { postType: 'general', showTitle: false, placeholder: 'Что нового в группе…', label: 'Пост', icon: 'PenLine' }
+})
+
+const creativePostStatuses = ['Скетч', 'Линии', 'Цвет', 'Готово']
+const selectedCreativeStatus = ref('')
 
 const groupPostCategories = [
   { id: '', name: 'Категория' },
@@ -177,17 +194,26 @@ async function createGroupPost() {
   if (!group.value || !newPostContent.value.trim() || isCreatingPost.value) return
   isCreatingPost.value = true
   try {
+    const cfg = archetypeComposer.value
+    const isAnnouncement = cfg.postType === 'announcement' ? true : newPostIsAnnouncement.value
+    // For creative groups: stage chip goes into category for kanban grouping
+    const category = selectedCreativeStatus.value
+      ? selectedCreativeStatus.value.toLowerCase()
+      : (newPostCategory.value || undefined)
     const post = await groupsStore.createGroupPost(group.value.id, {
       content: newPostContent.value.trim(),
+      title: newPostTitle.value.trim() || undefined,
+      postType: cfg.postType,
       isNsfw: newPostIsNsfw.value,
-      isAnnouncement: newPostIsAnnouncement.value,
+      isAnnouncement,
       mediaUrls: newPostMediaUrls.value,
       tags: newPostTags.value,
-      category: newPostCategory.value || undefined,
+      category,
       visibility: newPostVisibility.value,
     })
     if (post) groupPosts.value.unshift(post)
     newPostContent.value = ''
+    newPostTitle.value = ''
     newPostMediaUrls.value = []
     newPostIsNsfw.value = false
     newPostIsAnnouncement.value = false
@@ -195,6 +221,7 @@ async function createGroupPost() {
     newPostTagInput.value = ''
     newPostCategory.value = ''
     newPostVisibility.value = 'public'
+    selectedCreativeStatus.value = ''
     groupMediaUploadRef.value?.clearAll()
     showPostForm.value = false
     if (group.value._count) group.value._count.posts++
@@ -295,20 +322,39 @@ async function submitReview() {
 }
 
 // ── About tab (inside the About tabs card) ──────────────────────────────
-const aboutTab = ref<'about' | 'rules' | 'faq' | 'nearest' | 'orders' | 'schedule'>('about')
+const aboutTab = ref<'about' | 'rules' | 'faq' | 'nearest' | 'orders' | 'schedule' | 'prices' | 'queue' | 'reviews' | 'digest' | 'categories' | 'team' | 'market' | 'sponsors' | 'contacts'>('about')
 
 const aboutNavs = computed(() => {
   const navs: { key: string; label: string; icon: string }[] = []
-  if (group.value?.type === 'event') {
-    navs.push({ key: 'about', label: 'О Мероприятии', icon: 'Info' })
-    if (group.value?.events?.length > 1) navs.push({ key: 'nearest', label: 'Ближайшее', icon: 'CalendarCheck' })
+  const t = group.value?.type
+
+  if (t === 'event') {
+    navs.push({ key: 'about', label: 'О мероприятии', icon: 'Info' })
     const sched = (activeEvent.value?.schedule || (group.value as any)?.schedule) as any[]
-    if (sched?.length) navs.push({ key: 'schedule', label: 'Расписание', icon: 'Clock' })
+    if (sched?.length) navs.push({ key: 'schedule', label: 'Программа', icon: 'Clock' })
+    navs.push({ key: 'sponsors', label: 'Спонсоры', icon: 'Star' })
+    navs.push({ key: 'contacts', label: 'Контакты', icon: 'MapPin' })
+    if (group.value?.events?.length > 1) navs.push({ key: 'nearest', label: 'Ближайшее', icon: 'CalendarCheck' })
+  } else if (t === 'artist') {
+    navs.push({ key: 'about', label: 'О художнике', icon: 'Info' })
+    navs.push({ key: 'prices', label: 'Прайс', icon: 'Tag' })
+    navs.push({ key: 'queue', label: 'Очередь', icon: 'ClipboardList' })
+    navs.push({ key: 'reviews', label: 'Отзывы', icon: 'Star' })
+  } else if (t === 'news') {
+    navs.push({ key: 'about', label: 'О редакции', icon: 'Info' })
+    navs.push({ key: 'digest', label: 'Дайджест', icon: 'Newspaper' })
+    navs.push({ key: 'categories', label: 'Рубрики', icon: 'FolderOpen' })
+    navs.push({ key: 'team', label: 'Команда', icon: 'Users' })
+  } else if (t === 'creative') {
+    navs.push({ key: 'about', label: 'О студии', icon: 'Info' })
+    if ((group.value as any)?.commissionInfo)
+      navs.push({ key: 'orders', label: 'Заказы', icon: 'ClipboardList' })
+    navs.push({ key: 'prices', label: 'Цены', icon: 'Tag' })
+    navs.push({ key: 'market', label: 'Маркет', icon: 'ShoppingBag' })
   } else {
     navs.push({ key: 'about', label: 'О группе', icon: 'Info' })
   }
-  if (group.value?.type === 'creative' && group.value?.commissionInfo)
-    navs.push({ key: 'orders', label: 'Статус заказов', icon: 'ClipboardList' })
+
   if (group.value?.rules_text) navs.push({ key: 'rules', label: 'Правила', icon: 'Shield' })
   if ((group.value?.faq as any[])?.length) navs.push({ key: 'faq', label: 'FAQ', icon: 'HelpCircle' })
   return navs
@@ -337,17 +383,18 @@ const socialIconMap: Record<string, string> = {
 }
 
 const typeLabels: Record<string, string> = {
-  event: 'Ивент', creative: 'Фурсьют-мастерская', static: 'Паблик',
-  news: 'Канал', shop: 'Магазин', community: 'Сообщество', brand: 'Бренд',
+  event: 'Афиша', creative: 'Мастерская', artist: 'Художник', static: 'Паблик',
+  news: 'Новости', shop: 'Магазин', community: 'Сообщество', brand: 'Бренд',
 }
 const typeColors: Record<string, string> = {
   event: 'bg-brand-success/15 text-brand-success border-brand-success/25',
   creative: 'bg-brand-purple/15 text-brand-purple border-brand-purple/25',
+  artist: 'bg-rose-500/15 text-rose-400 border-rose-500/25',
   static: 'bg-brand-accent/15 text-brand-accent border-brand-accent/25',
   news: 'bg-sky-500/15 text-sky-400 border-sky-500/25',
   shop: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
   community: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
-  brand: 'bg-rose-500/15 text-rose-400 border-rose-500/25',
+  brand: 'bg-fuchsia-500/15 text-fuchsia-400 border-fuchsia-500/25',
 }
 
 const ratingStars = computed(() => {
@@ -593,7 +640,7 @@ const vClickOutside = {
             <div class="absolute bottom-8 right-4 z-10 flex gap-2">
               <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm border"
                 :class="typeColors[group.type] || 'bg-brand-accent/15 text-brand-accent border-brand-accent/25'">
-                <BIcon :name="{ event: 'CalendarDays', creative: 'Palette', static: 'Rss', news: 'Newspaper', shop: 'ShoppingBag', community: 'Users', brand: 'Building2' }[group.type] || 'Image'" class="w-3 h-3" />
+                <BIcon :name="{ event: 'CalendarDays', creative: 'Scissors', artist: 'Palette', static: 'Rss', news: 'Newspaper', shop: 'ShoppingBag', community: 'Users', brand: 'Building2' }[group.type] || 'Image'" class="w-3 h-3" />
                 {{ typeLabels[group.type] || 'Группа' }}
               </span>
             </div>
@@ -626,7 +673,7 @@ const vClickOutside = {
                       @click="group.avatar_url && (showAvatarViewer = true)">
                       <img v-if="group.avatar_url" :src="group.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
                       <div v-else class="w-full h-full flex items-center justify-center">
-                        <BIcon :name="{ event: 'CalendarDays', creative: 'Palette', static: 'Rss', news: 'Newspaper', shop: 'ShoppingBag', community: 'Users', brand: 'Building2' }[group.type] || 'Image'"
+                        <BIcon :name="{ event: 'CalendarDays', creative: 'Scissors', artist: 'Palette', static: 'Rss', news: 'Newspaper', shop: 'ShoppingBag', community: 'Users', brand: 'Building2' }[group.type] || 'Image'"
                           class="w-10 h-10" :style="{ color: group.accent_color || '#4C67CF' }" />
                       </div>
                     </div>
@@ -634,13 +681,28 @@ const vClickOutside = {
 
                   <!-- Action buttons -->
                   <div class="flex items-center gap-2 pt-3 md:pt-4 pr-1 flex-wrap">
-                    <button class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg hover:border-brand-accent/60 rounded-xl text-white/55 hover:text-brand-accent transition-all"
-                      title="Донат">
+                    <!-- Donate button — visible when donations enabled, or to owner (with hint) -->
+                    <button v-if="(group as any).donations_enabled"
+                      @click="showDonateModal = true"
+                      class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold transition-all border"
+                      :style="`background: ${group.accent_color || '#4C67CF'}15; color: ${group.accent_color || '#4C67CF'}; border-color: ${group.accent_color || '#4C67CF'}30; box-shadow: 0 2px 12px ${group.accent_color || '#4C67CF'}15`"
+                      title="Поддержать">
+                      <BIcon name="Heart" class="w-4 h-4" /> Поддержать
+                    </button>
+                    <button v-else-if="isOwner"
+                      @click="router.push({ name: 'group-settings', params: { slugOrId: group!.slug } })"
+                      class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg rounded-xl text-white/25 hover:text-white/55 transition-all"
+                      title="Донаты отключены — включить в настройках">
                       <BIcon name="DollarSign" class="w-4 h-4" />
                     </button>
                     <button class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg hover:border-brand-accent/60 rounded-xl text-white/55 hover:text-brand-accent transition-all"
                       title="Уведомления">
                       <BIcon name="Bell" class="w-4 h-4" />
+                    </button>
+                    <button v-if="group.type === 'news' && isMember"
+                      @click="router.push({ name: 'messages', query: { userId: group.owner.id } })"
+                      class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border border-sky-500/30 text-sky-400 bg-sky-500/10 hover:bg-sky-500/20">
+                      <BIcon name="Send" class="w-4 h-4" /> Предложить новость
                     </button>
                     <button v-if="group.type === 'event' && !isMember && !isOwner"
                       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-bold transition-all shadow-lg"
@@ -1061,6 +1123,299 @@ const vClickOutside = {
                     </template>
                   </div>
 
+                  <!-- Artist / Creative: Прайс -->
+                  <div v-else-if="aboutTab === 'prices'" class="space-y-4">
+                    <template v-if="(group as any).pricelist?.length">
+                      <div v-for="item in (group as any).pricelist" :key="item.id"
+                        class="flex items-center gap-4 px-4 py-3.5 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/30 transition-all">
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-bold text-white">{{ item.name }}</p>
+                          <p v-if="item.description" class="text-xs text-white/40 mt-0.5">{{ item.description }}</p>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                          <p class="text-sm font-extrabold" :style="`color: ${group.accent_color || '#4C67CF'}`">от {{ item.price_from }}₽</p>
+                          <p v-if="item.days" class="text-[10px] text-white/35">{{ item.days }}</p>
+                        </div>
+                      </div>
+                    </template>
+                    <template v-else-if="group.type === 'creative'">
+                      <div v-for="item in [['Голова','Голова + глаза + зубы','25 000','1–2 мес.'],['Парциал','Голова + лапы + хвост','45 000','2–3 мес.'],['Мини-фулл','Голова + верх + лапы','60 000','3–4 мес.'],['Фуллсьют','Полный костюм','90 000','4–6 мес.']]" :key="item[0]"
+                        class="flex items-center gap-4 px-4 py-3.5 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-purple/30 transition-all">
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-bold text-white">{{ item[0] }}</p>
+                          <p class="text-xs text-white/40 mt-0.5">{{ item[1] }}</p>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                          <p class="text-sm font-extrabold text-brand-purple">от {{ item[2] }}₽</p>
+                          <p class="text-[10px] text-white/35">~{{ item[3] }}</p>
+                        </div>
+                      </div>
+                    </template>
+                    <template v-else-if="group.type === 'artist'">
+                      <div class="space-y-3">
+                        <div class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl px-4 py-3">
+                          <p class="text-[10px] text-white/30 uppercase tracking-wide mb-2 font-bold">Базовые</p>
+                          <div class="grid grid-cols-2 gap-2">
+                            <div v-for="item in [['Скетч','500₽'],['Лайн','1 200₽'],['Флэт','2 000₽'],['Флэт + тени','3 000₽']]" :key="item[0]"
+                              class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5">
+                              <p class="text-xs text-white/45">{{ item[0] }}</p>
+                              <p class="text-sm font-extrabold text-white mt-0.5">от {{ item[1] }}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl px-4 py-3">
+                          <p class="text-[10px] text-white/30 uppercase tracking-wide mb-2 font-bold">Рендер</p>
+                          <div class="grid grid-cols-2 gap-2">
+                            <div v-for="item in [['Рендер','5 000₽'],['Полный рендер','8 000₽'],['Гиф-анимация','12 000₽'],['Анимация','от 20 000₽']]" :key="item[0]"
+                              class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5">
+                              <p class="text-xs text-white/45">{{ item[0] }}</p>
+                              <p class="text-sm font-extrabold text-white mt-0.5">от {{ item[1] }}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl px-4 py-3">
+                          <p class="text-[10px] text-white/30 uppercase tracking-wide mb-2 font-bold">Наценки</p>
+                          <div class="space-y-1">
+                            <div v-for="item in [['Сложный дизайн','+30%'],['Срочный заказ (до 7 дн.)','+50%'],['Дополнительный персонаж','+70%'],['Сцена/фон','+800₽']]" :key="item[0]"
+                              class="flex items-center justify-between px-2 py-1.5">
+                              <p class="text-xs text-white/55">{{ item[0] }}</p>
+                              <p class="text-xs font-bold text-brand-yellow">{{ item[1] }}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <p class="text-[10px] text-white/25 text-center">* Финальная цена обсуждается индивидуально</p>
+                    </template>
+                  </div>
+
+                  <!-- Artist: Очередь заказов -->
+                  <div v-else-if="aboutTab === 'queue'">
+                    <GroupKanban
+                      :group-id="group.id"
+                      :accent-color="group.accent_color"
+                      :is-admin="isAdmin"
+                    />
+                  </div>
+
+                  <!-- Artist: Отзывы -->
+                  <div v-else-if="aboutTab === 'reviews'" class="space-y-3">
+                    <template v-if="(group as any).reviews?.length">
+                      <div v-for="review in (group as any).reviews" :key="review.id"
+                        class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
+                        <div class="flex items-center gap-2 mb-2">
+                          <div class="w-7 h-7 rounded-full overflow-hidden bg-brand-accent/20 flex-shrink-0">
+                            <img v-if="review.author?.avatar_url" :src="review.author.avatar_url" class="w-full h-full object-cover" />
+                            <div v-else class="w-full h-full flex items-center justify-center text-brand-accent text-[10px] font-bold">{{ (review.author?.display_name || '?')[0] }}</div>
+                          </div>
+                          <p class="text-xs font-bold text-white">{{ review.author?.display_name || review.author?.username }}</p>
+                          <div class="flex items-center gap-0.5 ml-auto">
+                            <BIcon v-for="i in 5" :key="i" name="Star" class="w-3 h-3"
+                              :class="i <= review.rating ? 'text-brand-yellow fill-brand-yellow' : 'text-white/15'" />
+                          </div>
+                        </div>
+                        <p class="text-xs text-white/60 leading-relaxed">{{ review.text }}</p>
+                      </div>
+                    </template>
+                    <div v-else class="py-8 text-center">
+                      <BIcon name="Star" class="w-8 h-8 mx-auto mb-2 text-white/20" />
+                      <p class="text-white/40 text-sm">Отзывов пока нет</p>
+                      <p class="text-white/25 text-xs mt-1">Отзывы оставляют клиенты после выполненного заказа</p>
+                    </div>
+                  </div>
+
+                  <!-- News: Дайджест -->
+                  <div v-else-if="aboutTab === 'digest'" class="space-y-3">
+                    <template v-if="(group as any).digest?.length">
+                      <div v-for="item in (group as any).digest" :key="item.id"
+                        class="flex gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-sky-500/30 transition-all cursor-pointer">
+                        <div class="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-brand-border/40">
+                          <img v-if="item.image" :src="item.image" class="w-full h-full object-cover" />
+                          <div v-else class="w-full h-full flex items-center justify-center"><BIcon name="Newspaper" class="w-6 h-6 text-white/20" /></div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <span v-if="item.category" class="text-[10px] font-bold uppercase tracking-wider text-sky-400">{{ item.category }}</span>
+                          <p class="text-sm font-bold text-white leading-snug mt-0.5 line-clamp-2">{{ item.title }}</p>
+                          <p class="text-[10px] text-white/35 mt-1">{{ item.date }}</p>
+                        </div>
+                      </div>
+                    </template>
+                    <div v-else class="py-8 text-center">
+                      <BIcon name="Newspaper" class="w-8 h-8 mx-auto mb-2 text-white/20" />
+                      <p class="text-white/40 text-sm font-semibold">Дайджест ещё не опубликован</p>
+                      <p class="text-white/25 text-xs mt-1">Свежий выпуск появится здесь</p>
+                    </div>
+                  </div>
+
+                  <!-- News: Рубрики -->
+                  <div v-else-if="aboutTab === 'categories'" class="space-y-2">
+                    <template v-if="(group as any).categories?.length">
+                      <button v-for="cat in (group as any).categories" :key="cat.id"
+                        class="w-full flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-sky-500/30 transition-all text-left">
+                        <span class="text-xl flex-shrink-0">{{ cat.emoji }}</span>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-bold text-white">{{ cat.name }}</p>
+                          <p v-if="cat.description" class="text-xs text-white/40">{{ cat.description }}</p>
+                        </div>
+                        <span class="text-[10px] font-bold text-white/30 flex-shrink-0">{{ cat.post_count }}</span>
+                      </button>
+                    </template>
+                    <template v-else>
+                      <div v-for="cat in [['🎪','Конвенты','Анонсы и отчёты'],['😂','Мемы','Лучшее из фандома'],['🎤','Интервью','С авторами и мастерами'],['🎨','Арт-подборки','Лучшие работы недели'],['📢','Официальное','Важные новости']]" :key="cat[0]"
+                        class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-sky-500/30 transition-all cursor-pointer">
+                        <span class="text-xl flex-shrink-0">{{ cat[0] }}</span>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-bold text-white">{{ cat[1] }}</p>
+                          <p class="text-xs text-white/40">{{ cat[2] }}</p>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+
+                  <!-- News: Команда редакции -->
+                  <div v-else-if="aboutTab === 'team'" class="space-y-2">
+                    <template v-if="(group as any).editorialTeam?.length">
+                      <router-link v-for="member in (group as any).editorialTeam" :key="member.user_id"
+                        :to="`/profile/${member.user?.username}`"
+                        class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-sky-500/30 transition-all">
+                        <div class="w-9 h-9 rounded-xl overflow-hidden bg-brand-accent/20 flex-shrink-0">
+                          <img v-if="member.user?.avatar_url" :src="member.user.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
+                          <div v-else class="w-full h-full flex items-center justify-center text-brand-accent font-bold text-sm">{{ (member.user?.display_name || '?')[0] }}</div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-bold text-white truncate">{{ member.user?.display_name || member.user?.username }}</p>
+                          <p class="text-xs text-white/40">{{ member.role || 'Редактор' }}</p>
+                        </div>
+                        <BIcon name="ChevronRight" class="w-4 h-4 text-white/20 flex-shrink-0" />
+                      </router-link>
+                    </template>
+                    <template v-else>
+                      <router-link :to="`/profile/${group.owner.username}`"
+                        class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-sky-500/30 transition-all">
+                        <div class="w-9 h-9 rounded-xl overflow-hidden bg-sky-500/20 flex-shrink-0">
+                          <img v-if="group.owner.avatar_url" :src="group.owner.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
+                          <div v-else class="w-full h-full flex items-center justify-center text-sky-400 font-bold">{{ (group.owner.display_name || '?')[0] }}</div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-bold text-white truncate">{{ group.owner.display_name || group.owner.username }}</p>
+                          <p class="text-xs text-sky-400">Главный редактор</p>
+                        </div>
+                        <BIcon name="ChevronRight" class="w-4 h-4 text-white/20 flex-shrink-0" />
+                      </router-link>
+                    </template>
+                  </div>
+
+                  <!-- Creative: Маркет готовых работ -->
+                  <div v-else-if="aboutTab === 'market'" class="space-y-3">
+                    <template v-if="(group as any).shopItems?.length">
+                      <div v-for="item in (group as any).shopItems" :key="item.id"
+                        class="flex items-center gap-3 bg-brand-bg border border-brand-border rounded-2xl overflow-hidden hover:border-brand-purple/40 transition-all cursor-pointer">
+                        <div class="w-20 h-20 flex-shrink-0 bg-brand-border/40 overflow-hidden">
+                          <img v-if="item.image_url" :src="item.image_url" class="w-full h-full object-cover" />
+                          <div v-else class="w-full h-full flex items-center justify-center"><BIcon name="Image" class="w-7 h-7 text-white/20" /></div>
+                        </div>
+                        <div class="flex-1 min-w-0 py-3">
+                          <p class="text-sm font-bold text-white truncate">{{ item.name }}</p>
+                          <p v-if="item.description" class="text-xs text-white/40 mt-0.5 line-clamp-2">{{ item.description }}</p>
+                          <p class="text-sm font-extrabold text-brand-purple mt-1">{{ item.price }} ₽</p>
+                        </div>
+                        <div class="pr-3 flex-shrink-0">
+                          <button class="px-4 py-2 rounded-xl text-xs font-bold text-white"
+                            :style="`background: ${group.accent_color || '#8B5CF6'}`">
+                            Купить
+                          </button>
+                        </div>
+                      </div>
+                    </template>
+                    <div v-else class="py-10 text-center">
+                      <BIcon name="ShoppingBag" class="w-10 h-10 mx-auto mb-3 text-white/20" />
+                      <p class="text-white/40 text-sm font-semibold">В маркете пока пусто</p>
+                      <p class="text-white/25 text-xs mt-1">Здесь будут готовые работы для продажи</p>
+                    </div>
+                  </div>
+
+                  <!-- Event: Спонсоры -->
+                  <div v-else-if="aboutTab === 'sponsors'" class="space-y-3">
+                    <template v-if="(group.sponsors as any[])?.length">
+                      <div v-for="sp in (group.sponsors as any[])" :key="sp.name"
+                        class="flex items-center gap-4 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-success/30 transition-all">
+                        <div class="w-12 h-12 rounded-xl overflow-hidden bg-brand-border/40 flex items-center justify-center flex-shrink-0">
+                          <img v-if="sp.logo_url" :src="sp.logo_url" class="w-full h-full object-contain p-1.5" />
+                          <BIcon v-else name="Building2" class="w-6 h-6 text-white/25" />
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center gap-2 flex-wrap">
+                            <p class="text-sm font-bold text-white">{{ sp.name }}</p>
+                            <span v-if="sp.tier" class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+                              :class="sp.tier === 'gold' ? 'bg-brand-yellow/20 text-brand-yellow' : sp.tier === 'silver' ? 'bg-white/10 text-white/55' : 'bg-brand-success/15 text-brand-success'">
+                              {{ sp.tier === 'gold' ? '🥇 Gold' : sp.tier === 'silver' ? '🥈 Silver' : '🥉 Bronze' }}
+                            </span>
+                          </div>
+                          <p v-if="sp.description" class="text-xs text-white/40 mt-0.5">{{ sp.description }}</p>
+                        </div>
+                        <a v-if="sp.url" :href="sp.url" target="_blank"
+                          class="text-brand-success text-xs font-bold hover:underline flex-shrink-0 flex items-center gap-1">
+                          Сайт <BIcon name="ExternalLink" class="w-3 h-3" />
+                        </a>
+                      </div>
+                    </template>
+                    <div v-else class="py-8 text-center">
+                      <BIcon name="Star" class="w-8 h-8 mx-auto mb-2 text-white/20" />
+                      <p class="text-white/40 text-sm font-semibold">Спонсоры не объявлены</p>
+                      <p class="text-white/25 text-xs mt-1">Информация о партнёрах появится здесь</p>
+                    </div>
+                  </div>
+
+                  <!-- Event: Контакты + карта проезда -->
+                  <div v-else-if="aboutTab === 'contacts'" class="space-y-4">
+                    <div v-if="group.contact_email || group.contact_phone" class="space-y-2">
+                      <p class="text-[11px] font-bold text-white/40 uppercase tracking-wider px-1">Контакты организатора</p>
+                      <a v-if="group.contact_phone" :href="`tel:${group.contact_phone}`"
+                        class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-success/30 transition-all group/link">
+                        <div class="w-9 h-9 rounded-xl bg-brand-success/10 border border-brand-success/20 flex items-center justify-center flex-shrink-0">
+                          <BIcon name="Phone" class="w-4 h-4 text-brand-success" />
+                        </div>
+                        <span class="text-sm font-bold text-white font-mono group-hover/link:text-brand-success transition-colors">{{ group.contact_phone }}</span>
+                      </a>
+                      <a v-if="group.contact_email" :href="`mailto:${group.contact_email}`"
+                        class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/30 transition-all group/link">
+                        <div class="w-9 h-9 rounded-xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center flex-shrink-0">
+                          <BIcon name="Mail" class="w-4 h-4 text-brand-accent" />
+                        </div>
+                        <span class="text-sm font-bold text-white group-hover/link:text-brand-accent transition-colors">{{ group.contact_email }}</span>
+                      </a>
+                    </div>
+                    <div v-if="activeEvent?.location_name" class="space-y-2">
+                      <p class="text-[11px] font-bold text-white/40 uppercase tracking-wider px-1">Место проведения</p>
+                      <div class="px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
+                        <div class="flex items-start gap-3">
+                          <BIcon name="MapPin" class="w-4 h-4 text-brand-success mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p class="text-sm font-bold text-white">{{ activeEvent.location_name }}</p>
+                            <p v-if="activeEvent.location_address" class="text-xs text-white/45 mt-0.5">{{ activeEvent.location_address }}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div v-if="activeEvent?.map_embed_url" class="rounded-2xl overflow-hidden border border-brand-border">
+                        <iframe :src="activeEvent.map_embed_url" class="w-full h-52 border-0" loading="lazy" allowfullscreen />
+                      </div>
+                    </div>
+                    <div v-if="group.social_links && Object.keys(group.social_links).length" class="space-y-2">
+                      <p class="text-[11px] font-bold text-white/40 uppercase tracking-wider px-1">Ссылки и соцсети</p>
+                      <div class="grid grid-cols-2 gap-2">
+                        <a v-for="(url, platform) in group.social_links" :key="platform"
+                          :href="url" target="_blank"
+                          class="flex items-center gap-2 px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl hover:border-brand-success/30 transition-all">
+                          <BIcon :name="socialIconMap[platform as string] || 'Globe'" class="w-4 h-4 text-white/55 flex-shrink-0" />
+                          <span class="text-xs font-semibold text-white/70 capitalize truncate">{{ platform }}</span>
+                        </a>
+                      </div>
+                    </div>
+                    <div v-if="!group.contact_email && !group.contact_phone && !activeEvent?.location_name" class="py-8 text-center">
+                      <BIcon name="MapPin" class="w-8 h-8 mx-auto mb-2 text-white/20" />
+                      <p class="text-white/40 text-sm">Контактная информация не указана</p>
+                    </div>
+                  </div>
+
                   <!-- Schedule tab -->
                   <div v-else-if="aboutTab === 'schedule'" class="space-y-1">
                     <div v-if="!((activeEvent?.schedule || group.schedule) as any[])?.length" class="py-10 text-center text-white/30 text-sm">
@@ -1132,19 +1487,36 @@ const vClickOutside = {
                   class="w-full flex items-center gap-3 px-5 py-4 text-left group">
                   <img v-if="group.avatar_url" :src="group.avatar_url" class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" @error="onAvatarError" />
                   <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">{{ (group.name || '?')[0].toUpperCase() }}</div>
-                  <span class="flex-1 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">Написать пост от имени группы…</span>
+                  <span class="flex-1 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">
+                    {{ archetypeComposer.label }} · {{ archetypeComposer.placeholder.split('…')[0] }}…
+                  </span>
                   <div class="flex items-center gap-2 text-white/55 group-hover:text-white transition-colors ml-1">
                     <BIcon name="ImagePlus" class="w-5 h-5" />
                   </div>
                 </button>
                 <div v-else class="p-5 space-y-4">
+                  <!-- Archetype header chip -->
+                  <div class="flex items-center gap-2 px-1 pb-1">
+                    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border"
+                      :style="`background: ${group.accent_color || '#4C67CF'}15; border-color: ${group.accent_color || '#4C67CF'}35; color: ${group.accent_color || '#4C67CF'}`">
+                      <BIcon :name="archetypeComposer.icon" class="w-3 h-3" />
+                      {{ archetypeComposer.label }}
+                    </div>
+                  </div>
+
+                  <!-- Title field (news articles only) -->
+                  <div v-if="archetypeComposer.showTitle" class="px-0.5">
+                    <input v-model="newPostTitle" type="text" placeholder="Заголовок статьи…"
+                      class="w-full bg-transparent border-b border-brand-border focus:border-brand-accent/50 outline-none text-white text-lg font-bold placeholder-white/25 pb-2 mb-1 transition-colors" />
+                  </div>
+
                   <div class="flex items-start gap-3">
                     <div class="relative flex-shrink-0 mt-0.5">
                       <img v-if="group.avatar_url" :src="group.avatar_url" class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover" @error="onAvatarError" />
                       <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold">{{ (group.name || '?')[0].toUpperCase() }}</div>
                     </div>
                     <div class="flex-1 min-w-0">
-                      <MentionTextarea v-model="newPostContent" placeholder="Что нового в группе? Используйте @ для упоминаний" minHeight="90px" />
+                      <MentionTextarea v-model="newPostContent" :placeholder="archetypeComposer.placeholder + ' Используйте @ для упоминаний'" minHeight="90px" />
                     </div>
                     <button @click="createGroupPost" :disabled="!newPostContent.trim() || isCreatingPost"
                       class="w-10 h-10 rounded-full flex items-center justify-center bg-brand-accent text-white hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-accent/25 flex-shrink-0 mt-0.5">
@@ -1152,6 +1524,20 @@ const vClickOutside = {
                       <BIcon v-else name="SendHorizontal" class="w-5 h-5" />
                     </button>
                   </div>
+
+                  <!-- Creative status chips -->
+                  <div v-if="group.type === 'creative'" class="flex gap-2 flex-wrap px-1">
+                    <p class="text-[10px] text-white/30 w-full font-bold uppercase tracking-wide">Стадия работы:</p>
+                    <button v-for="s in creativePostStatuses" :key="s"
+                      @click="selectedCreativeStatus = selectedCreativeStatus === s ? '' : s"
+                      class="px-3 py-1 rounded-full text-xs font-bold border transition-all"
+                      :style="selectedCreativeStatus === s
+                        ? `background: ${group.accent_color || '#4C67CF'}20; border-color: ${group.accent_color || '#4C67CF'}60; color: ${group.accent_color || '#4C67CF'}`
+                        : 'border-color: rgba(255,255,255,0.1); color: rgba(255,255,255,0.4)'">
+                      {{ s }}
+                    </button>
+                  </div>
+
                   <MediaUpload ref="groupMediaUploadRef" type="posts" :multiple="true" @uploaded="onGroupMediaUploaded" />
 
                   <!-- Tags row -->
@@ -1577,6 +1963,111 @@ const vClickOutside = {
                 </div>
               </template>
 
+              <!-- Creative / Artist: Subscription tiers -->
+              <template v-if="group.type === 'creative' || group.type === 'artist'">
+                <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
+                  <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
+                    <BIcon name="Crown" class="w-3.5 h-3.5 text-brand-yellow" />
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">
+                      {{ group.type === 'artist' ? 'Подписки' : 'Поддержать студию' }}
+                    </p>
+                  </div>
+                  <div class="px-3 pb-3 space-y-2">
+                    <template v-if="(group as any).subscriptionTiers?.length">
+                      <div v-for="tier in (group as any).subscriptionTiers" :key="tier.id"
+                        class="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-brand-bg border border-brand-border hover:border-brand-yellow/30 transition-all cursor-pointer">
+                        <span class="text-lg leading-none flex-shrink-0">{{ tier.emoji || '⭐' }}</span>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-xs font-bold text-white leading-tight">{{ tier.name }}</p>
+                          <p class="text-[10px] text-white/40 mt-0.5">{{ tier.price }} ₽/мес</p>
+                        </div>
+                        <button class="px-2.5 py-1 rounded-xl text-[10px] font-bold flex-shrink-0"
+                          :style="`background: ${group.accent_color || '#4C67CF'}15; color: ${group.accent_color || '#4C67CF'}; border: 1px solid ${group.accent_color || '#4C67CF'}30`">
+                          Поддержать
+                        </button>
+                      </div>
+                    </template>
+                    <template v-else-if="group.type === 'creative'">
+                      <div v-for="tier in [{ emoji: '🍪', name: 'На печеньки', price: '150', desc: 'Поддержка студии' }, { emoji: '👑', name: 'VIP Мастер', price: '500', desc: 'WIP-фото + приоритет в очереди' }]" :key="tier.name"
+                        class="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-brand-bg border border-brand-border hover:border-brand-purple/30 transition-all cursor-pointer">
+                        <span class="text-lg leading-none flex-shrink-0">{{ tier.emoji }}</span>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-xs font-bold text-white leading-tight">{{ tier.name }}</p>
+                          <p class="text-[10px] text-white/40 mt-0.5">{{ tier.price }} ₽/мес · {{ tier.desc }}</p>
+                        </div>
+                        <button class="px-2.5 py-1 rounded-xl text-[10px] font-bold flex-shrink-0 bg-brand-purple/15 text-brand-purple border border-brand-purple/30">
+                          Поддержать
+                        </button>
+                      </div>
+                    </template>
+                    <template v-else-if="group.type === 'artist'">
+                      <div v-for="tier in [{ emoji: '🐰', name: 'Bunny', price: '200', desc: 'Ранний доступ к постам' }, { emoji: '🦊', name: 'Fox', price: '500', desc: 'WIP + голосование за темы' }, { emoji: '🐻', name: 'Bear', price: '1 500', desc: 'Всё выше + скидка 10%' }]" :key="tier.name"
+                        class="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-brand-bg border border-brand-border hover:border-brand-accent/30 transition-all cursor-pointer">
+                        <span class="text-lg leading-none flex-shrink-0">{{ tier.emoji }}</span>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-xs font-bold text-white leading-tight">{{ tier.name }}</p>
+                          <p class="text-[10px] text-white/40 mt-0.5">{{ tier.price }} ₽/мес · {{ tier.desc }}</p>
+                        </div>
+                        <button class="px-2.5 py-1 rounded-xl text-[10px] font-bold flex-shrink-0"
+                          :style="`background: ${group.accent_color || '#4C67CF'}15; color: ${group.accent_color || '#4C67CF'}; border: 1px solid ${group.accent_color || '#4C67CF'}30`">
+                          Поддержать
+                        </button>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Creative: Гарантии студии -->
+              <template v-if="group.type === 'creative'">
+                <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
+                  <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
+                    <BIcon name="ShieldCheck" class="w-3.5 h-3.5 text-brand-success" />
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Гарантии</p>
+                  </div>
+                  <div class="px-3 pb-3 space-y-0.5">
+                    <div v-for="item in ['Поэтапная оплата с эскроу', 'Фото прогресса на каждом этапе', 'Договор до начала работы', 'Возврат аванса при отмене до старта', 'Примерочное видео перед отправкой']" :key="item"
+                      class="flex items-center gap-2 px-2 py-1.5 rounded-xl text-xs text-white/60">
+                      <BIcon name="Check" class="w-3 h-3 text-brand-success flex-shrink-0" /> {{ item }}
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- News: Каналы и ссылки -->
+              <template v-if="group.type === 'news' && group.social_links && Object.keys(group.social_links).length">
+                <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
+                  <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
+                    <BIcon name="Send" class="w-3.5 h-3.5 text-sky-400" />
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Каналы</p>
+                  </div>
+                  <div class="px-2 pb-2 space-y-0.5">
+                    <a v-for="(url, platform) in group.social_links" :key="platform" :href="url" target="_blank"
+                      class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all group/chan">
+                      <BIcon :name="socialIconMap[platform as string] || 'Globe'" class="w-4 h-4 text-sky-400 flex-shrink-0" />
+                      <p class="text-xs font-bold text-white/70 capitalize flex-1 group-hover/chan:text-white transition-colors">{{ platform }}</p>
+                      <BIcon name="ExternalLink" class="w-3 h-3 text-white/25 flex-shrink-0" />
+                    </a>
+                  </div>
+                </div>
+              </template>
+
+              <!-- News: Тренды (хэштеги) -->
+              <template v-if="group.type === 'news' && (group as any).trending_tags?.length">
+                <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
+                  <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
+                    <BIcon name="TrendingUp" class="w-3.5 h-3.5 text-sky-400" />
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">В тренде</p>
+                  </div>
+                  <div class="px-3 pb-3 flex flex-wrap gap-1.5">
+                    <span v-for="tag in (group as any).trending_tags" :key="tag"
+                      class="px-2.5 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs font-semibold cursor-pointer hover:bg-sky-500/20 transition-all">
+                      #{{ tag }}
+                    </span>
+                  </div>
+                </div>
+              </template>
+
               <!-- Achievements -->
               <div v-if="group.achievements?.length" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                 <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
@@ -1900,6 +2391,13 @@ const vClickOutside = {
       v-model="showGroupReport"
       :target-id="group.id"
       target-type="group"
+    />
+
+    <!-- Donate modal -->
+    <DonateModal
+      v-if="showDonateModal && group"
+      :group="group as any"
+      @close="showDonateModal = false"
     />
   </div>
 </template>
