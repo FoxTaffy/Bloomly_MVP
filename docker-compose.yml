@@ -47,7 +47,7 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       FRONTEND_URL: ${FRONTEND_URL:-https://bloomly.fun}
       OAUTH_REDIRECT_BASE: ${OAUTH_REDIRECT_BASE:-https://bloomly.fun/api}
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-Bloomly <noreply@bloomly.fun>}
     command: sh -c "npx prisma migrate deploy && npm run start"
     depends_on:

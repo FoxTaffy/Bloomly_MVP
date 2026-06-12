@@ -1,10 +1,21 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
-import { Mail, Lock, User, Eye, EyeOff, ArrowRight, KeyRound, CheckCircle2, Monitor, ShieldCheck } from 'lucide-vue-next'
+import {
+  EnvelopeIcon,
+  LockClosedIcon,
+  UserIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  ArrowRightIcon,
+  KeyIcon,
+  CheckCircleIcon,
+  ComputerDesktopIcon,
+  ShieldCheckIcon,
+} from '@heroicons/vue/24/solid'
 import api from '@/api'
 
 const router = useRouter()
@@ -70,7 +81,7 @@ async function loadStats() {
 }
 
 const stats = computed(() => [
-  { val: statsLoaded.value ? fmtNum(statsData.value.users)  : '…', label: langStore.t.tabFollowers + '' },
+  { val: statsLoaded.value ? fmtNum(statsData.value.users)  : '…', label: langStore.t.loginStatsUsers + '' },
   { val: statsLoaded.value ? fmtNum(statsData.value.posts)  : '…', label: langStore.t.tabPosts + '' },
   { val: statsLoaded.value ? fmtNum(statsData.value.online) : '…', label: langStore.t.onlineFilter + '' },
 ])
@@ -368,7 +379,7 @@ const features = [
 
                 <!-- Email (login / register / forgot / reset) -->
                 <div v-if="mode !== 'verify'" class="input-group">
-                  <Mail class="input-icon" />
+                  <EnvelopeIcon class="input-icon" />
                   <input v-model="email" type="email" :placeholder="langStore.t.emailPlaceholder" required class="fld" />
                 </div>
 
@@ -382,8 +393,8 @@ const features = [
                   leave-to-class="opacity-0 max-h-0 -translate-y-2"
                 >
                   <div v-if="mode === 'register'" class="input-group overflow-hidden">
-                    <User class="input-icon" />
-                    <input :value="username" @input="username = ($event.target as HTMLInputElement).value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 30)" type="text" placeholder="имя_пользователя" required minlength="3" maxlength="30" class="fld" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false" />
+                    <UserIcon class="input-icon" />
+                    <input :value="username" @input="username = ($event.target as HTMLInputElement).value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 30)" type="text" :placeholder="langStore.t.usernamePlaceholder" required minlength="3" maxlength="30" class="fld" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false" />
                   </div>
                   <p v-if="mode === 'register' && username" class="text-[11px] text-white/30 pl-1 -mt-1">
                     только a–z, 0–9, _ · будет: <span class="text-brand-accent/70 font-mono">{{ username }}</span>
@@ -392,7 +403,7 @@ const features = [
 
                 <!-- Password (login / register) -->
                 <div v-if="mode === 'login' || mode === 'register'" class="input-group">
-                  <Lock class="input-icon" />
+                  <LockClosedIcon class="input-icon" />
                   <input
                     v-model="password"
                     :type="showPass ? 'text' : 'password'"
@@ -402,7 +413,7 @@ const features = [
                   />
                   <button type="button" @click="showPass = !showPass"
                     class="absolute right-4 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors">
-                    <component :is="showPass ? EyeOff : Eye" class="w-[18px] h-[18px]" />
+                    <component :is="showPass ? EyeSlashIcon : EyeIcon" class="w-[18px] h-[18px]" />
                   </button>
                 </div>
 
@@ -422,14 +433,14 @@ const features = [
                     <div class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white/40 peer-checked:bg-white peer-checked:translate-x-5 transition-all duration-200 shadow-sm"></div>
                   </div>
                   <span class="text-xs font-semibold text-white/35 group-hover:text-white/55 transition-colors flex items-center gap-1.5">
-                    <Monitor class="w-3.5 h-3.5" />
+                    <ComputerDesktopIcon class="w-3.5 h-3.5" />
                     Запомнить это устройство
                   </span>
                 </label>
 
                 <!-- Код сброса (режим reset) -->
                 <div v-if="mode === 'reset'" class="input-group">
-                  <KeyRound class="input-icon" />
+                  <KeyIcon class="input-icon" />
                   <input v-model="resetCode" type="text" placeholder="6-значный код" required maxlength="6" pattern="[0-9]{6}" class="fld tracking-[0.3em] text-center" />
                 </div>
 
@@ -437,11 +448,11 @@ const features = [
                 <div v-if="mode === 'verify'" class="space-y-3">
                   <!-- Информация куда отправлено -->
                   <div class="flex items-center gap-2.5 p-3.5 rounded-2xl bg-[#7c3aed]/10 border border-[#7c3aed]/25">
-                    <ShieldCheck class="w-4 h-4 shrink-0 text-[#a78bfa]" />
+                    <ShieldCheckIcon class="w-4 h-4 shrink-0 text-[#a78bfa]" />
                     <p class="text-xs text-[#a78bfa] font-semibold">Код отправлен на <span class="text-white">{{ email }}</span></p>
                   </div>
                   <div class="input-group">
-                    <KeyRound class="input-icon" />
+                    <KeyIcon class="input-icon" />
                     <input
                       v-model="otpCode"
                       type="text"
@@ -468,7 +479,7 @@ const features = [
 
                 <!-- Новый пароль (режим reset) -->
                 <div v-if="mode === 'reset'" class="input-group">
-                  <Lock class="input-icon" />
+                  <LockClosedIcon class="input-icon" />
                   <input
                     v-model="newPassword"
                     :type="showNewPass ? 'text' : 'password'"
@@ -478,7 +489,7 @@ const features = [
                   />
                   <button type="button" @click="showNewPass = !showNewPass"
                     class="absolute right-4 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors">
-                    <component :is="showNewPass ? EyeOff : Eye" class="w-[18px] h-[18px]" />
+                    <component :is="showNewPass ? EyeSlashIcon : EyeIcon" class="w-[18px] h-[18px]" />
                   </button>
                 </div>
 
@@ -501,7 +512,7 @@ const features = [
 
                 <!-- Успех forgot → показываем подсказку -->
                 <div v-if="mode === 'reset'" class="flex items-start gap-2.5 p-3.5 rounded-2xl bg-green-500/8 border border-green-500/20">
-                  <CheckCircle2 class="w-4 h-4 shrink-0 mt-0.5 text-green-400" />
+                  <CheckCircleIcon class="w-4 h-4 shrink-0 mt-0.5 text-green-400" />
                   <p class="text-xs text-green-400 font-semibold">Код отправлен на {{ email || 'ваш email' }}. Проверьте почту.</p>
                 </div>
 
@@ -537,7 +548,7 @@ const features = [
                      : mode === 'verify'   ? 'Подтвердить email'
                      : mode === 'forgot'   ? 'Отправить код'
                      :                      'Сменить пароль' }}
-                    <ArrowRight class="w-5 h-5" />
+                    <ArrowRightIcon class="w-5 h-5" />
                   </span>
                 </button>
               </form>
@@ -584,9 +595,9 @@ const features = [
               <!-- Footer links -->
               <p class="mt-6 text-center text-xs text-white/20 leading-relaxed">
                 Нажимая кнопку, ты принимаешь
-                <a href="https://bloomly.fun/terms" target="_blank" rel="noopener" class="text-white/40 hover:text-brand-accent-minus underline-offset-2 hover:underline transition-colors">Условия&nbsp;использования</a>
+                <RouterLink to="/terms" class="text-white/40 hover:text-brand-accent-minus underline-offset-2 hover:underline transition-colors">{{ langStore.t.termsTitle }}</RouterLink>
                 и
-                <a href="https://bloomly.fun/privacy" target="_blank" rel="noopener" class="text-white/40 hover:text-brand-accent-minus underline-offset-2 hover:underline transition-colors">Политику&nbsp;конфиденциальности</a>
+                <RouterLink to="/privacy" class="text-white/40 hover:text-brand-accent-minus underline-offset-2 hover:underline transition-colors">{{ langStore.t.privacyTitle }}</RouterLink>
               </p>
             </div>
           </div>

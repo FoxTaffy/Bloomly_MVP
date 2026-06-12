@@ -17,6 +17,16 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/LoginView.vue'),
   },
   {
+    path: '/terms',
+    name: 'terms',
+    component: () => import('@/views/TermsView.vue'),
+  },
+  {
+    path: '/privacy',
+    name: 'privacy',
+    component: () => import('@/views/PrivacyView.vue'),
+  },
+  {
     // После OAuth редиректа бэкенд направляет сюда с ?token=...
     path: '/auth/callback',
     name: 'oauth-callback',

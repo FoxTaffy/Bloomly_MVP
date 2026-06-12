@@ -509,6 +509,10 @@ export const translations = {
     openBtn: 'Открыть',
     hiddenLabel: 'Скрыто',
     artLabel: 'Арт:',
+    usernamePlaceholder: 'Имя пользователя',
+    loginStatsUsers: 'Пользователей',
+    termsTitle: 'Условия использования',
+    privacyTitle: 'Политика конфиденциальности',
   },
   EN: {
     home: 'Home',
@@ -1017,6 +1021,10 @@ export const translations = {
     openBtn: 'Open',
     hiddenLabel: 'Hidden',
     artLabel: 'Art:',
+    usernamePlaceholder: 'Username',
+    loginStatsUsers: 'Users',
+    termsTitle: 'Terms of Use',
+    privacyTitle: 'Privacy Policy',
   },
   JP: {
     home: 'ホーム',
@@ -1524,6 +1532,10 @@ export const translations = {
     openBtn: '開く',
     hiddenLabel: '非表示',
     artLabel: 'アート:',
+    usernamePlaceholder: 'ユーザー名',
+    loginStatsUsers: 'ユーザー',
+    termsTitle: '利用規約',
+    privacyTitle: 'プライバシーポリシー',
   },
   CN: {
     home: '首页',
@@ -2031,6 +2043,10 @@ export const translations = {
     openBtn: '打开',
     hiddenLabel: '已隐藏',
     artLabel: '艺术:',
+    usernamePlaceholder: '用户名',
+    loginStatsUsers: '用户',
+    termsTitle: '使用条款',
+    privacyTitle: '隐私政策',
   },
   DE: {
     home: 'Startseite',
@@ -2534,6 +2550,10 @@ export const translations = {
     openBtn: 'Öffnen',
     hiddenLabel: 'Verborgen',
     artLabel: 'Kunst:',
+    usernamePlaceholder: 'Benutzername',
+    loginStatsUsers: 'Nutzer',
+    termsTitle: 'Nutzungsbedingungen',
+    privacyTitle: 'Datenschutzrichtlinie',
   },
   FR: {
     home: 'Accueil',
@@ -3037,6 +3057,10 @@ export const translations = {
     openBtn: 'Ouvrir',
     hiddenLabel: 'Masqué',
     artLabel: 'Art :',
+    usernamePlaceholder: "Nom d'utilisateur",
+    loginStatsUsers: 'Utilisateurs',
+    termsTitle: "Conditions d'utilisation",
+    privacyTitle: 'Politique de confidentialité',
   },
   ES: {
     home: 'Inicio',
@@ -3540,6 +3564,10 @@ export const translations = {
     openBtn: 'Abrir',
     hiddenLabel: 'Oculto',
     artLabel: 'Arte:',
+    usernamePlaceholder: 'Nombre de usuario',
+    loginStatsUsers: 'Usuarios',
+    termsTitle: 'Términos de uso',
+    privacyTitle: 'Política de privacidad',
   },
   PT: {
     home: 'Início',
@@ -4043,6 +4071,10 @@ export const translations = {
     openBtn: 'Abrir',
     hiddenLabel: 'Oculto',
     artLabel: 'Arte:',
+    usernamePlaceholder: 'Nome de utilizador',
+    loginStatsUsers: 'Utilizadores',
+    termsTitle: 'Termos de utilização',
+    privacyTitle: 'Política de privacidade',
   },
 };
 

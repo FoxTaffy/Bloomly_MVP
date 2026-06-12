@@ -1,6 +1,6 @@
 {
   "name": "bloomly-vue",
-  "version": "0.4.24",
+  "version": "0.4.25",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@heroicons/vue": "^2.2.0",
     "@unhead/vue": "^2.1.12",
     "axios": "^1.13.5",
     "fflate": "^0.8.2",

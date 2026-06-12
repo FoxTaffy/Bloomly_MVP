@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useFriendsStore } from '@/stores/friends'
 import { useLangStore } from '@/stores/lang'
+import { useGroupsStore } from '@/stores/groups'
 import { useMobileSidebar } from '@/composables/useMobileSidebar'
 import BIcon from './BIcon.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
@@ -22,14 +23,25 @@ const route  = useRoute()
 const auth   = useAuthStore()
 const friendsStore = useFriendsStore()
 const langStore = useLangStore()
+const groupsStore = useGroupsStore()
 const mobileSidebar = useMobileSidebar()
+
+const managedGroups = computed(() =>
+  groupsStore.myGroups.filter(m => ['owner', 'admin'].includes(m.role))
+)
+const isOrganizer = computed(() => managedGroups.value.length > 0)
 
 function navigate(fn: () => void) {
   mobileSidebar.close()
   fn()
 }
 
-onMounted(() => { friendsStore.loadRequests().catch(() => {}) })
+onMounted(() => {
+  friendsStore.loadRequests().catch(() => {})
+  if (auth.user && !groupsStore.myGroups.length) {
+    groupsStore.loadMyGroups().catch(() => {})
+  }
+})
 watch(() => route.name, () => { mobileSidebar.close() })
 
 // Active detection: prefer route name, fall back to activeNav prop
@@ -203,6 +215,34 @@ const categoryItems = computed(() => [
           </div>
 
           <slot name="extra" />
+
+          <!-- Org tools (mobile) -->
+          <div v-if="isOrganizer">
+            <h4 class="px-4 text-xs font-bold text-white/40 mb-2 uppercase tracking-wider">Орг-инструменты</h4>
+            <nav class="space-y-0.5">
+              <button
+                @click="navigate(() => router.push({ name: 'groups', query: { create: '1' } }))"
+                class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all text-white"
+                style="background: linear-gradient(135deg, #6c47ff, #a855f7); box-shadow: 0 2px 12px #6c47ff33">
+                <BIcon name="CalendarPlus" class="w-5 h-5" />
+                <span class="flex-1 text-left">Создать кон</span>
+              </button>
+              <button
+                @click="navigate(() => router.push({ name: 'my-applications' }))"
+                class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
+                :class="route.name === 'my-applications' ? 'bg-brand-card text-white' : 'text-white/65 hover:bg-brand-card/50 hover:text-white'">
+                <BIcon name="ClipboardList" class="w-5 h-5" />
+                <span class="flex-1 text-left">Мои заявки</span>
+              </button>
+              <button
+                @click="navigate(() => router.push({ name: 'my-tickets' }))"
+                class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
+                :class="route.name === 'my-tickets' ? 'bg-brand-card text-white' : 'text-white/65 hover:bg-brand-card/50 hover:text-white'">
+                <BIcon name="Ticket" class="w-5 h-5" />
+                <span class="flex-1 text-left">Мои билеты</span>
+              </button>
+            </nav>
+          </div>
         </div>
       </div>
     </Transition>
@@ -270,6 +310,34 @@ const categoryItems = computed(() => [
 
     <!-- Extra slot (e.g. "О профиле" section on profile page) -->
     <slot name="extra" />
+
+    <!-- Org tools (visible when user owns/admins groups) -->
+    <div v-if="isOrganizer">
+      <h4 class="px-4 text-xs font-bold text-white/40 mb-2 uppercase tracking-wider">Орг-инструменты</h4>
+      <nav class="space-y-1">
+        <button
+          @click="router.push({ name: 'groups', query: { create: '1' } })"
+          class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all text-white"
+          style="background: linear-gradient(135deg, #6c47ff, #a855f7); box-shadow: 0 2px 12px #6c47ff33">
+          <BIcon name="CalendarPlus" class="w-5 h-5" />
+          <span class="flex-1 text-left">Создать кон</span>
+        </button>
+        <button
+          @click="router.push({ name: 'my-applications' })"
+          class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
+          :class="route.name === 'my-applications' ? 'bg-brand-card text-white' : 'text-white/65 hover:bg-brand-card/50 hover:text-white'">
+          <BIcon name="ClipboardList" class="w-5 h-5" />
+          <span class="flex-1 text-left">Мои заявки</span>
+        </button>
+        <button
+          @click="router.push({ name: 'my-tickets' })"
+          class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
+          :class="route.name === 'my-tickets' ? 'bg-brand-card text-white' : 'text-white/65 hover:bg-brand-card/50 hover:text-white'">
+          <BIcon name="Ticket" class="w-5 h-5" />
+          <span class="flex-1 text-left">Мои билеты</span>
+        </button>
+      </nav>
+    </div>
 
     <!-- Categories -->
     <div>
