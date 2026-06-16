@@ -142,40 +142,128 @@ function parseSender(from: string): { name: string; email: string } {
 // ── HTML шаблон ──────────────────────────────────────────────────────────────
 
 function otpHtml(code: string, purpose: Purpose, lang: Lang): string {
-  const t        = TRANSLATIONS[lang]
-  const title    = t.title[purpose]
+  const t       = TRANSLATIONS[lang]
+  const title   = t.title[purpose]
   const subtitle = t.subtitle[purpose]
+  const digits  = code.split('')
+  const isReset = purpose === 'reset'
+
+  // Icon SVG: lock for reset, sparkle for register
+  const icon = isReset
+    ? `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="5" y="11" width="14" height="10" rx="2" fill="white" fill-opacity=".9"/><path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="white" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16" r="1.5" fill="#a855f7"/></svg>`
+    : `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l2.09 6.26L20 10l-5.91 1.74L12 18l-2.09-6.26L4 10l5.91-1.74L12 2z" fill="white" fill-opacity=".9"/><path d="M19 15l.9 2.6L22 18.5l-2.1.9L19 22l-.9-2.6L16 18.5l2.1-.9L19 15z" fill="white" fill-opacity=".6"/></svg>`
+
+  const accentGrad   = isReset
+    ? 'linear-gradient(135deg,#6366f1,#8b5cf6,#a78bfa)'
+    : 'linear-gradient(135deg,#7c3aed,#a855f7,#ec4899)'
+  const glowColor    = isReset ? 'rgba(99,102,241,.35)' : 'rgba(168,85,247,.35)'
+  const borderColor  = isReset ? 'rgba(99,102,241,.25)' : 'rgba(168,85,247,.25)'
+
+  const digitBoxes = digits.map(d =>
+    `<td style="padding:0 4px"><div style="
+      display:inline-block;
+      width:44px;height:56px;
+      line-height:56px;
+      text-align:center;
+      background:rgba(255,255,255,.06);
+      border:1.5px solid ${borderColor};
+      border-radius:10px;
+      color:#fff;
+      font-size:28px;
+      font-weight:800;
+      font-family:'Courier New',monospace;
+      letter-spacing:0;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 2px 8px rgba(0,0,0,.3);
+    ">${d}</div></td>`
+  ).join('')
+
   return `<!DOCTYPE html>
 <html lang="${lang}">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0f0f18;font-family:'Segoe UI',Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f0f18;padding:40px 0">
-    <tr><td align="center">
-      <table width="480" cellpadding="0" cellspacing="0" style="background:#1a1a2e;border-radius:16px;overflow:hidden;box-shadow:0 4px 30px rgba(0,0,0,.4)">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>${title}</title>
+</head>
+<body style="margin:0;padding:0;background:#0a0a12;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a12;min-height:100vh;padding:48px 16px">
+    <tr><td align="center" valign="top">
+
+      <!-- Card -->
+      <table width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#13131f;border-radius:24px;overflow:hidden;border:1px solid rgba(255,255,255,.06);box-shadow:0 0 0 1px rgba(0,0,0,.5),0 32px 64px rgba(0,0,0,.6),0 0 80px ${glowColor}">
+
+        <!-- Hero -->
         <tr>
-          <td style="background:linear-gradient(135deg,#7c3aed,#a855f7,#ec4899);padding:32px 40px;text-align:center;">
-            <img src="https://bloomly.fun/bloomly.png" height="36" alt="Bloomly" style="display:block;margin:0 auto 8px">
-            <p style="margin:0;color:rgba(255,255,255,.7);font-size:13px;letter-spacing:.5px">bloomly.fun</p>
+          <td style="background:${accentGrad};padding:0;position:relative;overflow:hidden">
+            <!-- Noise overlay -->
+            <div style="position:absolute;inset:0;background:url('https://bloomly.fun/noise.png') repeat;opacity:.04;pointer-events:none"></div>
+            <!-- Glow blobs -->
+            <div style="position:absolute;top:-40px;right:-40px;width:200px;height:200px;background:radial-gradient(circle,rgba(255,255,255,.15) 0%,transparent 70%);pointer-events:none"></div>
+            <div style="position:absolute;bottom:-60px;left:-20px;width:180px;height:180px;background:radial-gradient(circle,rgba(0,0,0,.2) 0%,transparent 70%);pointer-events:none"></div>
+
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="padding:36px 40px 32px;text-align:center;position:relative">
+                  <!-- Logo circle -->
+                  <div style="display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;background:rgba(255,255,255,.15);border-radius:18px;margin-bottom:16px;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.2);box-shadow:0 4px 16px rgba(0,0,0,.2)">
+                    ${icon}
+                  </div>
+                  <div>
+                    <img src="https://bloomly.fun/bloomly.png" height="20" alt="Bloomly" style="display:inline-block;vertical-align:middle;margin-right:6px;opacity:.9">
+                    <span style="color:rgba(255,255,255,.8);font-size:13px;font-weight:600;letter-spacing:.3px;vertical-align:middle">bloomly.fun</span>
+                  </div>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
+
+        <!-- Body -->
         <tr>
-          <td style="padding:36px 40px">
-            <h1 style="margin:0 0 8px;color:#fff;font-size:24px;font-weight:700">${title}</h1>
-            <p style="margin:0 0 28px;color:#a0a0c0;font-size:15px;line-height:1.6">${subtitle}</p>
-            <div style="background:#0f0f18;border:1px solid rgba(168,85,247,.3);border-radius:12px;padding:24px;text-align:center;margin-bottom:24px">
-              <p style="margin:0 0 6px;color:#a0a0c0;font-size:12px;text-transform:uppercase;letter-spacing:1px">${t.codeLabel}</p>
-              <p style="margin:0;color:#fff;font-size:40px;font-weight:800;letter-spacing:10px;font-variant-numeric:tabular-nums">${code}</p>
-              <p style="margin:8px 0 0;color:#6b6b8a;font-size:12px">${t.validity}</p>
+          <td style="padding:40px 40px 32px">
+
+            <!-- Title -->
+            <h1 style="margin:0 0 10px;color:#f0f0ff;font-size:26px;font-weight:800;letter-spacing:-.3px;line-height:1.2">${title}</h1>
+            <p style="margin:0 0 32px;color:#7878a0;font-size:15px;line-height:1.65">${subtitle}</p>
+
+            <!-- Code block -->
+            <div style="background:linear-gradient(180deg,rgba(255,255,255,.04) 0%,rgba(255,255,255,.02) 100%);border:1px solid ${borderColor};border-radius:16px;padding:28px 20px;text-align:center;margin-bottom:28px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 0 40px ${glowColor}">
+              <p style="margin:0 0 16px;color:#5a5a7a;font-size:11px;text-transform:uppercase;letter-spacing:2px;font-weight:600">${t.codeLabel}</p>
+
+              <!-- Individual digit boxes -->
+              <table cellpadding="0" cellspacing="0" style="margin:0 auto 16px">
+                <tr>${digitBoxes}</tr>
+              </table>
+
+              <!-- Timer bar -->
+              <div style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.05);border-radius:20px;padding:5px 12px">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><circle cx="12" cy="12" r="9" stroke="#7878a0" stroke-width="2"/><path d="M12 7v5l3 3" stroke="#7878a0" stroke-width="2" stroke-linecap="round"/></svg>
+                <span style="color:#5a5a7a;font-size:12px;font-weight:500">${t.validity}</span>
+              </div>
             </div>
-            <p style="margin:0;color:#6b6b8a;font-size:13px;line-height:1.5">${t.ignore}</p>
+
+            <!-- Warning note -->
+            <div style="display:flex;align-items:flex-start;gap:10px;background:rgba(255,255,255,.03);border-radius:10px;padding:14px 16px;border:1px solid rgba(255,255,255,.05)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-top:1px"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" stroke="#5a5a7a" stroke-width="1.5"/><path d="M12 8v4m0 4h.01" stroke="#5a5a7a" stroke-width="1.5" stroke-linecap="round"/></svg>
+              <p style="margin:0;color:#5a5a7a;font-size:13px;line-height:1.5">${t.ignore}</p>
+            </div>
+
           </td>
         </tr>
+
+        <!-- Footer -->
         <tr>
-          <td style="border-top:1px solid rgba(255,255,255,.05);padding:20px 40px;text-align:center">
-            <p style="margin:0;color:#3d3d55;font-size:12px">© 2026 Bloomly · <a href="https://bloomly.fun" style="color:#7c3aed;text-decoration:none">bloomly.fun</a></p>
+          <td style="padding:20px 40px 28px;border-top:1px solid rgba(255,255,255,.04);text-align:center">
+            <p style="margin:0;color:#2e2e42;font-size:12px">
+              © 2026 Bloomly &nbsp;·&nbsp;
+              <a href="https://bloomly.fun" style="color:#5a3aed;text-decoration:none">bloomly.fun</a>
+            </p>
           </td>
         </tr>
+
       </table>
+      <!-- /Card -->
+
     </td></tr>
   </table>
 </body>
