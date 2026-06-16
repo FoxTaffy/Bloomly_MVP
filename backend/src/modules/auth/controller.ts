@@ -76,11 +76,11 @@ export const registerHandler = async (
 
 // ── Подтверждение email (Step 2) ──────────────────────────────────────────────
 export const verifyEmailHandler = async (
-  request: FastifyRequest<{ Body: { email: string; code: string } }>,
+  request: FastifyRequest<{ Body: { email: string; code: string; remember?: boolean } }>,
   reply: FastifyReply,
 ) => {
   try {
-    const { email, code } = request.body;
+    const { email, code, remember = false } = request.body;
     await authService.verifyEmail(email, code);
 
     const user = await prisma.user.findFirst({
@@ -90,7 +90,7 @@ export const verifyEmailHandler = async (
     if (!user) return reply.code(400).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Пользователь не найден' } });
 
     const token = issueAccessToken(request, user.id, user.role);
-    await issueRefreshToken(reply, user.id);
+    await issueRefreshToken(reply, user.id, remember);
     return reply.send({ success: true, data: { token, user }, error: null });
   } catch (e: any) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'VERIFY_ERROR', message: e.message } });

@@ -166,6 +166,24 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/AutomationView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/my-applications',
+    name: 'my-applications',
+    component: () => import('@/views/MyApplicationsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/my-tickets',
+    name: 'my-tickets',
+    component: () => import('@/views/MyTicketsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/my-todolist',
+    name: 'my-todolist',
+    component: () => import('@/views/MyTodolistView.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

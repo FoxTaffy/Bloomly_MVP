@@ -41,7 +41,10 @@ export class AuthService {
   async createUser(data: RegisterInput) {
     const { password } = data;
     const username = data.username.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-    if (!username || username.length < 3) throw new Error('Имя пользователя должно содержать минимум 3 символа (только a-z, 0-9, _)');
+    if (!username || username.length < 3) throw new Error('Имя пользователя должно содержать минимум 3 символа (только a–z, 0–9, _)');
+    if (username.length > 30) throw new Error('Имя пользователя не может быть длиннее 30 символов');
+    if (password.length < 8) throw new Error('Пароль должен содержать минимум 8 символов');
+    if (password.length > 128) throw new Error('Пароль слишком длинный');
     const email = data.email.toLowerCase().trim();
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -122,6 +125,8 @@ export class AuthService {
 
   /** Сброс пароля Step 2 — установить новый пароль */
   async resetPassword(email: string, code: string, newPassword: string) {
+    if (newPassword.length < 8) throw new Error('Пароль должен содержать минимум 8 символов');
+    if (newPassword.length > 128) throw new Error('Пароль слишком длинный');
     const e = email.toLowerCase().trim();
     await verifyOtp(e, code, 'reset');
     const hashed = await bcrypt.hash(newPassword, 10);

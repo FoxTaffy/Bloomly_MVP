@@ -109,11 +109,11 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function verifyEmail(email: string, code: string, _remember = false): Promise<void> {
+  async function verifyEmail(email: string, code: string, remember = false): Promise<void> {
     isLoading.value = true
     error.value = null
     try {
-      const res = await api.post('/auth/verify-email', { email, code })
+      const res = await api.post('/auth/verify-email', { email, code, remember })
       const data = res.data
       if (!data.success) throw new Error(data.error?.message ?? 'Verification failed')
       token.value = data.data.token

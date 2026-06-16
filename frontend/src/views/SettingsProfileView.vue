@@ -975,23 +975,18 @@
                     <!-- Already verified -->
                     <div v-if="verificationStatus?.isVerified" class="text-center py-6">
                       <div class="w-16 h-16 rounded-full bg-blue-500/15 border border-blue-500/25 flex items-center justify-center mx-auto mb-4">
-                        <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                        </svg>
+                        <BIcon name="ShieldCheck" class="w-8 h-8 text-blue-400" />
                       </div>
                       <h3 class="text-lg font-bold text-white mb-1">{{ langStore.t.accountVerified }}</h3>
                       <p class="text-sm text-white/55">{{ langStore.t.verifiedAt }} {{ verificationStatus.verifiedAt ? new Date(verificationStatus.verifiedAt).toLocaleDateString() : '' }}</p>
-                      <div v-if="verificationStatus.verificationType" class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold"
-                        :class="{
-                          'bg-purple-500/10 border border-purple-500/20 text-purple-400': verificationStatus.verificationType === 'artist',
-                          'bg-amber-500/10 border border-amber-500/20 text-amber-400': verificationStatus.verificationType === 'master',
-                          'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400': verificationStatus.verificationType === 'event',
-                        }">
-                        <img :src="`/icons/badges/${verificationStatus.verificationType}.svg`" class="w-4 h-4" />
-                        {{ { artist: langStore.t.verTypeArtist, master: langStore.t.verTypeMaster, event: langStore.t.verTypeEvent }[verificationStatus.verificationType as string] }}
+                      <div v-if="verificationStatus.verificationType && verTypeMeta[verificationStatus.verificationType]"
+                        class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-xs font-bold"
+                        :class="verTypeMeta[verificationStatus.verificationType].badgeCls">
+                        <BIcon :name="verTypeMeta[verificationStatus.verificationType].icon" class="w-4 h-4" />
+                        {{ verTypeMeta[verificationStatus.verificationType].label }}
                       </div>
                       <div class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <BIcon name="Check" class="w-4 h-4" />
                         {{ langStore.t.verDonationsAvailable }}
                       </div>
                     </div>
@@ -999,24 +994,23 @@
                     <!-- Pending request -->
                     <div v-else-if="verificationStatus?.latestRequest?.status === 'pending'" class="text-center py-6">
                       <div class="w-16 h-16 rounded-full bg-amber-500/15 border border-amber-500/25 flex items-center justify-center mx-auto mb-4">
-                        <svg class="w-8 h-8 text-amber-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
+                        <BIcon name="Clock" class="w-8 h-8 text-amber-400 animate-pulse" />
                       </div>
                       <h3 class="text-lg font-bold text-white mb-1">{{ langStore.t.verPending }}</h3>
                       <p class="text-sm text-white/55">{{ langStore.t.verPendingDesc }}</p>
                       <p class="text-xs text-white/40 mt-2">{{ langStore.t.verSentLabel }} {{ new Date(verificationStatus.latestRequest.created_at).toLocaleDateString() }}</p>
-                      <div v-if="verificationStatus.latestRequest.verification_type" class="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
-                        {{ { artist: langStore.t.verTypeArtist, master: langStore.t.verTypeMaster, event: langStore.t.verTypeEvent }[verificationStatus.latestRequest.verification_type as string] }}
+                      <div v-if="verificationStatus.latestRequest.verification_type && verTypeMeta[verificationStatus.latestRequest.verification_type]"
+                        class="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold"
+                        :class="verTypeMeta[verificationStatus.latestRequest.verification_type].badgeCls">
+                        <BIcon :name="verTypeMeta[verificationStatus.latestRequest.verification_type].icon" class="w-3.5 h-3.5" />
+                        {{ verTypeMeta[verificationStatus.latestRequest.verification_type].label }}
                       </div>
                     </div>
 
                     <!-- Rejected request -->
                     <div v-else-if="verificationStatus?.latestRequest?.status === 'rejected'" class="space-y-4">
                       <div class="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4 flex items-start gap-3">
-                        <svg class="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                        </svg>
+                        <BIcon name="AlertTriangle" class="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
                         <div>
                           <p class="text-sm font-bold text-rose-400">{{ langStore.t.verRejected }}</p>
                           <p v-if="verificationStatus.latestRequest.reason" class="text-xs text-white/55 mt-1">{{ verificationStatus.latestRequest.reason }}</p>
@@ -1031,31 +1025,29 @@
                       <!-- Profile completeness -->
                       <div>
                         <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
-                          <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                          </svg>
+                          <BIcon name="UserCheck" class="w-4 h-4 text-blue-400 flex-shrink-0" />
                           {{ langStore.t.verProfileCompletenessTitle }}
                           <span class="ml-auto text-xs font-bold"
-                            :class="profileCompleteness?.canSubmit ? 'text-emerald-400' : 'text-amber-400'">
-                            {{ profileCompleteness?.percentage ?? 0 }}%
+                            :class="localCompleteness.canSubmit ? 'text-emerald-400' : 'text-amber-400'">
+                            {{ localCompleteness.percentage }}%
                           </span>
                         </h3>
                         <div class="w-full h-3 bg-brand-bg rounded-full overflow-hidden border border-brand-border">
                           <div class="h-full rounded-full transition-all duration-500"
-                            :class="profileCompleteness?.canSubmit ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : 'bg-gradient-to-r from-amber-500 to-amber-400'"
-                            :style="`width: ${profileCompleteness?.percentage ?? 0}%`"></div>
+                            :class="localCompleteness.canSubmit ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : 'bg-gradient-to-r from-amber-500 to-amber-400'"
+                            :style="`width: ${localCompleteness.percentage}%`"></div>
                         </div>
                         <div class="grid grid-cols-2 gap-2 mt-3">
                           <div v-for="field in completenessFields" :key="field.key"
                             class="flex items-center gap-2 px-3 py-2 rounded-xl border text-xs"
                             :class="field.met ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' : 'bg-brand-bg border-brand-border text-white/40'">
-                            <svg v-if="field.met" class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                            <svg v-else class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            <BIcon v-if="field.met" name="Check" class="w-3.5 h-3.5 flex-shrink-0" />
+                            <BIcon v-else name="X" class="w-3.5 h-3.5 flex-shrink-0" />
                             {{ field.label }}
                           </div>
                         </div>
-                        <p v-if="!profileCompleteness?.canSubmit" class="text-xs text-amber-400/80 mt-2 flex items-center gap-1.5">
-                          <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01"/></svg>
+                        <p v-if="!localCompleteness.canSubmit" class="text-xs text-amber-400/80 mt-2 flex items-center gap-1.5">
+                          <BIcon name="Info" class="w-3.5 h-3.5 flex-shrink-0" />
                           {{ langStore.t.verFillProfile80 }}
                         </p>
                       </div>
@@ -1063,9 +1055,7 @@
                       <!-- Criteria checklist -->
                       <div>
                         <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
-                          <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                          </svg>
+                          <BIcon name="ClipboardList" class="w-4 h-4 text-blue-400 flex-shrink-0" />
                           {{ langStore.t.verCriteriaTitle }}
                         </h3>
                         <div class="space-y-2">
@@ -1074,12 +1064,8 @@
                             :class="cr.met ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-brand-bg border-brand-border'">
                             <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
                               :class="cr.met ? 'bg-emerald-500/20' : 'bg-white/5'">
-                              <svg v-if="cr.met" class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
-                              </svg>
-                              <svg v-else class="w-3.5 h-3.5 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                              </svg>
+                              <BIcon v-if="cr.met" name="Check" class="w-3.5 h-3.5 text-emerald-400" />
+                              <BIcon v-else name="X" class="w-3.5 h-3.5 text-white/30" />
                             </div>
                             <span class="text-sm font-semibold flex-1" :class="cr.met ? 'text-white' : 'text-white/55'">{{ cr.label }}</span>
                             <span v-if="cr.detail" class="text-xs font-bold" :class="cr.met ? 'text-emerald-400' : 'text-white/40'">{{ cr.detail }}</span>
@@ -1090,49 +1076,29 @@
                       <!-- Verification type selector -->
                       <div>
                         <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
-                          <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
-                          </svg>
+                          <BIcon name="BadgeCheck" class="w-4 h-4 text-purple-400 flex-shrink-0" />
                           {{ langStore.t.verTypeTitle }}
                         </h3>
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <!-- Artist -->
-                          <button type="button" @click="selectedVerType = 'artist'"
-                            class="relative p-4 rounded-2xl border-2 transition-all text-left group"
-                            :class="selectedVerType === 'artist' ? 'border-purple-500 bg-purple-500/10 shadow-lg shadow-purple-500/10' : 'border-brand-border bg-brand-bg hover:border-purple-500/40'">
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          <button v-for="vt in VER_TYPES" :key="vt.id"
+                            type="button" @click="selectedVerType = vt.id as any"
+                            class="relative p-4 rounded-2xl border-2 transition-all text-left"
+                            :class="selectedVerType === vt.id
+                              ? `${vt.borderSel} ${vt.bgSel} shadow-lg`
+                              : `border-brand-border bg-brand-bg ${vt.borderHov}`">
                             <div class="flex items-center gap-2 mb-2">
-                              <img src="/icons/badges/artist.svg" class="w-6 h-6" />
-                              <span class="font-bold text-sm" :class="selectedVerType === 'artist' ? 'text-purple-400' : 'text-white'">{{ langStore.t.verTypeArtist }}</span>
+                              <BIcon :name="vt.icon" class="w-5 h-5 flex-shrink-0"
+                                :class="selectedVerType === vt.id ? vt.textSel : 'text-white/60'" />
+                              <span class="font-bold text-xs leading-tight"
+                                :class="selectedVerType === vt.id ? vt.textSel : 'text-white'">
+                                {{ (langStore.t as any)[vt.titleKey] }}
+                              </span>
                             </div>
-                            <p class="text-[11px] text-white/50 leading-relaxed">{{ langStore.t.verTypeArtistHint }}</p>
-                            <div v-if="selectedVerType === 'artist'" class="absolute top-2 right-2 w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center">
-                              <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-                            </div>
-                          </button>
-                          <!-- Master -->
-                          <button type="button" @click="selectedVerType = 'master'"
-                            class="relative p-4 rounded-2xl border-2 transition-all text-left group"
-                            :class="selectedVerType === 'master' ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/10' : 'border-brand-border bg-brand-bg hover:border-amber-500/40'">
-                            <div class="flex items-center gap-2 mb-2">
-                              <img src="/icons/badges/master.svg" class="w-6 h-6" />
-                              <span class="font-bold text-sm" :class="selectedVerType === 'master' ? 'text-amber-400' : 'text-white'">{{ langStore.t.verTypeMaster }}</span>
-                            </div>
-                            <p class="text-[11px] text-white/50 leading-relaxed">{{ langStore.t.verTypeMasterHint }}</p>
-                            <div v-if="selectedVerType === 'master'" class="absolute top-2 right-2 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
-                              <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
-                            </div>
-                          </button>
-                          <!-- Event -->
-                          <button type="button" @click="selectedVerType = 'event'"
-                            class="relative p-4 rounded-2xl border-2 transition-all text-left group"
-                            :class="selectedVerType === 'event' ? 'border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10' : 'border-brand-border bg-brand-bg hover:border-emerald-500/40'">
-                            <div class="flex items-center gap-2 mb-2">
-                              <img src="/icons/badges/event.svg" class="w-6 h-6" />
-                              <span class="font-bold text-sm" :class="selectedVerType === 'event' ? 'text-emerald-400' : 'text-white'">{{ langStore.t.verTypeEvent }}</span>
-                            </div>
-                            <p class="text-[11px] text-white/50 leading-relaxed">{{ langStore.t.verTypeEventHint }}</p>
-                            <div v-if="selectedVerType === 'event'" class="absolute top-2 right-2 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
-                              <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                            <p class="text-[10px] text-white/45 leading-relaxed">{{ (langStore.t as any)[vt.hintKey] }}</p>
+                            <div v-if="selectedVerType === vt.id"
+                              class="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center"
+                              :class="vt.badge">
+                              <svg class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
                             </div>
                           </button>
                         </div>
@@ -1141,21 +1107,44 @@
                       <!-- Evidence upload -->
                       <div v-if="selectedVerType">
                         <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
-                          <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                          </svg>
+                          <BIcon name="ImagePlus" class="w-4 h-4 text-blue-400 flex-shrink-0" />
                           {{ langStore.t.verEvidenceTitle }}
-                          <span class="text-[10px] text-white/40 font-normal ml-1">{{ evidenceUrls.length }}/5</span>
+                          <span v-if="selectedVerType !== 'popular'" class="text-[10px] text-white/40 font-normal ml-1">{{ evidenceUrls.length }}/5</span>
                         </h3>
 
                         <!-- Evidence description per type -->
                         <div class="bg-blue-500/5 border border-blue-500/15 rounded-2xl px-4 py-3 mb-3">
                           <p class="text-xs text-white/55">
                             <span class="text-blue-400 font-bold">{{ langStore.t.verRequirementsLabel }}</span>
-                            <span v-if="selectedVerType === 'artist'">{{ langStore.t.verEvidenceDescArtist }}</span>
-                            <span v-else-if="selectedVerType === 'master'">{{ langStore.t.verEvidenceDescMaster }} ({{ authStore.user?.id?.slice(0,8) }}).</span>
-                            <span v-else-if="selectedVerType === 'event'">{{ langStore.t.verEvidenceDescEvent }}</span>
+                            <span v-if="selectedVerType === 'artist'">{{ (langStore.t as any).verEvidenceDescArtist }}</span>
+                            <span v-else-if="selectedVerType === 'master'">{{ (langStore.t as any).verEvidenceDescMaster }} ({{ authStore.user?.id?.slice(0,8) }}).</span>
+                            <span v-else-if="selectedVerType === 'event'">{{ (langStore.t as any).verEvidenceDescEvent }}</span>
+                            <span v-else-if="selectedVerType === 'fursuiter'">{{ (langStore.t as any).verEvidenceDescFursuiter }}</span>
+                            <span v-else-if="selectedVerType === 'popular'">{{ (langStore.t as any).verEvidenceDescPopular }}</span>
+                            <span v-else-if="selectedVerType === 'writer'">{{ (langStore.t as any).verEvidenceDescWriter }}</span>
+                            <span v-else-if="selectedVerType === 'organizer'">{{ (langStore.t as any).verEvidenceDescOrganizer }}</span>
                           </p>
+                        </div>
+
+                        <!-- Social links section (popular type) -->
+                        <div v-if="selectedVerType === 'popular'" class="mb-3 space-y-2">
+                          <p class="text-xs font-bold text-white/70 flex items-center gap-1.5">
+                            <BIcon name="Link" class="w-3.5 h-3.5 text-blue-400" />
+                            {{ (langStore.t as any).verLinksTitle }}
+                          </p>
+                          <div v-for="(_, i) in popularLinks" :key="i" class="flex items-center gap-2">
+                            <input v-model="popularLinks[i]" type="url"
+                              :placeholder="(langStore.t as any).verLinkPlaceholder"
+                              class="flex-1 px-3 py-2 rounded-xl bg-brand-bg border border-brand-border text-sm text-white placeholder-white/30 focus:outline-none focus:border-blue-500/60 transition-colors" />
+                            <button v-if="popularLinks.length > 1" type="button" @click="popularLinks.splice(i, 1)"
+                              class="w-7 h-7 rounded-lg bg-white/5 hover:bg-rose-500/15 text-white/40 hover:text-rose-400 flex items-center justify-center transition-colors flex-shrink-0">
+                              <BIcon name="X" class="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <button v-if="popularLinks.length < 5" type="button" @click="popularLinks.push('')"
+                            class="text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1">
+                            {{ (langStore.t as any).verAddLinkBtn }}
+                          </button>
                         </div>
 
                         <!-- Uploaded evidence preview -->
@@ -1164,7 +1153,7 @@
                             <img :src="url" class="w-full h-full object-cover" />
                             <button type="button" @click="evidenceUrls.splice(idx, 1)"
                               class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                              <BIcon name="X" class="w-3 h-3 text-white" />
                             </button>
                           </div>
                         </div>
@@ -1174,7 +1163,7 @@
                           :disabled="isUploadingEvidence"
                           class="w-full py-3 rounded-2xl border-2 border-dashed border-brand-border hover:border-blue-500/40 bg-brand-bg text-sm text-white/55 hover:text-white transition-all flex items-center justify-center gap-2">
                           <span v-if="isUploadingEvidence" class="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
-                          <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                          <BIcon v-else name="Upload" class="w-4 h-4" />
                           {{ isUploadingEvidence ? langStore.t.verUploadingLabel : langStore.t.verUploadBtn }}
                         </button>
                         <input ref="evidenceInput" type="file" accept="image/*,video/*" class="hidden" @change="onEvidenceUpload" />
@@ -1182,21 +1171,20 @@
 
                       <!-- Anti-AI notice -->
                       <div class="bg-rose-500/5 border border-rose-500/15 rounded-2xl px-4 py-3">
-                        <p class="text-xs text-white/55">
-                          <span class="text-rose-400 font-bold">{{ langStore.t.verImportantLabel }}</span>{{ langStore.t.verAntiAINotice }}
+                        <p class="text-xs text-white/55 flex items-start gap-1.5">
+                          <BIcon name="AlertTriangle" class="w-3.5 h-3.5 text-rose-400 flex-shrink-0 mt-0.5" />
+                          <span><span class="text-rose-400 font-bold">{{ langStore.t.verImportantLabel }}</span>{{ langStore.t.verAntiAINotice }}</span>
                         </p>
                       </div>
 
                       <!-- Submit button -->
                       <button type="button" @click="requestVerification"
-                        :disabled="isRequestingVerification || !selectedVerType || evidenceUrls.length === 0 || !profileCompleteness?.canSubmit"
+                        :disabled="isRequestingVerification || !canSubmitVer"
                         class="w-full py-3.5 rounded-2xl text-sm font-bold text-white transition-all shadow-lg disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         style="background: linear-gradient(135deg, #3b82f6, #2563eb); box-shadow: 0 4px 20px rgba(59,130,246,0.35)">
                         <span v-if="isRequestingVerification" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                        <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                        </svg>
-                        {{ isRequestingVerification ? langStore.t.verSubmitSending : !profileCompleteness?.canSubmit ? langStore.t.verSubmitNoProfile : !selectedVerType ? langStore.t.verSubmitNoType : evidenceUrls.length === 0 ? langStore.t.verSubmitNoEvidence : langStore.t.verSubmitBtn }}
+                        <BIcon v-else name="ShieldCheck" class="w-4 h-4" />
+                        {{ isRequestingVerification ? langStore.t.verSubmitSending : !localCompleteness.canSubmit ? langStore.t.verSubmitNoProfile : !selectedVerType ? langStore.t.verSubmitNoType : !canSubmitVer ? langStore.t.verSubmitNoEvidence : langStore.t.verSubmitBtn }}
                       </button>
                     </template>
                   </template>
@@ -2440,10 +2428,32 @@ const verificationCriteria = ref<any>(null)
 const profileCompleteness = ref<any>(null)
 const isLoadingVerification = ref(false)
 const isRequestingVerification = ref(false)
-const selectedVerType = ref<'artist' | 'master' | 'event' | ''>('')
+const selectedVerType = ref<'artist' | 'master' | 'event' | 'fursuiter' | 'popular' | 'writer' | 'organizer' | ''>('')
 const evidenceUrls = ref<string[]>([])
 const evidenceInput = ref<HTMLInputElement | null>(null)
 const isUploadingEvidence = ref(false)
+const popularLinks = ref<string[]>([''])
+
+const VER_TYPES = [
+  { id: 'artist',    icon: 'Palette',       borderSel: 'border-purple-500', bgSel: 'bg-purple-500/10 shadow-purple-500/10', borderHov: 'hover:border-purple-500/40', textSel: 'text-purple-400', badge: 'bg-purple-500', badgeCls: 'bg-purple-500/10 border-purple-500/20 text-purple-400',    titleKey: 'verTypeArtist',    hintKey: 'verTypeArtistHint' },
+  { id: 'master',    icon: 'Hammer',        borderSel: 'border-amber-500',  bgSel: 'bg-amber-500/10 shadow-amber-500/10',   borderHov: 'hover:border-amber-500/40',  textSel: 'text-amber-400',  badge: 'bg-amber-500',  badgeCls: 'bg-amber-500/10 border-amber-500/20 text-amber-400',       titleKey: 'verTypeMaster',    hintKey: 'verTypeMasterHint' },
+  { id: 'fursuiter', icon: 'Shirt',         borderSel: 'border-cyan-500',   bgSel: 'bg-cyan-500/10 shadow-cyan-500/10',     borderHov: 'hover:border-cyan-500/40',   textSel: 'text-cyan-400',   badge: 'bg-cyan-500',   badgeCls: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400',          titleKey: 'verTypeFursuiter', hintKey: 'verTypeFursuiterHint' },
+  { id: 'popular',   icon: 'TrendingUp',    borderSel: 'border-blue-500',   bgSel: 'bg-blue-500/10 shadow-blue-500/10',     borderHov: 'hover:border-blue-500/40',   textSel: 'text-blue-400',   badge: 'bg-blue-500',   badgeCls: 'bg-blue-500/10 border-blue-500/20 text-blue-400',          titleKey: 'verTypePopular',   hintKey: 'verTypePopularHint' },
+  { id: 'writer',    icon: 'PenLine',       borderSel: 'border-rose-500',   bgSel: 'bg-rose-500/10 shadow-rose-500/10',     borderHov: 'hover:border-rose-500/40',   textSel: 'text-rose-400',   badge: 'bg-rose-500',   badgeCls: 'bg-rose-500/10 border-rose-500/20 text-rose-400',          titleKey: 'verTypeWriter',    hintKey: 'verTypeWriterHint' },
+  { id: 'organizer', icon: 'CalendarCheck', borderSel: 'border-indigo-500', bgSel: 'bg-indigo-500/10 shadow-indigo-500/10', borderHov: 'hover:border-indigo-500/40', textSel: 'text-indigo-400', badge: 'bg-indigo-500', badgeCls: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400',    titleKey: 'verTypeOrganizer', hintKey: 'verTypeOrganizerHint' },
+  { id: 'event',     icon: 'Ticket',        borderSel: 'border-emerald-500',bgSel: 'bg-emerald-500/10 shadow-emerald-500/10',borderHov: 'hover:border-emerald-500/40',textSel: 'text-emerald-400',badge: 'bg-emerald-500',badgeCls: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',  titleKey: 'verTypeEvent',     hintKey: 'verTypeEventHint' },
+] as const
+
+const verTypeMeta = computed(() => {
+  const t = langStore.t as any
+  return Object.fromEntries(VER_TYPES.map(v => [v.id, { label: t[v.titleKey] ?? v.id, icon: v.icon, badgeCls: v.badgeCls }]))
+})
+
+const canSubmitVer = computed(() => {
+  if (!selectedVerType.value || !localCompleteness.value.canSubmit) return false
+  if (selectedVerType.value === 'popular') return popularLinks.value.some(l => l.trim())
+  return evidenceUrls.value.length > 0
+})
 
 async function fetchVerificationData() {
   isLoadingVerification.value = true
@@ -2477,17 +2487,22 @@ async function onEvidenceUpload(e: Event) {
 }
 
 async function requestVerification() {
-  if (!selectedVerType.value || evidenceUrls.value.length === 0) return
+  if (!canSubmitVer.value) return
   isRequestingVerification.value = true
   try {
-    const res = await api.post('/verification/request', {
+    const payload: Record<string, any> = {
       verificationType: selectedVerType.value,
       evidenceUrls: evidenceUrls.value,
-    })
+    }
+    if (selectedVerType.value === 'popular') {
+      payload.socialLinks = popularLinks.value.filter(l => l.trim())
+    }
+    const res = await api.post('/verification/request', payload)
     if (res.data.success) {
       showToast('success', 'Заявка отправлена на проверку модераторам')
       selectedVerType.value = ''
       evidenceUrls.value = []
+      popularLinks.value = ['']
       await fetchVerificationData()
     }
   } catch (e: any) {
@@ -2517,11 +2532,16 @@ const completenessFields = computed(() => {
     { key: 'avatar', label: t.complAvatarLabel, met: c.hasAvatar },
     { key: 'email', label: 'Email', met: c.hasEmail },
     { key: 'bio', label: t.complBioLabel, met: c.hasBio },
-    { key: 'fursonaName', label: t.complFursonaNameLabel, met: c.hasFursonaName },
     { key: 'fursonaSpecies', label: t.complFursonaSpeciesLabel, met: c.hasFursonaSpecies },
-    { key: 'fursonaGender', label: t.complFursonaGenderLabel, met: c.hasFursonaGender },
-    { key: 'fursonaDesc', label: t.complFursonaDescLabel, met: c.hasFursonaDescription },
   ]
+})
+
+const localCompleteness = computed(() => {
+  const fields = completenessFields.value
+  if (!fields.length) return { percentage: 0, canSubmit: false }
+  const met = fields.filter(f => f.met).length
+  const percentage = Math.round((met / fields.length) * 100)
+  return { percentage, canSubmit: percentage >= 75 }
 })
 
 // ── Birth date helpers ─────────────────────────────────────────────────────

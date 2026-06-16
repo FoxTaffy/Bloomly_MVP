@@ -1,6 +1,6 @@
 {
   "name": "bloomly-vue",
-  "version": "0.4.25",
+  "version": "0.4.33",
   "private": true,
   "type": "module",
   "scripts": {

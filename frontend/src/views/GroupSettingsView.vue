@@ -478,6 +478,7 @@ const form = reactive({
   groupTheme: '',
   donationsEnabled: false,
   bankCardMasked: '',
+  supportTiers: [] as Array<{ emoji: string; name: string; price: string; desc: string }>,
 })
 
 // Slug: авто-санитизация ввода
@@ -513,6 +514,7 @@ const savedForm = reactive({
   groupTheme: '',
   donationsEnabled: false,
   bankCardMasked: '',
+  supportTiers: [] as Array<{ emoji: string; name: string; price: string; desc: string }>,
 })
 
 function snapshotToSaved() {
@@ -535,6 +537,7 @@ function snapshotToSaved() {
     groupTheme: form.groupTheme,
     donationsEnabled: form.donationsEnabled,
     bankCardMasked: form.bankCardMasked,
+    supportTiers: JSON.parse(JSON.stringify(form.supportTiers)),
   })
 }
 
@@ -558,6 +561,7 @@ function resetForm() {
     groupTheme: savedForm.groupTheme,
     donationsEnabled: savedForm.donationsEnabled,
     bankCardMasked: savedForm.bankCardMasked,
+    supportTiers: JSON.parse(JSON.stringify(savedForm.supportTiers)),
   })
   avatarOriginalSrc.value = ''
   bannerOriginalSrc.value = ''
@@ -582,7 +586,8 @@ const isDirty = computed(() => {
     JSON.stringify(form.schedule) !== JSON.stringify(savedForm.schedule) ||
     JSON.stringify(form.whatToBring) !== JSON.stringify(savedForm.whatToBring) ||
     form.donationsEnabled !== savedForm.donationsEnabled ||
-    form.bankCardMasked !== savedForm.bankCardMasked
+    form.bankCardMasked !== savedForm.bankCardMasked ||
+    JSON.stringify(form.supportTiers) !== JSON.stringify(savedForm.supportTiers)
   )
 })
 
@@ -1017,6 +1022,7 @@ async function load() {
   form.hiddenMemberIds = JSON.parse(g.hidden_member_ids || '[]')
   form.donationsEnabled = (g as any).donations_enabled ?? false
   form.bankCardMasked = (g as any).bank_card_masked || ''
+  form.supportTiers = Array.isArray((g as any).support_tiers) ? (g as any).support_tiers : []
   if (g.commissionInfo) {
     const c = g.commissionInfo
     commForm.value.status = c.status || 'closed'
@@ -1113,6 +1119,7 @@ async function save() {
       hiddenMemberIds: form.hiddenMemberIds,
       donationsEnabled: form.donationsEnabled,
       bankCardMasked: form.bankCardMasked || null,
+      supportTiers: form.supportTiers.filter((t: { name: string }) => t.name.trim()),
     })
     if (group.value.type === 'creative') {
       await groupsStore.updateCommission(group.value.id, {
@@ -2638,6 +2645,47 @@ async function deleteGroup() {
                         <li class="flex gap-1.5"><span class="text-emerald-500 mt-0.5 flex-shrink-0">✓</span> Деньги поступают на привязанную карту</li>
                         <li class="flex gap-1.5"><span class="text-white/25 mt-0.5 flex-shrink-0">•</span> Bloomly берёт комиссию 5% за обработку платежа</li>
                       </ul>
+                    </div>
+
+                    <!-- Support tiers -->
+                    <div class="space-y-3">
+                      <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                          <BIcon name="Crown" class="w-4 h-4 text-brand-yellow" />
+                          <p class="text-sm font-bold text-white">Тарифы поддержки</p>
+                        </div>
+                        <button
+                          @click="form.supportTiers.push({ emoji: '⭐', name: '', price: '', desc: '' })"
+                          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-brand-yellow/10 text-brand-yellow border border-brand-yellow/25 hover:bg-brand-yellow/20 transition-all">
+                          <BIcon name="Plus" class="w-3.5 h-3.5" /> Добавить тариф
+                        </button>
+                      </div>
+                      <p class="text-xs text-white/35">Укажи уровни поддержки — они появятся в сайдбаре группы вместо заглушек</p>
+
+                      <div v-if="!form.supportTiers.length"
+                        class="px-4 py-5 bg-brand-bg border border-dashed border-white/10 rounded-2xl text-center">
+                        <BIcon name="Crown" class="w-7 h-7 mx-auto mb-2 text-white/15" />
+                        <p class="text-sm text-white/30">Тарифы не настроены</p>
+                        <p class="text-xs text-white/20 mt-0.5">Блок «Поддержать» в группе будет скрыт</p>
+                      </div>
+
+                      <div v-for="(tier, idx) in form.supportTiers" :key="idx"
+                        class="bg-brand-bg border border-brand-border rounded-2xl p-4 space-y-3">
+                        <div class="flex items-center gap-2">
+                          <input v-model="tier.emoji" maxlength="4" placeholder="⭐"
+                            class="w-14 text-center bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-2 py-2 text-lg outline-none transition-all" />
+                          <input v-model="tier.name" placeholder="Название тарифа"
+                            class="flex-1 bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-none transition-all" />
+                          <input v-model="tier.price" placeholder="500 ₽/мес" maxlength="20"
+                            class="w-28 bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-none transition-all" />
+                          <button @click="form.supportTiers.splice(idx, 1)"
+                            class="w-8 h-8 flex items-center justify-center rounded-xl text-white/30 hover:text-brand-error hover:bg-brand-error/10 transition-all flex-shrink-0">
+                            <BIcon name="Trash2" class="w-4 h-4" />
+                          </button>
+                        </div>
+                        <input v-model="tier.desc" placeholder="Описание — что получит подписчик"
+                          class="w-full bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-none transition-all" />
+                      </div>
                     </div>
 
                     <div class="pt-2">

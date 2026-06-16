@@ -49,6 +49,7 @@ export interface UpdateGroupInput {
   hiddenMemberIds?: string[];
   donationsEnabled?: boolean;
   bankCardMasked?: string | null;
+  supportTiers?: Array<{ emoji: string; name: string; price: string; desc: string }>;
 }
 
 export interface CreateEventInput {

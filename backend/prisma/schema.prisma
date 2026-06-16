@@ -563,9 +563,10 @@ model Group {
   hide_admins       Boolean         @default(false)
   hidden_member_ids String          @default("[]")
 
-  // Donations
+  // Donations & support tiers
   donations_enabled Boolean         @default(false)
   bank_card_masked  String?         @db.VarChar(25)   // e.g. "**** **** **** 4242"
+  support_tiers     Json            @default("[]")    // [{emoji,name,price,desc}]
 
   // Moderation / discovery
   is_verified       Boolean         @default(false)   // Official / verified community

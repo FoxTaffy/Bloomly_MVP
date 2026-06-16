@@ -181,8 +181,15 @@ const pwStrength = computed(() => {
   if (/[^A-Za-z0-9]/.test(p)) s++
   return s
 })
-const pwLabel = computed(() => ['', 'Слабый', 'Средний', 'Хороший', 'Отличный'][pwStrength.value])
-const pwColor = computed(() => ['', '#E14664', '#E76F51', '#FFC01F', '#66C770'][pwStrength.value])
+const pwLabel = computed(() => {
+  if (!activePassword.value) return ''
+  if (activePassword.value.length < 8) return 'Минимум 8 символов'
+  return ['', 'Слабый', 'Средний', 'Хороший', 'Отличный'][pwStrength.value]
+})
+const pwColor = computed(() => {
+  if (activePassword.value && activePassword.value.length < 8) return '#E14664'
+  return ['', '#E14664', '#E76F51', '#FFC01F', '#66C770'][pwStrength.value]
+})
 
 // Частицы
 const particles = Array.from({ length: 80 }, (_, i) => ({
@@ -380,7 +387,15 @@ const features = [
                 <!-- Email (login / register / forgot / reset) -->
                 <div v-if="mode !== 'verify'" class="input-group">
                   <EnvelopeIcon class="input-icon" />
-                  <input v-model="email" type="email" :placeholder="langStore.t.emailPlaceholder" required class="fld" />
+                  <input
+                    v-model="email"
+                    type="email"
+                    :placeholder="langStore.t.emailPlaceholder"
+                    required
+                    maxlength="254"
+                    autocomplete="email"
+                    class="fld"
+                  />
                 </div>
 
                 <!-- Username (только register) -->
@@ -396,8 +411,11 @@ const features = [
                     <UserIcon class="input-icon" />
                     <input :value="username" @input="username = ($event.target as HTMLInputElement).value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 30)" type="text" :placeholder="langStore.t.usernamePlaceholder" required minlength="3" maxlength="30" class="fld" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false" />
                   </div>
-                  <p v-if="mode === 'register' && username" class="text-[11px] text-white/30 pl-1 -mt-1">
-                    только a–z, 0–9, _ · будет: <span class="text-brand-accent/70 font-mono">{{ username }}</span>
+                  <p v-if="mode === 'register'" class="text-[11px] pl-1 -mt-1 transition-colors"
+                    :class="username && username.length < 3 ? 'text-red-400/70' : 'text-white/30'">
+                    <template v-if="!username">только a–z, 0–9, _ · минимум 3 символа</template>
+                    <template v-else-if="username.length < 3">нужно ещё {{ 3 - username.length }} симв.</template>
+                    <template v-else>будет: <span class="text-brand-accent/70 font-mono">{{ username }}</span></template>
                   </p>
                 </Transition>
 
@@ -408,7 +426,8 @@ const features = [
                     v-model="password"
                     :type="showPass ? 'text' : 'password'"
                     :placeholder="langStore.t.passwordPlaceholder"
-                    required minlength="6"
+                    required :minlength="mode === 'register' ? 8 : 1" maxlength="128"
+                    :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
                     class="fld pr-12"
                   />
                   <button type="button" @click="showPass = !showPass"
@@ -484,7 +503,8 @@ const features = [
                     v-model="newPassword"
                     :type="showNewPass ? 'text' : 'password'"
                     placeholder="Новый пароль"
-                    required minlength="6"
+                    required minlength="8" maxlength="128"
+                    autocomplete="new-password"
                     class="fld pr-12"
                   />
                   <button type="button" @click="showNewPass = !showNewPass"

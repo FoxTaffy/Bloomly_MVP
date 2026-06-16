@@ -1963,8 +1963,8 @@ const vClickOutside = {
                 </div>
               </template>
 
-              <!-- Creative / Artist: Subscription tiers -->
-              <template v-if="group.type === 'creative' || group.type === 'artist'">
+              <!-- Support tiers (configured by owner in settings) -->
+              <template v-if="(group as any).support_tiers?.length">
                 <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                   <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
                     <BIcon name="Crown" class="w-3.5 h-3.5 text-brand-yellow" />
@@ -1973,47 +1973,18 @@ const vClickOutside = {
                     </p>
                   </div>
                   <div class="px-3 pb-3 space-y-2">
-                    <template v-if="(group as any).subscriptionTiers?.length">
-                      <div v-for="tier in (group as any).subscriptionTiers" :key="tier.id"
-                        class="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-brand-bg border border-brand-border hover:border-brand-yellow/30 transition-all cursor-pointer">
-                        <span class="text-lg leading-none flex-shrink-0">{{ tier.emoji || '⭐' }}</span>
-                        <div class="flex-1 min-w-0">
-                          <p class="text-xs font-bold text-white leading-tight">{{ tier.name }}</p>
-                          <p class="text-[10px] text-white/40 mt-0.5">{{ tier.price }} ₽/мес</p>
-                        </div>
-                        <button class="px-2.5 py-1 rounded-xl text-[10px] font-bold flex-shrink-0"
-                          :style="`background: ${group.accent_color || '#4C67CF'}15; color: ${group.accent_color || '#4C67CF'}; border: 1px solid ${group.accent_color || '#4C67CF'}30`">
-                          Поддержать
-                        </button>
+                    <div v-for="tier in (group as any).support_tiers" :key="tier.name"
+                      class="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-brand-bg border border-brand-border hover:border-brand-yellow/30 transition-all cursor-pointer">
+                      <span class="text-lg leading-none flex-shrink-0">{{ tier.emoji || '⭐' }}</span>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs font-bold text-white leading-tight">{{ tier.name }}</p>
+                        <p class="text-[10px] text-white/40 mt-0.5">{{ tier.price }}<span v-if="tier.desc"> · {{ tier.desc }}</span></p>
                       </div>
-                    </template>
-                    <template v-else-if="group.type === 'creative'">
-                      <div v-for="tier in [{ emoji: '🍪', name: 'На печеньки', price: '150', desc: 'Поддержка студии' }, { emoji: '👑', name: 'VIP Мастер', price: '500', desc: 'WIP-фото + приоритет в очереди' }]" :key="tier.name"
-                        class="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-brand-bg border border-brand-border hover:border-brand-purple/30 transition-all cursor-pointer">
-                        <span class="text-lg leading-none flex-shrink-0">{{ tier.emoji }}</span>
-                        <div class="flex-1 min-w-0">
-                          <p class="text-xs font-bold text-white leading-tight">{{ tier.name }}</p>
-                          <p class="text-[10px] text-white/40 mt-0.5">{{ tier.price }} ₽/мес · {{ tier.desc }}</p>
-                        </div>
-                        <button class="px-2.5 py-1 rounded-xl text-[10px] font-bold flex-shrink-0 bg-brand-purple/15 text-brand-purple border border-brand-purple/30">
-                          Поддержать
-                        </button>
-                      </div>
-                    </template>
-                    <template v-else-if="group.type === 'artist'">
-                      <div v-for="tier in [{ emoji: '🐰', name: 'Bunny', price: '200', desc: 'Ранний доступ к постам' }, { emoji: '🦊', name: 'Fox', price: '500', desc: 'WIP + голосование за темы' }, { emoji: '🐻', name: 'Bear', price: '1 500', desc: 'Всё выше + скидка 10%' }]" :key="tier.name"
-                        class="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-brand-bg border border-brand-border hover:border-brand-accent/30 transition-all cursor-pointer">
-                        <span class="text-lg leading-none flex-shrink-0">{{ tier.emoji }}</span>
-                        <div class="flex-1 min-w-0">
-                          <p class="text-xs font-bold text-white leading-tight">{{ tier.name }}</p>
-                          <p class="text-[10px] text-white/40 mt-0.5">{{ tier.price }} ₽/мес · {{ tier.desc }}</p>
-                        </div>
-                        <button class="px-2.5 py-1 rounded-xl text-[10px] font-bold flex-shrink-0"
-                          :style="`background: ${group.accent_color || '#4C67CF'}15; color: ${group.accent_color || '#4C67CF'}; border: 1px solid ${group.accent_color || '#4C67CF'}30`">
-                          Поддержать
-                        </button>
-                      </div>
-                    </template>
+                      <button class="px-2.5 py-1 rounded-xl text-[10px] font-bold flex-shrink-0"
+                        :style="`background: ${group.accent_color || '#4C67CF'}15; color: ${group.accent_color || '#4C67CF'}; border: 1px solid ${group.accent_color || '#4C67CF'}30`">
+                        Поддержать
+                      </button>
+                    </div>
                   </div>
                 </div>
               </template>

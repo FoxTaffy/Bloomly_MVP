@@ -52,6 +52,7 @@ const GROUP_SELECT = {
   hidden_member_ids: true,
   donations_enabled: true,
   bank_card_masked: true,
+  support_tiers: true,
   _count: { select: { members: true, events: true, posts: { where: { post: { deleted_at: null } } } } },
   owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
   communityChat: { select: { id: true } },
@@ -235,6 +236,7 @@ export const groupService = {
     if (input.hiddenMemberIds !== undefined) data.hidden_member_ids = JSON.stringify(input.hiddenMemberIds);
     if (input.donationsEnabled !== undefined) data.donations_enabled = input.donationsEnabled;
     if (input.bankCardMasked !== undefined) data.bank_card_masked = input.bankCardMasked || null;
+    if (input.supportTiers !== undefined) data.support_tiers = input.supportTiers;
 
     return prisma.group.update({ where: { id: groupId }, data, select: GROUP_SELECT });
   },
