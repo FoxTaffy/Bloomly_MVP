@@ -59,16 +59,20 @@ export async function getMessagesHandler(
 }
 
 export async function sendMessageHandler(
-  req: FastifyRequest<{ Params: { id: string }; Body: { content: string } }>,
+  req: FastifyRequest<{ Params: { id: string }; Body: { content?: string; encrypted_text?: string; file_url?: string; media_type?: string; reply_to_id?: string } }>,
   reply: FastifyReply,
 ) {
   try {
     const { id: senderId } = req.user as JwtUser;
-    const { content } = req.body;
+    const { content = '', encrypted_text, file_url, media_type, reply_to_id } = req.body ?? {} as any;
     const message = await messageService.sendMessage({
       conversationId: req.params.id,
       senderId,
       content,
+      encrypted_text,
+      file_url,
+      media_type,
+      reply_to_id,
     });
     return reply.code(201).send({ success: true, data: { message }, error: null });
   } catch (e: any) {
@@ -305,6 +309,81 @@ export async function setConversationLabelHandler(
     return reply.send({ success: true, data: { label }, error: null });
   } catch (e: any) {
     return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  }
+}
+
+// ── E2EE key management ─────────────────────────────────────────────────────
+
+/** PUT /keys — register own public key */
+export async function registerPublicKeyHandler(req: FastifyRequest, reply: FastifyReply) {
+  try {
+    const { id: userId } = req.user as JwtUser;
+    const { publicKey } = req.body as { publicKey: string };
+    if (!publicKey) return reply.code(400).send({ success: false, data: null, error: { code: 'VALIDATION', message: 'publicKey is required' } });
+    const result = await messageService.registerPublicKey(userId, publicKey);
+    return reply.send({ success: true, data: result, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 500).send({ success: false, data: null, error: { code: 'KEY_ERROR', message: e.message } });
+  }
+}
+
+/** POST /keys/batch — get public keys for multiple users */
+export async function getPublicKeysHandler(req: FastifyRequest, reply: FastifyReply) {
+  try {
+    const { userIds } = req.body as { userIds: string[] };
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return reply.code(400).send({ success: false, data: null, error: { code: 'VALIDATION', message: 'userIds array is required' } });
+    }
+    const keys = await messageService.getPublicKeys(userIds);
+    return reply.send({ success: true, data: { keys }, error: null });
+  } catch (e: any) {
+    return reply.code(500).send({ success: false, data: null, error: { code: 'KEY_ERROR', message: e.message } });
+  }
+}
+
+/** PUT /conversations/:id/keys — set encrypted conv keys for all participants */
+export async function setConversationKeysHandler(req: FastifyRequest, reply: FastifyReply) {
+  try {
+    const { id: userId } = req.user as JwtUser;
+    const { keys } = req.body as { keys: Record<string, string> };
+    if (!keys || typeof keys !== 'object') {
+      return reply.code(400).send({ success: false, data: null, error: { code: 'VALIDATION', message: 'keys map is required' } });
+    }
+    await messageService.setConversationKeys((req.params as any).id, userId, keys);
+    return reply.send({ success: true, data: null, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'KEY_ERROR', message: e.message } });
+  }
+}
+
+/** GET /conversations/:id/keys/me — get my encrypted conv key */
+export async function getMyConversationKeyHandler(req: FastifyRequest, reply: FastifyReply) {
+  try {
+    const { id: userId } = req.user as JwtUser;
+    const encryptedKey = await messageService.getMyConversationKey((req.params as any).id, userId);
+    return reply.send({ success: true, data: { encryptedKey }, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'KEY_ERROR', message: e.message } });
+  }
+}
+
+// ── Forward message ─────────────────────────────────────────────────────────
+
+/** POST /messages/:msgId/forward */
+export async function forwardMessageHandler(
+  req: FastifyRequest<{ Params: { msgId: string }; Body: { targetConversationId: string; encrypted_text?: string; text?: string } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: senderId } = req.user as JwtUser;
+    const { targetConversationId, encrypted_text, text } = req.body ?? {} as any;
+    if (!targetConversationId) {
+      return reply.code(400).send({ success: false, data: null, error: { code: 'VALIDATION', message: 'targetConversationId is required' } });
+    }
+    const message = await messageService.forwardMessage(req.params.msgId, targetConversationId, senderId, encrypted_text, text);
+    return reply.code(201).send({ success: true, data: { message }, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'FORWARD_ERROR', message: e.message } });
   }
 }
 

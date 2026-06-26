@@ -225,8 +225,8 @@ const openPostModal = async (postId: string) => {
 
 const closePostModal = () => { postModal.value = null }
 
-const POST_TYPES = new Set(['LIKE', 'COMMENT', 'REPAW', 'MENTION', 'like', 'comment', 'repaw', 'mention'])
-const PROFILE_TYPES = new Set(['FOLLOW', 'RELATIONSHIP_ACCEPTED', 'follow', 'relationship_accepted'])
+const POST_TYPES = ['LIKE', 'COMMENT', 'REPAW', 'MENTION', 'like', 'comment', 'repaw', 'mention']
+const PROFILE_TYPES = ['FOLLOW', 'RELATIONSHIP_ACCEPTED', 'follow', 'relationship_accepted']
 
 const onNotifClick = async (n: any) => {
   if (n.type === 'RELATIONSHIP_REQUEST') return
@@ -237,13 +237,13 @@ const onNotifClick = async (n: any) => {
     try { await api.post('/notifications/read', { ids: [n.id] }) } catch {}
   }
   // Open post modal
-  if (POST_TYPES.has(n.type) && n.post_id) {
+  if (POST_TYPES.includes(n.type) && n.post_id) {
     showNotifications.value = false
     openPostModal(n.post_id)
     return
   }
   // Open sender profile
-  if (PROFILE_TYPES.has(n.type) && n.sender?.username) {
+  if (PROFILE_TYPES.includes(n.type) && n.sender?.username) {
     showNotifications.value = false
     router.push(`/profile/${n.sender.username}`)
     return
@@ -395,8 +395,8 @@ onUnmounted(() => {
 
     <!-- Right: Actions -->
     <div class="flex items-center gap-1.5 md:gap-3">
-      <!-- Language picker -->
-      <div class="relative">
+      <!-- Language picker (desktop only) -->
+      <div class="relative hidden md:block">
         <button @click.stop="showLangDropdown = !showLangDropdown"
           class="flex items-center gap-1.5 px-2.5 py-1.5 bg-brand-card border border-brand-border rounded-xl text-sm font-bold text-white/80 hover:text-white hover:border-brand-accent/50 transition-all">
           <span :class="`fi fi-${currentLangOption().fi} rounded-sm`" style="font-size:1.1rem"></span>

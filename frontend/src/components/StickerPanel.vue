@@ -335,7 +335,7 @@ async function importTgs(e: Event) {
 // ── Pick sticker ───────────────────────────────────────────────────────────
 function pick(url: string, pack?: StickerPack) {
   // Block paid pack stickers not owned/collected
-  if (pack && parseFloat(pack.price) > 0 && !isInCollection(pack) && !ownPackIds.has(pack.id)) {
+  if (pack && parseFloat(pack.price) > 0 && !isInCollection(pack) && !ownPackIds.value.has(pack.id)) {
     openPack(pack)
     return
   }

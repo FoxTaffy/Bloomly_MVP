@@ -189,7 +189,7 @@
             <template v-if="conv.is_group && conv.last_message">
               <span class="text-brand-accent/80">{{ conv.last_message.sender?.display_name || conv.last_message.sender?.username }}: </span>
             </template>
-            {{ previewText(conv.last_message?.text) || (conv.last_message?.file_url ? langStore.t.mediaFilePreview : langStore.t.noMessages) }}
+            {{ lastMessagePreview(conv.last_message) }}
           </p>
         </div>
         <!-- Context menu trigger -->
@@ -490,6 +490,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
 import BIcon from '@/components/BIcon.vue'
 import api from '@/api'
+import { isEncrypted } from '@/lib/e2e'
 
 const props = defineProps<{
   activeId: string | null
@@ -691,10 +692,27 @@ function isUnread(conv: Conversation): boolean {
 
 const STORY_REPLY_PREVIEW_RE = /^\[story_reply:[^\]]*\]/
 
-function previewText(text: string | undefined): string {
-  if (!text) return ''
-  if (STORY_REPLY_PREVIEW_RE.test(text)) return '📸 ' + langStore.t.storyReplyPreview
-  return text
+function lastMessagePreview(msg: Conversation['last_message']): string {
+  if (!msg) return langStore.t.noMessages
+  const t = langStore.t
+  // type-based overrides (check before text so sticker/voice never leaks text)
+  if (msg.type === 'sticker') return t.stickerPreview
+  if (msg.type === 'voice' || msg.type === 'audio') return t.voiceMessagePreview
+  // encrypted_text field (new schema)
+  if (!msg.text && msg.encrypted_text) return t.encryptedMessagePreview
+  // legacy: ciphertext stored in text field (ECDH E2E)
+  if (msg.text && isEncrypted(msg.text)) return t.encryptedMessagePreview
+  // forwarded message (new API — no text prefix, just the forwarded_from_sender_id marker)
+  if (msg.forwarded_from_sender_id && msg.text && !msg.text.startsWith('↩️')) return '↩️ ' + msg.text
+  // story reply
+  if (msg.text && STORY_REPLY_PREVIEW_RE.test(msg.text)) return '📸 ' + t.storyReplyPreview
+  // plain text
+  if (msg.text) return msg.text
+  // forwarded file/sticker with no text
+  if (msg.forwarded_from_sender_id && msg.file_url) return '↩️ ' + t.mediaFilePreview
+  // fallback for image/video/file
+  if (msg.file_url) return t.mediaFilePreview
+  return t.noMessages
 }
 
 function formatTime(iso: string | undefined): string {

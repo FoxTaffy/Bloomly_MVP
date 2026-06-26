@@ -32,6 +32,18 @@ const senderSelect = {
   badge_type: true,
 } as const;
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+async function enrichWithForwardedSenders<T extends { forwarded_from_sender_id?: string | null }>(
+  messages: T[],
+): Promise<(T & { forwarded_from_sender: typeof senderSelect | null })[]> {
+  const ids = [...new Set(messages.filter(m => m.forwarded_from_sender_id).map(m => m.forwarded_from_sender_id as string))];
+  if (!ids.length) return messages.map(m => ({ ...m, forwarded_from_sender: null }));
+  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: senderSelect });
+  const byId = Object.fromEntries(users.map((u: any) => [u.id, u]));
+  return messages.map(m => ({ ...m, forwarded_from_sender: m.forwarded_from_sender_id ? byId[m.forwarded_from_sender_id] ?? null : null }));
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 export const messageService = {
   /**
@@ -176,7 +188,7 @@ export const messageService = {
   ) {
     await this._assertParticipant(conversationId, userId);
 
-    return prisma.message.findMany({
+    const messages = await prisma.message.findMany({
       where: {
         conversation_id: conversationId,
         deleted_at: null,
@@ -194,12 +206,14 @@ export const messageService = {
         },
       },
     });
+
+    return enrichWithForwardedSenders(messages);
   },
 
   /**
    * Send a message, persist it and broadcast to all conversation participants.
    */
-  async sendMessage({ conversationId, senderId, content, file_url, media_type, reply_to_id }: SendMessageInput) {
+  async sendMessage({ conversationId, senderId, content, encrypted_text, file_url, media_type, reply_to_id }: SendMessageInput) {
     await this._assertParticipant(conversationId, senderId);
 
     const conv = await prisma.conversation.findUnique({
@@ -220,7 +234,7 @@ export const messageService = {
     }
 
     const text = content?.trim() ?? '';
-    if (!text && !file_url) throw new Error('Message must have text or media');
+    if (!text && !encrypted_text && !file_url) throw new Error('Message must have text or media');
 
     // Determine message type
     let msgType: string = 'text';
@@ -244,6 +258,7 @@ export const messageService = {
           conversation_id: conversationId,
           sender_id: senderId,
           text: text || null,
+          encrypted_text: encrypted_text ?? null,
           file_url: file_url ?? null,
           type: msgType,
           reply_to_id: reply_to_id ?? null,
@@ -681,7 +696,6 @@ export const messageService = {
     `;
     const stats: Record<string, number> = {};
     for (const row of rows) stats[row.type] = Number(row.cnt);
-    // Count voice messages (no file_url needed, type='audio') + links in text
     const voiceRows = await prisma.$queryRaw<Row[]>`
       SELECT 'voice' as type, COUNT(*) as cnt FROM "Message"
       WHERE conversation_id = ${convId}::uuid AND deleted_at IS NULL AND type = 'audio'
@@ -694,5 +708,112 @@ export const messageService = {
     `;
     if (linkRows[0]) stats.link = Number(linkRows[0].cnt);
     return stats;
+  },
+
+  // ── E2EE key management ────────────────────────────────────────────────
+
+  /** Register or update the user's RSA-OAEP public key (JWK string). */
+  async registerPublicKey(userId: string, publicKey: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { public_key: publicKey },
+      select: { id: true, public_key: true },
+    });
+  },
+
+  /** Get public keys for a list of user IDs (used by frontend to encrypt conv key for each participant). */
+  async getPublicKeys(userIds: string[]): Promise<Record<string, string>> {
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, public_key: true },
+    });
+    const map: Record<string, string> = {};
+    for (const u of users) {
+      if (u.public_key) map[u.id] = u.public_key;
+    }
+    return map;
+  },
+
+  /**
+   * Store encrypted conversation keys for multiple participants.
+   * Called by the conversation creator after generating the AES key on the client.
+   * keys: { [userId]: encryptedKeyBase64 }
+   */
+  async setConversationKeys(convId: string, callerId: string, keys: Record<string, string>) {
+    await this._assertParticipant(convId, callerId);
+    const upserts = Object.entries(keys).map(([userId, encryptedKey]) =>
+      (prisma as any).conversationKey.upsert({
+        where: { conversation_id_user_id: { conversation_id: convId, user_id: userId } },
+        create: { conversation_id: convId, user_id: userId, encrypted_key: encryptedKey },
+        update: { encrypted_key: encryptedKey },
+      }),
+    );
+    await prisma.$transaction(upserts);
+  },
+
+  /** Get the caller's encrypted conversation key for a given conversation. */
+  async getMyConversationKey(convId: string, userId: string): Promise<string | null> {
+    await this._assertParticipant(convId, userId);
+    const row = await (prisma as any).conversationKey.findUnique({
+      where: { conversation_id_user_id: { conversation_id: convId, user_id: userId } },
+    });
+    return row?.encrypted_key ?? null;
+  },
+
+  // ── Forward message ────────────────────────────────────────────────────
+
+  /**
+   * Forward a message to a target conversation.
+   * The frontend re-encrypts content for the target conversation before calling this.
+   */
+  async forwardMessage(
+    sourceMessageId: string,
+    targetConvId: string,
+    senderId: string,
+    encryptedText?: string | null,
+    text?: string | null,
+  ) {
+    const source = await prisma.message.findUnique({ where: { id: sourceMessageId } });
+    if (!source) throw Object.assign(new Error('Source message not found'), { statusCode: 404 });
+    if (source.deleted_at) throw Object.assign(new Error('Cannot forward deleted message'), { statusCode: 400 });
+    await this._assertParticipant(targetConvId, senderId);
+
+    const [fwdSender, [message]] = await Promise.all([
+      prisma.user.findUnique({ where: { id: source.sender_id }, select: senderSelect }),
+      prisma.$transaction([
+        prisma.message.create({
+          data: {
+            conversation_id: targetConvId,
+            sender_id: senderId,
+            text: text ?? source.text ?? null,
+            encrypted_text: encryptedText ?? null,
+            type: source.type === 'system' ? 'text' : source.type,
+            file_url: source.file_url ?? null,
+            forwarded_from_id: source.id,
+            forwarded_from_sender_id: source.sender_id,
+            forwarded_from_conv_id: source.conversation_id,
+          },
+          include: {
+            sender: { select: senderSelect },
+          },
+        }),
+        prisma.conversation.update({
+          where: { id: targetConvId },
+          data: { updated_at: new Date() },
+        }),
+      ]),
+    ]);
+
+    const enriched = { ...message, forwarded_from_sender: fwdSender ?? null };
+
+    // Real-time push
+    const participants = await prisma.conversationParticipant.findMany({
+      where: { conversation_id: targetConvId },
+      select: { user_id: true },
+    });
+    for (const { user_id } of participants) {
+      messageSubscriptions.push(user_id, { type: 'new_message', data: enriched });
+    }
+    return enriched;
   },
 };

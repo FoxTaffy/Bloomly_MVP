@@ -752,6 +752,16 @@
               </div>
             </div>
 
+            <!-- Forwarded banner for stickers/media (outside text bubble) -->
+            <div v-if="getForwardedAuthor(msg) && (msg.type === 'sticker' || (msg.file_url && !msg.text))"
+              class="flex items-center gap-1.5 mb-1 px-1"
+              :class="isMine(msg) ? 'justify-end' : ''">
+              <BIcon name="CornerUpRight" class="w-3 h-3 flex-shrink-0 text-brand-accent" />
+              <span class="text-[10px] font-semibold text-brand-accent truncate">
+                Переслано от {{ getForwardedAuthor(msg) }}
+              </span>
+            </div>
+
             <!-- Sticker (animated TGS/Lottie or regular image or legacy emoji) -->
             <div v-if="msg.type === 'sticker'" class="p-1">
               <div
@@ -1114,7 +1124,7 @@
               <div class="w-0.5 h-7 rounded-full bg-brand-accent flex-shrink-0" />
               <div class="min-w-0">
                 <p class="text-[10px] text-brand-accent font-semibold truncate">{{ forwardMsg.sender?.display_name || forwardMsg.sender?.username }}</p>
-                <p class="text-[11px] text-white/55 truncate">{{ forwardMsg.file_url && !forwardMsg.text ? '📎 Медиафайл' : previewMsgText(forwardMsg.text, 60) }}</p>
+                <p class="text-[11px] text-white/55 truncate">{{ forwardMsgPreview(forwardMsg) }}</p>
               </div>
             </div>
             <!-- Conv list -->
@@ -1856,10 +1866,16 @@ function openStoryCard(card: StoryReplyMeta, msg?: Message) {
 }
 
 function getForwardedAuthor(msg: Message): string | null {
+  if (msg.forwarded_from_sender) {
+    return msg.forwarded_from_sender.display_name || msg.forwarded_from_sender.username
+  }
   const m = (msg.text || '').match(FWD_RE); return m ? m[1] : null
 }
 
 function getMsgText(msg: Message): string {
+  if (msg.forwarded_from_sender) {
+    return getDisplayText(msg).replace(STORY_REPLY_RE, '$2')
+  }
   return getDisplayText(msg).replace(FWD_RE, '').replace(STORY_REPLY_RE, '$2')
 }
 
@@ -1902,14 +1918,25 @@ function scrollToMsg(msgId: string) {
 function startForward(msg: any) {
   forwardMsg.value = msg
 }
+
+function forwardMsgPreview(msg: Message): string {
+  if (msg.type === 'sticker') return '🎭 Стикер'
+  if (msg.type === 'voice' || msg.type === 'audio') return '🎤 Голосовое'
+  if (msg.text && isEncrypted(msg.text)) return '🔒 Зашифрованное сообщение'
+  if (msg.encrypted_text && !msg.text) return '🔒 Зашифрованное сообщение'
+  if (msg.text) return previewMsgText(msg.text, 60)
+  if (msg.file_url) return '📎 Медиафайл'
+  return ''
+}
 async function doForward(targetConvId: string) {
   if (!forwardMsg.value) return
   const original = forwardMsg.value
-  const author = original.sender?.display_name || original.sender?.username || ''
-  const prefix = `↩️ Переслано от ${author}\n`
-  const content = original.text ? prefix + original.text : prefix.trim()
-  store.sendMessage(targetConvId, content, original.file_url ?? null, original.type !== 'text' ? original.type : undefined)
   forwardMsg.value = null
+  try {
+    await store.forwardMessage(original.id, targetConvId)
+  } catch {
+    // silent — message still sent via WS push to target conv
+  }
 }
 
 // Open DM with user from @mention card

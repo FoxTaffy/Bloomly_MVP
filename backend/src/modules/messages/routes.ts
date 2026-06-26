@@ -21,6 +21,11 @@ import {
   pinMessageHandler,
   unpinMessageHandler,
   getMediaStatsHandler,
+  registerPublicKeyHandler,
+  getPublicKeysHandler,
+  setConversationKeysHandler,
+  getMyConversationKeyHandler,
+  forwardMessageHandler,
 } from './controller.js';
 
 declare module 'fastify' {
@@ -72,4 +77,13 @@ export async function messagesRoutes(fastify: FastifyInstance) {
   fastify.post('/conversations/:id/members', auth, addMemberHandler as any);
   fastify.delete('/conversations/:id/members/:userId', auth, removeMemberHandler as any);
   fastify.patch('/conversations/:id/members/:userId/role', auth, setMemberRoleHandler as any);
+
+  // E2EE key management
+  fastify.put('/keys', auth, registerPublicKeyHandler as any);
+  fastify.post('/keys/batch', auth, getPublicKeysHandler as any);
+  fastify.put('/conversations/:id/keys', auth, setConversationKeysHandler as any);
+  fastify.get('/conversations/:id/keys/me', auth, getMyConversationKeyHandler as any);
+
+  // Forward
+  fastify.post('/messages/:msgId/forward', auth, forwardMessageHandler as any);
 }

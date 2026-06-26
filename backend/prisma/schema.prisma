@@ -129,6 +129,7 @@ model User {
   denFairParticipations        DenFairParticipant[]
   allow_messages               Boolean               @default(true)
   donate_url                   String?               @db.VarChar(500)
+  conversationKeys             ConversationKey[]
 }
 
 model OAuthAccount {
@@ -442,10 +443,24 @@ model Conversation {
   group_id     String?                   @unique @db.Uuid  // set when type='community'
   participants ConversationParticipant[]
   messages     Message[]
+  keys         ConversationKey[]
   group        Group?                    @relation("GroupCommunityChat", fields: [group_id], references: [id], onDelete: SetNull)
 
   pinned_message_id String?  @db.Uuid
   pinnedMessage     Message? @relation("ConvPinnedMessage", fields: [pinned_message_id], references: [id], onDelete: SetNull)
+}
+
+model ConversationKey {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversation_id String       @db.Uuid
+  user_id         String       @db.Uuid
+  encrypted_key   String       // AES-256 conversation key encrypted with user's RSA-OAEP public key, base64
+  created_at      DateTime     @default(now())
+  conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([conversation_id, user_id])
+  @@index([user_id])
 }
 
 model Friendship {
@@ -493,23 +508,27 @@ model ConversationParticipant {
 }
 
 model Message {
-  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  conversation_id String       @db.Uuid
-  sender_id       String       @db.Uuid
-  text            String?
-  type            String       @default("text")
-  file_url        String?
-  reply_to_id     String?      @db.Uuid
-  reactions       Json?
-  edited_at       DateTime?
-  created_at      DateTime     @default(now())
-  updated_at      DateTime     @updatedAt
-  deleted_at      DateTime?
-  conversation    Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
-  sender          User         @relation(fields: [sender_id], references: [id])
-  reply_to        Message?     @relation("MessageReplies", fields: [reply_to_id], references: [id], onDelete: SetNull)
-  replies         Message[]    @relation("MessageReplies")
-  pinnedInConvs   Conversation[] @relation("ConvPinnedMessage")
+  id                       String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversation_id          String       @db.Uuid
+  sender_id                String       @db.Uuid
+  text                     String?
+  encrypted_text           String?      // AES-GCM ciphertext: base64(iv[12] + ciphertext), null for plaintext messages
+  type                     String       @default("text")
+  file_url                 String?
+  reply_to_id              String?      @db.Uuid
+  reactions                Json?
+  edited_at                DateTime?
+  created_at               DateTime     @default(now())
+  updated_at               DateTime     @updatedAt
+  deleted_at               DateTime?
+  forwarded_from_id        String?      @db.Uuid  // original message id
+  forwarded_from_sender_id String?      @db.Uuid  // original sender id
+  forwarded_from_conv_id   String?      @db.Uuid  // original conversation id
+  conversation             Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender                   User         @relation(fields: [sender_id], references: [id])
+  reply_to                 Message?     @relation("MessageReplies", fields: [reply_to_id], references: [id], onDelete: SetNull)
+  replies                  Message[]    @relation("MessageReplies")
+  pinnedInConvs            Conversation[] @relation("ConvPinnedMessage")
 
   @@index([conversation_id, created_at(sort: Desc)])
   @@index([reply_to_id])

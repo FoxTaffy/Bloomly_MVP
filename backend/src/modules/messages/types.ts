@@ -7,6 +7,7 @@ export interface SendMessageInput {
   conversationId: string;
   senderId: string;
   content: string;
+  encrypted_text?: string | null;
   file_url?: string | null;
   media_type?: string;
   reply_to_id?: string | null;

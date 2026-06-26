@@ -18,16 +18,21 @@ export interface Message {
   conversation_id: string
   sender_id: string
   text: string | null
+  encrypted_text?: string | null
   type: string
   file_url: string | null
   reply_to_id?: string | null
   reply_to?: { id: string; text: string | null; type: string; file_url: string | null; sender: { id: string; username: string; display_name: string | null } } | null
-  reactions?: Record<string, string[]> | null   // emoji → list of userIds
+  reactions?: Record<string, string[]> | null
   edited_at?: string | null
   created_at: string
   deleted_at: string | null
+  forwarded_from_id?: string | null
+  forwarded_from_sender_id?: string | null
+  forwarded_from_conv_id?: string | null
+  forwarded_from_sender?: MsgSender | null
   sender: MsgSender
-  _sending?: boolean   // optimistic flag
+  _sending?: boolean
 }
 
 export interface PinnedMessage {
@@ -448,6 +453,14 @@ export const useMessagesStore = defineStore('messages', () => {
     activeId.value = null
   }
 
+  async function forwardMessage(msgId: string, targetConvId: string): Promise<void> {
+    const res = await api.post(`/messages/messages/${msgId}/forward`, { targetConversationId: targetConvId })
+    const msg: Message = res.data.data?.message
+    if (msg && messages.value[targetConvId]) {
+      messages.value[targetConvId].push(msg)
+    }
+  }
+
   return {
     conversations,
     activeId,
@@ -486,5 +499,6 @@ export const useMessagesStore = defineStore('messages', () => {
     pinMessage,
     unpinMessage,
     getMediaStats,
+    forwardMessage,
   }
 })

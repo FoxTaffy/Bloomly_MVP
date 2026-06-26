@@ -6,8 +6,6 @@ import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
 import MobileBottomNav from '@/components/MobileBottomNav.vue'
 import NotifToastContainer from '@/components/NotifToastContainer.vue'
-import LangSwitcherWidget from '@/components/LangSwitcherWidget.vue'
-
 usePresence()
 
 const auth  = useAuthStore()
@@ -30,5 +28,4 @@ const showMobileNav = computed(() =>
   <RouterView />
   <MobileBottomNav v-if="showMobileNav" />
   <NotifToastContainer />
-  <LangSwitcherWidget />
 </template>
