@@ -6,6 +6,7 @@ import {
   oauthRedirectHandler, oauthCallbackHandler,
   linkInitHandler, getLinkedAccountsHandler, unlinkAccountHandler,
   refreshHandler, logoutHandler,
+  listSessionsHandler, revokeSessionHandler, revokeOtherSessionsHandler,
 } from './controller.js';
 import type { JwtPayload } from './types.js';
 import prisma from '../../config/prisma.js';
@@ -108,6 +109,11 @@ export async function authRoutes(fastify: FastifyInstance) {
   fastify.get('/link-init/:provider',          auth, linkInitHandler as any);
   fastify.get('/linked-accounts',              auth, getLinkedAccountsHandler as any);
   fastify.delete('/linked-accounts/:provider', auth, unlinkAccountHandler as any);
+
+  // ── Активные сессии / устройства (требует JWT) ────────────────────────────────
+  fastify.get('/sessions',                auth, listSessionsHandler as any);
+  fastify.delete('/sessions/other',       auth, revokeOtherSessionsHandler as any);
+  fastify.delete('/sessions/:id',         auth, revokeSessionHandler as any);
 
   // ── Профиль (требует JWT) ─────────────────────────────────────────────────────
   fastify.get(

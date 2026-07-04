@@ -1349,6 +1349,61 @@
                       </button>
                     </div>
                   </template>
+
+                  <!-- Устройства и активные сессии -->
+                  <div class="pt-5 mt-2 border-t border-brand-border">
+                    <div class="flex items-center justify-between mb-3">
+                      <div>
+                        <p class="text-sm font-semibold text-white">{{ langStore.t.devicesTitle }}</p>
+                        <p class="text-xs text-white/45">{{ langStore.t.devicesDesc }}</p>
+                      </div>
+                      <button
+                        v-if="sessions.filter(s => !s.current).length > 0"
+                        @click="revokeOtherSessions"
+                        :disabled="revokingOthers"
+                        class="px-3 py-1.5 rounded-xl text-xs font-bold text-red-400 border border-red-500/20 hover:border-red-500/50 bg-red-500/5 hover:bg-red-500/10 transition-all disabled:opacity-50 whitespace-nowrap"
+                      >{{ langStore.t.revokeAllOthersBtn }}</button>
+                    </div>
+
+                    <div v-if="sessionsLoading" class="flex justify-center py-6">
+                      <span class="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin"></span>
+                    </div>
+                    <div v-else class="space-y-2">
+                      <div
+                        v-for="s in sessions" :key="s.id"
+                        class="flex items-center justify-between p-4 rounded-2xl border transition-all"
+                        :class="s.current ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-brand-border/50 bg-brand-bg/30'"
+                      >
+                        <div class="flex items-center gap-3 min-w-0">
+                          <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-4.5 h-4.5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                          </div>
+                          <div class="min-w-0">
+                            <p class="text-sm font-semibold text-white truncate">
+                              {{ s.device_name ?? langStore.t.unknownDeviceLabel }}
+                              <span v-if="s.current" class="ml-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold align-middle" style="background:rgba(16,185,129,0.15);color:#34d399">{{ langStore.t.currentSessionBadge }}</span>
+                            </p>
+                            <p class="text-xs text-white/45 truncate">
+                              {{ s.ip_address ?? '—' }} · {{ langStore.t.lastActiveLabel }} {{ new Date(s.last_used_at).toLocaleString() }}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          v-if="!s.current"
+                          @click="revokeSession(s.id)"
+                          :disabled="revokingSessionId === s.id"
+                          class="px-4 py-1.5 rounded-xl text-xs font-bold text-red-400 border border-red-500/20 hover:border-red-500/50 bg-red-500/5 hover:bg-red-500/10 transition-all disabled:opacity-50 flex-shrink-0"
+                        >
+                          <span v-if="revokingSessionId === s.id" class="flex items-center gap-1.5">
+                            <span class="w-3 h-3 border border-t-transparent border-red-400 rounded-full animate-spin"></span>
+                          </span>
+                          <span v-else>{{ langStore.t.revokeBtn }}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </section>
 
@@ -1555,6 +1610,58 @@ async function unlinkProvider(provider: string) {
     showToast('error', e.response?.data?.error?.message ?? 'Ошибка отвязки')
   } finally {
     unlinkingProvider.value = null
+  }
+}
+
+// ── Устройства и активные сессии ────────────────────────────────────────────
+interface DeviceSession {
+  id: string
+  device_name: string | null
+  ip_address: string | null
+  created_at: string
+  last_used_at: string
+  current: boolean
+}
+const sessions            = ref<DeviceSession[]>([])
+const sessionsLoading     = ref(false)
+const revokingSessionId   = ref<string | null>(null)
+const revokingOthers      = ref(false)
+
+async function loadSessions() {
+  sessionsLoading.value = true
+  try {
+    const { data } = await api.get('/auth/sessions')
+    sessions.value = data.data.sessions
+  } catch { /* ignore */ } finally {
+    sessionsLoading.value = false
+  }
+}
+
+async function revokeSession(id: string) {
+  if (!confirm(langStore.t.revokeConfirm)) return
+  revokingSessionId.value = id
+  try {
+    await api.delete(`/auth/sessions/${id}`)
+    sessions.value = sessions.value.filter(s => s.id !== id)
+    showToast('success', langStore.t.revokeBtn)
+  } catch (e: any) {
+    showToast('error', e.response?.data?.error?.message ?? 'Ошибка')
+  } finally {
+    revokingSessionId.value = null
+  }
+}
+
+async function revokeOtherSessions() {
+  if (!confirm(langStore.t.revokeAllOthersConfirm)) return
+  revokingOthers.value = true
+  try {
+    await api.delete('/auth/sessions/other')
+    sessions.value = sessions.value.filter(s => s.current)
+    showToast('success', langStore.t.revokeAllOthersBtn)
+  } catch (e: any) {
+    showToast('error', e.response?.data?.error?.message ?? 'Ошибка')
+  } finally {
+    revokingOthers.value = false
   }
 }
 
@@ -1867,6 +1974,8 @@ onMounted(async () => {
   loadAvatarHistory()
   // Загружаем привязанные аккаунты
   loadLinkedAccounts()
+  // Загружаем активные устройства/сессии
+  loadSessions()
   // Тосты после OAuth привязки
   const linkedParam = route.query.linked as string | undefined
   const errorParam  = route.query.error  as string | undefined

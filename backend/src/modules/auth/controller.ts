@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { createHash, randomBytes } from 'crypto';
 import { AuthService } from './service.js';
 import { buildOAuthUrl, handleOAuthCallback, findOrCreateOAuthUser, OAuthProvider } from './oauth.service.js';
+import { parseDeviceName, getClientIp } from './device.util.js';
 import prisma from '../../config/prisma.js';
 import type { RegisterInput, LoginInput, JwtPayload } from './types.js';
 
@@ -24,14 +25,26 @@ function issueAccessToken(request: FastifyRequest, id: string, role: string) {
 // ── Выдача refresh token: запись в БД + httpOnly cookie ───────────────────────
 // remember=true  → persistent 30-day cookie + 30-day DB token
 // remember=false → session cookie (no maxAge) + 24-hour DB token
-async function issueRefreshToken(reply: FastifyReply, userId: string, remember = false): Promise<void> {
+async function issueRefreshToken(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  userId: string,
+  remember = false,
+): Promise<void> {
   const raw     = randomBytes(40).toString('hex');
   const hash    = createHash('sha256').update(raw).digest('hex');
   const ttlMs   = remember ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
   const expiry  = new Date(Date.now() + ttlMs);
+  const userAgent  = request.headers['user-agent'];
+  const ipAddress  = getClientIp(request);
 
   await prisma.refreshToken.create({
-    data: { user_id: userId, token_hash: hash, expires_at: expiry },
+    data: {
+      user_id: userId, token_hash: hash, expires_at: expiry,
+      device_name: parseDeviceName(userAgent),
+      user_agent: userAgent ?? null,
+      ip_address: ipAddress ?? null,
+    },
   });
 
   const cookieOpts: Parameters<typeof reply.setCookie>[2] = {
@@ -90,7 +103,7 @@ export const verifyEmailHandler = async (
     if (!user) return reply.code(400).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Пользователь не найден' } });
 
     const token = issueAccessToken(request, user.id, user.role);
-    await issueRefreshToken(reply, user.id, remember);
+    await issueRefreshToken(request, reply, user.id, remember);
     return reply.send({ success: true, data: { token, user }, error: null });
   } catch (e: any) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'VERIFY_ERROR', message: e.message } });
@@ -134,7 +147,7 @@ export const loginHandler = async (
     }
 
     const token = issueAccessToken(request, user.id, user.role);
-    await issueRefreshToken(reply, user.id, remember);
+    await issueRefreshToken(request, reply, user.id, remember);
     const fullUser = await prisma.user.findUnique({ where: { id: user.id }, select: FULL_USER_SELECT });
 
     return reply.send({
@@ -228,7 +241,7 @@ export const oauthCallbackHandler = async (
     // ── ОБЫЧНЫЙ ВХОД / РЕГИСТРАЦИЯ ────────────────────────────────────────────
     const { user } = await findOrCreateOAuthUser(provider, oauthUser);
     const token = issueAccessToken(request, user.id, user.role);
-    await issueRefreshToken(reply, user.id);
+    await issueRefreshToken(request, reply, user.id);
     return reply.redirect(302, `${FRONTEND_URL()}/auth/callback?token=${token}`);
   } catch (e: any) {
     console.error('[OAuth callback error]', e instanceof Error ? e.message : 'Unknown error');
@@ -319,7 +332,7 @@ export const refreshHandler = async (
   }
 
   const token = issueAccessToken(request, user.id, user.role);
-  await issueRefreshToken(reply, user.id);
+  await issueRefreshToken(request, reply, user.id);
 
   return reply.send({ success: true, data: { token, user }, error: null });
 };
@@ -341,6 +354,76 @@ export const logoutHandler = async (
     }
   }
   reply.clearCookie('refresh_token', { path: '/api/auth' });
+  return reply.send({ success: true, data: null, error: null });
+};
+
+// ── Список активных сессий (устройств) ────────────────────────────────────────
+export const listSessionsHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const { id } = request.user as JwtPayload;
+  const raw = (request.cookies as any)?.refresh_token as string | undefined;
+  const currentHash = raw ? createHash('sha256').update(raw).digest('hex') : null;
+
+  const sessions = await prisma.refreshToken.findMany({
+    where: { user_id: id, revoked: false, expires_at: { gt: new Date() } },
+    orderBy: { last_used_at: 'desc' },
+    select: {
+      id: true, device_name: true, ip_address: true,
+      created_at: true, last_used_at: true, token_hash: true,
+    },
+  });
+
+  return reply.send({
+    success: true,
+    data: {
+      sessions: sessions.map(({ token_hash, ...s }) => ({ ...s, current: token_hash === currentHash })),
+    },
+    error: null,
+  });
+};
+
+// ── Завершение конкретной сессии (устройства) ─────────────────────────────────
+export const revokeSessionHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  const { id: userId } = request.user as JwtPayload;
+  const { id: sessionId } = request.params;
+
+  const session = await prisma.refreshToken.findUnique({ where: { id: sessionId } });
+  if (!session || session.user_id !== userId) {
+    return reply.code(404).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Сессия не найдена' } });
+  }
+
+  await prisma.refreshToken.update({ where: { id: sessionId }, data: { revoked: true } });
+
+  const raw = (request.cookies as any)?.refresh_token as string | undefined;
+  if (raw && createHash('sha256').update(raw).digest('hex') === session.token_hash) {
+    reply.clearCookie('refresh_token', { path: '/api/auth' });
+  }
+
+  return reply.send({ success: true, data: null, error: null });
+};
+
+// ── Завершение всех сессий, кроме текущей ─────────────────────────────────────
+export const revokeOtherSessionsHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const { id: userId } = request.user as JwtPayload;
+  const raw = (request.cookies as any)?.refresh_token as string | undefined;
+  const currentHash = raw ? createHash('sha256').update(raw).digest('hex') : null;
+
+  await prisma.refreshToken.updateMany({
+    where: {
+      user_id: userId, revoked: false,
+      ...(currentHash ? { token_hash: { not: currentHash } } : {}),
+    },
+    data: { revoked: true },
+  });
+
   return reply.send({ success: true, data: null, error: null });
 };
 

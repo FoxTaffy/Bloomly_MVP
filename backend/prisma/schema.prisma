@@ -692,6 +692,7 @@ model GroupMember {
   role        String   @default("member") @db.VarChar(20) // owner | admin | moderator | member | dealer | volunteer | guest_of_honor
   joined_at   DateTime @default(now())
   is_pinned   Boolean  @default(false)
+  notify_posts Boolean @default(true)
 
   group       Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
@@ -1300,15 +1301,19 @@ model StickerBanner {
 
 // ── Token rotation (15m access / 7d refresh) ─────────────────────────────────
 model RefreshToken {
-  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id    String    @db.Uuid
-  token_hash String    @unique @db.VarChar(64)  // SHA-256 of raw token
-  expires_at DateTime  @db.Timestamptz(6)
-  revoked    Boolean   @default(false)
-  created_at DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at DateTime  @updatedAt @db.Timestamptz(6)
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String    @db.Uuid
+  token_hash   String    @unique @db.VarChar(64)  // SHA-256 of raw token
+  expires_at   DateTime  @db.Timestamptz(6)
+  revoked      Boolean   @default(false)
+  device_name  String?   @db.VarChar(120)
+  user_agent   String?
+  ip_address   String?   @db.VarChar(64)
+  last_used_at DateTime  @default(now()) @db.Timestamptz(6)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @updatedAt @db.Timestamptz(6)
 
-  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
   @@index([token_hash])
