@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import BIcon from '@/components/BIcon.vue'
 import type { Group } from '@/stores/groups'
 
-const props = defineProps<{ group: Group }>()
+const props = defineProps<{ group: Group; isPinned?: boolean }>()
 const emit = defineEmits<{
   (e: 'click'): void
   (e: 'bookmark'): void
@@ -44,7 +44,10 @@ function bannerGradient(color: string | null | undefined) {
 
 <template>
   <div
-    class="bg-brand-card border border-brand-border rounded-2xl hover:border-brand-accent/40 transition-all group/card flex flex-col cursor-pointer relative overflow-visible"
+    class="bg-brand-card rounded-2xl hover:border-brand-accent/40 transition-all group/card flex flex-col cursor-pointer relative overflow-visible"
+    :class="isPinned
+      ? 'border-2 border-amber-400/55 shadow-lg shadow-amber-500/10 hover:border-amber-400/80'
+      : 'border border-brand-border'"
     @click="emit('click')"
   >
     <!-- Banner -->
@@ -57,6 +60,12 @@ function bannerGradient(color: string | null | undefined) {
       <div v-else class="absolute inset-0 opacity-15"
         style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 14px 14px;" />
 
+      <!-- Pinned chip -->
+      <div v-if="isPinned" class="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/90 backdrop-blur-sm shadow-sm">
+        <BIcon name="Pin" class="w-2.5 h-2.5 text-amber-900" />
+        <span class="text-[9px] font-bold text-amber-900 uppercase tracking-wider">Закреп</span>
+      </div>
+
       <!-- 18+ badge -->
       <span v-if="group.is_nsfw"
         class="absolute top-2 right-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md bg-brand-error/80 text-white border border-brand-error/30 backdrop-blur-sm">
@@ -68,7 +77,8 @@ function bannerGradient(color: string | null | undefined) {
     <div class="px-4 pb-3 pt-0 flex flex-col gap-1 flex-1 rounded-b-2xl bg-brand-card relative z-10 overflow-visible">
       <!-- Avatar row + three-dot menu -->
       <div class="-mt-7 mb-0.5 flex items-start justify-between">
-        <div class="w-14 h-14 rounded-xl overflow-hidden border-[3px] border-brand-card shadow">
+        <div class="w-14 h-14 rounded-xl overflow-hidden shadow"
+          :class="isPinned ? 'border-[3px] border-amber-400/50' : 'border-[3px] border-brand-card'">
           <img v-if="group.avatar_url" :src="group.avatar_url" :alt="group.name" class="w-full h-full object-cover" />
           <div v-else class="w-full h-full flex items-center justify-center"
             :style="'background: ' + bannerGradient(group.accent_color)">
@@ -80,7 +90,8 @@ function bannerGradient(color: string | null | undefined) {
         <!-- Three-dot button -->
         <div class="relative mt-8" @click.stop>
           <button
-            class="w-7 h-7 rounded-lg flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-brand-bg/60 transition-colors"
+            class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
+            :class="isPinned ? 'text-amber-400/50 hover:text-amber-400 hover:bg-amber-500/10' : 'text-white/30 hover:text-white/70 hover:bg-brand-bg/60'"
             @click="showMenu = !showMenu"
           >
             <BIcon name="MoreHorizontal" class="w-4 h-4" />
@@ -91,8 +102,8 @@ function bannerGradient(color: string | null | undefined) {
               class="absolute right-0 top-full mt-1 bg-brand-card border border-brand-border rounded-xl shadow-2xl py-1.5 min-w-[176px] z-50">
               <button class="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-white/70 hover:bg-brand-bg/50 hover:text-white transition-colors"
                 @click="emit('bookmark'); showMenu = false">
-                <BIcon name="Bookmark" class="w-3.5 h-3.5 text-brand-accent" />
-                Сохранить в закладки
+                <BIcon :name="isPinned ? 'PinOff' : 'Pin'" :class="isPinned ? 'text-amber-400' : 'text-brand-accent'" class="w-3.5 h-3.5" />
+                {{ isPinned ? 'Открепить' : 'Закрепить' }}
               </button>
               <button class="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-white/70 hover:bg-brand-bg/50 hover:text-white transition-colors"
                 @click="emit('notify'); showMenu = false">
@@ -110,14 +121,22 @@ function bannerGradient(color: string | null | undefined) {
         </div>
       </div>
 
-      <!-- Name only -->
-      <p class="font-bold text-white text-sm leading-tight truncate">{{ group.name }}</p>
+      <!-- Name + username -->
+      <p class="font-bold text-sm leading-tight truncate" :class="isPinned ? 'text-amber-100' : 'text-white'">{{ group.name }}</p>
+      <p class="text-[10px] text-white/35 truncate -mt-0.5">@{{ group.slug }}</p>
+
+      <!-- Type badge inline -->
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border w-fit mt-0.5"
+        :class="typeColor[group.type] || 'bg-brand-accent/15 text-brand-accent border-brand-accent/20'">
+        <BIcon :name="typeIcon[group.type] || 'Grid'" class="w-2.5 h-2.5" />
+        {{ typeLabel[group.type] || 'Группа' }}
+      </span>
 
       <!-- Brief description -->
-      <p v-if="group.description" class="text-[11px] text-white/40 line-clamp-2 leading-relaxed mt-0.5">{{ group.description }}</p>
+      <p v-if="group.description" class="text-[11px] text-white/40 line-clamp-1 leading-relaxed mt-0.5">{{ group.description }}</p>
 
       <!-- Footer: members -->
-      <div class="flex items-center gap-1.5 text-xs text-white/40 mt-auto pt-1.5">
+      <div class="flex items-center gap-1.5 text-xs text-white/40 mt-auto pt-1">
         <BIcon name="Users" class="w-3 h-3" />
         <span>{{ fmtMembers(group.subscriber_count > 0 ? group.subscriber_count : group._count.members) }} участников</span>
       </div>

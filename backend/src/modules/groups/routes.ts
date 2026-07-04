@@ -52,12 +52,16 @@ import {
   getUserPublicGroupsHandler,
   getCommonGroupsHandler,
   getKanbanHandler,
+  togglePinGroupHandler,
+  getTrendingHandler,
+  toggleGroupNotificationHandler,
 } from './controller.js';
 import { groupService } from './service.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
-    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    authenticate:    (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    tryAuthenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
@@ -67,8 +71,9 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   // ── Group CRUD ──────────────────────────────────────────────────────────
   fastify.get('/', listGroupsHandler as any);
   fastify.get('/me', auth, getMyGroupsHandler as any);
+  fastify.get('/trending', getTrendingHandler as any);
   fastify.get('/discover', discoverGroupsHandler as any);
-  fastify.get('/user/:userId', getUserPublicGroupsHandler as any);
+  fastify.get('/user/:userId', { onRequest: [fastify.tryAuthenticate] }, getUserPublicGroupsHandler as any);
   fastify.get('/common/:userId', auth, getCommonGroupsHandler as any);
   fastify.get('/search', async (request, reply) => {           // GET /groups/search?q=
     const q = ((request.query as any).q ?? '') as string;
@@ -83,6 +88,8 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   // ── Membership ────────────────────────────────────────────────────────────
   fastify.post('/:id/join', auth, joinGroupHandler as any);
   fastify.post('/:id/leave', auth, leaveGroupHandler as any);
+  fastify.patch('/:id/pin', auth, togglePinGroupHandler as any);
+  fastify.patch('/:id/notify', auth, toggleGroupNotificationHandler as any);
   fastify.get('/:id/members', getMembersHandler as any);
   fastify.patch('/:id/members/:userId/role', auth, setMemberRoleHandler as any);
   fastify.delete('/:id/members/:userId', auth, removeMemberHandler as any);

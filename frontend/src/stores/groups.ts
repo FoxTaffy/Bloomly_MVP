@@ -197,6 +197,8 @@ export interface GroupMembership {
   user_id: string
   role: string
   joined_at: string
+  is_pinned: boolean
+  notify_posts: boolean
   group: Group
 }
 
@@ -332,6 +334,13 @@ export const useGroupsStore = defineStore('groups', () => {
   async function leaveGroup(id: string) {
     await api.post(`/groups/${id}/leave`)
     myGroups.value = myGroups.value.filter(m => m.group_id !== id)
+  }
+
+  async function togglePinGroup(groupId: string) {
+    const { data } = await api.patch(`/groups/${groupId}/pin`)
+    const m = myGroups.value.find(m => m.group_id === groupId)
+    if (m) m.is_pinned = data.data.is_pinned
+    return data.data.is_pinned as boolean
   }
 
   // ── Events ────────────────────────────────────────────────────────────────
@@ -573,12 +582,41 @@ export const useGroupsStore = defineStore('groups', () => {
     await api.delete(`/groups/${groupId}/roles/${roleId}`)
   }
 
+  // ── Trending ──────────────────────────────────────────────────────────────
+
+  const trendingGroups = ref<Group[]>([])
+  const trendingTotal = ref(0)
+  const isTrendingLoading = ref(false)
+
+  async function loadTrending(page = 1, limit = 20) {
+    isTrendingLoading.value = true
+    try {
+      const { data } = await api.get('/groups/trending', { params: { page, limit } })
+      if (data.success) {
+        trendingGroups.value = data.data.groups
+        trendingTotal.value = data.data.total
+      }
+    } finally { isTrendingLoading.value = false }
+  }
+
+  // ── Notification toggle ───────────────────────────────────────────────────
+
+  async function toggleGroupNotification(groupId: string) {
+    const { data } = await api.patch(`/groups/${groupId}/notify`)
+    if (data.success) {
+      const m = myGroups.value.find(m => m.group_id === groupId)
+      if (m) (m as any).notify_posts = data.data.notify_posts
+    }
+    return data.data as { notify_posts: boolean }
+  }
+
   return {
     groups, currentGroup, myGroups, events, currentEvent, mySoonBadges,
     isLoading, total,
+    trendingGroups, trendingTotal, isTrendingLoading,
     eventGroups, creativeGroups, staticGroups, newsGroups, shopGroups, communityGroups, brandGroups,
     loadGroups, loadGroup, loadMyGroups, createGroup, updateGroup, deleteGroup,
-    joinGroup, leaveGroup,
+    joinGroup, leaveGroup, togglePinGroup,
     loadEvents, loadEvent, createEvent, updateEvent,
     toggleSoonBadge, toggleSoonBadgeVisibility, loadMySoonBadges,
     updateCommission,
@@ -586,7 +624,7 @@ export const useGroupsStore = defineStore('groups', () => {
     loadGroupPosts, createGroupPost, loadKanban,
     createTicketTier, updateTicketTier, deleteTicketTier,
     rsvpEvent, cancelRsvp, getEventAttendees, getMyRsvp,
-    discoverGroups,
+    discoverGroups, loadTrending, toggleGroupNotification,
     loadSubEvents, createSubEvent, updateSubEvent, deleteSubEvent,
     loadGroupMessages, sendGroupMessageRest,
     fetchMembers, changeMemberRole, removeMember,

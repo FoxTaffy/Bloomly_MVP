@@ -48,6 +48,7 @@ const replyingTo     = ref<{ id: string; username: string } | null>(null)
 const replyText      = ref('')
 const submitting     = ref(false)
 const expandedReplies = ref<Set<string>>(new Set())
+const userVotes      = ref<Record<string, 1 | -1 | 0>>({})
 
 // Sticker panel state
 const showStickerPanel      = ref(false)
@@ -181,6 +182,9 @@ const toggleReplies = (commentId: string) => {
 }
 
 const voteComment = async (commentId: string, value: 1 | -1) => {
+  const prev = userVotes.value[commentId] ?? 0
+  const next: 1 | -1 | 0 = prev === value ? 0 : value
+  userVotes.value = { ...userVotes.value, [commentId]: next }
   try {
     const res = await api.post(`/posts/comments/${commentId}/vote`, { value })
     if (res.data.success) {
@@ -193,7 +197,9 @@ const voteComment = async (commentId: string, value: 1 | -1) => {
       }
       updateRating(comments.value)
     }
-  } catch {}
+  } catch {
+    userVotes.value = { ...userVotes.value, [commentId]: prev as 1 | -1 | 0 }
+  }
 }
 
 const deleteComment = async (commentId: string) => {
@@ -304,16 +310,20 @@ const deleteComment = async (commentId: string) => {
             <!-- Actions row -->
             <div class="flex items-center gap-3 mt-1.5 pl-1">
               <!-- Vote -->
-              <div class="flex items-center gap-1">
-                <button @click="voteComment(comment.id, 1)" class="p-1 text-white/55 hover:text-emerald-400 rounded">
-                  <BIcon name="ArrowUp" class="w-3.5 h-3.5" />
+              <div class="flex items-center gap-0.5 bg-brand-bg rounded-full border border-brand-border/60 px-0.5">
+                <button @click="voteComment(comment.id, 1)"
+                  class="p-0.5 rounded-full transition-all duration-150"
+                  :class="(userVotes[comment.id] ?? 0) === 1 ? 'text-emerald-400 drop-shadow-[0_0_5px_rgba(52,211,153,0.6)]' : 'text-white/35 hover:text-emerald-400'">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" :fill-opacity="(userVotes[comment.id] ?? 0) === 1 ? 1 : 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19V13H5l7-9 7 9h-4v6H9z"/></svg>
                 </button>
-                <span class="text-xs font-bold min-w-[16px] text-center"
-                  :class="comment.rating > 0 ? 'text-emerald-400' : comment.rating < 0 ? 'text-rose-400' : 'text-white/55'">
+                <span class="text-xs font-bold min-w-[16px] text-center tabular-nums"
+                  :class="(userVotes[comment.id] ?? 0) === 1 ? 'text-emerald-400' : (userVotes[comment.id] ?? 0) === -1 ? 'text-rose-400' : comment.rating > 0 ? 'text-emerald-300/80' : comment.rating < 0 ? 'text-rose-300/80' : 'text-white/50'">
                   {{ comment.rating }}
                 </span>
-                <button @click="voteComment(comment.id, -1)" class="p-1 text-white/55 hover:text-rose-400 rounded">
-                  <BIcon name="ArrowDown" class="w-3.5 h-3.5" />
+                <button @click="voteComment(comment.id, -1)"
+                  class="p-0.5 rounded-full transition-all duration-150"
+                  :class="(userVotes[comment.id] ?? 0) === -1 ? 'text-rose-400 drop-shadow-[0_0_5px_rgba(251,113,133,0.6)]' : 'text-white/35 hover:text-rose-400'">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" :fill-opacity="(userVotes[comment.id] ?? 0) === -1 ? 1 : 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5v6h4l-7 9-7-9h4V5h6z"/></svg>
                 </button>
               </div>
               <!-- Translate (only for text) -->
@@ -411,13 +421,18 @@ const deleteComment = async (commentId: string) => {
                   </div>
 
                   <div class="flex items-center gap-3 mt-1 pl-1">
-                    <div class="flex items-center gap-1">
-                      <button @click="voteComment(reply.id, 1)" class="p-1 text-white/55 hover:text-emerald-400 rounded">
-                        <BIcon name="ArrowUp" class="w-3 h-3" />
+                    <div class="flex items-center gap-0.5 bg-brand-bg rounded-full border border-brand-border/60 px-0.5">
+                      <button @click="voteComment(reply.id, 1)"
+                        class="p-0.5 rounded-full transition-all duration-150"
+                        :class="(userVotes[reply.id] ?? 0) === 1 ? 'text-emerald-400 drop-shadow-[0_0_5px_rgba(52,211,153,0.6)]' : 'text-white/35 hover:text-emerald-400'">
+                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor" :fill-opacity="(userVotes[reply.id] ?? 0) === 1 ? 1 : 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19V13H5l7-9 7 9h-4v6H9z"/></svg>
                       </button>
-                      <span class="text-xs font-bold" :class="reply.rating > 0 ? 'text-emerald-400' : reply.rating < 0 ? 'text-rose-400' : 'text-white/55'">{{ reply.rating }}</span>
-                      <button @click="voteComment(reply.id, -1)" class="p-1 text-white/55 hover:text-rose-400 rounded">
-                        <BIcon name="ArrowDown" class="w-3 h-3" />
+                      <span class="text-xs font-bold min-w-[14px] text-center tabular-nums"
+                        :class="(userVotes[reply.id] ?? 0) === 1 ? 'text-emerald-400' : (userVotes[reply.id] ?? 0) === -1 ? 'text-rose-400' : reply.rating > 0 ? 'text-emerald-300/80' : reply.rating < 0 ? 'text-rose-300/80' : 'text-white/50'">{{ reply.rating }}</span>
+                      <button @click="voteComment(reply.id, -1)"
+                        class="p-0.5 rounded-full transition-all duration-150"
+                        :class="(userVotes[reply.id] ?? 0) === -1 ? 'text-rose-400 drop-shadow-[0_0_5px_rgba(251,113,133,0.6)]' : 'text-white/35 hover:text-rose-400'">
+                        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor" :fill-opacity="(userVotes[reply.id] ?? 0) === -1 ? 1 : 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5v6h4l-7 9-7-9h4V5h6z"/></svg>
                       </button>
                     </div>
                     <!-- Translate reply (only for text) -->

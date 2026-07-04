@@ -61,8 +61,12 @@ model User {
   comments                     Comment[]
   commentVotes                 CommentVote[]
   favourites                   Favourite[]
+  postBookmarkLabels           PostBookmarkLabel[]
   followers                    Follow[]              @relation("UserFollowers")
   following                    Follow[]              @relation("UserFollowing")
+  userBookmarksGiven           UserBookmark[]        @relation("UserBookmarkOwner")
+  userBookmarksReceived        UserBookmark[]        @relation("UserBookmarkTarget")
+  groupBookmarks               GroupBookmark[]
   mediaHistory                 MediaHistory[]
   notifications                Notification[]        @relation("NotificationReceiver")
   sentNotifications            Notification[]        @relation("NotificationSender")
@@ -199,14 +203,31 @@ model Repaw {
 }
 
 model Favourite {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id    String   @db.Uuid
-  post_id    String   @db.Uuid
-  created_at DateTime @default(now())
-  post       Post     @relation(fields: [post_id], references: [id])
-  user       User     @relation(fields: [user_id], references: [id])
+  id         String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String               @db.Uuid
+  post_id    String               @db.Uuid
+  label_id   String?              @db.Uuid
+  created_at DateTime             @default(now())
+  post       Post                 @relation(fields: [post_id], references: [id])
+  user       User                 @relation(fields: [user_id], references: [id])
+  label      PostBookmarkLabel?   @relation(fields: [label_id], references: [id], onDelete: SetNull)
 
   @@unique([user_id, post_id])
+  @@index([label_id])
+}
+
+model PostBookmarkLabel {
+  id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String      @db.Uuid
+  name       String      @db.VarChar(60)
+  color      String      @default("#4C67CF") @db.VarChar(20)
+  created_at DateTime    @default(now())
+  updated_at DateTime    @updatedAt
+
+  user       User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  favourites Favourite[]
+
+  @@index([user_id])
 }
 
 model Tag {
@@ -603,6 +624,7 @@ model Group {
   activities      Activity[]
   todoItems       GroupTodoItem[]
   customRoles     GroupCustomRole[]
+  bookmarks       GroupBookmark[]
 
   @@index([owner_id])
   @@index([type])
@@ -669,6 +691,7 @@ model GroupMember {
   user_id     String   @db.Uuid
   role        String   @default("member") @db.VarChar(20) // owner | admin | moderator | member | dealer | volunteer | guest_of_honor
   joined_at   DateTime @default(now())
+  is_pinned   Boolean  @default(false)
 
   group       Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
@@ -1391,4 +1414,34 @@ model BloomlyUpdate {
   updated_at DateTime @updatedAt
 
   @@index([created_at(sort: Desc)])
+}
+
+// ── User & Group Bookmarks ────────────────────────────────────────────────────
+
+model UserBookmark {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  target_id  String   @db.Uuid
+  created_at DateTime @default(now())
+
+  user       User     @relation("UserBookmarkOwner", fields: [user_id],   references: [id], onDelete: Cascade)
+  target     User     @relation("UserBookmarkTarget", fields: [target_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, target_id])
+  @@index([user_id])
+  @@index([target_id])
+}
+
+model GroupBookmark {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  group_id   String   @db.Uuid
+  created_at DateTime @default(now())
+
+  user       User     @relation(fields: [user_id],  references: [id], onDelete: Cascade)
+  group      Group    @relation(fields: [group_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, group_id])
+  @@index([user_id])
+  @@index([group_id])
 }

@@ -313,3 +313,23 @@ export const getUserFavouritesHandler = async (
     return reply.code(500).send({ success: false, data: null, error: { code: 'USER_LIKES_ERROR', message } });
   }
 };
+
+export const getMyBookmarksHandler = async (
+  request: FastifyRequest<{ Querystring: { skip?: string; take?: string; sort?: string; hasMedia?: string; labelId?: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const skip     = parseInt(request.query.skip  ?? '0',  10);
+    const take     = Math.min(parseInt(request.query.take  ?? '20', 10), 50);
+    const sort     = (request.query.sort ?? 'newest') as 'newest' | 'oldest' | 'top';
+    const hasMedia = request.query.hasMedia === 'true' ? true : undefined;
+    const labelId  = request.query.labelId === 'none' ? null
+                   : request.query.labelId ?? undefined;
+    const result   = await postService.getMyBookmarks(userId, { skip, take, sort, hasMedia, labelId });
+    return reply.send({ success: true, data: result, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch bookmarks';
+    return reply.code(500).send({ success: false, data: null, error: { code: 'BOOKMARKS_ERROR', message } });
+  }
+};

@@ -324,10 +324,17 @@ const closeStory = () => {
   if (storyTimerInterval) { clearInterval(storyTimerInterval); storyTimerInterval = null }
 }
 
+// ── Click-outside handler ─────────────────────────────────────────────────────
+const onDocumentClick = () => {
+  showLangDropdown.value = false
+  showNotifications.value = false
+}
+
 // ── Keyboard ──────────────────────────────────────────────────────────────────
 const onGlobalKeydown = (e: KeyboardEvent) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); openSearchModal() }
   if (e.key === 'Escape' && postModal.value) { closePostModal(); return }
+  if (e.key === 'Escape' && showNotifications.value) { showNotifications.value = false; return }
   if (e.key === 'Escape' && showSearchModal.value) closeSearchModal()
 }
 
@@ -346,14 +353,14 @@ function formatDate(d: string) {
 onMounted(() => {
   if (auth.isAuthenticated) { fetchUnreadCount(); connectNotifSSE(); fetchSearchStories() }
   window.addEventListener('keydown', onGlobalKeydown)
-  document.addEventListener('click', () => { showLangDropdown.value = false })
+  document.addEventListener('click', onDocumentClick)
 })
 onUnmounted(() => {
   notifEventSource?.close()
   if (sseReconnectTimer) clearTimeout(sseReconnectTimer)
   if (storyTimerInterval) clearInterval(storyTimerInterval)
   window.removeEventListener('keydown', onGlobalKeydown)
-  document.removeEventListener('click', () => { showLangDropdown.value = false })
+  document.removeEventListener('click', onDocumentClick)
 })
 </script>
 

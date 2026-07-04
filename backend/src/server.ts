@@ -27,6 +27,7 @@ import { activitiesRoutes } from './modules/activities/routes.js';
 import { automodRoutes } from './modules/automod/routes.js';
 import { seoRoutes } from './modules/seo/routes.js';
 import { updatesRoutes } from './modules/updates/routes.js';
+import { bookmarksRoutes } from './modules/bookmarks/routes.js';
 import { messageService, messageSubscriptions } from './modules/messages/service.js';
 import { groupService } from './modules/groups/service.js';
 import { initCronJobs } from './cron.js';
@@ -108,6 +109,27 @@ fastify.decorate(
   },
 );
 
+fastify.decorate(
+  'tryAuthenticate',
+  async (request: FastifyRequest, _reply: FastifyReply) => {
+    try {
+      await request.jwtVerify();
+      const payload = request.user as { id: string; role: string };
+      const dbUser = await prisma.user.findUnique({
+        where: { id: payload.id },
+        select: { role: true, deleted_at: true },
+      });
+      if (!dbUser || dbUser.deleted_at) {
+        (request as any).user = undefined;
+      } else {
+        (request.user as any).role = dbUser.role;
+      }
+    } catch {
+      (request as any).user = undefined;
+    }
+  },
+);
+
 fastify.setErrorHandler((error, _request, reply) => {
   const statusCode = error.statusCode ?? 500;
   reply.code(statusCode).send({
@@ -141,6 +163,7 @@ fastify.register(shopRoutes,    { prefix: '/api/shop' });
 fastify.register(activitiesRoutes, { prefix: '/api/activities' });
 fastify.register(automodRoutes,    { prefix: '/api/automod' });
 fastify.register(updatesRoutes,    { prefix: '/api/updates' });
+fastify.register(bookmarksRoutes,  { prefix: '/api/bookmarks' });
 // SEO: sitemap.xml and OG-proxy endpoints (no auth required, crawlers friendly)
 fastify.register(seoRoutes);
 

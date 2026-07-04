@@ -438,28 +438,55 @@
         </div>
       </div>
 
+      <!-- ── Top comment preview ──────────────────────────────────────── -->
+      <div
+        v-if="topComment && !isExpanded"
+        @click="isExpanded = true"
+        class="mt-3 flex items-start gap-2 cursor-pointer group/tc"
+      >
+        <img
+          v-if="topComment.author?.avatar_url"
+          :src="topComment.author.avatar_url"
+          class="w-6 h-6 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5"
+          @error="onAvatarError"
+        />
+        <div v-else class="w-6 h-6 rounded-full bg-brand-accent/20 flex items-center justify-center flex-shrink-0 mt-0.5 text-[9px] font-bold text-brand-accent">
+          {{ (topComment.author?.username ?? '?')[0].toUpperCase() }}
+        </div>
+        <div class="flex-1 min-w-0 bg-brand-bg/60 rounded-xl px-3 py-2 border border-brand-border/50 group-hover/tc:border-brand-accent/30 transition-colors">
+          <div class="flex items-center gap-1.5 mb-0.5">
+            <span class="text-white/80 text-xs font-bold">{{ topComment.author?.display_name || topComment.author?.username }}</span>
+            <span class="text-white/35 text-[10px] flex items-center gap-0.5">
+              <svg class="w-2.5 h-2.5 text-emerald-400" viewBox="0 0 24 24" fill="currentColor"><path d="M9 19V13H5l7-9 7 9h-4v6H9z"/></svg>
+              {{ topComment.rating }}
+            </span>
+          </div>
+          <p class="text-white/60 text-xs truncate">{{ topComment.content }}</p>
+        </div>
+      </div>
+
       <!-- ── Actions ───────────────────────────────────────────────────── -->
       <div class="flex items-center justify-between pt-4 mt-4 border-t border-brand-border">
         <div class="flex items-center gap-2">
           <!-- Vote -->
-          <div class="flex items-center gap-1 bg-brand-bg rounded-full p-1 border border-brand-border">
+          <div class="flex items-center gap-0.5 bg-brand-bg rounded-full px-1 py-0.5 border border-brand-border">
             <button @click="vote(1)"
               class="p-1 rounded-full transition-all duration-150"
               :class="localVote === 1
-                ? 'bg-brand-success/25 text-brand-success shadow-[0_0_8px_0px] shadow-brand-success/40'
-                : 'text-white/55 hover:bg-brand-success/20 hover:text-brand-success'">
-              <BIcon name="ThumbsUp" class="w-4 h-4" />
+                ? 'text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.7)]'
+                : 'text-white/40 hover:text-emerald-400'">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" :fill-opacity="localVote === 1 ? 1 : 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19V13H5l7-9 7 9h-4v6H9z"/></svg>
             </button>
-            <span class="font-bold text-sm min-w-[28px] text-center"
-              :class="localVote === 1 ? 'text-emerald-400' : localVote === -1 ? 'text-rose-400' : localRating > 0 ? 'text-emerald-400' : localRating < 0 ? 'text-rose-400' : 'text-white'">
+            <span class="font-bold text-sm min-w-[26px] text-center tabular-nums"
+              :class="localVote === 1 ? 'text-emerald-400' : localVote === -1 ? 'text-rose-400' : localRating > 0 ? 'text-emerald-300/80' : localRating < 0 ? 'text-rose-300/80' : 'text-white/60'">
               {{ localRating }}
             </span>
             <button @click="vote(-1)"
               class="p-1 rounded-full transition-all duration-150"
               :class="localVote === -1
-                ? 'bg-rose-500/25 text-rose-400 shadow-[0_0_8px_0px] shadow-rose-500/40'
-                : 'text-white/55 hover:bg-rose-500/20 hover:text-rose-400'">
-              <BIcon name="ThumbsDown" class="w-4 h-4" />
+                ? 'text-rose-400 drop-shadow-[0_0_6px_rgba(251,113,133,0.7)]'
+                : 'text-white/40 hover:text-rose-400'">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" :fill-opacity="localVote === -1 ? 1 : 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5v6h4l-7 9-7-9h4V5h6z"/></svg>
             </button>
           </div>
 
@@ -672,6 +699,7 @@ const emit = defineEmits<{
   (e: 'unpin'): void
   (e: 'deleted', id: string): void
   (e: 'updated', post: any): void
+  (e: 'favouriteChanged', id: string, favourited: boolean): void
 }>()
 
 // ── Composables ───────────────────────────────────────────────────────────
@@ -812,6 +840,13 @@ const effectiveGroupContext = computed(() =>
   props.groupContext ?? (props.post.groupPosts?.[0]?.group ?? null)
 )
 
+// Top-rated comment — included by the backend in post.comments[0] when rating > 0
+const topComment = computed(() => {
+  const c = props.post.comments?.[0]
+  if (!c || c.type === 'sticker') return null
+  return c
+})
+
 const isOwn = computed(() =>
   !!authStore.user && (authStore.user.id === props.post.author_id || authStore.user.id === props.post.author?.id)
 )
@@ -870,12 +905,17 @@ function isImg(url: string): boolean {
 async function vote(value: 1 | -1) {
   if (!authStore.isAuthenticated) return
   const prev = localVote.value
-  localVote.value = prev === value ? 0 : value
+  const prevRating = localRating.value
+  const next: 1 | -1 | 0 = prev === value ? 0 : value
+  // Optimistic update
+  localVote.value = next
+  localRating.value = prevRating + (next - prev)
   try {
     const r = await api.post(`/posts/${props.post.id}/vote`, { value })
     if (r.data.success) localRating.value = r.data.data.rating ?? localRating.value
   } catch {
     localVote.value = prev
+    localRating.value = prevRating
   }
 }
 
@@ -917,7 +957,10 @@ async function toggleFavourite() {
   if (!authStore.isAuthenticated) return
   try {
     const r = await api.post(`/posts/${props.post.id}/favourite`)
-    if (r.data.success) localFavourited.value = r.data.data.favourited
+    if (r.data.success) {
+      localFavourited.value = r.data.data.favourited
+      emit('favouriteChanged', props.post.id, r.data.data.favourited)
+    }
   } catch {}
 }
 

@@ -414,10 +414,24 @@ export const getUserPublicGroupsHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const groups = await groupService.getUserPublicGroups(request.params.userId);
-    return ok(reply, { groups });
+    const requesterId = (request.user as JwtUser | undefined)?.id ?? null;
+    const result = await groupService.getUserGroupsForViewer(request.params.userId, requesterId);
+    return ok(reply, result);
   } catch (e: any) {
     return fail(reply, 500, 'USER_GROUPS_ERROR', e.message);
+  }
+};
+
+export const togglePinGroupHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const result = await groupService.togglePinGroup(userId, request.params.id);
+    return ok(reply, result);
+  } catch (e: any) {
+    return fail(reply, 500, 'PIN_GROUP_ERROR', e.message);
   }
 };
 
@@ -776,5 +790,32 @@ export const reorderGroupTodoHandler = async (
     return ok(reply, { success: true });
   } catch (e: any) {
     return fail(reply, 500, 'REORDER_TODO_ERROR', e.message);
+  }
+};
+export const getTrendingHandler = async (
+  request: FastifyRequest<{ Querystring: { page?: string; limit?: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const page  = parseInt(request.query.page  ?? '1',  10);
+    const limit = Math.min(parseInt(request.query.limit ?? '20', 10), 50);
+    const data = await groupService.getTrending(page, limit);
+    return ok(reply, data);
+  } catch (e: any) {
+    return fail(reply, 500, 'TRENDING_ERROR', e.message);
+  }
+};
+
+export const toggleGroupNotificationHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const result = await groupService.toggleNotification(request.params.id, userId);
+    return ok(reply, result);
+  } catch (e: any) {
+    const code = e.message === 'Not a member' ? 403 : 500;
+    return fail(reply, code, 'NOTIFY_TOGGLE_ERROR', e.message);
   }
 };

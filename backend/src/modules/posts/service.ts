@@ -11,6 +11,19 @@ const POST_INCLUDE = {
   rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
   tags: { include: { tag: true } },
   _count: { select: { votes: true, repaws: true, comments: true } },
+  comments: {
+    where: { deleted_at: null, parent_id: null, rating: { gt: 0 } },
+    orderBy: { rating: 'desc' as const },
+    take: 1,
+    select: {
+      id: true,
+      content: true,
+      rating: true,
+      type: true,
+      file_url: true,
+      author: { select: AUTHOR_SELECT },
+    },
+  },
 } as const;
 
 /**
@@ -421,6 +434,43 @@ export const postService = {
       },
     });
     return favs.map((f) => maskGroupAuthor({ ...f.post, favourited_at: f.created_at }));
+  },
+
+  async getMyBookmarks(
+    userId: string,
+    opts: { skip?: number; take?: number; sort?: 'newest' | 'oldest' | 'top'; hasMedia?: boolean; labelId?: string | null },
+  ) {
+    const { skip = 0, take = 20, sort = 'newest', hasMedia, labelId } = opts;
+
+    const postFilter: any = { deleted_at: null };
+    if (hasMedia) postFilter.media_urls = { isEmpty: false };
+
+    const where: any = { user_id: userId, post: postFilter };
+    if (labelId !== undefined) where.label_id = labelId ?? null;
+
+    const orderBy: any =
+      sort === 'oldest' ? { created_at: 'asc' }
+      : sort === 'top'  ? { post: { rating: 'desc' } }
+      : { created_at: 'desc' };
+
+    const POST_INCLUDE_FULL = {
+      author: { select: AUTHOR_SELECT },
+      rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+      tags: { include: { tag: true } },
+      _count: { select: { votes: true, repaws: true, comments: true } },
+      groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+    };
+
+    const [favs, total] = await Promise.all([
+      prisma.favourite.findMany({ where, orderBy, skip, take, include: { post: { include: POST_INCLUDE_FULL } } }),
+      prisma.favourite.count({ where }),
+    ]);
+
+    return {
+      posts: favs.map((f) => maskGroupAuthor({ ...f.post, favourited_at: f.created_at, label_id: f.label_id })),
+      total,
+      hasMore: skip + take < total,
+    };
   },
 
   async getPostStatus(userId: string, postIds: string[]) {

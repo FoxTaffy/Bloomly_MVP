@@ -361,22 +361,70 @@ const aboutNavs = computed(() => {
 })
 
 // ── Content tabs (floating pills like profile) ─────────────────────────
-const activeContentTab = ref<'posts' | 'media' | 'archive'>('posts')
+const activeContentTab = ref<'posts' | 'media' | 'archive' | 'members' | 'events' | 'achievements'>('posts')
 
 watch(activeContentTab, (val) => {
   if (val === 'media' && !groupMediaLoaded.value) loadGroupMediaPosts()
+  if (val === 'members') openMembersTab()
+  if (val === 'events') loadGroupEvents()
 })
 
 const contentTabs = computed(() => {
   const tabs: { key: string; label: string; icon: string }[] = [
-    { key: 'posts', label: 'Посты', icon: 'Newspaper' },
-    { key: 'media', label: 'Медиа', icon: 'Image' },
+    { key: 'posts',  label: 'Посты',      icon: 'Newspaper' },
+    { key: 'media',  label: 'Медиа',      icon: 'Image' },
   ]
+  if (group.value?.type !== 'event') {
+    tabs.push({ key: 'events', label: 'События', icon: 'CalendarDays' })
+  }
   if (group.value?.type === 'event' && pastEvents.value.length) {
     tabs.push({ key: 'archive', label: `Архив (${pastEvents.value.length})`, icon: 'Archive' })
   }
+  tabs.push({ key: 'members', label: 'Участники', icon: 'Users' })
+  if ((group.value as any)?.achievements?.length) {
+    tabs.push({ key: 'achievements', label: 'Достижения', icon: 'Trophy' })
+  }
   return tabs
 })
+
+// ── Members tab (inline, not modal) ────────────────────────────────────
+const membersTabLoaded = ref(false)
+function openMembersTab() {
+  if (membersTabLoaded.value) return
+  membersTabLoaded.value = true
+  allMembers.value = []
+  membersPage.value = 1
+  membersHasMore.value = true
+  loadMoreMembers()
+}
+
+// ── Group events (for non-event groups) ────────────────────────────────
+const groupEvents = ref<any[]>([])
+const isGroupEventsLoading = ref(false)
+const groupEventsLoaded = ref(false)
+async function loadGroupEvents() {
+  if (!group.value || groupEventsLoaded.value) return
+  isGroupEventsLoading.value = true
+  groupEventsLoaded.value = true
+  try {
+    const { data } = await api.get(`/groups/${group.value.id}/events`)
+    groupEvents.value = data.data?.events ?? []
+  } catch {} finally { isGroupEventsLoading.value = false }
+}
+
+// ── Notification toggle ─────────────────────────────────────────────────
+const isTogglingNotify = ref(false)
+const notifyPosts = computed(() => {
+  const m = groupsStore.myGroups.find(m => m.group_id === group.value?.id)
+  return m?.notify_posts ?? false
+})
+
+async function toggleNotify() {
+  if (!group.value || isTogglingNotify.value || !isMember.value) return
+  isTogglingNotify.value = true
+  try { await groupsStore.toggleGroupNotification(group.value.id) }
+  catch {} finally { isTogglingNotify.value = false }
+}
 
 const socialIconMap: Record<string, string> = {
   telegram: 'Send', discord: 'MessageCircle', twitter: 'Twitter', vk: 'Globe', website: 'Globe',
@@ -417,6 +465,28 @@ const ticketStatusColor = computed(() => {
   return 'bg-brand-success/15 text-brand-success'
 })
 
+// ── Group bookmark ────────────────────────────────────────────────────────────
+const isGroupBookmarked   = ref(false)
+const isTogglingGrpBm     = ref(false)
+
+async function checkGroupBookmark() {
+  if (!group.value || isOwner.value || !authStore.user) return
+  try {
+    const res = await api.get(`/bookmarks/groups/${group.value.id}`)
+    if (res.data.success) isGroupBookmarked.value = res.data.data.bookmarked
+  } catch { /* ignore */ }
+}
+
+async function toggleGroupBookmark() {
+  if (!group.value || isTogglingGrpBm.value) return
+  isTogglingGrpBm.value = true
+  try {
+    const res = await api.post(`/bookmarks/groups/${group.value.id}`)
+    if (res.data.success) isGroupBookmarked.value = res.data.data.bookmarked
+  } catch (e) { console.error('group bookmark toggle failed', e) }
+  finally { isTogglingGrpBm.value = false }
+}
+
 async function load() {
   groupMediaLoaded.value = false
   groupMediaPostsList.value = []
@@ -425,6 +495,7 @@ async function load() {
   loadMyRating()
   loadGroupPosts()
   loadMemberPreview()
+  if (authStore.user && !isOwner.value) checkGroupBookmark()
   if (group.value?.type === 'event' && activeEvent.value) {
     loadMyRsvp()
   }
@@ -695,9 +766,15 @@ const vClickOutside = {
                       title="Донаты отключены — включить в настройках">
                       <BIcon name="DollarSign" class="w-4 h-4" />
                     </button>
-                    <button class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg hover:border-brand-accent/60 rounded-xl text-white/55 hover:text-brand-accent transition-all"
-                      title="Уведомления">
-                      <BIcon name="Bell" class="w-4 h-4" />
+                    <button v-if="isMember"
+                      @click="toggleNotify"
+                      :disabled="isTogglingNotify"
+                      :title="notifyPosts ? 'Уведомления включены — нажмите, чтобы отключить' : 'Включить уведомления о постах'"
+                      class="w-9 h-9 flex items-center justify-center border rounded-xl transition-all disabled:opacity-50"
+                      :class="notifyPosts
+                        ? 'border-brand-yellow/50 bg-brand-yellow/10 text-brand-yellow hover:bg-brand-yellow/20'
+                        : 'border-brand-border bg-brand-bg text-white/55 hover:border-brand-accent/60 hover:text-brand-accent'">
+                      <BIcon :name="notifyPosts ? 'BellRing' : 'Bell'" class="w-4 h-4" />
                     </button>
                     <button v-if="group.type === 'news' && isMember"
                       @click="router.push({ name: 'messages', query: { userId: group.owner.id } })"
@@ -735,6 +812,17 @@ const vClickOutside = {
                       @click="router.push({ name: 'group-settings', params: { slugOrId: group!.slug } })"
                       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-border bg-brand-bg text-white/55 text-sm font-bold hover:border-brand-accent/60 hover:text-brand-accent transition-all">
                       <BIcon name="Settings" class="w-4 h-4" /> Настройки
+                    </button>
+                    <!-- Bookmark group button (non-owners only) -->
+                    <button
+                      v-if="authStore.user && !isOwner"
+                      @click="toggleGroupBookmark"
+                      :disabled="isTogglingGrpBm"
+                      :title="isGroupBookmarked ? langStore.t.unbookmarkGroup : langStore.t.bookmarkGroup"
+                      class="w-9 h-9 flex items-center justify-center border rounded-xl transition-all disabled:opacity-50"
+                      :class="isGroupBookmarked ? 'border-yellow-500/50 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20' : 'border-brand-border bg-brand-bg hover:border-yellow-500/40 text-white/55 hover:text-yellow-400'">
+                      <span v-if="isTogglingGrpBm" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      <BIcon v-else :name="isGroupBookmarked ? 'BookmarkCheck' : 'Bookmark'" class="w-4 h-4" />
                     </button>
                     <!-- More options menu -->
                     <div class="relative" v-click-outside="closeGroupMenu">
@@ -1799,6 +1887,95 @@ const vClickOutside = {
                     <div v-else class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl p-8 text-center">
                       <BIcon name="Archive" class="w-10 h-10 mx-auto mb-3 text-white/20" />
                       <p class="text-white/40 text-sm font-semibold">Прошедших событий нет</p>
+                    </div>
+                  </template>
+
+                  <!-- ── MEMBERS TAB ──────────────────────────────────── -->
+                  <template v-else-if="activeContentTab === 'members'">
+                    <div class="flex items-center gap-3 border-b border-brand-border pb-3 mb-4">
+                      <BIcon name="Users" class="w-4 h-4 text-white/30" />
+                      <span class="text-sm font-bold text-white/55">Участники</span>
+                      <span class="text-xs text-white/30 ml-auto">{{ fmtNum(group._count.members) }}</span>
+                    </div>
+                    <div v-if="membersLoading && !allMembers.length" class="grid grid-cols-2 gap-2">
+                      <div v-for="i in 6" :key="i" class="h-16 bg-brand-bg/60 rounded-xl animate-pulse" />
+                    </div>
+                    <div v-else-if="allMembers.length" class="space-y-2">
+                      <div v-for="m in allMembers" :key="m.user_id ?? m.user?.id"
+                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-brand-bg/40 border border-brand-border/60 hover:border-brand-accent/30 transition-all cursor-pointer"
+                        @click="router.push({ name: 'profile', params: { username: m.user?.username } })">
+                        <div class="w-9 h-9 rounded-xl overflow-hidden border border-brand-border flex-shrink-0">
+                          <img v-if="m.user?.avatar_url" :src="m.user.avatar_url" class="w-full h-full object-cover" />
+                          <div v-else class="w-full h-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold">
+                            {{ (m.user?.display_name || m.user?.username || '?')[0].toUpperCase() }}
+                          </div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-bold text-white truncate">{{ m.user?.display_name || m.user?.username }}</p>
+                          <p class="text-xs text-white/35 truncate">@{{ m.user?.username }}</p>
+                        </div>
+                        <span v-if="m.role !== 'member'" class="text-[10px] font-bold px-2 py-0.5 rounded-full border"
+                          :class="{
+                            'bg-amber-400/15 text-amber-400 border-amber-400/30': m.role === 'owner',
+                            'bg-brand-accent/15 text-brand-accent border-brand-accent/30': m.role === 'admin',
+                            'bg-sky-500/15 text-sky-400 border-sky-500/30': m.role === 'moderator',
+                          }">
+                          {{ m.role === 'owner' ? 'Владелец' : m.role === 'admin' ? 'Адмін' : 'Мод' }}
+                        </span>
+                      </div>
+                      <button v-if="membersHasMore" @click="loadMoreMembers" :disabled="membersLoading"
+                        class="w-full py-2.5 mt-2 rounded-xl border border-brand-border text-white/55 text-sm font-semibold hover:text-white hover:border-brand-accent/40 transition-all disabled:opacity-40">
+                        {{ membersLoading ? '…' : 'Загрузить ещё' }}
+                      </button>
+                    </div>
+                    <div v-else class="text-center py-10 text-white/30 text-sm">Участников пока нет</div>
+                  </template>
+
+                  <!-- ── EVENTS TAB ─────────────────────────────────────── -->
+                  <template v-else-if="activeContentTab === 'events'">
+                    <div class="flex items-center gap-3 border-b border-brand-border pb-3 mb-4">
+                      <BIcon name="CalendarDays" class="w-4 h-4 text-white/30" />
+                      <span class="text-sm font-bold text-white/55">События группы</span>
+                    </div>
+                    <div v-if="isGroupEventsLoading" class="space-y-3">
+                      <div v-for="i in 3" :key="i" class="h-20 bg-brand-bg/60 rounded-xl animate-pulse" />
+                    </div>
+                    <div v-else-if="groupEvents.length" class="space-y-3">
+                      <div v-for="ev in groupEvents" :key="ev.id"
+                        class="flex gap-3 bg-brand-bg border border-brand-border rounded-2xl p-4 hover:border-brand-accent/30 transition-all cursor-pointer"
+                        @click="router.push({ name: 'event-detail', params: { eventId: ev.id } })">
+                        <div class="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 border border-brand-border/60">
+                          <img v-if="ev.banner_url" :src="ev.banner_url" class="w-full h-full object-cover" />
+                          <div v-else class="w-full h-full bg-brand-accent/10 flex items-center justify-center">
+                            <BIcon name="CalendarDays" class="w-6 h-6 text-brand-accent/40" />
+                          </div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-bold text-white truncate">{{ ev.title }}</p>
+                          <p class="text-[11px] text-white/40 mt-0.5">{{ fmt(ev.starts_at) }} — {{ fmt(ev.ends_at) }}</p>
+                          <p v-if="ev.location_name" class="text-[10px] text-white/30 flex items-center gap-1 mt-1">
+                            <BIcon name="MapPin" class="w-2.5 h-2.5" />{{ ev.location_name }}
+                          </p>
+                        </div>
+                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-lg bg-white/5 text-white/30 border border-white/10 self-start">#{{ ev.short_code }}</span>
+                      </div>
+                    </div>
+                    <div v-else class="text-center py-10 text-white/30 text-sm">Событий пока нет</div>
+                  </template>
+
+                  <!-- ── ACHIEVEMENTS TAB ───────────────────────────────── -->
+                  <template v-else-if="activeContentTab === 'achievements'">
+                    <div class="flex items-center gap-3 border-b border-brand-border pb-3 mb-4">
+                      <BIcon name="Trophy" class="w-4 h-4 text-white/30" />
+                      <span class="text-sm font-bold text-white/55">Достижения</span>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div v-for="ach in (group as any).achievements" :key="ach.id"
+                        class="flex flex-col items-center gap-2 p-4 bg-brand-bg border border-brand-border rounded-2xl text-center">
+                        <div class="text-3xl">{{ ach.icon }}</div>
+                        <p class="text-xs font-bold text-white/70">{{ ach.title }}</p>
+                        <p class="text-[10px] text-white/30">{{ new Date(ach.earned_at).toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' }) }}</p>
+                      </div>
                     </div>
                   </template>
 

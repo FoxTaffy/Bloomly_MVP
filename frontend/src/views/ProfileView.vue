@@ -566,6 +566,16 @@
                         <BIcon name="HeartHandshake" class="w-4 h-4" />
                         Донат
                       </a>
+                      <!-- Bookmark user button -->
+                      <button
+                        @click="toggleUserBookmark"
+                        :disabled="isTogglingBookmark"
+                        :title="isUserBookmarked ? langStore.t.unbookmarkUser : langStore.t.bookmarkUser"
+                        class="w-9 h-9 flex items-center justify-center border rounded-xl transition-all disabled:opacity-50"
+                        :class="isUserBookmarked ? 'border-yellow-500/50 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20' : 'border-brand-border bg-brand-bg hover:border-yellow-500/40 text-white/55 hover:text-yellow-400'">
+                        <span v-if="isTogglingBookmark" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        <BIcon v-else :name="isUserBookmarked ? 'BookmarkCheck' : 'Bookmark'" class="w-4 h-4" />
+                      </button>
                       <button class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg hover:border-brand-border/80 rounded-xl text-white/55 hover:text-white transition-all">
                         <BIcon name="MoreHorizontal" class="w-4 h-4" />
                       </button>
@@ -1731,10 +1741,13 @@
                     <span class="text-lg font-extrabold text-white group-hover:text-brand-accent transition-colors leading-none">{{ followers.length }}</span>
                     <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Подписчики</span>
                   </button>
-                  <div class="flex flex-col items-center gap-1 py-4 px-2">
-                    <span class="text-lg font-extrabold text-white leading-none">{{ groupsCount }}</span>
+                  <button
+                    @click="openGroupsModal"
+                    :class="(isOwnProfile || relation.friends || userGroupsList.some(g => g.is_pinned)) ? 'hover:bg-brand-bg/60 cursor-pointer group' : 'cursor-default'"
+                    class="flex flex-col items-center gap-1 py-4 px-2 transition-all">
+                    <span class="text-lg font-extrabold text-white leading-none" :class="(isOwnProfile || relation.friends || userGroupsList.some(g => g.is_pinned)) ? 'group-hover:text-brand-accent transition-colors' : ''">{{ groupsCount }}</span>
                     <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Группы</span>
-                  </div>
+                  </button>
                   <button @click="showFollowingModal = true"
                     class="flex flex-col items-center gap-1 py-4 px-2 hover:bg-brand-bg/60 transition-all group cursor-pointer">
                     <span class="text-lg font-extrabold text-white group-hover:text-brand-accent transition-colors leading-none">{{ following.length }}</span>
@@ -2201,6 +2214,67 @@
       </div>
     </Transition>
 
+    <!-- ─── Groups Modal ─────────────────────────────────────────────── -->
+    <Transition name="fade">
+      <div v-if="showGroupsModal" class="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4" @click.self="showGroupsModal = false">
+        <div class="w-full max-w-sm bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
+          <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0">
+            <div class="flex items-center gap-2.5">
+              <BIcon name="Users" class="w-5 h-5 text-violet-400" />
+              <h3 class="font-bold text-white text-base">Группы</h3>
+              <span class="text-xs font-bold bg-violet-500/15 text-violet-400 px-2 py-0.5 rounded-full">{{ userGroupsCount }}</span>
+            </div>
+            <button @click="showGroupsModal = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
+              <BIcon name="X" class="w-4 h-4" />
+            </button>
+          </div>
+          <div class="overflow-y-auto flex-1 p-3 space-y-1.5">
+            <div v-if="!userGroupsList.length" class="py-12 text-center text-white/35 text-sm">
+              {{ userGroupsPinnedOnly ? 'Нет закреплённых групп' : 'Нет групп' }}
+            </div>
+            <template v-else>
+              <!-- pinned section header for non-friend viewers -->
+              <p v-if="userGroupsPinnedOnly && userGroupsList.length" class="text-[10px] font-bold text-amber-400/70 uppercase tracking-wider px-2 pb-1 flex items-center gap-1">
+                <BIcon name="Pin" class="w-3 h-3" /> Закреплённые
+              </p>
+              <div v-for="group in userGroupsList" :key="group.id"
+                class="flex items-center gap-3 px-3 py-2.5 rounded-2xl border transition-all group/item"
+                :class="group.is_pinned
+                  ? 'bg-amber-500/5 border-amber-400/25 hover:border-amber-400/50'
+                  : 'border-transparent hover:bg-brand-bg hover:border-brand-border'">
+                <router-link :to="'/groups/' + group.slug" @click="showGroupsModal = false" class="flex items-center gap-3 flex-1 min-w-0">
+                  <div class="relative flex-shrink-0">
+                    <img v-if="group.avatar_url" :src="group.avatar_url" class="w-10 h-10 rounded-xl object-cover" :class="group.is_pinned ? 'ring-2 ring-amber-400/50' : ''" @error="onAvatarError" />
+                    <div v-else class="w-10 h-10 rounded-xl flex items-center justify-center" :class="group.is_pinned ? 'bg-amber-500/15 ring-2 ring-amber-400/50' : 'bg-brand-accent/15'">
+                      <BIcon name="Users" class="w-5 h-5" :class="group.is_pinned ? 'text-amber-400' : 'text-brand-accent'" />
+                    </div>
+                    <!-- pin badge -->
+                    <span v-if="group.is_pinned" class="absolute -top-1 -right-1 w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center shadow-md shadow-amber-500/30">
+                      <BIcon name="Pin" class="w-2.5 h-2.5 text-amber-900" />
+                    </span>
+                  </div>
+                  <div class="min-w-0">
+                    <p class="text-sm font-bold truncate group-hover/item:text-brand-accent transition-colors" :class="group.is_pinned ? 'text-amber-100' : 'text-white'">{{ group.name }}</p>
+                    <p class="text-[10px] text-white/45">{{ group.members_count }} участников</p>
+                  </div>
+                </router-link>
+                <!-- pin toggle (own profile only) -->
+                <div v-if="isOwnProfile" class="relative flex-shrink-0">
+                  <button
+                    @click.stop="togglePinGroup(group.id)"
+                    :title="group.is_pinned ? 'Открепить' : 'Закрепить'"
+                    class="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+                    :class="group.is_pinned ? 'text-amber-400 hover:text-amber-300' : 'text-white/25 hover:text-amber-400'">
+                    <BIcon :name="group.is_pinned ? 'PinOff' : 'Pin'" class="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- ─── Status Edit Modal ──────────────────────────────────────────── -->
     <Transition name="fade">
       <div v-if="showStatusEdit" class="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4" @click.self="showStatusEdit = false">
@@ -2563,6 +2637,7 @@ type ContentTab = 'posts' | 'repaws' | 'media' | 'followers' | 'following' | 'mu
 // ── Social modals ─────────────────────────────────────────────────────────────
 const showFollowersModal = ref(false)
 const showFollowingModal = ref(false)
+const showGroupsModal    = ref(false)
 const followingLoading = ref(false)
 
 // ── Profile status (temporary, localStorage) ──────────────────────────────────
@@ -3091,14 +3166,40 @@ async function onFursonaRefUpload(e: Event) {
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const isOwnProfile = computed(() => !!authStore.user && authStore.user.id === viewedProfile.value?.id)
-const userGroupsCount = ref(0)
+const userGroupsCount    = ref(0)
+const userGroupsList     = ref<any[]>([])
+const userGroupsPinnedOnly = ref(false)
+const groupsModalLoading = ref(false)
 const groupsCount = computed(() => userGroupsCount.value)
 
 async function loadUserGroupsCount(userId: string) {
   try {
     const res = await api.get(`/groups/user/${userId}`)
-    userGroupsCount.value = Array.isArray(res.data) ? res.data.length : 0
-  } catch { userGroupsCount.value = 0 }
+    userGroupsCount.value = res.data.data?.count ?? 0
+    userGroupsList.value  = res.data.data?.groups ?? []
+    userGroupsPinnedOnly.value = res.data.data?.pinned_only ?? true
+  } catch {
+    userGroupsCount.value = 0
+    userGroupsList.value  = []
+  }
+}
+
+function openGroupsModal() {
+  if (!viewedProfile.value) return
+  if (!isOwnProfile.value && !relation.friends && !userGroupsList.value.length) return
+  showGroupsModal.value = true
+}
+
+async function togglePinGroup(groupId: string) {
+  try {
+    await api.patch(`/groups/${groupId}/pin`)
+    const g = userGroupsList.value.find((g) => g.id === groupId)
+    if (g) g.is_pinned = !g.is_pinned
+    userGroupsList.value = [
+      ...userGroupsList.value.filter((g) => g.is_pinned),
+      ...userGroupsList.value.filter((g) => !g.is_pinned),
+    ]
+  } catch {}
 }
 
 const profileDisplayName = computed(() => {
@@ -3492,6 +3593,9 @@ async function loadProfile() {
   tabPosts.value = []
   pinnedPost.value = null
   partnerProfile.value = null
+  userGroupsList.value = []
+  userGroupsCount.value = 0
+  userGroupsPinnedOnly.value = false
   Object.assign(relation, { aFollowsB: false, bFollowsA: false, friends: false })
 
   try {
@@ -3505,6 +3609,7 @@ async function loadProfile() {
         loadFollowingList(userId),
         loadUserGroupsCount(userId),
         authStore.isAuthenticated && !isOwnProfile.value ? loadRelation(userId) : Promise.resolve(),
+        authStore.isAuthenticated && !isOwnProfile.value ? checkUserBookmark() : Promise.resolve(),
         fetchOnlineStatus(userId),
         (result as any).relationship_with ? loadPartnerProfile((result as any).relationship_with) : Promise.resolve(),
         loadProfileSoonBadges(userId),
@@ -3658,6 +3763,28 @@ async function toggleFollow() {
     }
   } catch (e) { console.error('follow toggle failed', e) }
   finally { isTogglingFollow.value = false }
+}
+
+// ── User bookmark ─────────────────────────────────────────────────────────────
+const isUserBookmarked   = ref(false)
+const isTogglingBookmark = ref(false)
+
+async function checkUserBookmark() {
+  if (!viewedProfile.value || isOwnProfile.value || !authStore.user) return
+  try {
+    const res = await api.get(`/bookmarks/users/${viewedProfile.value.id}`)
+    if (res.data.success) isUserBookmarked.value = res.data.data.bookmarked
+  } catch { /* ignore */ }
+}
+
+async function toggleUserBookmark() {
+  if (!viewedProfile.value || isTogglingBookmark.value) return
+  isTogglingBookmark.value = true
+  try {
+    const res = await api.post(`/bookmarks/users/${viewedProfile.value.id}`)
+    if (res.data.success) isUserBookmarked.value = res.data.data.bookmarked
+  } catch (e) { console.error('bookmark toggle failed', e) }
+  finally { isTogglingBookmark.value = false }
 }
 
 // ── Pin / unpin ───────────────────────────────────────────────────────────────

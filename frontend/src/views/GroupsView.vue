@@ -24,8 +24,21 @@ const showCategoryDropdown = ref(false)
 const groupsStore = useGroupsStore()
 const authStore = useAuthStore()
 
+// Pinned groups tracking
+const pinnedGroupIds = computed(() => {
+  const ids = new Set<string>()
+  groupsStore.myGroups.forEach(m => { if (m.is_pinned) ids.add(m.group_id) })
+  return ids
+})
+
+async function handleBookmark(groupId: string) {
+  try {
+    await groupsStore.togglePinGroup(groupId)
+  } catch {}
+}
+
 // Sidebar navigation
-const sidebarTab = ref<'my' | 'for_you' | 'managed'>('my')
+const sidebarTab = ref<'my' | 'for_you' | 'trending' | 'afisha' | 'managed'>('my')
 
 // Category filter (via dropdown)
 const selectedCategory = ref<string>('all')
@@ -48,14 +61,15 @@ const displayGroups = computed(() => {
     list = groupsStore.myGroups
       .filter(m => ['owner', 'admin'].includes(m.role))
       .map(m => m.group)
+  } else if (sidebarTab.value === 'trending') {
+    list = groupsStore.trendingGroups
   } else {
     // for_you
     list = groupsStore.groups
   }
 
-  // Apply category filter
-  if (selectedCategory.value !== 'all') {
-    // map 'event' category key to group type 'event'
+  // Category filter (not applied for afisha tab)
+  if (sidebarTab.value !== 'afisha' && selectedCategory.value !== 'all') {
     list = list.filter(g => g.type === selectedCategory.value)
   }
 
@@ -102,6 +116,10 @@ function switchSidebarTab(tab: typeof sidebarTab.value) {
   sidebarTab.value = tab
   if (tab === 'for_you') {
     loadData()
+  } else if (tab === 'trending') {
+    groupsStore.loadTrending()
+  } else if (tab === 'afisha') {
+    groupsStore.loadEvents({ upcoming: true, limit: 20 })
   } else {
     groupsStore.loadMyGroups()
   }
@@ -271,117 +289,71 @@ function fmtMembers(n: number): string {
           </button>
         </div>
 
-        <!-- ════════ MAIN CONTENT + SIDEBAR ════════ -->
-        <div class="flex gap-6">
-          <!-- Left: Groups Grid (2 columns) -->
-          <div class="flex-1 min-w-0">
-            <div v-if="groupsStore.isLoading" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div v-for="i in 6" :key="i" class="bg-brand-card border border-brand-border rounded-2xl h-[160px] animate-pulse" />
-            </div>
-            <div v-else-if="displayGroups.length" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <GroupCard
-                v-for="group in displayGroups"
-                :key="group.id"
-                :group="group"
-                @click="router.push({ name: 'group-detail', params: { slugOrId: group.slug } })"
-              />
-            </div>
-            <div v-else class="text-center py-16">
-              <div class="w-16 h-16 rounded-3xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center mx-auto mb-4">
-                <BIcon name="Grid" class="w-8 h-8 text-brand-accent" />
-              </div>
-              <p class="text-white/40 text-sm">Групп пока нет. Создай первую!</p>
-            </div>
-          </div>
-
-          <!-- Right: Sidebar -->
-          <div class="hidden lg:block w-72 shrink-0 space-y-4">
-            <!-- Navigation tabs -->
-            <div class="bg-brand-card border border-brand-border rounded-2xl p-3 space-y-1">
-              <button
-                v-for="tab in [
-                  { key: 'my' as const,      label: langStore.t.mySubscriptions, icon: 'Heart' },
-                  { key: 'for_you' as const, label: langStore.t.forYou,          icon: 'Sparkles' },
-                  { key: 'managed' as const, label: langStore.t.managed,         icon: 'ShieldCheck' },
-                ]"
-                :key="tab.key"
-                class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all"
-                :class="sidebarTab === tab.key
-                  ? 'bg-brand-accent/10 text-brand-accent'
-                  : 'text-white/50 hover:text-white/80 hover:bg-brand-bg/40'"
-                @click="switchSidebarTab(tab.key)"
-              >
-                <BIcon :name="tab.icon" class="w-4 h-4" />
-                {{ tab.label }}
-              </button>
-            </div>
-
-            <!-- Category tags -->
-            <div class="bg-brand-card border border-brand-border rounded-2xl p-4">
-              <h3 class="text-sm font-extrabold text-white mb-3 flex items-center gap-2">
-                <BIcon name="Tag" class="w-4 h-4 text-brand-accent" />
-                {{ langStore.t.categoriesLabel }}
-              </h3>
-              <div class="flex flex-wrap gap-1.5">
-                <button
-                  v-for="cat in categories.filter(c => c.key !== 'all')"
-                  :key="cat.key"
-                  class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors"
-                  :class="selectedCategory === cat.key
-                    ? 'bg-brand-accent text-white border-brand-accent'
-                    : 'bg-brand-bg/60 text-white/60 border-brand-border hover:border-brand-accent/40 hover:text-white/80'"
-                  @click="selectCategory(cat.key)"
-                >
-                  <BIcon :name="cat.icon" class="w-3 h-3" />
-                  {{ cat.label }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Upcoming events: Скоро! -->
-            <div v-if="upcomingEvents.length" class="bg-brand-card border border-brand-border rounded-2xl p-4">
-              <h3 class="text-sm font-extrabold text-white mb-3 flex items-center gap-2">
-                <BIcon name="Flame" class="w-4 h-4 text-amber-400" />
-                {{ langStore.t.upcoming }}
-              </h3>
-              <div class="space-y-2.5">
-                <div
-                  v-for="ev in upcomingEvents"
-                  :key="ev.id"
-                  class="flex gap-3 cursor-pointer hover:bg-brand-bg/40 rounded-xl p-2 -mx-1 transition-colors items-center"
-                  @click="router.push({ name: 'group-detail', params: { slugOrId: ev.group?.slug || ev.group_id } })"
-                >
-                  <!-- Group avatar -->
-                  <div class="w-11 h-11 rounded-xl overflow-hidden shrink-0 border-2 border-brand-border">
-                    <img v-if="ev.group?.avatar_url" :src="ev.group.avatar_url" class="w-full h-full object-cover" />
-                    <div v-else class="w-full h-full flex items-center justify-center"
-                      :style="ev.group?.accent_color ? `background:${ev.group.accent_color}33` : 'background:#4C67CF33'">
-                      <BIcon name="CalendarDays" class="w-5 h-5 text-brand-accent" />
-                    </div>
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <!-- Event title -->
-                    <p class="text-white text-xs font-bold truncate leading-tight">{{ ev.title }}</p>
-                    <!-- Group name -->
-                    <p v-if="ev.group?.name" class="text-white/50 text-[10px] truncate mt-0.5">{{ ev.group.name }}</p>
-                    <!-- Date + members row -->
-                    <div class="flex items-center gap-2.5 mt-1">
-                      <span class="flex items-center gap-1 text-brand-accent text-[10px] font-semibold">
-                        <BIcon name="CalendarDays" class="w-2.5 h-2.5" />
-                        {{ fmt(ev.starts_at) }}
-                      </span>
-                      <span v-if="ev.group && (ev.group.subscriber_count > 0 || ev.group._count?.members > 0)"
-                        class="flex items-center gap-1 text-white/40 text-[10px]">
-                        <BIcon name="Users" class="w-2.5 h-2.5" />
-                        {{ fmtMembers(ev.group.subscriber_count > 0 ? ev.group.subscriber_count : ev.group._count?.members ?? 0) }}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        <!-- ════════ TAB BAR ════════ -->
+        <div class="flex items-center gap-2 mb-5 flex-wrap">
+          <button
+            v-for="tab in [
+              { key: 'my'       as const, label: langStore.t.mySubscriptions, icon: 'Heart' },
+              { key: 'for_you'  as const, label: langStore.t.forYou,          icon: 'Sparkles' },
+              { key: 'trending' as const, label: 'В тренде',                  icon: 'TrendingUp' },
+              { key: 'afisha'   as const, label: 'Афиша',                     icon: 'CalendarDays' },
+              { key: 'managed'  as const, label: langStore.t.managed,         icon: 'ShieldCheck' },
+            ]"
+            :key="tab.key"
+            class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all border"
+            :class="sidebarTab === tab.key
+              ? 'bg-brand-accent/15 text-brand-accent border-brand-accent/40'
+              : 'text-white/50 hover:text-white border-brand-border hover:border-brand-accent/30 bg-brand-card'"
+            @click="switchSidebarTab(tab.key)"
+          >
+            <BIcon :name="tab.icon" class="w-4 h-4" />
+            {{ tab.label }}
+          </button>
         </div>
+
+        <!-- ════════ AFISHA TAB ════════ -->
+        <template v-if="sidebarTab === 'afisha'">
+          <div v-if="groupsStore.isLoading" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div v-for="i in 4" :key="i" class="bg-brand-card border border-brand-border rounded-2xl h-40 animate-pulse" />
+          </div>
+          <div v-else-if="upcomingEvents.length === 0" class="text-center py-16">
+            <div class="w-16 h-16 rounded-3xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center mx-auto mb-4">
+              <BIcon name="CalendarDays" class="w-8 h-8 text-brand-accent" />
+            </div>
+            <p class="text-white/40 text-sm">Предстоящих событий пока нет</p>
+          </div>
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <EventCard
+              v-for="event in upcomingEvents"
+              :key="event.id"
+              :event="event"
+              @click="router.push({ name: 'group-detail', params: { slugOrId: event.group?.slug || event.group_id } })"
+            />
+          </div>
+        </template>
+
+        <!-- ════════ GROUPS GRID ════════ -->
+        <template v-else>
+          <div v-if="groupsStore.isLoading || groupsStore.isTrendingLoading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div v-for="i in 6" :key="i" class="bg-brand-card border border-brand-border rounded-2xl h-[160px] animate-pulse" />
+          </div>
+          <div v-else-if="displayGroups.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <GroupCard
+              v-for="group in displayGroups"
+              :key="group.id"
+              :group="group"
+              :is-pinned="pinnedGroupIds.has(group.id)"
+              @click="router.push({ name: 'group-detail', params: { slugOrId: group.slug } })"
+              @bookmark="handleBookmark(group.id)"
+            />
+          </div>
+          <div v-else class="text-center py-16">
+            <div class="w-16 h-16 rounded-3xl bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center mx-auto mb-4">
+              <BIcon name="Grid" class="w-8 h-8 text-brand-accent" />
+            </div>
+            <p class="text-white/40 text-sm">Групп пока нет. Создай первую!</p>
+          </div>
+        </template>
       </main>
     </div>
 

@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
-import { createPostHandler, votePostHandler, getPostsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler, getPostByIdHandler } from './controller.js';
+import { createPostHandler, votePostHandler, getPostsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler, getPostByIdHandler, getMyBookmarksHandler } from './controller.js';
 
 // The authenticate decorator is declared in auth/routes.ts; this re-declaration
 // merges into the same global FastifyInstance augmentation via TypeScript.
@@ -35,7 +35,7 @@ const voteSchema = {
     type: 'object',
     required: ['value'],
     properties: {
-      value: { type: 'integer', enum: [1, -1] },
+      value: { type: 'integer', minimum: -1, maximum: 1 },
     },
   },
 };
@@ -57,6 +57,9 @@ export async function postsRoutes(fastify: FastifyInstance) {
   fastify.get('/personalized', auth, getPersonalizedPostsHandler as any);
   fastify.get('/trending-tags', getTrendingTagsHandler as any);
   fastify.get('/status', auth, getUserPostStatusHandler as any);
+
+  // ── Private "me" routes (must come before /user/:userId) ────────────────
+  fastify.get('/me/bookmarks', auth, getMyBookmarksHandler as any);
 
   // ── User-specific ───────────────────────────────────────────────────────
   fastify.get('/user/:userId',        getUserPostsHandler as any);

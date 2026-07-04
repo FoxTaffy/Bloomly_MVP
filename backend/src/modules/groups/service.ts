@@ -658,12 +658,11 @@ export const groupService = {
   async getUserGroups(userId: string) {
     return prisma.groupMember.findMany({
       where: { user_id: userId, group: { deleted_at: null } },
-      include: {
-        group: {
-          select: GROUP_LIST_SELECT,
-        },
+      select: {
+        group_id: true, role: true, joined_at: true, is_pinned: true, notify_posts: true,
+        group: { select: GROUP_LIST_SELECT },
       },
-      orderBy: { joined_at: 'desc' },
+      orderBy: [{ is_pinned: 'desc' }, { joined_at: 'desc' }],
     });
   },
 
@@ -675,6 +674,61 @@ export const groupService = {
       orderBy: { joined_at: 'desc' },
     });
     return memberships.map((m) => ({ ...m.group, badge_level: getGroupBadgeLevel(m.group.members_count), role: m.role }));
+  },
+
+  // ── Groups visible to viewer (friend-gated) ───────────────────────────────
+  async getUserGroupsForViewer(userId: string, requesterId: string | null) {
+    const isOwn = requesterId === userId;
+
+    let isFriend = false;
+    if (requesterId && !isOwn) {
+      const friendship = await prisma.friendship.findFirst({
+        where: {
+          OR: [
+            { requester_id: requesterId, addressee_id: userId, status: 'accepted' },
+            { requester_id: userId, addressee_id: requesterId, status: 'accepted' },
+          ],
+        },
+      });
+      isFriend = !!friendship;
+    }
+
+    const canSeeAll = isOwn || isFriend;
+
+    const [totalCount, memberships] = await Promise.all([
+      prisma.groupMember.count({ where: { user_id: userId, group: { deleted_at: null } } }),
+      prisma.groupMember.findMany({
+        where: {
+          user_id: userId,
+          group: { deleted_at: null },
+          ...(canSeeAll ? {} : { is_pinned: true }),
+        },
+        include: { group: { select: GROUP_LIST_SELECT } },
+        orderBy: [{ is_pinned: 'desc' }, { joined_at: 'desc' }],
+      }),
+    ]);
+
+    const groups = memberships.map((m) => ({
+      ...m.group,
+      badge_level: getGroupBadgeLevel(m.group.members_count),
+      role: m.role,
+      is_pinned: m.is_pinned,
+    }));
+
+    return { groups, count: totalCount, pinned_only: !canSeeAll };
+  },
+
+  // ── Toggle pin for own membership ─────────────────────────────────────────
+  async togglePinGroup(userId: string, groupId: string) {
+    const membership = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+    });
+    if (!membership) throw new Error('Not a member');
+    return prisma.groupMember.update({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      data: { is_pinned: !membership.is_pinned },
+      select: { is_pinned: true },
+    });
   },
 
   // ── Groups shared between two users ──────────────────────────────────────
@@ -1044,6 +1098,36 @@ export const groupService = {
         })
       )
     );
+  },
+
+  // ── Trending groups (by member count + recent activity) ──────────────────
+  async getTrending(page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const [groups, total] = await Promise.all([
+      prisma.group.findMany({
+        where: { deleted_at: null, is_public: true },
+        select: GROUP_LIST_SELECT,
+        orderBy: [{ members_count: 'desc' }, { rating: 'desc' }, { created_at: 'desc' }],
+        skip,
+        take: limit,
+      }),
+      prisma.group.count({ where: { deleted_at: null, is_public: true } }),
+    ]);
+    return { groups: groups.map((g) => ({ ...g, badge_level: getGroupBadgeLevel(g.members_count) })), total };
+  },
+
+  // ── Toggle notification preference ───────────────────────────────────────
+  async toggleNotification(groupId: string, userId: string) {
+    const membership = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+    });
+    if (!membership) throw new Error('Not a member');
+    const updated = await prisma.groupMember.update({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      data: { notify_posts: !membership.notify_posts },
+      select: { notify_posts: true },
+    });
+    return { notify_posts: updated.notify_posts };
   },
 
   // ── Ticket tier helpers ──────────────────────────────────────────────────
