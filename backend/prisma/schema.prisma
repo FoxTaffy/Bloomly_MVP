@@ -538,6 +538,7 @@ model Message {
   file_url                 String?
   reply_to_id              String?      @db.Uuid
   reactions                Json?
+  metadata                 Json?        // structured payload for card-style messages (payment_request, payment_confirmation, tip)
   edited_at                DateTime?
   created_at               DateTime     @default(now())
   updated_at               DateTime     @updatedAt

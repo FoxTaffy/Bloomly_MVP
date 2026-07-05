@@ -44,25 +44,11 @@
               </button>
             </div>
 
-            <!-- Tab switcher: Личные / Беседы -->
-            <div class="flex gap-1 px-4 py-2 border-b border-brand-border flex-shrink-0">
-              <button @click="chatTab = 'dm'"
-                class="flex-1 py-1.5 rounded-xl text-xs font-bold transition-all"
-                :class="chatTab === 'dm' ? 'bg-brand-accent text-white' : 'text-white/50 hover:text-white hover:bg-white/5'">
-                {{ langStore.t.tabPersonal }}
-              </button>
-              <button @click="chatTab = 'groups'"
-                class="flex-1 py-1.5 rounded-xl text-xs font-bold transition-all"
-                :class="chatTab === 'groups' ? 'bg-brand-accent text-white' : 'text-white/50 hover:text-white hover:bg-white/5'">
-                {{ langStore.t.tabGroups }}
-              </button>
-            </div>
-
-            <!-- Conversations list -->
+            <!-- Conversations list — tabs (Личные/Беседы/Группы) are ConversationList's own built-in category switcher -->
             <ConversationList
               :active-id="store.activeId"
               :hide-header="true"
-              :conv-filter="chatTab === 'dm' ? 'personal' : 'groups'"
+              conv-filter="all"
               @select="onSelectConversation"
               @new-conversation="showNewDm = true"
             />
@@ -223,7 +209,6 @@ const showNewDm  = ref(false)
 const dmSearch   = ref('')
 const dmLoading  = ref(false)
 const dmResults  = ref<Array<{ id: string; username: string; display_name: string | null; avatar_url: string | null }>>([])
-const chatTab    = ref<'dm' | 'groups'>('dm')
 
 let dmSearchTimer: ReturnType<typeof setTimeout> | null = null
 

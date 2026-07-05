@@ -11,6 +11,8 @@ export interface SendMessageInput {
   file_url?: string | null;
   media_type?: string;
   reply_to_id?: string | null;
+  type?: 'payment_request' | 'tip';
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface GetMessagesQuery {

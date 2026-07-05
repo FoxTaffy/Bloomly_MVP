@@ -59,12 +59,15 @@ export async function getMessagesHandler(
 }
 
 export async function sendMessageHandler(
-  req: FastifyRequest<{ Params: { id: string }; Body: { content?: string; encrypted_text?: string; file_url?: string; media_type?: string; reply_to_id?: string } }>,
+  req: FastifyRequest<{ Params: { id: string }; Body: { content?: string; encrypted_text?: string; file_url?: string; media_type?: string; reply_to_id?: string; type?: string; metadata?: Record<string, unknown> } }>,
   reply: FastifyReply,
 ) {
   try {
     const { id: senderId } = req.user as JwtUser;
-    const { content = '', encrypted_text, file_url, media_type, reply_to_id } = req.body ?? {} as any;
+    const { content = '', encrypted_text, file_url, media_type, reply_to_id, type, metadata } = req.body ?? {} as any;
+    // Only these client-settable types bypass the normal text/media inference — anything
+    // else (e.g. 'system') stays server-only.
+    const cardType = type === 'payment_request' || type === 'tip' ? type : undefined;
     const message = await messageService.sendMessage({
       conversationId: req.params.id,
       senderId,
@@ -73,8 +76,23 @@ export async function sendMessageHandler(
       file_url,
       media_type,
       reply_to_id,
+      type: cardType,
+      metadata: cardType ? metadata : undefined,
     });
     return reply.code(201).send({ success: true, data: { message }, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  }
+}
+
+export async function payMessageHandler(
+  req: FastifyRequest<{ Params: { msgId: string } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = req.user as JwtUser;
+    const result = await messageService.payPaymentRequest(req.params.msgId, userId);
+    return reply.send({ success: true, data: result, error: null });
   } catch (e: any) {
     return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
   }

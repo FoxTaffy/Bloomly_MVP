@@ -44,6 +44,30 @@ async function enrichWithForwardedSenders<T extends { forwarded_from_sender_id?:
   return messages.map(m => ({ ...m, forwarded_from_sender: m.forwarded_from_sender_id ? byId[m.forwarded_from_sender_id] ?? null : null }));
 }
 
+/** Validates and normalizes the metadata payload for card-style messages. */
+function validateCardMetadata(type: 'payment_request' | 'tip', metadata: unknown): Record<string, unknown> {
+  const meta = (metadata ?? {}) as Record<string, unknown>;
+  const amount = Number(meta.amount);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 10_000_000) {
+    throw Object.assign(new Error('amount must be a positive number'), { statusCode: 400 });
+  }
+  if (type === 'payment_request') {
+    const description = typeof meta.description === 'string' ? meta.description.trim().slice(0, 300) : '';
+    const out: Record<string, unknown> = { amount, description, status: 'pending' };
+    if (meta.prepaymentPercent != null) {
+      const pct = Number(meta.prepaymentPercent);
+      if (Number.isFinite(pct) && pct > 0 && pct <= 100) out.prepaymentPercent = pct;
+    }
+    if (typeof meta.deadline === 'string' && !Number.isNaN(Date.parse(meta.deadline))) {
+      out.deadline = meta.deadline;
+    }
+    return out;
+  }
+  // tip
+  const note = typeof meta.note === 'string' ? meta.note.trim().slice(0, 200) : '';
+  return { amount, note };
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 export const messageService = {
   /**
@@ -118,9 +142,15 @@ export const messageService = {
       include: {
         conversation: {
           include: {
+            // Capped — the client only ever renders up to 4 avatars in the group grid.
+            // Fetching every member of a large community's conversation on every list
+            // load was pulling in thousands of rows for no reason; participants_count
+            // (a cheap aggregate) carries the real total for the "N участников" label.
             participants: {
+              take: 6,
               include: { user: { select: senderSelect } },
             },
+            _count: { select: { participants: true } },
             messages: {
               where: { deleted_at: null },
               orderBy: { created_at: 'desc' },
@@ -151,6 +181,7 @@ export const messageService = {
         personal_pinned_message_id: p.personal_pinned_message_id ?? null,
       },
       last_message: p.conversation.messages[0] ?? null,
+      participants_count: p.conversation._count.participants,
       other_participants: p.conversation.participants
         .filter((cp: any) => cp.user_id !== userId)
         .map((cp: any) => ({ user_id: cp.user_id, user: cp.user, last_read_at: cp.last_read_at ?? null })),
@@ -213,7 +244,7 @@ export const messageService = {
   /**
    * Send a message, persist it and broadcast to all conversation participants.
    */
-  async sendMessage({ conversationId, senderId, content, encrypted_text, file_url, media_type, reply_to_id }: SendMessageInput) {
+  async sendMessage({ conversationId, senderId, content, encrypted_text, file_url, media_type, reply_to_id, type, metadata }: SendMessageInput) {
     await this._assertParticipant(conversationId, senderId);
 
     const conv = await prisma.conversation.findUnique({
@@ -234,7 +265,37 @@ export const messageService = {
     }
 
     const text = content?.trim() ?? '';
-    if (!text && !encrypted_text && !file_url) throw new Error('Message must have text or media');
+    if (!text && !encrypted_text && !file_url && !type) throw new Error('Message must have text or media');
+
+    // Card-style messages (payment_request, tip) carry a structured metadata payload
+    // instead of being derived from file_url/media_type.
+    if (type === 'payment_request' || type === 'tip') {
+      const meta = validateCardMetadata(type, metadata);
+      const [message] = await prisma.$transaction([
+        prisma.message.create({
+          data: {
+            conversation_id: conversationId,
+            sender_id: senderId,
+            text: text || null,
+            type,
+            reply_to_id: reply_to_id ?? null,
+            metadata: meta as any,
+          },
+          include: {
+            sender: { select: senderSelect },
+            reply_to: {
+              select: {
+                id: true, text: true, type: true, file_url: true,
+                sender: { select: { id: true, username: true, display_name: true } },
+              },
+            },
+          },
+        }),
+        prisma.conversation.update({ where: { id: conversationId }, data: { updated_at: new Date() } }),
+      ]);
+      await this._broadcastNewMessage(conversationId, message);
+      return message;
+    }
 
     // Determine message type
     let msgType: string = 'text';
@@ -280,22 +341,86 @@ export const messageService = {
       }),
     ]);
 
-    // Real-time push to all participants
+    await this._broadcastNewMessage(conversationId, message);
+    return message;
+  },
+
+  /**
+   * Push a freshly created message to every participant's open sockets.
+   */
+  async _broadcastNewMessage(conversationId: string, message: unknown) {
     const participants = await prisma.conversationParticipant.findMany({
       where: { conversation_id: conversationId },
       select: { user_id: true },
     });
-
-    const wsPayload = {
-      type: 'new_message',
-      data: message,
-    };
-
+    const wsPayload = { type: 'new_message', data: message };
     for (const { user_id } of participants) {
       messageSubscriptions.push(user_id, wsPayload);
     }
+  },
 
-    return message;
+  /**
+   * Mark a pending payment_request message as paid, and post a payment_confirmation
+   * card in reply. Chat-only — no real payment processor or Dealers' Den linkage.
+   */
+  async payPaymentRequest(messageId: string, userId: string) {
+    const request = await prisma.message.findUnique({ where: { id: messageId } });
+    if (!request) throw Object.assign(new Error('Message not found'), { statusCode: 404 });
+    if (request.type !== 'payment_request') throw Object.assign(new Error('Not a payment request'), { statusCode: 400 });
+    if (request.deleted_at) throw Object.assign(new Error('Message deleted'), { statusCode: 400 });
+    await this._assertParticipant(request.conversation_id, userId);
+    if (request.sender_id === userId) throw Object.assign(new Error('Cannot pay your own request'), { statusCode: 400 });
+
+    const meta = (request.metadata as Record<string, any>) ?? {};
+    if (meta.status === 'paid') throw Object.assign(new Error('Already paid'), { statusCode: 400 });
+
+    const nextMeta = { ...meta, status: 'paid', paid_at: new Date().toISOString() };
+    // Paying settles the prepayment portion when one was requested, not the full order total.
+    const dueAmount = meta.prepaymentPercent ? (meta.amount * meta.prepaymentPercent) / 100 : meta.amount;
+    const [updatedRequest, confirmation] = await prisma.$transaction([
+      prisma.message.update({
+        where: { id: messageId },
+        data: { metadata: nextMeta as any },
+        include: {
+          sender: { select: senderSelect },
+          reply_to: {
+            select: {
+              id: true, text: true, type: true, file_url: true,
+              sender: { select: { id: true, username: true, display_name: true } },
+            },
+          },
+        },
+      }),
+      prisma.message.create({
+        data: {
+          conversation_id: request.conversation_id,
+          sender_id: userId,
+          type: 'payment_confirmation',
+          reply_to_id: messageId,
+          metadata: { amount: dueAmount, description: meta.description } as any,
+        },
+        include: {
+          sender: { select: senderSelect },
+          reply_to: {
+            select: {
+              id: true, text: true, type: true, file_url: true,
+              sender: { select: { id: true, username: true, display_name: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const parts = await prisma.conversationParticipant.findMany({
+      where: { conversation_id: request.conversation_id },
+      select: { user_id: true },
+    });
+    for (const { user_id } of parts) {
+      messageSubscriptions.push(user_id, { type: 'message_updated', data: updatedRequest });
+    }
+    await this._broadcastNewMessage(request.conversation_id, confirmation);
+
+    return { request: updatedRequest, confirmation };
   },
 
   /**

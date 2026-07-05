@@ -34,34 +34,38 @@
       <!-- Main tabs -->
       <div class="flex gap-1 bg-brand-bg rounded-2xl p-1 mb-2">
         <button @click="activeCategory = 'personal'"
-          :class="['flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-bold transition-all',
-            activeCategory === 'personal' || activeCategory === 'all' ? 'bg-brand-card text-white shadow-sm' : 'text-white/50 hover:text-white/80']">
+          :class="['flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-bold transition-all duration-200',
+            activeCategory === 'personal' || activeCategory === 'all' ? 'bg-gradient-to-br from-brand-accent to-brand-accent-plus text-white shadow-accent' : 'text-white/50 hover:text-white/80']">
           <BIcon name="User" class="w-3 h-3" />
           {{ langStore.t.tabPersonal }}
-          <span v-if="getCategoryCount('personal')" class="text-[9px] bg-brand-accent/20 text-brand-accent rounded-full px-1 min-w-[14px] text-center font-bold">{{ getCategoryCount('personal') }}</span>
+          <span v-if="getCategoryCount('personal')"
+            :class="['text-[9px] rounded-full px-1 min-w-[14px] text-center font-bold',
+              activeCategory === 'personal' || activeCategory === 'all' ? 'bg-white/25 text-white' : 'bg-brand-accent/20 text-brand-accent']">{{ getCategoryCount('personal') }}</span>
         </button>
         <button @click="activeCategory = 'groups'"
-          :class="['flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-bold transition-all',
-            activeCategory === 'groups' ? 'bg-brand-card text-white shadow-sm' : 'text-white/50 hover:text-white/80']">
+          :class="['flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-bold transition-all duration-200',
+            activeCategory === 'groups' ? 'bg-gradient-to-br from-brand-accent to-brand-accent-plus text-white shadow-accent' : 'text-white/50 hover:text-white/80']">
           <BIcon name="MessagesSquare" class="w-3 h-3" />
           {{ langStore.t.tabGroups }}
-          <span v-if="getCategoryCount('groups')" class="text-[9px] bg-brand-accent/20 text-brand-accent rounded-full px-1 min-w-[14px] text-center font-bold">{{ getCategoryCount('groups') }}</span>
+          <span v-if="getCategoryCount('groups')"
+            :class="['text-[9px] rounded-full px-1 min-w-[14px] text-center font-bold', activeCategory === 'groups' ? 'bg-white/25 text-white' : 'bg-brand-accent/20 text-brand-accent']">{{ getCategoryCount('groups') }}</span>
         </button>
         <button @click="activeCategory = 'community'"
-          :class="['flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-bold transition-all',
-            activeCategory === 'community' ? 'bg-brand-card text-white shadow-sm' : 'text-white/50 hover:text-white/80']">
+          :class="['flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-bold transition-all duration-200',
+            activeCategory === 'community' ? 'bg-gradient-to-br from-brand-accent to-brand-accent-plus text-white shadow-accent' : 'text-white/50 hover:text-white/80']">
           <BIcon name="Globe" class="w-3 h-3" />
           {{ langStore.t.tabCommunity }}
-          <span v-if="getCategoryCount('community')" class="text-[9px] bg-brand-accent/20 text-brand-accent rounded-full px-1 min-w-[14px] text-center font-bold">{{ getCategoryCount('community') }}</span>
+          <span v-if="getCategoryCount('community')"
+            :class="['text-[9px] rounded-full px-1 min-w-[14px] text-center font-bold', activeCategory === 'community' ? 'bg-white/25 text-white' : 'bg-brand-accent/20 text-brand-accent']">{{ getCategoryCount('community') }}</span>
         </button>
       </div>
       <!-- Zakazы small button -->
       <button @click="activeCategory = activeCategory === 'customer' ? 'personal' : 'customer'"
-        :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-semibold transition-all',
-          activeCategory === 'customer' ? 'bg-brand-accent/15 text-brand-accent border border-brand-accent/30' : 'text-white/40 hover:text-white/70 hover:bg-brand-bg border border-transparent']">
+        :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-semibold transition-all duration-200',
+          activeCategory === 'customer' ? 'bg-gradient-to-r from-brand-purple/25 to-brand-pink/20 text-brand-pink border border-brand-pink/40 shadow-sm' : 'text-white/40 hover:text-white/70 hover:bg-brand-bg border border-transparent']">
         <BIcon name="Briefcase" class="w-3 h-3" />
         {{ langStore.t.tabOrders }}
-        <span v-if="getCategoryCount('customer')" class="text-[9px] bg-brand-accent/20 text-brand-accent rounded-full px-1.5">{{ getCategoryCount('customer') }}</span>
+        <span v-if="getCategoryCount('customer')" class="text-[9px] bg-brand-pink/25 text-brand-pink rounded-full px-1.5">{{ getCategoryCount('customer') }}</span>
       </button>
     </div>
 
@@ -71,27 +75,29 @@
       <!-- ═══ Группы (community) tab ═══ -->
       <template v-if="activeCategory === 'community'">
         <div v-if="!groupsStore.myGroups.length" class="flex flex-col items-center justify-center h-40 text-white/55 text-sm gap-2">
-          <BIcon name="Globe" class="w-8 h-8 opacity-40" />
+          <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-accent/20 to-brand-accent/5 border border-brand-accent/20 flex items-center justify-center mb-1">
+            <BIcon name="Globe" class="w-6 h-6 text-brand-accent/60" />
+          </div>
           <span>{{ langStore.t.convNoGroups }}</span>
           <button @click="router.push('/groups')" class="text-brand-accent text-xs hover:underline mt-1">{{ langStore.t.findGroupsLink }}</button>
         </div>
         <template v-else>
           <div
           v-for="m in groupsStore.myGroups" :key="m.group_id"
-          :class="['w-full flex items-center gap-3 px-3 py-3 transition-all cursor-pointer text-left border-b border-brand-border/30 last:border-0 group',
+          :class="['w-full flex items-center gap-3 px-3 py-3 transition-all duration-200 cursor-pointer text-left border-b border-brand-border/30 last:border-0 group',
             m.group.communityChat?.id && activeId === m.group.communityChat.id
-              ? 'bg-brand-accent/12 border-l-2 border-l-brand-accent pl-2'
+              ? 'bg-gradient-to-r from-brand-accent/14 to-transparent border-l-2 border-l-brand-accent pl-2'
               : 'hover:bg-brand-bg/60 border-l-2 border-l-transparent']"
           @click="m.group.communityChat?.id ? $emit('select', m.group.communityChat.id) : router.push('/groups/' + m.group.slug)">
           <!-- Avatar -->
           <div class="relative flex-shrink-0">
             <img v-if="m.group.avatar_url" :src="m.group.avatar_url" :alt="m.group.name"
-              class="w-10 h-10 rounded-full object-cover border border-brand-border" @error="onAvatarError" />
-            <div v-else class="w-10 h-10 rounded-full bg-brand-accent/15 border border-brand-accent/30 flex items-center justify-center">
+              class="w-11 h-11 rounded-full object-cover ring-2 ring-brand-border group-hover:ring-brand-accent/40 transition-all" @error="onAvatarError" />
+            <div v-else class="w-11 h-11 rounded-full bg-gradient-to-br from-brand-accent/25 to-brand-accent/10 ring-2 ring-brand-accent/30 flex items-center justify-center">
               <BIcon name="Globe" class="w-5 h-5 text-brand-accent" />
             </div>
             <!-- online dot for chat-linked groups -->
-            <span v-if="m.group.communityChat?.id" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-brand-accent rounded-full border-2 border-brand-card" />
+            <span v-if="m.group.communityChat?.id" class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-brand-accent rounded-full border-2 border-brand-card shadow-[0_0_6px_rgba(76,103,207,0.7)]" />
           </div>
           <!-- Text -->
           <div class="flex-1 min-w-0">
@@ -127,26 +133,28 @@
           </div>
         </template>
         <div v-else-if="!filtered.length" class="flex flex-col items-center justify-center h-40 text-white/55 text-sm gap-2">
-          <BIcon name="MessageCircle" class="w-8 h-8 opacity-40" />
+          <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-accent/20 to-brand-accent/5 border border-brand-accent/20 flex items-center justify-center mb-1">
+            <BIcon name="MessageCircle" class="w-6 h-6 text-brand-accent/60" />
+          </div>
           <span>{{ search ? langStore.t.convNothingFound : langStore.t.emptyNoConvs }}</span>
         </div>
         <button v-for="conv in filtered" :key="conv.id"
-        :class="['w-full flex items-center gap-3 px-3 py-3 transition-all text-left border-b border-brand-border/30 last:border-0 relative group/conv',
-          activeId === conv.id ? 'bg-brand-accent/12 border-l-2 border-l-brand-accent pl-2' : 'hover:bg-brand-bg/60 border-l-2 border-l-transparent']"
+        :class="['w-full flex items-center gap-3 px-3 py-3 transition-all duration-200 text-left border-b border-brand-border/30 last:border-0 relative group/conv',
+          activeId === conv.id ? 'bg-gradient-to-r from-brand-accent/14 to-transparent border-l-2 border-l-brand-accent pl-2' : 'hover:bg-brand-bg/60 border-l-2 border-l-transparent']"
         @click="$emit('select', conv.id)">
         <!-- Customer badge -->
         <div v-if="conv.my_participant?.label === 'customer'"
-          class="absolute top-2 right-24 flex items-center gap-0.5 bg-brand-accent/15 border border-brand-accent/30 rounded-full px-1.5 py-0.5 pointer-events-none">
-          <BIcon name="Briefcase" class="w-2.5 h-2.5 text-brand-accent" />
-          <span class="text-[9px] font-bold text-brand-accent">{{ langStore.t.tabOrders }}</span>
+          class="absolute top-2 right-24 flex items-center gap-0.5 bg-gradient-to-r from-brand-purple/20 to-brand-pink/20 border border-brand-pink/40 rounded-full px-1.5 py-0.5 pointer-events-none">
+          <BIcon name="Briefcase" class="w-2.5 h-2.5 text-brand-pink" />
+          <span class="text-[9px] font-bold text-brand-pink">{{ langStore.t.tabOrders }}</span>
         </div>
         <!-- Avatar -->
         <div class="relative flex-shrink-0">
           <!-- Group: 2x2 grid or custom avatar -->
           <template v-if="conv.is_group">
             <img v-if="conv.avatar_url" :src="conv.avatar_url" :alt="conv.name ?? langStore.t.tabCommunity"
-              class="w-10 h-10 rounded-full object-cover border border-brand-border" @error="onAvatarError" />
-            <div v-else class="grid grid-cols-2 gap-px w-10 h-10 rounded-full overflow-hidden border border-brand-border bg-brand-bg">
+              class="w-11 h-11 rounded-full object-cover ring-2 ring-brand-border group-hover/conv:ring-brand-accent/40 transition-all" @error="onAvatarError" />
+            <div v-else class="grid grid-cols-2 gap-px w-11 h-11 rounded-full overflow-hidden ring-2 ring-brand-border group-hover/conv:ring-brand-accent/40 transition-all bg-brand-bg">
               <template v-for="(p, idx) in conv.other_participants.slice(0, 4)" :key="p.user_id">
                 <img v-if="p.user?.avatar_url" :src="p.user.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
                 <div v-else class="w-full h-full flex items-center justify-center bg-brand-accent/20 text-brand-accent text-[8px] font-bold">
@@ -160,19 +168,19 @@
           <template v-else>
             <!-- Notes: self-DM (no other participants) -->
             <template v-if="isNotes(conv)">
-              <div class="w-10 h-10 rounded-full bg-brand-accent/15 border border-brand-accent/30 flex items-center justify-center">
+              <div class="w-11 h-11 rounded-full bg-gradient-to-br from-brand-accent/25 to-brand-accent/10 ring-2 ring-brand-accent/30 flex items-center justify-center">
                 <BIcon name="StickyNote" class="w-5 h-5 text-brand-accent" />
               </div>
             </template>
             <template v-else>
               <img v-if="getOther(conv)?.avatar_url" :src="getOther(conv)!.avatar_url!" :alt="getOther(conv)?.username"
-                class="w-10 h-10 rounded-full object-cover border border-brand-border" @error="onAvatarError" />
-              <div v-else class="w-10 h-10 rounded-full bg-brand-accent/20 border border-brand-border flex items-center justify-center text-brand-accent font-bold text-sm">
+                class="w-11 h-11 rounded-full object-cover ring-2 ring-brand-border group-hover/conv:ring-brand-accent/40 transition-all" @error="onAvatarError" />
+              <div v-else class="w-11 h-11 rounded-full bg-gradient-to-br from-brand-accent/30 to-brand-accent/10 ring-2 ring-brand-border group-hover/conv:ring-brand-accent/40 transition-all flex items-center justify-center text-brand-accent font-bold text-sm">
                 {{ (getOther(conv)?.display_name || getOther(conv)?.username || '?')[0].toUpperCase() }}
               </div>
             </template>
           </template>
-          <span v-if="isUnread(conv)" class="absolute -top-0.5 -right-0.5 w-3 h-3 bg-brand-accent rounded-full border-2 border-brand-card" />
+          <span v-if="isUnread(conv)" class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-brand-accent rounded-full border-2 border-brand-card shadow-[0_0_6px_rgba(76,103,207,0.7)]" />
         </div>
         <!-- Text -->
         <div class="flex-1 min-w-0">
@@ -183,9 +191,9 @@
               </span>
               <BIcon v-if="conv.is_group" name="Users" class="w-3 h-3 text-white/55 flex-shrink-0" />
             </div>
-            <span class="text-[10px] text-white/55 flex-shrink-0">{{ formatTime(conv.last_message?.created_at || conv.updated_at) }}</span>
+            <span class="text-[10px] text-white/45 flex-shrink-0 tabular-nums">{{ formatTime(conv.last_message?.created_at || conv.updated_at) }}</span>
           </div>
-          <p :class="['text-xs truncate mt-0.5', isUnread(conv) ? 'text-brand-offwhite/70' : 'text-white/55']">
+          <p :class="['text-xs truncate mt-0.5', isUnread(conv) ? 'text-brand-offwhite/70 font-medium' : 'text-white/50']">
             <template v-if="conv.is_group && conv.last_message">
               <span class="text-brand-accent/80">{{ conv.last_message.sender?.display_name || conv.last_message.sender?.username }}: </span>
             </template>
@@ -692,12 +700,21 @@ function isUnread(conv: Conversation): boolean {
 
 const STORY_REPLY_PREVIEW_RE = /^\[story_reply:[^\]]*\]/
 
+function formatMoneyPreview(amount: number | undefined): string {
+  if (!amount && amount !== 0) return ''
+  return new Intl.NumberFormat('ru-RU').format(amount) + ' ₽'
+}
+
 function lastMessagePreview(msg: Conversation['last_message']): string {
   if (!msg) return langStore.t.noMessages
   const t = langStore.t
   // type-based overrides (check before text so sticker/voice never leaks text)
   if (msg.type === 'sticker') return t.stickerPreview
   if (msg.type === 'voice' || msg.type === 'audio') return t.voiceMessagePreview
+  // Order cards are currently Russian-only, matching the rest of this chat-only feature (no i18n yet)
+  if (msg.type === 'payment_request') return `💳 ${msg.metadata?.status === 'paid' ? 'Оплачено' : 'Запрос оплаты'} · ${formatMoneyPreview(msg.metadata?.amount)}`
+  if (msg.type === 'payment_confirmation') return `✅ Оплачено · ${formatMoneyPreview(msg.metadata?.amount)}`
+  if (msg.type === 'tip') return `🎉 Чаевые · ${formatMoneyPreview(msg.metadata?.amount)}`
   // encrypted_text field (new schema)
   if (!msg.text && msg.encrypted_text) return t.encryptedMessagePreview
   // legacy: ciphertext stored in text field (ECDH E2E)

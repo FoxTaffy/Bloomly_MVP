@@ -18,6 +18,7 @@ import {
   setMemberRoleHandler,
   getGroupMembersHandler,
   setConversationLabelHandler,
+  payMessageHandler,
   pinMessageHandler,
   unpinMessageHandler,
   getMediaStatsHandler,
@@ -69,6 +70,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
   fastify.delete('/messages/:msgId', auth, deleteMessageHandler as any);
   fastify.patch('/messages/:msgId', auth, editMessageHandler as any);
   fastify.post('/messages/:msgId/reactions', auth, toggleReactionHandler as any);
+  fastify.post('/messages/:msgId/pay', auth, payMessageHandler as any);
 
   // Group endpoints
   fastify.post('/groups', auth, createGroupHandler as any);

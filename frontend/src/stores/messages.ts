@@ -24,6 +24,7 @@ export interface Message {
   reply_to_id?: string | null
   reply_to?: { id: string; text: string | null; type: string; file_url: string | null; sender: { id: string; username: string; display_name: string | null } } | null
   reactions?: Record<string, string[]> | null
+  metadata?: Record<string, any> | null
   edited_at?: string | null
   created_at: string
   deleted_at: string | null
@@ -57,6 +58,8 @@ export interface Conversation {
   my_participant: { archived: boolean; hidden_at: string | null; last_read_at: string | null; role: string; label?: string; personal_pinned_message_id?: string | null }
   pinned_message: PinnedMessage | null
   last_message: Message | null
+  /** Real total member count — `other_participants` is capped server-side to a handful for avatar rendering. */
+  participants_count?: number
   other_participants: Array<{ user_id: string; user: MsgSender; last_read_at?: string | null; role?: string }>
 }
 
@@ -283,6 +286,41 @@ export const useMessagesStore = defineStore('messages', () => {
     wsClient.send({ type: 'message', conversationId: convId, content: content ?? '', file_url: fileUrl ?? undefined, media_type: mediaType ?? undefined, reply_to_id: replyToId ?? undefined })
   }
 
+  /** Chat-only order card — not wired to Dealers' Den, purely a rich message type. */
+  async function sendPaymentRequest(convId: string, payload: { amount: number; description: string; prepaymentPercent?: number; deadline?: string }) {
+    const res = await api.post(`/messages/conversations/${convId}/messages`, { type: 'payment_request', metadata: payload })
+    const msg = res.data?.data?.message as Message | undefined
+    if (msg && messages.value[convId] && !messages.value[convId].some((m) => m.id === msg.id)) {
+      messages.value[convId].push(msg)
+    }
+    return msg
+  }
+
+  async function sendTip(convId: string, amount: number, note?: string) {
+    const res = await api.post(`/messages/conversations/${convId}/messages`, { type: 'tip', metadata: { amount, note } })
+    const msg = res.data?.data?.message as Message | undefined
+    if (msg && messages.value[convId] && !messages.value[convId].some((m) => m.id === msg.id)) {
+      messages.value[convId].push(msg)
+    }
+    return msg
+  }
+
+  /** Marks a payment_request as paid and appends the payment_confirmation card the server creates. */
+  async function payRequest(msgId: string) {
+    const res = await api.post(`/messages/messages/${msgId}/pay`)
+    const { request, confirmation } = (res.data?.data ?? {}) as { request?: Message; confirmation?: Message }
+    if (request) {
+      const list = messages.value[request.conversation_id]
+      const idx = list?.findIndex((m) => m.id === request.id) ?? -1
+      if (list && idx !== -1) list.splice(idx, 1, { ...list[idx], ...request })
+    }
+    if (confirmation) {
+      const list = messages.value[confirmation.conversation_id]
+      if (list && !list.some((m) => m.id === confirmation.id)) list.push(confirmation)
+    }
+    return { request, confirmation }
+  }
+
   async function deleteMessage(msgId: string) {
     await api.delete(`/messages/messages/${msgId}`)
     for (const convId of Object.keys(messages.value)) {
@@ -480,6 +518,9 @@ export const useMessagesStore = defineStore('messages', () => {
     fetchMessages,
     loadMoreMessages,
     sendMessage,
+    sendPaymentRequest,
+    sendTip,
+    payRequest,
     deleteMessage,
     editMessage,
     toggleReaction,

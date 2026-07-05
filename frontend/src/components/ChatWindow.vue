@@ -12,8 +12,8 @@
         <!-- Group -->
         <template v-if="conv?.is_group">
           <img v-if="conv.avatar_url" :src="conv.avatar_url" :alt="conv.name ?? 'Группа'"
-            class="w-10 h-10 rounded-full object-cover border-2 border-brand-border hover:border-brand-accent/60 transition-colors" @error="onAvatarError" />
-          <div v-else class="grid grid-cols-2 gap-px w-10 h-10 rounded-full overflow-hidden border-2 border-brand-border hover:border-brand-accent/60 transition-colors bg-brand-bg">
+            class="w-10 h-10 rounded-full object-cover ring-2 ring-brand-border hover:ring-brand-accent/50 transition-all" @error="onAvatarError" />
+          <div v-else class="grid grid-cols-2 gap-px w-10 h-10 rounded-full overflow-hidden ring-2 ring-brand-border hover:ring-brand-accent/50 transition-all bg-brand-bg">
             <template v-for="(p, idx) in conv.other_participants.slice(0, 4)" :key="p.user_id">
               <img v-if="p.user?.avatar_url" :src="p.user.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
               <div v-else class="w-full h-full flex items-center justify-center bg-brand-accent/20 text-brand-accent text-[7px] font-bold">
@@ -27,16 +27,19 @@
         <template v-else>
           <!-- Notes: self-chat -->
           <template v-if="!other">
-            <div class="w-10 h-10 rounded-full bg-brand-accent/20 border-2 border-brand-accent/40 flex items-center justify-center">
+            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-brand-accent/30 to-brand-accent/10 ring-2 ring-brand-accent/40 flex items-center justify-center">
               <BIcon name="StickyNote" class="w-5 h-5 text-brand-accent" />
             </div>
           </template>
           <template v-else>
-            <img v-if="other?.avatar_url" :src="other.avatar_url" :alt="other.username"
-              class="w-10 h-10 rounded-full object-cover border-2 border-brand-border hover:border-brand-accent/60 transition-colors" @error="onAvatarError" />
-            <div v-else class="w-10 h-10 rounded-full bg-brand-accent/20 border-2 border-brand-border flex items-center justify-center text-brand-accent font-bold hover:border-brand-accent/60 transition-colors">
-              {{ (other?.display_name || other?.username || '?')[0].toUpperCase() }}
-            </div>
+            <span class="relative inline-flex">
+              <img v-if="other?.avatar_url" :src="other.avatar_url" :alt="other.username"
+                class="w-10 h-10 rounded-full object-cover ring-2 ring-brand-border hover:ring-brand-accent/50 transition-all" @error="onAvatarError" />
+              <div v-else class="w-10 h-10 rounded-full bg-gradient-to-br from-brand-accent/30 to-brand-accent/10 ring-2 ring-brand-border hover:ring-brand-accent/50 transition-all flex items-center justify-center text-brand-accent font-bold">
+                {{ (other?.display_name || other?.username || '?')[0].toUpperCase() }}
+              </div>
+              <span v-if="isPartnerOnline" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-brand-success rounded-full border-2 border-brand-card shadow-[0_0_6px_rgba(102,199,112,0.7)]" />
+            </span>
           </template>
         </template>
       </div>
@@ -73,7 +76,7 @@
         </p>
         <p v-else-if="conv?.type === 'community'" class="text-xs text-white/55">сообщество · нажмите для перехода</p>
         <p v-else-if="conv?.is_group" class="text-xs text-white/55">
-          {{ (conv.other_participants?.length ?? 0) + 1 }} участников · нажмите для просмотра
+          {{ conv.participants_count ?? ((conv.other_participants?.length ?? 0) + 1) }} участников · нажмите для просмотра
         </p>
         <p v-else-if="!other" class="text-xs text-white/55">Только для вас</p>
         <p v-else class="text-xs flex items-center gap-1.5">
@@ -473,6 +476,51 @@
       </Transition>
     </Teleport>
 
+    <!-- ── Payment request modal (chat-only order card) ────────────────────── -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showPaymentModal" class="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="closePaymentModal">
+          <div class="bg-brand-card border border-brand-border rounded-3xl p-5 w-full max-w-xs shadow-2xl">
+            <div class="flex items-center gap-2 mb-4">
+              <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-accent/30 to-brand-accent/10 ring-1 ring-brand-accent/30 flex items-center justify-center">
+                <BIcon name="CreditCard" class="w-4 h-4 text-brand-accent" />
+              </div>
+              <h3 class="text-base font-bold text-white">Запрос оплаты</h3>
+            </div>
+            <div class="flex flex-col gap-3">
+              <div>
+                <label class="text-[11px] text-white/45 font-semibold">Сумма, ₽</label>
+                <input v-model="paymentForm.amount" type="number" min="1" placeholder="3500"
+                  class="w-full mt-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/50" />
+              </div>
+              <div>
+                <label class="text-[11px] text-white/45 font-semibold">Описание</label>
+                <input v-model="paymentForm.description" type="text" maxlength="300" placeholder="Полноцветный арт · 1 персонаж"
+                  class="w-full mt-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/50" />
+              </div>
+              <div>
+                <label class="text-[11px] text-white/45 font-semibold">Предоплата, % (необязательно)</label>
+                <input v-model="paymentForm.prepaymentPercent" type="number" min="1" max="100" placeholder="50"
+                  class="w-full mt-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/50" />
+              </div>
+              <div>
+                <label class="text-[11px] text-white/45 font-semibold">Срок (необязательно)</label>
+                <input v-model="paymentForm.deadline" type="date"
+                  class="w-full mt-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/50" />
+              </div>
+              <button type="button" @click="submitPaymentRequest" :disabled="!paymentForm.amount || sendingPayment"
+                class="w-full py-2.5 rounded-xl bg-brand-accent hover:bg-brand-accent-plus text-white text-sm font-semibold transition-all disabled:opacity-40 mt-1">
+                {{ sendingPayment ? 'Отправка...' : 'Отправить запрос' }}
+              </button>
+              <button type="button" @click="closePaymentModal" class="w-full py-1 text-sm text-white/45 hover:text-white transition-colors">
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- ── Edit Group Modal ────────────────────────────────────────────────── -->
     <Teleport to="body">
       <Transition name="fade">
@@ -665,13 +713,17 @@
 
       <!-- Empty -->
       <div v-else-if="!msgList.length" class="flex flex-col items-center justify-center h-32 text-white/55 text-sm gap-2">
-        <BIcon :name="!conv?.is_group && !other ? 'PenLine' : 'MessageCircle'" class="w-8 h-8 opacity-30" />
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-accent/20 to-brand-accent/5 border border-brand-accent/20 flex items-center justify-center mb-1">
+          <BIcon :name="!conv?.is_group && !other ? 'PenLine' : 'MessageCircle'" class="w-6 h-6 text-brand-accent/60" />
+        </div>
         <span>{{ !conv?.is_group && !other ? 'Отправьте себе первое сообщение' : 'Начните переписку' }}</span>
       </div>
 
       <!-- Search no results -->
       <div v-else-if="searchQuery && !filteredMsgList.length" class="flex flex-col items-center justify-center h-32 text-white/55 text-sm gap-2">
-        <BIcon name="SearchX" class="w-8 h-8 opacity-30" />
+        <div class="w-14 h-14 rounded-2xl bg-brand-bg border border-brand-border flex items-center justify-center mb-1">
+          <BIcon name="SearchX" class="w-6 h-6 text-white/40" />
+        </div>
         <span>Сообщения не найдены</span>
       </div>
 
@@ -787,6 +839,75 @@
               <MiniPlayer :src="msg.file_url" :msg-type="msg.type" @click-image="openImageLightbox(msg.file_url!)" />
             </div>
 
+            <!-- ── Payment request card (chat-only order card, not linked to Dealers' Den) ── -->
+            <div v-if="msg.type === 'payment_request'"
+              class="relative mb-0.5 w-[264px] rounded-3xl overflow-hidden border border-brand-accent/30 bg-gradient-to-br from-brand-accent/25 via-brand-accent/10 to-brand-card shadow-accent"
+              :class="isMine(msg) ? 'rounded-br-md' : 'rounded-bl-md'">
+              <!-- decorative glow -->
+              <div class="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-brand-accent/25 blur-2xl pointer-events-none" />
+              <div class="relative px-3.5 pt-3 pb-2.5">
+                <div class="flex items-center gap-1.5">
+                  <span class="w-5 h-5 rounded-lg bg-brand-accent/25 flex items-center justify-center">
+                    <BIcon name="CreditCard" class="w-3 h-3 text-brand-accent" />
+                  </span>
+                  <span class="text-brand-accent text-[10px] font-bold tracking-wide uppercase">Запрос оплаты</span>
+                </div>
+                <p class="text-2xl font-extrabold text-white mt-1.5 tracking-tight">{{ formatMoney(msg.metadata?.amount) }}</p>
+                <p v-if="msg.metadata?.description" class="text-xs text-white/70 mt-0.5 leading-snug">{{ msg.metadata.description }}</p>
+              </div>
+              <div v-if="msg.metadata?.prepaymentPercent || msg.metadata?.deadline"
+                class="relative px-3.5 py-2 border-t border-white/10 bg-black/15 flex items-center justify-between gap-2 text-[11px]">
+                <template v-if="msg.metadata?.prepaymentPercent">
+                  <span class="text-white/55">Предоплата {{ msg.metadata.prepaymentPercent }}%</span>
+                  <span class="font-semibold text-white/85">{{ formatMoney(msg.metadata.amount * msg.metadata.prepaymentPercent / 100) }}</span>
+                </template>
+                <template v-else-if="msg.metadata?.deadline">
+                  <span class="text-white/55">Срок</span>
+                  <span class="font-semibold" :class="isOverdue(msg.metadata.deadline) ? 'text-brand-error' : 'text-white/85'">
+                    {{ formatDeadline(msg.metadata.deadline) }}
+                  </span>
+                </template>
+              </div>
+              <div class="relative px-3.5 py-2.5 border-t border-white/10">
+                <div v-if="msg.metadata?.status === 'paid'" class="flex items-center gap-1.5 text-brand-success text-xs font-bold">
+                  <BIcon name="CheckCircle2" class="w-3.5 h-3.5" />
+                  Оплачено
+                </div>
+                <button v-else-if="!isMine(msg)" type="button" @click="payOrder(msg)" :disabled="payingId === msg.id"
+                  class="w-full py-1.5 rounded-xl bg-gradient-to-r from-brand-accent to-brand-accent-plus hover:brightness-110 text-white text-xs font-bold transition-all active:scale-95 disabled:opacity-50 shadow-sm">
+                  {{ payingId === msg.id ? 'Оплата...' : 'Оплатить' }}
+                </button>
+                <span v-else class="text-[11px] text-white/45">Ожидает оплаты</span>
+              </div>
+            </div>
+
+            <!-- ── Payment confirmation card ── -->
+            <div v-else-if="msg.type === 'payment_confirmation'"
+              class="mb-0.5 w-[264px] rounded-3xl overflow-hidden border border-brand-success/30 bg-gradient-to-br from-brand-success/15 to-brand-card shadow-sm px-3.5 py-2.5 flex items-center gap-2.5"
+              :class="isMine(msg) ? 'rounded-br-md' : 'rounded-bl-md'">
+              <div class="w-9 h-9 rounded-full bg-gradient-to-br from-brand-success/30 to-brand-success/10 ring-1 ring-brand-success/30 flex items-center justify-center flex-shrink-0">
+                <BIcon name="Check" class="w-4 h-4 text-brand-success" />
+              </div>
+              <div class="min-w-0">
+                <p class="text-sm font-bold text-brand-success">Оплачено · {{ formatMoney(msg.metadata?.amount) }}</p>
+                <p v-if="msg.metadata?.description" class="text-[11px] text-white/55 truncate">{{ msg.metadata.description }}</p>
+              </div>
+            </div>
+
+            <!-- ── Tip card ── -->
+            <div v-else-if="msg.type === 'tip'"
+              class="relative mb-0.5 w-[264px] rounded-3xl overflow-hidden border border-brand-pink/35 bg-gradient-to-br from-brand-purple/20 via-brand-pink/10 to-brand-card shadow-sm px-3.5 py-2.5 flex items-center gap-2.5"
+              :class="isMine(msg) ? 'rounded-br-md' : 'rounded-bl-md'">
+              <div class="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-brand-pink/20 blur-2xl pointer-events-none" />
+              <div class="relative w-9 h-9 rounded-full bg-gradient-to-br from-brand-pink/25 to-brand-purple/20 ring-1 ring-brand-pink/30 flex items-center justify-center flex-shrink-0 text-base">🎉</div>
+              <div class="relative min-w-0">
+                <p class="text-sm font-bold text-brand-pink">Чаевые +{{ formatMoney(msg.metadata?.amount) }}</p>
+                <p class="text-[11px] text-white/55 truncate">
+                  {{ msg.metadata?.note || `${msg.sender?.display_name || msg.sender?.username} поблагодарил(а) за работу` }}
+                </p>
+              </div>
+            </div>
+
             <!-- ── Story reply card ─────────────────────────────────── -->
             <template v-if="parseStoryReply(msg)">
               <div
@@ -873,14 +994,14 @@
               </div>
             </template>
 
-            <!-- Text bubble (not shown for pure sticker or story reply with text already shown in card) -->
-            <div v-if="msg.type !== 'sticker' && !parseStoryReply(msg) && !/^\[story_reply:/u.test(msg.text || '') && (msg.text || !msg.file_url)"
+            <!-- Text bubble (not shown for pure sticker, order cards, or story reply with text already shown in card) -->
+            <div v-if="!['sticker', 'payment_request', 'payment_confirmation', 'tip'].includes(msg.type) && !parseStoryReply(msg) && !/^\[story_reply:/u.test(msg.text || '') && (msg.text || !msg.file_url)"
               @click="tappedMsgId = tappedMsgId === msg.id ? null : msg.id"
               :class="[
-                'relative px-3.5 py-2 rounded-3xl text-sm leading-relaxed break-words min-w-[60px] shadow-sm transition-shadow',
+                'relative px-3.5 py-2 rounded-3xl text-sm leading-relaxed break-words min-w-[60px] transition-shadow',
                 isMine(msg)
-                  ? 'bg-gradient-to-br from-brand-accent to-brand-accent-plus text-white rounded-br-md shadow-brand-accent/25'
-                  : 'bg-brand-card text-brand-offwhite border border-brand-border/60 rounded-bl-md',
+                  ? 'bg-gradient-to-br from-brand-accent to-brand-accent-plus text-white rounded-br-md shadow-accent'
+                  : 'bg-brand-card text-brand-offwhite border border-brand-border/60 rounded-bl-md shadow-sm',
                 msg._sending ? 'opacity-60' : '',
                 translateMode && translations[msg.id] && !isMine(msg) ? 'border-brand-accent/40' : '',
               ]">
@@ -1181,8 +1302,50 @@
         </div>
       </Transition>
     </Teleport>
+    <!-- ── Order actions row (only in chats labeled "заказ") ────────────────── -->
+    <div v-if="conv?.my_participant?.label === 'customer'"
+      class="px-3 pt-2.5 border-t border-brand-border bg-brand-card flex-shrink-0 flex items-center gap-2">
+      <button type="button" @click="showPaymentModal = true"
+        class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-2xl bg-gradient-to-r from-brand-accent/15 to-brand-accent/5 border border-brand-accent/30 text-brand-accent text-xs font-bold hover:from-brand-accent/25 hover:to-brand-accent/10 transition-all active:scale-[0.98]">
+        <span class="w-4 h-4 rounded-md bg-brand-accent/20 flex items-center justify-center">
+          <BIcon name="CreditCard" class="w-2.5 h-2.5" />
+        </span>
+        Запросить оплату
+      </button>
+      <button type="button" @click="showTipPicker = !showTipPicker"
+        class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-2xl bg-gradient-to-r from-brand-purple/15 to-brand-pink/10 border border-brand-pink/30 text-brand-pink text-xs font-bold hover:from-brand-purple/25 hover:to-brand-pink/15 transition-all active:scale-[0.98]">
+        <span class="w-4 h-4 rounded-md bg-brand-pink/20 flex items-center justify-center">
+          <BIcon name="Gift" class="w-2.5 h-2.5" />
+        </span>
+        Поддержать
+      </button>
+    </div>
+
     <!-- ── Input ───────────────────────────────────────────────────────────── -->
     <div class="px-3 py-3 border-t border-brand-border bg-brand-card flex-shrink-0 relative">
+      <!-- Tip quick-amount popover -->
+      <Transition name="popover-up">
+        <div v-if="showTipPicker" class="absolute bottom-full right-3 mb-2 z-50 bg-brand-card border border-brand-border rounded-2xl shadow-2xl p-3 w-56">
+          <p class="text-xs font-bold text-white/70 mb-2 flex items-center gap-1.5">
+            <span class="text-sm">🎉</span> Отправить чаевые
+          </p>
+          <div class="grid grid-cols-4 gap-1.5 mb-2">
+            <button v-for="amt in [100, 300, 500, 1000]" :key="amt" type="button" @click="sendQuickTip(amt)"
+              class="py-1.5 rounded-xl bg-brand-bg border border-brand-border hover:border-brand-pink/50 hover:text-brand-pink text-xs font-bold text-white/85 transition-all active:scale-95">
+              {{ amt }}
+            </button>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <input v-model="customTipAmount" type="number" min="1" placeholder="Своя сумма"
+              class="flex-1 min-w-0 bg-brand-bg border border-brand-border rounded-xl px-2.5 py-1.5 text-xs text-white outline-none focus:border-brand-pink/50" />
+            <button type="button" @click="sendQuickTip(Number(customTipAmount))" :disabled="!customTipAmount || Number(customTipAmount) <= 0"
+              class="flex-shrink-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-brand-purple/25 to-brand-pink/25 text-brand-pink text-xs font-bold disabled:opacity-40 transition-all active:scale-95">
+              Отпр.
+            </button>
+          </div>
+        </div>
+      </Transition>
+
       <!-- Emoji Picker popover -->
       <Transition name="popover-up">
         <div v-if="showEmojiPicker"
@@ -1548,6 +1711,11 @@ const mediaStatsData   = ref<Record<string, number>>({})
 const mediaStatsLoading = ref(false)
 const pinTarget        = ref<Message | null>(null)
 const showPinScopeModal = ref(false)
+const showPaymentModal = ref(false)
+const showTipPicker    = ref(false)
+const customTipAmount  = ref('')
+const sendingPayment   = ref(false)
+const paymentForm      = reactive({ amount: '', description: '', prepaymentPercent: '', deadline: '' })
 const showEditGroup    = ref(false)
 const editGroupName    = ref('')
 const editGroupAvatar  = ref('')
@@ -1823,7 +1991,25 @@ interface StoryReplyMeta {
   expired: boolean
 }
 
+// The template calls parseStoryReply(msg) up to a dozen times per story-reply row
+// (once per v-if/attribute binding). Regex + JSON.parse on every one of those, on
+// every re-render of the message list, adds up fast in long chats — so the parse
+// itself is cached per message; only the cheap expiry check re-runs on each call.
+const storyReplyCache = new Map<string, { fields: Omit<StoryReplyMeta, 'expired'>; forcedExpired: boolean } | null>()
+
 function parseStoryReply(msg: Message): StoryReplyMeta | null {
+  const cacheKey = `${msg.id}|${msg.text ?? ''}`
+  let cached = storyReplyCache.get(cacheKey)
+  if (cached === undefined) {
+    cached = parseStoryReplyUncached(msg)
+    storyReplyCache.set(cacheKey, cached)
+  }
+  if (!cached) return null
+  const expired = cached.forcedExpired || (cached.fields.expiresAt ? Date.now() > new Date(cached.fields.expiresAt).getTime() : false)
+  return { ...cached.fields, expired }
+}
+
+function parseStoryReplyUncached(msg: Message): { fields: Omit<StoryReplyMeta, 'expired'>; forcedExpired: boolean } | null {
   const m = (msg.text || '').match(STORY_REPLY_RE)
   if (!m) return null
   const raw = m[1]
@@ -1838,8 +2024,10 @@ function parseStoryReply(msg: Message): StoryReplyMeta | null {
       authorAvatar = j.ava ?? ''
     } catch {
       // JSON malformed — show as expired card with fallback sender info
-      const expired = true
-      return { imageUrl: '', expiresAt: '', authorName: msg.sender?.display_name || msg.sender?.username || '', authorAvatar: msg.sender?.avatar_url || '', replyText: '', expired }
+      return {
+        fields: { imageUrl: '', expiresAt: '', authorName: msg.sender?.display_name || msg.sender?.username || '', authorAvatar: msg.sender?.avatar_url || '', replyText: '' },
+        forcedExpired: true,
+      }
     }
   } else {
     // v1 pipe format (legacy fallback)
@@ -1849,8 +2037,7 @@ function parseStoryReply(msg: Message): StoryReplyMeta | null {
     authorName   = parts[2] ?? ''
     authorAvatar = parts[3] ?? ''
   }
-  const expired = expiresAt ? Date.now() > new Date(expiresAt).getTime() : false
-  return { imageUrl, expiresAt, authorName, authorAvatar, replyText: m[2].trim(), expired }
+  return { fields: { imageUrl, expiresAt, authorName, authorAvatar, replyText: m[2].trim() }, forcedExpired: false }
 }
 
 // ── In-chat story viewer ──────────────────────────────────────────────────────
@@ -1956,6 +2143,61 @@ function isRead(msg: Message): boolean {
 
 function formatMsgTime(iso: string) {
   return new Date(iso).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
+}
+
+// ── Order cards (chat-only payment request / tip) ──────────────────────────────
+function formatMoney(amount: number | undefined): string {
+  if (!amount && amount !== 0) return ''
+  return new Intl.NumberFormat('ru-RU').format(amount) + ' ₽'
+}
+function isOverdue(deadline: string | undefined): boolean {
+  return !!deadline && new Date(deadline).getTime() < Date.now()
+}
+function formatDeadline(deadline: string | undefined): string {
+  if (!deadline) return ''
+  return new Date(deadline).toLocaleDateString('ru', { day: 'numeric', month: 'long' })
+}
+const payingId = ref<string | null>(null)
+async function payOrder(msg: Message) {
+  if (payingId.value) return
+  payingId.value = msg.id
+  try {
+    await store.payRequest(msg.id)
+  } catch { /* silent */ }
+  payingId.value = null
+}
+
+function closePaymentModal() {
+  showPaymentModal.value = false
+  paymentForm.amount = ''
+  paymentForm.description = ''
+  paymentForm.prepaymentPercent = ''
+  paymentForm.deadline = ''
+}
+async function submitPaymentRequest() {
+  const amount = Number(paymentForm.amount)
+  if (!amount || amount <= 0 || sendingPayment.value) return
+  sendingPayment.value = true
+  try {
+    await store.sendPaymentRequest(props.convId, {
+      amount,
+      description: paymentForm.description.trim(),
+      prepaymentPercent: paymentForm.prepaymentPercent ? Number(paymentForm.prepaymentPercent) : undefined,
+      deadline: paymentForm.deadline || undefined,
+    })
+    closePaymentModal()
+    scrollToBottom(true)
+  } catch { /* silent */ }
+  sendingPayment.value = false
+}
+async function sendQuickTip(amount: number) {
+  if (!amount || amount <= 0) return
+  showTipPicker.value = false
+  customTipAmount.value = ''
+  try {
+    await store.sendTip(props.convId, amount)
+    scrollToBottom(true)
+  } catch { /* silent */ }
 }
 
 // ── Date dividers ─────────────────────────────────────────────────────────────
