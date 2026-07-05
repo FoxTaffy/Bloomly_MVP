@@ -584,6 +584,65 @@
                     </div>
                   </div>
 
+                  <!-- Soon — куда собираешься -->
+                  <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-3">
+                    <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
+                      <BIcon name="Sparkles" class="w-3.5 h-3.5" style="color:#fbbf24" />
+                      Soon — куда собираешься
+                    </p>
+                    <p class="text-[11px] text-white/35 -mt-2">
+                      Отметь мероприятие, на которое собираешься — рядом с именем появится бейдж SOON. Можно оставить пустым.
+                    </p>
+
+                    <!-- Current selection chip -->
+                    <div v-if="mySoonEvent" class="flex items-center gap-3 p-3 rounded-xl border border-brand-border bg-brand-card">
+                      <div class="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 bg-brand-accent/15 flex items-center justify-center">
+                        <img v-if="mySoonEvent.banner_url" :src="mySoonEvent.banner_url" class="w-full h-full object-cover" />
+                        <BIcon v-else name="Sparkles" class="w-4 h-4 text-brand-accent" />
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm font-bold text-white truncate">{{ mySoonEvent.title }}</p>
+                        <p class="text-xs text-white/55 truncate">{{ mySoonEvent.group?.name }} · {{ formatSoonDate(mySoonEvent.starts_at) }}</p>
+                      </div>
+                      <button type="button" @click="clearSoonSelection" :disabled="soonSaving"
+                        class="w-7 h-7 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-white/10 transition-all flex-shrink-0 disabled:opacity-40">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
+                    </div>
+                    <p v-else class="text-xs text-white/35">Сейчас ничего не выбрано.</p>
+
+                    <!-- Search / select -->
+                    <div class="relative">
+                      <input
+                        v-model="soonSearch"
+                        type="text"
+                        placeholder="Найти мероприятие или группу…"
+                        class="field-input"
+                        @focus="soonDropOpen = true"
+                        @blur="onSoonBlur"
+                      />
+                      <Transition name="fade">
+                        <div v-if="soonDropOpen && filteredSoonEvents.length"
+                          class="absolute z-30 mt-1 w-full bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-y-auto max-h-56">
+                          <button v-for="ev in filteredSoonEvents" :key="ev.id" type="button"
+                            class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-all"
+                            @mousedown.prevent="selectSoonEvent(ev)">
+                            <div class="w-7 h-7 rounded-lg overflow-hidden flex-shrink-0 bg-brand-accent/15 flex items-center justify-center">
+                              <img v-if="ev.banner_url" :src="ev.banner_url" class="w-full h-full object-cover" />
+                              <BIcon v-else name="CalendarDays" class="w-3.5 h-3.5 text-brand-accent" />
+                            </div>
+                            <div class="flex-1 min-w-0 text-left">
+                              <p class="text-sm font-semibold text-white truncate">{{ ev.title }}</p>
+                              <p class="text-xs text-white/55 truncate">{{ ev.group?.name }} · {{ formatSoonDate(ev.starts_at) }}</p>
+                            </div>
+                          </button>
+                        </div>
+                      </Transition>
+                      <p v-if="soonDropOpen && soonSearch && !filteredSoonEvents.length" class="text-xs text-white/55 px-1 pt-2">Ничего не найдено</p>
+                    </div>
+                    <p v-if="!soonEventsLoading && !soonEventsList.length" class="text-xs text-white/35">Пока нет доступных мероприятий.</p>
+                  </div>
+
                 </div><!-- /p-6 form fields -->
                 </div><!-- /p-0 outer -->
               </section>
@@ -1499,6 +1558,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
+import { useGroupsStore, type EventItem } from '@/stores/groups'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
@@ -1507,11 +1567,12 @@ import FursuitSettings from '@/components/profile/FursuitSettings.vue'
 import api from '@/api'
 import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
 
-const userStore  = useUserStore()
-const authStore  = useAuthStore()
-const langStore  = useLangStore()
-const route      = useRoute()
-const router     = useRouter()
+const userStore   = useUserStore()
+const authStore   = useAuthStore()
+const langStore   = useLangStore()
+const groupsStore = useGroupsStore()
+const route       = useRoute()
+const router      = useRouter()
 
 const langOptions = [
   { code: 'RU' as const, fi: 'ru', name: 'Русский' },
@@ -1960,6 +2021,9 @@ onMounted(async () => {
   citySearch.value    = form.location
   // Load following list for partner picker
   loadFollowing()
+  // Load Soon picker data
+  loadSoonEvents()
+  loadMySoonSelection()
   // Load verification data
   fetchVerificationData()
   // Navigate to a specific section if ?section= param is present
@@ -2903,6 +2967,93 @@ function selectPartner(u: FollowUser) {
 function clearPartner() {
   form.relationship_with = ''
   partnerSearch.value    = ''
+}
+
+// ── Soon picker (мероприятие, на которое собираешься) ─────────────────────
+const soonEventsList   = ref<EventItem[]>([])
+const soonEventsLoading = ref(false)
+const soonSearch       = ref('')
+const soonDropOpen     = ref(false)
+const soonSaving       = ref(false)
+const mySoonEventId    = ref<string | null>(null)
+
+async function loadSoonEvents() {
+  soonEventsLoading.value = true
+  try {
+    const { data } = await api.get('/groups/events', { params: { upcoming: true, limit: 50, sort: 'popular' } })
+    soonEventsList.value = ((data.data?.events ?? []) as EventItem[]).filter(e => e.group?.type === 'event')
+  } catch {
+    soonEventsList.value = []
+  } finally {
+    soonEventsLoading.value = false
+  }
+}
+
+async function loadMySoonSelection() {
+  if (!authStore.user?.id) return
+  try {
+    await groupsStore.loadMySoonBadges(authStore.user.id)
+    mySoonEventId.value = groupsStore.mySoonBadges[0]?.event_id ?? null
+  } catch {
+    mySoonEventId.value = null
+  }
+}
+
+const mySoonEvent = computed(() => {
+  if (!mySoonEventId.value) return null
+  const fromBadge = groupsStore.mySoonBadges.find(b => b.event_id === mySoonEventId.value)?.event
+  return fromBadge ?? soonEventsList.value.find(e => e.id === mySoonEventId.value) ?? null
+})
+
+const filteredSoonEvents = computed(() => {
+  const q = soonSearch.value.toLowerCase().trim()
+  const list = soonEventsList.value.filter(e => e.id !== mySoonEventId.value)
+  if (!q) return list
+  return list.filter(e =>
+    e.title.toLowerCase().includes(q) ||
+    (e.group?.name ?? '').toLowerCase().includes(q),
+  )
+})
+
+function formatSoonDate(date: string): string {
+  return new Date(date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+}
+
+function onSoonBlur() {
+  setTimeout(() => { soonDropOpen.value = false }, 180)
+}
+
+async function selectSoonEvent(ev: EventItem) {
+  if (soonSaving.value) return
+  soonSaving.value = true
+  try {
+    if (mySoonEventId.value && mySoonEventId.value !== ev.id) {
+      await groupsStore.toggleSoonBadge(mySoonEventId.value)
+    }
+    await groupsStore.toggleSoonBadge(ev.id)
+    soonSearch.value   = ''
+    soonDropOpen.value = false
+    await loadMySoonSelection()
+    showToast('success', 'Отмечено: скоро на «' + ev.title + '»')
+  } catch (e: any) {
+    showToast('error', e?.response?.data?.error ?? 'Не удалось сохранить')
+  } finally {
+    soonSaving.value = false
+  }
+}
+
+async function clearSoonSelection() {
+  if (!mySoonEventId.value || soonSaving.value) return
+  soonSaving.value = true
+  try {
+    await groupsStore.toggleSoonBadge(mySoonEventId.value)
+    mySoonEventId.value = null
+    showToast('success', 'Метка Soon снята')
+  } catch (e: any) {
+    showToast('error', e?.response?.data?.error ?? 'Не удалось сохранить')
+  } finally {
+    soonSaving.value = false
+  }
 }
 
 // ── Fursona steps ─────────────────────────────────────────────────────────
