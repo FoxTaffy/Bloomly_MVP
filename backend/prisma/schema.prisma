@@ -1306,6 +1306,7 @@ model RefreshToken {
   token_hash   String    @unique @db.VarChar(64)  // SHA-256 of raw token
   expires_at   DateTime  @db.Timestamptz(6)
   revoked      Boolean   @default(false)
+  remember     Boolean   @default(false)
   device_name  String?   @db.VarChar(120)
   user_agent   String?
   ip_address   String?   @db.VarChar(64)

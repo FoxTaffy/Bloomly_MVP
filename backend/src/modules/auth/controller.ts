@@ -40,7 +40,7 @@ async function issueRefreshToken(
 
   await prisma.refreshToken.create({
     data: {
-      user_id: userId, token_hash: hash, expires_at: expiry,
+      user_id: userId, token_hash: hash, expires_at: expiry, remember,
       device_name: parseDeviceName(userAgent),
       user_agent: userAgent ?? null,
       ip_address: ipAddress ?? null,
@@ -241,7 +241,9 @@ export const oauthCallbackHandler = async (
     // ── ОБЫЧНЫЙ ВХОД / РЕГИСТРАЦИЯ ────────────────────────────────────────────
     const { user } = await findOrCreateOAuthUser(provider, oauthUser);
     const token = issueAccessToken(request, user.id, user.role);
-    await issueRefreshToken(request, reply, user.id);
+    // OAuth-вход не спрашивает "запомнить меня" — всегда выдаём persistent-сессию,
+    // иначе вход через Google/Yandex/etc. живёт всего 24ч и разлогинивает раньше обычного
+    await issueRefreshToken(request, reply, user.id, true);
     return reply.redirect(302, `${FRONTEND_URL()}/auth/callback?token=${token}`);
   } catch (e: any) {
     console.error('[OAuth callback error]', e instanceof Error ? e.message : 'Unknown error');
@@ -332,7 +334,9 @@ export const refreshHandler = async (
   }
 
   const token = issueAccessToken(request, user.id, user.role);
-  await issueRefreshToken(request, reply, user.id);
+  // Сохраняем remember-статус при ротации — иначе persistent-сессия
+  // превращалась бы в session-cookie на первом же обновлении токена
+  await issueRefreshToken(request, reply, user.id, record.remember);
 
   return reply.send({ success: true, data: { token, user }, error: null });
 };
