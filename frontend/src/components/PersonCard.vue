@@ -69,8 +69,11 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
 </script>
 
 <template>
-  <div class="bg-brand-card border border-brand-border rounded-2xl hover:border-brand-accent/40
-              transition-all group flex flex-col cursor-default relative overflow-visible">
+  <div
+    class="bg-brand-card border border-brand-border rounded-2xl hover:border-brand-accent/40
+              transition-all group flex flex-col cursor-pointer relative overflow-visible"
+    @click="openProfile"
+  >
 
     <!-- Banner — h-20, clips only inside this div -->
     <div
@@ -99,7 +102,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
 
       <!-- Avatar (left) + ··· button (right) -->
       <div class="flex items-start justify-between">
-        <div class="-mt-9 cursor-pointer" @click="openProfile">
+        <div class="-mt-9">
           <img
             v-if="user.avatar_url"
             :src="user.avatar_url"
@@ -116,7 +119,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
         </div>
 
         <!-- Kebab menu -->
-        <div class="relative mt-2" ref="menuRef">
+        <div class="relative mt-2" ref="menuRef" @click.stop>
           <button
             class="w-8 h-8 flex items-center justify-center rounded-xl
                    bg-white/5 hover:bg-white/10 text-white/55 hover:text-white transition-colors"
@@ -171,7 +174,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
       </div>
 
       <!-- Name -->
-      <div class="min-w-0 cursor-pointer leading-snug -mt-1" @click="openProfile">
+      <div class="min-w-0 leading-snug -mt-1">
         <p class="font-semibold text-white truncate text-base leading-tight">
           {{ user.display_name || user.username }}
         </p>

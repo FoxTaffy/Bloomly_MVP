@@ -23,12 +23,12 @@ function avatarInitial(name: string | null | undefined) {
 </script>
 
 <template>
-  <div class="bg-brand-card border border-brand-border rounded-2xl p-4 flex items-center gap-3 hover:border-brand-accent/30 transition-all group">
+  <div
+    class="bg-brand-card border border-brand-border rounded-2xl p-4 flex items-center gap-3 hover:border-brand-accent/30 transition-all group cursor-pointer"
+    @click="router.push(`/profile/${friend.username}`)"
+  >
     <!-- Avatar + online dot -->
-    <div
-      class="relative flex-shrink-0 cursor-pointer"
-      @click="router.push(`/profile/${friend.username}`)"
-    >
+    <div class="relative flex-shrink-0">
       <img
         v-if="friend.avatar_url"
         :src="friend.avatar_url"
@@ -52,10 +52,7 @@ function avatarInitial(name: string | null | undefined) {
     </div>
 
     <!-- Name -->
-    <div
-      class="min-w-0 flex-1 cursor-pointer"
-      @click="router.push(`/profile/${friend.username}`)"
-    >
+    <div class="min-w-0 flex-1">
       <p class="font-semibold text-brand-offwhite truncate leading-tight text-sm">
         {{ friend.display_name || friend.username }}
       </p>
