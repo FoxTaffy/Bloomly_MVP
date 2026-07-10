@@ -22,20 +22,20 @@ const BASE = 'https://bloomly.fun'
 useHead({
   title: () => {
     if (!post.value) return 'Bloomly'
-    const name = post.value.author?.display_name || post.value.author?.username || 'Пользователь'
+    const name = post.value.author?.display_name || post.value.author?.username || 'a user'
     return `${name} — Bloomly`
   },
   meta: [
-    { name: 'description', content: () => post.value?.content?.slice(0, 160)?.replace(/\n/g, ' ') || 'Публикация в Bloomly — творческой социальной сети.' },
+    { name: 'description', content: () => post.value?.content?.slice(0, 160)?.replace(/\n/g, ' ') || 'A post on Bloomly — the creative social network.' },
     { name: 'robots', content: 'index, follow' },
     { property: 'og:type', content: 'article' },
     { property: 'og:site_name', content: 'Bloomly' },
     { property: 'og:title', content: () => {
-        const name = post.value?.author?.display_name || post.value?.author?.username || 'Пользователь'
+        const name = post.value?.author?.display_name || post.value?.author?.username || 'a user'
         return `${name} — Bloomly`
       }
     },
-    { property: 'og:description', content: () => post.value?.content?.slice(0, 200)?.replace(/\n/g, ' ') || 'Публикация в Bloomly.' },
+    { property: 'og:description', content: () => post.value?.content?.slice(0, 200)?.replace(/\n/g, ' ') || 'A post on Bloomly.' },
     { property: 'og:image', content: () => (Array.isArray(post.value?.media_urls) && post.value.media_urls[0]) ? String(post.value.media_urls[0]) : `${BASE}/og-default.png` },
     { property: 'og:url', content: () => `${BASE}/post/${route.params.id}` },
     { name: 'twitter:card', content: 'summary_large_image' },
@@ -44,7 +44,7 @@ useHead({
         return `${name} — Bloomly`
       }
     },
-    { name: 'twitter:description', content: () => post.value?.content?.slice(0, 160)?.replace(/\n/g, ' ') || 'Публикация в Bloomly.' },
+    { name: 'twitter:description', content: () => post.value?.content?.slice(0, 160)?.replace(/\n/g, ' ') || 'A post on Bloomly.' },
     { name: 'twitter:image', content: () => (Array.isArray(post.value?.media_urls) && post.value.media_urls[0]) ? String(post.value.media_urls[0]) : `${BASE}/og-default.png` },
   ],
   link: [

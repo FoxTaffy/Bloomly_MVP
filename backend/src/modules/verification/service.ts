@@ -4,9 +4,13 @@ import prisma from '../../config/prisma.js';
  * «Честная верификация» — Anti-AI verification system.
  *
  * Verification types:
- *   - artist:  Screenshot of layers or video of art process
- *   - master:  Photo of craft with "signa" (paper with "Bloomly", date, user ID)
- *   - event:   Photo of ticket or selfie at event location
+ *   - artist:     Screenshot of layers or video of art process
+ *   - master:     Photo of craft with "signa" (paper with "Bloomly", date, user ID)
+ *   - fursuiter:  Photo/video of fursuit with "signa"
+ *   - popular:    Links to social media accounts with sizable following
+ *   - writer:     Screenshot of drafts/manuscript with "signa"
+ *   - organizer:  Photo of event material with "signa"
+ *   - event:      Photo of ticket or selfie at event location
  *
  * Rules:
  *   - NO auto-approve. All requests go to manual admin review.
@@ -14,7 +18,11 @@ import prisma from '../../config/prisma.js';
  *   - Profile must be ≥ 80% complete to submit (avatar, fursona tab filled, email).
  */
 
-export type VerificationType = 'artist' | 'master' | 'event';
+export const VERIFICATION_TYPES = [
+  'artist', 'master', 'fursuiter', 'popular', 'writer', 'organizer', 'event',
+] as const;
+
+export type VerificationType = (typeof VERIFICATION_TYPES)[number];
 
 export interface ProfileCompleteness {
   hasAvatar: boolean;
@@ -61,13 +69,18 @@ export async function getProfileCompleteness(userId: string): Promise<ProfileCom
   });
   if (!user) throw new Error('User not found');
 
+  const fursona = await prisma.fursona.findUnique({
+    where: { user_id: userId },
+    select: { name: true, species: true, likes: true, dislikes: true },
+  });
+
   const hasAvatar = !!user.avatar_url;
   const hasEmail = !!user.email && user.email.trim().length > 0;
   const hasBio = !!user.bio && user.bio.trim().length > 0;
-  const hasFursonaName = !!user.fursona_name && user.fursona_name.trim().length > 0;
-  const hasFursonaSpecies = !!user.persona && user.persona.trim().length > 0;
+  const hasFursonaName = (!!fursona?.name && fursona.name.trim().length > 0) || (!!user.fursona_name && user.fursona_name.trim().length > 0);
+  const hasFursonaSpecies = (fursona?.species?.length ?? 0) > 0 || (!!user.persona && user.persona.trim().length > 0);
   const hasFursonaGender = !!user.fursona_gender && user.fursona_gender.trim().length > 0;
-  const hasFursonaDescription = !!user.fursona_description && user.fursona_description.trim().length > 0;
+  const hasFursonaDescription = ((fursona?.likes?.length ?? 0) + (fursona?.dislikes?.length ?? 0)) > 0 || (!!user.fursona_description && user.fursona_description.trim().length > 0);
 
   const filledCount = [hasAvatar, hasEmail, hasBio, hasFursonaName, hasFursonaSpecies, hasFursonaGender, hasFursonaDescription].filter(Boolean).length;
   const percentage = Math.round((filledCount / 7) * 100);
@@ -134,6 +147,7 @@ export async function requestVerification(
   userId: string,
   verificationType: VerificationType,
   evidenceUrls: string[],
+  socialLinks?: string[],
 ) {
   // Check if already verified
   const user = await prisma.user.findUnique({
@@ -154,28 +168,36 @@ export async function requestVerification(
     throw new Error('Profile must be at least 80% complete to request verification');
   }
 
-  // Validate evidence
-  if (!evidenceUrls || evidenceUrls.length === 0) {
-    throw new Error('Evidence is required for verification');
+  // Validate verification type
+  if (!VERIFICATION_TYPES.includes(verificationType)) {
+    throw new Error(`Invalid verification type. Must be one of: ${VERIFICATION_TYPES.join(', ')}`);
   }
 
-  // Validate verification type
-  if (!['artist', 'master', 'event'].includes(verificationType)) {
-    throw new Error('Invalid verification type. Must be: artist, master, or event');
+  // "popular" is backed by social links instead of uploaded evidence files
+  const finalEvidenceUrls = verificationType === 'popular'
+    ? (socialLinks ?? []).filter((l) => l && l.trim())
+    : evidenceUrls;
+
+  if (!finalEvidenceUrls || finalEvidenceUrls.length === 0) {
+    throw new Error(
+      verificationType === 'popular'
+        ? 'At least one social link is required for verification'
+        : 'Evidence is required for verification',
+    );
   }
 
   // Collect criteria snapshot
   const criteria = await checkCriteria(userId);
 
   // Determine badge type based on verification type
-  const badgeType = verificationType; // artist, master, or event
+  const badgeType = verificationType;
 
   // Create the request — ALWAYS pending, NO auto-approve
   const request = await prisma.verificationRequest.create({
     data: {
       user_id: userId,
       verification_type: verificationType,
-      evidence_urls: evidenceUrls,
+      evidence_urls: finalEvidenceUrls,
       badge_type: badgeType,
       account_age_days: criteria.accountAgeDays,
       post_count: criteria.postCount,

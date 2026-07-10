@@ -106,14 +106,20 @@ export interface JwtPayload {
 export interface UpsertFursonaInput {
   name?: string;
   species?: string[];
+  species_other?: string | null;
   colors?: string[];
   likes_dislikes_visible?: boolean;
   likes?: string[];
   dislikes?: string[];
-  reference_image_url?: string | null;
-  reference_is_nsfw?: boolean;
-  reference_artist_name?: string | null;
-  reference_artist_url?: string | null;
+}
+
+// ── Fursona reference gallery ────────────────────────────────────────────────
+
+export interface UpsertReferenceImageInput {
+  image_url?: string;
+  is_nsfw?: boolean;
+  artist_name?: string | null;
+  artist_url?: string | null;
 }
 
 // ── Fursuit ───────────────────────────────────────────────────────────────────

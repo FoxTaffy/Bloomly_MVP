@@ -3,11 +3,10 @@
 
     <!-- ── Шапка секции ──────────────────────────────────── -->
     <div class="flex items-center justify-between">
-      <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
-        <svg class="w-3.5 h-3.5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-        </svg>
+      <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-2">
+        <span class="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style="background:rgba(167,139,250,0.16)">
+          <BIcon name="Shirt" class="w-3.5 h-3.5 text-brand-accent" />
+        </span>
         {{ t.fursuitTitle }}
       </p>
       <button
@@ -24,14 +23,16 @@
 
     <!-- Empty state -->
     <div v-else-if="!showForm && userStore.fursuits.length === 0"
-      class="p-6 border border-dashed border-brand-border/50 rounded-2xl text-center space-y-1.5">
-      <div class="w-12 h-12 mx-auto rounded-2xl bg-brand-accent/10 flex items-center justify-center">
-        <svg class="w-6 h-6 text-brand-accent/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-        </svg>
+      class="p-7 border border-dashed border-brand-accent/25 rounded-2xl text-center space-y-2"
+      style="background:linear-gradient(135deg,rgba(167,139,250,0.08),transparent 65%)">
+      <div class="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center shadow-inner" style="background:rgba(167,139,250,0.14)">
+        <BIcon name="Shirt" class="w-7 h-7 text-brand-accent/60" />
       </div>
-      <p class="text-sm text-white/30">{{ t.fursuitEmptyMsg }}</p>
+      <p class="text-sm text-white/45 font-semibold">{{ t.fursuitEmptyMsg }}</p>
+      <button type="button" @click="openCreateForm"
+        class="text-xs font-bold text-brand-accent hover:text-brand-accent/80 transition-colors">
+        {{ t.fursuitAddBtn }}
+      </button>
     </div>
 
     <!-- Fursuit list -->
@@ -39,7 +40,7 @@
       <div
         v-for="suit in userStore.fursuits"
         :key="suit.id"
-        class="flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border/60 rounded-2xl transition-all hover:border-brand-border"
+        class="flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border/60 rounded-2xl transition-all hover:border-brand-accent/30 hover:shadow-lg hover:shadow-black/20"
       >
         <!-- Photo / NSFW blur -->
         <div class="relative flex-shrink-0">
@@ -47,15 +48,12 @@
             v-if="suit.image_url"
             :src="suit.image_url"
             alt="Fursuit"
-            class="w-12 h-12 rounded-xl object-cover border border-brand-border"
+            class="w-14 h-14 rounded-xl object-cover border border-brand-border"
             :class="suit.is_nsfw ? 'blur-sm' : ''"
             draggable="false"
           />
-          <div v-else class="w-12 h-12 rounded-xl bg-brand-bg border border-brand-border flex items-center justify-center text-brand-accent/30">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-            </svg>
+          <div v-else class="w-14 h-14 rounded-xl flex items-center justify-center" style="background:rgba(167,139,250,0.12)">
+            <BIcon name="Shirt" class="w-6 h-6 text-brand-accent/40" />
           </div>
           <span v-if="suit.is_nsfw"
             class="absolute -top-1.5 -right-1.5 text-[9px] font-bold px-1 py-0.5 rounded bg-rose-600/90 text-white leading-none">
@@ -104,10 +102,7 @@
       <!-- Заголовок формы -->
       <div class="flex items-center justify-between">
         <p class="text-xs font-bold text-brand-accent uppercase tracking-wider flex items-center gap-1.5">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-          </svg>
+          <BIcon name="Shirt" class="w-3.5 h-3.5" />
           {{ editingId ? t.fursuitEditTitle : t.fursuitNewTitle }}
         </p>
         <button type="button" @click="closeForm"
@@ -366,6 +361,7 @@ import { useUserStore } from '@/stores/user'
 import { useLangStore } from '@/stores/lang'
 import type { UpsertFursuitInput, Fursuit } from '@/stores/user'
 import MediaUpload from '@/components/MediaUpload.vue'
+import BIcon from '@/components/BIcon.vue'
 
 const userStore = useUserStore()
 const langStore = useLangStore()

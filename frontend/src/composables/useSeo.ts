@@ -36,14 +36,14 @@ export interface SeoOptions {
 function buildTitle(title?: string, titleRaw?: string): string {
   if (titleRaw) return titleRaw
   if (title) return `${title} — ${SITE_NAME}`
-  return `${SITE_NAME} — творческая социальная сеть`
+  return `${SITE_NAME} — Creative Social Network`
 }
 
 export function useSeo(options: SeoOptions = {}) {
   const {
     title,
     titleRaw,
-    description = 'Bloomly — социальная сеть для художников, фурри-сообщества и всех творческих людей. Публикуй арт, общайся, находи единомышленников.',
+    description = 'Bloomly is a creative social network for artists, the furry community, and creative people everywhere. Share art, connect, find your people.',
     image = DEFAULT_IMAGE,
     imageAlt = 'Bloomly',
     url = BASE_URL,
@@ -111,7 +111,7 @@ export function useProfileSeo(opts: {
     title: `${displayName} (@${username})`,
     description: bio
       ? `${bio.slice(0, 140)}…`
-      : `Профиль ${displayName} на Bloomly — творческой социальной сети.`,
+      : `${displayName}'s profile on Bloomly — the creative social network.`,
     image: avatarUrl,
     imageAlt: displayName,
     url: `${BASE_URL}/profile/${username}`,
@@ -141,17 +141,17 @@ export function usePostSeo(opts: {
 
   const description = content
     ? content.slice(0, 160).replace(/\n/g, ' ')
-    : `Пост в Bloomly от ${authorName ?? 'пользователя'}.`
+    : `A post on Bloomly by ${authorName ?? 'a user'}.`
 
   const title = authorName
-    ? `${authorName} в Bloomly`
-    : 'Пост в Bloomly'
+    ? `${authorName} on Bloomly`
+    : 'Post on Bloomly'
 
   useSeo({
     title,
     description,
     image: mediaUrl,
-    imageAlt: `Публикация ${authorName ?? ''}`,
+    imageAlt: `Post by ${authorName ?? ''}`,
     url: `${BASE_URL}/post/${postId}`,
     type: 'article',
     jsonLd: {
@@ -192,10 +192,10 @@ export function useGroupSeo(opts: {
   const urlSegment = slug || groupId
   const desc = description
     ? description.slice(0, 160)
-    : `Группа ${name} на Bloomly. ${membersCount ? `${membersCount} участников.` : ''}`
+    : `${name} — a community on Bloomly. ${membersCount ? `${membersCount} members.` : ''}`
 
   useSeo({
-    title: `${name} — сообщество`,
+    title: `${name} — Community`,
     description: desc,
     image: avatarUrl,
     imageAlt: name,

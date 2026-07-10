@@ -189,6 +189,12 @@
                 :style="form.banner_url
                   ? `background-image:url(${form.banner_url});background-size:cover;background-position:center`
                   : `background:linear-gradient(135deg,${form.accent_color}33,${form.accent_color}0a)`">
+                <span v-if="userStore.fursona?.species?.length"
+                  class="absolute bottom-1 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold backdrop-blur-sm"
+                  style="background:rgba(0,0,0,0.55);color:#fff">
+                  <span class="leading-none">🐾</span>
+                  {{ primarySpeciesLabel }}
+                </span>
               </div>
               <div class="px-4 pb-4 -mt-6 relative">
                 <div class="w-12 h-12 rounded-full border-[3px] overflow-hidden mb-2 shadow-lg"
@@ -384,17 +390,17 @@
                       <button type="button" @click="avatarFileRef?.click()"
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-border hover:border-brand-accent/50 hover:text-white transition-all">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                        Аватар
+                        {{ langStore.t.avatarBtnLabel }}
                       </button>
                       <button type="button" @click="bannerFileRef?.click()"
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-border hover:border-brand-accent/50 hover:text-white transition-all">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                        Баннер
+                        {{ langStore.t.bannerBtnLabel }}
                       </button>
                       <button v-if="form.avatar_url" type="button" @click="reopenCrop('avatar')"
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-border hover:border-sky-400/50 hover:text-sky-300 transition-all">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
-                        Кадр аватар
+                        {{ langStore.t.cropAvatarBtn }}
                       </button>
                     </div>
                   </div>
@@ -408,7 +414,7 @@
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
-                        История аватаров
+                        {{ langStore.t.avatarHistoryLabel }}
                         <span v-if="avatarHistory.length" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10">{{ avatarHistory.length }}</span>
                       </span>
                       <svg class="w-3.5 h-3.5 transition-transform" :class="showAvatarHistory ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -421,7 +427,7 @@
                           <span class="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin"></span>
                         </div>
                         <div v-else-if="!avatarHistory.length" class="text-xs text-white/35 text-center py-4">
-                          История аватаров пуста
+                          {{ langStore.t.avatarHistoryEmpty }}
                         </div>
                         <div v-else class="grid grid-cols-5 sm:grid-cols-8 gap-2">
                           <div
@@ -469,7 +475,7 @@
                   <!-- Username -->
                   <div>
                     <div class="flex items-center justify-between mb-2">
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">Никнейм</label>
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.usernameFieldLabel }}</label>
                       <span class="text-[11px] tabular-nums" :class="form.username.length > 27 ? 'text-brand-error/80' : 'text-white/35'">
                         {{ form.username.length }}<span class="opacity-50">/30</span>
                       </span>
@@ -489,7 +495,7 @@
                       />
                     </div>
                     <p v-if="usernameError" class="text-[11px] text-brand-error/80 mt-1.5">{{ usernameError }}</p>
-                    <p v-else class="text-[11px] text-white/35 mt-1.5">Только a–z, 0–9, _ · Без пробелов · Мин. 3 символа</p>
+                    <p v-else class="text-[11px] text-white/35 mt-1.5">{{ langStore.t.usernameHint }}</p>
                   </div>
 
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -501,9 +507,9 @@
                           {{ form.display_name?.length ?? 0 }}<span class="opacity-50">/50</span>
                         </span>
                       </div>
-                      <input v-model="form.display_name" type="text" maxlength="50" placeholder="Ваше имя" class="field-input"/>
+                      <input v-model="form.display_name" type="text" maxlength="50" :placeholder="langStore.t.displayNamePlaceholder" class="field-input"/>
                       <p v-if="savedForm.display_name" class="text-[11px] text-white/35 mt-1.5 truncate">
-                        Сейчас: <span class="text-white/35 font-semibold">{{ savedForm.display_name }}</span>
+                        {{ langStore.t.currentlyPrefix }} <span class="text-white/35 font-semibold">{{ savedForm.display_name }}</span>
                       </p>
                     </div>
                     <!-- Status -->
@@ -514,9 +520,9 @@
                           {{ form.status?.length ?? 0 }}<span class="opacity-50">/100</span>
                         </span>
                       </div>
-                      <input v-model="form.status" type="text" maxlength="100" placeholder="Чем вы занимаетесь?" class="field-input"/>
+                      <input v-model="form.status" type="text" maxlength="100" :placeholder="langStore.t.statusFieldPlaceholder" class="field-input"/>
                       <p v-if="savedForm.status" class="text-[11px] text-white/35 mt-1.5 truncate">
-                        Сейчас: <span class="text-white/35 font-semibold">{{ savedForm.status }}</span>
+                        {{ langStore.t.currentlyPrefix }} <span class="text-white/35 font-semibold">{{ savedForm.status }}</span>
                       </p>
                     </div>
                   </div>
@@ -529,26 +535,36 @@
                         {{ form.bio?.length ?? 0 }}<span class="opacity-50">/300</span>
                       </span>
                     </div>
-                    <textarea v-model="form.bio" rows="4" maxlength="300" placeholder="Расскажите о себе…" class="field-input resize-none"></textarea>
+                    <textarea v-model="form.bio" rows="4" maxlength="300" :placeholder="langStore.t.bioPlaceholder" class="field-input resize-none"></textarea>
                     <p v-if="savedForm.bio" class="text-[11px] text-white/35 mt-1.5 line-clamp-1">
-                      Сейчас: <span class="text-white/35 font-semibold">{{ savedForm.bio }}</span>
+                      {{ langStore.t.currentlyPrefix }} <span class="text-white/35 font-semibold">{{ savedForm.bio }}</span>
                     </p>
                   </div>
 
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <!-- Job title -->
                     <div>
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.jobLabel }}</label>
-                      <input v-model="form.job_title" type="text" placeholder="Напр. Цифровой художник" class="field-input"/>
+                      <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.jobLabel }}</label>
+                        <span class="text-[11px] tabular-nums" :class="(form.job_title?.length??0) > 70 ? 'text-brand-error/80' : 'text-white/35'">
+                          {{ form.job_title?.length ?? 0 }}<span class="opacity-50">/80</span>
+                        </span>
+                      </div>
+                      <input v-model="form.job_title" type="text" maxlength="80" :placeholder="langStore.t.jobTitlePlaceholder" class="field-input"/>
                       <p v-if="savedForm.job_title" class="text-[11px] text-white/35 mt-1.5 truncate">
-                        Сейчас: <span class="text-white/35 font-semibold">{{ savedForm.job_title }}</span>
+                        {{ langStore.t.currentlyPrefix }} <span class="text-white/35 font-semibold">{{ savedForm.job_title }}</span>
                       </p>
                     </div>
                     <!-- Pronouns -->
                     <div>
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.pronounsLabel }}</label>
+                      <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.pronounsLabel }}</label>
+                        <span class="text-[11px] tabular-nums" :class="(form.pronouns?.length??0) > 27 ? 'text-brand-error/80' : 'text-white/35'">
+                          {{ form.pronouns?.length ?? 0 }}<span class="opacity-50">/30</span>
+                        </span>
+                      </div>
                       <div class="flex gap-2">
-                        <input v-model="form.pronouns" type="text" placeholder="он/его, она/её…" class="field-input flex-1"/>
+                        <input v-model="form.pronouns" type="text" maxlength="30" :placeholder="langStore.t.pronounsFieldPlaceholder" class="field-input flex-1"/>
                         <div class="flex gap-1.5 items-center flex-shrink-0">
                           <button v-for="p in pronounPresets" :key="p" type="button" @click="form.pronouns = p"
                             class="px-2 py-1 rounded-xl text-[10px] font-bold transition-all border"
@@ -559,7 +575,7 @@
                         </div>
                       </div>
                       <p v-if="savedForm.pronouns" class="text-[11px] text-white/35 mt-1.5 truncate">
-                        Сейчас: <span class="text-white/35 font-semibold">{{ savedForm.pronouns }}</span>
+                        {{ langStore.t.currentlyPrefix }} <span class="text-white/35 font-semibold">{{ savedForm.pronouns }}</span>
                       </p>
                     </div>
                   </div>
@@ -568,16 +584,16 @@
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.birthdayLabel }}</label>
-                      <input v-model="form.birth_date" type="date" class="field-input"
+                      <DateInput v-model="form.birth_date"
                         :max="new Date().toISOString().substring(0,10)" />
                       <p v-if="savedForm.birth_date" class="text-[11px] text-white/35 mt-1.5 truncate">
-                        Сейчас: <span class="text-white/35 font-semibold">{{ formatBirthDate(savedForm.birth_date) }}</span>
+                        {{ langStore.t.currentlyPrefix }} <span class="text-white/35 font-semibold">{{ formatBirthDate(savedForm.birth_date) }}</span>
                       </p>
                       <p class="text-[11px] mt-1.5"
                         :class="birthAge !== null && birthAge < 18 ? 'text-brand-error/80' : 'text-white/35'">
                         <template v-if="birthAge !== null">
-                          {{ birthAge }} лет
-                          <span v-if="birthAge < 18"> · NSFW-контент недоступен (менее 18 лет)</span>
+                          {{ ageLabel(birthAge) }}
+                          <span v-if="birthAge < 18"> · {{ langStore.t.nsfwUnder18Hint }}</span>
                         </template>
                         <template v-else>{{ langStore.t.nsfwBirthdayHint }}</template>
                       </p>
@@ -588,10 +604,10 @@
                   <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-3">
                     <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
                       <BIcon name="Sparkles" class="w-3.5 h-3.5" style="color:#fbbf24" />
-                      Soon — куда собираешься
+                      {{ langStore.t.soonSectionTitle }}
                     </p>
                     <p class="text-[11px] text-white/35 -mt-2">
-                      Отметь мероприятие, на которое собираешься — рядом с именем появится бейдж SOON. Можно оставить пустым.
+                      {{ langStore.t.soonSectionHint }}
                     </p>
 
                     <!-- Current selection chip -->
@@ -609,14 +625,14 @@
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                       </button>
                     </div>
-                    <p v-else class="text-xs text-white/35">Сейчас ничего не выбрано.</p>
+                    <p v-else class="text-xs text-white/35">{{ langStore.t.soonNothingSelected }}</p>
 
                     <!-- Search / select -->
                     <div class="relative">
                       <input
                         v-model="soonSearch"
                         type="text"
-                        placeholder="Найти мероприятие или группу…"
+                        :placeholder="langStore.t.soonSearchPlaceholder"
                         class="field-input"
                         @focus="soonDropOpen = true"
                         @blur="onSoonBlur"
@@ -676,9 +692,7 @@
                     <div class="relative">
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.countryLabel }}</label>
                       <div class="relative">
-                        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/35 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 004 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064"/>
-                        </svg>
+                        <BIcon name="Flag" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/35 pointer-events-none" />
                         <input
                           v-model="countrySearch"
                           type="text"
@@ -1362,6 +1376,21 @@
                     </Transition>
                   </div>
                 </div>
+
+                <!-- ── Регион для оплаты ── -->
+                <div class="px-6 pb-6">
+                  <div class="rounded-2xl border border-brand-border bg-brand-bg/40 p-4">
+                    <p class="text-sm font-semibold text-white">{{ langStore.t.secLangRegionLabel }}</p>
+                    <p class="text-xs text-white/40 mt-0.5 mb-3">{{ langStore.t.secLangRegionHint }}</p>
+                    <select
+                      :value="paymentRegion"
+                      @change="setPaymentRegion(($event.target as HTMLSelectElement).value)"
+                      class="field-input"
+                    >
+                      <option v-for="r in PAYMENT_REGIONS" :key="r.id" :value="r.id">{{ r.label }}</option>
+                    </select>
+                  </div>
+                </div>
               </section>
 
               <!-- ── § 6: БЕЗОПАСНОСТЬ / Способы входа ─────────────── -->
@@ -1388,8 +1417,38 @@
                         <p class="text-xs text-white/45">{{ authStore.user?.email }}</p>
                       </div>
                     </div>
-                    <span class="px-2.5 py-1 rounded-lg text-xs font-bold" style="background:rgba(16,185,129,0.15);color:#34d399">{{ langStore.t.activeLabel }}</span>
+                    <div class="flex items-center gap-2">
+                      <span class="px-2.5 py-1 rounded-lg text-xs font-bold" style="background:rgba(16,185,129,0.15);color:#34d399">{{ langStore.t.activeLabel }}</span>
+                      <button type="button" @click="showChangePassword = !showChangePassword"
+                        class="px-3 py-1.5 rounded-xl text-xs font-bold text-white/60 border border-brand-border hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all">
+                        {{ langStore.t.changePasswordBtn }}
+                      </button>
+                    </div>
                   </div>
+
+                  <!-- Смена пароля -->
+                  <Transition name="fade">
+                    <div v-if="showChangePassword" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 space-y-3">
+                      <div>
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-1.5">{{ langStore.t.currentPasswordLabel }}</label>
+                        <input v-model="pwForm.current" type="password" autocomplete="current-password" class="field-input" />
+                      </div>
+                      <div>
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-1.5">{{ langStore.t.newPasswordLabel }}</label>
+                        <input v-model="pwForm.next" type="password" autocomplete="new-password" minlength="8" maxlength="128" class="field-input" />
+                      </div>
+                      <div>
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-1.5">{{ langStore.t.confirmPasswordLabel }}</label>
+                        <input v-model="pwForm.confirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" class="field-input" />
+                      </div>
+                      <p v-if="pwError" class="text-xs text-brand-error/80">{{ pwError }}</p>
+                      <p v-if="pwSuccess" class="text-xs text-emerald-400">{{ pwSuccess }}</p>
+                      <button type="button" @click="submitChangePassword" :disabled="pwSaving"
+                        class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-500/80 hover:bg-emerald-500 transition-all disabled:opacity-50">
+                        {{ pwSaving ? langStore.t.savingLabel : langStore.t.changePasswordBtn }}
+                      </button>
+                    </div>
+                  </Transition>
 
                   <!-- OAuth провайдеры -->
                   <div v-if="linkedAccountsLoading" class="flex justify-center py-6">
@@ -1495,6 +1554,78 @@
                 </div>
               </section>
 
+              <!-- ── § 6.5: ОПЛАТА / Сохранённые карты ──────────────── -->
+              <section v-show="openSection === 'sec-billing'" id="sec-billing" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                <div class="px-6 py-4 border-b border-brand-border flex items-center justify-between gap-3" style="background:linear-gradient(90deg,rgba(76,103,207,0.07) 0%,transparent 100%)">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(76,103,207,0.15)">
+                      <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                      </svg>
+                    </div>
+                    <h2 class="font-bold text-white text-sm">{{ langStore.t.secBillingTitle }}</h2>
+                  </div>
+                  <button
+                    v-if="paymentMethods.length"
+                    @click="showAddCardModal = true"
+                    class="px-3 py-1.5 rounded-xl text-xs font-bold text-white border border-brand-border hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all active:scale-95 flex-shrink-0"
+                  >{{ langStore.t.billingAddCard }}</button>
+                </div>
+
+                <div class="p-6">
+                  <div v-if="paymentMethodsLoading" class="flex justify-center py-6">
+                    <span class="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin"></span>
+                  </div>
+
+                  <div v-else-if="!paymentMethods.length" class="text-center py-8">
+                    <div class="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-3">
+                      <BIcon name="CreditCard" class="w-6 h-6 text-white/30" />
+                    </div>
+                    <p class="text-sm font-semibold text-white/70">{{ langStore.t.billingNoCards }}</p>
+                    <p class="text-xs text-white/40 mt-1 max-w-xs mx-auto">{{ langStore.t.billingNoCardsHint }}</p>
+                    <button
+                      @click="showAddCardModal = true"
+                      class="mt-4 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all active:scale-95 hover:brightness-110"
+                      style="background: linear-gradient(135deg, #4C67CF 0%, #7C6FDB 55%, #CD83F5 100%);"
+                    >{{ langStore.t.billingAddCard }}</button>
+                  </div>
+
+                  <div v-else class="space-y-2">
+                    <div
+                      v-for="m in paymentMethods" :key="m.id"
+                      class="flex items-center gap-3 p-4 rounded-2xl border transition-all"
+                      :class="m.is_default ? 'border-brand-accent/40 bg-brand-accent/5' : 'border-brand-border bg-brand-bg/40'"
+                    >
+                      <span class="px-2 py-1 rounded-lg text-[10px] font-black tracking-wide flex-shrink-0"
+                        :style="`background:${cardBrandInfo(m.brand).color}22; color:${cardBrandInfo(m.brand).color}`">
+                        {{ cardBrandInfo(m.brand).label }}
+                      </span>
+                      <div class="min-w-0 flex-1">
+                        <p class="font-mono text-sm text-white/85">•••• {{ m.last4 }}</p>
+                        <p class="text-xs text-white/35 truncate">{{ m.holder_name }} · {{ String(m.exp_month).padStart(2, '0') }}/{{ String(m.exp_year).slice(-2) }}</p>
+                      </div>
+                      <span v-if="m.is_default" class="px-2.5 py-1 rounded-lg text-[10px] font-bold flex-shrink-0" style="background:rgba(16,185,129,0.15);color:#34d399">
+                        {{ langStore.t.billingDefaultBadge }}
+                      </span>
+                      <button
+                        v-else
+                        @click="makeDefaultPaymentMethod(m.id)"
+                        :disabled="settingDefaultId === m.id"
+                        class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-white/55 hover:text-white border border-brand-border hover:border-white/20 transition-all disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
+                      >{{ langStore.t.billingSetDefault }}</button>
+                      <button
+                        @click="deletePaymentMethod(m.id)"
+                        :disabled="deletingMethodId === m.id"
+                        class="w-8 h-8 rounded-lg flex items-center justify-center text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50 flex-shrink-0"
+                      >
+                        <span v-if="deletingMethodId === m.id" class="w-3.5 h-3.5 border border-t-transparent border-red-400 rounded-full animate-spin"></span>
+                        <BIcon v-else name="Trash2" class="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
               <!-- ── § 7: DANGER ZONE ────────────────────────────────── -->
               <section v-show="openSection === 'sec-danger'" id="sec-danger" class="bg-brand-card border border-red-500/30 rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                 <div class="px-6 py-4 border-b border-red-500/20 flex items-center gap-3" style="background:linear-gradient(90deg,rgba(239,68,68,0.07) 0%,transparent 100%)">
@@ -1579,6 +1710,12 @@
       </div>
     </Transition>
   </Teleport>
+
+  <AddCardModal
+    v-if="showAddCardModal"
+    @close="showAddCardModal = false"
+    @added="onCardAdded"
+  />
 </template>
 
 <script setup lang="ts">
@@ -1587,14 +1724,21 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
+import type { Lang } from '@/locales/translations'
 import { useGroupsStore, type EventItem } from '@/stores/groups'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import FursonaSettings from '@/components/profile/FursonaSettings.vue'
 import FursuitSettings from '@/components/profile/FursuitSettings.vue'
+import DateInput from '@/components/DateInput.vue'
+import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
 import api from '@/api'
 import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
+import { PAYMENT_REGIONS } from '@/lib/paymentRegions'
+import { cardBrandInfo } from '@/lib/cardBrand'
+import type { PaymentMethod } from '@/types/paymentMethod'
+import AddCardModal from '@/components/AddCardModal.vue'
 
 const userStore   = useUserStore()
 const authStore   = useAuthStore()
@@ -1613,6 +1757,70 @@ const langOptions = [
   { code: 'ES' as const, fi: 'es', name: 'Español' },
   { code: 'PT' as const, fi: 'br', name: 'Português' },
 ]
+
+// ── Payment region (used to pick alt payment methods when no card is saved) ──
+const paymentRegion = ref<string>((authStore.user as any)?.payment_region || 'GLOBAL')
+
+async function setPaymentRegion(id: string) {
+  const previous = paymentRegion.value
+  paymentRegion.value = id
+  try {
+    await api.patch('/users/me', { payment_region: id })
+    if (authStore.user) (authStore.user as any).payment_region = id
+  } catch {
+    paymentRegion.value = previous
+    showToast('error', langStore.t.subToastError)
+  }
+}
+
+// ── Saved payment methods (billing tab) ──────────────────────────────────────
+const paymentMethods        = ref<PaymentMethod[]>([])
+const paymentMethodsLoading = ref(true)
+const showAddCardModal      = ref(false)
+const deletingMethodId      = ref<string | null>(null)
+const settingDefaultId      = ref<string | null>(null)
+
+async function loadPaymentMethods() {
+  paymentMethodsLoading.value = true
+  try {
+    const res = await api.get('/users/me/payment-methods')
+    paymentMethods.value = res.data.data ?? []
+  } catch {
+    paymentMethods.value = []
+  } finally {
+    paymentMethodsLoading.value = false
+  }
+}
+
+function onCardAdded(method: PaymentMethod) {
+  if (method.is_default) paymentMethods.value.forEach(m => { m.is_default = false })
+  paymentMethods.value.unshift(method)
+}
+
+async function deletePaymentMethod(id: string) {
+  if (!confirm(langStore.t.billingDeleteConfirm)) return
+  deletingMethodId.value = id
+  try {
+    await api.delete(`/users/me/payment-methods/${id}`)
+    paymentMethods.value = paymentMethods.value.filter(m => m.id !== id)
+  } catch {
+    showToast('error', langStore.t.subToastError)
+  } finally {
+    deletingMethodId.value = null
+  }
+}
+
+async function makeDefaultPaymentMethod(id: string) {
+  settingDefaultId.value = id
+  try {
+    await api.patch(`/users/me/payment-methods/${id}/default`)
+    paymentMethods.value.forEach(m => { m.is_default = m.id === id })
+  } catch {
+    showToast('error', langStore.t.subToastError)
+  } finally {
+    settingDefaultId.value = null
+  }
+}
 
 // ── Delete account modal ─────────────────────────────────────────────────────
 const showDeleteModal    = ref(false)
@@ -1642,6 +1850,31 @@ function showToast(type: 'success' | 'error', message: string) {
   clearTimeout(toastTimer)
   Object.assign(toast, { show: true, type, message })
   toastTimer = window.setTimeout(() => { toast.show = false }, 3500)
+}
+
+// ── Change password ──────────────────────────────────────────────────────
+const showChangePassword = ref(false)
+const pwForm    = reactive({ current: '', next: '', confirm: '' })
+const pwSaving  = ref(false)
+const pwError   = ref('')
+const pwSuccess = ref('')
+
+async function submitChangePassword() {
+  pwError.value = ''
+  pwSuccess.value = ''
+  if (pwForm.next.length < 8) { pwError.value = langStore.t.passwordTooShort; return }
+  if (pwForm.next !== pwForm.confirm) { pwError.value = langStore.t.passwordsDontMatch; return }
+  pwSaving.value = true
+  try {
+    await authStore.changePassword(pwForm.next, pwForm.current)
+    pwSuccess.value = langStore.t.passwordChangedMsg
+    pwForm.current = ''; pwForm.next = ''; pwForm.confirm = ''
+    setTimeout(() => { showChangePassword.value = false; pwSuccess.value = '' }, 2000)
+  } catch (e: any) {
+    pwError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } finally {
+    pwSaving.value = false
+  }
 }
 
 // ── Linked OAuth accounts ──────────────────────────────────────────────────
@@ -1865,6 +2098,7 @@ const form = reactive({
   online_status_visibility: 'everyone' as string,
   friends_list_visibility:  'everyone' as string,
   profile_visibility:       'everyone' as string,
+  relationship_status_visibility: 'everyone' as string,
 })
 
 // ── Saved snapshot ─────────────────────────────────────────────────────────
@@ -1906,6 +2140,7 @@ const savedForm = reactive({
   online_status_visibility: 'everyone' as string,
   friends_list_visibility:  'everyone' as string,
   profile_visibility:       'everyone' as string,
+  relationship_status_visibility: 'everyone' as string,
 })
 
 function snapshotToSaved() {
@@ -1946,6 +2181,7 @@ function snapshotToSaved() {
   savedForm.online_status_visibility = form.online_status_visibility
   savedForm.friends_list_visibility  = form.friends_list_visibility
   savedForm.profile_visibility       = form.profile_visibility
+  savedForm.relationship_status_visibility = form.relationship_status_visibility
 }
 
 function resetForm() {
@@ -1986,14 +2222,16 @@ function resetForm() {
   form.online_status_visibility = savedForm.online_status_visibility
   form.friends_list_visibility  = savedForm.friends_list_visibility
   form.profile_visibility       = savedForm.profile_visibility
+  form.relationship_status_visibility = savedForm.relationship_status_visibility
   // Clear originals so re-crop picks up the reverted server images
   avatarOriginalSrc.value = ''
   bannerOriginalSrc.value = ''
+  fursonaRef.value?.reset()
 }
 
 // ── isDirty ────────────────────────────────────────────────────────────────
 const fursonaIsDirty = ref(false)
-const fursonaRef     = ref<{ save: () => Promise<void> } | null>(null)
+const fursonaRef     = ref<{ save: () => Promise<void>; reset: () => void } | null>(null)
 
 const isDirty = computed(() => {
   const fieldsChanged = (
@@ -2030,7 +2268,8 @@ const isDirty = computed(() => {
     form.mentions_privacy         !== savedForm.mentions_privacy ||
     form.online_status_visibility !== savedForm.online_status_visibility ||
     form.friends_list_visibility  !== savedForm.friends_list_visibility ||
-    form.profile_visibility       !== savedForm.profile_visibility
+    form.profile_visibility       !== savedForm.profile_visibility ||
+    form.relationship_status_visibility !== savedForm.relationship_status_visibility
   )
   return fieldsChanged ||
     JSON.stringify(form.likes)         !== JSON.stringify(savedForm.likes) ||
@@ -2080,7 +2319,10 @@ onMounted(async () => {
   form.online_status_visibility = (p as any).online_status_visibility ?? 'everyone'
   form.friends_list_visibility  = (p as any).friends_list_visibility  ?? 'everyone'
   form.profile_visibility       = (p as any).profile_visibility       ?? 'everyone'
+  form.relationship_status_visibility = (p as any).relationship_status_visibility ?? 'everyone'
+  paymentRegion.value           = (p as any).payment_region ?? 'GLOBAL'
   snapshotToSaved()
+  loadPaymentMethods()
   // Pre-fill combobox search inputs with saved values
   countrySearch.value = form.country
   citySearch.value    = form.location
@@ -2094,7 +2336,7 @@ onMounted(async () => {
   // Navigate to a specific section if ?section= param is present
   const sectionParam = route.query.section as string | undefined
   if (sectionParam) {
-    const valid = [...sections.map(s => s.id)]
+    const valid = sections.value.map(s => s.id)
     if (valid.includes(sectionParam)) {
       openSec(sectionParam)
     }
@@ -2629,6 +2871,7 @@ async function handleSubmit() {
     online_status_visibility: form.online_status_visibility,
     friends_list_visibility:  form.friends_list_visibility,
     profile_visibility:       form.profile_visibility,
+    relationship_status_visibility: form.relationship_status_visibility,
   }
   if (/^#[0-9A-Fa-f]{6}$/.test(form.accent_color)) payload.accent_color = form.accent_color
 
@@ -2655,6 +2898,7 @@ const sections = computed(() => [
   { id: 'sec-privacy',       label: langStore.t.secPrivacy,       color: '#ec4899', iconPath: 'M12 11c0-1.104.896-2 2-2s2 .896 2 2-.896 2-2 2-2-.896-2-2zm-6 0a6 6 0 1112 0 6 6 0 01-12 0zM3 21c0-3.314 4.03-6 9-6s9 2.686 9 6' },
   { id: 'sec-lang',          label: langStore.t.secLang,          color: '#f59e0b', iconPath: 'M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' },
   { id: 'sec-security',      label: langStore.t.secSecurity,      color: '#10b981', iconPath: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
+  { id: 'sec-billing',       label: langStore.t.secBilling,       color: '#4C67CF', iconPath: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
   { id: 'sec-danger',        label: langStore.t.secAccount,       color: '#ef4444', iconPath: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
 ])
 
@@ -2665,7 +2909,17 @@ const lockedSettings = computed(() => [
   { label: langStore.t.privacy ?? 'Privacy', d: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
 ])
 
-const pronounPresets = ['он/его', 'она/её', 'они/их']
+const PRONOUN_MAP: Record<'he' | 'she' | 'they', Record<Lang, string>> = {
+  he:   { RU: 'он/его',  EN: 'he/him',   JP: '彼/彼を',     CN: '他/他的',   DE: 'er/ihm',   FR: 'il/lui',   ES: 'él/le',   PT: 'ele/dele' },
+  she:  { RU: 'она/её',  EN: 'she/her',  JP: '彼女/彼女を', CN: '她/她的',   DE: 'sie/ihr',  FR: 'elle/elle', ES: 'ella/le', PT: 'ela/dela' },
+  they: { RU: 'они/их',  EN: 'they/them',JP: '彼ら/彼らを', CN: '他们/他们的', DE: 'sie/ihnen', FR: 'iels/leur', ES: 'elle/le', PT: 'elu/delu' },
+}
+const pronounPresets = computed(() => (['he', 'she', 'they'] as const).map((k) => PRONOUN_MAP[k][langStore.currentLang]))
+
+const primarySpeciesLabel = computed(() => {
+  const sp = userStore.fursona?.species?.[0]
+  return sp ? speciesLabelFor(sp, langStore.currentLang) : ''
+})
 
 const birthdayVisibilityOptions = computed(() => [
   { value: 'hidden',    label: langStore.t.birthdayVisibilityHidden },
@@ -2688,6 +2942,7 @@ const privacyOnlyMeOptions = computed(() => [
 const privacyRows = computed(() => [
   { field: 'profile_visibility',       label: langStore.t.profileVisibilityLabel,      options: privacyOnlyMeOptions.value },
   { field: 'friends_list_visibility',  label: langStore.t.friendsListVisibilityLabel,  options: privacyOnlyMeOptions.value },
+  { field: 'relationship_status_visibility', label: langStore.t.relationshipVisibilityLabel, options: privacyOnlyMeOptions.value },
   { field: 'messages_privacy',         label: langStore.t.messagesPrivacyLabel,        options: privacyNobodyOptions.value },
   { field: 'comments_privacy',         label: langStore.t.commentsPrivacyLabel,        options: privacyNobodyOptions.value },
   { field: 'mentions_privacy',         label: langStore.t.mentionsPrivacyLabel,        options: privacyNobodyOptions.value },
@@ -2833,31 +3088,15 @@ function formatBirthDate(date: string): string {
   return `${d}.${m}.${y}`
 }
 
-// ── Fursona species helpers ────────────────────────────────────────────────
-const fursonaSpeciesList = [
-  'Волк', 'Лис', 'Дракон', 'Кошка', 'Собака', 'Кролик', 'Олень', 'Выдра',
-  'Медведь', 'Рысь', 'Тигр', 'Лошадь', 'Летучая мышь', 'Гиена', 'Ящерица',
-  'Птица', 'Змея', 'Панда', 'Белка', 'Сергал', 'Мышь', 'Акула', 'Лев', 'Енот',
-]
-const customSpeciesInput = ref('')
-const selectedSpecies = computed(() =>
-  form.persona ? form.persona.split(',').map(s => s.trim()).filter(Boolean) : [],
-)
-function toggleSpecies(sp: string) {
-  const cur = selectedSpecies.value
-  if (cur.includes(sp)) {
-    form.persona = cur.filter(s => s !== sp).join(', ')
-  } else {
-    form.persona = [...cur, sp].join(', ')
+function ageLabel(n: number): string {
+  if (langStore.currentLang === 'RU') {
+    const word = n % 10 === 1 && n % 100 !== 11 ? 'год'
+      : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'года'
+      : 'лет'
+    return `${n} ${word}`
   }
-}
-function addCustomSpecies() {
-  const v = customSpeciesInput.value.trim()
-  if (!v) return
-  if (!selectedSpecies.value.includes(v)) {
-    form.persona = [...selectedSpecies.value, v].join(', ')
-  }
-  customSpeciesInput.value = ''
+  if (langStore.currentLang === 'JP' || langStore.currentLang === 'CN') return `${n}${langStore.t.yearsOldSuffix}`
+  return `${n} ${langStore.t.yearsOldSuffix}`
 }
 
 const fursonaColorSwatches = [
@@ -2888,7 +3127,7 @@ const socialNetworks = [
   { key: 'instagram',   label: 'Instagram',     color: '#E4405F', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>` },
   { key: 'youtube',     label: 'YouTube',       color: '#FF0000', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>` },
   { key: 'twitch',      label: 'Twitch',        color: '#9146FF', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>` },
-  { key: 'furaffinity', label: 'FurAffinity',   color: '#FAAF3A', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm.75 4.5c.414 0 .75.336.75.75s-.336.75-.75.75-.75-.336-.75-.75.336-.75.75-.75zM9 6.75A.75.75 0 0 1 9.75 6h4.5a.75.75 0 0 1 0 1.5H9.75A.75.75 0 0 1 9 6.75zm-.75 3a.75.75 0 0 1 .75-.75h6a.75.75 0 0 1 0 1.5h-6a.75.75 0 0 1-.75-.75zm9 4.5c0 2.9-2.35 5.25-5.25 5.25S6.75 17.15 6.75 14.25c0-.414.336-.75.75-.75s.75.336.75.75c0 2.07 1.68 3.75 3.75 3.75s3.75-1.68 3.75-3.75a.75.75 0 0 1 1.5 0z"/></svg>` },
+  { key: 'furaffinity', label: 'FurAffinity',   color: '#FAAF3A', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="15.2" rx="5.2" ry="4.6"/><ellipse cx="5.3" cy="9.6" rx="2.2" ry="2.9" transform="rotate(-24 5.3 9.6)"/><ellipse cx="9.4" cy="5.4" rx="2.1" ry="2.8" transform="rotate(-10 9.4 5.4)"/><ellipse cx="14.6" cy="5.4" rx="2.1" ry="2.8" transform="rotate(10 14.6 5.4)"/><ellipse cx="18.7" cy="9.6" rx="2.2" ry="2.9" transform="rotate(24 18.7 9.6)"/></svg>` },
   { key: 'vk',          label: 'ВКонтакте',     color: '#4C75A3', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.684 0H8.316C1.592 0 0 1.592 0 8.316v7.368C0 22.408 1.592 24 8.316 24h7.368C22.408 24 24 22.408 24 15.684V8.316C24 1.592 22.391 0 15.684 0zm3.692 17.123h-1.744c-.66 0-.862-.523-2.049-1.714-1.033-1.01-1.49-1.135-1.744-1.135-.356 0-.458.102-.458.593v1.566c0 .424-.135.678-1.252.678-1.846 0-3.896-1.118-5.335-3.202C4.624 10.857 4.03 8.57 4.03 8.096c0-.254.102-.491.593-.491h1.744c.44 0 .61.203.78.677.863 2.49 2.303 4.675 2.896 4.675.22 0 .322-.102.322-.66V9.721c-.068-1.186-.695-1.287-.695-1.71 0-.204.17-.407.44-.407h2.743c.372 0 .508.203.508.643v3.473c0 .372.17.508.271.508.22 0 .407-.136.813-.542 1.252-1.406 2.151-3.574 2.151-3.574.119-.254.322-.491.763-.491h1.744c.525 0 .644.27.525.643-.22 1.017-2.354 4.031-2.354 4.031-.186.305-.254.44 0 .78.186.254.796.779 1.202 1.253.745.847 1.32 1.558 1.473 2.049.17.474-.085.716-.576.716z"/></svg>` },
   { key: 'discord',     label: 'Discord',       color: '#7289DA', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>` },
   { key: 'github',      label: 'GitHub',        color: '#fff',    svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.605-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>` },
@@ -3079,8 +3318,11 @@ const mySoonEventId    = ref<string | null>(null)
 async function loadSoonEvents() {
   soonEventsLoading.value = true
   try {
+    if (!groupsStore.myGroups.length) await groupsStore.loadMyGroups().catch(() => {})
+    const myGroupIds = new Set(groupsStore.myGroups.map(m => m.group_id))
     const { data } = await api.get('/groups/events', { params: { upcoming: true, limit: 50, sort: 'popular' } })
-    soonEventsList.value = ((data.data?.events ?? []) as EventItem[]).filter(e => e.group?.type === 'event')
+    soonEventsList.value = ((data.data?.events ?? []) as EventItem[])
+      .filter(e => e.group?.type === 'event' && myGroupIds.has(e.group_id))
   } catch {
     soonEventsList.value = []
   } finally {
@@ -3154,14 +3396,6 @@ async function clearSoonSelection() {
     soonSaving.value = false
   }
 }
-
-// ── Fursona steps ─────────────────────────────────────────────────────────
-const fursonaSteps = computed(() => [
-  { label: 'Вид',      done: !!form.persona,                                    locked: false },
-  { label: 'Имя',      done: !!form.fursona_name,                               locked: !form.persona },
-  { label: 'Характер', done: form.likes.length > 0 || form.dislikes.length > 0, locked: !form.persona },
-  { label: 'Фото',     done: false,                                              locked: true },
-])
 
 // ── Active section (accordion) ────────────────────────────────────────────
 const openSection = ref('sec-basic')

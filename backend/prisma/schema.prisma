@@ -119,6 +119,7 @@ model User {
   // Fursona & Fursuit
   fursona                      Fursona?
   fursuits                     Fursuit[]
+  referenceImages               FursonaReferenceImage[]
   // Shop
   shopItems                    UserShopItem[]
   // Dealers Den v2
@@ -141,6 +142,24 @@ model User {
   online_status_visibility     String                @default("everyone") @db.VarChar(20)
   friends_list_visibility      String                @default("everyone") @db.VarChar(20)
   profile_visibility           String                @default("everyone") @db.VarChar(20)
+  relationship_status_visibility String              @default("everyone") @db.VarChar(20)
+  payment_region                String?               @db.VarChar(10)
+  paymentMethods                PaymentMethod[]
+}
+
+model PaymentMethod {
+  id          String   @id @default(uuid()) @db.Uuid
+  user_id     String   @db.Uuid
+  brand       String   @db.VarChar(20)
+  last4       String   @db.VarChar(4)
+  exp_month   Int
+  exp_year    Int
+  holder_name String   @db.VarChar(60)
+  is_default  Boolean  @default(false)
+  created_at  DateTime @default(now())
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
 }
 
 model OAuthAccount {
@@ -906,7 +925,7 @@ model VerificationRequest {
   created_at       DateTime @default(now())
   reviewed_at      DateTime?
   reviewed_by      String?  @db.Uuid
-  verification_type String?  @db.VarChar(30)  // general, artist, master, event
+  verification_type String?  @db.VarChar(30)  // artist, master, fursuiter, popular, writer, organizer, event
   evidence_urls    String[] @default([])
   badge_type       String?  @db.VarChar(30)  // verified, artist, master, event
 
@@ -1335,23 +1354,36 @@ model Fursona {
   name                   String    @default("") @db.VarChar(80)
   /// Hardcoded species list — stored as text array for multi-species characters
   species                String[]  @default([])
+  /// Free-text species when "Other" is selected in `species`
+  species_other          String?   @db.VarChar(50)
   /// Hex color palette, e.g. ["#FF5733", "#C70039"]
   colors                 String[]  @default([])
   likes_dislikes_visible Boolean   @default(true)
   likes                  String[]  @default([])
   dislikes               String[]  @default([])
-  /// URL of the uploaded reference sheet (stored in MinIO/R2)
-  reference_image_url    String?
-  /// Mark reference sheet as NSFW / 18+
-  reference_is_nsfw      Boolean   @default(false)
-  /// Artist / author who created the reference sheet
-  reference_artist_name  String?   @db.VarChar(100)
-  reference_artist_url   String?   @db.VarChar(500)
   created_at             DateTime  @default(now())
   updated_at             DateTime  @updatedAt
   deleted_at             DateTime?
 
   user                   User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+// ── Fursona reference gallery (1:N with User) ────────────────────────────────
+model FursonaReferenceImage {
+  id           String    @id @default(uuid()) @db.Uuid
+  user_id      String    @db.Uuid
+  image_url    String
+  /// Mark this reference image as NSFW / 18+
+  is_nsfw      Boolean   @default(false)
+  artist_name  String?   @db.VarChar(100)
+  artist_url   String?   @db.VarChar(500)
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  deleted_at   DateTime?
+
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
 }

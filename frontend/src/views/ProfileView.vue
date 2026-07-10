@@ -19,267 +19,6 @@
     <input ref="bannerFileInput" type="file" accept="image/*" class="sr-only" @change="onBannerFileChange" />
     <input ref="avatarFileInput" type="file" accept="image/*" class="sr-only" @change="onAvatarFileChange" />
 
-    <!-- ─── Edit Profile Modal ───────────────────────────────────────────── -->
-    <Transition name="fade">
-      <div v-if="showEditModal" class="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4" @click.self="showEditModal = false">
-        <div class="w-full max-w-lg bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
-          <div class="flex items-center justify-between px-6 py-4 border-b border-brand-border sticky top-0 bg-brand-card z-10">
-            <h3 class="font-bold text-white text-lg">
-              {{ editSection === 'bio' ? langStore.t.aboutTab : editSection === 'fursona' ? langStore.t.fursonaSettingsTitle : editSection === 'fursuit' ? langStore.t.fursuitTitle : editSection === 'contacts' ? langStore.t.secContacts : editSection === 'basics' ? langStore.t.secBasic : editSection === 'socials' ? langStore.t.socialNetworksLabel : langStore.t.editProfileBtn }}
-            </h3>
-            <button @click="showEditModal = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
-              <BIcon name="X" class="w-4 h-4" />
-            </button>
-          </div>
-
-          <div class="p-6 space-y-4">
-            <!-- Basics: display_name, pronouns, job_title -->
-            <template v-if="editSection === 'basics'">
-              <div>
-                <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5">Имя</label>
-                <input v-model="editForm.display_name" type="text" maxlength="50" placeholder="Отображаемое имя"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5">Местоимения</label>
-                <input v-model="editForm.pronouns" type="text" maxlength="30" placeholder="он/его, она/её, они/их…"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5">Должность / специализация</label>
-                <input v-model="editForm.job_title" type="text" maxlength="80" placeholder="Художник, Программист…"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
-              </div>
-              <div v-if="!(viewedProfile as any)?.is_verified">
-                <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5">Творчество с (дата)</label>
-                <input v-model="editForm.artist_since" type="date" :max="todayISO"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
-                <p class="text-[10px] text-white/40 mt-1">Определяет ваш значок стажа художника</p>
-              </div>
-            </template>
-
-            <!-- Bio -->
-            <template v-if="editSection === 'bio'">
-              <div>
-                <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5">О себе</label>
-                <textarea v-model="editForm.bio" rows="5" maxlength="300" placeholder="Расскажи о себе…"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all resize-none"></textarea>
-                <p class="text-[11px] text-white/55 mt-1 text-right">{{ (editForm.bio ?? '').length }}/300</p>
-              </div>
-            </template>
-
-            <!-- Fursona -->
-            <template v-if="editSection === 'fursona'">
-              <!-- Hero banner -->
-              <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-accent/20 via-purple-500/10 to-pink-500/10 border border-brand-accent/20 p-5 mb-1">
-                <div class="absolute top-0 right-0 w-32 h-32 bg-brand-accent/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                <div class="flex items-center gap-3 relative z-10">
-                  <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-accent to-purple-500 flex items-center justify-center shadow-lg shadow-brand-accent/25">
-                    <BIcon name="PawPrint" class="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h4 class="text-sm font-extrabold text-white">Твоя фурсона</h4>
-                    <p class="text-[11px] text-white/50 mt-0.5">Расскажи о своём персонаже — заполни все поля</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Имя и вид -->
-              <div class="p-4 bg-gradient-to-br from-brand-bg/80 to-brand-card/40 border border-brand-border/60 rounded-2xl space-y-3">
-                <p class="text-xs font-bold text-brand-accent uppercase tracking-wider flex items-center gap-1.5">
-                  <span class="w-5 h-5 rounded-md bg-brand-accent/15 flex items-center justify-center text-[10px] font-black text-brand-accent">1</span>
-                  Основная информация
-                </p>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="block text-xs font-semibold text-white/55 mb-1.5">Имя персонажа</label>
-                    <input v-model="editForm.fursona_name" type="text" maxlength="80" placeholder="Как зовут фурсону…"
-                      class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all" />
-                  </div>
-                  <div>
-                    <label class="block text-xs font-semibold text-white/55 mb-1.5">Вид / порода</label>
-                    <input v-model="editForm.persona" type="text" placeholder="Волк, Дракон, Лис…"
-                      class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all" />
-                  </div>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="block text-xs font-semibold text-white/55 mb-1.5">Пол персонажа</label>
-                    <select v-model="editForm.fursona_gender"
-                      class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all appearance-none">
-                      <option value="">{{ langStore.t.genderNone }}</option>
-                      <option value="male">{{ langStore.t.genderMale }}</option>
-                      <option value="female">{{ langStore.t.genderFemale }}</option>
-                      <option value="nonbinary">{{ langStore.t.genderNonbinary }}</option>
-                      <option value="androgynous">{{ langStore.t.genderAndrogyne }}</option>
-                      <option value="other">{{ langStore.t.genderOther }}</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label class="block text-xs font-semibold text-white/55 mb-1.5">Цвет</label>
-                    <div class="flex items-center gap-2">
-                      <input v-model="editForm.fursona_color" type="color"
-                        class="w-10 h-10 rounded-xl border border-brand-border cursor-pointer bg-transparent p-0.5" />
-                      <input v-model="editForm.fursona_color" type="text" maxlength="20" placeholder="#A855F7"
-                        class="flex-1 bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Описание / особенности -->
-              <div class="p-4 bg-gradient-to-br from-brand-bg/80 to-brand-card/40 border border-brand-border/60 rounded-2xl space-y-3">
-                <p class="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <span class="w-5 h-5 rounded-md bg-purple-500/15 flex items-center justify-center text-[10px] font-black text-purple-400">2</span>
-                  Особенности и характер
-                </p>
-                <div>
-                  <label class="block text-xs font-semibold text-white/55 mb-1.5">Описание / особенности</label>
-                  <textarea v-model="editForm.fursona_description" rows="4" maxlength="500"
-                    placeholder="Опиши внешность, характер, историю… Всё, что делает персонажа уникальным."
-                    class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent focus:ring-1 focus:ring-brand-accent/30 transition-all resize-none leading-relaxed"></textarea>
-                  <p class="text-[11px] text-white/40 mt-1 text-right">{{ (editForm.fursona_description ?? '').length }}/500</p>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                  <div>
-                    <label class="block text-xs font-semibold text-white/55 mb-1.5">Любит</label>
-                    <input :value="editForm.likes?.join(', ')" @input="editForm.likes = ($event.target as HTMLInputElement).value.split(',').map(s => s.trim()).filter(Boolean)"
-                      type="text" placeholder="Музыка, Горы…"
-                      class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
-                  </div>
-                  <div>
-                    <label class="block text-xs font-semibold text-white/55 mb-1.5">Не любит</label>
-                    <input :value="editForm.dislikes?.join(', ')" @input="editForm.dislikes = ($event.target as HTMLInputElement).value.split(',').map(s => s.trim()).filter(Boolean)"
-                      type="text" placeholder="Шум, Понедельник…"
-                      class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
-                  </div>
-                </div>
-              </div>
-
-              <!-- Реф-лист -->
-              <div class="p-4 bg-gradient-to-br from-brand-bg/80 to-brand-card/40 border border-brand-border/60 rounded-2xl space-y-3">
-                <p class="text-xs font-bold text-pink-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <span class="w-5 h-5 rounded-md bg-pink-500/15 flex items-center justify-center text-[10px] font-black text-pink-400">3</span>
-                  Реф-лист
-                </p>
-                <input ref="fursonaRefInput" type="file" accept="image/*" class="sr-only" @change="onFursonaRefUpload" />
-                <div v-if="editForm.fursona_photo_url" class="relative group/ref rounded-xl overflow-hidden border border-brand-border">
-                  <img :src="editForm.fursona_photo_url" class="w-full max-h-48 object-cover" />
-                  <div class="absolute inset-0 bg-black/50 opacity-0 group-hover/ref:opacity-100 transition-all flex items-center justify-center gap-3">
-                    <button type="button" @click="(fursonaRefInput as any)?.click()" class="px-3 py-1.5 bg-white/15 hover:bg-white/25 backdrop-blur-sm rounded-lg text-xs font-bold text-white transition-all">
-                      <BIcon name="RefreshCw" class="w-3 h-3 inline mr-1" />Заменить
-                    </button>
-                    <button type="button" @click="editForm.fursona_photo_url = ''" class="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 backdrop-blur-sm rounded-lg text-xs font-bold text-rose-300 transition-all">
-                      <BIcon name="Trash2" class="w-3 h-3 inline mr-1" />Удалить
-                    </button>
-                  </div>
-                </div>
-                <button v-else type="button" @click="(fursonaRefInput as any)?.click()" :disabled="isUploadingRef"
-                  class="w-full py-6 border-2 border-dashed border-brand-border/60 hover:border-brand-accent/40 rounded-xl flex flex-col items-center gap-2 transition-all group/upload cursor-pointer">
-                  <div class="w-12 h-12 rounded-2xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center group-hover/upload:scale-105 transition-transform">
-                    <span v-if="isUploadingRef" class="w-5 h-5 border-2 border-pink-400 border-t-transparent rounded-full animate-spin" />
-                    <BIcon v-else name="Image" class="w-6 h-6 text-pink-400" />
-                  </div>
-                  <p class="text-xs font-bold text-white/55 group-hover/upload:text-white transition-colors">Загрузить реф-лист</p>
-                  <p class="text-[10px] text-white/35">PNG, JPG до 10 МБ</p>
-                </button>
-              </div>
-            </template>
-
-            <!-- Fursuit -->
-            <template v-if="editSection === 'fursuit'">
-              <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-4">
-                <div class="flex items-center justify-between">
-                  <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
-                    <span class="text-base">🐾</span> Показывать вкладку «Фурсьют»
-                  </p>
-                  <button type="button" @click="editForm.has_fursuit = !editForm.has_fursuit"
-                    class="relative w-11 h-6 rounded-full border transition-all flex-shrink-0"
-                    :class="editForm.has_fursuit ? 'bg-brand-accent/20 border-brand-accent/60' : 'bg-brand-bg border-brand-border'">
-                    <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-all"
-                      :class="editForm.has_fursuit ? 'translate-x-5 bg-brand-accent' : 'translate-x-0 bg-white/40'"></span>
-                  </button>
-                </div>
-
-                <div v-if="editForm.has_fursuit" class="space-y-3">
-                  <div>
-                    <label class="block text-xs font-semibold text-white/55 mb-1">Описание фурсьюта</label>
-                    <textarea v-model="editForm.fursuit_description"
-                      placeholder="Расскажи о своём фурсьюте…"
-                      class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all resize-none"
-                      rows="4" maxlength="300"></textarea>
-                  </div>
-                  <div>
-                    <label class="block text-xs font-semibold text-white/55 mb-1">Мастер (изготовитель)</label>
-                    <input v-model="editForm.fursuit_maker" type="text"
-                      placeholder="Имя или ник мастера…"
-                      class="w-full bg-brand-card border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all"
-                      maxlength="200" />
-                  </div>
-                </div>
-              </div>
-            </template>
-
-            <!-- Contacts -->
-            <template v-if="editSection === 'contacts'">
-              <div>
-                <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5">Город</label>
-                <input v-model="editForm.location" type="text" maxlength="100" placeholder="Москва, Санкт-Петербург…"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5">Страна</label>
-                <input v-model="editForm.country" type="text" maxlength="80" placeholder="Россия, Германия…"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5">Сайт</label>
-                <input v-model="editForm.website" type="url" placeholder="https://…"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/60 focus:outline-none focus:border-brand-accent transition-all" />
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5">Статус отношений</label>
-                <select v-model="editForm.relationship_status"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-accent transition-all">
-                  <option value="">{{ langStore.t.relStatusNone }}</option>
-                  <option value="single">{{ langStore.t.relStatusSingle }}</option>
-                  <option value="in_relationship">{{ langStore.t.relStatusInRel }}</option>
-                  <option value="married">{{ langStore.t.relStatusMarried }}</option>
-                  <option value="complicated">{{ langStore.t.relStatusComplicated }}</option>
-                  <option value="open">{{ langStore.t.relStatusOpen }}</option>
-                  <option value="looking">{{ langStore.t.relStatusLooking }}</option>
-                </select>
-              </div>
-            </template>
-
-            <!-- Socials -->
-            <template v-if="editSection === 'socials'">
-              <p class="text-xs text-white/35">Укажи username или полную ссылку</p>
-              <div v-for="net in socialNetworks" :key="net.key" class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border border-brand-border"
-                  :style="{ backgroundColor: net.color + '22', borderColor: net.color + '55' }">
-                  <BIcon :name="net.iconName" class="w-4 h-4" :style="{ color: net.color }" />
-                </div>
-                <div class="flex-1">
-                  <label class="block text-[11px] font-semibold text-white/55 mb-1">{{ net.label }}</label>
-                  <input :value="editForm.social_links?.[net.key] ?? ''"
-                    @input="editForm.social_links = { ...(editForm.social_links ?? {}), [net.key]: ($event.target as HTMLInputElement).value }"
-                    type="text" :placeholder="net.key === 'telegram' ? '@username' : net.key === 'discord' ? 'username#0000' : net.key === 'other' ? 'https://example.com' : '@username'"
-                    class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white placeholder-brand-muted/50 focus:outline-none focus:border-brand-accent transition-all" />
-                </div>
-              </div>
-            </template>
-
-            <button @click="saveEditModal" :disabled="isSavingEdit"
-              class="inline-flex items-center gap-2 px-6 py-2.5 bg-brand-accent hover:bg-brand-accent-plus text-white text-sm font-bold rounded-xl transition-all disabled:opacity-50 shadow-sm">
-              <span v-if="isSavingEdit" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Сохранить
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-
     <!-- ─── Badges Modal ───────────────────────────────────────────── -->
     <Transition name="fade">
       <div v-if="showBadgesModal" class="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4" @click.self="showBadgesModal = false">
@@ -434,12 +173,12 @@
               </button>
             </div>
 
-            <!-- Bottom-right: persona chip — raised so it doesn't hide behind the card overlap -->
+            <!-- Bottom-right: species chip — sourced from the canonical fursona species -->
             <div class="absolute bottom-8 right-4 z-20 flex gap-2">
-              <span v-if="viewedProfile.persona"
+              <span v-if="profileFursona?.species?.length"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm border"
                 :style="accentStyleSubtle">
-                <span class="text-sm leading-none">{{ personaEmoji(viewedProfile.persona) }}</span>{{ viewedProfile.persona }}
+                <span class="text-sm leading-none">{{ speciesEmoji(profileFursona.species[0]) }}</span>{{ primarySpeciesLabel }}
               </span>
             </div>
           </div>
@@ -536,7 +275,7 @@
                           </div>
                           <!-- Empty own profile -->
                           <span v-if="!profileStatus.text && !profileStatus.emoji && !profileStatus.music && isOwnProfile"
-                            class="text-[11px] text-white/80">+ Статус</span>
+                            class="text-[11px] text-white/80">{{ langStore.t.addStatusLabel }}</span>
                           <span v-if="statusTimeRemaining" class="block mt-0.5 text-[9px] opacity-40">{{ statusTimeRemaining }}</span>
                         </div>
                         <!-- Arrow tail -->
@@ -736,7 +475,17 @@
                               </div>
                               <div>
                                 <p class="text-[10px] text-pink-300/60 uppercase tracking-widest font-bold">{{ langStore.t.relationsLabel }}</p>
-                                <p class="text-sm text-white font-bold">{{ { single: 'Свободен/а', in_relationship: 'В отношениях', relationship: 'В отношениях', married: 'В браке', complicated: 'Всё сложно', open: 'Открытые', open_relationship: 'Открытые отношения', looking: 'В поиске', secret: 'Секрет' }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}</p>
+                                <p class="text-sm text-white font-bold">{{ {
+                                  single: langStore.t.relStatusSingle,
+                                  in_relationship: langStore.t.relStatusInRel,
+                                  relationship: langStore.t.relStatusInRel,
+                                  married: langStore.t.relStatusMarried,
+                                  complicated: langStore.t.relStatusComplicated,
+                                  open: langStore.t.relStatusOpen,
+                                  open_relationship: langStore.t.relStatusOpen,
+                                  looking: langStore.t.relStatusLooking,
+                                  secret: langStore.t.relStatusSecret,
+                                }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}</p>
                               </div>
                             </div>
                           </template>
@@ -745,7 +494,17 @@
                           <template v-else>
                             <p class="text-[10px] text-pink-300/60 uppercase tracking-widest font-bold mb-2 flex items-center gap-1.5">
                               <BIcon name="Heart" class="w-3 h-3 text-pink-400" />
-                              {{ { single: 'Свободен/а', in_relationship: 'В отношениях', relationship: 'В отношениях', married: 'В браке', complicated: 'Всё сложно', open: 'Открытые', open_relationship: 'Открытые отношения', looking: 'В поиске', secret: 'Секрет' }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}
+                              {{ {
+                                  single: langStore.t.relStatusSingle,
+                                  in_relationship: langStore.t.relStatusInRel,
+                                  relationship: langStore.t.relStatusInRel,
+                                  married: langStore.t.relStatusMarried,
+                                  complicated: langStore.t.relStatusComplicated,
+                                  open: langStore.t.relStatusOpen,
+                                  open_relationship: langStore.t.relStatusOpen,
+                                  looking: langStore.t.relStatusLooking,
+                                  secret: langStore.t.relStatusSecret,
+                                }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}
                             </p>
                             <!-- Two avatars with heart between -->
                             <div class="flex items-center gap-2">
@@ -782,21 +541,21 @@
                       </div>
 
                       <!-- Персонаж / фурсона с именем и цветом -->
-                      <div v-if="viewedProfile.persona"
+                      <div v-if="profileFursona?.species?.length"
                         class="flex items-center gap-3 px-4 py-3.5 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/30 transition-colors group">
                         <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-xl"
-                          :style="(viewedProfile as any).fursona_color ? `background:${(viewedProfile as any).fursona_color}20;border:1px solid ${(viewedProfile as any).fursona_color}35` : 'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1)'">
-                          {{ personaEmoji(viewedProfile.persona) }}
+                          :style="profileFursona.colors?.length ? `background:${profileFursona.colors[0]}20;border:1px solid ${profileFursona.colors[0]}35` : 'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1)'">
+                          {{ speciesEmoji(profileFursona.species[0]) }}
                         </div>
                         <div class="flex-1 min-w-0">
                           <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold mb-0.5">{{ langStore.t.characterLabel }}</p>
                           <div class="flex items-center gap-2">
-                            <p class="text-sm text-white font-bold truncate">{{ (viewedProfile as any).fursona_name || viewedProfile.persona }}</p>
-                            <span v-if="(viewedProfile as any).fursona_name" class="text-xs text-white/45 font-medium">{{ viewedProfile.persona }}</span>
+                            <p class="text-sm text-white font-bold truncate">{{ profileFursona.name || primarySpeciesLabel }}</p>
+                            <span v-if="profileFursona.name" class="text-xs text-white/45 font-medium">{{ primarySpeciesLabel }}</span>
                           </div>
-                          <div v-if="(viewedProfile as any).fursona_color" class="flex items-center gap-1.5 mt-1">
-                            <span class="w-3.5 h-3.5 rounded-md border border-black/20 flex-shrink-0 shadow-sm" :style="`background:${(viewedProfile as any).fursona_color}`"></span>
-                            <span class="text-[10px] text-white/40 font-mono">{{ (viewedProfile as any).fursona_color }}</span>
+                          <div v-if="profileFursona.colors?.length" class="flex items-center gap-1.5 mt-1">
+                            <span class="w-3.5 h-3.5 rounded-md border border-black/20 flex-shrink-0 shadow-sm" :style="`background:${profileFursona.colors[0]}`"></span>
+                            <span class="text-[10px] text-white/40 font-mono">{{ profileFursona.colors[0] }}</span>
                           </div>
                         </div>
                         <button v-if="isOwnProfile" @click="openEditModal('fursona')"
@@ -826,7 +585,7 @@
                         <BIcon name="MapPin" class="w-4 h-4 text-white/50" />
                       </div>
                       <div class="min-w-0 flex-1">
-                        <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Местоположение</p>
+                        <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">{{ langStore.t.locationCardLabel }}</p>
                         <p class="text-sm text-white/80 font-semibold truncate">{{ [viewedProfile.location, (viewedProfile as any).country].filter(Boolean).join(', ') }}</p>
                         <a v-if="viewedProfile.website" :href="viewedProfile.website" target="_blank"
                           class="text-xs text-brand-accent hover:underline truncate block mt-0.5">{{ viewedProfile.website.replace(/^https?:\/\//, '') }}</a>
@@ -850,13 +609,13 @@
                     class="flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-amber-500/8 to-transparent border border-amber-500/20 rounded-2xl">
                     <BIcon name="Palette" class="w-4 h-4 text-amber-400 flex-shrink-0" />
                     <div>
-                      <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Творчество с</p>
-                      <p class="text-sm text-amber-300 font-bold">{{ new Date((viewedProfile as any).artist_since).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }) }}</p>
+                      <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">{{ langStore.t.artistSinceLabel }}</p>
+                      <p class="text-sm text-amber-300 font-bold">{{ new Date((viewedProfile as any).artist_since).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'long', year: 'numeric' }) }}</p>
                     </div>
                   </div>
 
                     <!-- Пусто (только редактируемый профиль) -->
-                    <div v-if="isOwnProfile && !viewedProfile.relationship_status && !viewedProfile.persona" class="pt-1">
+                    <div v-if="isOwnProfile && !viewedProfile.relationship_status && !profileFursona?.species?.length" class="pt-1">
                       <p class="text-xs text-white/30 text-center">{{ langStore.t.addInfoInSettings }}</p>
                     </div>
 
@@ -864,15 +623,15 @@
                     <div v-if="isOwnProfile" class="flex gap-2 flex-wrap pt-2 border-t border-brand-border/40">
                       <button @click="openEditModal('basics')"
                         class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white/55 hover:text-white bg-brand-bg border border-brand-border hover:border-brand-accent/40 rounded-xl transition-all">
-                        <BIcon name="User" class="w-3 h-3" /> Основное
+                        <BIcon name="User" class="w-3 h-3" /> {{ langStore.t.secBasic }}
                       </button>
                       <button @click="openEditModal('contacts')"
                         class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white/55 hover:text-white bg-brand-bg border border-brand-border hover:border-brand-accent/40 rounded-xl transition-all">
-                        <BIcon name="MapPin" class="w-3 h-3" /> Контакты
+                        <BIcon name="MapPin" class="w-3 h-3" /> {{ langStore.t.secContacts }}
                       </button>
                       <button @click="openEditModal('socials')"
                         class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white/55 hover:text-white bg-brand-bg border border-brand-border hover:border-brand-accent/40 rounded-xl transition-all">
-                        <BIcon name="AtSign" class="w-3 h-3" /> Соцсети
+                        <BIcon name="AtSign" class="w-3 h-3" /> {{ langStore.t.socialNetworksLabel }}
                       </button>
                     </div>
 
@@ -918,7 +677,7 @@
                                   :style="profileFursona.colors?.length
                                     ? `background:${profileFursona.colors[0]}20;border-color:${profileFursona.colors[0]}40;color:${profileFursona.colors[0]}`
                                     : 'background:rgba(124,58,237,0.15);border-color:rgba(124,58,237,0.3);color:#a78bfa'">
-                                  {{ sp }}
+                                  {{ speciesDisplay(sp) }}
                                 </span>
                               </div>
                             </div>
@@ -946,23 +705,24 @@
                         <div class="p-4 grid grid-cols-1 xl:grid-cols-[1fr_1.15fr] gap-4">
                           <!-- Левая колонка: референс -->
                           <div class="space-y-2">
-                            <!-- Референс изображение -->
-                            <button v-if="profileFursona.reference_image_url" type="button"
+                            <!-- Референс изображение (галерея) -->
+                            <button v-if="userStore.referenceImages.length" type="button"
                               class="w-full relative rounded-2xl overflow-hidden border border-brand-border/60 group shadow-lg"
                               style="height:280px"
-                              @click="openFursonaRef(profileFursona!.reference_image_url!)">
-                              <img :src="profileFursona.reference_image_url"
+                              @click="openReferencesAlbum">
+                              <img :src="userStore.referenceImages[0].image_url"
                                 class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                :class="profileFursona.reference_is_nsfw && !nsfwMode ? 'blur-xl' : ''"
+                                :class="userStore.referenceImages[0].is_nsfw && !nsfwMode ? 'blur-xl' : ''"
                                 alt="Референс фурсоны" />
                               <div class="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent group-hover:from-black/60 transition-all"></div>
-                              <div v-if="profileFursona.reference_is_nsfw && !nsfwMode"
+                              <div v-if="userStore.referenceImages[0].is_nsfw && !nsfwMode"
                                 class="absolute inset-0 flex flex-col items-center justify-center gap-2">
                                 <span class="px-3 py-1.5 rounded-xl bg-black/70 border border-rose-500/50 text-rose-400 text-xs font-bold">18+ NSFW</span>
                                 <span class="text-white/60 text-xs">Скрыто</span>
                               </div>
-                              <div v-else class="absolute top-3 left-3">
+                              <div v-else class="absolute top-3 left-3 flex items-center gap-1.5">
                                 <span class="px-2.5 py-1 rounded-lg bg-black/50 border border-white/15 text-[10px] font-bold text-white/85 uppercase tracking-wider backdrop-blur-sm">Reference</span>
+                                <span v-if="userStore.referenceImages.length > 1" class="px-2 py-1 rounded-lg bg-black/50 border border-white/15 text-[10px] font-bold text-white/85 backdrop-blur-sm">+{{ userStore.referenceImages.length - 1 }}</span>
                               </div>
                               <div class="absolute bottom-3 left-4 right-4 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
                                 <span class="text-white text-sm font-bold">{{ profileFursona.name }}</span>
@@ -984,20 +744,6 @@
                                   <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-black/60 text-white backdrop-blur-sm">{{ c }}</span>
                                 </span>
                               </div>
-                            </div>
-
-                            <!-- Кредит художника референса -->
-                            <div v-if="profileFursona.reference_artist_name"
-                              class="flex items-center gap-2 px-2 py-1.5 rounded-xl bg-brand-bg/60 border border-brand-border/50 mt-1">
-                              <svg class="w-3 h-3 text-white/35 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
-                              </svg>
-                              <span class="text-[10px] text-white/35">Арт:</span>
-                              <a v-if="profileFursona.reference_artist_url"
-                                :href="profileFursona.reference_artist_url" target="_blank" rel="noopener noreferrer"
-                                class="text-[11px] font-semibold text-brand-accent hover:underline truncate"
-                                @click.stop>{{ profileFursona.reference_artist_name }}</a>
-                              <span v-else class="text-[11px] font-semibold text-white/60 truncate">{{ profileFursona.reference_artist_name }}</span>
                             </div>
                           </div>
 
@@ -1031,13 +777,6 @@
                                     </div>
                                     <div>
                                       <p class="text-sm font-semibold text-white/40">Предпочтения не указаны</p>
-                                      <p v-if="profileFursona.reference_artist_name" class="text-xs text-white/25 mt-1">
-                                        Реф нарисован:
-                                        <a v-if="profileFursona.reference_artist_url"
-                                          :href="profileFursona.reference_artist_url" target="_blank" rel="noopener noreferrer"
-                                          class="text-brand-accent hover:underline font-semibold">{{ profileFursona.reference_artist_name }}</a>
-                                        <span v-else class="text-white/50 font-semibold">{{ profileFursona.reference_artist_name }}</span>
-                                      </p>
                                     </div>
                                   </div>
                                   <!-- Есть хотя бы что-то → два блока -->
@@ -1089,7 +828,7 @@
                                     <div class="flex flex-wrap gap-1 justify-end">
                                       <span v-for="sp in profileFursona.species" :key="sp"
                                         class="px-2 py-0.5 rounded-md text-xs font-bold"
-                                        style="background:rgba(124,58,237,0.2);color:#a78bfa">{{ sp }}</span>
+                                        style="background:rgba(124,58,237,0.2);color:#a78bfa">{{ speciesDisplay(sp) }}</span>
                                     </div>
                                   </div>
                                   <div v-if="profileFursona.colors?.length"
@@ -1436,8 +1175,8 @@
               </div>
 
               <!-- ── Content card ──────────────────────────────────────── -->
-              <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
-                <div class="p-4 space-y-3">
+              <div>
+                <div class="space-y-3">
 
                   <!-- POSTS / REPAWS -->
                   <template v-if="['posts', 'repaws'].includes(activeContentTab)">
@@ -1766,19 +1505,19 @@
                   <button @click="showFollowersModal = true"
                     class="flex flex-col items-center gap-1 py-4 px-2 hover:bg-brand-bg/60 transition-all group cursor-pointer">
                     <span class="text-lg font-extrabold text-white group-hover:text-brand-accent transition-colors leading-none">{{ followers.length }}</span>
-                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Подписчики</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">{{ langStore.t.tabFollowers }}</span>
                   </button>
                   <button
                     @click="openGroupsModal"
                     :class="(isOwnProfile || relation.friends || userGroupsList.some(g => g.is_pinned)) ? 'hover:bg-brand-bg/60 cursor-pointer group' : 'cursor-default'"
                     class="flex flex-col items-center gap-1 py-4 px-2 transition-all">
                     <span class="text-lg font-extrabold text-white leading-none" :class="(isOwnProfile || relation.friends || userGroupsList.some(g => g.is_pinned)) ? 'group-hover:text-brand-accent transition-colors' : ''">{{ groupsCount }}</span>
-                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Группы</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">{{ langStore.t.groups }}</span>
                   </button>
                   <button @click="showFollowingModal = true"
                     class="flex flex-col items-center gap-1 py-4 px-2 hover:bg-brand-bg/60 transition-all group cursor-pointer">
                     <span class="text-lg font-extrabold text-white group-hover:text-brand-accent transition-colors leading-none">{{ following.length }}</span>
-                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Подписки</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">{{ langStore.t.tabFollowing }}</span>
                   </button>
                 </div>
               </div>
@@ -1877,11 +1616,11 @@
                     </div>
                   </div>
                   <!-- Fursona species -->
-                  <div v-if="viewedProfile.persona" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
-                    <span class="text-base leading-none flex-shrink-0">{{ personaEmoji(viewedProfile.persona) }}</span>
+                  <div v-if="profileFursona?.species?.length" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
+                    <span class="text-base leading-none flex-shrink-0">{{ speciesEmoji(profileFursona.species[0]) }}</span>
                     <div class="min-w-0">
                       <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.fursonaTab }}</p>
-                      <p class="text-xs text-brand-offwhite font-semibold truncate">{{ viewedProfile.persona }}</p>
+                      <p class="text-xs text-brand-offwhite font-semibold truncate">{{ primarySpeciesLabel }}</p>
                     </div>
                   </div>
                   <!-- Pronouns -->
@@ -2096,7 +1835,7 @@
           <!-- Date label -->
           <p v-if="avatarGallery[avatarGalleryIndex]" class="text-center text-white/35 text-xs mt-2">
             <span v-if="avatarGalleryIndex === 0">Текущая аватарка</span>
-            <span v-else>{{ new Date(avatarGallery[avatarGalleryIndex].created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) }}</span>
+            <span v-else>{{ new Date(avatarGallery[avatarGalleryIndex].created_at).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'long', year: 'numeric' }) }}</span>
           </p>
         </div>
       </div>
@@ -2124,10 +1863,14 @@
             <div v-for="(item, idx) in openAlbum.urls" :key="idx"
               @click.stop="openMediaLightbox(item.url, openAlbum!.urls.map(u => u.url), idx)"
               class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-brand-border/60 hover:border-brand-accent/60 bg-brand-bg transition-all">
-              <img v-if="isImage(item.url)" :src="item.url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+              <img v-if="isImage(item.url)" :src="item.url"
+                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                :class="item.is_nsfw && !nsfwMode ? 'blur-lg' : ''"
+                loading="lazy" />
               <div v-else class="w-full h-full flex items-center justify-center bg-brand-bg/60">
                 <BIcon name="Play" class="w-8 h-8 text-white/55" />
               </div>
+              <span v-if="item.is_nsfw" class="absolute top-1 left-1 text-[9px] font-bold px-1 py-0.5 rounded bg-rose-600/90 text-white leading-none">18+</span>
               <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
                 <BIcon name="ZoomIn" class="w-6 h-6 text-white" />
               </div>
@@ -2142,7 +1885,7 @@
       <div v-if="showFursonaRefViewer" class="fixed inset-0 z-[610] bg-black/92 flex items-center justify-center p-4" @click.self="showFursonaRefViewer = false">
         <div class="w-full max-w-6xl bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden">
           <div class="flex items-center justify-between px-5 py-3 border-b border-brand-border bg-gradient-to-r from-brand-bg to-brand-card">
-            <h3 class="text-white font-bold text-lg truncate">Референс {{ (viewedProfile as any)?.fursona_name || viewedProfile?.persona || viewedProfile?.display_name }}</h3>
+            <h3 class="text-white font-bold text-lg truncate">Референс {{ profileFursona?.name || viewedProfile?.display_name }}</h3>
             <button @click="showFursonaRefViewer = false"
               class="w-9 h-9 flex items-center justify-center rounded-xl bg-brand-bg hover:bg-brand-border text-white/70 hover:text-white transition-all">
               <BIcon name="X" class="w-4 h-4" />
@@ -2153,8 +1896,8 @@
               <img :src="activeFursonaRef" class="w-full max-h-[70vh] object-contain" alt="Референс фурсоны" />
             </div>
             <div class="flex flex-wrap gap-2">
-              <span v-if="viewedProfile?.persona" class="px-3 py-1.5 rounded-lg bg-brand-bg border border-brand-border text-xs font-semibold text-white/80">{{ viewedProfile.persona }}</span>
-              <span v-if="(viewedProfile as any)?.fursona_name" class="px-3 py-1.5 rounded-lg bg-brand-bg border border-brand-border text-xs font-semibold text-white/80">{{ (viewedProfile as any).fursona_name }}</span>
+              <span v-if="primarySpeciesLabel" class="px-3 py-1.5 rounded-lg bg-brand-bg border border-brand-border text-xs font-semibold text-white/80">{{ primarySpeciesLabel }}</span>
+              <span v-if="profileFursona?.name" class="px-3 py-1.5 rounded-lg bg-brand-bg border border-brand-border text-xs font-semibold text-white/80">{{ profileFursona.name }}</span>
               <span v-if="viewedProfile?.pronouns" class="px-3 py-1.5 rounded-lg bg-brand-bg border border-brand-border text-xs font-semibold text-white/80">{{ viewedProfile.pronouns }}</span>
             </div>
             <div v-if="fursonaRefPalette.length" class="flex flex-wrap gap-2">
@@ -2193,7 +1936,7 @@
           <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0">
             <div class="flex items-center gap-2.5">
               <BIcon name="Users" class="w-5 h-5 text-brand-accent" />
-              <h3 class="font-bold text-white text-base">Подписчики</h3>
+              <h3 class="font-bold text-white text-base">{{ langStore.t.tabFollowers }}</h3>
               <span class="text-xs font-bold bg-brand-accent/15 text-brand-accent px-2 py-0.5 rounded-full">{{ followers.length }}</span>
             </div>
             <button @click="showFollowersModal = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
@@ -2224,7 +1967,7 @@
           <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0">
             <div class="flex items-center gap-2.5">
               <BIcon name="UserPlus" class="w-5 h-5 text-emerald-400" />
-              <h3 class="font-bold text-white text-base">Подписки</h3>
+              <h3 class="font-bold text-white text-base">{{ langStore.t.tabFollowing }}</h3>
               <span class="text-xs font-bold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full">{{ following.length }}</span>
             </div>
             <button @click="showFollowingModal = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
@@ -2258,7 +2001,7 @@
           <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0">
             <div class="flex items-center gap-2.5">
               <BIcon name="Users" class="w-5 h-5 text-violet-400" />
-              <h3 class="font-bold text-white text-base">Группы</h3>
+              <h3 class="font-bold text-white text-base">{{ langStore.t.groups }}</h3>
               <span class="text-xs font-bold bg-violet-500/15 text-violet-400 px-2 py-0.5 rounded-full">{{ userGroupsCount }}</span>
             </div>
             <button @click="showGroupsModal = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
@@ -2495,7 +2238,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useHead } from '@unhead/vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUserStore, type UserProfile, type Fursona, type Fursuit } from '@/stores/user'
-import { useLangStore } from '@/stores/lang'
+import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import PostComments from '@/components/PostComments.vue'
 import PostCard from '@/components/PostCard.vue'
 import MentionTextarea from '@/components/MentionTextarea.vue'
@@ -2510,6 +2253,7 @@ import StoryViewer from '@/components/StoryViewer.vue'
 import api from '@/api'
 import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
 import { onAvatarError } from '@/composables/useAvatarFallback'
+import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
 import {
   User, Users, UserPlus, UserMinus, UserX, UsersRound,
   Bell, MessageSquare, Pencil, Pin, Trash2, MoreHorizontal,
@@ -2528,6 +2272,10 @@ const router = useRouter()
 const authStore = useAuthStore()
 const userStore = useUserStore()
 const langStore = useLangStore()
+const primarySpeciesLabel = computed(() => {
+  const sp = profileFursona.value?.species?.[0]
+  return sp ? speciesLabelFor(sp, langStore.currentLang) : ''
+})
 
 import { useMessagesStore } from '@/stores/messages'
 import { useGroupsStore, type SoonBadge as SoonBadgeType } from '@/stores/groups'
@@ -2593,11 +2341,11 @@ useHead({
   meta: [
     { name: 'robots', content: 'index, follow' },
     { name: 'description', content: () => {
-        if (!viewedProfile.value) return 'Bloomly — творческая социальная сеть.'
+        if (!viewedProfile.value) return 'Bloomly — Creative Social Network.'
         const name = viewedProfile.value.display_name || viewedProfile.value.username
         return (viewedProfile.value.bio)
           ? `${viewedProfile.value.bio.slice(0, 155)}…`
-          : `Профиль ${name} на Bloomly — творческой социальной сети.`
+          : `${name}'s profile on Bloomly — the creative social network.`
       }
     },
     { property: 'og:type', content: 'profile' },
@@ -2611,7 +2359,7 @@ useHead({
     { property: 'og:description', content: () => {
         if (!viewedProfile.value) return ''
         const name = viewedProfile.value.display_name || viewedProfile.value.username
-        return viewedProfile.value.bio?.slice(0, 200) || `Профиль ${name} на Bloomly.`
+        return viewedProfile.value.bio?.slice(0, 200) || `${name}'s profile on Bloomly.`
       }
     },
     { property: 'og:image', content: () => viewedProfile.value?.avatar_url || `${BASE}/og-default.png` },
@@ -2843,10 +2591,21 @@ const mediaAlbumView = ref(false)
 // postId → 'fursona' | 'fursuit' | null  (ярлыки для ручных альбомов)
 const mediaPostLabels = ref<Record<string, 'fursona' | 'fursuit'>>({})
 const mediaTagTarget = ref<string | null>(null) // postId с открытым попапом тегов
-const openAlbum = ref<{ label: string; emoji?: string; urls: { url: string; postId?: string }[] } | null>(null)
+const openAlbum = ref<{ label: string; emoji?: string; urls: { url: string; postId?: string; is_nsfw?: boolean }[] } | null>(null)
+
+function openReferencesAlbum() {
+  openAlbum.value = {
+    label: 'Референсы',
+    emoji: '🖼️',
+    urls: userStore.referenceImages.map((r) => ({ url: r.image_url, is_nsfw: r.is_nsfw })),
+  }
+}
 
 // ── Fursona / fursuit для просматриваемого профиля ───────────────────────────
 const profileFursona = ref<Fursona | null>(null)
+function speciesDisplay(sp: string): string {
+  return sp === 'Other' && profileFursona.value?.species_other ? profileFursona.value.species_other : sp
+}
 const profileFursuits = ref<Fursuit[]>([])
 const profileFursonaLoading = ref(false)
 const profileFursuitsLoading = ref(false)
@@ -2960,7 +2719,6 @@ const { nsfwEnabled: nsfwMode } = useNsfwMode()
 const showPostForm = ref(false)
 
 // ── Edit modal ────────────────────────────────────────────────────────────────
-const showEditModal = ref(false)
 const showBadgesModal = ref(false)
 const showWalletModal = ref(false)
 const showAvatarViewer = ref(false)
@@ -3039,20 +2797,6 @@ function onGalleryKeydown(e: KeyboardEvent) {
 const showFursonaRefViewer = ref(false)
 const selectedFursonaRef = ref('')
 const fursonaSubTab = ref<'info' | 'personality' | 'features'>('personality')
-const editSection = ref<'basics' | 'bio' | 'fursona' | 'fursuit' | 'contacts' | 'socials'>('bio')
-const isSavingEdit = ref(false)
-const editForm = ref<{
-  display_name?: string; pronouns?: string; job_title?: string; artist_since?: string
-  bio?: string; persona?: string; fursona_name?: string; fursona_gender?: string; fursona_description?: string; fursona_color?: string; fursona_photo_url?: string; likes?: string[]; dislikes?: string[]
-  location?: string; country?: string; website?: string; relationship_status?: string
-  accent_color?: string; social_links?: Record<string, string>
-  has_fursuit?: boolean; fursuit_description?: string; fursuit_maker?: string
-}>({})
-
-const fursonaRefInput = ref<HTMLInputElement | null>(null)
-const isUploadingRef = ref(false)
-
-const todayISO = new Date().toISOString().slice(0, 10)
 
 function openEditModal(section: 'basics' | 'bio' | 'fursona' | 'fursuit' | 'contacts' | 'socials') {
   // Map profile section → settings section ID
@@ -3139,15 +2883,6 @@ async function removeManualInterest(idx: number) {
   ;(viewedProfile.value as any).interests = updated
 }
 
-async function saveEditModal() {
-  isSavingEdit.value = true
-  try {
-    await userStore.updateProfile(editForm.value as any)
-    await loadProfile()
-    showEditModal.value = false
-  } catch {} finally { isSavingEdit.value = false }
-}
-
 // ── S3 uploads ────────────────────────────────────────────────────────────────
 const bannerFileInput = ref<HTMLInputElement | null>(null)
 const avatarFileInput = ref<HTMLInputElement | null>(null)
@@ -3190,24 +2925,6 @@ async function onAvatarFileChange(e: Event) {
   finally {
     isUploadingAvatar.value = false
     if (avatarFileInput.value) avatarFileInput.value.value = ''
-  }
-}
-
-async function onFursonaRefUpload(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  isUploadingRef.value = true
-  try {
-    const fd = new FormData()
-    fd.append('file', file)
-    const res = await api.post('/media/upload?folder=posts', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-    if (res.data.success && res.data.data?.url) {
-      editForm.value.fursona_photo_url = res.data.data.url
-    }
-  } catch (err) { console.error('fursona ref upload failed', err) }
-  finally {
-    isUploadingRef.value = false
-    if (fursonaRefInput.value) fursonaRefInput.value.value = ''
   }
 }
 
@@ -3303,8 +3020,8 @@ const accentStyle = computed(() => {
   return { backgroundColor: `${color}25`, borderColor: `${color}60`, color }
 })
 
-// ── Persona species emoji map ────────────────────────────────────────────────
-function personaEmoji(species: string): string {
+// ── Fursona species emoji map ────────────────────────────────────────────────
+function speciesEmoji(species: string): string {
   const s = (species ?? '').toLowerCase().trim()
   if (/fox|лис/.test(s))                      return '🦊'
   if (/wolf|волк/.test(s))                     return '🐺'
@@ -3479,7 +3196,10 @@ function socialUrl(key: string, val: string) {
   if (key === 'other') return val.startsWith('http') ? val : 'https://' + val
   if (val.startsWith('http')) return val
   const map: Record<string, string> = { telegram: 'https://t.me/', twitter: 'https://x.com/', instagram: 'https://instagram.com/', youtube: 'https://youtube.com/@', twitch: 'https://twitch.tv/', furaffinity: 'https://www.furaffinity.net/user/', vk: 'https://vk.com/', discord: '', github: 'https://github.com/' }
-  return (map[key] ?? '') + val
+  // Users may type the handle with or without a leading "@" — normalize so the
+  // built URL never ends up with none or a doubled "@" (e.g. youtube.com/@@handle).
+  const handle = val.replace(/^@+/, '')
+  return (map[key] ?? '') + handle
 }
 
 // ── NSFW age check ──────────────────────────────────────────────────────────
@@ -3522,17 +3242,6 @@ const togetherSince = computed((): string | null => {
 })
 
 
-// ── Fursona steps ─────────────────────────────────────────────────────────────
-const fursonaSteps = computed(() => {
-  const p = viewedProfile.value
-  return [
-    { label: 'Вид',      iconName: 'PawPrint', done: !!((p as any)?.persona) },
-    { label: 'Характер', iconName: 'Heart',    done: !!((p as any)?.likes?.length || (p as any)?.dislikes?.length) },
-    { label: 'Фото',     iconName: 'Camera',   done: false, locked: true },
-    { label: 'Реф',      iconName: 'Image',    done: false, locked: true },
-  ]
-})
-
 const filteredMediaPosts = computed(() => {
   if (mediaFilter.value === 'photo') return tabPosts.value.filter((p: any) => isImage(p.media_urls?.[0] ?? ''))
   if (mediaFilter.value === 'video') return tabPosts.value.filter((p: any) => !isImage(p.media_urls?.[0] ?? ''))
@@ -3544,7 +3253,7 @@ const mediaAlbums = computed(() => {
   const map = new Map<string, { url: string; created_at: string; postId?: string }[]>()
   for (const post of filteredMediaPosts.value as any[]) {
     const dt = new Date(post.created_at)
-    const label = dt.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+    const label = dt.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'long', year: 'numeric' })
     if (!map.has(label)) map.set(label, [])
     for (const url of (post.media_urls ?? [])) {
       map.get(label)!.push({ url, created_at: post.created_at, postId: post.id })
@@ -3555,13 +3264,20 @@ const mediaAlbums = computed(() => {
 
 // ── Специальные альбомы (Фурсона, Фурсьют, + ярлыки из постов) ──────────────
 const specialAlbums = computed(() => {
-  const albums: { id: string; label: string; emoji: string; urls: { url: string; postId?: string }[] }[] = []
+  const albums: { id: string; label: string; emoji: string; urls: { url: string; postId?: string; is_nsfw?: boolean }[] }[] = []
+
+  // Альбом Референсы
+  if (userStore.referenceImages.length) {
+    albums.push({
+      id: 'references',
+      label: 'Референсы',
+      emoji: '🖼️',
+      urls: userStore.referenceImages.map((r) => ({ url: r.image_url, is_nsfw: r.is_nsfw })),
+    })
+  }
 
   // Альбом Фурсона
   const fursonaUrls: { url: string }[] = []
-  if (profileFursona.value?.reference_image_url) {
-    fursonaUrls.push({ url: profileFursona.value.reference_image_url })
-  }
   // Посты помеченные как фурсона
   for (const post of filteredMediaPosts.value as any[]) {
     if (mediaPostLabels.value[post.id] === 'fursona') {
@@ -3607,7 +3323,7 @@ function setMediaLabel(postId: string, label: 'fursona' | 'fursuit' | null) {
 
 const joinDate = computed(() => {
   if (!viewedProfile.value) return ''
-  return new Date(viewedProfile.value.created_at).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+  return new Date(viewedProfile.value.created_at).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'long', year: 'numeric' })
 })
 
 // ── Birth date, formatted per the owner's chosen public visibility ─────────
@@ -3615,12 +3331,12 @@ const formattedBirthDate = computed(() => {
   const p = viewedProfile.value as any
   if (!p?.birth_date) return null
   const bd = new Date(p.birth_date)
-  const full = () => bd.toLocaleDateString('ru-RU', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' })
+  const full = () => bd.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' })
   if (isOwnProfile.value) return full()
   switch (p.birth_date_visibility) {
     case 'full':      return full()
-    case 'month_day': return bd.toLocaleDateString('ru-RU', { timeZone: 'UTC', day: 'numeric', month: 'long' })
-    case 'year':      return bd.toLocaleDateString('ru-RU', { timeZone: 'UTC', year: 'numeric' })
+    case 'month_day': return bd.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { timeZone: 'UTC', day: 'numeric', month: 'long' })
+    case 'year':      return bd.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { timeZone: 'UTC', year: 'numeric' })
     default:          return null
   }
 })
@@ -3632,7 +3348,7 @@ function formatDate(d: string) {
   if (diff < 60) return `${diff}с назад`
   if (diff < 3600) return `${Math.floor(diff / 60)}м назад`
   if (diff < 86400) return `${Math.floor(diff / 3600)}ч назад`
-  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+  return date.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'short' })
 }
 
 function isImage(url: string) {
@@ -3678,6 +3394,7 @@ async function loadProfile() {
         fetchProfileStories(userId),
         loadProfileFursona(userId),
         loadProfileFursuits(userId),
+        userStore.fetchReferenceImages(userId),
       ])
       if (result.pinnedPost) pinnedPost.value = result.pinnedPost
       profileStatus.emoji = ''; profileStatus.text = ''; profileStatus.expiresAt = 0; profileStatus.color = ''; profileStatus.music = null

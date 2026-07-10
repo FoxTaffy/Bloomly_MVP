@@ -60,24 +60,24 @@ const isAdmin = computed(() => {
 // ── SEO ──────────────────────────────────────────────────────────────────────
 const BASE = 'https://bloomly.fun'
 useHead({
-  title: () => group.value ? `${group.value.name} — Bloomly` : 'Сообщество — Bloomly',
+  title: () => group.value ? `${group.value.name} — Bloomly` : 'Community — Bloomly',
   meta: [
     { name: 'robots', content: 'index, follow' },
     { name: 'description', content: () => {
-        if (!group.value) return 'Bloomly — творческая социальная сеть.'
+        if (!group.value) return 'Bloomly — Creative Social Network.'
         const members = (group.value as any)._count?.members
-        const suffix = members ? ` · ${members} участников` : ''
+        const suffix = members ? ` · ${members} members` : ''
         return group.value.description
           ? group.value.description.slice(0, 160)
-          : `Сообщество ${group.value.name} на Bloomly${suffix}.`
+          : `${group.value.name} — a community on Bloomly${suffix}.`
       }
     },
     { property: 'og:type', content: 'website' },
     { property: 'og:site_name', content: 'Bloomly' },
-    { property: 'og:title', content: () => group.value?.name || 'Сообщество — Bloomly' },
+    { property: 'og:title', content: () => group.value?.name || 'Community — Bloomly' },
     { property: 'og:description', content: () => {
         if (!group.value) return ''
-        return group.value.description?.slice(0, 200) || `Сообщество ${group.value.name} на Bloomly.`
+        return group.value.description?.slice(0, 200) || `${group.value.name} — a community on Bloomly.`
       }
     },
     { property: 'og:image', content: () => (group.value as any)?.avatar_url || `${BASE}/og-default.png` },

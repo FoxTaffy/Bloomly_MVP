@@ -223,10 +223,22 @@ const reviewVerRequest = async (id: string, action: 'approve' | 'reject', reason
 }
 
 const expandedEvidence = ref<string | null>(null)
-const verTypeLabels: Record<string, string> = { artist: 'Художник', master: 'Мастер', event: 'Мероприятие' }
+const verTypeLabels: Record<string, string> = {
+  artist: 'Художник',
+  master: 'Мастер',
+  fursuiter: 'Фурсьютер',
+  popular: 'Блогер',
+  writer: 'Писатель',
+  organizer: 'Организатор',
+  event: 'Мероприятие',
+}
 const verTypeColors: Record<string, string> = {
   artist: 'text-purple-400 bg-purple-400/10 border-purple-400/20',
   master: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
+  fursuiter: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20',
+  popular: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
+  writer: 'text-rose-400 bg-rose-400/10 border-rose-400/20',
+  organizer: 'text-indigo-400 bg-indigo-400/10 border-indigo-400/20',
   event: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
 }
 
@@ -1087,7 +1099,8 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
                       <span v-if="req.verification_type"
                         class="text-xs font-bold px-2 py-0.5 rounded-full border flex items-center gap-1"
                         :class="verTypeColors[req.verification_type] || 'text-blue-400 bg-blue-400/10 border-blue-400/20'">
-                        <img :src="`/icons/badges/${req.verification_type}.svg`" class="w-3 h-3" />
+                        <img v-if="['artist','master','event'].includes(req.verification_type)"
+                          :src="`/icons/badges/${req.verification_type}.svg`" class="w-3 h-3" />
                         {{ verTypeLabels[req.verification_type] || req.verification_type }}
                       </span>
                       <span class="text-[10px] text-white/25">{{ formatDate(req.created_at) }}</span>

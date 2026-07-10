@@ -99,7 +99,7 @@ async function loadData() {
 async function loadStaticData() {
   await Promise.all([
     groupsStore.loadEvents({ upcoming: true, limit: 6 }),
-    groupsStore.loadMyGroups(),
+    authStore.user ? groupsStore.loadMyGroups() : Promise.resolve(),
     authStore.user ? groupsStore.loadMySoonBadges(authStore.user.id) : Promise.resolve(),
   ])
 }
@@ -120,7 +120,7 @@ function switchSidebarTab(tab: typeof sidebarTab.value) {
     groupsStore.loadTrending()
   } else if (tab === 'afisha') {
     groupsStore.loadEvents({ upcoming: true, limit: 20 })
-  } else {
+  } else if (authStore.user) {
     groupsStore.loadMyGroups()
   }
 }

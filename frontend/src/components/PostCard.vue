@@ -298,7 +298,7 @@
         <!-- ── Media carousel ────────────────────────────────────── -->
         <div
           v-if="post.media_urls && post.media_urls.length"
-          class="relative mt-3 rounded-2xl overflow-hidden bg-black/20 group/carousel"
+          class="relative mt-3 rounded-2xl overflow-hidden group/carousel"
           :class="adMode ? 'select-none' : ''"
           @contextmenu="adMode ? ($event as Event).preventDefault() : null"
           @touchstart.passive="carouselTouchStart"

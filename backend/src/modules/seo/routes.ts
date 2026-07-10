@@ -46,7 +46,7 @@ function buildOgHtml(opts: {
   const canonicalRedirect = redirectUrl || url
 
   return `<!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -68,7 +68,7 @@ function buildOgHtml(opts: {
 <meta http-equiv="refresh" content="0;url=${htmlEscape(canonicalRedirect)}"/>
 </head>
 <body>
-<p>Загрузка… <a href="${htmlEscape(canonicalRedirect)}">Нажмите, если перенаправление не сработало</a></p>
+<p>Loading… <a href="${htmlEscape(canonicalRedirect)}">Click here if you are not redirected</a></p>
 </body>
 </html>`
 }
@@ -153,11 +153,11 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
       return reply.status(404).send('Not found')
     }
 
-    const authorName = post.author?.display_name || post.author?.username || 'Пользователь'
-    const title = `${authorName} на Bloomly`
+    const authorName = post.author?.display_name || post.author?.username || 'A user'
+    const title = `${authorName} on Bloomly`
     const description = post.content
       ? post.content.slice(0, 200).replace(/\n/g, ' ')
-      : `Публикация от ${authorName} в Bloomly.`
+      : `A post by ${authorName} on Bloomly.`
     const image = (post.media_urls && Array.isArray(post.media_urls) && post.media_urls.length > 0)
       ? String(post.media_urls[0])
       : undefined
@@ -184,7 +184,7 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
     const title = `${name} (@${user.username})`
     const description = user.bio
       ? user.bio.slice(0, 200)
-      : `Профиль ${name} на Bloomly — творческой социальной сети.`
+      : `${name}'s profile on Bloomly — the creative social network.`
     const url = `${BASE_URL}/profile/${user.username}`
 
     reply.header('Content-Type', 'text/html; charset=utf-8')
@@ -208,10 +208,10 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     const seg = group.slug || group.id
-    const membersStr = group._count.members ? ` · ${group._count.members} участников` : ''
+    const membersStr = group._count.members ? ` · ${group._count.members} members` : ''
     const description = group.description
       ? group.description.slice(0, 200)
-      : `Сообщество ${group.name} на Bloomly${membersStr}.`
+      : `${group.name} — a community on Bloomly${membersStr}.`
     const url = `${BASE_URL}/groups/${seg}`
 
     reply.header('Content-Type', 'text/html; charset=utf-8')

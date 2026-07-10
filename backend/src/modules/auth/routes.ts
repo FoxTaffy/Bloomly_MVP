@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import {
   registerHandler, loginHandler, statsHandler,
-  forgotPasswordHandler, resetPasswordHandler,
+  forgotPasswordHandler, resetPasswordHandler, changePasswordHandler,
   verifyEmailHandler, resendOtpHandler,
   oauthRedirectHandler, oauthCallbackHandler,
   linkInitHandler, getLinkedAccountsHandler, unlinkAccountHandler,
@@ -106,6 +106,21 @@ export async function authRoutes(fastify: FastifyInstance) {
 
   // ── Привязка OAuth-аккаунтов (требует JWT) ────────────────────────────────────
   const auth: import('fastify').RouteShorthandOptions = { onRequest: [fastify.authenticate] };
+
+  fastify.post('/change-password', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      body: {
+        type: 'object', required: ['newPassword'],
+        properties: {
+          currentPassword: { type: 'string' },
+          newPassword:     { type: 'string', minLength: 8, maxLength: 128 },
+        },
+      },
+    },
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+  }, changePasswordHandler as any);
+
   fastify.get('/link-init/:provider',          auth, linkInitHandler as any);
   fastify.get('/linked-accounts',              auth, getLinkedAccountsHandler as any);
   fastify.delete('/linked-accounts/:provider', auth, unlinkAccountHandler as any);
@@ -129,6 +144,7 @@ export async function authRoutes(fastify: FastifyInstance) {
           subscription_tier: true, profile_theme: true, profile_bg_url: true,
           profile_frame: true, is_verified: true, verification_type: true,
           badge_type: true, email_verified: true, onboarding_done: true,
+          payment_region: true,
         },
       });
       if (!user) {

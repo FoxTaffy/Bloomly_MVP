@@ -54,7 +54,6 @@ const routes: RouteRecordRaw[] = [
     path: '/profile/:username',
     name: 'profile',
     component: () => import('@/views/ProfileView.vue'),
-    meta: { requiresAuth: true },
   },
   {
     path: '/bookmarks',
@@ -84,7 +83,6 @@ const routes: RouteRecordRaw[] = [
     path: '/post/:id',
     name: 'post',
     component: () => import('@/views/PostView.vue'),
-    meta: { requiresAuth: true },
   },
   {
     path: '/friends',
@@ -102,13 +100,11 @@ const routes: RouteRecordRaw[] = [
     path: '/groups',
     name: 'groups',
     component: () => import('@/views/GroupsView.vue'),
-    meta: { requiresAuth: true },
   },
   {
     path: '/groups/:slugOrId',
     name: 'group-detail',
     component: () => import('@/views/GroupDetailView.vue'),
-    meta: { requiresAuth: true },
   },
   {
     path: '/groups/:slugOrId/settings',
@@ -120,13 +116,11 @@ const routes: RouteRecordRaw[] = [
     path: '/events/:eventId',
     name: 'event-detail',
     component: () => import('@/views/EventDetailView.vue'),
-    meta: { requiresAuth: true },
   },
   {
     path: '/dealers-den',
     name: 'dealers-den',
     component: () => import('@/views/DealersDenView.vue'),
-    meta: { requiresAuth: true },
   },
   {
     path: '/dealers-den/seller/:username',
@@ -142,7 +136,6 @@ const routes: RouteRecordRaw[] = [
     path: '/dealers-den/:id',
     name: 'dealer-listing',
     component: () => import('@/views/DealerListingView.vue'),
-    meta: { requiresAuth: true },
   },
   {
     path: '/shop',

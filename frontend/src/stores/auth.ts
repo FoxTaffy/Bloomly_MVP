@@ -19,6 +19,7 @@ export interface User {
   email_verified?: boolean
   is_verified?: boolean
   onboarding_done?: boolean
+  payment_region?: string | null
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -175,6 +176,21 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function changePassword(newPassword: string, currentPassword?: string): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const res = await api.post('/auth/change-password', { currentPassword, newPassword })
+      const data = res.data
+      if (!data.success) throw new Error(data.error?.message ?? 'Change password failed')
+    } catch (e: any) {
+      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   async function fetchMe(): Promise<void> {
     if (!token.value) return
     try {
@@ -217,6 +233,6 @@ export const useAuthStore = defineStore('auth', () => {
     token, user, isLoading, isInitialized, error,
     isAuthenticated, displayName, avatarUrl,
     login, register, verifyEmail, resendOtp, loginWithToken,
-    forgotPassword, resetPassword, fetchMe, logout, tryRefresh,
+    forgotPassword, resetPassword, changePassword, fetchMe, logout, tryRefresh,
   }
 })

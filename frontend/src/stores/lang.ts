@@ -2,6 +2,11 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { translations, type Lang } from '../locales/translations'
 
+/** Intl/toLocaleDateString locale for each UI language. */
+export const LANG_TO_LOCALE: Record<Lang, string> = {
+  RU: 'ru-RU', EN: 'en-US', JP: 'ja-JP', CN: 'zh-CN', DE: 'de-DE', FR: 'fr-FR', ES: 'es-ES', PT: 'pt-PT',
+}
+
 const COUNTRY_TO_LANG: Record<string, Lang> = {
   RU: 'RU', BY: 'RU', UA: 'RU', KZ: 'RU', UZ: 'RU', TJ: 'RU', KG: 'RU', TM: 'RU', MD: 'RU', AM: 'RU',
   JP: 'JP',

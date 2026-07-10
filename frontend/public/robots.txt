@@ -18,6 +18,11 @@ Disallow: /automation
 Disallow: /friends
 Disallow: /subscriptions
 Disallow: /stickers
+Disallow: /groups/*/settings
+Disallow: /shop
+Disallow: /my-applications
+Disallow: /my-tickets
+Disallow: /my-todolist
 
 # API — не индексировать
 Disallow: /api/

@@ -1,6 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { usersService } from './service.js';
-import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, JwtPayload } from './types.js';
+import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput, JwtPayload } from './types.js';
 
 
 export async function getUserHandler(
@@ -175,6 +175,57 @@ export async function updateSubscriptionHandler(
   }
 }
 
+export async function listPaymentMethodsHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  const { id: userId } = request.user as JwtPayload;
+  const data = await usersService.listPaymentMethods(userId);
+  return reply.send({ success: true, data, error: null });
+}
+
+export async function addPaymentMethodHandler(
+  request: FastifyRequest<{ Body: { cardNumber: string; expMonth: number; expYear: number; holderName: string; setDefault?: boolean } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = request.user as JwtPayload;
+    const data = await usersService.addPaymentMethod(userId, request.body);
+    return reply.send({ success: true, data, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'PAYMENT_METHOD_ERROR', message: e.message } });
+  }
+}
+
+export async function deletePaymentMethodHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = request.user as JwtPayload;
+    const data = await usersService.deletePaymentMethod(userId, request.params.id);
+    return reply.send({ success: true, data, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'PAYMENT_METHOD_ERROR', message: e.message } });
+  }
+}
+
+export async function setDefaultPaymentMethodHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = request.user as JwtPayload;
+    const data = await usersService.setDefaultPaymentMethod(userId, request.params.id);
+    return reply.send({ success: true, data, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'PAYMENT_METHOD_ERROR', message: e.message } });
+  }
+}
+
 export async function notifyStatusHandler(
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
@@ -271,17 +322,68 @@ export async function upsertFursonaHandler(
   }
 }
 
+// ── Fursona reference gallery handlers ────────────────────────────────────────
+
+export async function getReferenceImagesHandler(
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) {
+  const referenceImages = await usersService.getReferenceImages(request.params.id);
+  return reply.send({ success: true, data: { referenceImages }, error: null });
+}
+
+export async function addReferenceImageHandler(
+  request: FastifyRequest<{ Body: UpsertReferenceImageInput }>,
+  reply: FastifyReply,
+) {
+  const { id: userId } = request.user as JwtPayload;
+  try {
+    const referenceImage = await usersService.addReferenceImage(userId, request.body);
+    return reply.code(201).send({ success: true, data: { referenceImage }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'REFERENCE_CREATE_ERROR', message: e.message } });
+  }
+}
+
+export async function updateReferenceImageHandler(
+  request: FastifyRequest<{ Params: { refId: string }; Body: UpsertReferenceImageInput }>,
+  reply: FastifyReply,
+) {
+  const { id: userId } = request.user as JwtPayload;
+  try {
+    const referenceImage = await usersService.updateReferenceImage(userId, request.params.refId, request.body);
+    return reply.send({ success: true, data: { referenceImage }, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'REFERENCE_UPDATE_ERROR', message: e.message } });
+  }
+}
+
+export async function deleteReferenceImageHandler(
+  request: FastifyRequest<{ Params: { refId: string } }>,
+  reply: FastifyReply,
+) {
+  const { id: userId } = request.user as JwtPayload;
+  try {
+    await usersService.deleteReferenceImage(userId, request.params.refId);
+    return reply.send({ success: true, data: null, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'REFERENCE_DELETE_ERROR', message: e.message } });
+  }
+}
+
 /**
  * Serve a watermarked reference image.
  * Auth required so that only logged-in users can view it.
  * The original MinIO URL is never returned to the browser.
  */
-export async function getReferenceImageHandler(
-  request: FastifyRequest<{ Params: { id: string } }>,
+export async function getWatermarkedReferenceImageHandler(
+  request: FastifyRequest<{ Params: { id: string; refId: string } }>,
   reply: FastifyReply,
 ) {
   try {
-    const result = await usersService.getWatermarkedReference(request.params.id);
+    const result = await usersService.getWatermarkedReferenceImage(request.params.id, request.params.refId);
     if (!result) {
       return reply.code(404).send({ success: false, data: null, error: { code: 'REFERENCE_NOT_FOUND', message: 'Reference image not found' } });
     }

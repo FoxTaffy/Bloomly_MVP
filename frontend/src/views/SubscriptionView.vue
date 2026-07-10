@@ -2,21 +2,19 @@
 import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
-import api from '@/api'
+import SubscriptionPaymentModal from '@/components/SubscriptionPaymentModal.vue'
 
-const router = useRouter()
-const auth   = useAuthStore()
+const auth = useAuthStore()
 
 const nsfwMode   = ref(false)
 const billing    = ref<'monthly' | 'yearly'>('monthly')
-const upgrading  = ref<string | null>(null)
 const toast      = ref('')
 const activeNav  = ref('subscriptions')
+const payingPlan = ref<Plan | null>(null)
 
 // Ранние пользователи = зарегистрировались до апреля 2026
 const isEarlyUser = computed(() => {
@@ -30,6 +28,7 @@ const currentTier = computed(() => (auth.user as any)?.subscription_tier ?? 'fre
 type Plan = {
   id:         string
   label:      string
+  icon:       string
   badge:      string
   badgeColor: string
   priceM:     number
@@ -37,6 +36,7 @@ type Plan = {
   discount:   number
   color:      string
   gradient:   string
+  iconBg:     string
   features:   string[]
   featured?:  boolean
 }
@@ -46,35 +46,47 @@ const plans = computed<Plan[]>(() => {
   return [
     {
       id: 'free', label: 'Free',
+      icon: 'Gift',
       badge: t.planBadgeFree,
       badgeColor: 'text-white/55 bg-white/5 border-white/10',
       priceM: 0, priceY: 0, discount: 0,
-      color: 'text-white/70', gradient: 'from-white/5 to-white/2',
+      color: 'text-white/70',
+      gradient: 'from-white/5 to-white/2',
+      iconBg: 'bg-white/8 text-white/60 border-white/10',
       features: [t.featUnlimitedPosts, t.featFollowAuthors, t.featBasicNotifs, t.featPrivateMsgs],
     },
     {
       id: 'lite', label: 'Lite',
+      icon: 'Zap',
       badge: t.planBadgePopular,
       badgeColor: 'text-sky-400 bg-sky-400/10 border-sky-400/20',
       priceM: 149, priceY: 99, discount: 30,
-      color: 'text-sky-400', gradient: 'from-sky-500/12 to-sky-500/3',
+      color: 'text-sky-400',
+      gradient: 'from-sky-500/12 to-sky-500/3',
+      iconBg: 'bg-sky-400/10 text-sky-400 border-sky-400/25',
       features: [t.featAllFree, t.featProfileTheme, t.featLiteBadge, t.featPrioritySearch, t.featUnlimitedMsgs, t.featStorage5gb],
     },
     {
       id: 'pro', label: 'Pro',
+      icon: 'Crown',
       badge: t.planBadgeBest,
       badgeColor: 'text-brand-accent bg-brand-accent/10 border-brand-accent/20',
       priceM: 349, priceY: 249, discount: 40,
-      color: 'text-brand-accent', gradient: 'from-brand-accent/15 to-brand-accent/3',
+      color: 'text-brand-accent',
+      gradient: 'from-brand-accent/18 to-brand-accent/3',
+      iconBg: 'bg-brand-accent/15 text-brand-accent-minus border-brand-accent/30',
       featured: true,
       features: [t.featAllLite, t.featCustomBg, t.featSteamTheme, t.featAvatarFrames, t.featProBadge, t.featStorage20gb, t.featPostAnalytics, t.featExclStickers],
     },
     {
       id: 'business', label: 'Business',
+      icon: 'Briefcase',
       badge: t.planBadgeBusiness,
       badgeColor: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
       priceM: 899, priceY: 649, discount: 25,
-      color: 'text-amber-400', gradient: 'from-amber-400/12 to-amber-400/3',
+      color: 'text-amber-400',
+      gradient: 'from-amber-400/12 to-amber-400/3',
+      iconBg: 'bg-amber-400/10 text-amber-400 border-amber-400/25',
       features: [t.featAllPro, t.featAdProfile, t.featAdCampaigns, t.featBoostPosts, t.featAdvAnalytics, t.featStorage100gb, t.featPrioritySupport, t.featEarlyAccess],
     },
   ]
@@ -91,27 +103,36 @@ function originalPrice(plan: Plan): number {
   return billing.value === 'yearly' ? plan.priceY : plan.priceM
 }
 
-async function selectPlan(planId: string) {
-  if (planId === currentTier.value || planId === 'free') return
-  upgrading.value = planId
-  try {
-    await api.patch('/users/me/subscription', { tier: planId })
-    // update local user state and persist
-    if (auth.user) {
-      ;(auth.user as any).subscription_tier = planId
-      sessionStorage.setItem('auth_user', JSON.stringify(auth.user))
-    }
-    toast.value = `${planId.charAt(0).toUpperCase() + planId.slice(1)} ${langStore.t.subToastSuccess}`
-    setTimeout(() => { toast.value = '' }, 3000)
-  } catch {
-    toast.value = langStore.t.subToastError
-    setTimeout(() => { toast.value = '' }, 3000)
-  } finally { upgrading.value = null }
+function showToast(msg: string) {
+  toast.value = msg
+  setTimeout(() => { toast.value = '' }, 3000)
+}
+
+function selectPlan(planId: string) {
+  if (planId === currentTier.value) return
+  if (planId === 'free') { showToast(langStore.t.subToastFreeInfo); return }
+  if (planId === 'business') { showToast(langStore.t.subToastBusinessInfo); return }
+  const plan = plans.value.find(p => p.id === planId)
+  if (plan) payingPlan.value = plan
+}
+
+function onPaymentSuccess(planId: string) {
+  if (auth.user) {
+    ;(auth.user as any).subscription_tier = planId
+    sessionStorage.setItem('auth_user', JSON.stringify(auth.user))
+  }
 }
 </script>
 
 <template>
-  <div class="min-h-screen bg-brand-bg text-white font-nunito">
+  <div class="min-h-screen bg-brand-bg text-white font-nunito relative overflow-hidden">
+
+    <!-- Ambient background glow -->
+    <div class="pointer-events-none absolute inset-0 overflow-hidden">
+      <div class="absolute -top-32 left-1/4 w-[36rem] h-[36rem] rounded-full bg-brand-accent/15 blur-[120px]" />
+      <div class="absolute top-40 right-0 w-[28rem] h-[28rem] rounded-full bg-sky-500/10 blur-[110px]" />
+      <div class="absolute bottom-0 left-0 w-[26rem] h-[26rem] rounded-full bg-amber-400/8 blur-[110px]" />
+    </div>
 
     <!-- Toast -->
     <Transition name="toast">
@@ -126,18 +147,18 @@ async function selectPlan(planId: string) {
 
     <AppHeader v-model:nsfwMode="nsfwMode" />
 
-    <div class="max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-8">
+    <div class="relative z-10 max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-8">
       <AppSidebar v-model:activeNav="activeNav" />
 
       <main class="flex-1 min-w-0 pb-28 md:pb-20">
 
         <!-- Hero -->
         <div class="text-center mb-12 pt-4">
-          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-accent/10 border border-brand-accent/20 text-brand-accent text-xs font-bold uppercase tracking-widest mb-6">
+          <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand-accent/10 border border-brand-accent/20 text-brand-accent text-xs font-bold uppercase tracking-widest mb-6 shadow-[0_0_24px_rgba(76,103,207,0.25)]">
             <BIcon name="Sparkles" class="w-3.5 h-3.5" />
             Bloomly Premium
           </div>
-          <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight">
+          <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight bg-gradient-to-b from-white to-white/70 bg-clip-text text-transparent">
             {{ langStore.t.subHeroTitle }}
           </h1>
           <p class="text-lg text-white/55 max-w-xl mx-auto">
@@ -152,66 +173,75 @@ async function selectPlan(planId: string) {
           </div>
 
           <!-- Billing toggle -->
-          <div class="flex items-center justify-center gap-3 mt-8">
+          <div class="relative inline-flex items-center gap-1 mt-8 p-1 rounded-2xl bg-brand-card border border-brand-border shadow-inner">
+            <div class="absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-xl bg-gradient-to-b from-white/15 to-white/5 border border-white/10 shadow-lg transition-transform duration-300 ease-out"
+              :class="billing === 'yearly' ? 'translate-x-[calc(100%+0.5rem)]' : 'translate-x-0'" />
             <button @click="billing = 'monthly'"
-              class="px-5 py-2.5 rounded-2xl text-sm font-bold transition-all"
-              :class="billing === 'monthly' ? 'bg-brand-card text-white shadow-lg border border-brand-border' : 'text-white/55 hover:text-white'">
+              class="relative z-10 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors duration-150 active:scale-95"
+              :class="billing === 'monthly' ? 'text-white' : 'text-white/50 hover:text-white/80'">
               {{ langStore.t.subMonthly }}
             </button>
             <button @click="billing = 'yearly'"
-              class="relative px-5 py-2.5 rounded-2xl text-sm font-bold transition-all"
-              :class="billing === 'yearly' ? 'bg-brand-card text-white shadow-lg border border-brand-border' : 'text-white/55 hover:text-white'">
+              class="relative z-10 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors duration-150 active:scale-95"
+              :class="billing === 'yearly' ? 'text-white' : 'text-white/50 hover:text-white/80'">
               {{ langStore.t.subYearly }}
-              <span class="absolute -top-2 -right-2 text-[9px] font-black bg-brand-success text-white px-1.5 py-0.5 rounded-full">–29%</span>
+              <span class="absolute -top-2.5 -right-3 text-[9px] font-black bg-brand-success text-white px-1.5 py-0.5 rounded-full shadow-[0_0_10px_rgba(102,199,112,0.5)]">–29%</span>
             </button>
           </div>
         </div>
 
         <!-- Plans grid — ticket style -->
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-12">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-12 items-start">
           <div
             v-for="plan in plans"
             :key="plan.id"
-            class="relative ticket-card transition-all duration-300"
+            class="relative ticket-card transition-all duration-300 hover:-translate-y-1.5 active:translate-y-0 active:scale-[0.985]"
             :class="[
-              plan.featured ? 'scale-[1.03]' : '',
+              plan.featured ? 'md:-mt-3 z-10' : '',
               currentTier === plan.id ? 'ring-2 ring-brand-success ring-offset-2 ring-offset-brand-bg rounded-3xl' : '',
             ]"
           >
+            <!-- Featured glow halo -->
+            <div v-if="plan.featured"
+              class="absolute -inset-1 rounded-[28px] opacity-60 blur-md bg-gradient-to-b from-brand-accent/50 to-brand-accent/0 pointer-events-none featured-pulse" />
+
             <!-- Active glow -->
             <div v-if="currentTier === plan.id"
               class="absolute -inset-0.5 rounded-3xl opacity-30 blur-sm"
               :class="`bg-gradient-to-b ${plan.gradient}`" />
 
             <!-- Ticket body -->
-            <div class="relative rounded-3xl border overflow-hidden"
+            <div class="relative rounded-3xl border overflow-hidden backdrop-blur-sm"
               :class="[
                 `bg-gradient-to-b ${plan.gradient}`,
-                plan.featured ? 'border-brand-accent/60 shadow-2xl shadow-brand-accent/20' : 'border-brand-border',
+                plan.featured ? 'border-brand-accent/60 shadow-2xl shadow-brand-accent/25' : 'border-brand-border',
               ]">
 
               <!-- Accent line top -->
-              <div class="h-1 w-full" :class="plan.featured ? 'bg-brand-accent' : 'bg-white/10'" />
+              <div class="h-1 w-full" :class="plan.featured ? 'bg-gradient-to-r from-brand-accent via-brand-accent-minus to-brand-accent' : 'bg-white/10'" />
 
               <!-- Top half: plan info -->
               <div class="px-5 pt-5 pb-4">
-                <!-- Badge row -->
-                <div class="flex items-center justify-between mb-3">
-                  <span class="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full border"
-                    :class="plan.badgeColor">
+                <!-- Icon + badge row -->
+                <div class="flex items-center justify-between mb-4">
+                  <div class="w-11 h-11 rounded-2xl border flex items-center justify-center" :class="plan.iconBg">
+                    <BIcon :name="plan.icon" class="w-5 h-5" />
+                  </div>
+                  <span class="text-[10px] font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full border flex items-center gap-1"
+                    :class="[plan.badgeColor, plan.featured ? 'shadow-[0_0_16px_rgba(76,103,207,0.35)]' : '']">
+                    <BIcon v-if="plan.featured" name="Sparkles" class="w-2.5 h-2.5" />
                     {{ plan.badge }}
                   </span>
-                  <div class="flex items-center gap-1.5">
-                    <span v-if="currentTier === plan.id"
-                      class="text-[10px] font-extrabold uppercase tracking-wider text-brand-success bg-brand-success/10 border border-brand-success/20 px-2.5 py-1 rounded-full flex items-center gap-1">
-                      <BIcon name="CheckCircle" class="w-3 h-3" /> {{ langStore.t.subActive }}
-                    </span>
-                    <BIcon v-if="plan.featured" name="Sparkles" class="w-4 h-4 text-brand-accent" />
-                  </div>
                 </div>
 
                 <!-- Plan name -->
-                <h2 class="text-2xl font-extrabold tracking-tight mb-1" :class="plan.color">{{ plan.label }}</h2>
+                <div class="flex items-center gap-2 mb-1">
+                  <h2 class="text-2xl font-extrabold tracking-tight" :class="plan.color">{{ plan.label }}</h2>
+                  <span v-if="currentTier === plan.id"
+                    class="text-[10px] font-extrabold uppercase tracking-wider text-brand-success bg-brand-success/10 border border-brand-success/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <BIcon name="CheckCircle" class="w-3 h-3" /> {{ langStore.t.subActive }}
+                  </span>
+                </div>
 
                 <!-- Price -->
                 <div class="mb-4">
@@ -221,10 +251,10 @@ async function selectPlan(planId: string) {
                   </template>
                   <template v-else>
                     <div class="flex items-end gap-1.5">
-                      <p class="text-3xl font-extrabold text-white">{{ effectivePrice(plan) }} ₽</p>
-                      <p class="text-sm text-white/55 mb-1">{{ langStore.t.subPerMonth }}</p>
+                      <p class="text-4xl font-extrabold tracking-tight" :class="plan.featured ? 'bg-gradient-to-b from-white to-brand-accent-minus bg-clip-text text-transparent' : 'text-white'">{{ effectivePrice(plan) }} ₽</p>
+                      <p class="text-sm text-white/55 mb-1.5">{{ langStore.t.subPerMonth }}</p>
                     </div>
-                    <div class="flex items-center gap-2 mt-1">
+                    <div class="flex items-center gap-2 mt-1.5 min-h-[1.25rem]">
                       <span v-if="isEarlyUser && plan.discount > 0"
                         class="text-xs text-white/30 line-through">{{ originalPrice(plan) }} ₽</span>
                       <span v-if="isEarlyUser && plan.discount > 0"
@@ -242,7 +272,7 @@ async function selectPlan(planId: string) {
               <!-- Tear-line / perforation divider -->
               <div class="relative px-3 flex items-center gap-0 -my-0.5 z-10">
                 <div class="w-5 h-5 rounded-full bg-brand-bg flex-shrink-0 -ml-4 border border-brand-border" />
-                <div class="flex-1 border-t-2 border-dashed border-white/10 mx-1" />
+                <div class="flex-1 border-t-2 border-dashed border-white/12 mx-1" />
                 <div class="w-5 h-5 rounded-full bg-brand-bg flex-shrink-0 -mr-4 border border-brand-border" />
               </div>
 
@@ -255,13 +285,16 @@ async function selectPlan(planId: string) {
                 </div>
 
                 <!-- Features -->
-                <ul class="space-y-2 mb-5">
+                <ul class="space-y-2.5 mb-5">
                   <li
                     v-for="feature in plan.features"
                     :key="feature"
                     class="flex items-start gap-2 text-xs text-white/65"
                   >
-                    <BIcon name="Check" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5" :class="plan.color" />
+                    <span class="w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 mt-0.5"
+                      :class="plan.iconBg">
+                      <BIcon name="Check" class="w-2.5 h-2.5" />
+                    </span>
                     {{ feature }}
                   </li>
                 </ul>
@@ -269,21 +302,20 @@ async function selectPlan(planId: string) {
                 <!-- CTA -->
                 <button
                   @click="selectPlan(plan.id)"
-                  :disabled="currentTier === plan.id || plan.id === 'free' || upgrading === plan.id"
-                  class="w-full py-2.5 rounded-2xl text-sm font-bold transition-all disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  :disabled="currentTier === plan.id"
+                  class="w-full py-2.5 rounded-2xl text-sm font-bold transition-all duration-150 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-[0.96] hover:brightness-110"
                   :class="currentTier === plan.id
                     ? 'bg-brand-success/10 text-brand-success border border-brand-success/30'
                     : plan.id === 'free'
-                      ? 'bg-white/5 text-white/30 border border-white/10'
+                      ? 'bg-white/5 text-white/40 border border-white/10 hover:bg-white/10 hover:text-white/70'
                       : plan.featured
-                        ? 'bg-brand-accent hover:bg-brand-accent-plus text-white shadow-lg shadow-brand-accent/30'
+                        ? 'bg-gradient-to-r from-brand-accent to-brand-accent-plus text-white shadow-lg shadow-brand-accent/40 hover:shadow-brand-accent/60'
                         : 'bg-white/8 hover:bg-white/15 text-white border border-white/10'"
                 >
-                  <BIcon v-if="upgrading === plan.id" name="Loader2" class="w-4 h-4 animate-spin" />
-                  <BIcon v-else-if="currentTier === plan.id" name="CheckCircle" class="w-4 h-4" />
+                  <BIcon v-if="currentTier === plan.id" name="CheckCircle" class="w-4 h-4" />
                   <BIcon v-else-if="plan.id !== 'free'" name="Ticket" class="w-4 h-4" />
                   <span>
-                    {{ upgrading === plan.id ? langStore.t.subActivating : currentTier === plan.id ? langStore.t.subYourPlan : plan.id === 'free' ? langStore.t.subBasic : `${langStore.t.subActivatePrefix} ${plan.label}` }}
+                    {{ currentTier === plan.id ? langStore.t.subYourPlan : plan.id === 'free' ? langStore.t.subBasic : `${langStore.t.subActivatePrefix} ${plan.label}` }}
                   </span>
                 </button>
               </div>
@@ -292,34 +324,43 @@ async function selectPlan(planId: string) {
         </div>
 
         <!-- FAQ / Comparison highlights -->
-        <div class="bg-brand-card border border-brand-border rounded-3xl p-8 mb-8">
-          <h2 class="text-xl font-extrabold text-white mb-6 flex items-center gap-2">
-            <BIcon name="HelpCircle" class="w-5 h-5 text-brand-accent" />
+        <div class="relative bg-brand-card border border-brand-border rounded-3xl p-8 mb-8 overflow-hidden">
+          <div class="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full bg-brand-accent/10 blur-[90px]" />
+          <h2 class="relative text-xl font-extrabold text-white mb-6 flex items-center gap-2">
+            <span class="w-9 h-9 rounded-xl bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center">
+              <BIcon name="HelpCircle" class="w-[18px] h-[18px] text-brand-accent" />
+            </span>
             {{ langStore.t.subFaqTitle }}
           </h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+          <div class="relative grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6 text-sm">
             <div v-for="faq in [
               { q: langStore.t.subFaqQ1, a: langStore.t.subFaqA1 },
               { q: langStore.t.subFaqQ2, a: langStore.t.subFaqA2 },
               { q: langStore.t.subFaqQ3, a: langStore.t.subFaqA3 },
               { q: langStore.t.subFaqQ4, a: langStore.t.subFaqA4 },
-            ]" :key="faq.q">
-              <div>
-                <p class="font-bold text-white mb-1">{{ faq.q }}</p>
-                <p class="text-white/55">{{ faq.a }}</p>
-              </div>
+            ]" :key="faq.q"
+              class="pb-6 border-b border-white/5 md:border-b-0 last:border-b-0 md:[&:nth-last-child(-n+2)]:pb-0">
+              <p class="font-bold text-white mb-1.5 flex items-center gap-2">
+                <BIcon name="ChevronRight" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+                {{ faq.q }}
+              </p>
+              <p class="text-white/55 leading-relaxed pl-[22px]">{{ faq.a }}</p>
             </div>
           </div>
         </div>
 
-        <!-- Back link -->
-        <button @click="router.back()" class="flex items-center gap-2 text-sm text-white/55 hover:text-white transition-colors">
-          <BIcon name="ArrowLeft" class="w-4 h-4" />
-          {{ langStore.t.backBtn2 }}
-        </button>
-
       </main>
     </div>
+
+    <SubscriptionPaymentModal
+      v-if="payingPlan"
+      :plan="payingPlan"
+      :price="effectivePrice(payingPlan)"
+      :original-price="originalPrice(payingPlan)"
+      :discounted="isEarlyUser && payingPlan.discount > 0"
+      @close="payingPlan = null"
+      @success="onPaymentSuccess"
+    />
   </div>
 </template>
 
@@ -333,5 +374,13 @@ async function selectPlan(planId: string) {
 }
 .ticket-card:hover {
   filter: drop-shadow(0 8px 32px rgba(0,0,0,0.5));
+}
+
+.featured-pulse {
+  animation: featured-pulse 3.5s ease-in-out infinite;
+}
+@keyframes featured-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.75; }
 }
 </style>

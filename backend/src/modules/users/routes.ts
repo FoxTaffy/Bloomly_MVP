@@ -6,13 +6,16 @@ import {
   setPublicKeyHandler, getPublicKeyHandler,
   notifyStatusHandler, notifyToggleHandler,
   updateSubscriptionHandler, deleteAccountHandler,
+  listPaymentMethodsHandler, addPaymentMethodHandler, deletePaymentMethodHandler, setDefaultPaymentMethodHandler,
   deleteAvatarHistoryHandler, restoreAvatarHistoryHandler,
-  getFursonaHandler, upsertFursonaHandler, getReferenceImageHandler,
+  getFursonaHandler, upsertFursonaHandler,
+  getReferenceImagesHandler, addReferenceImageHandler, updateReferenceImageHandler, deleteReferenceImageHandler, getWatermarkedReferenceImageHandler,
   getFursuitsHandler, createFursuitHandler, updateFursuitHandler, deleteFursuitHandler,
 } from './controller.js';
 import {
   getUserParamsSchema, updateUserSchema, updateUsernameSchema, pinPostSchema,
   updateFursonaSchema, updateFursuitSchema, fursuitIdParamSchema,
+  upsertReferenceImageSchema, referenceImageIdParamSchema,
 } from './schemas.js';
 
 export async function usersRoutes(fastify: FastifyInstance) {
@@ -55,6 +58,35 @@ export async function usersRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate],
   }, updateSubscriptionHandler as any);
 
+  // ── Saved payment methods ────────────────────────────────────────────────
+  // GET /api/users/me/payment-methods
+  fastify.get('/me/payment-methods', auth, listPaymentMethodsHandler as any);
+
+  // POST /api/users/me/payment-methods — save a (masked) card
+  fastify.post('/me/payment-methods', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['cardNumber', 'expMonth', 'expYear', 'holderName'],
+        properties: {
+          cardNumber: { type: 'string', minLength: 12, maxLength: 23 },
+          expMonth: { type: 'integer', minimum: 1, maximum: 12 },
+          expYear: { type: 'integer', minimum: 2024, maximum: 2100 },
+          holderName: { type: 'string', minLength: 2, maxLength: 60 },
+          setDefault: { type: 'boolean' },
+        },
+        additionalProperties: false,
+      },
+    },
+    onRequest: [fastify.authenticate],
+  }, addPaymentMethodHandler as any);
+
+  // DELETE /api/users/me/payment-methods/:id
+  fastify.delete('/me/payment-methods/:id', auth, deletePaymentMethodHandler as any);
+
+  // PATCH /api/users/me/payment-methods/:id/default
+  fastify.patch('/me/payment-methods/:id/default', auth, setDefaultPaymentMethodHandler as any);
+
   // PUT /api/users/me/public-key — store E2E public key
   fastify.put('/me/public-key', auth, setPublicKeyHandler as any);
 
@@ -83,24 +115,24 @@ export async function usersRoutes(fastify: FastifyInstance) {
   // PUT  /api/users/me/fursona  — create or update own fursona
   fastify.put('/me/fursona', { schema: updateFursonaSchema, onRequest: [fastify.authenticate] }, upsertFursonaHandler as any);
 
-  // GET  /api/users/me/fursona/reference — serve own watermarked reference (auth)
-  fastify.get('/me/fursona/reference', auth, async (req, reply) => {
-    const { id: userId } = (req as any).user as { id: string };
-    const result = await import('./service.js').then((m) =>
-      m.usersService.getWatermarkedReference(userId),
-    );
-    if (!result) return reply.code(404).send({ success: false, data: null, error: { code: 'REFERENCE_NOT_FOUND', message: 'No reference image' } });
-    return reply
-      .header('Content-Type', result.mimeType)
-      .header('Cache-Control', 'private, no-store')
-      .send(result.buffer);
-  });
-
   // GET  /api/users/:id/fursona — public fursona (likes/dislikes gated by owner setting)
   fastify.get('/:id/fursona', getFursonaHandler as any);
 
-  // GET  /api/users/:id/fursona/reference — watermarked reference (auth required)
-  fastify.get('/:id/fursona/reference', auth, getReferenceImageHandler as any);
+  // ── Fursona reference gallery (1:N per user) ──────────────────────────────
+  // GET  /api/users/:id/fursona/references — public gallery listing
+  fastify.get('/:id/fursona/references', getReferenceImagesHandler as any);
+
+  // GET  /api/users/:id/fursona/references/:refId/watermarked — watermarked image (auth required)
+  fastify.get('/:id/fursona/references/:refId/watermarked', auth, getWatermarkedReferenceImageHandler as any);
+
+  // POST /api/users/me/fursona/references — add a reference image
+  fastify.post('/me/fursona/references', { schema: upsertReferenceImageSchema, onRequest: [fastify.authenticate] }, addReferenceImageHandler as any);
+
+  // PUT  /api/users/me/fursona/references/:refId
+  fastify.put('/me/fursona/references/:refId', { schema: { ...upsertReferenceImageSchema, ...referenceImageIdParamSchema }, onRequest: [fastify.authenticate] }, updateReferenceImageHandler as any);
+
+  // DELETE /api/users/me/fursona/references/:refId
+  fastify.delete('/me/fursona/references/:refId', { schema: referenceImageIdParamSchema, onRequest: [fastify.authenticate] }, deleteReferenceImageHandler as any);
 
   // ── Fursuits (1:N per user) ───────────────────────────────────────────────
   // GET  /api/users/:id/fursuits

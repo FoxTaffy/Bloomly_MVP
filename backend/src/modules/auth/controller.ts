@@ -15,6 +15,7 @@ const FULL_USER_SELECT = {
   subscription_tier: true, profile_theme: true, profile_bg_url: true,
   profile_frame: true, is_verified: true, verification_type: true,
   badge_type: true, email_verified: true, onboarding_done: true,
+  payment_region: true,
 } as const;
 
 // ── 15-минутный access token ──────────────────────────────────────────────────
@@ -183,6 +184,20 @@ export const resetPasswordHandler = async (
     return reply.send({ success: true, data: { message: 'Пароль успешно изменён' }, error: null });
   } catch (e: any) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'RESET_ERROR', message: e.message } });
+  }
+};
+
+// ── Смена пароля (требует JWT) ─────────────────────────────────────────────────
+export const changePasswordHandler = async (
+  request: FastifyRequest<{ Body: { currentPassword?: string; newPassword: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id } = request.user as JwtPayload;
+    await authService.changePassword(id, request.body.currentPassword, request.body.newPassword);
+    return reply.send({ success: true, data: { message: 'Пароль успешно изменён' }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'CHANGE_PASSWORD_ERROR', message: e.message } });
   }
 };
 

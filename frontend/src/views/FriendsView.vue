@@ -264,16 +264,16 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
             <template v-else>
               <div v-if="friendsStore.suggestions.length" class="flex flex-col gap-3">
                 <div v-for="user in friendsStore.suggestions.slice(0, 8)" :key="user.id" class="flex items-center gap-3 group">
-                  <div class="flex-shrink-0 cursor-pointer" @click="router.push(`/profile/${user.username}`)">
+                  <router-link :to="`/profile/${user.username}`" class="flex-shrink-0">
                     <img v-if="user.avatar_url" :src="user.avatar_url" class="w-9 h-9 rounded-full object-cover border border-brand-border" />
                     <div v-else class="w-9 h-9 rounded-full border border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">
                       {{ avatarInitial(user.display_name || user.username) }}
                     </div>
-                  </div>
-                  <div class="min-w-0 flex-1 cursor-pointer" @click="router.push(`/profile/${user.username}`)">
+                  </router-link>
+                  <router-link :to="`/profile/${user.username}`" class="min-w-0 flex-1">
                     <p class="text-sm font-semibold text-brand-offwhite truncate leading-tight">{{ user.display_name || user.username }}</p>
                     <p class="text-xs text-white/55 truncate">@{{ user.username }}</p>
-                  </div>
+                  </router-link>
                   <button class="flex-shrink-0 w-8 h-8 rounded-xl bg-brand-accent/15 hover:bg-brand-accent/30 flex items-center justify-center text-brand-accent transition-colors" @click="handleSendRequest(user.id)">
                     <BIcon name="UserPlus" class="w-4 h-4" />
                   </button>

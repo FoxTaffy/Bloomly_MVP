@@ -17,6 +17,9 @@ export const FURSONA_SPECIES = [
   'Wyvern', 'Kangaroo', 'Hedgehog', 'Otter', 'Ferret',
   'Meerkat', 'Axolotl', 'Octopus', 'Salamander', 'Primate',
   'Demon', 'Angel', 'Alien', 'Kobold', 'Sphinx',
+  'Arctic Fox', 'Cow', 'Horse', 'Sheep', 'Goat', 'Pig',
+  'Squirrel', 'Weasel', 'Badger', 'Serval', 'Caracal',
+  'Cougar', 'Jaguar', 'Husky', 'Werewolf', 'Centaur',
   'Other',
 ] as const
 
@@ -28,14 +31,11 @@ export interface Fursona {
   user_id: string
   name: string
   species: string[]
+  species_other: string | null
   colors: string[]
   likes_dislikes_visible: boolean
   likes: string[]
   dislikes: string[]
-  reference_image_url: string | null
-  reference_is_nsfw: boolean
-  reference_artist_name: string | null
-  reference_artist_url: string | null
   created_at: string
   updated_at: string
 }
@@ -43,14 +43,30 @@ export interface Fursona {
 export interface UpsertFursonaInput {
   name?: string
   species?: string[]
+  species_other?: string | null
   colors?: string[]
   likes_dislikes_visible?: boolean
   likes?: string[]
   dislikes?: string[]
-  reference_image_url?: string | null
-  reference_is_nsfw?: boolean
-  reference_artist_name?: string | null
-  reference_artist_url?: string | null
+}
+
+// ── Fursona reference gallery ────────────────────────────────────────────────
+export interface FursonaReferenceImage {
+  id: string
+  user_id: string
+  image_url: string
+  is_nsfw: boolean
+  artist_name: string | null
+  artist_url: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface UpsertReferenceImageInput {
+  image_url?: string | null
+  is_nsfw?: boolean
+  artist_name?: string | null
+  artist_url?: string | null
 }
 
 // ── Fursuit ───────────────────────────────────────────────────────────────────
@@ -193,6 +209,10 @@ export const useUserStore = defineStore('user', () => {
   const fursuits        = ref<Fursuit[]>([])
   const fursuitsLoading = ref(false)
 
+  // Fursona reference gallery state
+  const referenceImages        = ref<FursonaReferenceImage[]>([])
+  const referenceImagesLoading = ref(false)
+
 
 
   /** Fetch any user's public profile by id. Returns the profile or null. */
@@ -306,6 +326,41 @@ export const useUserStore = defineStore('user', () => {
     fursuits.value = fursuits.value.filter((f) => f.id !== id)
   }
 
+  // ── Fursona reference gallery actions ────────────────────────────────────────
+
+  async function fetchReferenceImages(userId: string): Promise<void> {
+    referenceImagesLoading.value = true
+    try {
+      const res = await api.get(`/users/${userId}/fursona/references`)
+      if (res.data.success) referenceImages.value = res.data.data.referenceImages
+    } catch {
+      referenceImages.value = []
+    } finally {
+      referenceImagesLoading.value = false
+    }
+  }
+
+  async function addReferenceImage(input: UpsertReferenceImageInput): Promise<FursonaReferenceImage> {
+    const res = await api.post('/users/me/fursona/references', input)
+    if (!res.data.success) throw new Error(res.data.error?.message ?? 'Failed to add reference image')
+    const created = res.data.data.referenceImage as FursonaReferenceImage
+    referenceImages.value.push(created)
+    return created
+  }
+
+  async function updateReferenceImage(id: string, input: UpsertReferenceImageInput): Promise<void> {
+    const res = await api.put(`/users/me/fursona/references/${id}`, input)
+    if (!res.data.success) throw new Error(res.data.error?.message ?? 'Failed to update reference image')
+    const updated = res.data.data.referenceImage as FursonaReferenceImage
+    const idx = referenceImages.value.findIndex((r) => r.id === id)
+    if (idx !== -1) referenceImages.value[idx] = updated
+  }
+
+  async function deleteReferenceImage(id: string): Promise<void> {
+    await api.delete(`/users/me/fursona/references/${id}`)
+    referenceImages.value = referenceImages.value.filter((r) => r.id !== id)
+  }
+
   return {
     profile,
     isLoading,
@@ -325,5 +380,12 @@ export const useUserStore = defineStore('user', () => {
     createFursuit,
     updateFursuit,
     deleteFursuit,
+    // Fursona reference gallery
+    referenceImages,
+    referenceImagesLoading,
+    fetchReferenceImages,
+    addReferenceImage,
+    updateReferenceImage,
+    deleteReferenceImage,
   }
 })

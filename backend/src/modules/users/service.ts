@@ -3,11 +3,32 @@ import { deleteFileByUrl } from '../media/service.js';
 import { getUserBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import sharp from 'sharp';
-import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput } from './types.js';
+import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput } from './types.js';
 
 // Sentinel year used to carry a day+month without revealing the real year.
 // Must be a leap year so Feb 29 birthdays don't overflow into March.
 const MONTH_DAY_SENTINEL_YEAR = 2000;
+
+/** Best-effort card brand detection from the BIN prefix — cosmetic only, no real PSP behind this. */
+function detectCardBrand(digits: string): string {
+  if (/^4/.test(digits)) return 'visa';
+  if (/^5[1-5]/.test(digits) || /^2(2[2-9]|[3-6]\d|7[01])/.test(digits)) return 'mastercard';
+  if (/^220[0-4]/.test(digits)) return 'mir';
+  return 'card';
+}
+
+/** Which card networks are usable per payment region (mirrors frontend/src/lib/paymentRegions.ts). */
+const REGION_ALLOWED_BRANDS: Record<string, string[]> = {
+  RU:     ['mir'],
+  US:     ['visa', 'mastercard'],
+  EU:     ['visa', 'mastercard'],
+  CN:     ['visa', 'mastercard'],
+  IN:     ['visa', 'mastercard'],
+  BR:     ['visa', 'mastercard'],
+  GLOBAL: ['visa', 'mastercard', 'mir'],
+};
+
+const CARD_BRAND_LABELS: Record<string, string> = { visa: 'Visa', mastercard: 'Mastercard', mir: 'МИР', card: 'эта карта' };
 
 /** Reduce a birth_date down to whatever granularity its owner allows non-owners to see. */
 function redactBirthDate(birthDate: Date | null, visibility: string | null | undefined): Date | null {
@@ -79,6 +100,8 @@ const PUBLIC_SELECT = {
   online_status_visibility: true,
   friends_list_visibility:  true,
   profile_visibility:       true,
+  relationship_status_visibility: true,
+  payment_region:           true,
 } as const;
 
 export const usersService = {
@@ -126,7 +149,13 @@ export const usersService = {
     // Attach computed badge_level
     const withBadge = { ...raw, badge_level: getUserBadgeLevel((raw as any).artist_since) };
 
-    return { ...withBadge, birth_date: redactBirthDate((raw as any).birth_date, (raw as any).birth_date_visibility) };
+    const result = { ...withBadge, birth_date: redactBirthDate((raw as any).birth_date, (raw as any).birth_date_visibility) };
+
+    if (!(await isAllowedByPrivacy((raw as any).relationship_status_visibility, raw.id, viewerId))) {
+      return { ...result, relationship_status: null, relationship_with: null };
+    }
+
+    return result;
   },
 
   async updateUser(id: string, data: UpdateUserInput) {
@@ -500,17 +529,6 @@ export const usersService = {
 
   /** Create or update the fursona for a user (upsert). */
   async upsertFursona(userId: string, data: UpsertFursonaInput) {
-    // Track reference image replacement in MediaHistory
-    if (data.reference_image_url !== undefined) {
-      const existing = await prisma.fursona.findUnique({ where: { user_id: userId } });
-      if (existing?.reference_image_url && existing.reference_image_url !== data.reference_image_url) {
-        await prisma.mediaHistory.create({
-          data: { user_id: userId, type: 'fursona_reference', url: existing.reference_image_url },
-        });
-        deleteFileByUrl(existing.reference_image_url).catch(() => {});
-      }
-    }
-
     return prisma.fursona.upsert({
       where: { user_id: userId },
       create: { user_id: userId, ...data },
@@ -518,22 +536,75 @@ export const usersService = {
     });
   },
 
+  // ── Fursona reference gallery ────────────────────────────────────────────────
+
+  async getReferenceImages(userId: string) {
+    return prisma.fursonaReferenceImage.findMany({
+      where: { user_id: userId, deleted_at: null },
+      orderBy: { created_at: 'asc' },
+    });
+  },
+
+  async addReferenceImage(userId: string, data: UpsertReferenceImageInput) {
+    if (!data.image_url) throw Object.assign(new Error('image_url is required'), { statusCode: 400 });
+    return prisma.fursonaReferenceImage.create({
+      data: { user_id: userId, ...data, image_url: data.image_url },
+    });
+  },
+
+  async updateReferenceImage(userId: string, refId: string, data: UpsertReferenceImageInput) {
+    const existing = await prisma.fursonaReferenceImage.findFirst({
+      where: { id: refId, user_id: userId, deleted_at: null },
+    });
+    if (!existing) throw Object.assign(new Error('Reference image not found'), { statusCode: 404 });
+
+    if (data.image_url !== undefined && existing.image_url && existing.image_url !== data.image_url) {
+      await prisma.mediaHistory.create({
+        data: { user_id: userId, type: 'fursona_reference', url: existing.image_url },
+      });
+      deleteFileByUrl(existing.image_url).catch(() => {});
+    }
+
+    return prisma.fursonaReferenceImage.update({
+      where: { id: refId },
+      data: { ...data, updated_at: new Date() },
+    });
+  },
+
+  async deleteReferenceImage(userId: string, refId: string) {
+    const existing = await prisma.fursonaReferenceImage.findFirst({
+      where: { id: refId, user_id: userId, deleted_at: null },
+    });
+    if (!existing) throw Object.assign(new Error('Reference image not found'), { statusCode: 404 });
+
+    await prisma.mediaHistory.create({
+      data: { user_id: userId, type: 'fursona_reference', url: existing.image_url },
+    });
+    deleteFileByUrl(existing.image_url).catch(() => {});
+
+    return prisma.fursonaReferenceImage.update({
+      where: { id: refId },
+      data: { deleted_at: new Date() },
+      select: { id: true },
+    });
+  },
+
   /**
-   * Download the reference image from MinIO and composite a Bloomly watermark.
+   * Download a reference image from MinIO and composite a Bloomly watermark.
    * The original URL is never returned to the client — only this
    * protected stream is served through the authenticated endpoint.
    */
-  async getWatermarkedReference(userId: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
-    const fursona = await prisma.fursona.findUnique({
-      where: { user_id: userId },
-      select: { reference_image_url: true, deleted_at: true },
+  async getWatermarkedReferenceImage(userId: string, refId: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
+    const ref = await prisma.fursonaReferenceImage.findFirst({
+      where: { id: refId, user_id: userId, deleted_at: null },
+      select: { image_url: true },
     });
-    if (!fursona?.reference_image_url || fursona.deleted_at) return null;
+    if (!ref?.image_url) return null;
 
     const owner = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } });
     const username = owner?.username ?? 'unknown';
 
-    const response = await fetch(fursona.reference_image_url);
+    const response = await fetch(ref.image_url);
     if (!response.ok) return null;
     const srcBuffer = Buffer.from(await response.arrayBuffer());
 
@@ -622,6 +693,75 @@ export const usersService = {
       data: { deleted_at: new Date() },
       select: { id: true },
     });
+  },
+
+  // ── Saved payment methods (masked card info only — never store PAN/CVV) ──
+  async listPaymentMethods(userId: string) {
+    return prisma.paymentMethod.findMany({
+      where: { user_id: userId },
+      orderBy: [{ is_default: 'desc' }, { created_at: 'desc' }],
+    });
+  },
+
+  async addPaymentMethod(userId: string, input: {
+    cardNumber: string; expMonth: number; expYear: number; holderName: string; setDefault?: boolean;
+  }) {
+    const digits = input.cardNumber.replace(/\D/g, '');
+    if (digits.length < 12 || digits.length > 19) {
+      throw Object.assign(new Error('Invalid card number'), { statusCode: 400 });
+    }
+    const brand = detectCardBrand(digits);
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { payment_region: true } });
+    const allowedBrands = REGION_ALLOWED_BRANDS[user?.payment_region || 'GLOBAL'] ?? REGION_ALLOWED_BRANDS.GLOBAL;
+    if (!allowedBrands.includes(brand)) {
+      throw Object.assign(
+        new Error(`Карты «${CARD_BRAND_LABELS[brand] ?? brand}» недоступны в вашем регионе`),
+        { statusCode: 400 },
+      );
+    }
+    const count = await prisma.paymentMethod.count({ where: { user_id: userId } });
+    if (count >= 5) {
+      throw Object.assign(new Error('You can save up to 5 cards'), { statusCode: 400 });
+    }
+    const makeDefault = input.setDefault ?? count === 0;
+    if (makeDefault) {
+      await prisma.paymentMethod.updateMany({ where: { user_id: userId, is_default: true }, data: { is_default: false } });
+    }
+    return prisma.paymentMethod.create({
+      data: {
+        user_id: userId,
+        brand,
+        last4: digits.slice(-4),
+        exp_month: input.expMonth,
+        exp_year: input.expYear,
+        holder_name: input.holderName.trim().slice(0, 60),
+        is_default: makeDefault,
+      },
+    });
+  },
+
+  async deletePaymentMethod(userId: string, id: string) {
+    const existing = await prisma.paymentMethod.findFirst({ where: { id, user_id: userId } });
+    if (!existing) throw Object.assign(new Error('Payment method not found'), { statusCode: 404 });
+
+    await prisma.paymentMethod.delete({ where: { id } });
+
+    if (existing.is_default) {
+      const next = await prisma.paymentMethod.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' } });
+      if (next) await prisma.paymentMethod.update({ where: { id: next.id }, data: { is_default: true } });
+    }
+    return { id };
+  },
+
+  async setDefaultPaymentMethod(userId: string, id: string) {
+    const existing = await prisma.paymentMethod.findFirst({ where: { id, user_id: userId } });
+    if (!existing) throw Object.assign(new Error('Payment method not found'), { statusCode: 404 });
+
+    await prisma.$transaction([
+      prisma.paymentMethod.updateMany({ where: { user_id: userId, is_default: true }, data: { is_default: false } }),
+      prisma.paymentMethod.update({ where: { id }, data: { is_default: true } }),
+    ]);
+    return { id };
   },
 
 };

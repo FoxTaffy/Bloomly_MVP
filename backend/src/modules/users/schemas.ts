@@ -22,6 +22,9 @@ export const FURSONA_SPECIES = [
   'Wyvern', 'Kangaroo', 'Hedgehog', 'Otter', 'Ferret',
   'Meerkat', 'Axolotl', 'Octopus', 'Salamander', 'Primate',
   'Demon', 'Angel', 'Alien', 'Kobold', 'Sphinx',
+  'Arctic Fox', 'Cow', 'Horse', 'Sheep', 'Goat', 'Pig',
+  'Squirrel', 'Weasel', 'Badger', 'Serval', 'Caracal',
+  'Cougar', 'Jaguar', 'Husky', 'Werewolf', 'Centaur',
   'Other',
 ] as const;
 
@@ -78,6 +81,8 @@ export const updateUserSchema = {
       online_status_visibility: { type: 'string', enum: ['everyone', 'friends', 'nobody'] },
       friends_list_visibility:  { type: 'string', enum: ['everyone', 'friends', 'only_me'] },
       profile_visibility:       { type: 'string', enum: ['everyone', 'friends', 'only_me'] },
+      relationship_status_visibility: { type: 'string', enum: ['everyone', 'friends', 'only_me'] },
+      payment_region:           { type: 'string', maxLength: 10, nullable: true },
     },
     additionalProperties: false,
   },
@@ -115,6 +120,7 @@ export const updateFursonaSchema = {
         items: { type: 'string', enum: [...FURSONA_SPECIES] },
         maxItems: 5,
       },
+      species_other: { type: 'string', maxLength: 50, nullable: true },
       colors: {
         type: 'array',
         // Each color must be a valid 6-digit hex
@@ -132,12 +138,32 @@ export const updateFursonaSchema = {
         items: { type: 'string', maxLength: 100 },
         maxItems: 30,
       },
-      reference_image_url: { type: ['string', 'null'] },
-      reference_is_nsfw: { type: 'boolean' },
-      reference_artist_name: { type: ['string', 'null'], maxLength: 100 },
-      reference_artist_url:  { type: ['string', 'null'], maxLength: 500 },
     },
     additionalProperties: false,
+  },
+};
+
+// ── Fursona reference gallery schemas ─────────────────────────────────────────
+export const upsertReferenceImageSchema = {
+  body: {
+    type: 'object',
+    properties: {
+      image_url: { type: 'string' },
+      is_nsfw: { type: 'boolean' },
+      artist_name: { type: ['string', 'null'], maxLength: 100 },
+      artist_url:  { type: ['string', 'null'], maxLength: 500 },
+    },
+    additionalProperties: false,
+  },
+};
+
+export const referenceImageIdParamSchema = {
+  params: {
+    type: 'object',
+    required: ['refId'],
+    properties: {
+      refId: { type: 'string', format: 'uuid' },
+    },
   },
 };
 

@@ -69,10 +69,10 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
 </script>
 
 <template>
-  <div
+  <router-link
+    :to="`/profile/${user.username}`"
     class="bg-brand-card border border-brand-border rounded-2xl hover:border-brand-accent/40
               transition-all group flex flex-col cursor-pointer relative overflow-visible"
-    @click="openProfile"
   >
 
     <!-- Banner — h-20, clips only inside this div -->
@@ -212,5 +212,5 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
         </button>
       </div>
     </div>
-  </div>
+  </router-link>
 </template>

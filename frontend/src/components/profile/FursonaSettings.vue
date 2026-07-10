@@ -51,20 +51,66 @@
           {{ form.species.length }}/5
         </span>
       </div>
-      <div class="flex flex-wrap gap-1.5">
-        <button
-          v-for="sp in FURSONA_SPECIES"
-          :key="sp"
-          type="button"
-          @click="toggleSpecies(sp)"
-          class="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all select-none"
-          :class="form.species.includes(sp)
-            ? 'border-brand-accent/50 bg-brand-accent/15 text-brand-accent shadow-[0_0_12px_rgba(167,139,250,0.15)]'
-            : 'bg-brand-bg border-brand-border text-white/45 hover:text-white hover:border-white/25'"
-        >
-          <span v-if="form.species.includes(sp)" class="mr-1 text-[10px]">✓</span>{{ speciesLabel(sp) }}
-        </button>
+      <div class="relative">
+        <div class="relative">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          <input
+            v-model="speciesSearch"
+            type="text"
+            :placeholder="t.fursonaSpeciesSearchPlaceholder"
+            class="w-full bg-brand-bg border border-brand-border rounded-xl pl-9 pr-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/50 transition-all"
+            @focus="speciesDropOpen = true"
+            @blur="onSpeciesBlur"
+          />
+        </div>
+        <Transition name="fade">
+          <div v-if="speciesDropOpen && filteredSpecies.length"
+            class="absolute z-30 mt-1 w-full bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-y-auto max-h-52">
+            <button
+              v-for="sp in filteredSpecies"
+              :key="sp"
+              type="button"
+              class="w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-all flex items-center justify-between"
+              :class="form.species.includes(sp) ? 'text-brand-accent font-bold' : 'text-white/70'"
+              @mousedown.prevent="toggleSpecies(sp)"
+            >
+              {{ speciesLabel(sp) }}
+              <span v-if="form.species.includes(sp)" class="text-[10px]">✓</span>
+            </button>
+          </div>
+        </Transition>
       </div>
+      <div v-if="form.species.length" class="flex flex-wrap gap-1.5">
+        <span
+          v-for="sp in form.species"
+          :key="sp"
+          class="flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-xl text-xs font-bold border border-brand-accent/50 bg-brand-accent/15 text-brand-accent shadow-[0_0_12px_rgba(167,139,250,0.15)]"
+        >
+          {{ speciesLabel(sp) }}
+          <button type="button" @click="toggleSpecies(sp)"
+            class="w-4 h-4 flex items-center justify-center rounded-full hover:bg-brand-accent/25 leading-none">×</button>
+        </span>
+      </div>
+      <Transition
+        enter-active-class="transition-all duration-200 ease-out"
+        enter-from-class="opacity-0 -translate-y-1 max-h-0"
+        enter-to-class="opacity-100 translate-y-0 max-h-20"
+        leave-active-class="transition-all duration-150 ease-in"
+        leave-from-class="opacity-100 translate-y-0 max-h-20"
+        leave-to-class="opacity-0 -translate-y-1 max-h-0"
+      >
+        <div v-if="form.species.includes('Other')" class="overflow-hidden">
+          <input
+            v-model="form.species_other"
+            type="text"
+            maxlength="50"
+            :placeholder="t.fursonaSpeciesOtherPlaceholder"
+            class="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-sm font-semibold text-white placeholder-white/20 focus:outline-none focus:border-brand-accent/50 focus:shadow-[0_0_0_3px_rgba(167,139,250,0.08)] transition-all"
+          />
+        </div>
+      </Transition>
     </div>
 
     <!-- ── Цвета персонажа ──────────────────────────────── -->
@@ -124,7 +170,14 @@
               </button>
             </div>
             <div class="flex items-center gap-2 border-t border-brand-border/60 pt-2">
-              <div class="w-6 h-6 rounded-lg border border-brand-border flex-shrink-0" :style="`background:${color}`"></div>
+              <label class="relative w-6 h-6 rounded-lg border border-brand-border flex-shrink-0 cursor-pointer overflow-hidden" :style="`background:${color}`" title="Свой цвет">
+                <input
+                  type="color"
+                  :value="color"
+                  class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  @input="updateColor(idx, ($event.target as HTMLInputElement).value)"
+                />
+              </label>
               <input
                 type="text"
                 :value="color"
@@ -251,69 +304,53 @@
       </div>
     </div>
 
-    <!-- ── Реф-лист ───────────────────────────────────────── -->
+    <!-- ── Реф-лист (галерея) ───────────────────────────────── -->
     <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-3">
-      <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
-        <svg class="w-3.5 h-3.5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-        </svg>
-        {{ t.fursonaRefLabel }}
-      </p>
-      <div v-if="form.reference_image_url" class="flex items-start gap-3">
-        <div class="relative group flex-shrink-0">
-          <img
-            :src="form.reference_image_url"
-            alt="Reference"
-            class="w-24 h-24 rounded-xl object-cover border border-brand-border"
-            :class="form.reference_is_nsfw ? 'blur-sm' : ''"
-            draggable="false"
-          />
-          <div class="absolute inset-0 rounded-xl bg-black/55 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-            <button type="button" @click="form.reference_image_url = null"
-              class="text-white text-xs font-bold px-2 py-1 bg-rose-500/80 rounded-lg">
-              {{ t.fursonaRefRemove }}
-            </button>
+      <div class="flex items-center justify-between">
+        <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+          {{ t.fursonaRefLabel }}
+        </p>
+        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+          :class="userStore.referenceImages.length >= 12
+            ? 'bg-amber-500/15 text-amber-400'
+            : 'bg-brand-accent/10 text-brand-accent/70'">
+          {{ userStore.referenceImages.length }}/12
+        </span>
+      </div>
+      <p class="text-[11px] text-white/30 leading-relaxed">{{ t.fursonaRefHint }}</p>
+
+      <div v-if="userStore.referenceImages.length" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div v-for="item in userStore.referenceImages" :key="item.id"
+          class="group relative p-2 bg-brand-bg border border-brand-border rounded-xl space-y-1.5">
+          <div class="relative">
+            <img :src="item.image_url" alt="Reference"
+              class="w-full aspect-square rounded-lg object-cover"
+              :class="item.is_nsfw ? 'blur-sm' : ''"
+              draggable="false" />
+            <span v-if="item.is_nsfw"
+              class="absolute top-1 left-1 text-[9px] font-bold px-1 py-0.5 rounded bg-rose-600/90 text-white leading-none">18+</span>
+            <button type="button" @click="removeReference(item.id)"
+              class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity">×</button>
           </div>
-        </div>
-        <div class="space-y-2.5 pt-0.5">
-          <p class="text-[11px] text-white/30 leading-relaxed">{{ t.fursonaRefHint }}</p>
-          <!-- NSFW toggle -->
-          <div class="flex items-center gap-2.5">
-            <button
-              type="button"
-              :class="['relative w-10 h-5 rounded-full border transition-all flex-shrink-0',
-                form.reference_is_nsfw
-                  ? 'bg-rose-500/20 border-rose-500/60'
-                  : 'bg-brand-bg border-brand-border']"
-              @click="form.reference_is_nsfw = !form.reference_is_nsfw"
-            >
-              <span :class="['absolute top-0.5 left-0.5 w-4 h-4 rounded-full shadow transition-all',
-                form.reference_is_nsfw ? 'translate-x-5 bg-rose-500' : 'translate-x-0 bg-white/40']"></span>
-            </button>
-            <div>
-              <p class="text-xs font-bold" :class="form.reference_is_nsfw ? 'text-rose-400' : 'text-white/45'">{{ t.fursonaRefNsfw }}</p>
-              <p class="text-[11px] text-white/25">{{ t.fursonaRefNsfwHint }}</p>
-            </div>
-          </div>
-          <!-- Художник / автор референса -->
-          <div class="space-y-1.5 pt-1">
-            <p class="text-[10px] font-bold uppercase tracking-wider text-white/35 flex items-center gap-1">
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
-              </svg>
-              Художник
-            </p>
-            <input v-model="form.reference_artist_name" type="text" maxlength="100"
-              placeholder="Имя художника / ник…"
-              class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-1.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/50 transition-all" />
-            <input v-model="form.reference_artist_url" type="url" maxlength="500"
-              placeholder="Ссылка на профиль (https://…)"
-              class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-1.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/50 transition-all" />
-          </div>
+          <button type="button" @click="toggleReferenceNsfw(item)"
+            class="w-full py-1 rounded-lg text-[9px] font-bold border transition-all"
+            :class="item.is_nsfw
+              ? 'bg-rose-500/15 border-rose-500/40 text-rose-400'
+              : 'bg-brand-bg border-brand-border text-white/40 hover:text-white'">
+            {{ t.fursonaRefNsfw }}
+          </button>
+          <input v-model="item.artist_name" @blur="persistReferenceMeta(item)" type="text" maxlength="100"
+            placeholder="Художник…"
+            class="w-full bg-brand-bg border border-brand-border rounded-lg px-2 py-1 text-[10px] text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/50 transition-all" />
         </div>
       </div>
-      <MediaUpload v-else accept="image/*" folder="fursona" @uploaded="onReferenceUploaded" />
+
+      <MediaUpload v-if="userStore.referenceImages.length < 12" accept="image/*" folder="fursona" multiple @uploaded="onReferenceUploaded" />
+      <p v-if="referenceError" class="text-[11px] text-rose-400">{{ referenceError }}</p>
     </div>
 
     <!-- ── Кнопка сохранения ──────────────────────────────── -->
@@ -347,9 +384,9 @@
 import { reactive, ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useUserStore, FURSONA_SPECIES } from '@/stores/user'
 import { useLangStore } from '@/stores/lang'
-import type { UpsertFursonaInput } from '@/stores/user'
-import type { Lang } from '@/locales/translations'
+import type { UpsertFursonaInput, FursonaReferenceImage } from '@/stores/user'
 import MediaUpload from '@/components/MediaUpload.vue'
+import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
 
 const emit = defineEmits<{ dirty: [val: boolean] }>()
 
@@ -357,76 +394,22 @@ const userStore = useUserStore()
 const langStore = useLangStore()
 const t = computed(() => langStore.t)
 
-// ── Переводы видов ────────────────────────────────────────────────────────────
-const SPECIES_MAP: Record<string, Record<Lang, string>> = {
-  'Canine':             { RU:'Псовые',         EN:'Canine',            JP:'犬系',           CN:'犬系',     DE:'Canide',      FR:'Canidé',      ES:'Cánido',   PT:'Canídeo'   },
-  'Feline':             { RU:'Кошачьи',         EN:'Feline',            JP:'猫系',           CN:'猫系',     DE:'Katze',       FR:'Félin',       ES:'Felino',   PT:'Felino'    },
-  'Dragon':             { RU:'Дракон',          EN:'Dragon',            JP:'ドラゴン',        CN:'龙',       DE:'Drache',      FR:'Dragon',      ES:'Dragón',   PT:'Dragão'    },
-  'Protogen':           { RU:'Протоген',        EN:'Protogen',          JP:'プロトゲン',      CN:'原型犬',   DE:'Protogen',    FR:'Protogen',    ES:'Protogen', PT:'Protogen'  },
-  'Avian':              { RU:'Птица',           EN:'Avian',             JP:'鳥系',           CN:'鸟系',     DE:'Vogel',       FR:'Aviaire',     ES:'Aviar',    PT:'Aviário'   },
-  'Equine':             { RU:'Лошадь',          EN:'Equine',            JP:'馬系',           CN:'马系',     DE:'Equide',      FR:'Équidé',      ES:'Équido',   PT:'Equídeo'   },
-  'Reptile':            { RU:'Рептилия',        EN:'Reptile',           JP:'爬虫類',          CN:'爬虫类',   DE:'Reptil',      FR:'Reptile',     ES:'Reptil',   PT:'Réptil'    },
-  'Rodent':             { RU:'Грызун',          EN:'Rodent',            JP:'げっ歯類',        CN:'啮齿类',   DE:'Nagetier',    FR:'Rongeur',     ES:'Roedor',   PT:'Roedor'    },
-  'Ursine':             { RU:'Медведь',         EN:'Ursine',            JP:'クマ系',          CN:'熊系',     DE:'Bär',         FR:'Ursidé',      ES:'Ursino',   PT:'Ursino'    },
-  'Bovine':             { RU:'Бык/Корова',      EN:'Bovine',            JP:'牛系',           CN:'牛系',     DE:'Rind',        FR:'Bovin',       ES:'Bovino',   PT:'Bovino'    },
-  'Cervine':            { RU:'Олень',           EN:'Cervine',           JP:'シカ系',          CN:'鹿系',     DE:'Cervide',     FR:'Cervidé',     ES:'Cérvido',  PT:'Cervídeo'  },
-  'Mustelid':           { RU:'Куньи',           EN:'Mustelid',          JP:'イタチ系',        CN:'鼬系',     DE:'Marder',      FR:'Mustélidé',   ES:'Mustélido',PT:'Mustelídeo'},
-  'Sergal':             { RU:'Сергал',          EN:'Sergal',            JP:'サーガル',        CN:'瑟格尔',   DE:'Sergal',      FR:'Sergal',      ES:'Sergal',   PT:'Sergal'    },
-  'Dutch Angel Dragon': { RU:'Дутч Э. Дракон',  EN:'Dutch Angel Dragon',JP:'ダッチエンジェル',CN:'荷兰天使龙',DE:'Dutch Angel', FR:'Dutch Angel', ES:'Dutch Angel',PT:'Dutch Angel'},
-  'Shark':              { RU:'Акула',           EN:'Shark',             JP:'サメ',           CN:'鲨鱼',     DE:'Hai',         FR:'Requin',      ES:'Tiburón',  PT:'Tubarão'   },
-  'Bat':                { RU:'Летучая мышь',    EN:'Bat',               JP:'コウモリ',        CN:'蝙蝠',     DE:'Fledermaus',  FR:'Chauve-souris',ES:'Murciélago',PT:'Morcego'  },
-  'Fox':                { RU:'Лис',             EN:'Fox',               JP:'キツネ',          CN:'狐狸',     DE:'Fuchs',       FR:'Renard',      ES:'Zorro',    PT:'Raposa'    },
-  'Wolf':               { RU:'Волк',            EN:'Wolf',              JP:'オオカミ',        CN:'狼',       DE:'Wolf',        FR:'Loup',        ES:'Lobo',     PT:'Lobo'      },
-  'Rabbit':             { RU:'Кролик',          EN:'Rabbit',            JP:'ウサギ',          CN:'兔子',     DE:'Hase',        FR:'Lapin',       ES:'Conejo',   PT:'Coelho'    },
-  'Tiger':              { RU:'Тигр',            EN:'Tiger',             JP:'トラ',           CN:'老虎',     DE:'Tiger',       FR:'Tigre',       ES:'Tigre',    PT:'Tigre'     },
-  'Hyena':              { RU:'Гиена',           EN:'Hyena',             JP:'ハイエナ',        CN:'鬣狗',     DE:'Hyäne',       FR:'Hyène',       ES:'Hiena',    PT:'Hiena'     },
-  'Synth':              { RU:'Синт',            EN:'Synth',             JP:'シンス',          CN:'合成体',   DE:'Synth',       FR:'Synth',       ES:'Synth',    PT:'Synth'     },
-  'Wickerbeast':        { RU:'Уикербист',       EN:'Wickerbeast',       JP:'ウィッカービースト',CN:'柳条兽',  DE:'Wickerbeast', FR:'Wickerbeast', ES:'Wickerbeast',PT:'Wickerbeast'},
-  'Lion':               { RU:'Лев',             EN:'Lion',              JP:'ライオン',        CN:'狮子',     DE:'Löwe',        FR:'Lion',        ES:'León',     PT:'Leão'      },
-  'Leopard':            { RU:'Леопард',         EN:'Leopard',           JP:'ヒョウ',          CN:'豹',       DE:'Leopard',     FR:'Léopard',     ES:'Leopardo', PT:'Leopardo'  },
-  'Snow Leopard':       { RU:'Снежный барс',    EN:'Snow Leopard',      JP:'ユキヒョウ',      CN:'雪豹',     DE:'Schneeleopard',FR:'Léopard des neiges',ES:'Leopardo de las nieves',PT:'Leopardo das neves'},
-  'Cheetah':            { RU:'Гепард',          EN:'Cheetah',           JP:'チーター',        CN:'猎豹',     DE:'Gepard',      FR:'Guépard',     ES:'Guepardo', PT:'Guepardo'  },
-  'Lynx':               { RU:'Рысь',            EN:'Lynx',              JP:'オオヤマネコ',    CN:'猞猁',     DE:'Luchs',       FR:'Lynx',        ES:'Lince',    PT:'Lince'     },
-  'Raccoon':            { RU:'Енот',            EN:'Raccoon',           JP:'アライグマ',      CN:'浣熊',     DE:'Waschbär',    FR:'Raton laveur',ES:'Mapache',  PT:'Guaxinim'  },
-  'Red Panda':          { RU:'Красная панда',   EN:'Red Panda',         JP:'レッサーパンダ',  CN:'小熊猫',   DE:'Roter Panda', FR:'Panda roux',  ES:'Panda rojo',PT:'Panda vermelho'},
-  'Skunk':              { RU:'Скунс',           EN:'Skunk',             JP:'スカンク',        CN:'臭鼬',     DE:'Skunk',       FR:'Mouffette',   ES:'Mofeta',   PT:'Gambá'     },
-  'Opossum':            { RU:'Опоссум',         EN:'Opossum',           JP:'オポッサム',      CN:'负鼠',     DE:'Opossum',     FR:'Opossum',     ES:'Zarigüeya',PT:'Gambá'     },
-  'Coyote':             { RU:'Койот',           EN:'Coyote',            JP:'コヨーテ',        CN:'土狼',     DE:'Kojote',      FR:'Coyote',      ES:'Coyote',   PT:'Coiote'    },
-  'Jackal':             { RU:'Шакал',           EN:'Jackal',            JP:'ジャッカル',      CN:'豺',       DE:'Schakal',     FR:'Chacal',      ES:'Chacal',   PT:'Chacal'    },
-  'Panda':              { RU:'Панда',           EN:'Panda',             JP:'パンダ',          CN:'熊猫',     DE:'Panda',       FR:'Panda',       ES:'Panda',    PT:'Panda'     },
-  'Dolphin':            { RU:'Дельфин',         EN:'Dolphin',           JP:'イルカ',          CN:'海豚',     DE:'Delfin',      FR:'Dauphin',     ES:'Delfín',   PT:'Golfinho'  },
-  'Orca':               { RU:'Косатка',         EN:'Orca',              JP:'シャチ',          CN:'虎鲸',     DE:'Orca',        FR:'Orque',       ES:'Orca',     PT:'Orca'      },
-  'Seal':               { RU:'Тюлень',          EN:'Seal',              JP:'アザラシ',        CN:'海豹',     DE:'Robbe',       FR:'Phoque',      ES:'Foca',     PT:'Foca'      },
-  'Gryphon':            { RU:'Грифон',          EN:'Gryphon',           JP:'グリフォン',      CN:'狮鹫',     DE:'Greif',       FR:'Griffon',     ES:'Grifo',    PT:'Grifo'     },
-  'Phoenix':            { RU:'Феникс',          EN:'Phoenix',           JP:'フェニックス',    CN:'凤凰',     DE:'Phönix',      FR:'Phénix',      ES:'Fénix',    PT:'Fênix'     },
-  'Unicorn':            { RU:'Единорог',        EN:'Unicorn',           JP:'ユニコーン',      CN:'独角兽',   DE:'Einhorn',     FR:'Licorne',     ES:'Unicornio',PT:'Unicórnio' },
-  'Naga':               { RU:'Нага',            EN:'Naga',              JP:'ナーガ',          CN:'那伽',     DE:'Naga',        FR:'Naga',        ES:'Naga',     PT:'Naga'      },
-  'Frog':               { RU:'Лягушка',         EN:'Frog',              JP:'カエル',          CN:'青蛙',     DE:'Frosch',      FR:'Grenouille',  ES:'Rana',     PT:'Sapo'      },
-  'Maned Wolf':         { RU:'Гривистый волк',  EN:'Maned Wolf',        JP:'タテガミオオカミ', CN:'鬃狼',     DE:'Mähnenwolf',  FR:'Loup à crinière',ES:'Lobo de crin',PT:'Lobo-guará'},
-  'African Wild Dog':   { RU:'Гиеновая собака', EN:'African Wild Dog',  JP:'リカオン',        CN:'非洲野犬', DE:'Wildhund',    FR:'Lycaon',      ES:'Licaón',   PT:'Lycaon'    },
-  'Kitsune':            { RU:'Кицунэ',          EN:'Kitsune',           JP:'キツネ（妖狐）',  CN:'狐妖',     DE:'Kitsune',     FR:'Kitsune',     ES:'Kitsune',  PT:'Kitsune'   },
-  'Tanuki':             { RU:'Тануки',          EN:'Tanuki',            JP:'たぬき',          CN:'狸',       DE:'Tanuki',      FR:'Tanuki',      ES:'Tanuki',   PT:'Tanuki'    },
-  'Kirin':              { RU:'Цилинь',          EN:'Kirin',             JP:'麒麟',            CN:'麒麟',     DE:'Kirin',       FR:'Kirin',       ES:'Kirin',    PT:'Kirin'     },
-  'Wyvern':             { RU:'Виверн',          EN:'Wyvern',            JP:'ワイバーン',      CN:'飞龙',     DE:'Wyvern',      FR:'Vouivre',     ES:'Wyvern',   PT:'Wyvern'    },
-  'Kangaroo':           { RU:'Кенгуру',         EN:'Kangaroo',          JP:'カンガルー',      CN:'袋鼠',     DE:'Känguru',     FR:'Kangourou',   ES:'Canguro',  PT:'Canguru'   },
-  'Hedgehog':           { RU:'Ёж',              EN:'Hedgehog',          JP:'ハリネズミ',      CN:'刺猬',     DE:'Igel',        FR:'Hérisson',    ES:'Erizo',    PT:'Ouriço'    },
-  'Otter':              { RU:'Выдра',           EN:'Otter',             JP:'カワウソ',        CN:'水獭',     DE:'Otter',       FR:'Loutre',      ES:'Nutria',   PT:'Lontra'    },
-  'Ferret':             { RU:'Хорёк',           EN:'Ferret',            JP:'フェレット',      CN:'貂',       DE:'Frettchen',   FR:'Furet',       ES:'Hurón',    PT:'Furão'     },
-  'Meerkat':            { RU:'Сурикат',         EN:'Meerkat',           JP:'ミーアキャット',  CN:'猫鼬',     DE:'Erdmännchen', FR:'Suricate',    ES:'Suricata', PT:'Suricata'  },
-  'Axolotl':            { RU:'Аксолотль',       EN:'Axolotl',           JP:'アホロートル',    CN:'六角恐龙', DE:'Axolotl',     FR:'Axolotl',     ES:'Ajolote',  PT:'Axolote'   },
-  'Octopus':            { RU:'Осьминог',        EN:'Octopus',           JP:'タコ',            CN:'章鱼',     DE:'Oktopus',     FR:'Pieuvre',     ES:'Pulpo',    PT:'Polvo'     },
-  'Salamander':         { RU:'Саламандра',      EN:'Salamander',        JP:'サラマンダー',    CN:'蝾螈',     DE:'Salamander',  FR:'Salamandre',  ES:'Salamandra',PT:'Salamandra'},
-  'Primate':            { RU:'Примат',          EN:'Primate',           JP:'霊長類',          CN:'灵长类',   DE:'Primat',      FR:'Primate',     ES:'Primate',  PT:'Primata'   },
-  'Demon':              { RU:'Демон',           EN:'Demon',             JP:'デーモン',        CN:'恶魔',     DE:'Dämon',       FR:'Démon',       ES:'Demonio',  PT:'Demônio'   },
-  'Angel':              { RU:'Ангел',           EN:'Angel',             JP:'エンジェル',      CN:'天使',     DE:'Engel',       FR:'Ange',        ES:'Ángel',    PT:'Anjo'      },
-  'Alien':              { RU:'Инопланетянин',   EN:'Alien',             JP:'エイリアン',      CN:'外星人',   DE:'Alien',       FR:'Alien',       ES:'Alien',    PT:'Alien'     },
-  'Kobold':             { RU:'Кобольд',         EN:'Kobold',            JP:'コボルト',        CN:'地精',     DE:'Kobold',      FR:'Kobold',      ES:'Kobold',   PT:'Kobold'    },
-  'Sphinx':             { RU:'Сфинкс',          EN:'Sphinx',            JP:'スフィンクス',    CN:'狮身人面兽',DE:'Sphinx',     FR:'Sphinx',      ES:'Esfinge',  PT:'Esfinge'   },
-  'Other':              { RU:'Другое',          EN:'Other',             JP:'その他',          CN:'其他',     DE:'Andere',      FR:'Autre',       ES:'Otro',     PT:'Outro'     },
+function speciesLabel(sp: string): string {
+  return speciesLabelFor(sp, langStore.currentLang)
 }
 
-function speciesLabel(sp: string): string {
-  return SPECIES_MAP[sp]?.[langStore.currentLang] ?? sp
+// ── Species search combobox ────────────────────────────────────────────────────
+const speciesSearch   = ref('')
+const speciesDropOpen = ref(false)
+
+const filteredSpecies = computed(() => {
+  const q = speciesSearch.value.trim().toLowerCase()
+  if (!q) return FURSONA_SPECIES as unknown as string[]
+  return (FURSONA_SPECIES as unknown as string[]).filter((sp) => speciesLabel(sp).toLowerCase().includes(q))
+})
+
+function onSpeciesBlur() {
+  setTimeout(() => { speciesDropOpen.value = false }, 180)
 }
 
 // ── Пресеты цветов ────────────────────────────────────────────────────────────
@@ -460,55 +443,73 @@ function contrastColor(hex: string): string {
 }
 
 // ── Форма ─────────────────────────────────────────────────────────────────────
-const form = reactive<UpsertFursonaInput & { species: string[]; colors: string[]; name: string; reference_is_nsfw: boolean }>({  
+const form = reactive<UpsertFursonaInput & { species: string[]; colors: string[]; name: string }>({
   name: '',
   species: [],
+  species_other: null,
   colors: [],
   likes_dislikes_visible: true,
   likes: [],
   dislikes: [],
-  reference_image_url: null,
-  reference_is_nsfw: false,  reference_artist_name: null,
-  reference_artist_url: null,})
+})
 
-const saving      = ref(false)
-const successMsg  = ref('')
-const errorMsg    = ref('')
+const saving         = ref(false)
+const successMsg     = ref('')
+const errorMsg       = ref('')
+const referenceError = ref('')
 const newLike     = ref('')
 const newDislike  = ref('')
 const pickingIdx  = ref<number | null>(null)
 const formLoaded  = ref(false)
+const processedRefUrls = new Set<string>()
 
 watch(form, () => {
   if (formLoaded.value) emit('dirty', true)
 }, { deep: true })
 
+function applyFromStore() {
+  if (!userStore.fursona) return
+  Object.assign(form, {
+    name: userStore.fursona.name || userStore.profile?.fursona_name || '',
+    species: [...(userStore.fursona.species ?? [])],
+    species_other: userStore.fursona.species_other ?? null,
+    colors: [...(userStore.fursona.colors ?? [])],
+    likes_dislikes_visible: userStore.fursona.likes_dislikes_visible ?? true,
+    likes: [...(userStore.fursona.likes ?? [])],
+    dislikes: [...(userStore.fursona.dislikes ?? [])],
+  })
+}
+
 onMounted(async () => {
   const auth = await import('@/stores/auth').then((m) => m.useAuthStore())
   if (!auth.user?.id) return
-  await userStore.fetchFursona(auth.user.id)
-  if (userStore.fursona) {
-    Object.assign(form, {
-      name: userStore.fursona.name || userStore.profile?.fursona_name || '',
-      species: [...(userStore.fursona.species ?? [])],
-      colors: [...(userStore.fursona.colors ?? [])],
-      likes_dislikes_visible: userStore.fursona.likes_dislikes_visible ?? true,
-      likes: [...(userStore.fursona.likes ?? [])],
-      dislikes: [...(userStore.fursona.dislikes ?? [])],
-      reference_image_url: userStore.fursona.reference_image_url ?? null,
-      reference_is_nsfw: userStore.fursona.reference_is_nsfw ?? false,
-      reference_artist_name: userStore.fursona.reference_artist_name ?? null,
-      reference_artist_url: userStore.fursona.reference_artist_url ?? null,
-    })
-  }
+  await Promise.all([
+    userStore.fetchFursona(auth.user.id),
+    userStore.fetchReferenceImages(auth.user.id),
+  ])
+  applyFromStore()
   await nextTick()
   formLoaded.value = true
 })
 
+/** Discard local edits and revert to the last-saved (server) fursona state. */
+function reset() {
+  // Suppress the deep watcher below while applyFromStore() mutates `form`,
+  // otherwise it re-fires `dirty: true` a tick later and the "unsaved changes"
+  // bar never actually clears.
+  formLoaded.value = false
+  applyFromStore()
+  emit('dirty', false)
+  nextTick(() => { formLoaded.value = true })
+}
+
 function toggleSpecies(sp: string) {
   const idx = form.species.indexOf(sp)
   if (idx === -1) { if (form.species.length < 5) form.species.push(sp) }
-  else { form.species.splice(idx, 1) }
+  else {
+    form.species.splice(idx, 1)
+    if (sp === 'Other') form.species_other = null
+  }
 }
 
 function addColor() {
@@ -539,7 +540,36 @@ function addTag(field: 'likes' | 'dislikes') {
 }
 function removeTag(field: 'likes' | 'dislikes', idx: number) { ;(form[field] as string[]).splice(idx, 1) }
 
-function onReferenceUploaded(urls: string[]) { form.reference_image_url = urls[0] ?? null }
+async function onReferenceUploaded(urls: string[]) {
+  referenceError.value = ''
+  for (const url of urls) {
+    if (processedRefUrls.has(url) || userStore.referenceImages.length >= 12) continue
+    processedRefUrls.add(url)
+    try {
+      await userStore.addReferenceImage({ image_url: url })
+    } catch (e: any) {
+      referenceError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+    }
+  }
+}
+
+function toggleReferenceNsfw(item: FursonaReferenceImage) {
+  userStore.updateReferenceImage(item.id, { is_nsfw: !item.is_nsfw }).catch((e: any) => {
+    referenceError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  })
+}
+
+function persistReferenceMeta(item: FursonaReferenceImage) {
+  userStore.updateReferenceImage(item.id, { artist_name: item.artist_name || null }).catch((e: any) => {
+    referenceError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  })
+}
+
+function removeReference(id: string) {
+  userStore.deleteReferenceImage(id).catch((e: any) => {
+    referenceError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  })
+}
 
 async function save() {
   saving.value = true; successMsg.value = ''; errorMsg.value = ''
@@ -555,7 +585,7 @@ async function save() {
   }
 }
 
-defineExpose({ save })
+defineExpose({ save, reset })
 </script>
 
 <style scoped>

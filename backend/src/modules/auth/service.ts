@@ -132,4 +132,26 @@ export class AuthService {
     const hashed = await bcrypt.hash(newPassword, 10);
     await prisma.user.updateMany({ where: { email: e, deleted_at: null }, data: { password: hashed } });
   }
+
+  /**
+   * Change password while logged in. If the account already has a password,
+   * the current one must be supplied and match. OAuth-only accounts (no
+   * password yet) may set one without providing `currentPassword`.
+   */
+  async changePassword(userId: string, currentPassword: string | undefined, newPassword: string) {
+    if (newPassword.length < 8) throw new Error('Пароль должен содержать минимум 8 символов');
+    if (newPassword.length > 128) throw new Error('Пароль слишком длинный');
+
+    const user = await prisma.user.findUnique({ where: { id: userId, deleted_at: null }, select: { password: true } });
+    if (!user) throw new Error('Пользователь не найден');
+
+    if (user.password) {
+      if (!currentPassword) throw new Error('Введите текущий пароль');
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!isMatch) throw new Error('Неверный текущий пароль');
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
+  }
 }
