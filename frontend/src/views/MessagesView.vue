@@ -187,7 +187,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
@@ -241,9 +241,9 @@ onMounted(async () => {
   }
 })
 
-onUnmounted(() => {
-  store.stopListening()
-})
+// Note: intentionally NOT calling store.stopListening() here — the WS subscription
+// is shared app-wide (kept alive from AppHeader) so unread counts / conversation
+// previews keep updating in real time after the user navigates away from this page.
 
 watch(activeConvId, async (id) => {
   if (id && !store.messages[id]) {

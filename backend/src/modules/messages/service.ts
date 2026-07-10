@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma.js';
+import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import type { SendMessageInput, GetMessagesQuery } from './types.js';
 
 // ── In-process real-time delivery ─────────────────────────────────────────────
@@ -89,10 +90,12 @@ export const messageService = {
 
     const target = await prisma.user.findUnique({
       where: { id: userB },
-      select: { allow_messages: true },
+      select: { messages_privacy: true },
     });
     if (!target) throw Object.assign(new Error('User not found'), { statusCode: 404 });
-    if (!target.allow_messages) throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
+    if (!(await isAllowedByPrivacy(target.messages_privacy, userB, userA))) {
+      throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
+    }
 
     // Find an existing 1-to-1 (non-group) conversation where BOTH users participate
     const existing = await prisma.conversation.findFirst({
@@ -256,9 +259,9 @@ export const messageService = {
       if (recipientId) {
         const recipient = await prisma.user.findUnique({
           where: { id: recipientId },
-          select: { allow_messages: true },
+          select: { messages_privacy: true },
         });
-        if (recipient && !recipient.allow_messages) {
+        if (recipient && !(await isAllowedByPrivacy(recipient.messages_privacy, recipientId, senderId))) {
           throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
         }
       }

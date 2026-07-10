@@ -1,8 +1,29 @@
 import prisma from '../../config/prisma.js';
 import { deleteFileByUrl } from '../media/service.js';
 import { getUserBadgeLevel } from '../../lib/badges.js';
+import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import sharp from 'sharp';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput } from './types.js';
+
+// Sentinel year used to carry a day+month without revealing the real year.
+// Must be a leap year so Feb 29 birthdays don't overflow into March.
+const MONTH_DAY_SENTINEL_YEAR = 2000;
+
+/** Reduce a birth_date down to whatever granularity its owner allows non-owners to see. */
+function redactBirthDate(birthDate: Date | null, visibility: string | null | undefined): Date | null {
+  if (!birthDate) return null;
+  switch (visibility) {
+    case 'full':
+      return birthDate;
+    case 'month_day':
+      return new Date(Date.UTC(MONTH_DAY_SENTINEL_YEAR, birthDate.getUTCMonth(), birthDate.getUTCDate()));
+    case 'year':
+      return new Date(Date.UTC(birthDate.getUTCFullYear(), 0, 1));
+    case 'hidden':
+    default:
+      return null;
+  }
+}
 
 // Fields exposed in public profile responses (never email, password, role)
 const PUBLIC_SELECT = {
@@ -36,6 +57,7 @@ const PUBLIC_SELECT = {
   fursuit_description:  true,
   fursuit_maker:        true,
   birth_date:           true,
+  birth_date_visibility: true,
   relationship_since:   true,
   pinned_post_id:       true,
   role:                 true,
@@ -50,12 +72,18 @@ const PUBLIC_SELECT = {
   verification_type:    true,
   artist_since:         true,
   onboarding_done:      true,
-  allow_messages:       true,
   donate_url:           true,
+  messages_privacy:         true,
+  comments_privacy:         true,
+  mentions_privacy:         true,
+  online_status_visibility: true,
+  friends_list_visibility:  true,
+  profile_visibility:       true,
 } as const;
 
 export const usersService = {
-  async getUserById(id: string) {
+  /** Return a public profile, redacting birth_date per the owner's chosen visibility unless the viewer is the owner. */
+  async getUserById(id: string, viewerId?: string) {
     // Accept both UUID and username
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
     const PROFILE_SELECT = {
@@ -79,8 +107,26 @@ export const usersService = {
 
     if (!raw) return null;
 
+    if (viewerId === raw.id) {
+      return { ...raw, badge_level: getUserBadgeLevel((raw as any).artist_since) };
+    }
+
+    // Whole-profile gate: return only an identity stub if the owner restricts who can view it
+    if (!(await isAllowedByPrivacy((raw as any).profile_visibility, raw.id, viewerId))) {
+      return {
+        id: raw.id,
+        username: raw.username,
+        display_name: raw.display_name,
+        avatar_url: raw.avatar_url,
+        badge_type: raw.badge_type,
+        is_private: true,
+      };
+    }
+
     // Attach computed badge_level
-    return { ...raw, badge_level: getUserBadgeLevel((raw as any).artist_since) };
+    const withBadge = { ...raw, badge_level: getUserBadgeLevel((raw as any).artist_since) };
+
+    return { ...withBadge, birth_date: redactBirthDate((raw as any).birth_date, (raw as any).birth_date_visibility) };
   },
 
   async updateUser(id: string, data: UpdateUserInput) {

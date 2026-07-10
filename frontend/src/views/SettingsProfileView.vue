@@ -259,8 +259,8 @@
             <form @submit.prevent="handleSubmit" class="space-y-5">
 
               <!-- ── § 1: ОСНОВНОЕ + МЕДИА ──────────────────────────── -->
-              <section v-show="openSection === sections[0].id" :id="sections[0].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
-                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
+              <section v-show="openSection === sections[0].id" :id="sections[0].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl scroll-mt-28">
+                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3 rounded-t-3xl"
                   :style="`background:linear-gradient(90deg,${sections[0].color}0c 0%,transparent 100%)`">
                   <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[0].color}1a`">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[0].color}`">
@@ -849,23 +849,6 @@
                     <p class="text-[11px] text-white/35 mt-1.5">Ссылка появится кнопкой «Донат» на вашем профиле</p>
                   </div>
 
-                  <!-- ── Приём личных сообщений ────────────── -->
-                  <div class="pt-2">
-                    <div class="flex items-center justify-between p-4 bg-brand-bg/60 border border-brand-border rounded-2xl">
-                      <div>
-                        <p class="text-sm font-semibold text-white">Личные сообщения</p>
-                        <p class="text-xs text-white/45 mt-0.5">{{ form.allow_messages ? 'Любой может написать вам' : 'Никто не может написать вам' }}</p>
-                      </div>
-                      <button type="button"
-                        @click="form.allow_messages = !form.allow_messages"
-                        class="relative w-11 h-6 rounded-full transition-colors flex-shrink-0"
-                        :class="form.allow_messages ? 'bg-brand-accent' : 'bg-white/15'">
-                        <span class="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all"
-                          :class="form.allow_messages ? 'left-[calc(100%-22px)]' : 'left-0.5'" />
-                      </button>
-                    </div>
-                  </div>
-
                 </div>
               </section>
 
@@ -1248,6 +1231,52 @@
                     </template>
                   </template>
 
+                </div>
+              </section>
+
+              <!-- ── § PRIVACY: Приватность ─────────────────────────── -->
+              <section v-show="openSection === 'sec-privacy'" id="sec-privacy" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3" style="background:linear-gradient(90deg,rgba(236,72,153,0.07) 0%,transparent 100%)">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(236,72,153,0.15)">
+                    <svg class="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0-1.104.896-2 2-2s2 .896 2 2-.896 2-2 2-2-.896-2-2zm-6 0a6 6 0 1112 0 6 6 0 01-12 0zM3 21c0-3.314 4.03-6 9-6s9 2.686 9 6"/>
+                    </svg>
+                  </div>
+                  <h2 class="font-bold text-white text-sm">{{ langStore.t.secPrivacy }}</h2>
+                </div>
+                <div class="p-6 space-y-3">
+                  <div>
+                    <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.birthdayVisibilityLabel }}</label>
+                    <p class="text-[11px] text-white/35 mb-3">{{ langStore.t.birthdayVisibilityHint }}</p>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <button
+                        v-for="opt in birthdayVisibilityOptions" :key="opt.value"
+                        type="button"
+                        @click="form.birth_date_visibility = opt.value"
+                        class="px-3 py-2.5 rounded-2xl text-xs font-bold border transition-all"
+                        :class="form.birth_date_visibility === opt.value ? 'text-white border-transparent' : 'bg-brand-bg border-brand-border text-white/55 hover:text-white hover:border-white/20'"
+                        :style="form.birth_date_visibility === opt.value ? `background:${form.accent_color};box-shadow:0 4px 16px ${form.accent_color}44` : ''">
+                        {{ opt.label }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="border-t border-brand-border/50 my-1"></div>
+
+                  <div v-for="row in privacyRows" :key="row.field">
+                    <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ row.label }}</label>
+                    <div class="grid grid-cols-3 gap-2">
+                      <button
+                        v-for="opt in row.options" :key="opt.value"
+                        type="button"
+                        @click="(form as any)[row.field] = opt.value"
+                        class="px-3 py-2.5 rounded-2xl text-xs font-bold border transition-all"
+                        :class="(form as any)[row.field] === opt.value ? 'text-white border-transparent' : 'bg-brand-bg border-brand-border text-white/55 hover:text-white hover:border-white/20'"
+                        :style="(form as any)[row.field] === opt.value ? `background:${form.accent_color};box-shadow:0 4px 16px ${form.accent_color}44` : ''">
+                        {{ opt.label }}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </section>
 
@@ -1822,14 +1851,20 @@ const form = reactive({
   fursuit_description: '' as string,
   fursuit_maker:       '' as string,
   birth_date:          '',
+  birth_date_visibility: 'hidden' as string,
   likes:               [] as string[],
   dislikes:            [] as string[],
   profile_theme:       '' as string,
   profile_bg_url:      '' as string,
   profile_frame:       '' as string,
   social_links:        {} as Record<string, string>,
-  allow_messages:      true,
   donate_url:          '' as string,
+  messages_privacy:         'everyone' as string,
+  comments_privacy:         'everyone' as string,
+  mentions_privacy:         'everyone' as string,
+  online_status_visibility: 'everyone' as string,
+  friends_list_visibility:  'everyone' as string,
+  profile_visibility:       'everyone' as string,
 })
 
 // ── Saved snapshot ─────────────────────────────────────────────────────────
@@ -1857,14 +1892,20 @@ const savedForm = reactive({
   fursuit_description: '' as string,
   fursuit_maker:       '' as string,
   birth_date:          '',
+  birth_date_visibility: 'hidden' as string,
   likes:               [] as string[],
   dislikes:            [] as string[],
   profile_theme:       '' as string,
   profile_bg_url:      '' as string,
   profile_frame:       '' as string,
   social_links:        {} as Record<string, string>,
-  allow_messages:      true,
   donate_url:          '' as string,
+  messages_privacy:         'everyone' as string,
+  comments_privacy:         'everyone' as string,
+  mentions_privacy:         'everyone' as string,
+  online_status_visibility: 'everyone' as string,
+  friends_list_visibility:  'everyone' as string,
+  profile_visibility:       'everyone' as string,
 })
 
 function snapshotToSaved() {
@@ -1891,14 +1932,20 @@ function snapshotToSaved() {
   savedForm.fursuit_description = form.fursuit_description
   savedForm.fursuit_maker       = form.fursuit_maker
   savedForm.birth_date          = form.birth_date
+  savedForm.birth_date_visibility = form.birth_date_visibility
   savedForm.likes               = [...form.likes]
   savedForm.dislikes            = [...form.dislikes]
   savedForm.profile_theme       = form.profile_theme
   savedForm.profile_bg_url      = form.profile_bg_url
   savedForm.profile_frame       = form.profile_frame
   savedForm.social_links        = { ...form.social_links }
-  savedForm.allow_messages      = form.allow_messages
   savedForm.donate_url          = form.donate_url
+  savedForm.messages_privacy         = form.messages_privacy
+  savedForm.comments_privacy         = form.comments_privacy
+  savedForm.mentions_privacy         = form.mentions_privacy
+  savedForm.online_status_visibility = form.online_status_visibility
+  savedForm.friends_list_visibility  = form.friends_list_visibility
+  savedForm.profile_visibility       = form.profile_visibility
 }
 
 function resetForm() {
@@ -1925,14 +1972,20 @@ function resetForm() {
   form.fursuit_description = savedForm.fursuit_description
   form.fursuit_maker       = savedForm.fursuit_maker
   form.birth_date          = savedForm.birth_date
+  form.birth_date_visibility = savedForm.birth_date_visibility
   form.likes               = [...savedForm.likes]
   form.dislikes            = [...savedForm.dislikes]
   form.profile_theme       = savedForm.profile_theme
   form.profile_bg_url      = savedForm.profile_bg_url
   form.profile_frame       = savedForm.profile_frame
   form.social_links        = { ...savedForm.social_links }
-  form.allow_messages      = savedForm.allow_messages
   form.donate_url          = savedForm.donate_url
+  form.messages_privacy         = savedForm.messages_privacy
+  form.comments_privacy         = savedForm.comments_privacy
+  form.mentions_privacy         = savedForm.mentions_privacy
+  form.online_status_visibility = savedForm.online_status_visibility
+  form.friends_list_visibility  = savedForm.friends_list_visibility
+  form.profile_visibility       = savedForm.profile_visibility
   // Clear originals so re-crop picks up the reverted server images
   avatarOriginalSrc.value = ''
   bannerOriginalSrc.value = ''
@@ -1967,11 +2020,17 @@ const isDirty = computed(() => {
     form.fursuit_description !== savedForm.fursuit_description ||
     form.fursuit_maker       !== savedForm.fursuit_maker ||
     form.birth_date          !== savedForm.birth_date ||
+    form.birth_date_visibility !== savedForm.birth_date_visibility ||
     form.profile_theme       !== savedForm.profile_theme ||
     form.profile_bg_url      !== savedForm.profile_bg_url ||
     form.profile_frame       !== savedForm.profile_frame ||
-    form.allow_messages      !== savedForm.allow_messages ||
-    form.donate_url          !== savedForm.donate_url
+    form.donate_url          !== savedForm.donate_url ||
+    form.messages_privacy         !== savedForm.messages_privacy ||
+    form.comments_privacy         !== savedForm.comments_privacy ||
+    form.mentions_privacy         !== savedForm.mentions_privacy ||
+    form.online_status_visibility !== savedForm.online_status_visibility ||
+    form.friends_list_visibility  !== savedForm.friends_list_visibility ||
+    form.profile_visibility       !== savedForm.profile_visibility
   )
   return fieldsChanged ||
     JSON.stringify(form.likes)         !== JSON.stringify(savedForm.likes) ||
@@ -2007,14 +2066,20 @@ onMounted(async () => {
   form.fursuit_description = (p as any).fursuit_description ?? ''
   form.fursuit_maker       = (p as any).fursuit_maker      ?? ''
   form.birth_date          = p.birth_date ? p.birth_date.substring(0, 10) : ''
+  form.birth_date_visibility = (p as any).birth_date_visibility ?? 'hidden'
   form.likes               = [...p.likes]
   form.dislikes            = [...p.dislikes]
   form.profile_theme       = (p as any).profile_theme  ?? ''
   form.profile_bg_url      = (p as any).profile_bg_url ?? ''
   form.profile_frame       = (p as any).profile_frame  ?? ''
   form.social_links        = { ...((p as any).social_links ?? {}) }
-  form.allow_messages      = (p as any).allow_messages ?? true
   form.donate_url          = (p as any).donate_url ?? ''
+  form.messages_privacy         = (p as any).messages_privacy         ?? 'everyone'
+  form.comments_privacy         = (p as any).comments_privacy         ?? 'everyone'
+  form.mentions_privacy         = (p as any).mentions_privacy         ?? 'everyone'
+  form.online_status_visibility = (p as any).online_status_visibility ?? 'everyone'
+  form.friends_list_visibility  = (p as any).friends_list_visibility  ?? 'everyone'
+  form.profile_visibility       = (p as any).profile_visibility       ?? 'everyone'
   snapshotToSaved()
   // Pre-fill combobox search inputs with saved values
   countrySearch.value = form.country
@@ -2550,14 +2615,20 @@ async function handleSubmit() {
     fursuit_description: form.fursuit_description || null,
     fursuit_maker:       form.fursuit_maker       || null,
     birth_date:          form.birth_date || null,
+    birth_date_visibility: form.birth_date_visibility,
     likes:               form.likes,
     dislikes:            form.dislikes,
     profile_theme:       form.profile_theme  || null,
     profile_bg_url:      form.profile_bg_url || null,
     profile_frame:       form.profile_frame  || null,
     social_links:        form.social_links,
-    allow_messages:      form.allow_messages,
     donate_url:          form.donate_url || null,
+    messages_privacy:         form.messages_privacy,
+    comments_privacy:         form.comments_privacy,
+    mentions_privacy:         form.mentions_privacy,
+    online_status_visibility: form.online_status_visibility,
+    friends_list_visibility:  form.friends_list_visibility,
+    profile_visibility:       form.profile_visibility,
   }
   if (/^#[0-9A-Fa-f]{6}$/.test(form.accent_color)) payload.accent_color = form.accent_color
 
@@ -2581,6 +2652,7 @@ const sections = computed(() => [
   { id: 'sec-fursona',       label: langStore.t.fursonaSettingsTitle, color: '#a78bfa', iconPath: 'M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
   { id: 'sec-profile-style', label: langStore.t.secProfileStyle,  color: '#f59e0b', iconPath: 'M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 2h14v14H5V5zm2 2v2h10V7H7zm0 4v2h7v-2H7z' },
   { id: 'sec-verification',  label: langStore.t.secVerification,  color: '#3b82f6', iconPath: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+  { id: 'sec-privacy',       label: langStore.t.secPrivacy,       color: '#ec4899', iconPath: 'M12 11c0-1.104.896-2 2-2s2 .896 2 2-.896 2-2 2-2-.896-2-2zm-6 0a6 6 0 1112 0 6 6 0 01-12 0zM3 21c0-3.314 4.03-6 9-6s9 2.686 9 6' },
   { id: 'sec-lang',          label: langStore.t.secLang,          color: '#f59e0b', iconPath: 'M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' },
   { id: 'sec-security',      label: langStore.t.secSecurity,      color: '#10b981', iconPath: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
   { id: 'sec-danger',        label: langStore.t.secAccount,       color: '#ef4444', iconPath: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
@@ -2594,6 +2666,33 @@ const lockedSettings = computed(() => [
 ])
 
 const pronounPresets = ['он/его', 'она/её', 'они/их']
+
+const birthdayVisibilityOptions = computed(() => [
+  { value: 'hidden',    label: langStore.t.birthdayVisibilityHidden },
+  { value: 'year',      label: langStore.t.birthdayVisibilityYear },
+  { value: 'month_day', label: langStore.t.birthdayVisibilityMonthDay },
+  { value: 'full',      label: langStore.t.birthdayVisibilityFull },
+])
+
+// ── Privacy: who-can-X selectors (Everyone / Friends / Nobody or OnlyMe) ────
+const privacyNobodyOptions = computed(() => [
+  { value: 'everyone', label: langStore.t.privacyEveryone },
+  { value: 'friends',  label: langStore.t.privacyFriends },
+  { value: 'nobody',   label: langStore.t.privacyNobody },
+])
+const privacyOnlyMeOptions = computed(() => [
+  { value: 'everyone', label: langStore.t.privacyEveryone },
+  { value: 'friends',  label: langStore.t.privacyFriends },
+  { value: 'only_me',  label: langStore.t.privacyOnlyMe },
+])
+const privacyRows = computed(() => [
+  { field: 'profile_visibility',       label: langStore.t.profileVisibilityLabel,      options: privacyOnlyMeOptions.value },
+  { field: 'friends_list_visibility',  label: langStore.t.friendsListVisibilityLabel,  options: privacyOnlyMeOptions.value },
+  { field: 'messages_privacy',         label: langStore.t.messagesPrivacyLabel,        options: privacyNobodyOptions.value },
+  { field: 'comments_privacy',         label: langStore.t.commentsPrivacyLabel,        options: privacyNobodyOptions.value },
+  { field: 'mentions_privacy',         label: langStore.t.mentionsPrivacyLabel,        options: privacyNobodyOptions.value },
+  { field: 'online_status_visibility', label: langStore.t.onlineStatusVisibilityLabel, options: privacyNobodyOptions.value },
+])
 
 // ── Verification ────────────────────────────────────────────────────────────
 const verificationStatus = ref<any>(null)

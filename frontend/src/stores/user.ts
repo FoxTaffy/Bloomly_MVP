@@ -105,6 +105,7 @@ export interface UserProfile {
   fursuit_description: string | null
   fursuit_maker: string | null
   birth_date: string | null
+  birth_date_visibility: string
   relationship_since: string | null
   pinned_post_id: string | null
   role: string
@@ -123,6 +124,13 @@ export interface UserProfile {
   _count?: { followers: number; following: number; posts: number }
   pinnedPost?: any | null
   badge_level?: string
+  messages_privacy?: string
+  comments_privacy?: string
+  mentions_privacy?: string
+  online_status_visibility?: string
+  friends_list_visibility?: string
+  profile_visibility?: string
+  is_private?: boolean
 }
 
 export interface UpdateProfileInput {
@@ -152,6 +160,7 @@ export interface UpdateProfileInput {
   fursuit_description?: string | null
   fursuit_maker?: string | null
   birth_date?: string | null
+  birth_date_visibility?: string
   relationship_since?: string | null
   social_links?: Record<string, string> | null
   interests?: string[]
@@ -161,6 +170,12 @@ export interface UpdateProfileInput {
   profile_frame?: string | null
   artist_since?: string | null
   onboarding_done?: boolean
+  messages_privacy?: string
+  comments_privacy?: string
+  mentions_privacy?: string
+  online_status_visibility?: string
+  friends_list_visibility?: string
+  profile_visibility?: string
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────

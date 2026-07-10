@@ -1,6 +1,14 @@
 <template>
     <AppHeader :show-back="true" v-model:nsfwMode="nsfwMode" />
 
+    <!-- ─── Minimal error toast (e.g. messaging blocked by privacy settings) ── -->
+    <Transition name="fade">
+      <div v-if="messageErrorNotice"
+        class="fixed top-20 left-1/2 -translate-x-1/2 z-[300] px-4 py-2.5 rounded-2xl shadow-2xl text-xs font-bold border bg-brand-error/10 border-brand-error/30 text-brand-error backdrop-blur-lg">
+        {{ messageErrorNotice }}
+      </div>
+    </Transition>
+
     <!-- ─── Page background (profile_bg_url) ──────────────────────────────── -->
     <template v-if="profileBgStyle.backgroundImage">
       <div class="fixed inset-0 z-[-1] pointer-events-none" :style="profileBgStyle" />
@@ -394,6 +402,17 @@
           </button>
         </div>
 
+        <!-- Private profile stub (viewer isn't allowed to see this profile) -->
+        <div v-else-if="(viewedProfile as any).is_private" class="mt-8 bg-brand-card border border-brand-border rounded-3xl p-12 text-center shadow-xl">
+          <img :src="viewedProfile.avatar_url || '/icons/badges/NN.jpg'" class="w-20 h-20 rounded-full object-cover mx-auto mb-4 border-2 border-brand-border" @error="onAvatarError" />
+          <p class="text-white font-bold text-lg mb-1">{{ viewedProfile.display_name || viewedProfile.username }}</p>
+          <p class="text-white/45 text-sm mb-6">@{{ viewedProfile.username }}</p>
+          <div class="w-16 h-16 rounded-2xl bg-brand-bg border border-brand-border flex items-center justify-center mx-auto mb-4">
+            <BIcon name="Lock" class="w-8 h-8 text-white/55" />
+          </div>
+          <p class="text-white/55 text-sm">Этот профиль скрыт настройками приватности</p>
+        </div>
+
         <template v-else>
 
           <!-- ════════════════════════════════════════════════════════════════
@@ -547,7 +566,7 @@
                         <span v-if="notifyLoading" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         <BIcon v-else :name="notifyPosts && relation.aFollowsB ? 'BellRing' : 'Bell'" class="w-4 h-4" />
                       </button>
-                      <button v-if="(viewedProfile as any).allow_messages !== false" @click="openChat" class="inline-flex items-center gap-2 px-4 py-2 border border-brand-border bg-brand-bg hover:border-brand-accent/60 text-brand-offwhite hover:text-brand-accent rounded-xl text-sm font-bold transition-all">
+                      <button v-if="(viewedProfile as any).messages_privacy !== 'nobody'" @click="openChat" class="inline-flex items-center gap-2 px-4 py-2 border border-brand-border bg-brand-bg hover:border-brand-accent/60 text-brand-offwhite hover:text-brand-accent rounded-xl text-sm font-bold transition-all">
                         <BIcon name="MessageSquare" class="w-4 h-4" /> {{ langStore.t.messageBtn }}
                       </button>
                       <button @click="toggleFollow" :disabled="isTogglingFollow"
@@ -684,7 +703,7 @@
                     <div class="relative group/bio">
                       <div v-if="viewedProfile.bio"
                         class="bg-brand-bg/60 border border-brand-border/60 rounded-2xl px-5 py-4 pr-12">
-                        <p class="text-sm text-white/90 leading-relaxed whitespace-pre-wrap">{{ viewedProfile.bio }}</p>
+                        <p class="text-sm text-white/90 leading-relaxed whitespace-pre-wrap break-words">{{ viewedProfile.bio }}</p>
                       </div>
                       <div v-else-if="isOwnProfile" class="flex flex-col items-center gap-2 py-6 text-center bg-brand-bg/30 rounded-2xl border border-dashed border-brand-border/60 cursor-pointer hover:border-brand-accent/40 transition-all"
                         @click="openEditModal('bio')">
@@ -1629,6 +1648,10 @@
                     <div v-if="isLoadingTab" class="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       <div v-for="n in 6" :key="n" class="h-24 bg-brand-bg border border-brand-border rounded-2xl animate-pulse"></div>
                     </div>
+                    <div v-else-if="friendsListRestricted" class="py-14 text-center text-white/55">
+                      <BIcon name="Lock" class="w-10 h-10 mx-auto mb-3 opacity-30" />
+                      <p class="font-semibold text-sm mb-1">Список скрыт настройками приватности</p>
+                    </div>
                     <div v-else-if="!followers.length" class="py-14 text-center text-white/55">
                       <BIcon name="Users" class="w-10 h-10 mx-auto mb-3 opacity-30" />
                       <p class="font-semibold text-sm mb-1">{{ langStore.t.noFollowersLabel }}</p>
@@ -1650,6 +1673,10 @@
                   <div v-else-if="activeContentTab === 'following'">
                     <div v-if="isLoadingTab" class="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       <div v-for="n in 6" :key="n" class="h-24 bg-brand-bg border border-brand-border rounded-2xl animate-pulse"></div>
+                    </div>
+                    <div v-else-if="friendsListRestricted" class="py-14 text-center text-white/55">
+                      <BIcon name="Lock" class="w-10 h-10 mx-auto mb-3 opacity-30" />
+                      <p class="font-semibold text-sm mb-1">Список скрыт настройками приватности</p>
                     </div>
                     <div v-else-if="!following.length" class="py-14 text-center text-white/55">
                       <BIcon name="UserPlus" class="w-10 h-10 mx-auto mb-3 opacity-30" />
@@ -1863,6 +1890,14 @@
                     <div class="min-w-0">
                       <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.pronounsLabel }}</p>
                       <p class="text-xs text-brand-offwhite font-semibold">{{ viewedProfile.pronouns }}</p>
+                    </div>
+                  </div>
+                  <!-- Birth date -->
+                  <div v-if="formattedBirthDate" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
+                    <BIcon name="Cake" class="w-4 h-4 text-pink-400/70 flex-shrink-0" />
+                    <div class="min-w-0">
+                      <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.birthdayLabel }}</p>
+                      <p class="text-xs text-brand-offwhite font-semibold truncate">{{ formattedBirthDate }}</p>
                     </div>
                   </div>
                   <!-- Join date -->
@@ -2166,7 +2201,8 @@
             </button>
           </div>
           <div class="overflow-y-auto flex-1 p-3 space-y-1.5">
-            <div v-if="!followers.length" class="py-12 text-center text-white/35 text-sm">Нет подписчиков</div>
+            <div v-if="friendsListRestricted" class="py-12 text-center text-white/35 text-sm">Список скрыт настройками приватности</div>
+            <div v-else-if="!followers.length" class="py-12 text-center text-white/35 text-sm">Нет подписчиков</div>
             <router-link v-for="u in followers" :key="u.id" :to="'/profile/' + u.username"
               @click="showFollowersModal = false"
               class="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-brand-bg border border-transparent hover:border-brand-border transition-all group">
@@ -2199,6 +2235,7 @@
             <div v-if="followingLoading" class="py-12 flex justify-center">
               <span class="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
             </div>
+            <div v-else-if="friendsListRestricted" class="py-12 text-center text-white/35 text-sm">Список скрыт настройками приватности</div>
             <div v-else-if="!following.length" class="py-12 text-center text-white/35 text-sm">Нет подписок</div>
             <router-link v-for="u in following" :key="u.id" :to="'/profile/' + u.username"
               @click="showFollowingModal = false"
@@ -2508,11 +2545,20 @@ async function loadProfileSoonBadges(userId: string) {
   } catch { profileSoonBadges.value = [] }
 }
 
+const messageErrorNotice = ref<string | null>(null)
+
 async function openChat() {
   if (!viewedProfile.value) return
-  const convId = await messagesStore.openConversation(viewedProfile.value.id)
-  messagesStore.activeId = convId
-  router.push({ name: 'messages' })
+  try {
+    const convId = await messagesStore.openConversation(viewedProfile.value.id)
+    messagesStore.activeId = convId
+    router.push({ name: 'messages' })
+  } catch (e: any) {
+    messageErrorNotice.value = e?.response?.data?.error?.message === 'MESSAGES_DISABLED'
+      ? 'Этот пользователь ограничил приём сообщений'
+      : 'Не удалось начать переписку'
+    setTimeout(() => { messageErrorNotice.value = null }, 4000)
+  }
 }
 
 const closeMenu = () => {}
@@ -2785,6 +2831,7 @@ const tabPosts = ref<any[]>([])
 const repawsFallback = ref<any[]>([])
 const followers = ref<any[]>([])
 const following = ref<any[]>([])
+const friendsListRestricted = ref(false)
 const mutualGroups = ref<any[]>([])
 const userHashtags = ref<{ name: string; count: number }[]>([])
 const isLoadingTab = ref(false)
@@ -3563,6 +3610,21 @@ const joinDate = computed(() => {
   return new Date(viewedProfile.value.created_at).toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
 })
 
+// ── Birth date, formatted per the owner's chosen public visibility ─────────
+const formattedBirthDate = computed(() => {
+  const p = viewedProfile.value as any
+  if (!p?.birth_date) return null
+  const bd = new Date(p.birth_date)
+  const full = () => bd.toLocaleDateString('ru-RU', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' })
+  if (isOwnProfile.value) return full()
+  switch (p.birth_date_visibility) {
+    case 'full':      return full()
+    case 'month_day': return bd.toLocaleDateString('ru-RU', { timeZone: 'UTC', day: 'numeric', month: 'long' })
+    case 'year':      return bd.toLocaleDateString('ru-RU', { timeZone: 'UTC', year: 'numeric' })
+    default:          return null
+  }
+})
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function formatDate(d: string) {
   const date = new Date(d)
@@ -3632,16 +3694,20 @@ async function loadProfile() {
 async function loadFriends(userId: string) {
   try {
     const res = await api.get(`/follows/${userId}/followers`)
-    if (res.data.success) followers.value = res.data.data.users
-  } catch {}
+    if (res.data.success) { followers.value = res.data.data.users; friendsListRestricted.value = false }
+  } catch (e: any) {
+    if (e?.response?.status === 403) { followers.value = []; friendsListRestricted.value = true }
+  }
 }
 
 async function loadFollowingList(userId: string) {
   followingLoading.value = true
   try {
     const res = await api.get(`/follows/${userId}/following`)
-    if (res.data.success) following.value = res.data.data.users
-  } catch {} finally {
+    if (res.data.success) { following.value = res.data.data.users; friendsListRestricted.value = false }
+  } catch (e: any) {
+    if (e?.response?.status === 403) { following.value = []; friendsListRestricted.value = true }
+  } finally {
     followingLoading.value = false
   }
 }
@@ -3725,8 +3791,7 @@ async function loadTabData(tab: string) {
     } else if (tab === 'followers') {
       await loadFriends(uid)
     } else if (tab === 'following') {
-      const res = await api.get(`/follows/${uid}/following`)
-      if (res.data.success) following.value = res.data.data.users
+      await loadFollowingList(uid)
     } else if (tab === 'mutual_groups') {
       const res = await api.get(`/groups/common/${uid}`)
       if (res.data.success) mutualGroups.value = res.data.data.groups

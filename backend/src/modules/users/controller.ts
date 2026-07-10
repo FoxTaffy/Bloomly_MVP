@@ -7,7 +7,8 @@ export async function getUserHandler(
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) {
-  const user = await usersService.getUserById(request.params.id);
+  const viewer = request.user as JwtPayload | undefined;
+  const user = await usersService.getUserById(request.params.id, viewer?.id);
 
   if (!user) {
     return reply.code(404).send({

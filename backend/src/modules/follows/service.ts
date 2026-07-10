@@ -1,5 +1,15 @@
 import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
+import { isAllowedByPrivacy } from '../../lib/privacy.js';
+
+/** Throws a 403 unless the viewer is allowed to see userId's friends/followers list. */
+async function assertFriendsListVisible(userId: string, viewerId?: string) {
+  if (viewerId === userId) return;
+  const owner = await prisma.user.findUnique({ where: { id: userId }, select: { friends_list_visibility: true } });
+  if (owner && !(await isAllowedByPrivacy(owner.friends_list_visibility, userId, viewerId))) {
+    throw Object.assign(new Error('FRIENDS_LIST_PRIVATE'), { statusCode: 403 });
+  }
+}
 
 export const followsService = {
   async toggle(followerId: string, followingId: string) {
@@ -43,7 +53,8 @@ export const followsService = {
     return Object.fromEntries(targetIds.map((id) => [id, set.has(id)]));
   },
 
-  async getFollowers(userId: string) {
+  async getFollowers(userId: string, viewerId?: string) {
+    await assertFriendsListVisible(userId, viewerId);
     const rows = await prisma.follow.findMany({
       where: { following_id: userId },
       include: {
@@ -56,7 +67,8 @@ export const followsService = {
     return rows.map((r) => r.follower);
   },
 
-  async getFollowing(userId: string) {
+  async getFollowing(userId: string, viewerId?: string) {
+    await assertFriendsListVisible(userId, viewerId);
     const rows = await prisma.follow.findMany({
       where: { follower_id: userId },
       include: {
@@ -78,7 +90,8 @@ export const followsService = {
   },
 
   /** Mutual follows: people who follow userId AND whom userId follows */
-  async getFriends(userId: string) {
+  async getFriends(userId: string, viewerId?: string) {
+    await assertFriendsListVisible(userId, viewerId);
     const [followerRows, followingRows] = await Promise.all([
       prisma.follow.findMany({ where: { following_id: userId }, select: { follower_id: true } }),
       prisma.follow.findMany({ where: { follower_id: userId }, select: { following_id: true } }),

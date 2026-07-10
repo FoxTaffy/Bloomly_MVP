@@ -35,7 +35,7 @@
       <div class="flex gap-1 bg-brand-bg rounded-2xl p-1 mb-2">
         <button @click="activeCategory = 'personal'"
           :class="['flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-bold transition-all duration-200',
-            activeCategory === 'personal' || activeCategory === 'all' ? 'bg-gradient-to-br from-brand-accent to-brand-accent-plus text-white shadow-accent' : 'text-white/50 hover:text-white/80']">
+            activeCategory === 'personal' || activeCategory === 'all' ? 'bg-brand-accent text-white' : 'text-white/50 hover:text-white/80']">
           <BIcon name="User" class="w-3 h-3" />
           {{ langStore.t.tabPersonal }}
           <span v-if="getCategoryCount('personal')"
@@ -44,7 +44,7 @@
         </button>
         <button @click="activeCategory = 'groups'"
           :class="['flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-bold transition-all duration-200',
-            activeCategory === 'groups' ? 'bg-gradient-to-br from-brand-accent to-brand-accent-plus text-white shadow-accent' : 'text-white/50 hover:text-white/80']">
+            activeCategory === 'groups' ? 'bg-brand-accent text-white' : 'text-white/50 hover:text-white/80']">
           <BIcon name="MessagesSquare" class="w-3 h-3" />
           {{ langStore.t.tabGroups }}
           <span v-if="getCategoryCount('groups')"
@@ -52,7 +52,7 @@
         </button>
         <button @click="activeCategory = 'community'"
           :class="['flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-bold transition-all duration-200',
-            activeCategory === 'community' ? 'bg-gradient-to-br from-brand-accent to-brand-accent-plus text-white shadow-accent' : 'text-white/50 hover:text-white/80']">
+            activeCategory === 'community' ? 'bg-brand-accent text-white' : 'text-white/50 hover:text-white/80']">
           <BIcon name="Globe" class="w-3 h-3" />
           {{ langStore.t.tabCommunity }}
           <span v-if="getCategoryCount('community')"
@@ -86,7 +86,7 @@
           v-for="m in groupsStore.myGroups" :key="m.group_id"
           :class="['w-full flex items-center gap-3 px-3 py-3 transition-all duration-200 cursor-pointer text-left border-b border-brand-border/30 last:border-0 group',
             m.group.communityChat?.id && activeId === m.group.communityChat.id
-              ? 'bg-gradient-to-r from-brand-accent/14 to-transparent border-l-2 border-l-brand-accent pl-2'
+              ? 'bg-brand-accent/12 border-l-2 border-l-brand-accent pl-2'
               : 'hover:bg-brand-bg/60 border-l-2 border-l-transparent']"
           @click="m.group.communityChat?.id ? $emit('select', m.group.communityChat.id) : router.push('/groups/' + m.group.slug)">
           <!-- Avatar -->
@@ -97,7 +97,7 @@
               <BIcon name="Globe" class="w-5 h-5 text-brand-accent" />
             </div>
             <!-- online dot for chat-linked groups -->
-            <span v-if="m.group.communityChat?.id" class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-brand-accent rounded-full border-2 border-brand-card shadow-[0_0_6px_rgba(76,103,207,0.7)]" />
+            <span v-if="m.group.communityChat?.id" class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-brand-accent rounded-full border-2 border-brand-card" />
           </div>
           <!-- Text -->
           <div class="flex-1 min-w-0">
@@ -140,7 +140,7 @@
         </div>
         <button v-for="conv in filtered" :key="conv.id"
         :class="['w-full flex items-center gap-3 px-3 py-3 transition-all duration-200 text-left border-b border-brand-border/30 last:border-0 relative group/conv',
-          activeId === conv.id ? 'bg-gradient-to-r from-brand-accent/14 to-transparent border-l-2 border-l-brand-accent pl-2' : 'hover:bg-brand-bg/60 border-l-2 border-l-transparent']"
+          activeId === conv.id ? 'bg-brand-accent/12 border-l-2 border-l-brand-accent pl-2' : 'hover:bg-brand-bg/60 border-l-2 border-l-transparent']"
         @click="$emit('select', conv.id)">
         <!-- Customer badge -->
         <div v-if="conv.my_participant?.label === 'customer'"
@@ -180,7 +180,7 @@
               </div>
             </template>
           </template>
-          <span v-if="isUnread(conv)" class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-brand-accent rounded-full border-2 border-brand-card shadow-[0_0_6px_rgba(76,103,207,0.7)]" />
+          <span v-if="isUnread(conv)" class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-brand-accent rounded-full border-2 border-brand-card" />
         </div>
         <!-- Text -->
         <div class="flex-1 min-w-0">

@@ -7,6 +7,7 @@ import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useMobileSidebar } from '@/composables/useMobileSidebar'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useNotifToast } from '@/composables/useNotifToast'
+import { useMessagesStore } from '@/stores/messages'
 import api from '@/api'
 import BIcon from './BIcon.vue'
 import PostCard from './PostCard.vue'
@@ -25,6 +26,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const langStore = useLangStore()
 const mobileSidebar = useMobileSidebar()
+const messagesStore = useMessagesStore()
 
 // ── Language picker ───────────────────────────────────────────────────────────
 const showLangDropdown = ref(false)
@@ -351,7 +353,14 @@ function formatDate(d: string) {
 }
 
 onMounted(() => {
-  if (auth.isAuthenticated) { fetchUnreadCount(); connectNotifSSE(); fetchSearchStories() }
+  if (auth.isAuthenticated) {
+    fetchUnreadCount(); connectNotifSSE(); fetchSearchStories()
+    // Keep the chat WS subscription alive app-wide, not just while the Messages page is open —
+    // otherwise incoming messages are silently dropped (no handler registered) until the user
+    // happens to navigate back to /messages.
+    messagesStore.startListening()
+    messagesStore.fetchUnreadCount()
+  }
   window.addEventListener('keydown', onGlobalKeydown)
   document.addEventListener('click', onDocumentClick)
 })

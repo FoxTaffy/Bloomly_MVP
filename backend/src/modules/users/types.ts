@@ -28,6 +28,7 @@ export interface UserPublicProfile {
   fursuit_description: string | null;
   fursuit_maker: string | null;
   birth_date: Date | null;
+  birth_date_visibility: string;
   relationship_since: Date | null;
   pinned_post_id: string | null;
   social_links: Record<string, string> | null;
@@ -41,8 +42,13 @@ export interface UserPublicProfile {
   verified_at: Date | null;
   verification_type: string | null;
   artist_since: Date | null;
-  allow_messages: boolean;
   donate_url: string | null;
+  messages_privacy: string;
+  comments_privacy: string;
+  mentions_privacy: string;
+  online_status_visibility: string;
+  friends_list_visibility: string;
+  profile_visibility: string;
 }
 
 export interface UpdateUserInput {
@@ -72,6 +78,7 @@ export interface UpdateUserInput {
   fursuit_description?: string | null;
   fursuit_maker?: string | null;
   birth_date?: string | null;
+  birth_date_visibility?: string;
   social_links?: Record<string, string> | null;
   interests?: string[];
   profile_theme?: string | null;
@@ -80,8 +87,13 @@ export interface UpdateUserInput {
   artist_since?: string | null;
   relationship_since?: string | null;
   onboarding_done?: boolean;
-  allow_messages?: boolean;
   donate_url?: string | null;
+  messages_privacy?: string;
+  comments_privacy?: string;
+  mentions_privacy?: string;
+  online_status_visibility?: string;
+  friends_list_visibility?: string;
+  profile_visibility?: string;
 }
 
 export interface JwtPayload {

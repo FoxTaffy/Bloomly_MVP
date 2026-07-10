@@ -38,7 +38,7 @@
               <div v-else class="w-10 h-10 rounded-full bg-gradient-to-br from-brand-accent/30 to-brand-accent/10 ring-2 ring-brand-border hover:ring-brand-accent/50 transition-all flex items-center justify-center text-brand-accent font-bold">
                 {{ (other?.display_name || other?.username || '?')[0].toUpperCase() }}
               </div>
-              <span v-if="isPartnerOnline" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-brand-success rounded-full border-2 border-brand-card shadow-[0_0_6px_rgba(102,199,112,0.7)]" />
+              <span v-if="isPartnerOnline" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-brand-success rounded-full border-2 border-brand-card" />
             </span>
           </template>
         </template>
@@ -834,14 +834,14 @@
 
             <!-- Media (compact MiniPlayer) -->
             <div v-else-if="msg.file_url"
-              class="rounded-3xl overflow-hidden border border-brand-border/60 mb-0.5 max-w-[280px] w-full shadow-sm"
+              class="rounded-2xl overflow-hidden border border-brand-border/60 mb-0.5 max-w-[280px] w-full shadow-sm"
               :class="isMine(msg) ? 'rounded-br-md' : 'rounded-bl-md'">
               <MiniPlayer :src="msg.file_url" :msg-type="msg.type" @click-image="openImageLightbox(msg.file_url!)" />
             </div>
 
             <!-- ── Payment request card (chat-only order card, not linked to Dealers' Den) ── -->
             <div v-if="msg.type === 'payment_request'"
-              class="relative mb-0.5 w-[264px] rounded-3xl overflow-hidden border border-brand-accent/30 bg-gradient-to-br from-brand-accent/25 via-brand-accent/10 to-brand-card shadow-accent"
+              class="relative mb-0.5 w-[264px] rounded-2xl overflow-hidden border border-brand-accent/30 bg-gradient-to-br from-brand-accent/25 via-brand-accent/10 to-brand-card shadow-sm"
               :class="isMine(msg) ? 'rounded-br-md' : 'rounded-bl-md'">
               <!-- decorative glow -->
               <div class="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-brand-accent/25 blur-2xl pointer-events-none" />
@@ -874,7 +874,7 @@
                   Оплачено
                 </div>
                 <button v-else-if="!isMine(msg)" type="button" @click="payOrder(msg)" :disabled="payingId === msg.id"
-                  class="w-full py-1.5 rounded-xl bg-gradient-to-r from-brand-accent to-brand-accent-plus hover:brightness-110 text-white text-xs font-bold transition-all active:scale-95 disabled:opacity-50 shadow-sm">
+                  class="w-full py-1.5 rounded-xl bg-brand-accent hover:bg-brand-accent-plus text-white text-xs font-bold transition-all active:scale-95 disabled:opacity-50 shadow-sm">
                   {{ payingId === msg.id ? 'Оплата...' : 'Оплатить' }}
                 </button>
                 <span v-else class="text-[11px] text-white/45">Ожидает оплаты</span>
@@ -883,7 +883,7 @@
 
             <!-- ── Payment confirmation card ── -->
             <div v-else-if="msg.type === 'payment_confirmation'"
-              class="mb-0.5 w-[264px] rounded-3xl overflow-hidden border border-brand-success/30 bg-gradient-to-br from-brand-success/15 to-brand-card shadow-sm px-3.5 py-2.5 flex items-center gap-2.5"
+              class="mb-0.5 w-[264px] rounded-2xl overflow-hidden border border-brand-success/30 bg-gradient-to-br from-brand-success/15 to-brand-card shadow-sm px-3.5 py-2.5 flex items-center gap-2.5"
               :class="isMine(msg) ? 'rounded-br-md' : 'rounded-bl-md'">
               <div class="w-9 h-9 rounded-full bg-gradient-to-br from-brand-success/30 to-brand-success/10 ring-1 ring-brand-success/30 flex items-center justify-center flex-shrink-0">
                 <BIcon name="Check" class="w-4 h-4 text-brand-success" />
@@ -896,7 +896,7 @@
 
             <!-- ── Tip card ── -->
             <div v-else-if="msg.type === 'tip'"
-              class="relative mb-0.5 w-[264px] rounded-3xl overflow-hidden border border-brand-pink/35 bg-gradient-to-br from-brand-purple/20 via-brand-pink/10 to-brand-card shadow-sm px-3.5 py-2.5 flex items-center gap-2.5"
+              class="relative mb-0.5 w-[264px] rounded-2xl overflow-hidden border border-brand-pink/35 bg-gradient-to-br from-brand-purple/20 via-brand-pink/10 to-brand-card shadow-sm px-3.5 py-2.5 flex items-center gap-2.5"
               :class="isMine(msg) ? 'rounded-br-md' : 'rounded-bl-md'">
               <div class="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-brand-pink/20 blur-2xl pointer-events-none" />
               <div class="relative w-9 h-9 rounded-full bg-gradient-to-br from-brand-pink/25 to-brand-purple/20 ring-1 ring-brand-pink/30 flex items-center justify-center flex-shrink-0 text-base">🎉</div>
@@ -998,9 +998,9 @@
             <div v-if="!['sticker', 'payment_request', 'payment_confirmation', 'tip'].includes(msg.type) && !parseStoryReply(msg) && !/^\[story_reply:/u.test(msg.text || '') && (msg.text || !msg.file_url)"
               @click="tappedMsgId = tappedMsgId === msg.id ? null : msg.id"
               :class="[
-                'relative px-3.5 py-2 rounded-3xl text-sm leading-relaxed break-words min-w-[60px] transition-shadow',
+                'relative px-3 py-[7px] rounded-2xl text-sm leading-relaxed break-words min-w-[60px] transition-shadow',
                 isMine(msg)
-                  ? 'bg-gradient-to-br from-brand-accent to-brand-accent-plus text-white rounded-br-md shadow-accent'
+                  ? 'bg-brand-accent text-white rounded-br-md'
                   : 'bg-brand-card text-brand-offwhite border border-brand-border/60 rounded-bl-md shadow-sm',
                 msg._sending ? 'opacity-60' : '',
                 translateMode && translations[msg.id] && !isMine(msg) ? 'border-brand-accent/40' : '',

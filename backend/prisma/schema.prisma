@@ -38,6 +38,7 @@ model User {
   fursona_name                 String?               @db.VarChar(80)
   relationship_with            String?               @db.Uuid
   birth_date                   DateTime?             @db.Timestamp(6)
+  birth_date_visibility        String                @default("hidden") @db.VarChar(20)
   fursona_color                String?               @db.VarChar(50)
   fursona_gender               String?               @db.VarChar(50)
   fursona_description          String?
@@ -131,9 +132,15 @@ model User {
   disputesBuyer                DenDispute[]          @relation("DisputeBuyer")
   disputesSeller               DenDispute[]          @relation("DisputeSeller")
   denFairParticipations        DenFairParticipant[]
-  allow_messages               Boolean               @default(true)
   donate_url                   String?               @db.VarChar(500)
   conversationKeys             ConversationKey[]
+  // Privacy (all: "everyone" | "friends" | "nobody", except *_visibility below which use "only_me" instead of "nobody")
+  messages_privacy             String                @default("everyone") @db.VarChar(20)
+  comments_privacy             String                @default("everyone") @db.VarChar(20)
+  mentions_privacy             String                @default("everyone") @db.VarChar(20)
+  online_status_visibility     String                @default("everyone") @db.VarChar(20)
+  friends_list_visibility      String                @default("everyone") @db.VarChar(20)
+  profile_visibility           String                @default("everyone") @db.VarChar(20)
 }
 
 model OAuthAccount {

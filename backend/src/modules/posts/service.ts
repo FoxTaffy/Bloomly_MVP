@@ -1,6 +1,16 @@
 import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
+import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import type { CreatePostInput, GetPostsQuery } from './types.js';
+
+/** Throws a 403 unless the viewer is allowed to see userId's profile content. */
+async function assertProfileVisible(userId: string, viewerId?: string) {
+  if (viewerId === userId) return;
+  const owner = await prisma.user.findUnique({ where: { id: userId }, select: { profile_visibility: true } });
+  if (owner && !(await isAllowedByPrivacy(owner.profile_visibility, userId, viewerId))) {
+    throw Object.assign(new Error('PROFILE_PRIVATE'), { statusCode: 403 });
+  }
+}
 
 /** Reusable author select for posts — includes verification fields */
 const AUTHOR_SELECT = { id: true, username: true, display_name: true, avatar_url: true, is_verified: true, verification_type: true } as const;
@@ -364,7 +374,8 @@ export const postService = {
     }
   },
 
-  async getUserPosts(userId: string, take = 50) {
+  async getUserPosts(userId: string, take = 50, viewerId?: string) {
+    await assertProfileVisible(userId, viewerId);
     const posts = await prisma.post.findMany({
       where: { author_id: userId, deleted_at: null, groupPosts: { none: {} } },
       orderBy: { created_at: 'desc' },
@@ -380,7 +391,8 @@ export const postService = {
     return posts.map(maskGroupAuthor);
   },
 
-  async getUserMediaPosts(userId: string, take = 50) {
+  async getUserMediaPosts(userId: string, take = 50, viewerId?: string) {
+    await assertProfileVisible(userId, viewerId);
     const posts = await prisma.post.findMany({
       where: { author_id: userId, deleted_at: null, media_urls: { isEmpty: false }, groupPosts: { none: {} } },
       orderBy: { created_at: 'desc' },
@@ -396,7 +408,8 @@ export const postService = {
     return posts.map(maskGroupAuthor);
   },
 
-  async getUserRepawedPosts(userId: string, take = 50) {
+  async getUserRepawedPosts(userId: string, take = 50, viewerId?: string) {
+    await assertProfileVisible(userId, viewerId);
     const repaws = await prisma.repaw.findMany({
       where: { user_id: userId, post: { groupPosts: { none: {} } } },
       orderBy: { created_at: 'desc' },
@@ -416,7 +429,8 @@ export const postService = {
     return repaws.map((r) => maskGroupAuthor({ ...r.post, repawed_at: r.created_at }));
   },
 
-  async getUserFavouritePosts(userId: string, take = 50) {
+  async getUserFavouritePosts(userId: string, take = 50, viewerId?: string) {
+    await assertProfileVisible(userId, viewerId);
     const favs = await prisma.favourite.findMany({
       where: { user_id: userId, post: { groupPosts: { none: {} } } },
       orderBy: { created_at: 'desc' },
@@ -491,6 +505,15 @@ export const postService = {
   },
 
   async createComment(userId: string, postId: string, content: string, parentId?: string, type?: string, file_url?: string) {
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+      select: { author_id: true, author: { select: { comments_privacy: true } } },
+    });
+    if (!post) throw Object.assign(new Error('Post not found'), { statusCode: 404 });
+    if (!(await isAllowedByPrivacy(post.author.comments_privacy, post.author_id, userId))) {
+      throw Object.assign(new Error('COMMENTS_DISABLED'), { statusCode: 403 });
+    }
+
     const comment = await prisma.comment.create({
       data: {
         post_id: postId,
@@ -507,8 +530,7 @@ export const postService = {
     });
 
     // Notify post author (not for self-comments)
-    const post = await prisma.post.findUnique({ where: { id: postId }, select: { author_id: true } });
-    if (post && post.author_id !== userId) {
+    if (post.author_id !== userId) {
       notificationService.create({
         receiverId: post.author_id,
         senderId: userId,
@@ -518,14 +540,14 @@ export const postService = {
       }).catch(() => {});
     }
 
-    // Notify @mentioned users in parallel
+    // Notify @mentioned users in parallel (skipped if the mentioned user restricts who can mention them)
     const mentions = content.match(/@(\w+)/g);
     if (mentions) {
       const uniqueUsernames = [...new Set(mentions.map((m) => m.slice(1)))];
       await Promise.all(
         uniqueUsernames.map(async (username) => {
-          const mentioned = await prisma.user.findFirst({ where: { username, deleted_at: null }, select: { id: true } });
-          if (mentioned && mentioned.id !== userId) {
+          const mentioned = await prisma.user.findFirst({ where: { username, deleted_at: null }, select: { id: true, mentions_privacy: true } });
+          if (mentioned && mentioned.id !== userId && (await isAllowedByPrivacy(mentioned.mentions_privacy, mentioned.id, userId))) {
             notificationService.create({
               receiverId: mentioned.id,
               senderId: userId,

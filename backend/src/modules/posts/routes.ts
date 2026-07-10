@@ -6,6 +6,7 @@ import { createPostHandler, votePostHandler, getPostsHandler, getPersonalizedPos
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    tryAuthenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
@@ -51,6 +52,7 @@ const getPostsSchema = {
 
 export async function postsRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
+  const tryAuth: RouteShorthandOptions = { onRequest: [fastify.tryAuthenticate] };
 
   // ── Static / non-parametric ─────────────────────────────────────────────
   fastify.get('/', { schema: getPostsSchema }, getPostsHandler as any);
@@ -62,10 +64,10 @@ export async function postsRoutes(fastify: FastifyInstance) {
   fastify.get('/me/bookmarks', auth, getMyBookmarksHandler as any);
 
   // ── User-specific ───────────────────────────────────────────────────────
-  fastify.get('/user/:userId',        getUserPostsHandler as any);
-  fastify.get('/user/:userId/media',  getUserMediaPostsHandler as any);
-  fastify.get('/user/:userId/repaws', getUserRepawsHandler as any);
-  fastify.get('/user/:userId/likes',  getUserFavouritesHandler as any);
+  fastify.get('/user/:userId',        tryAuth, getUserPostsHandler as any);
+  fastify.get('/user/:userId/media',  tryAuth, getUserMediaPostsHandler as any);
+  fastify.get('/user/:userId/repaws', tryAuth, getUserRepawsHandler as any);
+  fastify.get('/user/:userId/likes',  tryAuth, getUserFavouritesHandler as any);
 
   // ── Comment sub-resources ───────────────────────────────────────────────
   fastify.post('/comments/:commentId/vote', auth, voteCommentHandler as any);

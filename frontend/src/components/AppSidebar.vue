@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useFriendsStore } from '@/stores/friends'
 import { useLangStore } from '@/stores/lang'
 import { useGroupsStore } from '@/stores/groups'
+import { useMessagesStore } from '@/stores/messages'
 import { useMobileSidebar } from '@/composables/useMobileSidebar'
 import BIcon from './BIcon.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
@@ -24,6 +25,7 @@ const auth   = useAuthStore()
 const friendsStore = useFriendsStore()
 const langStore = useLangStore()
 const groupsStore = useGroupsStore()
+const messagesStore = useMessagesStore()
 const mobileSidebar = useMobileSidebar()
 
 const ADMIN_ROUTES = new Set([
@@ -106,6 +108,7 @@ function navigate(fn: () => void) {
 
 onMounted(() => {
   friendsStore.loadRequests().catch(() => {})
+  messagesStore.fetchUnreadCount().catch(() => {})
   if (auth.user && !groupsStore.myGroups.length) {
     groupsStore.loadMyGroups().catch(() => {})
   }
@@ -151,6 +154,7 @@ const navItems = computed(() => [
     label: langStore.t.messages,
     disabled: false,
     action: () => router.push({ name: 'messages' }),
+    badge: messagesStore.unreadCount > 0 ? String(messagesStore.unreadCount) : undefined,
   },
   {
     key: 'friends',

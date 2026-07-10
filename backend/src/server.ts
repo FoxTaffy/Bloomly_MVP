@@ -32,6 +32,7 @@ import { messageService, messageSubscriptions } from './modules/messages/service
 import { groupService } from './modules/groups/service.js';
 import { initCronJobs } from './cron.js';
 import prisma from './config/prisma.js';
+import { isAllowedByPrivacy } from './lib/privacy.js';
 
 dotenv.config();
 
@@ -295,10 +296,21 @@ fastify.register(async function (fastify) {
   })
 
   // REST endpoint: GET /api/users/online?ids=id1,id2,...
-  fastify.get('/api/users/online', async (request, reply) => {
+  fastify.get('/api/users/online', { onRequest: [fastify.tryAuthenticate] }, async (request, reply) => {
     const ids = ((request.query as any).ids ?? '').split(',').filter(Boolean) as string[]
+    const viewerId = (request.user as { id: string } | undefined)?.id
     const result: Record<string, boolean> = {}
-    for (const id of ids) result[id] = onlineUsers.has(id)
+    if (ids.length) {
+      const owners = await prisma.user.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, online_status_visibility: true },
+      })
+      const visibilityById = new Map(owners.map((o) => [o.id, o.online_status_visibility]))
+      for (const id of ids) {
+        const isOnline = onlineUsers.has(id)
+        result[id] = isOnline && await isAllowedByPrivacy(visibilityById.get(id), id, viewerId)
+      }
+    }
     return reply.send({ success: true, data: result, error: null })
   })
 })

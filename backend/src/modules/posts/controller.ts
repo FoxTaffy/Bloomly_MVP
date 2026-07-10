@@ -179,7 +179,8 @@ export const createCommentHandler = async (
     return reply.code(201).send({ success: true, data: { comment }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to create comment';
-    return reply.code(400).send({ success: false, data: null, error: { code: 'COMMENT_ERROR', message } });
+    const statusCode = (error as any)?.statusCode ?? 400;
+    return reply.code(statusCode).send({ success: false, data: null, error: { code: 'COMMENT_ERROR', message } });
   }
 };
 
@@ -267,11 +268,12 @@ export const getUserPostsHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const posts = await postService.getUserPosts(request.params.userId);
+    const viewer = request.user as JwtUser | undefined;
+    const posts = await postService.getUserPosts(request.params.userId, undefined, viewer?.id);
     return reply.send({ success: true, data: { posts }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch user posts';
-    return reply.code(500).send({ success: false, data: null, error: { code: 'USER_POSTS_ERROR', message } });
+    return reply.code((error as any)?.statusCode ?? 500).send({ success: false, data: null, error: { code: 'USER_POSTS_ERROR', message } });
   }
 };
 
@@ -280,11 +282,12 @@ export const getUserMediaPostsHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const posts = await postService.getUserMediaPosts(request.params.userId);
+    const viewer = request.user as JwtUser | undefined;
+    const posts = await postService.getUserMediaPosts(request.params.userId, undefined, viewer?.id);
     return reply.send({ success: true, data: { posts }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch user media posts';
-    return reply.code(500).send({ success: false, data: null, error: { code: 'USER_MEDIA_ERROR', message } });
+    return reply.code((error as any)?.statusCode ?? 500).send({ success: false, data: null, error: { code: 'USER_MEDIA_ERROR', message } });
   }
 };
 
@@ -293,11 +296,12 @@ export const getUserRepawsHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const posts = await postService.getUserRepawedPosts(request.params.userId);
+    const viewer = request.user as JwtUser | undefined;
+    const posts = await postService.getUserRepawedPosts(request.params.userId, undefined, viewer?.id);
     return reply.send({ success: true, data: { posts }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch user repaws';
-    return reply.code(500).send({ success: false, data: null, error: { code: 'USER_REPAWS_ERROR', message } });
+    return reply.code((error as any)?.statusCode ?? 500).send({ success: false, data: null, error: { code: 'USER_REPAWS_ERROR', message } });
   }
 };
 
@@ -306,11 +310,12 @@ export const getUserFavouritesHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const posts = await postService.getUserFavouritePosts(request.params.userId);
+    const viewer = request.user as JwtUser | undefined;
+    const posts = await postService.getUserFavouritePosts(request.params.userId, undefined, viewer?.id);
     return reply.send({ success: true, data: { posts }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch user likes';
-    return reply.code(500).send({ success: false, data: null, error: { code: 'USER_LIKES_ERROR', message } });
+    return reply.code((error as any)?.statusCode ?? 500).send({ success: false, data: null, error: { code: 'USER_LIKES_ERROR', message } });
   }
 };
 

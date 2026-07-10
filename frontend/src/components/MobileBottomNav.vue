@@ -4,13 +4,15 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
 import { useMobileHubStore } from '@/stores/mobileHub'
+import { useMessagesStore } from '@/stores/messages'
 import BIcon from './BIcon.vue'
 
-const router    = useRouter()
-const route     = useRoute()
-const auth      = useAuthStore()
-const langStore = useLangStore()
-const hub       = useMobileHubStore()
+const router       = useRouter()
+const route        = useRoute()
+const auth         = useAuthStore()
+const langStore    = useLangStore()
+const hub          = useMobileHubStore()
+const messagesStore = useMessagesStore()
 
 const mobileHubOpen = ref(false)
 
@@ -141,6 +143,10 @@ function handleNewStory() {
           <div v-if="activeTab === 'messages'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-success/30 blur-sm"></div>
           <BIcon name="MessageCircle" class="w-6 h-6 relative transition-transform duration-200"
             :class="activeTab === 'messages' ? 'scale-110 text-brand-success' : ''" />
+          <span v-if="messagesStore.unreadCount > 0"
+            class="absolute -top-1 -right-1.5 min-w-[16px] h-[16px] px-1 flex items-center justify-center bg-brand-error rounded-full text-[9px] font-bold text-white border-2 border-brand-bg">
+            {{ messagesStore.unreadCount > 9 ? '9+' : messagesStore.unreadCount }}
+          </span>
         </div>
         <span class="text-[10px] font-semibold">{{ langStore.t.chats }}</span>
         <div v-if="activeTab === 'messages'" class="w-1 h-1 rounded-full bg-brand-success mt-0.5"></div>

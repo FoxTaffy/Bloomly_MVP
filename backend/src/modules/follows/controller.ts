@@ -47,16 +47,26 @@ export const getFollowersHandler = async (
   req: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) => {
-  const users = await followsService.getFollowers(req.params.id);
-  return reply.send({ success: true, data: { users }, error: null });
+  try {
+    const viewer = req.user as JwtUser | undefined;
+    const users = await followsService.getFollowers(req.params.id, viewer?.id);
+    return reply.send({ success: true, data: { users }, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 500).send({ success: false, data: null, error: { code: 'FOLLOWERS_ERROR', message: e.message } });
+  }
 };
 
 export const getFollowingHandler = async (
   req: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) => {
-  const users = await followsService.getFollowing(req.params.id);
-  return reply.send({ success: true, data: { users }, error: null });
+  try {
+    const viewer = req.user as JwtUser | undefined;
+    const users = await followsService.getFollowing(req.params.id, viewer?.id);
+    return reply.send({ success: true, data: { users }, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 500).send({ success: false, data: null, error: { code: 'FOLLOWING_ERROR', message: e.message } });
+  }
 };
 
 export const getFollowCountsHandler = async (
@@ -87,10 +97,11 @@ export const getFriendsHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const users = await followsService.getFriends(req.params.id);
+    const viewer = req.user as JwtUser | undefined;
+    const users = await followsService.getFriends(req.params.id, viewer?.id);
     return reply.send({ success: true, data: { users }, error: null });
   } catch (e: any) {
-    return reply.code(500).send({ success: false, data: null, error: { code: 'FRIENDS_ERROR', message: e.message } });
+    return reply.code(e.statusCode ?? 500).send({ success: false, data: null, error: { code: 'FRIENDS_ERROR', message: e.message } });
   }
 };
 

@@ -116,5 +116,5 @@ export async function usersRoutes(fastify: FastifyInstance) {
   fastify.delete('/me/fursuits/:fursuitId', { schema: fursuitIdParamSchema, onRequest: [fastify.authenticate] }, deleteFursuitHandler as any);
 
   // GET /api/users/:id — public profile (no auth required) — must be last
-  fastify.get('/:id', { schema: getUserParamsSchema }, getUserHandler as any);
+  fastify.get('/:id', { schema: getUserParamsSchema, onRequest: [fastify.tryAuthenticate] }, getUserHandler as any);
 }
