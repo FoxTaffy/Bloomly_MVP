@@ -2,9 +2,10 @@
  * AutoMod Service — rule-based content moderation with scoring
  *
  * Actions:
- *  - warn:       +1 warn_count, log (max 3 → auto-ban)
- *  - freeze:     set frozen_at, log
- *  - ban:        set deleted_at + frozen_reason = 'ban', log
+ *  - warn:       +1 warn_count, log (max N → auto-freeze, never auto-ban)
+ *  - freeze:     set frozen_at, log — reversible, requires moderator review to lift
+ *  - ban:        set deleted_at + frozen_reason = 'ban', log — manual/moderator use only,
+ *                automod itself never calls this automatically anymore
  *  - flag_post:  soft-delete or mark suspicious post, log
  *
  * Categories:
@@ -13,19 +14,23 @@
 
 import prisma from '../../config/prisma.js';
 
-// ── Thresholds ────────────────────────────────────────────────────────────────
-const WARNS_BEFORE_BAN       = 3;
-const SPAM_POSTS_PER_MINUTE  = 5;    // more than 5 posts/min = spam
-const SPAM_POSTS_PER_HOUR    = 20;   // more than 20 posts/hr = spam
-const DUPLICATE_SIMILARITY   = 0.85; // 85% same chars = duplicate
+// ── Thresholds (loosened to reduce false positives; escalation is warn → freeze, never an automatic ban) ──
+const WARNS_BEFORE_BAN       = 5;
+const SPAM_POSTS_PER_MINUTE  = 8;    // more than 8 posts/min = spam
+const SPAM_POSTS_PER_HOUR    = 30;   // more than 30 posts/hr = spam
+const STORY_BURST_PER_10S    = 8;    // 8+ stories in 10 seconds = bot-like burst
+const STORY_SPAM_PER_MINUTE  = 12;   // more than 12 stories/min = spam
+const STORY_SPAM_PER_HOUR    = 35;   // more than 35 stories/hr = spam (safety net past the route limiter)
+const DUPLICATE_SIMILARITY   = 0.85; // 85% bigram overlap = duplicate
 const FRAUD_SCORE_THRESHOLD  = 0.7;
-const TOXIC_SCORE_THRESHOLD  = 0.65;
-const SPAM_SCORE_THRESHOLD   = 0.6;
+const TOXIC_SCORE_THRESHOLD  = 0.75;
+const SPAM_SCORE_THRESHOLD   = 0.7;
 
 // ── Russian keyword dictionaries ──────────────────────────────────────────────
 const FRAUD_PATTERNS = [
-  /казино|casino|заработ[аи][тй]|пассивный доход|кликни по ссылк|инвест.*гарант/i,
+  /казино|casino|пассивный доход|кликни по ссылк|инвест.*гарант/i,
   /бинарн.*опцион|криптоин.*схем|заработок в интернет|лёгкие деньги/i,
+  /заработ\w*\s*(без вложени|не выходя из дома|каждый день\s*\d|гарантированн)/i,
   /telegram.*заработ|пишите в лс.*деньги|перевед.*кошел/i,
   /Hyip|hyip|рефераль.*ссылк|партнёрск.*програ/i,
   /обнал|отмыв.*денег|вывес.*средств без верификац/i,
@@ -111,20 +116,44 @@ function normalize(text: string): string {
   return text.toLowerCase().replace(/\s+/g, ' ').replace(/[^\wа-яёa-z0-9 ]/gi, '').trim();
 }
 
-function similarity(a: string, b: string): number {
-  if (a === b) return 1;
-  const la = a.length, lb = b.length;
-  if (!la || !lb) return 0;
-  const common = [...a].filter(c => b.includes(c)).length;
-  return (2 * common) / (la + lb);
+// Dice's coefficient over character bigrams — measures actual textual overlap,
+// not just shared alphabet (a naive per-character check flags almost any two
+// same-language posts of similar length as "duplicates").
+function bigrams(s: string): Map<string, number> {
+  const map = new Map<string, number>();
+  for (let i = 0; i < s.length - 1; i++) {
+    const bg = s.slice(i, i + 2);
+    map.set(bg, (map.get(bg) ?? 0) + 1);
+  }
+  return map;
 }
 
-export async function checkDuplicate(authorId: string, content: string): Promise<{ isDuplicate: boolean; originalPostId?: string }> {
+function similarity(a: string, b: string): number {
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+  const ba = bigrams(a), bb = bigrams(b);
+  let common = 0;
+  for (const [bg, count] of ba) {
+    const other = bb.get(bg);
+    if (other) common += Math.min(count, other);
+  }
+  let total = 0;
+  for (const v of ba.values()) total += v;
+  for (const v of bb.values()) total += v;
+  return total ? (2 * common) / total : 0;
+}
+
+export async function checkDuplicate(authorId: string, content: string, postId?: string): Promise<{ isDuplicate: boolean; originalPostId?: string }> {
   const norm = normalize(content);
   if (norm.length < 20) return { isDuplicate: false };
 
   const recent = await prisma.post.findMany({
-    where: { author_id: authorId, deleted_at: null, created_at: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+    where: {
+      author_id: authorId,
+      deleted_at: null,
+      created_at: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+      ...(postId ? { id: { not: postId } } : {}),
+    },
     select: { id: true, content: true },
     orderBy: { created_at: 'desc' },
     take: 20,
@@ -148,6 +177,21 @@ export async function checkSpamRate(authorId: string): Promise<{ isSpam: boolean
 
   if (perMinute >= SPAM_POSTS_PER_MINUTE) return { isSpam: true, reason: `Слишком много постов за минуту (${perMinute})` };
   if (perHour  >= SPAM_POSTS_PER_HOUR)   return { isSpam: true, reason: `Слишком много постов за час (${perHour})` };
+  return { isSpam: false, reason: '' };
+}
+
+// ── Story burst / spam frequency check ────────────────────────────────────────
+export async function checkStoryBurstRate(userId: string): Promise<{ isSpam: boolean; reason: string }> {
+  const now = Date.now();
+  const [per10s, perMinute, perHour] = await Promise.all([
+    prisma.story.count({ where: { user_id: userId, created_at: { gte: new Date(now - 10_000) } } }),
+    prisma.story.count({ where: { user_id: userId, created_at: { gte: new Date(now - 60_000) } } }),
+    prisma.story.count({ where: { user_id: userId, created_at: { gte: new Date(now - 3_600_000) } } }),
+  ]);
+
+  if (per10s    >= STORY_BURST_PER_10S)   return { isSpam: true, reason: `Аномальный всплеск историй: ${per10s} за 10 секунд` };
+  if (perMinute >= STORY_SPAM_PER_MINUTE) return { isSpam: true, reason: `Слишком много историй за минуту (${perMinute})` };
+  if (perHour   >= STORY_SPAM_PER_HOUR)   return { isSpam: true, reason: `Слишком много историй за час (${perHour})` };
   return { isSpam: false, reason: '' };
 }
 
@@ -184,9 +228,15 @@ export async function applyAction(
   if (action === 'warn') {
     const newWarnCount = (user.warn_count ?? 0) + 1;
     if (newWarnCount >= WARNS_BEFORE_BAN) {
-      await prisma.user.update({ where: { id: userId }, data: { warn_count: newWarnCount, deleted_at: new Date(), frozen_reason: `[AUTOMOD BAN after ${newWarnCount} warns] ${reason}` } });
-      await prisma.autoModLog.create({ data: { user_id: userId, action: 'ban', reason: `Забанен после ${newWarnCount} предупреждений`, category, score: 1, details } });
-      console.log(`[AUTOMOD] BAN (warn limit) user=${userId}`);
+      // Escalate to a reversible freeze, never an automatic permanent ban.
+      // A human moderator reviews the log and decides whether to lift it or ban manually.
+      if (!user.frozen_at) {
+        await prisma.user.update({ where: { id: userId }, data: { warn_count: newWarnCount, frozen_at: new Date(), frozen_reason: `[AUTOMOD FREEZE after ${newWarnCount} warns] ${reason}` } });
+        await prisma.autoModLog.create({ data: { user_id: userId, action: 'freeze', reason: `Аккаунт заморожен после ${newWarnCount} предупреждений — проверка модератором`, category, score: 1, details } });
+        console.log(`[AUTOMOD] FREEZE (warn limit) user=${userId}`);
+      } else {
+        await prisma.user.update({ where: { id: userId }, data: { warn_count: newWarnCount } });
+      }
     } else {
       await prisma.user.update({ where: { id: userId }, data: { warn_count: newWarnCount } });
       console.log(`[AUTOMOD] WARN user=${userId} count=${newWarnCount} reason=${reason}`);
@@ -217,10 +267,10 @@ export async function moderatePost(postId: string, authorId: string, content: st
   }
 
   // 2. Check duplicate
-  const dupCheck = await checkDuplicate(authorId, content);
+  const dupCheck = await checkDuplicate(authorId, content, postId);
   if (dupCheck.isDuplicate) {
     await flagPost(postId, authorId, 'duplicate', 'Копия ранее опубликованного поста');
-    await applyAction(authorId, 'warn', 'duplicate', 'Публикация дублирующегося контента', `Оригинал: ${dupCheck.originalPostId}`, postId);
+    await applyAction(authorId, 'warn', 'duplicate', `Публикация дублирующегося контента. При накоплении ${WARNS_BEFORE_BAN} предупреждений аккаунт будет заморожен.`, `Оригинал: ${dupCheck.originalPostId}`, postId);
     return;
   }
 
@@ -231,12 +281,33 @@ export async function moderatePost(postId: string, authorId: string, content: st
   await flagPost(postId, authorId, analysis.category, analysis.reason);
 
   if (analysis.category === 'fraud') {
-    await applyAction(authorId, 'ban', 'fraud', analysis.reason, undefined, postId);
+    // Fraud is serious but still gets a reversible freeze, not an instant permanent ban —
+    // a moderator reviews the flagged post and decides on further action.
+    await applyAction(authorId, 'freeze', 'fraud', `${analysis.reason}. Аккаунт заморожен до проверки модератором.`, undefined, postId);
   } else if (analysis.category === 'toxic') {
-    await applyAction(authorId, 'warn', 'toxic', analysis.reason, undefined, postId);
+    await applyAction(authorId, 'warn', 'toxic', `${analysis.reason}. При накоплении ${WARNS_BEFORE_BAN} предупреждений аккаунт будет заморожен.`, undefined, postId);
   } else if (analysis.category === 'spam') {
     await applyAction(authorId, 'freeze', 'spam', analysis.reason, undefined, postId);
   }
+}
+
+// ── Main entry: called on story creation ──────────────────────────────────────
+export async function moderateStory(storyId: string, userId: string): Promise<void> {
+  // Skip if user is already banned/frozen or is staff
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { deleted_at: true, frozen_at: true, role: true } });
+  if (!user || user.deleted_at || user.frozen_at) return;
+  if (user.role === 'admin' || user.role === 'moderator') return; // admins exempt
+
+  const rateCheck = await checkStoryBurstRate(userId);
+  if (!rateCheck.isSpam) return;
+
+  // Hide the stories that made up the burst, then freeze the account
+  await prisma.story.updateMany({
+    where: { user_id: userId, deleted_at: null, created_at: { gte: new Date(Date.now() - 60_000) } },
+    data: { deleted_at: new Date() },
+  });
+  await applyAction(userId, 'freeze', 'suspicious', rateCheck.reason, `story_id=${storyId}`, undefined);
+  console.log(`[AUTOMOD] STORY_BURST user=${userId} reason=${rateCheck.reason}`);
 }
 
 // ── Report priority scoring ───────────────────────────────────────────────────
@@ -287,7 +358,20 @@ export async function patrolSuspiciousActivity(): Promise<void> {
     await applyAction(hp.author_id, 'freeze', 'suspicious', `Подозрительная активность: ${hp.cnt} постов за 24ч`, undefined, undefined);
   }
 
-  // 2. Users with many reports against them in last hour → freeze
+  // 2. Users with very high story rate today (possible bot)
+  const highStoryPosters = await prisma.$queryRaw<{ user_id: string; cnt: bigint }[]>`
+    SELECT user_id, COUNT(*) as cnt FROM "Story"
+    WHERE deleted_at IS NULL AND created_at >= ${oneDayAgo}
+    GROUP BY user_id HAVING COUNT(*) > 40
+  `;
+
+  for (const hs of highStoryPosters) {
+    const u = await prisma.user.findUnique({ where: { id: hs.user_id }, select: { deleted_at: true, frozen_at: true, role: true } });
+    if (!u || u.deleted_at || u.frozen_at || u.role === 'admin' || u.role === 'moderator') continue;
+    await applyAction(hs.user_id, 'freeze', 'suspicious', `Подозрительная активность: ${hs.cnt} историй за 24ч`, undefined, undefined);
+  }
+
+  // 3. Users with many reports against them in last hour → freeze
   const reportedUsers = await prisma.$queryRaw<{ reporter_id_ignored: string; uid: string; cnt: bigint }[]>`
     SELECT r.target_id as uid, COUNT(*) as cnt FROM "Report" r
     WHERE r.status = 'pending' AND r.created_at >= ${oneHourAgo}
@@ -301,7 +385,7 @@ export async function patrolSuspiciousActivity(): Promise<void> {
     await applyAction(ru.uid, 'freeze', 'suspicious', `Массовые жалобы: ${ru.cnt} за час`, undefined, undefined);
   }
 
-  // 3. Auto-prioritize all pending reports
+  // 4. Auto-prioritize all pending reports
   const pending = await prisma.report.findMany({ where: { status: 'pending', priority: 0 }, select: { id: true, reason: true, target_type: true } });
   for (const r of pending) {
     const { priority, category, score } = scoreReport(r.reason, r.target_type);
@@ -310,5 +394,5 @@ export async function patrolSuspiciousActivity(): Promise<void> {
     }
   }
 
-  console.log(`[AUTOMOD] Patrol done. HighPosters:${highPosters.length} ReportedUsers:${reportedUsers.length} PrioritizedReports:${pending.length}`);
+  console.log(`[AUTOMOD] Patrol done. HighPosters:${highPosters.length} HighStoryPosters:${highStoryPosters.length} ReportedUsers:${reportedUsers.length} PrioritizedReports:${pending.length}`);
 }

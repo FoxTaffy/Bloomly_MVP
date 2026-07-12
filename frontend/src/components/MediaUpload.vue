@@ -10,9 +10,9 @@ const props = defineProps<{
   multiple?: boolean
 }>()
 
-const emit = defineEmits<{ (e: 'uploaded', urls: string[]): void }>()
+const emit = defineEmits<{ (e: 'uploaded', urls: string[], originalUrls: string[]): void }>()
 
-type PreviewEntry = { localUrl: string; uploading: boolean; progress: number; finalUrl?: string; name: string; size: number }
+type PreviewEntry = { localUrl: string; uploading: boolean; progress: number; finalUrl?: string; finalOriginalUrl?: string; name: string; size: number; isVideo: boolean }
 
 const previews = ref<PreviewEntry[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -61,7 +61,7 @@ const processFiles = (files: FileList | File[] | null) => {
     // Content-based dedup: skip if same name+size is already queued
     if (previews.value.some(p => p.name === file.name && p.size === file.size)) return
     const idx = previews.value.length
-    previews.value.push({ localUrl: URL.createObjectURL(file), uploading: true, progress: 0, name: file.name, size: file.size })
+    previews.value.push({ localUrl: URL.createObjectURL(file), uploading: true, progress: 0, name: file.name, size: file.size, isVideo: file.type.startsWith('video/') })
     uploadFile(file, idx)
   })
 }
@@ -91,6 +91,7 @@ const uploadFile = async (file: File, idx: number) => {
     if (fakeTimer) { clearInterval(fakeTimer); fakeTimer = null }
     previews.value[idx].progress = 100
     previews.value[idx].finalUrl = res.data.data.url
+    previews.value[idx].finalOriginalUrl = res.data.data.originalUrl || res.data.data.url
     setTimeout(() => { previews.value[idx].uploading = false }, 350)
     emitAll()
   } catch (err: any) {
@@ -100,11 +101,22 @@ const uploadFile = async (file: File, idx: number) => {
   }
 }
 
-const emitAll = () => emit('uploaded', [...new Set(previews.value.filter(p => p.finalUrl).map(p => p.finalUrl!))])
+const emitAll = () => {
+  const seen = new Set<string>()
+  const urls: string[] = []
+  const originalUrls: string[] = []
+  for (const p of previews.value) {
+    if (!p.finalUrl || seen.has(p.finalUrl)) continue
+    seen.add(p.finalUrl)
+    urls.push(p.finalUrl)
+    originalUrls.push(p.finalOriginalUrl || p.finalUrl)
+  }
+  emit('uploaded', urls, originalUrls)
+}
 
 const remove = (idx: number) => { previews.value.splice(idx, 1); emitAll() }
 
-const clearAll = () => { previews.value = []; emit('uploaded', []) }
+const clearAll = () => { previews.value = []; emit('uploaded', [], []) }
 
 const onDrop = (e: DragEvent) => { isDragging.value = false; processFiles(e.dataTransfer?.files ?? null) }
 const onDragOver = (e: DragEvent) => { e.preventDefault(); isDragging.value = true }
@@ -119,11 +131,11 @@ const onDragLeave = (e: DragEvent) => {
 const onPaste = (e: ClipboardEvent) => {
   const items = e.clipboardData?.items
   if (!items) return
-  const imageFiles = Array.from(items)
-    .filter(i => i.kind === 'file' && i.type.startsWith('image/'))
+  const mediaFiles = Array.from(items)
+    .filter(i => i.kind === 'file' && (i.type.startsWith('image/') || i.type.startsWith('video/')))
     .map(i => i.getAsFile())
     .filter(Boolean) as File[]
-  if (imageFiles.length) processFiles(imageFiles)
+  if (mediaFiles.length) processFiles(mediaFiles)
 }
 
 onMounted(() => document.addEventListener('paste', onPaste))
@@ -161,7 +173,7 @@ defineExpose({
         <Image class="w-5 h-5 text-violet-300" />
       </div>
       <p class="text-sm font-bold text-violet-300">Отпусти для загрузки</p>
-      <p class="text-xs text-white/30">JPG, PNG, WebP, GIF · до 50 МБ</p>
+      <p class="text-xs text-white/30">Фото, GIF, видео · до 100 МБ</p>
     </div>
 
     <!-- Empty state — click to pick files -->
@@ -175,7 +187,7 @@ defineExpose({
         <Image class="w-4 h-4 text-white/35 group-hover/empty:text-violet-400 transition-colors" />
       </div>
       <p class="text-xs font-bold text-white/35 group-hover/empty:text-violet-400 transition-colors">Нажми или перетащи файл</p>
-      <p class="text-[10px] text-white/20">JPG, PNG, WebP · до 50 МБ</p>
+      <p class="text-[10px] text-white/20">Фото, GIF, видео · до 100 МБ</p>
     </button>
 
     <!-- Thumbnails grid (shown when files exist and not dragging) -->
@@ -186,7 +198,11 @@ defineExpose({
           :key="idx"
           class="relative aspect-square rounded-xl overflow-hidden bg-white/5 border border-white/10 group/thumb"
         >
-          <img :src="p.localUrl" class="w-full h-full object-cover transition-opacity duration-300" :class="p.uploading ? 'opacity-30' : 'opacity-100'" />
+          <video v-if="p.isVideo" :src="p.localUrl" muted playsinline class="w-full h-full object-cover transition-opacity duration-300" :class="p.uploading ? 'opacity-30' : 'opacity-100'" />
+          <img v-else :src="p.localUrl" class="w-full h-full object-cover transition-opacity duration-300" :class="p.uploading ? 'opacity-30' : 'opacity-100'" />
+          <div v-if="p.isVideo" class="absolute bottom-1 right-1 w-4 h-4 bg-black/60 rounded-full flex items-center justify-center pointer-events-none">
+            <svg viewBox="0 0 24 24" class="w-2.5 h-2.5 text-white" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </div>
 
           <!-- Upload progress -->
           <div v-if="p.uploading" class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/40 backdrop-blur-[2px]">

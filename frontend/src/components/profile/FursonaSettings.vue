@@ -66,7 +66,7 @@
           />
         </div>
         <Transition name="fade">
-          <div v-if="speciesDropOpen && filteredSpecies.length"
+          <div v-if="speciesDropOpen && (filteredSpecies.length || showCustomSpeciesOption)"
             class="absolute z-30 mt-1 w-full bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-y-auto max-h-52">
             <button
               v-for="sp in filteredSpecies"
@@ -78,6 +78,17 @@
             >
               {{ speciesLabel(sp) }}
               <span v-if="form.species.includes(sp)" class="text-[10px]">✓</span>
+            </button>
+            <!-- Nothing matched the typed text — offer to add it as a custom species -->
+            <button
+              v-if="showCustomSpeciesOption"
+              type="button"
+              class="w-full text-left px-4 py-2.5 text-sm text-brand-accent font-semibold hover:bg-brand-accent/10 transition-all flex items-center gap-2"
+              :class="filteredSpecies.length ? 'border-t border-brand-border/60' : ''"
+              @mousedown.prevent="addCustomSpecies"
+            >
+              <span class="text-[10px]">＋</span>
+              {{ t.fursonaSpeciesAddCustom }} «{{ speciesSearch.trim() }}»
             </button>
           </div>
         </Transition>
@@ -407,6 +418,23 @@ const filteredSpecies = computed(() => {
   if (!q) return FURSONA_SPECIES as unknown as string[]
   return (FURSONA_SPECIES as unknown as string[]).filter((sp) => speciesLabel(sp).toLowerCase().includes(q))
 })
+
+// Typed text that doesn't match any preset species → offer to add it as a free-text ("Other") variant
+const showCustomSpeciesOption = computed(() => {
+  const q = speciesSearch.value.trim()
+  if (!q || form.species.length >= 5) return false
+  const qLower = q.toLowerCase()
+  return !(FURSONA_SPECIES as unknown as string[]).some((sp) => speciesLabel(sp).toLowerCase() === qLower)
+})
+
+function addCustomSpecies() {
+  const val = speciesSearch.value.trim().slice(0, 50)
+  if (!val || form.species.length >= 5) return
+  if (!form.species.includes('Other')) form.species.push('Other')
+  form.species_other = val
+  speciesSearch.value = ''
+  speciesDropOpen.value = false
+}
 
 function onSpeciesBlur() {
   setTimeout(() => { speciesDropOpen.value = false }, 180)

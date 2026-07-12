@@ -13,13 +13,15 @@ declare module 'fastify' {
 const createPostSchema = {
   body: {
     type: 'object',
-    required: ['content'],
     properties: {
-      content: { type: 'string', minLength: 1, pattern: '.*\\S.*' },
+      // Not required/non-empty at the schema level: a post can be media-only (no
+      // caption). postService.createPost enforces "content OR mediaUrls" instead.
+      content: { type: 'string' },
       isNsfw: { type: 'boolean' },
       category: { type: 'string' },
       tags: { type: 'array', items: { type: 'string' } },
       mediaUrls: { type: 'array', items: { type: 'string' } },
+      mediaOriginalUrls: { type: 'array', items: { type: 'string' } },
     },
   },
 };

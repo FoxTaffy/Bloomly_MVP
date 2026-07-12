@@ -73,6 +73,11 @@ export const relationshipsService = {
     await prisma.relationshipRequest.deleteMany({
       where: { from_id: fromId, to_id: toId, status: 'pending' },
     });
+    await notificationService.deleteForAction({
+      receiverId: toId,
+      senderId:   fromId,
+      type:       'RELATIONSHIP_REQUEST',
+    });
     return { ok: true };
   },
 

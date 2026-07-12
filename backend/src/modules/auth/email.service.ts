@@ -12,7 +12,7 @@
 
 const BREVO_URL = 'https://api.brevo.com/v3/smtp/email'
 
-type Purpose = 'register' | 'reset'
+type Purpose = 'register' | 'reset' | 'unfreeze' | 'change_email'
 
 // Supported locales. Add a code here and a matching block in TRANSLATIONS to enable a language.
 type Lang = 'ru' | 'en' | 'uk' | 'de' | 'es' | 'fr' | 'pl' | 'pt'
@@ -32,96 +32,112 @@ interface Strings {
 
 const TRANSLATIONS: Record<Lang, Strings> = {
   ru: {
-    title:    { register: 'Подтверждение почты',  reset: 'Сброс пароля' },
+    title:    { register: 'Подтверждение почты',  reset: 'Сброс пароля', unfreeze: 'Разморозка аккаунта', change_email: 'Смена email' },
     subtitle: {
       register: 'Введи этот код на сайте Bloomly, чтобы завершить регистрацию.',
       reset:    'Введи этот код для сброса пароля.',
+      unfreeze: 'Введи этот код на сайте Bloomly, чтобы разморозить аккаунт.',
+      change_email: 'Введи этот код на сайте Bloomly, чтобы сменить почту аккаунта.',
     },
-    subject:  { register: '🌸 Код подтверждения Bloomly', reset: '🔑 Сброс пароля Bloomly' },
+    subject:  { register: '🌸 Код подтверждения Bloomly', reset: '🔑 Сброс пароля Bloomly', unfreeze: '❄️ Разморозка аккаунта Bloomly', change_email: '📧 Смена email Bloomly' },
     codeLabel: 'Код подтверждения',
     validity:  'Действует 15 минут',
     ignore:    'Если это не ты — просто проигнорируй письмо.',
   },
 
   en: {
-    title:    { register: 'Confirm your email', reset: 'Reset your password' },
+    title:    { register: 'Confirm your email', reset: 'Reset your password', unfreeze: 'Unfreeze your account', change_email: 'Change your email' },
     subtitle: {
       register: 'Enter this code on Bloomly to finish signing up.',
       reset:    'Enter this code to reset your password.',
+      unfreeze: 'Enter this code on Bloomly to unfreeze your account.',
+      change_email: 'Enter this code on Bloomly to change your account email.',
     },
-    subject:  { register: '🌸 Your Bloomly verification code', reset: '🔑 Reset your Bloomly password' },
+    subject:  { register: '🌸 Your Bloomly verification code', reset: '🔑 Reset your Bloomly password', unfreeze: '❄️ Unfreeze your Bloomly account', change_email: '📧 Change your Bloomly email' },
     codeLabel: 'Verification code',
     validity:  'Valid for 15 minutes',
     ignore:    "If this wasn't you, just ignore this email.",
   },
 
   uk: {
-    title:    { register: 'Підтвердження пошти', reset: 'Скидання пароля' },
+    title:    { register: 'Підтвердження пошти', reset: 'Скидання пароля', unfreeze: 'Розморозка акаунта', change_email: 'Зміна email' },
     subtitle: {
       register: 'Введи цей код на сайті Bloomly, щоб завершити реєстрацію.',
       reset:    'Введи цей код, щоб скинути пароль.',
+      unfreeze: 'Введи цей код на сайті Bloomly, щоб розморозити акаунт.',
+      change_email: 'Введи цей код на сайті Bloomly, щоб змінити пошту акаунта.',
     },
-    subject:  { register: '🌸 Код підтвердження Bloomly', reset: '🔑 Скидання пароля Bloomly' },
+    subject:  { register: '🌸 Код підтвердження Bloomly', reset: '🔑 Скидання пароля Bloomly', unfreeze: '❄️ Розморозка акаунта Bloomly', change_email: '📧 Зміна email Bloomly' },
     codeLabel: 'Код підтвердження',
     validity:  'Дійсний 15 хвилин',
     ignore:    'Якщо це не ти — просто проігноруй цей лист.',
   },
 
   de: {
-    title:    { register: 'E-Mail bestätigen', reset: 'Passwort zurücksetzen' },
+    title:    { register: 'E-Mail bestätigen', reset: 'Passwort zurücksetzen', unfreeze: 'Konto entsperren', change_email: 'E-Mail ändern' },
     subtitle: {
       register: 'Gib diesen Code auf Bloomly ein, um die Registrierung abzuschließen.',
       reset:    'Gib diesen Code ein, um dein Passwort zurückzusetzen.',
+      unfreeze: 'Gib diesen Code auf Bloomly ein, um dein Konto zu entsperren.',
+      change_email: 'Gib diesen Code auf Bloomly ein, um die E-Mail deines Kontos zu ändern.',
     },
-    subject:  { register: '🌸 Dein Bloomly-Bestätigungscode', reset: '🔑 Bloomly-Passwort zurücksetzen' },
+    subject:  { register: '🌸 Dein Bloomly-Bestätigungscode', reset: '🔑 Bloomly-Passwort zurücksetzen', unfreeze: '❄️ Bloomly-Konto entsperren', change_email: '📧 Bloomly-E-Mail ändern' },
     codeLabel: 'Bestätigungscode',
     validity:  '15 Minuten gültig',
     ignore:    'Wenn du das nicht warst, ignoriere diese E-Mail einfach.',
   },
 
   es: {
-    title:    { register: 'Confirma tu correo', reset: 'Restablece tu contraseña' },
+    title:    { register: 'Confirma tu correo', reset: 'Restablece tu contraseña', unfreeze: 'Desbloquea tu cuenta', change_email: 'Cambia tu correo' },
     subtitle: {
       register: 'Introduce este código en Bloomly para completar el registro.',
       reset:    'Introduce este código para restablecer tu contraseña.',
+      unfreeze: 'Introduce este código en Bloomly para desbloquear tu cuenta.',
+      change_email: 'Introduce este código en Bloomly para cambiar el correo de tu cuenta.',
     },
-    subject:  { register: '🌸 Tu código de verificación de Bloomly', reset: '🔑 Restablece tu contraseña de Bloomly' },
+    subject:  { register: '🌸 Tu código de verificación de Bloomly', reset: '🔑 Restablece tu contraseña de Bloomly', unfreeze: '❄️ Desbloquea tu cuenta de Bloomly', change_email: '📧 Cambia tu correo de Bloomly' },
     codeLabel: 'Código de verificación',
     validity:  'Válido durante 15 minutos',
     ignore:    'Si no fuiste tú, simplemente ignora este correo.',
   },
 
   fr: {
-    title:    { register: 'Confirme ton e-mail', reset: 'Réinitialise ton mot de passe' },
+    title:    { register: 'Confirme ton e-mail', reset: 'Réinitialise ton mot de passe', unfreeze: 'Débloque ton compte', change_email: 'Change ton e-mail' },
     subtitle: {
       register: 'Saisis ce code sur Bloomly pour terminer ton inscription.',
       reset:    'Saisis ce code pour réinitialiser ton mot de passe.',
+      unfreeze: 'Saisis ce code sur Bloomly pour débloquer ton compte.',
+      change_email: 'Saisis ce code sur Bloomly pour changer l\'e-mail de ton compte.',
     },
-    subject:  { register: '🌸 Ton code de vérification Bloomly', reset: '🔑 Réinitialise ton mot de passe Bloomly' },
+    subject:  { register: '🌸 Ton code de vérification Bloomly', reset: '🔑 Réinitialise ton mot de passe Bloomly', unfreeze: '❄️ Débloque ton compte Bloomly', change_email: '📧 Change ton e-mail Bloomly' },
     codeLabel: 'Code de vérification',
     validity:  'Valable 15 minutes',
     ignore:    "Si ce n'était pas toi, ignore simplement cet e-mail.",
   },
 
   pl: {
-    title:    { register: 'Potwierdź e-mail', reset: 'Zresetuj hasło' },
+    title:    { register: 'Potwierdź e-mail', reset: 'Zresetuj hasło', unfreeze: 'Odblokuj konto', change_email: 'Zmień e-mail' },
     subtitle: {
       register: 'Wpisz ten kod na Bloomly, aby dokończyć rejestrację.',
       reset:    'Wpisz ten kod, aby zresetować hasło.',
+      unfreeze: 'Wpisz ten kod na Bloomly, aby odblokować konto.',
+      change_email: 'Wpisz ten kod na Bloomly, aby zmienić e-mail konta.',
     },
-    subject:  { register: '🌸 Twój kod weryfikacyjny Bloomly', reset: '🔑 Zresetuj hasło Bloomly' },
+    subject:  { register: '🌸 Twój kod weryfikacyjny Bloomly', reset: '🔑 Zresetuj hasło Bloomly', unfreeze: '❄️ Odblokuj konto Bloomly', change_email: '📧 Zmień e-mail Bloomly' },
     codeLabel: 'Kod weryfikacyjny',
     validity:  'Ważny przez 15 minut',
     ignore:    'Jeśli to nie ty — po prostu zignoruj tę wiadomość.',
   },
 
   pt: {
-    title:    { register: 'Confirme seu e-mail', reset: 'Redefina sua senha' },
+    title:    { register: 'Confirme seu e-mail', reset: 'Redefina sua senha', unfreeze: 'Desbloqueie sua conta', change_email: 'Altere seu e-mail' },
     subtitle: {
       register: 'Digite este código no Bloomly para concluir o cadastro.',
       reset:    'Digite este código para redefinir sua senha.',
+      unfreeze: 'Digite este código no Bloomly para desbloquear sua conta.',
+      change_email: 'Digite este código no Bloomly para alterar o e-mail da sua conta.',
     },
-    subject:  { register: '🌸 Seu código de verificação do Bloomly', reset: '🔑 Redefina sua senha do Bloomly' },
+    subject:  { register: '🌸 Seu código de verificação do Bloomly', reset: '🔑 Redefina sua senha do Bloomly', unfreeze: '❄️ Desbloqueie sua conta Bloomly', change_email: '📧 Altere seu e-mail Bloomly' },
     codeLabel: 'Código de verificação',
     validity:  'Válido por 15 minutos',
     ignore:    'Se não foi você, basta ignorar este e-mail.',
@@ -145,35 +161,39 @@ function otpHtml(code: string, purpose: Purpose, lang: Lang): string {
   const t        = TRANSLATIONS[lang]
   const title    = t.title[purpose]
   const subtitle = t.subtitle[purpose]
-  const isReset  = purpose === 'reset'
+  const isReset      = purpose === 'reset'
+  const isUnfreeze    = purpose === 'unfreeze'
+  const isChangeEmail = purpose === 'change_email'
 
-  const topGrad     = isReset
+  const topGrad     = isUnfreeze
+    ? 'linear-gradient(160deg,#0ea5e9 0%,#38bdf8 55%,#7dd3fc 100%)'
+    : isReset
     ? 'linear-gradient(160deg,#4f46e5 0%,#7c3aed 60%,#9333ea 100%)'
+    : isChangeEmail
+    ? 'linear-gradient(160deg,#0d9488 0%,#14b8a6 55%,#5eead4 100%)'
     : 'linear-gradient(160deg,#7c3aed 0%,#a855f7 55%,#ec4899 100%)'
-  const borderClr   = isReset ? '#4f46e5' : '#9333ea'
-  const emoji       = isReset ? '🔑' : '✉️'
+  const borderClr   = isUnfreeze ? '#0ea5e9' : isReset ? '#4f46e5' : isChangeEmail ? '#0d9488' : '#9333ea'
+  const emoji       = isUnfreeze ? '❄️' : isReset ? '🔑' : isChangeEmail ? '📧' : '✉️'
 
-  // Each digit gets its own table cell — works in all email clients
-  const digitCells = code.split('').map(d =>
-    `<td width="48" style="padding:0 3px">
-      <table width="48" cellpadding="0" cellspacing="0">
-        <tr>
-          <td align="center" style="
-            width:48px;height:58px;
-            background:#1e1e30;
-            border:1px solid ${borderClr}55;
-            border-top:2px solid ${borderClr}99;
-            border-radius:10px;
-            color:#ffffff;
-            font-size:30px;
-            font-weight:700;
-            font-family:'Courier New',Courier,monospace;
-            vertical-align:middle;
-          ">${d}</td>
-        </tr>
-      </table>
-    </td>`
-  ).join('')
+  // Code is rendered as ONE text node (no per-digit <td>s) so selecting/copying
+  // it on desktop mail clients yields a single clean string like "123456",
+  // not a spaced-out/line-broken mess. Visual "digit boxes" look is done purely
+  // via letter-spacing + a single bordered panel, not separate table cells.
+  const digitCells = `<td style="padding:0">
+    <div style="
+      display:inline-block;
+      background:#1e1e30;
+      border:1px solid ${borderClr}55;
+      border-top:2px solid ${borderClr}99;
+      border-radius:10px;
+      color:#ffffff;
+      font-size:30px;
+      font-weight:700;
+      font-family:'Courier New',Courier,monospace;
+      letter-spacing:12px;
+      padding:14px 12px 14px 24px;
+    ">${code}</div>
+  </td>`
 
   return `<!DOCTYPE html>
 <html lang="${lang}">
@@ -261,7 +281,7 @@ function otpHtml(code: string, purpose: Purpose, lang: Lang): string {
 /**
  * @param to       recipient email
  * @param code     OTP code
- * @param purpose  'register' | 'reset'
+ * @param purpose  'register' | 'reset' | 'unfreeze' | 'change_email'
  * @param lang     locale (defaults to 'ru'); unknown codes fall back to DEFAULT_LANG
  */
 export async function sendOtpEmail(

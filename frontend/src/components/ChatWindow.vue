@@ -2316,8 +2316,9 @@ async function setupE2E() {
 function getDisplayText(msg: Message): string {
   const text = msg.text
   if (!text) return ''
-  if (!sharedKey.value || !isEncrypted(text)) return text
+  if (!isEncrypted(text)) return text
   if (decryptedCache.value[msg.id]) return decryptedCache.value[msg.id]
+  if (!sharedKey.value) return '🔒 ...' // key not established yet — never show raw ciphertext
   // Trigger async decryption
   decryptMsg(text, sharedKey.value).then((plain) => {
     if (plain) decryptedCache.value = { ...decryptedCache.value, [msg.id]: plain }

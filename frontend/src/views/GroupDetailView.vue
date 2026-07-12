@@ -143,6 +143,7 @@ const newPostTitle = ref('')
 const newPostIsNsfw = ref(false)
 const newPostIsAnnouncement = ref(false)
 const newPostMediaUrls = ref<string[]>([])
+const newPostMediaOriginalUrls = ref<string[]>([])
 const newPostTags = ref<string[]>([])
 const newPostTagInput = ref('')
 const newPostCategory = ref('')
@@ -191,7 +192,7 @@ async function loadGroupPosts() {
 }
 
 async function createGroupPost() {
-  if (!group.value || !newPostContent.value.trim() || isCreatingPost.value) return
+  if (!group.value || (!newPostContent.value.trim() && newPostMediaUrls.value.length === 0) || isCreatingPost.value) return
   isCreatingPost.value = true
   try {
     const cfg = archetypeComposer.value
@@ -207,6 +208,7 @@ async function createGroupPost() {
       isNsfw: newPostIsNsfw.value,
       isAnnouncement,
       mediaUrls: newPostMediaUrls.value,
+      mediaOriginalUrls: newPostMediaOriginalUrls.value,
       tags: newPostTags.value,
       category,
       visibility: newPostVisibility.value,
@@ -215,6 +217,7 @@ async function createGroupPost() {
     newPostContent.value = ''
     newPostTitle.value = ''
     newPostMediaUrls.value = []
+    newPostMediaOriginalUrls.value = []
     newPostIsNsfw.value = false
     newPostIsAnnouncement.value = false
     newPostTags.value = []
@@ -229,8 +232,9 @@ async function createGroupPost() {
   finally { isCreatingPost.value = false }
 }
 
-function onGroupMediaUploaded(urls: string[]) {
+function onGroupMediaUploaded(urls: string[], originalUrls: string[]) {
   newPostMediaUrls.value = urls
+  newPostMediaOriginalUrls.value = originalUrls
 }
 
 function onPostDeleted(postId: string) {
@@ -1606,7 +1610,7 @@ const vClickOutside = {
                     <div class="flex-1 min-w-0">
                       <MentionTextarea v-model="newPostContent" :placeholder="archetypeComposer.placeholder + ' Используйте @ для упоминаний'" minHeight="90px" />
                     </div>
-                    <button @click="createGroupPost" :disabled="!newPostContent.trim() || isCreatingPost"
+                    <button @click="createGroupPost" :disabled="(!newPostContent.trim() && newPostMediaUrls.length === 0) || isCreatingPost"
                       class="w-10 h-10 rounded-full flex items-center justify-center bg-brand-accent text-white hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-accent/25 flex-shrink-0 mt-0.5">
                       <BIcon v-if="isCreatingPost" name="Loader2" class="w-5 h-5 animate-spin" />
                       <BIcon v-else name="SendHorizontal" class="w-5 h-5" />
@@ -1702,7 +1706,7 @@ const vClickOutside = {
                         </div>
                       </Transition>
                     </div>
-                    <button @click="showPostForm = false; newPostContent = ''; newPostMediaUrls = []; newPostTags = []; newPostTagInput = ''; newPostCategory = ''; newPostVisibility = 'public'; newPostIsAnnouncement = false; groupMediaUploadRef?.clearAll()"
+                    <button @click="showPostForm = false; newPostContent = ''; newPostMediaUrls = []; newPostMediaOriginalUrls = []; newPostTags = []; newPostTagInput = ''; newPostCategory = ''; newPostVisibility = 'public'; newPostIsAnnouncement = false; groupMediaUploadRef?.clearAll()"
                       class="text-xs font-semibold text-white/55 hover:text-white transition-all">Отмена</button>
                   </div>
                 </div>

@@ -59,6 +59,78 @@ function closeStickerPanels() {
   showReplyStickerPanel.value = false
 }
 
+// ── Comment media attachment (photo / video / GIF) ──────────────────────────
+type CommentMediaType = 'image' | 'video' | 'gif'
+function detectMediaType(file: File): CommentMediaType {
+  if (file.type === 'image/gif') return 'gif'
+  if (file.type.startsWith('video/')) return 'video'
+  return 'image'
+}
+
+const commentFileRef      = ref<HTMLInputElement | null>(null)
+const commentFilePreview  = ref('')
+const commentFileType     = ref<CommentMediaType>('image')
+const commentFileUrl      = ref('')
+const commentFileUploading = ref(false)
+
+async function onCommentFilePicked(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (commentFileRef.value) commentFileRef.value.value = ''
+  if (!file) return
+  commentFileType.value = detectMediaType(file)
+  commentFilePreview.value = URL.createObjectURL(file)
+  commentFileUploading.value = true
+  commentFileUrl.value = ''
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await api.post('/media/upload?folder=comments', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    commentFileUrl.value = res.data.data.url
+  } catch {
+    removeCommentFile()
+  } finally {
+    commentFileUploading.value = false
+  }
+}
+
+function removeCommentFile() {
+  if (commentFilePreview.value) URL.revokeObjectURL(commentFilePreview.value)
+  commentFilePreview.value = ''
+  commentFileUrl.value = ''
+}
+
+const replyFileRef      = ref<HTMLInputElement | null>(null)
+const replyFilePreview  = ref('')
+const replyFileType     = ref<CommentMediaType>('image')
+const replyFileUrl      = ref('')
+const replyFileUploading = ref(false)
+
+async function onReplyFilePicked(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (replyFileRef.value) replyFileRef.value.value = ''
+  if (!file) return
+  replyFileType.value = detectMediaType(file)
+  replyFilePreview.value = URL.createObjectURL(file)
+  replyFileUploading.value = true
+  replyFileUrl.value = ''
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await api.post('/media/upload?folder=comments', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    replyFileUrl.value = res.data.data.url
+  } catch {
+    removeReplyFile()
+  } finally {
+    replyFileUploading.value = false
+  }
+}
+
+function removeReplyFile() {
+  if (replyFilePreview.value) URL.revokeObjectURL(replyFilePreview.value)
+  replyFilePreview.value = ''
+  replyFileUrl.value = ''
+}
+
 const fetchComments = async () => {
   isLoading.value = true
   try {
@@ -88,13 +160,19 @@ const formatDate = (d: string) => {
 }
 
 const submitComment = async () => {
-  if (!commentText.value.trim() || submitting.value) return
+  const hasText = !!commentText.value.trim()
+  const hasFile = !!commentFileUrl.value
+  if ((!hasText && !hasFile) || submitting.value || commentFileUploading.value) return
   submitting.value = true
   try {
-    const res = await api.post(`/posts/${props.postId}/comments`, { content: commentText.value.trim() })
+    const res = await api.post(`/posts/${props.postId}/comments`, {
+      content: commentText.value.trim(),
+      ...(hasFile ? { type: commentFileType.value, file_url: commentFileUrl.value } : {}),
+    })
     if (res.data.success) {
       comments.value.unshift({ ...res.data.data.comment, replies: [], _count: { replies: 0 } })
       commentText.value = ''
+      removeCommentFile()
     }
   } catch {}
   submitting.value = false
@@ -122,12 +200,15 @@ function pickCommentSticker(url: string) {
 }
 
 const submitReply = async () => {
-  if (!replyText.value.trim() || !replyingTo.value || submitting.value) return
+  const hasText = !!replyText.value.trim()
+  const hasFile = !!replyFileUrl.value
+  if ((!hasText && !hasFile) || !replyingTo.value || submitting.value || replyFileUploading.value) return
   submitting.value = true
   try {
     const res = await api.post(`/posts/${props.postId}/comments`, {
       content: replyText.value.trim(),
       parentId: replyingTo.value.id,
+      ...(hasFile ? { type: replyFileType.value, file_url: replyFileUrl.value } : {}),
     })
     if (res.data.success) {
       const parent = comments.value.find(c => c.id === replyingTo.value!.id)
@@ -139,6 +220,7 @@ const submitReply = async () => {
       }
       replyText.value = ''
       replyingTo.value = null
+      removeReplyFile()
     }
   } catch {}
   submitting.value = false
@@ -174,7 +256,7 @@ function pickReplySticker(url: string) {
   submitReplySticker(url)
 }
 
-const cancelReply = () => { replyingTo.value = null; replyText.value = ''; closeStickerPanels() }
+const cancelReply = () => { replyingTo.value = null; replyText.value = ''; closeStickerPanels(); removeReplyFile() }
 
 const toggleReplies = (commentId: string) => {
   if (expandedReplies.value.has(commentId)) expandedReplies.value.delete(commentId)
@@ -233,6 +315,21 @@ const deleteComment = async (commentId: string) => {
           </div>
         </Transition>
 
+        <!-- Attached media preview -->
+        <div v-if="commentFilePreview" class="relative inline-block mb-2">
+          <video v-if="commentFileType === 'video'" :src="commentFilePreview" muted playsinline class="h-20 rounded-xl object-cover border border-brand-border" />
+          <img v-else :src="commentFilePreview" class="h-20 rounded-xl object-cover border border-brand-border" />
+          <div v-if="commentFileUploading" class="absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center">
+            <BIcon name="Loader2" class="w-4 h-4 animate-spin text-white" />
+          </div>
+          <button type="button" @click="removeCommentFile"
+            class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-black/70 hover:bg-rose-500 rounded-full flex items-center justify-center text-white">
+            <BIcon name="X" class="w-3 h-3" />
+          </button>
+        </div>
+
+        <input ref="commentFileRef" type="file" accept="image/*,video/*" class="hidden" @change="onCommentFilePicked" />
+
         <div class="flex gap-2">
           <input
             v-model="commentText"
@@ -241,6 +338,15 @@ const deleteComment = async (commentId: string) => {
             :placeholder="langStore.t.writeComment"
             class="flex-1 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
           />
+          <!-- Media attach button -->
+          <button
+            type="button"
+            @click="commentFileRef?.click()"
+            :class="['flex-shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center transition-all',
+              commentFilePreview ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/50 hover:text-brand-accent hover:bg-brand-bg border border-brand-border']"
+            title="Фото / видео / GIF">
+            <BIcon name="Image" class="w-4 h-4" />
+          </button>
           <!-- Sticker button -->
           <button
             type="button"
@@ -253,7 +359,7 @@ const deleteComment = async (commentId: string) => {
           <!-- Send button -->
           <button
             @click="submitComment"
-            :disabled="!commentText.trim() || submitting"
+            :disabled="(!commentText.trim() && !commentFileUrl) || submitting || commentFileUploading"
             class="px-4 py-2 bg-brand-accent text-white text-sm font-bold rounded-2xl disabled:opacity-40 flex-shrink-0">
             <BIcon v-if="submitting" name="Loader2" class="w-4 h-4 animate-spin" />
             <span v-else>{{ langStore.t.send }}</span>
@@ -295,6 +401,20 @@ const deleteComment = async (commentId: string) => {
               <div class="cursor-pointer hover:scale-105 transition-transform active:scale-95 inline-block">
                 <StickerRenderer :src="comment.file_url" size="lg" :loop="true" :autoplay="true" />
               </div>
+            </template>
+
+            <!-- Media comment (photo / video / GIF) — media + optional caption -->
+            <template v-else-if="['image', 'video', 'gif'].includes(comment.type) && comment.file_url">
+              <div class="flex items-center gap-2 mb-1 px-1">
+                <span class="font-bold text-white text-sm">{{ comment.author.display_name || comment.author.username }}</span>
+                <span class="text-white/55 text-xs">@{{ comment.author.username }}</span>
+                <span class="text-white/55 text-xs ml-auto">{{ formatDate(comment.created_at) }}</span>
+              </div>
+              <div class="rounded-2xl overflow-hidden border border-brand-border/50 max-w-[280px] bg-black/20">
+                <video v-if="comment.type === 'video'" :src="comment.file_url" controls playsinline class="w-full h-auto max-h-72 object-contain" />
+                <img v-else :src="comment.file_url" class="w-full h-auto max-h-72 object-contain" />
+              </div>
+              <p v-if="comment.content" class="text-white/85 text-sm leading-relaxed mt-1.5 px-1">{{ getCommentText(comment.id, comment.content) }}</p>
             </template>
 
             <!-- Text comment — with bubble -->
@@ -361,6 +481,21 @@ const deleteComment = async (commentId: string) => {
                 </div>
               </Transition>
 
+              <!-- Attached media preview -->
+              <div v-if="replyFilePreview" class="relative inline-block mb-2 ml-9">
+                <video v-if="replyFileType === 'video'" :src="replyFilePreview" muted playsinline class="h-16 rounded-xl object-cover border border-brand-border" />
+                <img v-else :src="replyFilePreview" class="h-16 rounded-xl object-cover border border-brand-border" />
+                <div v-if="replyFileUploading" class="absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center">
+                  <BIcon name="Loader2" class="w-4 h-4 animate-spin text-white" />
+                </div>
+                <button type="button" @click="removeReplyFile"
+                  class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-black/70 hover:bg-rose-500 rounded-full flex items-center justify-center text-white">
+                  <BIcon name="X" class="w-3 h-3" />
+                </button>
+              </div>
+
+              <input ref="replyFileRef" type="file" accept="image/*,video/*" class="hidden" @change="onReplyFilePicked" />
+
               <div class="flex gap-2 items-center">
                 <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover border border-brand-border flex-shrink-0" />
                 <div v-else class="w-7 h-7 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px]">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
@@ -371,6 +506,15 @@ const deleteComment = async (commentId: string) => {
                   autofocus
                   class="flex-1 bg-brand-bg border border-brand-border rounded-2xl px-3 py-1.5 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
                 />
+                <!-- Reply media attach button -->
+                <button
+                  type="button"
+                  @click="replyFileRef?.click()"
+                  :class="['flex-shrink-0 w-7 h-7 rounded-xl flex items-center justify-center transition-all',
+                    replyFilePreview ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/50 hover:text-brand-accent hover:bg-brand-bg border border-brand-border']"
+                  title="Фото / видео / GIF">
+                  <BIcon name="Image" class="w-3.5 h-3.5" />
+                </button>
                 <!-- Reply sticker button -->
                 <button
                   type="button"
@@ -380,7 +524,7 @@ const deleteComment = async (commentId: string) => {
                   title="Стикеры">
                   <BIcon name="Sticker" class="w-3.5 h-3.5" />
                 </button>
-                <button @click="submitReply" :disabled="!replyText.trim() || submitting"
+                <button @click="submitReply" :disabled="(!replyText.trim() && !replyFileUrl) || submitting || replyFileUploading"
                   class="px-3 py-1.5 bg-brand-accent text-white text-xs font-bold rounded-xl disabled:opacity-40">
                   {{ langStore.t.send }}
                 </button>
@@ -409,6 +553,19 @@ const deleteComment = async (commentId: string) => {
                     <div class="cursor-pointer hover:scale-105 transition-transform active:scale-95 inline-block">
                       <StickerRenderer :src="reply.file_url" size="md" :loop="true" :autoplay="true" />
                     </div>
+                  </template>
+
+                  <!-- Media reply (photo / video / GIF) -->
+                  <template v-else-if="['image', 'video', 'gif'].includes(reply.type) && reply.file_url">
+                    <div class="flex items-center gap-2 mb-1 px-1">
+                      <span class="font-bold text-white text-xs">{{ reply.author.display_name || reply.author.username }}</span>
+                      <span class="text-white/55 text-[11px] ml-auto">{{ formatDate(reply.created_at) }}</span>
+                    </div>
+                    <div class="rounded-2xl overflow-hidden border border-brand-border/50 max-w-[240px] bg-black/20">
+                      <video v-if="reply.type === 'video'" :src="reply.file_url" controls playsinline class="w-full h-auto max-h-64 object-contain" />
+                      <img v-else :src="reply.file_url" class="w-full h-auto max-h-64 object-contain" />
+                    </div>
+                    <p v-if="reply.content" class="text-white/85 text-sm leading-relaxed mt-1 px-1">{{ getCommentText(reply.id, reply.content) }}</p>
                   </template>
 
                   <!-- Text reply -->

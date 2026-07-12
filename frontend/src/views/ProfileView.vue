@@ -175,7 +175,13 @@
 
             <!-- Bottom-right: species chip — sourced from the canonical fursona species -->
             <div class="absolute bottom-8 right-4 z-20 flex gap-2">
-              <span v-if="profileFursona?.species?.length"
+              <button v-if="profileFursona?.species?.length && isOwnProfile"
+                type="button" @click.stop="openEditModal('fursona')"
+                class="species-chip-pulse inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm border cursor-pointer transition-all hover:scale-[1.06] hover:shadow-[0_0_16px_rgba(167,139,250,0.5)] active:scale-95"
+                :style="accentStyleSubtle" :title="langStore.t.fursonaSettingsTitle">
+                <span class="text-sm leading-none">{{ speciesEmoji(profileFursona.species[0]) }}</span>{{ primarySpeciesLabel }}
+              </button>
+              <span v-else-if="profileFursona?.species?.length"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm border"
                 :style="accentStyleSubtle">
                 <span class="text-sm leading-none">{{ speciesEmoji(profileFursona.species[0]) }}</span>{{ primarySpeciesLabel }}
@@ -1089,7 +1095,7 @@
                     <div class="flex-1 min-w-0">
                       <MentionTextarea v-model="newPostContent" placeholder="Что у вас нового? Используйте @ для упоминаний" minHeight="90px" />
                     </div>
-                    <button @click="createPost" :disabled="!newPostContent.trim() || isCreatingPost"
+                    <button @click="createPost" :disabled="(!newPostContent.trim() && newPostMediaUrls.length === 0) || isCreatingPost"
                       class="w-10 h-10 rounded-full flex items-center justify-center bg-brand-accent text-white hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-accent/25 flex-shrink-0 mt-0.5">
                       <BIcon v-if="isCreatingPost" name="Loader2" class="w-5 h-5 animate-spin" />
                       <BIcon v-else name="SendHorizontal" class="w-5 h-5" />
@@ -1801,6 +1807,14 @@
               <span class="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
               <span class="text-white/40 text-sm">Загрузка...</span>
             </div>
+            <video
+              v-else-if="avatarGallery[avatarGalleryIndex]?.video_url"
+              :src="avatarGallery[avatarGalleryIndex].video_url!"
+              :key="avatarGallery[avatarGalleryIndex].video_url!"
+              class="max-w-full max-h-full rounded-3xl object-contain shadow-2xl select-none"
+              style="max-height: calc(100vh - 200px)"
+              autoplay loop muted playsinline controls
+            />
             <img
               v-else-if="avatarGallery[avatarGalleryIndex]"
               :src="avatarGallery[avatarGalleryIndex].url"
@@ -1827,9 +1841,12 @@
             <button
               v-for="(item, idx) in avatarGallery" :key="item.url"
               @click="avatarGalleryIndex = idx"
-              class="flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden border-2 transition-all"
+              class="relative flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden border-2 transition-all"
               :class="idx === avatarGalleryIndex ? 'border-white scale-105' : 'border-transparent opacity-50 hover:opacity-80'">
               <img :src="item.url" class="w-full h-full object-cover" loading="lazy" />
+              <span v-if="item.video_url" class="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 bg-black/70 rounded-full flex items-center justify-center pointer-events-none">
+                <svg viewBox="0 0 24 24" class="w-2 h-2 text-white" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              </span>
             </button>
           </div>
           <!-- Date label -->
@@ -2724,7 +2741,7 @@ const showWalletModal = ref(false)
 const showAvatarViewer = ref(false)
 const showBannerViewer = ref(false)
 
-interface GalleryItem { url: string; created_at: string; id?: string }
+interface GalleryItem { url: string; video_url?: string | null; created_at: string; id?: string }
 const avatarGallery        = ref<GalleryItem[]>([])
 const avatarGalleryIndex   = ref(0)
 const avatarGalleryLoading = ref(false)
@@ -2736,7 +2753,7 @@ async function openAvatarGallery() {
   avatarGalleryIndex.value = 0
   avatarGalleryLoading.value = true
 
-  const current: GalleryItem = { url: viewedProfile.value.avatar_url, created_at: new Date().toISOString() }
+  const current: GalleryItem = { url: viewedProfile.value.avatar_url, video_url: viewedProfile.value.avatar_video_url, created_at: new Date().toISOString() }
   avatarGallery.value = [current]
 
   try {
@@ -2917,9 +2934,10 @@ async function onAvatarFileChange(e: Event) {
     fd.append('file', file)
     const res = await api.post('/media/upload?folder=avatars', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     if (res.data.success && res.data.data?.url) {
-      await userStore.updateProfile({ avatar_url: res.data.data.url } as any)
-      if (viewedProfile.value) viewedProfile.value.avatar_url = res.data.data.url
-      if (authStore.user) (authStore.user as any).avatar_url = res.data.data.url
+      const videoUrl = res.data.data.videoUrl ?? null
+      await userStore.updateProfile({ avatar_url: res.data.data.url, avatar_video_url: videoUrl } as any)
+      if (viewedProfile.value) { viewedProfile.value.avatar_url = res.data.data.url; (viewedProfile.value as any).avatar_video_url = videoUrl }
+      if (authStore.user) { (authStore.user as any).avatar_url = res.data.data.url; (authStore.user as any).avatar_video_url = videoUrl }
     }
   } catch (err) { console.error('avatar upload failed', err) }
   finally {
@@ -3589,7 +3607,7 @@ async function unpinPost() {
 
 // ── Create post ───────────────────────────────────────────────────────────────
 async function createPost() {
-  if (!newPostContent.value.trim() || isCreatingPost.value) return
+  if ((!newPostContent.value.trim() && newPostMediaUrls.value.length === 0) || isCreatingPost.value) return
   isCreatingPost.value = true
   try {
     const res = await api.post('/posts', {
@@ -3646,6 +3664,15 @@ watch(() => route.params.username, () => { aboutTab.value = 'about'; activeConte
 <style scoped>
 .note-bar-profile {
   animation: noteBarProfile 0.6s ease-in-out infinite;
+}
+
+/* ── Species chip on own profile banner: subtle glow to hint it's clickable ── */
+.species-chip-pulse {
+  animation: species-chip-glow 2.6s ease-in-out infinite;
+}
+@keyframes species-chip-glow {
+  0%, 100% { box-shadow: 0 0 0 rgba(167,139,250,0); }
+  50%      { box-shadow: 0 0 14px rgba(167,139,250,0.45); }
 }
 @keyframes noteBarProfile {
   0%, 100% { transform: scaleY(0.35) }

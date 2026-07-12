@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js';
 import { getGroupBadgeLevel } from '../../lib/badges.js';
+import { isTrustedMediaUrl } from '../media/service.js';
 import type {
   CreateGroupInput,
   UpdateGroupInput,
@@ -806,7 +807,7 @@ export const groupService = {
   },
 
   // ── Create post in group ──────────────────────────────────────────────────
-  async createGroupPost(groupId: string, userId: string, input: { content: string; title?: string; postType?: string; isNsfw?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; tags?: string[]; visibility?: string; category?: string }) {
+  async createGroupPost(groupId: string, userId: string, input: { content: string; title?: string; postType?: string; isNsfw?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; mediaOriginalUrls?: string[]; tags?: string[]; visibility?: string; category?: string }) {
     // Check user is admin/owner
     const member = await prisma.groupMember.findUnique({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
@@ -816,9 +817,18 @@ export const groupService = {
     }
 
     const content = (input.content ?? '').trim();
-    if (!content) throw new Error('Content is required');
-
     const mediaUrls = (input.mediaUrls ?? []).filter(Boolean);
+    if (!content && mediaUrls.length === 0) throw new Error('Content is required');
+    if (mediaUrls.some((url) => !isTrustedMediaUrl(url))) {
+      throw Object.assign(new Error('INVALID_MEDIA_URL'), { statusCode: 422 });
+    }
+    const mediaOriginalUrls = input.mediaOriginalUrls?.length === mediaUrls.length
+      ? input.mediaOriginalUrls
+      : [];
+    if (mediaOriginalUrls.some((url) => !isTrustedMediaUrl(url))) {
+      throw Object.assign(new Error('INVALID_MEDIA_URL'), { statusCode: 422 });
+    }
+
     const tags = Array.from(
       new Set(
         (input.tags ?? [])
@@ -835,6 +845,7 @@ export const groupService = {
           is_nsfw: input.isNsfw ?? false,
           is_announcement: input.isAnnouncement ?? false,
           media_urls: mediaUrls,
+          media_original_urls: mediaOriginalUrls,
           title: input.title?.trim() || null,
           post_type: input.postType || 'general',
           category: input.category || null,

@@ -36,6 +36,7 @@ const uploadedImageUrl    = ref<string | null>(null)
 const uploadedImageFile   = ref<File | null>(null)
 const bgImageLoaded       = ref(false)
 const bgImageEl           = ref<HTMLImageElement | null>(null)
+const isVideoFile         = ref(false)
 
 // Text overlay
 const textEnabled = ref(false)
@@ -53,7 +54,18 @@ const STICKER_EMOJIS = ['🔥','⚡','💫','✨','❤️','🌸','🎉','🐾',
 
 // Publishing
 const isPublishing  = ref(false)
+const publishError  = ref<string | null>(null)
 const fileInputRef  = ref<HTMLInputElement | null>(null)
+
+const PUBLISH_ERROR_MESSAGES: Record<string, string> = {
+  STORY_LIMIT_EXCEEDED: 'Слишком много активных историй (максимум 20). Дождись, пока старые исчезнут.',
+  MISSING_MEDIA: 'Не удалось загрузить фото или видео — попробуй ещё раз.',
+  INVALID_MEDIA_URL: 'Не удалось загрузить файл — попробуй ещё раз.',
+}
+function describePublishError(err: any): string {
+  const code = err?.response?.data?.error?.code
+  return (code && PUBLISH_ERROR_MESSAGES[code]) || 'Не удалось опубликовать историю. Попробуй ещё раз.'
+}
 
 // ── Computed ───────────────────────────────────────────────────────────────────
 const selectedTemplate = computed(() => TEMPLATES.find(t => t.id === selectedTemplateId.value)!)
@@ -81,9 +93,12 @@ function openFilePicker() {
 async function onFileSelected(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file) return
+  publishError.value = null
   uploadedImageFile.value = file
   uploadedImageUrl.value = URL.createObjectURL(file)
+  isVideoFile.value = file.type.startsWith('video/')
   bgImageLoaded.value = false
+  if (isVideoFile.value) return // videos are published as-is, no canvas overlay
   // load image element for canvas
   const img = new Image()
   img.onload = () => { bgImageEl.value = img; bgImageLoaded.value = true }
@@ -95,6 +110,7 @@ function removeImage() {
   uploadedImageFile.value = null
   bgImageEl.value = null
   bgImageLoaded.value = false
+  isVideoFile.value = false
   if (fileInputRef.value) fileInputRef.value.value = ''
 }
 
@@ -212,7 +228,23 @@ watch(bgImageEl, v => { uploadedImageEl.value = v })
 // ── Publish ────────────────────────────────────────────────────────────────────
 async function publishStory() {
   isPublishing.value = true
+  publishError.value = null
   try {
+    // Video: upload as-is, no canvas overlay support
+    if (isVideoFile.value && uploadedImageFile.value) {
+      const fd = new FormData()
+      fd.append('file', uploadedImageFile.value)
+      const up = await api.post('/media/upload?folder=posts', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      const videoUrl = up.data.url ?? up.data.data?.url ?? null
+      if (!videoUrl) throw new Error('Upload failed: no URL returned')
+      await api.post('/stories', { video_url: videoUrl })
+      emit('created')
+      emit('close')
+      return
+    }
+
     let imageUrl: string | null = null
 
     // If user just uploaded an image AND no text/stickers → send as-is to save time
@@ -243,6 +275,7 @@ async function publishStory() {
     emit('close')
   } catch (err) {
     console.error('Failed to publish story', err)
+    publishError.value = describePublishError(err)
   } finally {
     isPublishing.value = false
   }
@@ -270,8 +303,9 @@ const activePanel = ref<'template' | 'text' | 'sticker'>('template')
         <div class="flex items-center px-3 pt-3 gap-1">
           <button v-for="tab in [{id:'template',icon:'Palette',label:'Фон'},{id:'text',icon:'Type',label:'Текст'},{id:'sticker',icon:'Smile',label:'Стикеры'}]"
             :key="tab.id"
+            :disabled="isVideoFile && tab.id !== 'template'"
             @click="activePanel = tab.id as any"
-            class="flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-[10px] font-semibold transition-all"
+            class="flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-[10px] font-semibold transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             :class="activePanel === tab.id
               ? 'bg-brand-accent/20 text-brand-accent'
               : 'text-white/40 hover:text-white/70 hover:bg-white/5'"
@@ -292,13 +326,18 @@ const activePanel = ref<'template' | 'text' | 'sticker'>('template')
             {{ uploadedImageUrl ? 'Сменить фото' : 'Загрузить фото' }}
           </button>
           <div v-if="uploadedImageUrl" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10">
-            <img :src="uploadedImageUrl" class="w-8 h-8 rounded-lg object-cover shrink-0" />
-            <span class="flex-1 text-xs text-white/60 truncate">Фото загружено</span>
+            <img v-if="!isVideoFile" :src="uploadedImageUrl" class="w-8 h-8 rounded-lg object-cover shrink-0" />
+            <div v-else class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+              <BIcon name="Video" class="w-4 h-4 text-white/60" />
+            </div>
+            <span class="flex-1 text-xs text-white/60 truncate">{{ isVideoFile ? 'Видео загружено' : 'Фото загружено' }}</span>
             <button @click="removeImage" class="text-white/40 hover:text-red-400 transition-colors">
               <BIcon name="X" class="w-3.5 h-3.5" />
             </button>
           </div>
+          <p v-if="isVideoFile" class="text-[10px] text-white/30 px-1">Текст и стикеры для видео пока недоступны — видео публикуется как есть</p>
 
+          <template v-if="!isVideoFile">
           <p class="text-[10px] text-white/30 font-semibold uppercase tracking-wider pt-1 px-1">Шаблоны</p>
           <!-- Template grid -->
           <div class="grid grid-cols-2 gap-2">
@@ -324,6 +363,7 @@ const activePanel = ref<'template' | 'text' | 'sticker'>('template')
               </div>
             </button>
           </div>
+          </template>
         </div>
 
         <!-- Text panel -->
@@ -412,7 +452,20 @@ const activePanel = ref<'template' | 'text' | 'sticker'>('template')
         </div>
 
         <!-- Publish button (desktop) -->
-        <div class="p-3 border-t border-white/8">
+        <div class="p-3 border-t border-white/8 space-y-2">
+          <Transition
+            enter-active-class="transition duration-150 ease-out"
+            enter-from-class="opacity-0 -translate-y-1"
+            enter-to-class="opacity-100 translate-y-0"
+          >
+            <p
+              v-if="publishError"
+              class="flex items-start gap-1.5 px-3 py-2 rounded-xl bg-rose-500/15 border border-rose-500/25 text-rose-300 text-[11px] leading-snug"
+            >
+              <BIcon name="AlertCircle" class="w-3.5 h-3.5 flex-shrink-0 mt-px" />
+              {{ publishError }}
+            </p>
+          </Transition>
           <button
             @click="publishStory"
             :disabled="isPublishing"
@@ -438,6 +491,10 @@ const activePanel = ref<'template' | 'text' | 'sticker'>('template')
             {{ isPublishing ? '…' : 'Готово' }}
           </button>
         </div>
+        <p v-if="publishError" class="md:hidden w-full max-w-[300px] flex items-start gap-1.5 px-3 py-2 rounded-xl bg-rose-500/15 border border-rose-500/25 text-rose-300 text-[11px] leading-snug">
+          <BIcon name="AlertCircle" class="w-3.5 h-3.5 flex-shrink-0 mt-px" />
+          {{ publishError }}
+        </p>
 
         <!-- Story phone frame -->
         <div
@@ -452,8 +509,14 @@ const activePanel = ref<'template' | 'text' | 'sticker'>('template')
             class="absolute inset-0 transition-all duration-500"
             :style="uploadedImageUrl ? {} : { background: bgGradient }"
           >
+            <video
+              v-if="uploadedImageUrl && isVideoFile"
+              :src="uploadedImageUrl"
+              class="w-full h-full object-cover"
+              autoplay loop muted playsinline
+            />
             <img
-              v-if="uploadedImageUrl"
+              v-else-if="uploadedImageUrl"
               :src="uploadedImageUrl"
               class="w-full h-full object-cover"
               @load="bgImageLoaded = true"
@@ -514,11 +577,11 @@ const activePanel = ref<'template' | 'text' | 'sticker'>('template')
             class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold">
             <BIcon name="ImagePlus" class="w-4 h-4" />Фото
           </button>
-          <button @click="activePanel = 'text'; textEnabled = true"
+          <button v-if="!isVideoFile" @click="activePanel = 'text'; textEnabled = true"
             class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold">
             <BIcon name="Type" class="w-4 h-4" />Текст
           </button>
-          <button @click="activePanel = 'sticker'"
+          <button v-if="!isVideoFile" @click="activePanel = 'sticker'"
             class="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 text-white text-xs font-semibold">
             <BIcon name="Smile" class="w-4 h-4" />Стикеры
           </button>

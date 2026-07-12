@@ -43,6 +43,27 @@ export const notificationService = {
     return notif;
   },
 
+  /** Soft-delete notification(s) matching an action that has since been retracted (unlike, un-repaw, cancelled request, etc). */
+  async deleteForAction(where: {
+    receiverId: string;
+    senderId?:  string;
+    type:       string;
+    postId?:    string;
+    refId?:     string;
+  }) {
+    await prisma.notification.updateMany({
+      where: {
+        receiver_id: where.receiverId,
+        sender_id:   where.senderId,
+        type:        where.type,
+        post_id:     where.postId,
+        ref_id:      where.refId,
+        deleted_at:  null,
+      },
+      data: { deleted_at: new Date() },
+    });
+  },
+
   async getForUser(userId: string, limit = 50) {
     return prisma.notification.findMany({
       where:   { receiver_id: userId, deleted_at: null },

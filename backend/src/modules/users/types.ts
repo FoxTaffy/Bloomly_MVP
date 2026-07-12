@@ -4,6 +4,7 @@ export interface UserPublicProfile {
   display_name: string | null;
   bio: string | null;
   avatar_url: string | null;
+  avatar_video_url: string | null;
   banner_url: string | null;
   status: string | null;
   persona: string | null;
@@ -55,6 +56,7 @@ export interface UpdateUserInput {
   display_name?: string;
   bio?: string;
   avatar_url?: string;
+  avatar_video_url?: string | null;
   banner_url?: string;
   status?: string;
   persona?: string;

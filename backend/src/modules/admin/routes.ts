@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import {
   getStatsHandler, getUsersHandler, updateUserRoleHandler, deleteUserHandler,
-  getArchivedUsersHandler, restoreUserHandler,
+  getArchivedUsersHandler, getFrozenUsersHandler, restoreUserHandler,
   getPostsAdminHandler, deletePostAdminHandler,
   getReportsHandler, submitReportHandler, resolveReportHandler,
   getAdsHandler, getActiveAdsHandler, submitAdHandler, reviewAdHandler,
@@ -27,6 +27,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   // Users
   fastify.get('/users',            auth, getUsersHandler as any);
   fastify.get('/users/archived',   auth, getArchivedUsersHandler as any);
+  fastify.get('/users/frozen',     auth, getFrozenUsersHandler as any);
   fastify.patch('/users/:id/role', auth, updateUserRoleHandler as any);
   fastify.delete('/users/:id',     auth, deleteUserHandler as any);
   fastify.post('/users/:id/restore', auth, restoreUserHandler as any);

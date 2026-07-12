@@ -122,7 +122,34 @@ export const adminService = {
         select: {
           id: true, username: true, display_name: true, email: true,
           role: true, badge_type: true, avatar_url: true,
-          created_at: true, deleted_at: true,
+          created_at: true, deleted_at: true, frozen_reason: true,
+          _count: { select: { posts: true, followers: true, following: true } },
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+    return { users, total, page, pages: Math.ceil(total / limit) };
+  },
+
+  // ── Frozen users (reversible, awaiting review / email unfreeze) ─────────────
+  async getFrozenUsers(page = 1, limit = 30, search?: string) {
+    const skip = (page - 1) * limit;
+    const where: any = { deleted_at: null, frozen_at: { not: null } };
+    if (search) where.OR = [
+      { username:     { contains: search, mode: 'insensitive' } },
+      { display_name: { contains: search, mode: 'insensitive' } },
+      { email:        { contains: search, mode: 'insensitive' } },
+    ];
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { frozen_at: 'desc' },
+        select: {
+          id: true, username: true, display_name: true, email: true,
+          role: true, badge_type: true, avatar_url: true,
+          created_at: true, frozen_at: true, frozen_reason: true, warn_count: true,
           _count: { select: { posts: true, followers: true, following: true } },
         },
       }),

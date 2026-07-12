@@ -10,6 +10,7 @@ export interface User {
   role: string
   display_name?: string | null
   avatar_url?: string | null
+  avatar_video_url?: string | null
   bio?: string | null
   status?: string | null
   subscription_tier?: string
@@ -128,7 +129,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function resendOtp(email: string, purpose: 'register' | 'reset'): Promise<void> {
+  async function resendOtp(email: string, purpose: 'register' | 'reset' | 'unfreeze'): Promise<void> {
     isLoading.value = true
     error.value = null
     try {
@@ -146,6 +147,46 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = jwtToken
     user.value  = savedUser
     saveUser(savedUser)
+  }
+
+  /** Экспорт своих данных — доступен даже забаненным/замороженным аккаунтам */
+  async function exportData(email: string, password: string): Promise<any> {
+    const res = await api.post('/auth/export-data', { email, password })
+    if (!res.data.success) throw new Error(res.data.error?.message ?? 'Export failed')
+    return res.data.data
+  }
+
+  /** Запрос кода разморозки на почту (для замороженного аккаунта) */
+  async function requestUnfreeze(email: string): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      await api.post('/auth/unfreeze/request', { email })
+    } catch (e: any) {
+      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /** Подтверждение кода разморозки — снимает заморозку и логинит */
+  async function confirmUnfreeze(email: string, code: string, remember = false): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const res = await api.post('/auth/unfreeze/verify', { email, code, remember })
+      const data = res.data
+      if (!data.success) throw new Error(data.error?.message ?? 'Unfreeze failed')
+      token.value = data.data.token
+      user.value  = data.data.user
+      saveUser(data.data.user)
+    } catch (e: any) {
+      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+      throw e
+    } finally {
+      isLoading.value = false
+    }
   }
 
   async function forgotPassword(email: string): Promise<void> {
@@ -168,6 +209,37 @@ export const useAuthStore = defineStore('auth', () => {
       const res = await api.post('/auth/reset-password', { email, code, password: newPassword })
       const data = res.data
       if (!data.success) throw new Error(data.error?.message ?? 'Reset failed')
+    } catch (e: any) {
+      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /** Смена email Step 1 — код отправляется на текущую почту */
+  async function requestEmailChange(): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      await api.post('/auth/change-email/request')
+    } catch (e: any) {
+      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /** Смена email Step 2 — код с текущей почты подтверждает переход на новую */
+  async function confirmEmailChange(code: string, newEmail: string): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const res = await api.post('/auth/change-email/confirm', { code, newEmail })
+      const data = res.data
+      if (!data.success) throw new Error(data.error?.message ?? 'Change email failed')
+      if (user.value) { user.value.email = data.data.email; saveUser(user.value) }
     } catch (e: any) {
       error.value = e.response?.data?.error?.message || e.message || 'Connection error'
       throw e
@@ -233,6 +305,7 @@ export const useAuthStore = defineStore('auth', () => {
     token, user, isLoading, isInitialized, error,
     isAuthenticated, displayName, avatarUrl,
     login, register, verifyEmail, resendOtp, loginWithToken,
-    forgotPassword, resetPassword, changePassword, fetchMe, logout, tryRefresh,
+    requestUnfreeze, confirmUnfreeze, exportData,
+    forgotPassword, resetPassword, changePassword, requestEmailChange, confirmEmailChange, fetchMe, logout, tryRefresh,
   }
 })

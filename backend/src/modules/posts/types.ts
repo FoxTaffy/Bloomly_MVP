@@ -12,6 +12,7 @@ export interface CreatePostInput {
   category?: string;
   tags?: string[];
   mediaUrls?: string[];
+  mediaOriginalUrls?: string[];
 }
 
 export type PostSortBy = 'new' | 'hot';

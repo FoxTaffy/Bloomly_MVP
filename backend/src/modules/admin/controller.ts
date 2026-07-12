@@ -67,6 +67,17 @@ export const getArchivedUsersHandler = async (
   return reply.send({ success: true, data: result, error: null });
 };
 
+export const getFrozenUsersHandler = async (
+  req: FastifyRequest<{ Querystring: { page?: string; limit?: string; search?: string } }>,
+  reply: FastifyReply,
+) => {
+  if (!requireMod(req, reply)) return;
+  const page  = parseInt(req.query.page  || '1');
+  const limit = parseInt(req.query.limit || '30');
+  const result = await adminService.getFrozenUsers(page, limit, req.query.search);
+  return reply.send({ success: true, data: result, error: null });
+};
+
 export const restoreUserHandler = async (
   req: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,

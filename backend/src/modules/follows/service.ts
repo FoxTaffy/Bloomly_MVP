@@ -23,6 +23,11 @@ export const followsService = {
       await prisma.follow.delete({
         where: { follower_id_following_id: { follower_id: followerId, following_id: followingId } },
       });
+      await notificationService.deleteForAction({
+        receiverId: followingId,
+        senderId:   followerId,
+        type:       'FOLLOW',
+      });
       return { following: false };
     } else {
       await prisma.follow.create({ data: { follower_id: followerId, following_id: followingId } });

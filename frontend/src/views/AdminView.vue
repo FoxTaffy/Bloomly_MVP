@@ -23,7 +23,7 @@ onMounted(async () => {
 })
 
 // ── Tabs ──────────────────────────────────────────────────────────────
-const activeTab = ref<'overview' | 'users' | 'archived' | 'posts' | 'reports' | 'ads' | 'verification' | 'banners' | 'automod' | 'statistics' | 'updates'>('overview')
+const activeTab = ref<'overview' | 'users' | 'frozen' | 'archived' | 'posts' | 'reports' | 'ads' | 'verification' | 'banners' | 'automod' | 'statistics' | 'updates'>('overview')
 
 // ── Stats ─────────────────────────────────────────────────────────────
 const stats = ref<any>(null)
@@ -71,6 +71,27 @@ const deleteUser = async (userId: string) => {
     await api.delete(`/admin/users/${userId}`)
     users.value = users.value.filter(u => u.id !== userId)
   } catch {}
+}
+
+// ── Frozen Users ──────────────────────────────────────────────────────
+const frozenUsers = ref<any[]>([])
+const frozenPage = ref(1)
+const frozenTotal = ref(0)
+const frozenSearch = ref('')
+const isLoadingFrozen = ref(false)
+let frozenSearchDebounce: ReturnType<typeof setTimeout>
+
+const fetchFrozenUsers = async () => {
+  isLoadingFrozen.value = true
+  try {
+    const res = await api.get('/admin/users/frozen', { params: { page: frozenPage.value, search: frozenSearch.value || undefined } })
+    if (res.data.success) { frozenUsers.value = res.data.data.users; frozenTotal.value = res.data.data.total }
+  } catch {} finally { isLoadingFrozen.value = false }
+}
+
+const onFrozenSearch = () => {
+  clearTimeout(frozenSearchDebounce)
+  frozenSearchDebounce = setTimeout(() => { frozenPage.value = 1; fetchFrozenUsers() }, 300)
 }
 
 // ── Archived Users ────────────────────────────────────────────────────
@@ -271,6 +292,8 @@ const unfreezeUser = async (userId: string) => {
     await api.post(`/admin/users/${userId}/unfreeze`)
     const u = users.value.find(u => u.id === userId)
     if (u) { u.frozen_at = null; u.frozen_reason = null }
+    frozenUsers.value = frozenUsers.value.filter(u => u.id !== userId)
+    frozenTotal.value = Math.max(0, frozenTotal.value - 1)
     await fetchAutoModLogs()
   } catch {}
 }
@@ -282,6 +305,7 @@ const freezeUser = async (userId: string) => {
     await api.post(`/admin/users/${userId}/freeze`, { reason })
     const u = users.value.find(u => u.id === userId)
     if (u) u.frozen_at = new Date().toISOString()
+    if (activeTab.value === 'frozen') await fetchFrozenUsers()
   } catch {}
 }
 
@@ -290,6 +314,8 @@ const clearUserWarns = async (userId: string) => {
     await api.post(`/admin/users/${userId}/clear-warns`)
     const u = users.value.find(u => u.id === userId)
     if (u) u.warn_count = 0
+    const fu = frozenUsers.value.find(u => u.id === userId)
+    if (fu) fu.warn_count = 0
   } catch {}
 }
 
@@ -461,6 +487,7 @@ const toggleUpdate = async (id: string, is_active: boolean) => {
 const switchTab = (tab: typeof activeTab.value) => {
   activeTab.value = tab
   if (tab === 'users' && !users.value.length) fetchUsers()
+  if (tab === 'frozen' && !frozenUsers.value.length) fetchFrozenUsers()
   if (tab === 'archived' && !archivedUsers.value.length) fetchArchivedUsers()
   if (tab === 'posts' && !posts.value.length) fetchPosts()
   if (tab === 'reports' && !reports.value.length) fetchReports()
@@ -481,7 +508,8 @@ const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map
 const navItems = computed(() => [
   { tab: 'overview'     as const, label: 'Обзор',          icon: 'LayoutDashboard', color: '#6366f1', badge: null },
   { tab: 'users'        as const, label: 'Пользователи',   icon: 'Users',           color: '#8b5cf6', badge: userTotal.value > 0 ? formatNum(userTotal.value) : null },
-  { tab: 'archived'     as const, label: 'Архив',           icon: 'Archive',         color: '#64748b', badge: archivedTotal.value > 0 ? String(archivedTotal.value) : null },
+  { tab: 'frozen'       as const, label: 'Заморожены',      icon: 'Snowflake',       color: '#0ea5e9', badge: frozenTotal.value > 0 ? String(frozenTotal.value) : null },
+  { tab: 'archived'     as const, label: 'Забанены',        icon: 'Archive',         color: '#64748b', badge: archivedTotal.value > 0 ? String(archivedTotal.value) : null },
   { tab: 'posts'        as const, label: 'Посты',           icon: 'FileText',        color: '#0ea5e9', badge: null },
   { tab: 'reports'      as const, label: 'Жалобы',          icon: 'Flag',            color: '#f59e0b', badge: reports.value.filter((r:any) => r.status==='pending').length || null },
   { tab: 'ads'          as const, label: 'Реклама',         icon: 'Megaphone',       color: '#f97316', badge: ads.value.filter((a:any) => a.status==='pending').length || null },
@@ -766,6 +794,77 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
           </div>
         </div>
 
+        <!-- ── FROZEN ─────────────────────────────────────────────────── -->
+        <div v-else-if="activeTab === 'frozen'">
+          <div class="flex items-center gap-3 mb-5">
+            <div class="relative flex-1 max-w-sm">
+              <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+              <input v-model="frozenSearch" @input="onFrozenSearch" type="text" placeholder="Поиск среди замороженных…"
+                class="w-full bg-white/5 border border-white/8 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
+                  outline-none focus:border-sky-500/40 focus:bg-white/8 transition-all" />
+            </div>
+            <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/8">{{ frozenTotal }}</span>
+          </div>
+
+          <div class="rounded-3xl border border-white/5 overflow-hidden" style="background:rgba(255,255,255,0.02)">
+            <div v-if="isLoadingFrozen" class="divide-y divide-white/5">
+              <div v-for="n in 4" :key="n" class="flex items-center gap-3 px-5 py-3.5 animate-pulse">
+                <div class="w-9 h-9 rounded-full bg-white/8 flex-shrink-0" />
+                <div class="flex-1 space-y-2">
+                  <div class="h-3 bg-white/8 rounded-full w-32" /><div class="h-2 bg-white/5 rounded-full w-24" />
+                </div>
+              </div>
+            </div>
+            <div v-else-if="frozenUsers.length === 0"
+              class="flex flex-col items-center gap-3 py-16 text-white/25">
+              <BIcon name="Snowflake" class="w-10 h-10 opacity-40" />
+              <p class="text-sm font-semibold">Нет замороженных аккаунтов</p>
+            </div>
+            <div v-else class="divide-y divide-white/5">
+              <div v-for="user in frozenUsers" :key="user.id"
+                class="flex items-center gap-3 px-5 py-3 hover:bg-white/3 transition-all group">
+                <img v-if="user.avatar_url" :src="user.avatar_url"
+                  class="w-9 h-9 rounded-full object-cover border border-white/10 flex-shrink-0" />
+                <div v-else class="w-9 h-9 rounded-full border border-sky-500/20 bg-sky-500/10 flex items-center justify-center text-xs font-bold text-sky-400 flex-shrink-0">
+                  {{ (user.display_name || user.username || '?')[0].toUpperCase() }}
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="font-bold text-sm text-white truncate flex items-center gap-1.5">
+                    {{ user.display_name || user.username }}
+                    <span class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/20">
+                      🧊 с {{ formatDate(user.frozen_at) }}
+                    </span>
+                  </p>
+                  <p class="text-xs text-white/35 truncate">@{{ user.username }} · {{ user._count?.posts ?? 0 }} постов</p>
+                  <p v-if="user.frozen_reason" class="text-[11px] text-sky-400/70 truncate mt-0.5">{{ user.frozen_reason }}</p>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                  <button @click="unfreezeUser(user.id)" title="Разморозить"
+                    class="w-8 h-8 rounded-xl bg-sky-500/10 border border-sky-500/15 text-sky-400 hover:bg-sky-500/20 flex items-center justify-center transition-all text-xs">
+                    🔓
+                  </button>
+                  <button v-if="user.warn_count > 0" @click="clearUserWarns(user.id)" title="Сбросить варны"
+                    class="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/15 text-amber-400 hover:bg-amber-500/20 flex items-center justify-center transition-all text-xs">
+                    ✖
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="frozenTotal > 20" class="flex items-center justify-center gap-2 mt-4">
+            <button @click="frozenPage--; fetchFrozenUsers()" :disabled="frozenPage <= 1"
+              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+              <BIcon name="ChevronLeft" class="w-4 h-4" />
+            </button>
+            <span class="text-xs font-bold text-white/40 px-3">{{ frozenPage }} / {{ Math.ceil(frozenTotal/20) }}</span>
+            <button @click="frozenPage++; fetchFrozenUsers()" :disabled="frozenPage >= Math.ceil(frozenTotal/20)"
+              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+              <BIcon name="ChevronRight" class="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
         <!-- ── ARCHIVED ────────────────────────────────────────────────── -->
         <div v-else-if="activeTab === 'archived'">
           <div class="flex items-center gap-3 mb-5">
@@ -803,6 +902,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
                 <div class="flex-1 min-w-0">
                   <p class="font-bold text-sm text-white/70 truncate">{{ user.display_name || user.username }}</p>
                   <p class="text-xs text-white/30">@{{ user.username }} · удалён {{ formatDate(user.deleted_at) }}</p>
+                  <p v-if="user.frozen_reason" class="text-[11px] text-rose-400/70 truncate mt-0.5">{{ user.frozen_reason }}</p>
                 </div>
                 <button @click="restoreUser(user.id)"
                   class="px-3 py-1.5 text-xs font-bold rounded-xl border opacity-0 group-hover:opacity-100 transition-all

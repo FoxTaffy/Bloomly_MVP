@@ -63,6 +63,19 @@ export interface Conversation {
   other_participants: Array<{ user_id: string; user: MsgSender; last_read_at?: string | null; role?: string }>
 }
 
+// ── Notification sound ───────────────────────────────────────────────────────
+const NOTIFICATION_SOUND_URL = '/sounds/Jiff.mp3'
+let notificationAudio: HTMLAudioElement | null = null
+
+function playNotificationSound() {
+  try {
+    if (!notificationAudio) notificationAudio = new Audio(NOTIFICATION_SOUND_URL)
+    notificationAudio.currentTime = 0
+    notificationAudio.volume = 0.5
+    void notificationAudio.play().catch(() => { /* blocked until user interacts with the page */ })
+  } catch { /* unsupported environment */ }
+}
+
 // ── Store ─────────────────────────────────────────────────────────────────────
 export const useMessagesStore = defineStore('messages', () => {
   const conversations    = ref<Conversation[]>([])
@@ -84,6 +97,7 @@ export const useMessagesStore = defineStore('messages', () => {
   let unsubTyping: (() => void) | null = null
   let unsubReadReceipt: (() => void) | null = null
   let unsubMessageUpdated: (() => void) | null = null
+  let unsubMessageDeleted: (() => void) | null = null
 
   // ── WebSocket ───────────────────────────────────────────────────────────
   function startListening() {
@@ -94,10 +108,11 @@ export const useMessagesStore = defineStore('messages', () => {
       const msg = (frame as any).data as Message
       if (!msg?.conversation_id) return
       const convId = msg.conversation_id
+      const auth = useAuthStore()
+      const isOwn = msg.sender_id === auth.user?.id
 
       // Replace matching optimistic temp message, or just append
       if (messages.value[convId]) {
-        const auth = useAuthStore()
         const tempIdx = messages.value[convId].findIndex(
           (m) => m._sending && m.sender_id === auth.user?.id && m.text === msg.text,
         )
@@ -122,6 +137,7 @@ export const useMessagesStore = defineStore('messages', () => {
       }
 
       if (activeId.value !== convId) unreadCount.value++
+      if (!isOwn) playNotificationSound()
     })
 
     unsubTyping = wsClient.on('typing', (frame) => {
@@ -150,6 +166,18 @@ export const useMessagesStore = defineStore('messages', () => {
       list.splice(idx, 1, { ...list[idx], ...msg, _sending: false })
     })
 
+    unsubMessageDeleted = wsClient.on('message_deleted', (frame) => {
+      const { id, conversation_id } = (frame as any).data as { id?: string; conversation_id?: string }
+      if (!id || !conversation_id) return
+      const list = messages.value[conversation_id]
+      if (list) messages.value[conversation_id] = list.filter((m) => m.id !== id)
+      const conv = conversations.value.find((c) => c.id === conversation_id)
+      if (conv?.last_message?.id === id) {
+        const remaining = messages.value[conversation_id]
+        conv.last_message = remaining?.length ? remaining[remaining.length - 1] : null
+      }
+    })
+
     unsubReadReceipt = wsClient.on('read_receipt', (frame) => {
       const { conversationId, userId, last_read_at } = frame as {
         conversationId?: string; userId?: string; last_read_at?: string
@@ -170,10 +198,12 @@ export const useMessagesStore = defineStore('messages', () => {
     unsubTyping?.()
     unsubReadReceipt?.()
     unsubMessageUpdated?.()
+    unsubMessageDeleted?.()
     unsubWs = null
     unsubTyping = null
     unsubReadReceipt = null
     unsubMessageUpdated = null
+    unsubMessageDeleted = null
   }
 
   // ── REST API ────────────────────────────────────────────────────────────

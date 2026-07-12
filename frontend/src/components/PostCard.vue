@@ -164,7 +164,7 @@
               </button>
 
               <!-- Share -->
-              <button @click="doShare" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5 hover:text-white">
+              <button @click="showMenu = false; toggleShareMenu($event)" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5 hover:text-white">
                 <BIcon name="Share2" class="w-4 h-4" /> Поделиться
               </button>
 
@@ -309,8 +309,27 @@
             class="transition-all duration-300"
             :class="(post.is_nsfw && !nsfwEnabled) || (isPaywalled && !paidRevealed) ? 'blur-xl scale-110 pointer-events-none select-none' : ''"
           >
+            <!-- VK-style photo grid (multiple images, no video/gif/audio) -->
+            <div
+              v-if="isPhotoGrid"
+              class="photo-grid"
+              :class="`photo-grid--${Math.min(post.media_urls.length, 4)}`"
+            >
+              <div
+                v-for="(url, i) in gridUrls"
+                :key="i"
+                class="photo-grid-cell"
+                @click.stop="openLightbox(i)"
+              >
+                <img :src="url" loading="lazy" />
+                <div v-if="i === 3 && gridExtraCount > 0" class="photo-grid-more">
+                  +{{ gridExtraCount }}
+                </div>
+              </div>
+            </div>
+
             <!-- Slide -->
-            <div class="carousel-track" :style="{ transform: `translateX(-${carouselIndex * 100}%)` }">
+            <div v-else class="carousel-track" :style="{ transform: `translateX(-${carouselIndex * 100}%)` }">
               <div
                 v-for="(url, i) in post.media_urls"
                 :key="i"
@@ -325,7 +344,7 @@
 
             <!-- Counter badge -->
             <div
-              v-if="post.media_urls.length > 1"
+              v-if="!isPhotoGrid && post.media_urls.length > 1"
               class="absolute top-2.5 left-2.5 z-10 px-2.5 py-1 rounded-full bg-black/60 text-white text-xs font-bold backdrop-blur-sm border border-white/10 select-none"
             >
               {{ carouselIndex + 1 }}&thinsp;/&thinsp;{{ post.media_urls.length }}
@@ -333,14 +352,14 @@
 
             <!-- Prev / Next arrows -->
             <button
-              v-if="post.media_urls.length > 1 && carouselIndex > 0"
+              v-if="!isPhotoGrid && post.media_urls.length > 1 && carouselIndex > 0"
               @click.stop="carouselIndex--"
               class="carousel-arrow left-2 opacity-0 group-hover/carousel:opacity-100"
             >
               <BIcon name="ChevronLeft" class="w-5 h-5" />
             </button>
             <button
-              v-if="post.media_urls.length > 1 && carouselIndex < post.media_urls.length - 1"
+              v-if="!isPhotoGrid && post.media_urls.length > 1 && carouselIndex < post.media_urls.length - 1"
               @click.stop="carouselIndex++"
               class="carousel-arrow right-2 opacity-0 group-hover/carousel:opacity-100"
             >
@@ -349,7 +368,7 @@
 
             <!-- Dots -->
             <div
-              v-if="post.media_urls.length > 1"
+              v-if="!isPhotoGrid && post.media_urls.length > 1"
               class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-10 flex gap-1.5 select-none"
             >
               <button
@@ -527,16 +546,42 @@
           </button>
 
           <!-- Share -->
-          <button v-if="!adMode" @click="doShare"
-            class="p-2 rounded-full border bg-brand-bg border-brand-border text-white/55 hover:text-white hover:border-brand-border/80 transition-all">
-            <BIcon name="Share2" class="w-4.5 h-4.5" />
-          </button>
+          <div v-if="!adMode" class="relative">
+            <button ref="shareBtnRef" @click="toggleShareMenu"
+              class="p-2 rounded-full border bg-brand-bg border-brand-border text-white/55 hover:text-white hover:border-brand-border/80 transition-all">
+              <BIcon name="Share2" class="w-4.5 h-4.5" />
+            </button>
+
+            <!-- Dropdown teleported to body to escape overflow:hidden -->
+            <Teleport to="body">
+              <div
+                v-if="showShareMenu"
+                v-click-outside="() => showShareMenu = false"
+                class="fixed z-[9998] w-52 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1"
+                :style="{ top: shareMenuPos.top, right: shareMenuPos.right }"
+              >
+                <button @click="quickCopyLink" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/80 hover:bg-white/5 hover:text-white">
+                  <BIcon :name="linkCopied ? 'CheckCheck' : 'Link'" class="w-4 h-4" />
+                  {{ linkCopied ? langStore.t.copiedBtn : langStore.t.exportCopyLink }}
+                </button>
+                <button v-if="authStore.user?.id !== post.author?.id" @click="quickRepost"
+                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-white/5"
+                  :class="localRepawed ? 'text-brand-accent' : 'text-white/80 hover:text-white'">
+                  <BIcon name="Repeat2" class="w-4 h-4" />
+                  {{ localRepawed ? langStore.t.repawed : langStore.t.repaw }}
+                </button>
+                <button @click="quickEmbed" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/80 hover:bg-white/5 hover:text-white">
+                  <BIcon :name="embedCopied ? 'CheckCheck' : 'Code2'" class="w-4 h-4" />
+                  {{ embedCopied ? langStore.t.embedCopied : langStore.t.exportEmbed }}
+                </button>
+              </div>
+            </Teleport>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- ── Share & Report modals ─────────────────────────────────────────── -->
-    <ShareModal v-model="showShareModal" :post-id="post.id" :post-url="postUrl" />
+    <!-- ── Report modal ──────────────────────────────────────────────────── -->
     <ReportModal v-model="showReportModal" :target-id="post.id" target-type="post" />
 
     <!-- ── Comments section ──────────────────────────────────────────────── -->
@@ -550,6 +595,7 @@
     <PostLightbox
       v-if="lightboxOpen"
       :images="lightboxUrls"
+      :original-images="lightboxOriginalUrls"
       :start-index="lightboxIndex"
       :post-id="post.id"
       @close="lightboxOpen = false"
@@ -627,7 +673,6 @@ import BIcon from '@/components/BIcon.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
 import PostComments from '@/components/PostComments.vue'
 import PostLightbox from '@/components/PostLightbox.vue'
-import ShareModal from '@/components/ShareModal.vue'
 import ReportModal from '@/components/ReportModal.vue'
 
 // ── Module-level mention user cache (shared across all PostCard instances) ──
@@ -758,13 +803,29 @@ const isEditing   = ref(false)
 const editContent = ref('')
 const isSaving    = ref(false)
 const isDeleting  = ref(false)
-const showShareModal = ref(false)
 const showReportModal = ref(false)
 const notifyPosts   = ref(false)    // уведомления о постах
 const notifyLoaded  = ref(false)    // статус загружен с сервера?
 const isBlocking  = ref(false)
 const isHidden    = ref(false)    // «не интересно» — скрыт из фида
 const linkCopied  = ref(false)
+const embedCopied = ref(false)
+
+const showShareMenu = ref(false)
+const shareBtnRef   = ref<HTMLElement | null>(null)
+const shareMenuPos  = ref({ top: '0px', right: '0px' })
+
+function toggleShareMenu(e?: MouseEvent) {
+  e?.stopPropagation()
+  if (!showShareMenu.value && shareBtnRef.value) {
+    const rect = shareBtnRef.value.getBoundingClientRect()
+    shareMenuPos.value = {
+      top: `${rect.bottom + 6}px`,
+      right: `${window.innerWidth - rect.right}px`,
+    }
+  }
+  showShareMenu.value = !showShareMenu.value
+}
 
 // NSFW / paid reveal state
 const { nsfwEnabled, enableNsfw } = useNsfwMode()
@@ -860,6 +921,23 @@ const isPaywalled = computed(() =>
 
 const lightboxUrls = computed<string[]>(() =>
   props.post.media_urls ?? []
+)
+
+const lightboxOriginalUrls = computed<string[]>(() => {
+  const urls: string[] = props.post.media_urls ?? []
+  const originals: string[] | undefined = props.post.media_original_urls
+  if (!originals || originals.length !== urls.length) return urls
+  return urls.map((u: string, i: number) => originals[i] || u)
+})
+
+// VK-style photo grid: only when every attachment is a plain image (no video/gif/audio)
+const isPhotoGrid = computed(() => {
+  const urls = props.post.media_urls
+  return !!urls && urls.length > 1 && urls.every(isImg)
+})
+const gridUrls = computed(() => (props.post.media_urls ?? []).slice(0, 4))
+const gridExtraCount = computed(() =>
+  Math.max(0, (props.post.media_urls?.length ?? 0) - 4)
 )
 
 type Seg = { type: 'text' | 'mention'; key: number; text: string; username?: string }
@@ -1045,11 +1123,6 @@ async function doDelete() {
 // ── Computed URLs ─────────────────────────────────────────────────────────
 const postUrl = computed(() => `${window.location.origin}/post/${props.post.id}`)
 
-function doShare() {
-  showMenu.value = false
-  showShareModal.value = true
-}
-
 async function copyPostLink() {
   try {
     await navigator.clipboard.writeText(postUrl.value)
@@ -1057,6 +1130,30 @@ async function copyPostLink() {
     setTimeout(() => { linkCopied.value = false }, 2000)
   } catch {}
   showMenu.value = false
+}
+
+async function quickCopyLink() {
+  try {
+    await navigator.clipboard.writeText(postUrl.value)
+    linkCopied.value = true
+    setTimeout(() => { linkCopied.value = false }, 2000)
+  } catch {}
+  showShareMenu.value = false
+}
+
+async function quickRepost() {
+  showShareMenu.value = false
+  await toggleRepaw()
+}
+
+async function quickEmbed() {
+  const embedCode = `<iframe src="${postUrl.value}" width="560" height="315" frameborder="0"></iframe>`
+  try {
+    await navigator.clipboard.writeText(embedCode)
+    embedCopied.value = true
+    setTimeout(() => { embedCopied.value = false }, 2000)
+  } catch {}
+  showShareMenu.value = false
 }
 
 function markNotInterested() {
@@ -1199,6 +1296,58 @@ const vClickOutside = {
   backdrop-filter: blur(4px);
 }
 .carousel-arrow:hover { background: rgba(0,0,0,0.8); }
+
+/* ── Photo grid (VK-style) ─────────────────────────────────────────────── */
+.photo-grid {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  height: 340px;
+}
+.photo-grid-cell {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  background: #0d0d14;
+}
+.photo-grid-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: filter 0.15s;
+}
+.photo-grid-cell:hover img { filter: brightness(0.92); }
+.photo-grid-more {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.5rem;
+  pointer-events: none;
+}
+.photo-grid--2 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr;
+}
+.photo-grid--3 {
+  grid-template-columns: 1.3fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.photo-grid--3 .photo-grid-cell:first-child {
+  grid-row: 1 / span 2;
+}
+.photo-grid--4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+@media (max-width: 640px) {
+  .photo-grid { height: 260px; }
+}
 
 /* ── Media grid cells (legacy, kept for compatibility) ───────────────────── */
 .media-cell {

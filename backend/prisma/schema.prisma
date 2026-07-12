@@ -21,6 +21,7 @@ model User {
   role                         String                @default("user")
   bio                          String?               @db.VarChar(300)
   avatar_url                   String?
+  avatar_video_url             String?
   banner_url                   String?
   status                       String?               @db.VarChar(100)
   persona                      String?
@@ -79,6 +80,8 @@ model User {
   reports                      Report[]              @relation("ReportReporter")
   resolvedReports              Report[]              @relation("ReportResolver")
   stories                      Story[]
+  storyViews                   StoryView[]
+  storyVotes                   StoryVote[]
   pinnedPost                   Post?                 @relation("UserPinnedPost", fields: [pinned_post_id], references: [id])
   activities                   UserActivity[]
   votes                        Vote[]
@@ -205,6 +208,7 @@ model Post {
   title               String?        @db.VarChar(200)
   post_type           String         @default("general") @db.VarChar(30)
   media_urls          String[]       @default([])
+  media_original_urls String[]       @default([])
   comments            Comment[]
   favourites          Favourite[]
   author              User           @relation("PostAuthor", fields: [author_id], references: [id])
@@ -272,17 +276,46 @@ model PostTag {
 }
 
 model Story {
-  id         String    @id @default(uuid()) @db.Uuid
-  user_id    String    @db.Uuid
+  id         String      @id @default(uuid()) @db.Uuid
+  user_id    String      @db.Uuid
   image_url  String?
-  created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
+  video_url  String?
+  created_at DateTime    @default(now())
+  updated_at DateTime    @updatedAt
   deleted_at DateTime?
   expires_at DateTime
-  user       User      @relation(fields: [user_id], references: [id])
+  user       User        @relation(fields: [user_id], references: [id])
+  views      StoryView[]
+  votes      StoryVote[]
 
   @@index([user_id])
   @@index([created_at])
+}
+
+model StoryView {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  story_id   String   @db.Uuid
+  user_id    String   @db.Uuid
+  created_at DateTime @default(now())
+  story      Story    @relation(fields: [story_id], references: [id])
+  user       User     @relation(fields: [user_id], references: [id])
+
+  @@unique([story_id, user_id])
+  @@index([story_id])
+}
+
+model StoryVote {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  story_id   String   @db.Uuid
+  user_id    String   @db.Uuid
+  value      Int
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  story      Story    @relation(fields: [story_id], references: [id])
+  user       User     @relation(fields: [user_id], references: [id])
+
+  @@unique([story_id, user_id])
+  @@index([story_id])
 }
 
 model Vote {
@@ -418,6 +451,7 @@ model MediaHistory {
   user_id    String   @db.Uuid
   type       String
   url        String
+  video_url  String?
   created_at DateTime @default(now())
   user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 

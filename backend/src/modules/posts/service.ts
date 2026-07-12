@@ -1,6 +1,7 @@
 import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
+import { isTrustedMediaUrl } from '../media/service.js';
 import type { CreatePostInput, GetPostsQuery } from './types.js';
 
 /** Throws a 403 unless the viewer is allowed to see userId's profile content. */
@@ -52,7 +53,18 @@ function maskGroupAuthor(post: any): any {
 export const postService = {
   async createPost(input: CreatePostInput) {
     const content = (input.content ?? '').trim();
-    if (!content) throw new Error('Content is required');
+    const mediaUrls = (input.mediaUrls ?? []).filter(Boolean);
+    if (!content && mediaUrls.length === 0) throw new Error('Content is required');
+    if (mediaUrls.some((url) => !isTrustedMediaUrl(url))) {
+      throw Object.assign(new Error('INVALID_MEDIA_URL'), { statusCode: 422 });
+    }
+    // Index-aligned with mediaUrls; only kept when the caller supplied a matching-length array.
+    const mediaOriginalUrls = input.mediaOriginalUrls?.length === mediaUrls.length
+      ? input.mediaOriginalUrls
+      : [];
+    if (mediaOriginalUrls.some((url) => !isTrustedMediaUrl(url))) {
+      throw Object.assign(new Error('INVALID_MEDIA_URL'), { statusCode: 422 });
+    }
 
     const authorId = input.authorId;
     const isNsfw = input.isNsfw ?? false;
@@ -71,8 +83,7 @@ export const postService = {
           .filter(Boolean),
       ),
     );
-    const mediaUrls = (input.mediaUrls ?? []).filter(Boolean);
-    
+
     return prisma.$transaction(async (tx) => {
       const post = await tx.post.create({
         data: { 
@@ -88,6 +99,7 @@ export const postService = {
           video_description: videoDescription || undefined,
           category,
           media_urls: mediaUrls,
+          media_original_urls: mediaOriginalUrls,
         },
       });
 
@@ -313,6 +325,17 @@ export const postService = {
         },
       });
 
+      // The previous vote was an active upvote that is now being retracted or flipped → remove its notification
+      const hadActiveUpvote = existingVote && existingVote.deleted_at === null && existingVote.value === 1;
+      if (hadActiveUpvote && updated.author_id !== userId) {
+        notificationService.deleteForAction({
+          receiverId: updated.author_id,
+          senderId: userId,
+          type: 'LIKE',
+          postId,
+        }).catch(() => {});
+      }
+
       // Fire LIKE notification when a net new upvote is cast (not a retraction)
       const isNewUpvote = value === 1 && updated.author_id !== userId;
       if (isNewUpvote) {
@@ -339,7 +362,18 @@ export const postService = {
 
       if (existing) {
         await tx.repaw.delete({ where: { user_id_post_id: { user_id: userId, post_id: postId } } });
-        const count = await tx.repaw.count({ where: { post_id: postId } });
+        const [count, post] = await Promise.all([
+          tx.repaw.count({ where: { post_id: postId } }),
+          tx.post.findUnique({ where: { id: postId }, select: { author_id: true } }),
+        ]);
+        if (post && post.author_id !== userId) {
+          notificationService.deleteForAction({
+            receiverId: post.author_id,
+            senderId: userId,
+            type: 'REPAW',
+            postId,
+          }).catch(() => {});
+        }
         return { repawed: false, repaw_count: count };
       } else {
         await tx.repaw.create({ data: { user_id: userId, post_id: postId } });
@@ -505,6 +539,13 @@ export const postService = {
   },
 
   async createComment(userId: string, postId: string, content: string, parentId?: string, type?: string, file_url?: string) {
+    if (!content?.trim() && !file_url) {
+      throw Object.assign(new Error('Content is required'), { statusCode: 400 });
+    }
+    if (file_url && !isTrustedMediaUrl(file_url)) {
+      throw Object.assign(new Error('INVALID_MEDIA_URL'), { statusCode: 422 });
+    }
+
     const post = await prisma.post.findUnique({
       where: { id: postId },
       select: { author_id: true, author: { select: { comments_privacy: true } } },

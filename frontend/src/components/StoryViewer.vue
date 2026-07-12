@@ -12,11 +12,26 @@ import { useAuthStore } from '@/stores/auth'
 interface Story {
   id: string
   image_url: string | null
+  video_url?: string | null
   created_at: string
   expires_at: string
   isBloomly?: boolean
   title?: string
   body?: string
+  score?: number
+  my_vote?: 1 | -1 | 0
+  view_count?: number
+  user: {
+    id: string
+    username: string
+    display_name: string | null
+    avatar_url: string | null
+  }
+}
+
+interface Viewer {
+  id: string
+  created_at: string
   user: {
     id: string
     username: string
@@ -61,32 +76,80 @@ const showHeart = ref(false)     // double-tap heart burst
 const heartX = ref(0)
 const heartY = ref(0)
 
-// ── Vote (thumbs up / down — like PostCard, stored in localStorage) ──────────
-const VOTE_KEY   = 'bloomly_story_votes'
+// ── Vote (thumbs up / down — persisted server-side) ──────────────────────────
 const storyVote  = ref<1 | -1 | 0>(0)   // current user vote
-const storyScore = ref(0)               // aggregate score (optimistic)
+const storyScore = ref(0)               // aggregate score
 
-function loadVote(storyId: string) {
-  try {
-    const map = JSON.parse(localStorage.getItem(VOTE_KEY) ?? '{}')
-    const entry = map[storyId] as { vote: 1 | -1 | 0; score: number } | undefined
-    storyVote.value  = entry?.vote  ?? 0
-    storyScore.value = entry?.score ?? 0
-  } catch { storyVote.value = 0; storyScore.value = 0 }
+function loadVote(story: Story) {
+  storyVote.value  = story.my_vote ?? 0
+  storyScore.value = story.score ?? 0
 }
 
-function castVote(value: 1 | -1) {
-  if (!currentStory.value) return
+async function castVote(value: 1 | -1) {
+  const story = currentStory.value
+  if (!story || story.isBloomly) return
+  if (!authStore.isAuthenticated) { router.push('/login'); return }
   const prev = storyVote.value
   const prevScore = storyScore.value
-  // Toggle off if same button clicked
+  // Optimistic update; toggle off if same button clicked
   storyVote.value  = prev === value ? 0 : value
   storyScore.value = prevScore - prev + storyVote.value
   try {
-    const map = JSON.parse(localStorage.getItem(VOTE_KEY) ?? '{}')
-    map[currentStory.value.id] = { vote: storyVote.value, score: storyScore.value }
-    localStorage.setItem(VOTE_KEY, JSON.stringify(map))
-  } catch {}
+    const res = await api.post(`/stories/${story.id}/vote`, { value })
+    if (res.data.success) {
+      storyVote.value  = res.data.data.my_vote
+      storyScore.value = res.data.data.score
+    }
+  } catch (err) {
+    console.error('Failed to vote on story', err)
+    storyVote.value  = prev
+    storyScore.value = prevScore
+  }
+}
+
+// ── View tracking ─────────────────────────────────────────────────────────────
+const trackedViews = new Set<string>()
+async function trackView(story: Story) {
+  if (story.isBloomly) return
+  if (!authStore.isAuthenticated) return
+  if (story.user.id === (authStore.user as any)?.id) return
+  if (trackedViews.has(story.id)) return
+  trackedViews.add(story.id)
+  try { await api.post(`/stories/${story.id}/view`) } catch {}
+}
+
+// ── Viewers sheet (own story only) ────────────────────────────────────────────
+const showViewers    = ref(false)
+const viewers        = ref<Viewer[]>([])
+const loadingViewers  = ref(false)
+
+function pluralizeViews(n: number): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod100 >= 11 && mod100 <= 14) return 'просмотров'
+  if (mod10 === 1) return 'просмотр'
+  if (mod10 >= 2 && mod10 <= 4) return 'просмотра'
+  return 'просмотров'
+}
+
+async function openViewers() {
+  if (!currentStory.value) return
+  showViewers.value = true
+  pauseStory()
+  loadingViewers.value = true
+  try {
+    const res = await api.get(`/stories/${currentStory.value.id}/viewers`)
+    viewers.value = res.data.success ? res.data.data.viewers : []
+  } catch (err) {
+    console.error('Failed to load story viewers', err)
+    viewers.value = []
+  }
+  loadingViewers.value = false
+}
+
+function closeViewers() {
+  showViewers.value = false
+  if (!inputFocused.value) resumeStory()
 }
 
 // ── Computed ─────────────────────────────────────────────────────────────────
@@ -160,18 +223,42 @@ function goPrev() {
   }
 }
 
-// Watch story change → reset + load vote
+// Watch story change → reset + load vote + track view
 watch([curGroupIdx, curStoryIdx], () => {
   resetTimer()
-  if (currentStory.value) loadVote(currentStory.value.id)
+  showViewers.value = false
+  if (currentStory.value) {
+    loadVote(currentStory.value)
+    trackView(currentStory.value)
+  }
 })
 
-// Watch loaded state → start timer when image loaded
-watch(loaded, (v) => { if (v) startTimer() })
+// Watch loaded state → start timer when media loaded (video drives its own progress)
+watch(loaded, (v) => { if (v && !isVideoStory.value) startTimer() })
 
 // ── Image load handler ───────────────────────────────────────────────────────
 function onImageLoad() {
   loaded.value = true
+}
+
+// ── Video state ────────────────────────────────────────────────────────────────
+const videoEl    = ref<HTMLVideoElement | null>(null)
+const videoMuted = ref(true)
+const isVideoStory = computed(() => !!currentStory.value?.video_url)
+
+function onVideoLoaded() {
+  loaded.value = true
+}
+function onVideoTimeUpdate() {
+  const v = videoEl.value
+  if (!v || !v.duration) return
+  progress.value = Math.min(100, (v.currentTime / v.duration) * 100)
+}
+function onVideoEnded() {
+  goNext()
+}
+function toggleVideoMute() {
+  videoMuted.value = !videoMuted.value
 }
 
 // For text-only Bloomly updates (no image), auto-start the timer
@@ -199,12 +286,14 @@ function pauseStory() {
   if (paused.value) return
   paused.value = true
   pausedAt = performance.now()
+  if (isVideoStory.value) videoEl.value?.pause()
 }
 function resumeStory() {
   if (!paused.value) return
   paused.value = false
   // Shift timerStart so elapsed is preserved
   timerStart += performance.now() - pausedAt
+  if (isVideoStory.value) videoEl.value?.play().catch(() => {})
 }
 
 // ── Tap zones ────────────────────────────────────────────────────────────────
@@ -320,7 +409,10 @@ function formatAgo(d: string) {
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
   document.body.style.overflow = 'hidden'
-  if (currentStory.value) loadVote(currentStory.value.id)
+  if (currentStory.value) {
+    loadVote(currentStory.value)
+    trackView(currentStory.value)
+  }
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
@@ -435,6 +527,15 @@ onUnmounted(() => {
                 <BIcon name="Pause" class="w-3 h-3" />Пауза
               </div>
             </Transition>
+            <!-- Video mute toggle -->
+            <button
+              v-if="isVideoStory"
+              @click.stop="toggleVideoMute"
+              class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors flex-shrink-0"
+              :aria-label="videoMuted ? 'Включить звук' : 'Выключить звук'"
+            >
+              <BIcon :name="videoMuted ? 'VolumeX' : 'Volume2'" class="w-4 h-4" />
+            </button>
             <!-- Close -->
             <button
               @click.stop="emit('close')"
@@ -460,9 +561,23 @@ onUnmounted(() => {
                 :key="currentStory.id"
                 class="relative w-full h-full flex items-center justify-center"
               >
+                <!-- Video -->
+                <video
+                  v-if="currentStory.video_url"
+                  ref="videoEl"
+                  :src="currentStory.video_url"
+                  :muted="videoMuted"
+                  class="w-full h-full object-cover"
+                  autoplay
+                  playsinline
+                  draggable="false"
+                  @loadedmetadata="onVideoLoaded"
+                  @timeupdate="onVideoTimeUpdate"
+                  @ended="onVideoEnded"
+                />
                 <!-- Image -->
                 <img
-                  v-if="currentStory.image_url"
+                  v-else-if="currentStory.image_url"
                   :src="currentStory.image_url"
                   class="w-full h-full object-cover"
                   @load="onImageLoad"
@@ -491,7 +606,7 @@ onUnmounted(() => {
                 <!-- Loading spinner -->
                 <Transition name="fade">
                   <div
-                    v-if="!loaded && currentStory.image_url"
+                    v-if="!loaded && (currentStory.image_url || currentStory.video_url)"
                     class="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm"
                   >
                     <BIcon name="Loader2" class="w-10 h-10 text-white animate-spin" />
@@ -622,14 +737,15 @@ onUnmounted(() => {
                   <BIcon v-else name="SendHorizontal" class="w-3.5 h-3.5 text-white" />
                 </button>
               </div>
-              <!-- Own story: label instead of reply input -->
-              <div
+              <!-- Own story: viewers button instead of reply input -->
+              <button
                 v-else-if="currentStory"
-                class="flex-1 flex items-center justify-center gap-2 bg-white/6 border border-white/10 rounded-full px-4 py-2.5 text-xs text-white/40"
+                @click.stop="openViewers"
+                class="flex-1 flex items-center justify-center gap-2 bg-white/6 border border-white/10 rounded-full px-4 py-2.5 text-xs text-white/40 hover:text-white/70 hover:bg-white/10 transition-colors"
               >
                 <BIcon name="Eye" class="w-3.5 h-3.5" />
-                Ваша история
-              </div>
+                {{ currentStory.view_count ?? 0 }} {{ pluralizeViews(currentStory.view_count ?? 0) }}
+              </button>
 
             <!-- Vote pill — hidden for Bloomly stories -->
             <div v-if="!isBloomlyGroup" class="flex items-center gap-1 bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/20 flex-shrink-0">
@@ -702,6 +818,64 @@ onUnmounted(() => {
             </div>
           </button>
         </div>
+
+        <!-- Viewers bottom sheet (own story only) -->
+        <Transition
+          enter-active-class="transition duration-200 ease-out"
+          enter-from-class="opacity-0 translate-y-4"
+          enter-to-class="opacity-100 translate-y-0"
+          leave-active-class="transition duration-150 ease-in"
+          leave-from-class="opacity-100 translate-y-0"
+          leave-to-class="opacity-0 translate-y-4"
+        >
+          <div
+            v-if="showViewers"
+            class="absolute inset-x-0 bottom-0 z-20 max-h-[60%] flex flex-col bg-[#111318]/95 backdrop-blur-md rounded-t-3xl border-t border-white/10"
+            @click.stop
+            @mousedown.stop
+            @touchstart.stop
+          >
+            <div class="flex items-center justify-between px-5 pt-4 pb-2 flex-shrink-0">
+              <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+                <BIcon name="Eye" class="w-4 h-4" />
+                Просмотры
+              </h3>
+              <button
+                @click="closeViewers"
+                class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+                aria-label="Закрыть"
+              >
+                <BIcon name="X" class="w-4 h-4" />
+              </button>
+            </div>
+            <div class="flex-1 overflow-y-auto px-5 pb-5 space-y-1">
+              <div v-if="loadingViewers" class="flex items-center justify-center py-8">
+                <BIcon name="Loader2" class="w-6 h-6 text-white/40 animate-spin" />
+              </div>
+              <div v-else-if="viewers.length === 0" class="flex flex-col items-center gap-2 py-8 text-white/30">
+                <BIcon name="EyeOff" class="w-8 h-8" />
+                <span class="text-xs">Пока никто не смотрел</span>
+              </div>
+              <button
+                v-for="v in viewers"
+                :key="v.id"
+                class="w-full flex items-center gap-3 py-2 px-1 rounded-xl hover:bg-white/5 transition-colors text-left"
+                @click.stop="emit('close'); router.push('/profile/' + v.user.username)"
+              >
+                <img
+                  v-if="v.user.avatar_url"
+                  :src="v.user.avatar_url"
+                  class="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                />
+                <div v-else class="w-9 h-9 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm flex-shrink-0">
+                  {{ (v.user.username ?? '?')[0].toUpperCase() }}
+                </div>
+                <span class="flex-1 min-w-0 text-sm font-semibold text-white truncate">{{ v.user.display_name || v.user.username }}</span>
+                <span class="text-[11px] text-white/40 flex-shrink-0">{{ formatAgo(v.created_at) }}</span>
+              </button>
+            </div>
+          </div>
+        </Transition>
       </div>
     </Transition>
   </Teleport>

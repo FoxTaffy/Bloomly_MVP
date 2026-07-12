@@ -63,7 +63,8 @@ const showPostForm = ref(false)
 const showStoryModal = ref(false)
 const createTab = ref<'post' | 'story'>('post')
 const mediaUrls = ref<string[]>([])
-const handleMediaUploaded = (urls: string[]) => { mediaUrls.value = urls }
+const mediaOriginalUrls = ref<string[]>([])
+const handleMediaUploaded = (urls: string[], originalUrls: string[]) => { mediaUrls.value = urls; mediaOriginalUrls.value = originalUrls }
 
 // ── "Post as" entity selector ────────────────────────────────────────────────
 type PostEntity = { type: 'user' } | { type: 'group'; id: string; slug: string; name: string; avatar_url: string | null }
@@ -91,6 +92,7 @@ const closeCreateModal = () => {
   showVisibilityMenu.value = false
   newPost.value = { content: '', category: '', tags: [], isNsfw: false, visibility: 'public', price: '', videoTitle: '', videoDescription: '' }
   mediaUrls.value = []
+  mediaOriginalUrls.value = []
   mediaUploadRef.value?.clearAll()
 }
 
@@ -512,7 +514,7 @@ const removeTag = (t: string) => { newPost.value.tags = newPost.value.tags.filte
 
 const createPost = async () => {
   const content = newPost.value.content.trim()
-  if (!content) return
+  if (!content && mediaUrls.value.length === 0) return
   isPosting.value = true
   try {
     let createdPost: any = null
@@ -521,6 +523,7 @@ const createPost = async () => {
         content,
         isNsfw: newPost.value.isNsfw,
         mediaUrls: mediaUrls.value,
+        mediaOriginalUrls: mediaOriginalUrls.value,
         tags: newPost.value.tags,
       })
       createdPost = res
@@ -536,6 +539,7 @@ const createPost = async () => {
         videoTitle: newPost.value.videoTitle.trim() || undefined,
         videoDescription: newPost.value.videoDescription.trim() || undefined,
         mediaUrls: mediaUrls.value,
+        mediaOriginalUrls: mediaOriginalUrls.value,
       })
       if (res.data.success) createdPost = res.data.data?.post
     }
@@ -549,6 +553,7 @@ const createPost = async () => {
     }
     newPost.value = { content: '', category: '', tags: [], isNsfw: false, visibility: 'public', price: '', videoTitle: '', videoDescription: '' }
     mediaUrls.value = []
+    mediaOriginalUrls.value = []
     mediaUploadRef.value?.clearAll()
     showPostForm.value = false
     showVisibilityMenu.value = false
@@ -941,7 +946,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
               <!-- Send button (top-right) -->
               <button
                 @click="createPost"
-                :disabled="!newPost.content.trim() || isPosting"
+                :disabled="(!newPost.content.trim() && mediaUrls.length === 0) || isPosting"
                 class="w-10 h-10 rounded-full flex items-center justify-center bg-brand-accent text-white hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-accent/25 flex-shrink-0 mt-0.5"
                 title="Опубликовать"
               >

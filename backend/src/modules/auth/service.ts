@@ -12,7 +12,9 @@ function genCode(): string {
 
 // ── OTP helpers ───────────────────────────────────────────────────────────────
 
-async function createOtp(email: string, purpose: 'register' | 'reset') {
+type OtpPurpose = 'register' | 'reset' | 'unfreeze' | 'change_email';
+
+async function createOtp(email: string, purpose: OtpPurpose) {
   await prisma.emailOtp.deleteMany({ where: { email, purpose, used: false } });
   const code = genCode();
   await prisma.emailOtp.create({
@@ -21,7 +23,7 @@ async function createOtp(email: string, purpose: 'register' | 'reset') {
   return code;
 }
 
-async function verifyOtp(email: string, code: string, purpose: 'register' | 'reset') {
+async function verifyOtp(email: string, code: string, purpose: OtpPurpose) {
   const otp = await prisma.emailOtp.findFirst({
     where: { email, code, purpose, used: false },
     orderBy: { created_at: 'desc' },
@@ -93,16 +95,20 @@ export class AuthService {
   }
 
   /** Повторная отправка OTP */
-  async resendOtp(email: string, purpose: 'register' | 'reset') {
+  async resendOtp(email: string, purpose: OtpPurpose) {
     const e = email.toLowerCase().trim();
     const code = await createOtp(e, purpose);
     await sendOtpEmail(e, code, purpose);
   }
 
-  /** Вход по email + пароль */
+  /**
+   * Вход по email + пароль. Не фильтрует по deleted_at/frozen_at — возвращает
+   * учётку в любом состоянии, чтобы контроллер мог отличить "неверный пароль"
+   * от "аккаунт заморожен/забанен" и показать понятное сообщение.
+   */
   async loginUser(email: string, password: string) {
     const user = await prisma.user.findFirst({
-      where: { email: { equals: email, mode: 'insensitive' }, deleted_at: null },
+      where: { email: { equals: email, mode: 'insensitive' } },
     });
     if (!user || !user.password) return null;
 
@@ -111,6 +117,62 @@ export class AuthService {
 
     const { password: _pw, ...rest } = user;
     return rest;
+  }
+
+  /**
+   * Экспорт своих данных — доступен даже забаненным/замороженным аккаунтам
+   * (для этого и повторяем проверку пароля вместо переиспользования сессии).
+   * Не включает переписку (сообщения зашифрованы на клиенте).
+   */
+  async exportUserData(email: string, password: string) {
+    const user = await prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
+    if (!user || !user.password) throw new Error('Неверный email или пароль');
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) throw new Error('Неверный email или пароль');
+
+    const [posts, comments, wallet] = await Promise.all([
+      prisma.post.findMany({
+        where: { author_id: user.id },
+        select: { id: true, content: true, is_nsfw: true, rating: true, created_at: true, deleted_at: true },
+        orderBy: { created_at: 'desc' },
+      }),
+      prisma.comment.findMany({
+        where: { author_id: user.id },
+        select: { id: true, post_id: true, content: true, created_at: true, deleted_at: true },
+        orderBy: { created_at: 'desc' },
+      }),
+      prisma.wallet.findUnique({ where: { user_id: user.id }, select: { balance: true } }),
+    ]);
+
+    const { password: _pw, ...profile } = user;
+    return { profile, posts, comments, wallet, exported_at: new Date().toISOString() };
+  }
+
+  /** Запрос кода разморозки — только если аккаунт реально заморожен */
+  async requestUnfreeze(email: string) {
+    const e = email.toLowerCase().trim();
+    const user = await prisma.user.findFirst({ where: { email: e, deleted_at: null, frozen_at: { not: null } } });
+    if (!user) return; // silent — не палим наличие/статус аккаунта
+
+    const code = await createOtp(e, 'unfreeze');
+    await sendOtpEmail(e, code, 'unfreeze');
+  }
+
+  /** Подтверждение кода разморозки — снимает frozen_at/frozen_reason */
+  async confirmUnfreeze(email: string, code: string) {
+    const e = email.toLowerCase().trim();
+    await verifyOtp(e, code, 'unfreeze');
+
+    const user = await prisma.user.findFirst({ where: { email: e, deleted_at: null } });
+    if (!user) throw new Error('Пользователь не найден');
+
+    await prisma.user.update({ where: { id: user.id }, data: { frozen_at: null, frozen_reason: null, warn_count: 0 } });
+    await prisma.autoModLog.create({
+      data: { user_id: user.id, action: 'unfreeze', reason: 'Разморожен пользователем через подтверждение по email', category: 'manual', score: 0 },
+    });
+
+    return user;
   }
 
   /** Сброс пароля Step 1 — отправить код */
@@ -153,5 +215,32 @@ export class AuthService {
 
     const hashed = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
+  }
+
+  /** Смена email Step 1 — код отправляется на ТЕКУЩУЮ (старую) почту */
+  async requestEmailChange(userId: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId, deleted_at: null }, select: { email: true } });
+    if (!user) throw new Error('Пользователь не найден');
+
+    const code = await createOtp(user.email, 'change_email');
+    await sendOtpEmail(user.email, code, 'change_email');
+    return { email: user.email };
+  }
+
+  /** Смена email Step 2 — код с старой почты подтверждает переход на новую */
+  async confirmEmailChange(userId: string, code: string, newEmail: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId, deleted_at: null }, select: { email: true } });
+    if (!user) throw new Error('Пользователь не найден');
+
+    const ne = newEmail.toLowerCase().trim();
+    if (ne === user.email.toLowerCase()) throw new Error('Это уже ваш текущий email');
+
+    await verifyOtp(user.email, code, 'change_email');
+
+    const taken = await prisma.user.findFirst({ where: { email: { equals: ne, mode: 'insensitive' }, deleted_at: null } });
+    if (taken) throw new Error('Этот email уже используется');
+
+    await prisma.user.update({ where: { id: userId }, data: { email: ne, email_verified: true } });
+    return ne;
   }
 }

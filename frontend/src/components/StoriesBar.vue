@@ -17,11 +17,15 @@ interface StatusNote {
 export interface Story {
   id: string
   image_url: string | null
+  video_url?: string | null
   created_at: string
   expires_at: string
   isBloomly?: boolean
   title?: string
   body?: string
+  score?: number
+  my_vote?: 1 | -1 | 0
+  view_count?: number
   user: {
     id: string
     username: string
@@ -310,6 +314,13 @@ function openGroup(group: Story[]) {
                     </span>
                   </div>
                 </div>
+              </div>
+
+              <div
+                v-if="group[group.length - 1].video_url"
+                class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-brand-accent border-2 border-brand-card flex items-center justify-center"
+              >
+                <BIcon name="Play" class="w-2.5 h-2.5 text-white" style="margin-left:1px" />
               </div>
 
               <div

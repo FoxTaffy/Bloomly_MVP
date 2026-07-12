@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { uploadFile, UploadValidationError } from './service.js';
+import { uploadFile, UploadValidationError, convertGifAvatarToWebm } from './service.js';
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif',
@@ -7,8 +7,14 @@ const ALLOWED_MIME_TYPES = new Set([
   'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/mp4',
 ]);
 
-const ALLOWED_FOLDERS = ['posts', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers'] as const;
+const ALLOWED_FOLDERS = ['posts', 'comments', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers'] as const;
 type Folder = typeof ALLOWED_FOLDERS[number];
+
+/** Parses a 0..1 crop fraction from a query param; falls back to `def` if missing/invalid. */
+function parseFraction(raw: unknown, def: number): number {
+  const n = typeof raw === 'string' ? parseFloat(raw) : NaN;
+  return Number.isFinite(n) && n >= 0 && n <= 1 ? n : def;
+}
 
 function isAllowedMime(mime: string): boolean {
   return ALLOWED_MIME_TYPES.has(mime);
@@ -62,8 +68,30 @@ export const uploadFileHandler = async (
       });
     }
 
-    const url = await uploadFile(buf, data.filename, data.mimetype, folder);
-    return reply.send({ success: true, data: { url }, error: null });
+    if (folder === 'avatars' && !data.mimetype.startsWith('image/')) {
+      return reply.code(415).send({
+        success: false,
+        data: null,
+        error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Аватар может быть только изображением или GIF' },
+      });
+    }
+
+    // Animated GIF avatars are transcoded: a 1:1-cropped static poster (→ avatar_url)
+    // plus a full-frame WebM (→ avatar_video_url), far smaller than the source GIF.
+    if (folder === 'avatars' && data.mimetype === 'image/gif') {
+      const query = request.query as any;
+      const crop = {
+        x: parseFraction(query.cropX, 0),
+        y: parseFraction(query.cropY, 0),
+        w: parseFraction(query.cropW, 1),
+        h: parseFraction(query.cropH, 1),
+      };
+      const { posterUrl, videoUrl } = await convertGifAvatarToWebm(buf, crop);
+      return reply.send({ success: true, data: { url: posterUrl, videoUrl }, error: null });
+    }
+
+    const { url, originalUrl } = await uploadFile(buf, data.filename, data.mimetype, folder);
+    return reply.send({ success: true, data: { url, originalUrl }, error: null });
   } catch (err: any) {
     if (err instanceof UploadValidationError) {
       return reply.code(422).send({

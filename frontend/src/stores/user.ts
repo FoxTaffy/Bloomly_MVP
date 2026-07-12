@@ -97,6 +97,7 @@ export interface UserProfile {
   display_name: string | null
   bio: string | null
   avatar_url: string | null
+  avatar_video_url: string | null
   banner_url: string | null
   status: string | null
   persona: string | null

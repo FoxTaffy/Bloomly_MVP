@@ -23,8 +23,8 @@ export const createPostHandler = async (
 ) => {
   try {
     const { id: authorId } = request.user as JwtUser;
-    const { content, isNsfw, subscriberOnly, isPaid, price, rewardForUserId, videoTitle, videoDescription, category, tags, mediaUrls } = request.body as any;
-    const input: CreatePostInput = { content, authorId, isNsfw, subscriberOnly, isPaid, price, rewardForUserId, videoTitle, videoDescription, category, tags, mediaUrls };
+    const { content, isNsfw, subscriberOnly, isPaid, price, rewardForUserId, videoTitle, videoDescription, category, tags, mediaUrls, mediaOriginalUrls } = request.body as any;
+    const input: CreatePostInput = { content, authorId, isNsfw, subscriberOnly, isPaid, price, rewardForUserId, videoTitle, videoDescription, category, tags, mediaUrls, mediaOriginalUrls };
     const post = await postService.createPost(input);
     // fire-and-forget automod check (does not block the response)
     if (post) {

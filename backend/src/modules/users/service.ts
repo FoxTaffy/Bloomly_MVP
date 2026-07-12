@@ -53,6 +53,7 @@ const PUBLIC_SELECT = {
   display_name:    true,
   bio:             true,
   avatar_url:      true,
+  avatar_video_url: true,
   banner_url:      true,
   status:          true,
   persona:         true,
@@ -162,16 +163,16 @@ export const usersService = {
     // ── Fetch current media URLs before overwriting ─────────────────────
     const current = await prisma.user.findUnique({
       where: { id, deleted_at: null },
-      select: { avatar_url: true, banner_url: true },
+      select: { avatar_url: true, avatar_video_url: true, banner_url: true },
     });
 
     if (current) {
-      const historyEntries: { user_id: string; type: string; url: string }[] = [];
+      const historyEntries: { user_id: string; type: string; url: string; video_url?: string | null }[] = [];
 
-      // If avatar is actually changing — archive current, keep file in MinIO for history gallery
+      // If avatar is actually changing — archive current (+ its animated WebM, if any), keep files in MinIO for history gallery
       const newAvatar = (data as any).avatar_url;
       if (typeof newAvatar === 'string' && newAvatar && newAvatar !== current.avatar_url && current.avatar_url) {
-        historyEntries.push({ user_id: id, type: 'avatar', url: current.avatar_url });
+        historyEntries.push({ user_id: id, type: 'avatar', url: current.avatar_url, video_url: current.avatar_video_url });
       }
 
       // If banner is actually changing — archive current, keep file
@@ -249,7 +250,7 @@ export const usersService = {
       where: { user_id: userId, ...(type ? { type } : {}) },
       orderBy: { created_at: 'desc' },
       take: limit,
-      select: { id: true, type: true, url: true, created_at: true },
+      select: { id: true, type: true, url: true, video_url: true, created_at: true },
     });
   },
 
@@ -261,6 +262,7 @@ export const usersService = {
 
     await prisma.mediaHistory.delete({ where: { id: historyId } });
     deleteFileByUrl(item.url).catch(() => {});
+    if (item.video_url) deleteFileByUrl(item.video_url).catch(() => {});
   },
 
   async restoreAvatarFromHistory(userId: string, historyId: string) {
@@ -271,21 +273,21 @@ export const usersService = {
 
     const user = await prisma.user.findUnique({
       where: { id: userId, deleted_at: null },
-      select: { avatar_url: true },
+      select: { avatar_url: true, avatar_video_url: true },
     });
     if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
 
     await prisma.$transaction(async (tx) => {
-      // Archive current avatar into history (keep file in MinIO)
+      // Archive current avatar (+ its WebM, if any) into history (keep files in MinIO)
       if (user.avatar_url && user.avatar_url !== item.url) {
         await tx.mediaHistory.create({
-          data: { user_id: userId, type: 'avatar', url: user.avatar_url },
+          data: { user_id: userId, type: 'avatar', url: user.avatar_url, video_url: user.avatar_video_url },
         });
       }
-      // Promote historical avatar to current
+      // Promote historical avatar (+ its WebM, if any) to current
       await tx.user.update({
         where: { id: userId },
-        data: { avatar_url: item.url },
+        data: { avatar_url: item.url, avatar_video_url: item.video_url },
       });
       // Remove from history since it's now the current avatar
       await tx.mediaHistory.delete({ where: { id: historyId } });
@@ -293,7 +295,7 @@ export const usersService = {
 
     return prisma.user.findUnique({
       where: { id: userId },
-      select: { avatar_url: true },
+      select: { avatar_url: true, avatar_video_url: true },
     });
   },
 

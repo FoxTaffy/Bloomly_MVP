@@ -6,6 +6,7 @@ import CustomPlayer from './CustomPlayer.vue'
 
 const props = defineProps<{
   images: string[]
+  originalImages?: string[]
   startIndex?: number
   postId?: string
 }>()
@@ -18,6 +19,29 @@ const isVideo = (url: string) => /\.(mp4|webm|mov|mkv|ogv)$/i.test(url.split('?'
 const current = ref(props.startIndex ?? 0)
 const total = computed(() => props.images.length)
 const currentUrl = computed(() => props.images[current.value])
+const currentOriginalUrl = computed(() => props.originalImages?.[current.value] || currentUrl.value)
+
+const downloading = ref(false)
+async function downloadOriginal() {
+  const url = currentOriginalUrl.value
+  downloading.value = true
+  try {
+    const res = await fetch(url)
+    const blob = await res.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = url.split('/').pop() || 'image'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(blobUrl)
+  } catch {
+    window.open(url, '_blank')
+  } finally {
+    downloading.value = false
+  }
+}
 
 const prev = () => { current.value = (current.value - 1 + total.value) % total.value }
 const next = () => { current.value = (current.value + 1) % total.value }
@@ -89,6 +113,16 @@ onUnmounted(() => {
                 :name="showComments ? 'ChevronRight' : 'ChevronLeft'"
                 class="w-3.5 h-3.5 transition-transform"
               />
+            </button>
+            <!-- Download original -->
+            <button
+              v-if="!isVideo(currentUrl)"
+              @click="downloadOriginal"
+              :disabled="downloading"
+              class="w-9 h-9 rounded-full bg-black/60 border border-white/15 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/80 transition-colors disabled:opacity-50"
+              title="Скачать оригинал"
+            >
+              <BIcon name="Download" class="w-4.5 h-4.5" />
             </button>
             <!-- Close -->
             <button

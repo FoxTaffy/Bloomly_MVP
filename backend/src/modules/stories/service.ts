@@ -1,47 +1,82 @@
 import prisma from '../../config/prisma.js';
+import { isTrustedMediaUrl } from '../media/service.js';
 
 const STORY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const MAX_ACTIVE_STORIES_PER_USER = 20;
+
+const userSelect = {
+  id: true,
+  username: true,
+  display_name: true,
+  avatar_url: true,
+} as const;
+
+async function attachMeta<T extends { id: string }>(stories: T[], viewerId?: string) {
+  if (stories.length === 0) return stories as (T & { score: number; my_vote: number; view_count: number })[];
+  const ids = stories.map((s) => s.id);
+
+  const [voteAgg, myVotes, viewCounts] = await Promise.all([
+    prisma.storyVote.groupBy({ by: ['story_id'], where: { story_id: { in: ids } }, _sum: { value: true } }),
+    viewerId
+      ? prisma.storyVote.findMany({
+          where: { story_id: { in: ids }, user_id: viewerId },
+          select: { story_id: true, value: true },
+        })
+      : Promise.resolve([]),
+    prisma.storyView.groupBy({ by: ['story_id'], where: { story_id: { in: ids } }, _count: { _all: true } }),
+  ]);
+
+  const scoreMap = new Map(voteAgg.map((v) => [v.story_id, v._sum.value ?? 0]));
+  const myVoteMap = new Map(myVotes.map((v) => [v.story_id, v.value]));
+  const viewMap = new Map(viewCounts.map((v) => [v.story_id, v._count._all]));
+
+  return stories.map((s) => ({
+    ...s,
+    score: scoreMap.get(s.id) ?? 0,
+    my_vote: myVoteMap.get(s.id) ?? 0,
+    view_count: viewMap.get(s.id) ?? 0,
+  }));
+}
 
 export const storiesService = {
-  async getActiveStories() {
+  async getActiveStories(viewerId?: string) {
     const since = new Date(Date.now() - STORY_TTL_MS);
-    return prisma.story.findMany({
+    const stories = await prisma.story.findMany({
       where: {
         created_at: { gte: since },
         deleted_at: null,
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            display_name: true,
-            avatar_url: true,
-          },
-        },
-      },
+      include: { user: { select: userSelect } },
       orderBy: { created_at: 'desc' },
     });
+    return attachMeta(stories, viewerId);
   },
 
-  async createStory(userId: string, imageUrl?: string) {
+  async createStory(userId: string, imageUrl?: string, videoUrl?: string) {
+    if (!imageUrl && !videoUrl) {
+      throw new Error('MISSING_MEDIA');
+    }
+    if ((imageUrl && !isTrustedMediaUrl(imageUrl)) || (videoUrl && !isTrustedMediaUrl(videoUrl))) {
+      throw new Error('INVALID_MEDIA_URL');
+    }
+
+    const since = new Date(Date.now() - STORY_TTL_MS);
+    const activeCount = await prisma.story.count({
+      where: { user_id: userId, created_at: { gte: since }, deleted_at: null },
+    });
+    if (activeCount >= MAX_ACTIVE_STORIES_PER_USER) {
+      throw new Error('STORY_LIMIT_EXCEEDED');
+    }
+
     const expires_at = new Date(Date.now() + STORY_TTL_MS);
     return prisma.story.create({
       data: {
         user_id: userId,
         image_url: imageUrl ?? null,
+        video_url: videoUrl ?? null,
         expires_at,
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            display_name: true,
-            avatar_url: true,
-          },
-        },
-      },
+      include: { user: { select: userSelect } },
     });
   },
 
@@ -59,25 +94,78 @@ export const storiesService = {
     });
   },
 
-  async getStoriesByUser(userId: string) {
+  async getStoriesByUser(userId: string, viewerId?: string) {
     const since = new Date(Date.now() - STORY_TTL_MS);
-    return prisma.story.findMany({
+    const stories = await prisma.story.findMany({
       where: {
         user_id: userId,
         created_at: { gte: since },
         deleted_at: null,
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            display_name: true,
-            avatar_url: true,
-          },
-        },
-      },
+      include: { user: { select: userSelect } },
       orderBy: { created_at: 'desc' },
     });
+    return attachMeta(stories, viewerId);
+  },
+
+  async recordView(storyId: string, viewerId: string) {
+    const story = await prisma.story.findUnique({
+      where: { id: storyId },
+      select: { user_id: true, deleted_at: true },
+    });
+    if (!story || story.deleted_at) throw new Error('NOT_FOUND');
+    if (story.user_id === viewerId) return; // owner viewing their own story isn't tracked
+
+    await prisma.storyView.upsert({
+      where: { story_id_user_id: { story_id: storyId, user_id: viewerId } },
+      create: { story_id: storyId, user_id: viewerId },
+      update: {},
+    });
+  },
+
+  async getViewers(storyId: string, requesterId: string) {
+    const story = await prisma.story.findUnique({
+      where: { id: storyId },
+      select: { user_id: true, deleted_at: true },
+    });
+    if (!story || story.deleted_at) return null;
+    if (story.user_id !== requesterId) return false; // only the owner can see who viewed
+
+    return prisma.storyView.findMany({
+      where: { story_id: storyId },
+      include: { user: { select: userSelect } },
+      orderBy: { created_at: 'desc' },
+    });
+  },
+
+  async voteStory(storyId: string, userId: string, value: 1 | -1) {
+    const story = await prisma.story.findUnique({
+      where: { id: storyId },
+      select: { deleted_at: true },
+    });
+    if (!story || story.deleted_at) throw new Error('NOT_FOUND');
+
+    const existing = await prisma.storyVote.findUnique({
+      where: { story_id_user_id: { story_id: storyId, user_id: userId } },
+    });
+
+    let myVote: 1 | -1 | 0 = value;
+    if (existing) {
+      if (existing.value === value) {
+        await prisma.storyVote.delete({ where: { id: existing.id } });
+        myVote = 0;
+      } else {
+        await prisma.storyVote.update({ where: { id: existing.id }, data: { value } });
+      }
+    } else {
+      await prisma.storyVote.create({ data: { story_id: storyId, user_id: userId, value } });
+    }
+
+    const agg = await prisma.storyVote.aggregate({
+      where: { story_id: storyId },
+      _sum: { value: true },
+    });
+
+    return { score: agg._sum.value ?? 0, my_vote: myVote };
   },
 };

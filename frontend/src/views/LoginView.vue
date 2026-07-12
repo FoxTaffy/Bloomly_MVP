@@ -17,10 +17,17 @@ import {
   ShieldCheckIcon,
 } from '@heroicons/vue/24/solid'
 import api from '@/api'
+import FrozenAccountModal from '@/components/FrozenAccountModal.vue'
+import BannedAccountModal from '@/components/BannedAccountModal.vue'
 
 const router = useRouter()
 const route  = useRoute()
 const auth   = useAuthStore()
+
+// ── Заморозка / бан ────────────────────────────────────────────────────────
+const showFrozenModal = ref(false)
+const showBannedModal = ref(false)
+const blockedReason   = ref('')
 
 type Mode = 'login' | 'register' | 'forgot' | 'reset' | 'verify'
 const mode        = ref<Mode>('login')
@@ -36,6 +43,16 @@ const remember    = ref(false)
 const mounted     = ref(false)
 const mouseX      = ref(50)
 const mouseY      = ref(50)
+
+// Очистка кода от пробелов/переносов при вставке (в письме код визуально разбит по цифрам)
+function sanitizeCodeInput(e: Event) {
+  const target = e.target as HTMLInputElement
+  const digits = target.value.replace(/\D+/g, '').slice(0, 6)
+  target.value = digits
+  return digits
+}
+function onOtpInput(e: Event) { otpCode.value = sanitizeCodeInput(e) }
+function onResetCodeInput(e: Event) { resetCode.value = sanitizeCodeInput(e) }
 
 // Для повторной отправки OTP
 const resendCountdown = ref(0)
@@ -158,15 +175,29 @@ async function onSubmit() {
       switchMode('login')
     }
   } catch (e: any) {
+    const code = e?.response?.data?.error?.code
     // Email зарегистрирован, но не подтверждён → переводим на OTP-экран
-    if (mode.value === 'login' && e?.response?.data?.error?.code === 'EMAIL_NOT_VERIFIED') {
+    if (mode.value === 'login' && code === 'EMAIL_NOT_VERIFIED') {
       mode.value = 'verify'
       auth.error = null
       startResendTimer()
       auth.resendOtp(email.value, 'register').catch(() => {})
+    } else if (mode.value === 'login' && code === 'ACCOUNT_FROZEN') {
+      blockedReason.value = e?.response?.data?.error?.message || ''
+      auth.error = null
+      showFrozenModal.value = true
+    } else if (mode.value === 'login' && code === 'ACCOUNT_BANNED') {
+      blockedReason.value = e?.response?.data?.error?.message || ''
+      auth.error = null
+      showBannedModal.value = true
     }
     /* auth.error уже записан в остальных случаях */
   }
+}
+
+function onUnfrozen() {
+  showFrozenModal.value = false
+  router.push({ name: 'home' })
 }
 
 // ── Сила пароля ───────────────────────────────────────────────────────────────
@@ -460,7 +491,7 @@ const features = [
                 <!-- Код сброса (режим reset) -->
                 <div v-if="mode === 'reset'" class="input-group">
                   <KeyIcon class="input-icon" />
-                  <input v-model="resetCode" type="text" placeholder="6-значный код" required maxlength="6" pattern="[0-9]{6}" class="fld tracking-[0.3em] text-center" />
+                  <input :value="resetCode" @input="onResetCodeInput" type="text" inputmode="numeric" placeholder="6-значный код" required maxlength="20" pattern="[0-9]{6}" class="fld tracking-[0.3em] text-center" />
                 </div>
 
                 <!-- OTP для подтверждения email (режим verify) -->
@@ -473,11 +504,12 @@ const features = [
                   <div class="input-group">
                     <KeyIcon class="input-icon" />
                     <input
-                      v-model="otpCode"
+                      :value="otpCode"
+                      @input="onOtpInput"
                       type="text"
                       inputmode="numeric"
                       placeholder="• • • • • •"
-                      required maxlength="6" pattern="[0-9]{6}"
+                      required maxlength="20" pattern="[0-9]{6}"
                       class="fld tracking-[0.5em] text-center text-xl font-bold"
                       autocomplete="one-time-code"
                     />
@@ -627,6 +659,22 @@ const features = [
         </div>
       </div>
     </div>
+
+    <FrozenAccountModal
+      :show="showFrozenModal"
+      :email="email"
+      :reason="blockedReason"
+      :remember="remember"
+      @close="showFrozenModal = false"
+      @unfrozen="onUnfrozen"
+    />
+    <BannedAccountModal
+      :show="showBannedModal"
+      :reason="blockedReason"
+      :email="email"
+      :password="password"
+      @close="showBannedModal = false"
+    />
   </div>
 </template>
 

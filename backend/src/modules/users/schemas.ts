@@ -37,6 +37,7 @@ export const updateUserSchema = {
       display_name: { type: 'string', maxLength: 50 },
       bio:          { type: 'string', maxLength: 300 },
       avatar_url:   { type: 'string' },
+      avatar_video_url: { type: 'string', nullable: true },
       banner_url:   { type: 'string' },
       status:       { type: 'string', maxLength: 100 },
       persona:      { type: 'string' },

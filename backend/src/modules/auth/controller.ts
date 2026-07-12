@@ -11,7 +11,7 @@ const authService = new AuthService();
 // ── Вспомогательный селект полного профиля ────────────────────────────────────
 const FULL_USER_SELECT = {
   id: true, username: true, email: true, role: true,
-  display_name: true, avatar_url: true, bio: true, status: true,
+  display_name: true, avatar_url: true, avatar_video_url: true, bio: true, status: true,
   subscription_tier: true, profile_theme: true, profile_bg_url: true,
   profile_frame: true, is_verified: true, verification_type: true,
   badge_type: true, email_verified: true, onboarding_done: true,
@@ -113,7 +113,7 @@ export const verifyEmailHandler = async (
 
 // ── Повторная отправка OTP ────────────────────────────────────────────────────
 export const resendOtpHandler = async (
-  request: FastifyRequest<{ Body: { email: string; purpose: 'register' | 'reset' } }>,
+  request: FastifyRequest<{ Body: { email: string; purpose: 'register' | 'reset' | 'unfreeze' | 'change_email' } }>,
   reply: FastifyReply,
 ) => {
   try {
@@ -121,6 +121,55 @@ export const resendOtpHandler = async (
     return reply.send({ success: true, data: { message: 'Код отправлен повторно' }, error: null });
   } catch (e: any) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'RESEND_ERROR', message: e.message } });
+  }
+};
+
+// ── Экспорт своих данных (доступно и забаненным/замороженным) ─────────────────
+export const exportDataHandler = async (
+  request: FastifyRequest<{ Body: { email: string; password: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { email, password } = request.body;
+    const data = await authService.exportUserData(email, password);
+    return reply.send({ success: true, data, error: null });
+  } catch (e: any) {
+    return reply.code(401).send({ success: false, data: null, error: { code: 'EXPORT_ERROR', message: e.message } });
+  }
+};
+
+// ── Разморозка аккаунта по коду с почты ───────────────────────────────────────
+export const requestUnfreezeHandler = async (
+  request: FastifyRequest<{ Body: { email: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    await authService.requestUnfreeze(request.body.email);
+    return reply.send({ success: true, data: { message: 'Если аккаунт заморожен, код отправлен на почту' }, error: null });
+  } catch {
+    return reply.code(500).send({ success: false, data: null, error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } });
+  }
+};
+
+export const confirmUnfreezeHandler = async (
+  request: FastifyRequest<{ Body: { email: string; code: string; remember?: boolean } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { email, code, remember = false } = request.body;
+    await authService.confirmUnfreeze(email, code);
+
+    const user = await prisma.user.findFirst({
+      where: { email: email.toLowerCase().trim(), deleted_at: null },
+      select: FULL_USER_SELECT,
+    });
+    if (!user) return reply.code(400).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Пользователь не найден' } });
+
+    const token = issueAccessToken(request, user.id, user.role);
+    await issueRefreshToken(request, reply, user.id, remember);
+    return reply.send({ success: true, data: { token, user }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'UNFREEZE_ERROR', message: e.message } });
   }
 };
 
@@ -137,6 +186,20 @@ export const loginHandler = async (
       return reply.code(401).send({
         success: false, data: null,
         error: { code: 'AUTH_FAILED', message: 'Неверный email или пароль' },
+      });
+    }
+
+    if (user.deleted_at) {
+      return reply.code(403).send({
+        success: false, data: null,
+        error: { code: 'ACCOUNT_BANNED', message: user.frozen_reason || 'Аккаунт заблокирован за нарушение правил' },
+      });
+    }
+
+    if (user.frozen_at) {
+      return reply.code(403).send({
+        success: false, data: { email: user.email },
+        error: { code: 'ACCOUNT_FROZEN', message: user.frozen_reason || 'Аккаунт временно заморожен' },
       });
     }
 
@@ -198,6 +261,34 @@ export const changePasswordHandler = async (
     return reply.send({ success: true, data: { message: 'Пароль успешно изменён' }, error: null });
   } catch (e: any) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'CHANGE_PASSWORD_ERROR', message: e.message } });
+  }
+};
+
+// ── Смена email (требует JWT) ──────────────────────────────────────────────────
+export const requestEmailChangeHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id } = request.user as JwtPayload;
+    await authService.requestEmailChange(id);
+    return reply.send({ success: true, data: { message: 'Код отправлен на текущую почту' }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'REQUEST_EMAIL_CHANGE_ERROR', message: e.message } });
+  }
+};
+
+export const confirmEmailChangeHandler = async (
+  request: FastifyRequest<{ Body: { code: string; newEmail: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id } = request.user as JwtPayload;
+    const { code, newEmail } = request.body;
+    const email = await authService.confirmEmailChange(id, code, newEmail);
+    return reply.send({ success: true, data: { email }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'CONFIRM_EMAIL_CHANGE_ERROR', message: e.message } });
   }
 };
 

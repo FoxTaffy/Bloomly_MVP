@@ -139,6 +139,7 @@ export const messageService = {
       where: {
         user_id: userId,
         hidden_at: null,
+        conversation: { deleted_at: null },
         ...(archived !== undefined ? { archived } : {}),
         ...(label ? { label } : {}),
       },
@@ -457,10 +458,23 @@ export const messageService = {
     const msg = await prisma.message.findUnique({ where: { id: messageId } });
     if (!msg) throw new Error('Message not found');
     if (msg.sender_id !== userId) throw Object.assign(new Error('Forbidden'), { statusCode: 403 });
-    return prisma.message.update({
+    const updated = await prisma.message.update({
       where: { id: messageId },
       data: { deleted_at: new Date() },
     });
+
+    // Broadcast to all participants so the message disappears in real time for everyone
+    const parts = await prisma.conversationParticipant.findMany({
+      where: { conversation_id: msg.conversation_id },
+      select: { user_id: true },
+    });
+    for (const { user_id } of parts) {
+      messageSubscriptions.push(user_id, {
+        type: 'message_deleted',
+        data: { id: messageId, conversation_id: msg.conversation_id },
+      });
+    }
+    return updated;
   },
 
   /**

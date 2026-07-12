@@ -79,7 +79,7 @@
                     {{ cropModal.type === 'avatar' ? 'Обрезать аватар' : 'Обрезать баннер' }}
                   </h3>
                   <p class="text-[11px] text-white/55">
-                    {{ cropModal.type === 'avatar' ? 'Квадрат 1:1 · Перемещайте и масштабируйте' : 'Прямоугольник · Перемещайте и масштабируйте' }}
+                    {{ cropModal.type === 'avatar' ? (cropModal.isGif ? 'Квадрат 1:1 · Анимация сохранится' : 'Квадрат 1:1 · Перемещайте и масштабируйте') : 'Прямоугольник · Перемещайте и масштабируйте' }}
                   </p>
                 </div>
               </div>
@@ -145,7 +145,7 @@
             <!-- footer -->
             <div class="px-6 py-4 border-t border-brand-border flex items-center justify-between">
               <p class="text-xs text-white/35">
-                {{ cropModal.type === 'avatar' ? 'Квадрат · Выход 400 × 400 px' : 'Прямоугольник · Выход 1200 px ширина' }}
+                {{ cropModal.type === 'avatar' ? (cropModal.isGif ? 'Аватар 500×500 · Полная версия видна при открытии' : 'Квадрат · Выход 400 × 400 px') : 'Прямоугольник · Выход 1200 px ширина' }}
               </p>
               <div class="flex gap-3">
                 <button type="button" @click="cancelCrop"
@@ -353,12 +353,8 @@
                             {{ (form.display_name || authStore.user?.username || '?')[0].toUpperCase() }}
                           </div>
                         </div>
-                        <!-- GIF badge -->
-                        <span v-if="form.avatar_url && form.avatar_url.toLowerCase().includes('.gif')" class="absolute -top-1 -left-1 text-[9px] font-extrabold bg-brand-accent text-white px-1.5 py-0.5 rounded-full border border-brand-card shadow z-10">GIF</span>
-                        <!-- Loading overlay for GIF upload -->
-                        <div v-if="uploadingGifAvatar" class="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
-                          <span class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                        </div>
+                        <!-- GIF badge (animated avatar has a WebM counterpart) -->
+                        <span v-if="form.avatar_video_url" class="absolute -top-1 -left-1 text-[9px] font-extrabold bg-brand-accent text-white px-1.5 py-0.5 rounded-full border border-brand-card shadow z-10">GIF</span>
                         <!-- hover / drag overlay -->
                         <div class="absolute inset-0 rounded-full transition-all duration-200 flex items-center justify-center"
                           :class="avatarDragOver ? 'bg-sky-500/45 opacity-100' : 'bg-black/55 opacity-0 group-hover/av:opacity-100'">
@@ -372,7 +368,7 @@
                         </div>
                         <!-- remove avatar -->
                         <button v-if="form.avatar_url" type="button"
-                          @click.stop="form.avatar_url = ''"
+                          @click.stop="form.avatar_url = ''; form.avatar_video_url = ''"
                           class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-brand-error border-2 border-brand-card flex items-center justify-center text-white shadow-lg opacity-0 group-hover/av:opacity-100 transition-all">
                           <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
@@ -437,11 +433,14 @@
                               ? 'border-brand-accent shadow-lg shadow-brand-accent/30'
                               : 'border-transparent hover:border-white/30'"
                             :title="new Date(item.created_at).toLocaleDateString('ru-RU')">
-                            <img :src="item.url" class="w-full h-full object-cover cursor-pointer" loading="lazy" @click="applyHistoryAvatar(item.url)"/>
+                            <img :src="item.url" class="w-full h-full object-cover cursor-pointer" loading="lazy" @click="applyHistoryAvatar(item)"/>
+                            <span v-if="item.video_url" class="absolute bottom-0.5 left-0.5 w-3.5 h-3.5 bg-black/70 rounded-full flex items-center justify-center pointer-events-none">
+                              <svg viewBox="0 0 24 24" class="w-2 h-2 text-white" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                            </span>
                             <!-- Hover overlay: restore checkmark -->
                             <button
                               type="button"
-                              @click="applyHistoryAvatar(item.url)"
+                              @click="applyHistoryAvatar(item)"
                               class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                               <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
@@ -867,7 +866,9 @@
               </section>
 
               <!-- ── § 3: FURSONA ────────────────────────────────────── -->
-              <section v-show="openSection === sections[2].id" :id="sections[2].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+              <section v-show="openSection === sections[2].id" :id="sections[2].id"
+                class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28"
+                :class="sectionHighlight === sections[2].id ? 'section-link-flash' : ''">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                   :style="`background:linear-gradient(90deg,${sections[2].color}0c 0%,transparent 100%)`">
                   <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[2].color}1a`">
@@ -1443,10 +1444,93 @@
                       </div>
                       <p v-if="pwError" class="text-xs text-brand-error/80">{{ pwError }}</p>
                       <p v-if="pwSuccess" class="text-xs text-emerald-400">{{ pwSuccess }}</p>
-                      <button type="button" @click="submitChangePassword" :disabled="pwSaving"
-                        class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-500/80 hover:bg-emerald-500 transition-all disabled:opacity-50">
-                        {{ pwSaving ? langStore.t.savingLabel : langStore.t.changePasswordBtn }}
+                      <div class="flex items-center justify-between gap-3">
+                        <button type="button" @click="submitChangePassword" :disabled="pwSaving"
+                          class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-500/80 hover:bg-emerald-500 transition-all disabled:opacity-50">
+                          {{ pwSaving ? langStore.t.savingLabel : langStore.t.changePasswordBtn }}
+                        </button>
+                        <button type="button" @click="showForgotPassword = !showForgotPassword"
+                          class="text-xs font-semibold text-white/45 hover:text-white/70 transition-colors">
+                          {{ langStore.t.forgotPasswordSettingsBtn }}
+                        </button>
+                      </div>
+                    </div>
+                  </Transition>
+
+                  <!-- Забыли пароль — сброс кодом на почту -->
+                  <Transition name="fade">
+                    <div v-if="showForgotPassword" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 space-y-3">
+                      <p class="text-xs text-white/45">{{ authStore.user?.email }}</p>
+                      <button v-if="!fpCodeSent" type="button" @click="startForgotPassword" :disabled="fpSending"
+                        class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/15 transition-all disabled:opacity-50">
+                        {{ fpSending ? langStore.t.savingLabel : langStore.t.sendCodeBtn }}
                       </button>
+                      <template v-else>
+                        <p class="text-xs text-emerald-400">{{ langStore.t.codeSentHint }}</p>
+                        <div>
+                          <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-1.5">{{ langStore.t.otpCodeLabel }}</label>
+                          <input v-model="fpForm.code" type="text" inputmode="numeric" maxlength="6" class="field-input" />
+                        </div>
+                        <div>
+                          <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-1.5">{{ langStore.t.newPasswordLabel }}</label>
+                          <input v-model="fpForm.next" type="password" autocomplete="new-password" minlength="8" maxlength="128" class="field-input" />
+                        </div>
+                        <div>
+                          <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-1.5">{{ langStore.t.confirmPasswordLabel }}</label>
+                          <input v-model="fpForm.confirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" class="field-input" />
+                        </div>
+                        <button type="button" @click="submitForgotPassword" :disabled="fpSaving"
+                          class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-500/80 hover:bg-emerald-500 transition-all disabled:opacity-50">
+                          {{ fpSaving ? langStore.t.savingLabel : langStore.t.changePasswordBtn }}
+                        </button>
+                      </template>
+                      <p v-if="fpError" class="text-xs text-brand-error/80">{{ fpError }}</p>
+                      <p v-if="fpSuccess" class="text-xs text-emerald-400">{{ fpSuccess }}</p>
+                    </div>
+                  </Transition>
+
+                  <!-- Смена email -->
+                  <div class="flex items-center justify-between p-4 rounded-2xl border border-brand-border bg-brand-bg/60">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-4.5 h-4.5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <p class="text-sm font-semibold text-white">{{ langStore.t.emailPasswordLabel }}</p>
+                        <p class="text-xs text-white/45">{{ authStore.user?.email }}</p>
+                      </div>
+                    </div>
+                    <button type="button" @click="showChangeEmail = !showChangeEmail"
+                      class="px-3 py-1.5 rounded-xl text-xs font-bold text-white/60 border border-brand-border hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all">
+                      {{ langStore.t.changeEmailBtn }}
+                    </button>
+                  </div>
+
+                  <Transition name="fade">
+                    <div v-if="showChangeEmail" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 space-y-3">
+                      <button v-if="!ecCodeSent" type="button" @click="startChangeEmail" :disabled="ecSending"
+                        class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/15 transition-all disabled:opacity-50">
+                        {{ ecSending ? langStore.t.savingLabel : langStore.t.sendCodeBtn }}
+                      </button>
+                      <template v-else>
+                        <p class="text-xs text-emerald-400">{{ langStore.t.codeSentHint }}</p>
+                        <div>
+                          <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-1.5">{{ langStore.t.otpCodeLabel }}</label>
+                          <input v-model="ecForm.code" type="text" inputmode="numeric" maxlength="6" class="field-input" />
+                        </div>
+                        <div>
+                          <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-1.5">{{ langStore.t.newEmailLabel }}</label>
+                          <input v-model="ecForm.newEmail" type="email" autocomplete="email" class="field-input" />
+                        </div>
+                        <button type="button" @click="submitChangeEmail" :disabled="ecSaving"
+                          class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-500/80 hover:bg-emerald-500 transition-all disabled:opacity-50">
+                          {{ ecSaving ? langStore.t.savingLabel : langStore.t.changeEmailBtn }}
+                        </button>
+                      </template>
+                      <p v-if="ecError" class="text-xs text-brand-error/80">{{ ecError }}</p>
+                      <p v-if="ecSuccess" class="text-xs text-emerald-400">{{ ecSuccess }}</p>
                     </div>
                   </Transition>
 
@@ -1877,6 +1961,86 @@ async function submitChangePassword() {
   }
 }
 
+// ── Forgot password (settings) ───────────────────────────────────────────
+const showForgotPassword = ref(false)
+const fpCodeSent = ref(false)
+const fpSending  = ref(false)
+const fpForm     = reactive({ code: '', next: '', confirm: '' })
+const fpSaving   = ref(false)
+const fpError    = ref('')
+const fpSuccess  = ref('')
+
+async function startForgotPassword() {
+  fpError.value = ''; fpSuccess.value = ''
+  fpSending.value = true
+  try {
+    await authStore.forgotPassword(authStore.user!.email)
+    fpCodeSent.value = true
+  } catch (e: any) {
+    fpError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } finally {
+    fpSending.value = false
+  }
+}
+
+async function submitForgotPassword() {
+  fpError.value = ''; fpSuccess.value = ''
+  if (fpForm.next.length < 8) { fpError.value = langStore.t.passwordTooShort; return }
+  if (fpForm.next !== fpForm.confirm) { fpError.value = langStore.t.passwordsDontMatch; return }
+  fpSaving.value = true
+  try {
+    await authStore.resetPassword(authStore.user!.email, fpForm.code, fpForm.next)
+    fpSuccess.value = langStore.t.passwordChangedMsg
+    fpForm.code = ''; fpForm.next = ''; fpForm.confirm = ''
+    setTimeout(() => { showForgotPassword.value = false; fpCodeSent.value = false; fpSuccess.value = '' }, 2000)
+  } catch (e: any) {
+    fpError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } finally {
+    fpSaving.value = false
+  }
+}
+
+// ── Change email ──────────────────────────────────────────────────────────
+const showChangeEmail = ref(false)
+const ecCodeSent = ref(false)
+const ecSending  = ref(false)
+const ecForm     = reactive({ code: '', newEmail: '' })
+const ecSaving   = ref(false)
+const ecError    = ref('')
+const ecSuccess  = ref('')
+
+async function startChangeEmail() {
+  ecError.value = ''; ecSuccess.value = ''
+  ecSending.value = true
+  try {
+    await authStore.requestEmailChange()
+    ecCodeSent.value = true
+  } catch (e: any) {
+    ecError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } finally {
+    ecSending.value = false
+  }
+}
+
+async function submitChangeEmail() {
+  ecError.value = ''; ecSuccess.value = ''
+  if (!ecForm.newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ecForm.newEmail)) {
+    ecError.value = langStore.t.invalidEmailMsg
+    return
+  }
+  ecSaving.value = true
+  try {
+    await authStore.confirmEmailChange(ecForm.code, ecForm.newEmail)
+    ecSuccess.value = langStore.t.emailChangedMsg
+    ecForm.code = ''; ecForm.newEmail = ''
+    setTimeout(() => { showChangeEmail.value = false; ecCodeSent.value = false; ecSuccess.value = '' }, 2000)
+  } catch (e: any) {
+    ecError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } finally {
+    ecSaving.value = false
+  }
+}
+
 // ── Linked OAuth accounts ──────────────────────────────────────────────────
 const linkedAccounts        = ref<string[]>([])
 const linkedAccountsLoading = ref(false)
@@ -2008,7 +2172,7 @@ const newLike    = ref('')
 const newDislike = ref('')
 
 // ── Avatar history ─────────────────────────────────────────────────────────
-interface MediaHistoryItem { id: string; type: string; url: string; created_at: string }
+interface MediaHistoryItem { id: string; type: string; url: string; video_url: string | null; created_at: string }
 const avatarHistory        = ref<MediaHistoryItem[]>([])
 const avatarHistoryLoading = ref(false)
 const showAvatarHistory    = ref(false)
@@ -2027,8 +2191,9 @@ async function loadAvatarHistory() {
   }
 }
 
-function applyHistoryAvatar(url: string) {
-  form.avatar_url = url
+function applyHistoryAvatar(item: MediaHistoryItem) {
+  form.avatar_url = item.url
+  form.avatar_video_url = item.video_url || ''
   showAvatarHistory.value = false
 }
 
@@ -2053,6 +2218,7 @@ const uploadingFursonaPhoto = ref(false)
 // Stored the moment a file is picked from disk or dropped — never replaced by
 // the cropped/uploaded result, so re-cropping always starts from the original.
 const avatarOriginalSrc = ref<string>('')
+const avatarOriginalFile = ref<File | null>(null)
 const bannerOriginalSrc = ref<string>('')
 
 // ── Shake / unsaved warning state ──────────────────────────────────────────
@@ -2068,6 +2234,7 @@ const form = reactive({
   persona:             '',
   fursona_name:        '',
   avatar_url:          '',
+  avatar_video_url:    '' as string,
   banner_url:          '',
   accent_color:        '#4C97CF',
   website:             '',
@@ -2110,6 +2277,7 @@ const savedForm = reactive({
   persona:             '',
   fursona_name:        '',
   avatar_url:          '',
+  avatar_video_url:    '' as string,
   banner_url:          '',
   accent_color:        '#4C97CF',
   website:             '',
@@ -2151,6 +2319,7 @@ function snapshotToSaved() {
   savedForm.persona             = form.persona
   savedForm.fursona_name        = form.fursona_name
   savedForm.avatar_url          = form.avatar_url
+  savedForm.avatar_video_url    = form.avatar_video_url
   savedForm.banner_url          = form.banner_url
   savedForm.accent_color        = form.accent_color
   savedForm.website             = form.website
@@ -2192,6 +2361,7 @@ function resetForm() {
   form.persona             = savedForm.persona
   form.fursona_name        = savedForm.fursona_name
   form.avatar_url          = savedForm.avatar_url
+  form.avatar_video_url    = savedForm.avatar_video_url
   form.banner_url          = savedForm.banner_url
   form.accent_color        = savedForm.accent_color
   form.website             = savedForm.website
@@ -2242,6 +2412,7 @@ const isDirty = computed(() => {
     form.persona             !== savedForm.persona ||
     form.fursona_name        !== savedForm.fursona_name ||
     form.avatar_url          !== savedForm.avatar_url ||
+    form.avatar_video_url    !== savedForm.avatar_video_url ||
     form.banner_url          !== savedForm.banner_url ||
     form.accent_color        !== savedForm.accent_color ||
     form.website             !== savedForm.website ||
@@ -2289,6 +2460,7 @@ onMounted(async () => {
   form.persona             = p.persona             ?? ''
   form.fursona_name        = p.fursona_name           ?? ''
   form.avatar_url          = p.avatar_url          ?? ''
+  form.avatar_video_url    = (p as any).avatar_video_url ?? ''
   form.banner_url          = p.banner_url          ?? ''
   form.accent_color        = p.accent_color        ?? '#4C97CF'
   form.website             = p.website             ?? ''
@@ -2339,6 +2511,9 @@ onMounted(async () => {
     const valid = sections.value.map(s => s.id)
     if (valid.includes(sectionParam)) {
       openSec(sectionParam)
+      // Briefly highlight the section so it's obvious where the link landed
+      sectionHighlight.value = sectionParam
+      setTimeout(() => { sectionHighlight.value = null }, 1600)
     }
   }
   // Загружаем историю аватаров
@@ -2390,29 +2565,9 @@ async function onBgChange(e: Event) {
 }
 
 // ── File picking ───────────────────────────────────────────────────────────
-const uploadingGifAvatar = ref(false)
-
-async function uploadGifAvatar(file: File) {
-  uploadingGifAvatar.value = true
-  try {
-    const fd = new FormData()
-    fd.append('file', file, file.name)
-    const result = await api.post('/media/upload?folder=avatars', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-    form.avatar_url = result.data.data.url
-    showToast('success', '🎥 GIF-аватар загружен!')
-  } catch {
-    showToast('error', 'Ошибка загрузки GIF')
-  } finally {
-    uploadingGifAvatar.value = false
-    if (avatarFileRef.value) avatarFileRef.value.value = ''
-  }
-}
 function onAvatarFileChange(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) {
-    if (file.type === 'image/gif') { uploadGifAvatar(file); return }
-    openCrop(file, 'avatar')
-  }
+  if (file) openCrop(file, 'avatar')
   if (avatarFileRef.value) avatarFileRef.value.value = ''
 }
 function onBannerFileChange(e: Event) {
@@ -2424,7 +2579,6 @@ function onAvatarDrop(e: DragEvent) {
   avatarDragOver.value = false
   const file = e.dataTransfer?.files?.[0]
   if (!file || !file.type.startsWith('image/')) return
-  if (file.type === 'image/gif') { uploadGifAvatar(file); return }
   openCrop(file, 'avatar')
 }
 function onBannerDrop(e: DragEvent) {
@@ -2488,6 +2642,8 @@ const cropModal = reactive({
   show:     false,
   type:     'avatar' as 'avatar' | 'banner',
   src:      '',
+  file:     null as File | null,
+  isGif:    false,
   naturalW: 0,
   naturalH: 0,
   imgX:     0,
@@ -2510,11 +2666,13 @@ function openCrop(file: File, type: 'avatar' | 'banner') {
   const reader = new FileReader()
   reader.onload = (e) => {
     const src = e.target!.result as string
-    // Always store the original data URL so re-cropping uses the full source
-    if (type === 'avatar') avatarOriginalSrc.value = src
+    // Always store the original data URL (+ file, for GIFs) so re-cropping uses the full source
+    if (type === 'avatar') { avatarOriginalSrc.value = src; avatarOriginalFile.value = file }
     else                   bannerOriginalSrc.value = src
-    cropModal.src  = src
-    cropModal.type = type
+    cropModal.src   = src
+    cropModal.type  = type
+    cropModal.file  = type === 'avatar' ? file : null
+    cropModal.isGif = type === 'avatar' && file.type === 'image/gif'
     cropModal.imgW = 0
     cropModal.show = true
   }
@@ -2530,8 +2688,10 @@ async function reopenCrop(type: 'avatar' | 'banner') {
   const localSrc = type === 'avatar' ? avatarOriginalSrc.value : bannerOriginalSrc.value
   if (localSrc) {
     // Use the original file data URL — no quality loss
-    cropModal.src  = localSrc
-    cropModal.type = type
+    cropModal.src   = localSrc
+    cropModal.type  = type
+    cropModal.file  = type === 'avatar' ? avatarOriginalFile.value : null
+    cropModal.isGif = type === 'avatar' && avatarOriginalFile.value?.type === 'image/gif'
     cropModal.imgW = 0
     cropModal.show = true
     return
@@ -2722,6 +2882,23 @@ async function confirmCrop() {
     const relW = cw / imgW
     const relH = ch / imgH
 
+    // Animated GIF avatar: crop/scale/transcode happens server-side (ffmpeg) so the
+    // animation survives — canvas cropping below would only capture a single frame.
+    if (type === 'avatar' && cropModal.isGif && cropModal.file) {
+      const fd = new FormData()
+      fd.append('file', cropModal.file, cropModal.file.name)
+      const params = new URLSearchParams({
+        folder: 'avatars',
+        cropX: String(relX), cropY: String(relY), cropW: String(relW), cropH: String(relH),
+      })
+      const result = await api.post(`/media/upload?${params.toString()}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      form.avatar_url = result.data.data.url
+      form.avatar_video_url = result.data.data.videoUrl ?? ''
+      cropModal.show = false
+      showToast('success', '🎥 GIF-аватар загружен!')
+      return
+    }
+
     const srcX = relX * naturalW
     const srcY = relY * naturalH
     const srcW = relW * naturalW
@@ -2759,6 +2936,7 @@ async function confirmCrop() {
 
     if (type === 'avatar') {
       form.avatar_url = result.data.data.url
+      form.avatar_video_url = ''
     } else {
       form.banner_url = result.data.data.url
     }
@@ -2843,6 +3021,7 @@ async function handleSubmit() {
     persona:             form.persona,
     fursona_name:        form.fursona_name,
     avatar_url:          form.avatar_url,
+    avatar_video_url:    form.avatar_video_url || null,
     banner_url:          form.banner_url,
     website:             form.website,
     location:            form.location,
@@ -3399,6 +3578,8 @@ async function clearSoonSelection() {
 
 // ── Active section (accordion) ────────────────────────────────────────────
 const openSection = ref('sec-basic')
+// Section briefly flashed when landed on via a `?section=` deep link
+const sectionHighlight = ref<string | null>(null)
 
 function openSec(id: string) {
   openSection.value = id
@@ -3416,6 +3597,15 @@ function openSec(id: string) {
 /* ── Accordion section transition ───────────────────────────────────────── */
 .accordion-enter-active, .accordion-leave-active { transition: all 0.25s ease; }
 .accordion-enter-from, .accordion-leave-to { opacity: 0; max-height: 0; overflow: hidden; }
+
+/* ── Deep-link highlight: flashes the section you were routed to ────────── */
+.section-link-flash {
+  animation: section-link-flash 1.6s ease-out;
+}
+@keyframes section-link-flash {
+  0%   { box-shadow: 0 0 0 3px rgba(167,139,250,0.7), 0 0 24px rgba(167,139,250,0.5); }
+  100% { box-shadow: 0 0 0 3px rgba(167,139,250,0), 0 0 0 rgba(167,139,250,0); }
+}
 
 /* ── No scrollbar (mobile tabs) ─────────────────────────────────────────── */
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }

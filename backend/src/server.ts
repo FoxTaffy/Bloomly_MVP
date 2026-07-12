@@ -59,7 +59,7 @@ if (!process.env.ALLOWED_ORIGINS && process.env.NODE_ENV === 'production') {
   process.exit(1);
 }
 
-const fastify = Fastify({ logger: true, bodyLimit: 26_214_400, trustProxy: true }); // 25 MB
+const fastify = Fastify({ logger: true, bodyLimit: 104_857_600, trustProxy: true }); // 100 MB (video uploads)
 
 // Allow specific origins in production; fall back to wildcard for development only
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -68,7 +68,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 fastify.register(cors, { origin: allowedOrigins, credentials: true });
 fastify.register(cookie, { secret: cookieSecret || 'bloomly_cookie_secret_dev' });
 fastify.register(jwt, { secret: jwtSecret || 'bloomly_secret_dev_only' });
-fastify.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
+fastify.register(multipart, { limits: { fileSize: 100 * 1024 * 1024 } }); // 100 MB (video uploads)
 fastify.register(rateLimit, {
   global: true,
   max: 200,
@@ -98,12 +98,20 @@ fastify.decorate(
       const payload = request.user as { id: string; role: string };
       const dbUser = await prisma.user.findUnique({
         where: { id: payload.id },
-        select: { role: true, deleted_at: true },
+        select: { role: true, deleted_at: true, frozen_at: true, frozen_reason: true },
       });
       if (!dbUser || dbUser.deleted_at) {
         return reply.code(401).send({ success: false, data: null, error: { code: 'UNAUTHORIZED', message: 'User not found' } });
       }
       (request.user as any).role = dbUser.role;
+      // Frozen accounts (automod or manual) may still browse (GET) but cannot act
+      if (dbUser.frozen_at && request.method !== 'GET') {
+        return reply.code(403).send({
+          success: false,
+          data: null,
+          error: { code: 'ACCOUNT_FROZEN', message: dbUser.frozen_reason || 'Аккаунт временно заморожен за подозрительную активность' },
+        });
+      }
     } catch (err) {
       reply.send(err);
     }

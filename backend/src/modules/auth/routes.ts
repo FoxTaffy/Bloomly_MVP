@@ -3,6 +3,8 @@ import {
   registerHandler, loginHandler, statsHandler,
   forgotPasswordHandler, resetPasswordHandler, changePasswordHandler,
   verifyEmailHandler, resendOtpHandler,
+  requestUnfreezeHandler, confirmUnfreezeHandler, exportDataHandler,
+  requestEmailChangeHandler, confirmEmailChangeHandler,
   oauthRedirectHandler, oauthCallbackHandler,
   linkInitHandler, getLinkedAccountsHandler, unlinkAccountHandler,
   refreshHandler, logoutHandler,
@@ -55,12 +57,36 @@ export async function authRoutes(fastify: FastifyInstance) {
         type: 'object', required: ['email', 'purpose'],
         properties: {
           email:   { type: 'string', format: 'email' },
-          purpose: { type: 'string', enum: ['register', 'reset'] },
+          purpose: { type: 'string', enum: ['register', 'reset', 'unfreeze'] },
         },
       },
     },
     config: { rateLimit: { max: 3, timeWindow: '1 minute' } },
   }, resendOtpHandler);
+
+  fastify.post('/unfreeze/request', {
+    schema: {
+      body: {
+        type: 'object', required: ['email'],
+        properties: { email: { type: 'string', format: 'email' } },
+      },
+    },
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+  }, requestUnfreezeHandler);
+
+  fastify.post('/unfreeze/verify', {
+    schema: {
+      body: {
+        type: 'object', required: ['email', 'code'],
+        properties: {
+          email:    { type: 'string', format: 'email' },
+          code:     { type: 'string', minLength: 6, maxLength: 6 },
+          remember: { type: 'boolean' },
+        },
+      },
+    },
+    config: { rateLimit: { max: 10, timeWindow: '5 minutes' } },
+  }, confirmUnfreezeHandler);
 
   fastify.post('/login', {
     schema: {
@@ -100,6 +126,19 @@ export async function authRoutes(fastify: FastifyInstance) {
     config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
   }, resetPasswordHandler);
 
+  fastify.post('/export-data', {
+    schema: {
+      body: {
+        type: 'object', required: ['email', 'password'],
+        properties: {
+          email:    { type: 'string', format: 'email' },
+          password: { type: 'string', minLength: 1 },
+        },
+      },
+    },
+    config: { rateLimit: { max: 3, timeWindow: '1 hour' } },
+  }, exportDataHandler);
+
   // ── OAuth ─────────────────────────────────────────────────────────────────────
   fastify.get('/oauth/:provider',     oauthRedirectHandler);
   fastify.get('/callback/:provider',  oauthCallbackHandler);
@@ -121,6 +160,25 @@ export async function authRoutes(fastify: FastifyInstance) {
     config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
   }, changePasswordHandler as any);
 
+  fastify.post('/change-email/request', {
+    onRequest: [fastify.authenticate],
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+  }, requestEmailChangeHandler as any);
+
+  fastify.post('/change-email/confirm', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      body: {
+        type: 'object', required: ['code', 'newEmail'],
+        properties: {
+          code:     { type: 'string', minLength: 6, maxLength: 6 },
+          newEmail: { type: 'string', format: 'email', maxLength: 254 },
+        },
+      },
+    },
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+  }, confirmEmailChangeHandler as any);
+
   fastify.get('/link-init/:provider',          auth, linkInitHandler as any);
   fastify.get('/linked-accounts',              auth, getLinkedAccountsHandler as any);
   fastify.delete('/linked-accounts/:provider', auth, unlinkAccountHandler as any);
@@ -140,7 +198,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         where: { id: payload.id },
         select: {
           id: true, username: true, email: true, role: true,
-          display_name: true, avatar_url: true, bio: true, status: true,
+          display_name: true, avatar_url: true, avatar_video_url: true, bio: true, status: true,
           subscription_tier: true, profile_theme: true, profile_bg_url: true,
           profile_frame: true, is_verified: true, verification_type: true,
           badge_type: true, email_verified: true, onboarding_done: true,
