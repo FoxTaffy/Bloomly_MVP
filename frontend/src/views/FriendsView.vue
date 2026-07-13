@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
 import { useRouter } from 'vue-router'
@@ -37,6 +37,31 @@ onMounted(async () => {
     friendsStore.loadBirthdays(),
   ])
 })
+
+// ── Animated sliding pill behind the active tab ──────────────────────────────
+const tabBarEl = ref<HTMLElement | null>(null)
+const tabButtonEls = ref<Record<string, HTMLElement>>({})
+const tabSlider = ref({ left: 0, width: 0, ready: false })
+
+function setTabRef(key: string) {
+  return (el: any) => { if (el) tabButtonEls.value[key] = el as HTMLElement }
+}
+
+function updateTabSlider() {
+  const bar = tabBarEl.value
+  const btn = tabButtonEls.value[mainTab.value]
+  if (!bar || !btn) return
+  const barRect = bar.getBoundingClientRect()
+  const btnRect = btn.getBoundingClientRect()
+  tabSlider.value = { left: btnRect.left - barRect.left, width: btnRect.width, ready: true }
+}
+
+watch(mainTab, () => nextTick(updateTabSlider))
+onMounted(() => {
+  nextTick(updateTabSlider)
+  window.addEventListener('resize', updateTabSlider)
+})
+onUnmounted(() => window.removeEventListener('resize', updateTabSlider))
 
 // ── Displayed list depending on active tab ────────────────────────────────────
 const displayedList = computed(() => {
@@ -146,14 +171,21 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
 
             <!-- Main tabs: Друзья / Подписчики / Подписки -->
             <div class="flex items-center gap-2 flex-wrap">
-              <div class="flex bg-brand-bg rounded-xl p-1 gap-1">
+              <div ref="tabBarEl" class="relative flex bg-brand-bg rounded-xl p-1 gap-1">
+                <!-- Sliding highlight — animates to whichever tab is active -->
+                <div
+                  v-if="tabSlider.ready"
+                  class="absolute top-1 bottom-1 rounded-lg bg-brand-accent transition-[left,width] duration-300 ease-out pointer-events-none z-0"
+                  :style="{ left: tabSlider.left + 'px', width: tabSlider.width + 'px' }"
+                />
                 <button
                   v-for="tab in tabs"
                   :key="tab.key"
+                  :ref="setTabRef(tab.key)"
                   :class="[
-                    'px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5',
+                    'relative z-10 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5',
                     mainTab === tab.key
-                      ? 'bg-brand-accent text-white'
+                      ? 'text-white'
                       : 'text-white/55 hover:text-brand-offwhite'
                   ]"
                   @click="mainTab = tab.key; onlineFilter = false; searchQuery = ''"

@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { stickersService } from './service.js';
 import type { GetPacksQuery, CreatePackInput, UpdatePackInput } from './types.js';
+import { isAdmin } from '../../lib/roles.js';
 
 export async function findByUrlHandler(req: FastifyRequest, reply: FastifyReply) {
   const { url } = req.query as { url?: string };
@@ -122,6 +123,25 @@ export async function removeFromCollectionHandler(req: FastifyRequest, reply: Fa
   } catch (err) {
     req.log.error(err);
     return reply.status(500).send({ error: 'Failed to remove from collection' });
+  }
+}
+
+export async function getPackStatsHandler(req: FastifyRequest, reply: FastifyReply) {
+  const user = (req as any).user as { id: string; role?: string };
+  const { id } = req.params as { id: string };
+  const { period } = req.query as { period?: string };
+  try {
+    const pack = await stickersService.getById(id);
+    if (!pack) return reply.status(404).send({ error: 'Pack not found' });
+    if (pack.author_id !== user.id && !isAdmin(user.role)) {
+      return reply.status(403).send({ error: 'Only the pack owner can view its stats' });
+    }
+    const days = period === '30d' ? 30 : 7;
+    const stats = await stickersService.getPackStats(id, days);
+    return reply.send({ data: { stats } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ error: 'Failed to load pack stats' });
   }
 }
 

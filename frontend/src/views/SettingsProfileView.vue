@@ -1224,6 +1224,19 @@
                           {{ isUploadingEvidence ? langStore.t.verUploadingLabel : langStore.t.verUploadBtn }}
                         </button>
                         <input ref="evidenceInput" type="file" accept="image/*,video/*" class="hidden" @change="onEvidenceUpload" />
+
+                        <!-- Text evidence (in addition to, or instead of, photo/video) -->
+                        <div v-if="selectedVerType !== 'popular'" class="mt-3">
+                          <p class="text-xs font-bold text-white/70 flex items-center gap-1.5 mb-1.5">
+                            <BIcon name="FileText" class="w-3.5 h-3.5 text-blue-400" />
+                            {{ (langStore.t as any).verEvidenceTextLabel }}
+                            <span class="text-[10px] text-white/40 font-normal ml-1">{{ evidenceText.length }}/2000</span>
+                          </p>
+                          <textarea v-model="evidenceText" maxlength="2000" rows="3"
+                            :placeholder="(langStore.t as any).verEvidenceTextPlaceholder"
+                            class="w-full px-3 py-2 rounded-xl bg-brand-bg border border-brand-border text-sm text-white placeholder-white/30 focus:outline-none focus:border-blue-500/60 transition-colors resize-none"></textarea>
+                          <p class="text-[10px] text-white/40 mt-1">{{ (langStore.t as any).verEvidenceTextHint }}</p>
+                        </div>
                       </div>
 
                       <!-- Anti-AI notice -->
@@ -3136,6 +3149,7 @@ const isLoadingVerification = ref(false)
 const isRequestingVerification = ref(false)
 const selectedVerType = ref<'artist' | 'master' | 'event' | 'fursuiter' | 'popular' | 'writer' | 'organizer' | ''>('')
 const evidenceUrls = ref<string[]>([])
+const evidenceText = ref('')
 const evidenceInput = ref<HTMLInputElement | null>(null)
 const isUploadingEvidence = ref(false)
 const popularLinks = ref<string[]>([''])
@@ -3158,7 +3172,7 @@ const verTypeMeta = computed(() => {
 const canSubmitVer = computed(() => {
   if (!selectedVerType.value || !localCompleteness.value.canSubmit) return false
   if (selectedVerType.value === 'popular') return popularLinks.value.some(l => l.trim())
-  return evidenceUrls.value.length > 0
+  return evidenceUrls.value.length > 0 || evidenceText.value.trim().length > 0
 })
 
 async function fetchVerificationData() {
@@ -3199,6 +3213,7 @@ async function requestVerification() {
     const payload: Record<string, any> = {
       verificationType: selectedVerType.value,
       evidenceUrls: evidenceUrls.value,
+      evidenceText: evidenceText.value.trim() || undefined,
     }
     if (selectedVerType.value === 'popular') {
       payload.socialLinks = popularLinks.value.filter(l => l.trim())
@@ -3208,6 +3223,7 @@ async function requestVerification() {
       showToast('success', 'Заявка отправлена на проверку модераторам')
       selectedVerType.value = ''
       evidenceUrls.value = []
+      evidenceText.value = ''
       popularLinks.value = ['']
       await fetchVerificationData()
     }

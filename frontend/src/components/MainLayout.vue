@@ -17,7 +17,7 @@ import PostCard from './PostCard.vue'
 import MentionTextarea from './MentionTextarea.vue'
 import StoriesBar from './StoriesBar.vue'
 import StoryViewer from './StoryViewer.vue'
-import StoryEditor from './StoryEditor.vue'
+import StoryMobileOnlyModal from './StoryMobileOnlyModal.vue'
 import { useAnalytics } from '@/composables/useAnalytics'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { formatCount } from '@/lib/utils'
@@ -60,7 +60,7 @@ const selectedCategory = ref('')
 const sortBy = ref<'new' | 'hot'>('new')
 
 const showPostForm = ref(false)
-const showStoryModal = ref(false)
+const showStoryMobileNotice = ref(false)
 const createTab = ref<'post' | 'story'>('post')
 const mediaUrls = ref<string[]>([])
 const mediaOriginalUrls = ref<string[]>([])
@@ -78,15 +78,9 @@ const adminGroups = computed(() =>
   groupsStore.myGroups.filter(m => ['owner', 'admin'].includes(m.role)).map(m => m.group)
 )
 
-// ── Story creation ────────────────────────────────────────────────────────
-const onStoryEditorCreated = async () => {
-  showStoryModal.value = false
-  await fetchStories()
-}
-
 const closeCreateModal = () => {
   showPostForm.value = false
-  showStoryModal.value = false
+  showStoryMobileNotice.value = false
   showAdvanced.value = false
   showEntityPicker.value = false
   showVisibilityMenu.value = false
@@ -100,7 +94,7 @@ const closeCreateModal = () => {
 const mobileHub = useMobileHubStore()
 // Handle post/story triggers from MobileBottomNav (visible on all pages)
 watch(() => mobileHub.openPostForm, (v) => { if (v) { showPostForm.value = true; mobileHub.consumePost() } })
-watch(() => mobileHub.openStory,    (v) => { if (v) { showStoryModal.value = true; mobileHub.consumeStory() } })
+watch(() => mobileHub.openStory,    (v) => { if (v) { showStoryMobileNotice.value = true; mobileHub.consumeStory() } })
 
 // Search handled by AppHeader component
 
@@ -640,10 +634,15 @@ const storyViewerGroupIdx = ref(0)
 const storyViewerStoryIdx = ref(0)
 
 const openStoryViewer = (story: StoryItem, group: StoryItem[]) => {
-  // Build full groups list from the storiesBar data, keeping same order
-  // We use the group the bar passed us as the initial group
-  const allGroups = (storiesBarRef.value as any)?.userStories as StoryItem[][] | undefined
-  if (allGroups && allGroups.length) {
+  // Build full groups list from the storiesBar data, keeping the same order
+  // as the bar renders them: Bloomly updates bubble first, then user stories.
+  const bloomlyGroup = (storiesBarRef.value as any)?.bloomlyStoryGroup as StoryItem[] | undefined
+  const userGroups   = (storiesBarRef.value as any)?.userStories as StoryItem[][] | undefined
+  const allGroups: StoryItem[][] = []
+  if (bloomlyGroup && bloomlyGroup.length) allGroups.push(bloomlyGroup)
+  if (userGroups && userGroups.length) allGroups.push(...userGroups)
+
+  if (allGroups.length) {
     storyGroups.value = allGroups
     const gIdx = allGroups.findIndex(g => g[0].user.id === story.user.id)
     storyViewerGroupIdx.value = gIdx >= 0 ? gIdx : 0
@@ -657,10 +656,6 @@ const openStoryViewer = (story: StoryItem, group: StoryItem[]) => {
 
 const closeStory = () => {
   storyViewerOpen.value = false
-}
-
-const fetchStories = async () => {
-  storiesBarRef.value?.fetchStories()
 }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────
@@ -819,7 +814,7 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
         <StoriesBar
           ref="storiesBarRef"
           @open="openStoryViewer"
-          @create="showStoryModal = true"
+          @create="showStoryMobileNotice = true"
         />
 
         <!-- Create Post Window -->
@@ -850,13 +845,13 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
               <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" @error="onAvatarError" />
               <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
             </template>
-            <span class="flex-1 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">
-              {{ postAsEntity.type === 'group' ? `${(postAsEntity as any).name}…` : langStore.t.whatsNew }}
+            <span class="flex-1 flex items-center justify-between gap-2 min-w-0 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">
+              <span class="truncate">{{ postAsEntity.type === 'group' ? `${(postAsEntity as any).name}…` : langStore.t.whatsNew }}</span>
+              <span class="flex items-center gap-2 text-white/35 group-hover:text-white/60 transition-colors flex-shrink-0">
+                <BIcon name="ImagePlus" class="w-4 h-4" />
+                <BIcon name="Hash" class="w-4 h-4" />
+              </span>
             </span>
-            <div class="flex items-center gap-2 text-white/55 group-hover:text-white transition-colors ml-1">
-              <BIcon name="ImagePlus" class="w-4.5 h-4.5" />
-              <BIcon name="Hash" class="w-4.5 h-4.5" />
-            </div>
           </button>
 
           <!-- Expanded composer -->
@@ -1349,10 +1344,9 @@ onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRe
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════════════
-         STORY CREATION MODAL
+         STORY CREATION — web publishing disabled, mobile app only
     ═══════════════════════════════════════════════════════════════════ -->
-    <!-- Story Editor (full-screen, handles its own Teleport) -->
-    <StoryEditor v-if="showStoryModal" @close="showStoryModal = false" @created="onStoryEditorCreated" />
+    <StoryMobileOnlyModal v-if="showStoryMobileNotice" @close="showStoryMobileNotice = false" />
 
     <PostLightbox
       v-if="lightboxOpen"

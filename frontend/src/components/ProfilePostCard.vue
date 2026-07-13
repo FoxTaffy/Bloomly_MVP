@@ -21,7 +21,7 @@
               >{{ post.author.display_name || post.author.username }}</router-link>
               <!-- Verification badge -->
               <img v-if="post.author.is_verified"
-                src="/icons/badges/paw_offical.svg"
+                :src="verificationBadgeIcon(post.author.verification_type)"
                 class="w-4 h-4 flex-shrink-0" title="Верифицирован" />
               <span v-if="showRepawLabel"
                 class="inline-flex items-center gap-1 text-[10px] text-white/55 bg-brand-card border border-brand-border px-1.5 py-0.5 rounded-md font-semibold">
@@ -240,6 +240,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNsfwMode } from '@/composables/useNsfwMode'
+import { verificationBadgeIcon } from '@/composables/useVerificationBadge'
 import api from '@/api'
 import PostComments from '@/components/PostComments.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'

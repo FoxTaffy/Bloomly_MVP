@@ -62,6 +62,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/explore',
+    name: 'explore',
+    component: () => import('@/views/ExploreView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/messages',
     name: 'messages',
     component: () => import('@/views/MessagesView.vue'),
@@ -227,6 +233,19 @@ router.beforeEach(async (to) => {
     !ONBOARDING_BYPASS.has(String(to.name))
   ) {
     return { name: 'onboarding' }
+  }
+})
+
+// После деплоя хэши чанков меняются — старая вкладка попытается запросить
+// файл, которого больше нет на сервере, и получит index.html вместо JS.
+// В этом случае просто перезагружаем страницу, чтобы подхватить новый билд.
+router.onError((error, to) => {
+  const isChunkLoadError =
+    /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/i.test(
+      error.message,
+    )
+  if (isChunkLoadError) {
+    window.location.href = to.fullPath
   }
 })
 

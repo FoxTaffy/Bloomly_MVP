@@ -1,16 +1,17 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import prisma from '../../config/prisma.js';
 import { analyzeContent, patrolSuspiciousActivity } from './service.js';
+import { isModerator, isAdmin } from '../../lib/roles.js';
 
 interface JwtUser { id: string; role: string }
 
 const requireMod = (req: FastifyRequest, reply: FastifyReply): boolean => {
   const user = req.user as JwtUser;
-  if (!['admin', 'moderator'].includes(user.role)) {
+  if (!isModerator(user.role)) {
     reply.code(403).send({
       success: false,
       data: null,
-      error: { code: 'FORBIDDEN', message: 'Requires moderator or admin role' },
+      error: { code: 'FORBIDDEN', message: 'Requires moderator role or higher' },
     });
     return false;
   }
@@ -126,11 +127,11 @@ export const runPatrolHandler = async (
   reply: FastifyReply,
 ) => {
   const user = req.user as JwtUser;
-  if (user.role !== 'admin') {
+  if (!isAdmin(user.role)) {
     return reply.code(403).send({
       success: false,
       data: null,
-      error: { code: 'FORBIDDEN', message: 'Only admins can trigger patrol' },
+      error: { code: 'FORBIDDEN', message: 'Requires admin role or higher' },
     });
   }
 

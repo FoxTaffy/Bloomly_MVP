@@ -7,6 +7,7 @@ import type {
   CreateDisputeInput, ReplyDisputeInput, ResolveDisputeInput, CreateFairInput,
 } from './types.js';
 import prisma from '../../config/prisma.js';
+import { isAdmin as isAdminRole } from '../../lib/roles.js';
 
 // ── Listings ──────────────────────────────────────────────────────────────────
 
@@ -234,9 +235,9 @@ export async function getSellerReviewsHandler(req: FastifyRequest, reply: Fastif
 export async function deleteReviewHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = (req as any).user as { id: string; role?: string };
   const { reviewId } = req.params as { reviewId: string };
-  const isAdmin = (user as any).role === 'admin';
+  const userIsAdmin = isAdminRole((user as any).role);
   try {
-    await dealersDenService.deleteReview(reviewId, user.id, isAdmin);
+    await dealersDenService.deleteReview(reviewId, user.id, userIsAdmin);
     return reply.send({ success: true, data: { ok: true } });
   } catch (err: any) {
     if (err?.message === 'NOT_FOUND')  return reply.status(404).send({ success: false, error: 'Review not found' });

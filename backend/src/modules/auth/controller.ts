@@ -23,15 +23,23 @@ function issueAccessToken(request: FastifyRequest, id: string, role: string) {
   return request.server.jwt.sign({ id, role }, { expiresIn: '15m' });
 }
 
+// ── Мобильные клиенты (React Native): нет cookie jar между запусками,
+// поэтому им дополнительно отдаём raw refresh token в теле JSON-ответа ────────
+function isMobileClient(request: FastifyRequest): boolean {
+  return request.headers['x-client'] === 'mobile';
+}
+
 // ── Выдача refresh token: запись в БД + httpOnly cookie ───────────────────────
 // remember=true  → persistent 30-day cookie + 30-day DB token
 // remember=false → session cookie (no maxAge) + 24-hour DB token
+// Возвращает raw-токен, чтобы мобильные клиенты могли сохранить его сами
+// (веб-клиент его игнорирует и полагается на httpOnly cookie как раньше).
 async function issueRefreshToken(
   request: FastifyRequest,
   reply: FastifyReply,
   userId: string,
   remember = false,
-): Promise<void> {
+): Promise<string> {
   const raw     = randomBytes(40).toString('hex');
   const hash    = createHash('sha256').update(raw).digest('hex');
   const ttlMs   = remember ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
@@ -57,6 +65,7 @@ async function issueRefreshToken(
   if (remember) cookieOpts.maxAge = 30 * 24 * 60 * 60;
 
   reply.setCookie('refresh_token', raw, cookieOpts);
+  return raw;
 }
 
 // ── Статистика ────────────────────────────────────────────────────────────────
@@ -104,8 +113,12 @@ export const verifyEmailHandler = async (
     if (!user) return reply.code(400).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Пользователь не найден' } });
 
     const token = issueAccessToken(request, user.id, user.role);
-    await issueRefreshToken(request, reply, user.id, remember);
-    return reply.send({ success: true, data: { token, user }, error: null });
+    const refreshToken = await issueRefreshToken(request, reply, user.id, remember);
+    return reply.send({
+      success: true,
+      data: { token, user, ...(isMobileClient(request) ? { refreshToken } : {}) },
+      error: null,
+    });
   } catch (e: any) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'VERIFY_ERROR', message: e.message } });
   }
@@ -166,8 +179,12 @@ export const confirmUnfreezeHandler = async (
     if (!user) return reply.code(400).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Пользователь не найден' } });
 
     const token = issueAccessToken(request, user.id, user.role);
-    await issueRefreshToken(request, reply, user.id, remember);
-    return reply.send({ success: true, data: { token, user }, error: null });
+    const refreshToken = await issueRefreshToken(request, reply, user.id, remember);
+    return reply.send({
+      success: true,
+      data: { token, user, ...(isMobileClient(request) ? { refreshToken } : {}) },
+      error: null,
+    });
   } catch (e: any) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'UNFREEZE_ERROR', message: e.message } });
   }
@@ -211,12 +228,16 @@ export const loginHandler = async (
     }
 
     const token = issueAccessToken(request, user.id, user.role);
-    await issueRefreshToken(request, reply, user.id, remember);
+    const refreshToken = await issueRefreshToken(request, reply, user.id, remember);
     const fullUser = await prisma.user.findUnique({ where: { id: user.id }, select: FULL_USER_SELECT });
 
     return reply.send({
       success: true,
-      data: { token, user: fullUser ?? { id: user.id, username: user.username, email: user.email, role: user.role } },
+      data: {
+        token,
+        user: fullUser ?? { id: user.id, username: user.username, email: user.email, role: user.role },
+        ...(isMobileClient(request) ? { refreshToken } : {}),
+      },
       error: null,
     });
   } catch (error: unknown) {
@@ -294,7 +315,7 @@ export const confirmEmailChangeHandler = async (
 
 // ── OAuth: редирект на провайдера ─────────────────────────────────────────────
 export const oauthRedirectHandler = async (
-  request: FastifyRequest<{ Params: { provider: string } }>,
+  request: FastifyRequest<{ Params: { provider: string }; Querystring: { client?: string } }>,
   reply: FastifyReply,
 ) => {
   const provider = request.params.provider as OAuthProvider;
@@ -304,7 +325,8 @@ export const oauthRedirectHandler = async (
   }
 
   try {
-    const { url } = buildOAuthUrl(provider);
+    const client = request.query.client === 'mobile' ? 'mobile' : undefined;
+    const { url } = buildOAuthUrl(provider, undefined, client);
     return reply.redirect(302, url);
   } catch (e: any) {
     return reply.code(500).send({ success: false, data: null, error: { code: 'OAUTH_ERROR', message: e.message } });
@@ -326,7 +348,7 @@ export const oauthCallbackHandler = async (
   }
 
   try {
-    const { oauthUser, linkUserId } = await handleOAuthCallback(provider, code, state);
+    const { oauthUser, linkUserId, client } = await handleOAuthCallback(provider, code, state);
 
     // ── РЕЖИМ ПРИВЯЗКИ (пользователь уже залогинен) ───────────────────────────
     if (linkUserId) {
@@ -349,7 +371,11 @@ export const oauthCallbackHandler = async (
     const token = issueAccessToken(request, user.id, user.role);
     // OAuth-вход не спрашивает "запомнить меня" — всегда выдаём persistent-сессию,
     // иначе вход через Google/Yandex/etc. живёт всего 24ч и разлогинивает раньше обычного
-    await issueRefreshToken(request, reply, user.id, true);
+    const refreshToken = await issueRefreshToken(request, reply, user.id, true);
+    if (client === 'mobile') {
+      // Мобильное приложение не имеет cookie jar — отдаём токены через deep link
+      return reply.redirect(302, `bloomly://auth/callback?token=${token}&refreshToken=${refreshToken}`);
+    }
     return reply.redirect(302, `${FRONTEND_URL()}/auth/callback?token=${token}`);
   } catch (e: any) {
     console.error('[OAuth callback error]', e instanceof Error ? e.message : 'Unknown error');
@@ -410,11 +436,13 @@ export const unlinkAccountHandler = async (
 };
 
 // ── Обновление access token по refresh token ──────────────────────────────────
+// Веб-клиент шлёт токен через httpOnly cookie; мобильный (нет cookie jar между
+// запусками) — через тело запроса, полученное при login/verify-email.
 export const refreshHandler = async (
-  request: FastifyRequest,
+  request: FastifyRequest<{ Body?: { refreshToken?: string } }>,
   reply: FastifyReply,
 ) => {
-  const raw = (request.cookies as any)?.refresh_token as string | undefined;
+  const raw = ((request.cookies as any)?.refresh_token as string | undefined) ?? request.body?.refreshToken;
   if (!raw) {
     return reply.code(401).send({ success: false, data: null, error: { code: 'NO_REFRESH_TOKEN', message: 'Refresh token not provided' } });
   }
@@ -442,17 +470,21 @@ export const refreshHandler = async (
   const token = issueAccessToken(request, user.id, user.role);
   // Сохраняем remember-статус при ротации — иначе persistent-сессия
   // превращалась бы в session-cookie на первом же обновлении токена
-  await issueRefreshToken(request, reply, user.id, record.remember);
+  const refreshToken = await issueRefreshToken(request, reply, user.id, record.remember);
 
-  return reply.send({ success: true, data: { token, user }, error: null });
+  return reply.send({
+    success: true,
+    data: { token, user, ...(isMobileClient(request) ? { refreshToken } : {}) },
+    error: null,
+  });
 };
 
 // ── Выход (инвалидация всех refresh token пользователя) ──────────────────────
 export const logoutHandler = async (
-  request: FastifyRequest,
+  request: FastifyRequest<{ Body?: { refreshToken?: string } }>,
   reply: FastifyReply,
 ) => {
-  const raw = (request.cookies as any)?.refresh_token as string | undefined;
+  const raw = ((request.cookies as any)?.refresh_token as string | undefined) ?? request.body?.refreshToken;
   if (raw) {
     const hash = createHash('sha256').update(raw).digest('hex');
     const token = await prisma.refreshToken.findFirst({ where: { token_hash: hash }, select: { user_id: true } });

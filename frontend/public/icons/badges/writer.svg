@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="writerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FB7185"/>
+      <stop offset="100%" style="stop-color:#E11D48"/>
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="12" r="10" fill="url(#writerGrad)" opacity="0.15"/>
+  <circle cx="12" cy="12" r="10" fill="url(#writerGrad)"/>
+  <path d="M7 17l1-3.2L15.5 6.3a1.5 1.5 0 012.2 2.1L10.2 16 7 17z" stroke="white" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="white" fill-opacity="0.2"/>
+  <path d="M13.7 8l2.3 2.3" stroke="white" stroke-width="1.4" stroke-linecap="round"/>
+</svg>

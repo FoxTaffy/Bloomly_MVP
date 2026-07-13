@@ -417,6 +417,8 @@ model Notification {
   created_at  DateTime  @default(now())
   deleted_at  DateTime?
   ref_id      String?   @db.Uuid
+  /// Small structured payload for system notifications (e.g. AutoMod warn count/reason) — not used by social notifications
+  meta        Json?
   receiver    User      @relation("NotificationReceiver", fields: [receiver_id], references: [id], onDelete: Cascade)
   sender      User?     @relation("NotificationSender", fields: [sender_id], references: [id])
 
@@ -961,6 +963,7 @@ model VerificationRequest {
   reviewed_by      String?  @db.Uuid
   verification_type String?  @db.VarChar(30)  // artist, master, fursuiter, popular, writer, organizer, event
   evidence_urls    String[] @default([])
+  evidence_text    String?  @db.VarChar(2000)  // optional written explanation, alongside or instead of uploaded evidence
   badge_type       String?  @db.VarChar(30)  // verified, artist, master, event
 
   user             User     @relation(fields: [user_id], references: [id], onDelete: Cascade)

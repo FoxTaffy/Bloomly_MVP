@@ -7,6 +7,7 @@ import {
   adminReviewRequest,
   getProfileCompleteness,
 } from './service.js';
+import { isModerator } from '../../lib/roles.js';
 
 // GET /api/verification/status
 export async function getStatusHandler(request: FastifyRequest, reply: FastifyReply) {
@@ -32,9 +33,9 @@ export async function getCompletenessHandler(request: FastifyRequest, reply: Fas
 // POST /api/verification/request
 export async function requestHandler(request: FastifyRequest, reply: FastifyReply) {
   const userId = (request.user as any).id;
-  const { verificationType, evidenceUrls, socialLinks } = request.body as any;
+  const { verificationType, evidenceUrls, socialLinks, evidenceText } = request.body as any;
   try {
-    const result = await requestVerification(userId, verificationType, evidenceUrls, socialLinks);
+    const result = await requestVerification(userId, verificationType, evidenceUrls, socialLinks, evidenceText);
     return reply.send({ success: true, data: result });
   } catch (err: any) {
     return reply.code(400).send({ success: false, error: { message: err.message } });
@@ -44,7 +45,7 @@ export async function requestHandler(request: FastifyRequest, reply: FastifyRepl
 // GET /api/verification/admin/requests
 export async function adminRequestsHandler(request: FastifyRequest, reply: FastifyReply) {
   const user = request.user as any;
-  if (!['admin', 'moderator'].includes(user.role)) {
+  if (!isModerator(user.role)) {
     return reply.code(403).send({ success: false, error: { message: 'Forbidden' } });
   }
   const { status, page } = request.query as any;
@@ -55,7 +56,7 @@ export async function adminRequestsHandler(request: FastifyRequest, reply: Fasti
 // PATCH /api/verification/admin/requests/:id
 export async function adminReviewHandler(request: FastifyRequest, reply: FastifyReply) {
   const user = request.user as any;
-  if (!['admin', 'moderator'].includes(user.role)) {
+  if (!isModerator(user.role)) {
     return reply.code(403).send({ success: false, error: { message: 'Forbidden' } });
   }
   const { id } = request.params as any;

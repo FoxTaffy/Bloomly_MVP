@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useStickersStore } from '@/stores/stickers'
+import api from '@/api'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
@@ -70,68 +71,55 @@ const period    = ref<'7d' | '30d'>('7d')
 // Показывать вкладку статистики только владельцу
 const showStatTab = computed(() => isOwn())
 
-// ---------- Chart helpers ----------
-function seededRand(seed: number) {
-  let s = (Math.abs(seed) | 0) || 42
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0
-    return s / 0xffffffff
+// ---------- Real stats (fetched from the backend, no fabricated numbers) ----------
+interface PackStats {
+  days: number
+  installs: { date: string; count: number }[]
+  trendPct: number
+  totalSends: number
+  topStickers: { url: string; useCount: number }[]
+}
+const rawStats    = ref<PackStats | null>(null)
+const statsLoading = ref(false)
+
+async function fetchPackStats() {
+  if (!pack.value || !isOwn()) return
+  statsLoading.value = true
+  try {
+    const res = await api.get(`/stickers/${pack.value.id}/stats`, { params: { period: period.value } })
+    rawStats.value = res.data?.data?.stats ?? null
+  } catch {
+    rawStats.value = null
+  } finally {
+    statsLoading.value = false
   }
 }
 
+watch(period, () => { if (activeTab.value === 'stats') fetchPackStats() })
+watch(activeTab, (tab) => { if (tab === 'stats' && !rawStats.value) fetchPackStats() })
+
 const chartData = computed(() => {
-  if (!pack.value) return null
-  const days  = period.value === '7d' ? 7 : 30
-  const seed  = pack.value.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
-  const rand  = seededRand(seed)
-  const total = Math.max(pack.value.downloads_count || 0, 1)
+  if (!pack.value || !rawStats.value) return null
+  const { days, installs: installRows, trendPct, totalSends, topStickers } = rawStats.value
 
-  // Weighted growth curve (more installs toward recent days)
-  const weights: number[] = []
-  for (let i = 0; i < days; i++) {
-    weights.push(0.4 + (i / days) * 0.8 + rand() * 0.35)
-  }
-  const wSum = weights.reduce((a, b) => a + b, 0)
-  const installs = weights.map(w => Math.max(0, Math.round((w / wSum) * total)))
+  const installs = installRows.map(r => r.count)
 
-  // Collections: running retention fraction
-  let cumInstalls = 0
-  const collections = installs.map(v => {
-    cumInstalls += v
-    return Math.round(cumInstalls * (0.55 + rand() * 0.2))
-  })
-
-  // Views: installs × 3..8
-  const views = installs.map(v => Math.round(v * (3 + rand() * 5)))
+  // Cumulative installs as an honest growth proxy for "collections over time"
+  // (we don't retroactively track removals, so this tracks additions, not the live net total)
+  let cum = 0
+  const collections = installs.map(v => { cum += v; return cum })
 
   const maxInstalls = Math.max(...installs, 1)
   const maxColl     = Math.max(...collections, 1)
-  const totalViews  = views.reduce((a, b) => a + b, 0)
 
-  // Trend % vs previous period
-  const half    = Math.floor(days / 2)
-  const prevSum = installs.slice(0, half).reduce((a, b) => a + b, 0)
-  const currSum = installs.slice(half).reduce((a, b) => a + b, 0)
-  const trendPct = prevSum > 0 ? Math.round(((currSum - prevSum) / prevSum) * 100) : 0
+  const labels = installRows.map(r => new Date(r.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }))
 
-  // Day labels
-  const labels: string[] = []
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
-    labels.push(d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }))
-  }
-
-  // Sticker popularity (seeded per sticker index)
-  const stickerPop = pack.value.stickers.map((_, idx) => {
-    const r2 = seededRand(seed + idx * 7)
-    return 0.15 + r2() * 0.85
-  }).sort((a, b) => b - a)
+  const maxUse = Math.max(...topStickers.map(s => s.useCount), 1)
+  const stickerPop = topStickers.map(s => (s.useCount > 0 ? s.useCount / maxUse : 0))
 
   // SVG bar chart path
   const BAR_W  = 400
   const BAR_H  = 80
-  const barW   = Math.floor(BAR_W / days) - 2
   const bars   = installs.map((v, i) => {
     const h = Math.max(2, Math.round((v / maxInstalls) * BAR_H))
     const x = Math.round(i * (BAR_W / days))
@@ -139,11 +127,11 @@ const chartData = computed(() => {
     return { x, y, h, v }
   })
 
-  // SVG line chart (collections)
+  // SVG line chart (cumulative installs)
   const LINE_W = 400
   const LINE_H = 80
   const pts    = collections.map((v, i) => {
-    const px = Math.round((i / (days - 1)) * (LINE_W - 8)) + 4
+    const px = days > 1 ? Math.round((i / (days - 1)) * (LINE_W - 8)) + 4 : LINE_W / 2
     const py = Math.round(LINE_H - (v / maxColl) * (LINE_H - 8)) - 4
     return { px, py }
   })
@@ -156,10 +144,10 @@ const chartData = computed(() => {
   ].join(' ')
 
   return {
-    installs, collections, views, totalViews,
+    installs, collections, totalSends,
     maxInstalls, maxColl, trendPct, labels, days,
     bars, polyline, areaPath,
-    stickerPop,
+    topStickers, stickerPop,
   }
 })
 </script>
@@ -341,8 +329,16 @@ const chartData = computed(() => {
               </template>
 
               <!-- Tab: статистика (только для владельца) -->
-              <template v-else-if="activeTab === 'stats' && isOwn() && chartData">
-                <div class="space-y-3">
+              <template v-else-if="activeTab === 'stats' && isOwn()">
+                <div v-if="statsLoading && !chartData" class="flex items-center justify-center py-16">
+                  <BIcon name="Loader2" class="w-7 h-7 text-white/30 animate-spin" />
+                </div>
+                <div v-else-if="!chartData" class="flex flex-col items-center gap-3 py-16 text-white/30">
+                  <BIcon name="BarChart2" class="w-10 h-10 opacity-40" />
+                  <p class="text-sm font-semibold">Не удалось загрузить статистику</p>
+                  <button @click="fetchPackStats" class="text-xs font-bold text-brand-accent hover:underline">Повторить</button>
+                </div>
+                <div v-else class="space-y-3">
 
                   <!-- Period switcher -->
                   <div class="flex items-center justify-between">
@@ -379,11 +375,11 @@ const chartData = computed(() => {
                       <p class="text-xl font-black text-rose-400 tabular-nums">{{ pack._count.userCollections.toLocaleString() }}</p>
                       <p class="text-[10px] text-white/30 font-medium">хранят прямо сейчас</p>
                     </div>
-                    <!-- Просмотры -->
+                    <!-- Отправлено -->
                     <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 space-y-1">
-                      <p class="text-[10px] text-white/35 uppercase tracking-wider font-bold">Просмотров</p>
-                      <p class="text-xl font-black text-brand-accent tabular-nums">{{ chartData.totalViews.toLocaleString() }}</p>
-                      <p class="text-[10px] text-white/30 font-medium">за {{ chartData.days }} дней</p>
+                      <p class="text-[10px] text-white/35 uppercase tracking-wider font-bold">Отправлено</p>
+                      <p class="text-xl font-black text-brand-accent tabular-nums">{{ chartData.totalSends.toLocaleString() }}</p>
+                      <p class="text-[10px] text-white/30 font-medium">стикеров всего</p>
                     </div>
                     <!-- Удержание -->
                     <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 space-y-1">
@@ -458,13 +454,14 @@ const chartData = computed(() => {
                   </div>
 
                   <!-- Sticker popularity -->
-                  <div v-if="pack.stickers.length" class="bg-brand-bg border border-brand-border rounded-2xl p-4">
+                  <div v-if="chartData.topStickers.length" class="bg-brand-bg border border-brand-border rounded-2xl p-4">
                     <p class="text-xs font-extrabold text-white mb-3">Популярные стикеры</p>
-                    <div class="space-y-2">
+                    <p v-if="!chartData.topStickers.some(s => s.useCount > 0)" class="text-xs text-white/30">Ещё никто не отправлял стикеры из этого пака</p>
+                    <div v-else class="space-y-2">
                       <div
-                        v-for="(sticker, i) in pack.stickers.slice(0, 5)" :key="i"
+                        v-for="(sticker, i) in chartData.topStickers" :key="sticker.url"
                         class="flex items-center gap-3">
-                        <div class="w-9 h-9 shrink-0"><StickerImg :src="sticker" /></div>
+                        <div class="w-9 h-9 shrink-0"><StickerImg :src="sticker.url" /></div>
                         <div class="flex-1 min-w-0">
                           <div class="w-full h-2 bg-brand-border rounded-full overflow-hidden">
                             <div
@@ -472,8 +469,8 @@ const chartData = computed(() => {
                               :style="`width: ${Math.round(chartData.stickerPop[i] * 100)}%; background: linear-gradient(90deg, #7B2D8B, #4C67CF)`" />
                           </div>
                         </div>
-                        <span class="text-[11px] font-bold tabular-nums text-white/50 w-8 text-right">
-                          {{ Math.round(chartData.stickerPop[i] * 100) }}%
+                        <span class="text-[11px] font-bold tabular-nums text-white/50 w-10 text-right">
+                          {{ sticker.useCount }} отпр.
                         </span>
                       </div>
                     </div>

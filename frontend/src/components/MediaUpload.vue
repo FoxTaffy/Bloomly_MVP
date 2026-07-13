@@ -17,6 +17,28 @@ type PreviewEntry = { localUrl: string; uploading: boolean; progress: number; fi
 const previews = ref<PreviewEntry[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const isDragging = ref(false)
+const rejectedMsg = ref('')
+let rejectedTimer: ReturnType<typeof setTimeout> | null = null
+
+// Native <input accept> only filters the OS file picker — drag/drop and
+// clipboard paste bypass it entirely, so re-check every file against the
+// same allow-list before it's queued for upload.
+const acceptPatterns = () => (props.accept ?? 'image/*,video/*,audio/*').split(',').map(p => p.trim()).filter(Boolean)
+
+function isFileAccepted(file: File): boolean {
+  return acceptPatterns().some(pattern => {
+    if (pattern.endsWith('/*')) return file.type.startsWith(pattern.slice(0, -1))
+    return file.type === pattern
+  })
+}
+
+function flashRejected() {
+  const patterns = acceptPatterns()
+  const imagesOnly = patterns.every(p => p.startsWith('image/'))
+  rejectedMsg.value = imagesOnly ? 'Можно загружать только фото и GIF' : 'Этот тип файла здесь не поддерживается'
+  if (rejectedTimer) clearTimeout(rejectedTimer)
+  rejectedTimer = setTimeout(() => { rejectedMsg.value = '' }, 3000)
+}
 
 // ── Image compression ──────────────────────────────────────────────────────
 const MAX_PX = 1920
@@ -57,13 +79,16 @@ function compressImage(file: File): Promise<File> {
 // Exposed so parent can call directly
 const processFiles = (files: FileList | File[] | null) => {
   if (!files) return
+  let rejected = false
   Array.from(files).forEach((file) => {
+    if (!isFileAccepted(file)) { rejected = true; return }
     // Content-based dedup: skip if same name+size is already queued
     if (previews.value.some(p => p.name === file.name && p.size === file.size)) return
     const idx = previews.value.length
     previews.value.push({ localUrl: URL.createObjectURL(file), uploading: true, progress: 0, name: file.name, size: file.size, isVideo: file.type.startsWith('video/') })
     uploadFile(file, idx)
   })
+  if (rejected) flashRejected()
 }
 
 const uploadFile = async (file: File, idx: number) => {
@@ -131,15 +156,17 @@ const onDragLeave = (e: DragEvent) => {
 const onPaste = (e: ClipboardEvent) => {
   const items = e.clipboardData?.items
   if (!items) return
-  const mediaFiles = Array.from(items)
-    .filter(i => i.kind === 'file' && (i.type.startsWith('image/') || i.type.startsWith('video/')))
+  const files = Array.from(items)
+    .filter(i => i.kind === 'file')
     .map(i => i.getAsFile())
     .filter(Boolean) as File[]
-  if (mediaFiles.length) processFiles(mediaFiles)
+  if (files.length) processFiles(files)
 }
 
 onMounted(() => document.addEventListener('paste', onPaste))
 onUnmounted(() => document.removeEventListener('paste', onPaste))
+
+const hintLabel = () => (acceptPatterns().every(p => p.startsWith('image/')) ? 'Фото, GIF · до 100 МБ' : 'Фото, GIF, видео · до 100 МБ')
 
 // Expose to parent
 defineExpose({
@@ -173,7 +200,7 @@ defineExpose({
         <Image class="w-5 h-5 text-violet-300" />
       </div>
       <p class="text-sm font-bold text-violet-300">Отпусти для загрузки</p>
-      <p class="text-xs text-white/30">Фото, GIF, видео · до 100 МБ</p>
+      <p class="text-xs text-white/30">{{ hintLabel() }}</p>
     </div>
 
     <!-- Empty state — click to pick files -->
@@ -187,7 +214,7 @@ defineExpose({
         <Image class="w-4 h-4 text-white/35 group-hover/empty:text-violet-400 transition-colors" />
       </div>
       <p class="text-xs font-bold text-white/35 group-hover/empty:text-violet-400 transition-colors">Нажми или перетащи файл</p>
-      <p class="text-[10px] text-white/20">Фото, GIF, видео · до 100 МБ</p>
+      <p class="text-[10px] text-white/20">{{ hintLabel() }}</p>
     </button>
 
     <!-- Thumbnails grid (shown when files exist and not dragging) -->
@@ -255,6 +282,7 @@ defineExpose({
         </button>
       </div>
     </div>
+    <p v-if="rejectedMsg" class="mt-1.5 text-[11px] font-semibold text-rose-400">{{ rejectedMsg }}</p>
   </div>
 </template>
 

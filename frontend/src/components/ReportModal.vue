@@ -27,7 +27,7 @@
                 <div>
                   <h3 class="text-sm font-extrabold text-white leading-none">Пожаловаться</h3>
                   <p class="text-[11px] text-white/35 mt-0.5">
-                    {{ targetType === 'group' ? 'на сообщество' : 'на публикацию' }}
+                    {{ targetType === 'group' ? 'на сообщество' : targetType === 'message' ? 'на сообщение' : targetType === 'user' ? 'на пользователя' : 'на публикацию' }}
                   </p>
                 </div>
               </div>
@@ -54,6 +54,13 @@
 
               <!-- Form -->
               <div v-else key="form" class="p-4 space-y-2 max-h-[70vh] overflow-y-auto overscroll-contain">
+                <div v-if="evidence" class="flex items-start gap-2 px-3.5 py-2.5 mb-3 rounded-2xl bg-white/[0.03] border border-white/8">
+                  <BIcon name="Quote" class="w-3.5 h-3.5 text-white/25 flex-shrink-0 mt-0.5" />
+                  <div class="min-w-0">
+                    <p class="text-[10px] text-white/30 mb-0.5">Приложено к жалобе как доказательство</p>
+                    <p class="text-xs text-white/60 line-clamp-3">{{ evidence }}</p>
+                  </div>
+                </div>
                 <p class="text-[11px] font-bold text-white/35 uppercase tracking-wider px-1 mb-3">Выберите причину</p>
 
                 <button
@@ -136,8 +143,10 @@ import api from '@/api'
 const props = defineProps<{
   modelValue: boolean
   targetId: string
-  targetType?: 'post' | 'group' | 'listing'
+  targetType?: 'post' | 'group' | 'listing' | 'message' | 'user'
   postId?: string
+  /** Extra context (e.g. quoted message text + sender) sent as evidence for moderators. */
+  evidence?: string
 }>()
 
 const emit = defineEmits<{
@@ -241,10 +250,11 @@ async function submit() {
   try {
     const effectiveId = props.targetId || props.postId || ''
     const effectiveType = props.targetType ?? 'post'
+    const fullReason = props.evidence ? `${reason}\n\n— Сообщение —\n${props.evidence}` : reason
     await api.post('/reports', {
       target_type: effectiveType,
       target_id: effectiveId,
-      reason,
+      reason: fullReason,
     }).catch(() => null)
     sent.value = true
     setTimeout(() => close(), 2800)

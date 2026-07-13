@@ -12,6 +12,7 @@ import {
   getCurrentFairHandler, getFairHandler, applyToFairHandler,
   listFairsAdminHandler, createFairAdminHandler, updateFairParticipantAdminHandler,
 } from './controller.js';
+import { isAdmin as isAdminRole } from '../../lib/roles.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -19,9 +20,9 @@ declare module 'fastify' {
   }
 }
 
-function isAdmin(req: FastifyRequest, reply: FastifyReply, done: () => void) {
+function requireAdminRole(req: FastifyRequest, reply: FastifyReply, done: () => void) {
   const user = (req as any).user;
-  if (!user || user.role !== 'admin') {
+  if (!user || !isAdminRole(user.role)) {
     reply.status(403).send({ success: false, error: 'Admin only' });
     return;
   }
@@ -30,7 +31,7 @@ function isAdmin(req: FastifyRequest, reply: FastifyReply, done: () => void) {
 
 export async function dealersDenRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
-  const adminOnly: RouteShorthandOptions = { onRequest: [fastify.authenticate, isAdmin as any] };
+  const adminOnly: RouteShorthandOptions = { onRequest: [fastify.authenticate, requireAdminRole as any] };
 
   // ── Listings ──
   fastify.get('/',              listListingsHandler as any);
@@ -89,7 +90,7 @@ export async function dealersDenRoutes(fastify: FastifyInstance) {
 }
 
 export async function dealersDenAdminRoutes(fastify: FastifyInstance) {
-  const adminOnly: RouteShorthandOptions = { onRequest: [fastify.authenticate, isAdmin as any] };
+  const adminOnly: RouteShorthandOptions = { onRequest: [fastify.authenticate, requireAdminRole as any] };
 
   fastify.get('/den-disputes',                              adminOnly, getAllDisputesHandler as any);
   fastify.patch('/den-disputes/:disputeId/resolve',         adminOnly, resolveDisputeHandler as any);

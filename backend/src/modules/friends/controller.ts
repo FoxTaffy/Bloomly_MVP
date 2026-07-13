@@ -68,14 +68,17 @@ export async function getFriendsHandler(req: AuthRequest, reply: FastifyReply) {
   const { filter } = req.query as { filter?: string }
   const userId = (req.user as any).id
 
+  const onlineUsers = (req.server as any).onlineUsers
   const onlineSet: Set<string> =
-    (req.server as any).onlineUsers instanceof Map
-      ? new Set([...(req.server as any).onlineUsers.keys()].filter(
-          (k) => (req.server as any).onlineUsers.get(k)?.size > 0
-        ))
+    onlineUsers instanceof Map
+      ? new Set([...onlineUsers.keys()].filter((k) => onlineUsers.get(k)?.size > 0))
       : new Set()
+  const deviceById: Map<string, string> =
+    onlineUsers instanceof Map
+      ? new Map([...onlineSet].map((id) => [id, [...onlineUsers.get(id)!.values()][0]]))
+      : new Map()
 
-  const all = await friendsService.getFriends(userId, onlineSet)
+  const all = await friendsService.getFriends(userId, onlineSet, deviceById)
   const result = filter === 'online' ? all.filter((f) => f.online) : all
   return reply.send({ success: true, data: result })
 }

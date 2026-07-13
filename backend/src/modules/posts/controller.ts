@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { postService } from './service.js';
 import type { CreatePostInput, JwtUser, GetPostsQuery, GetPersonalizedQuery } from './types.js';
 import { moderatePost } from '../automod/service.js';
+import { isModerator, isAdmin } from '../../lib/roles.js';
 
 export const getTrendingTagsHandler = async (
   request: FastifyRequest<{ Querystring: { includeNsfw?: string } }>,
@@ -221,7 +222,7 @@ export const deletePostHandler = async (
   try {
     const { id: userId, role } = request.user as JwtUser;
     const { id: postId } = request.params;
-    await postService.deletePost(userId, postId, role === 'admin');
+    await postService.deletePost(userId, postId, isAdmin(role));
     return reply.send({ success: true, data: null, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to delete post';
@@ -254,7 +255,7 @@ export const deleteCommentHandler = async (
   try {
     const { id: userId, role } = request.user as JwtUser;
     const { commentId } = request.params;
-    await postService.deleteComment(userId, commentId, ['admin', 'moderator'].includes(role));
+    await postService.deleteComment(userId, commentId, isModerator(role));
     return reply.send({ success: true, data: null, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to delete comment';

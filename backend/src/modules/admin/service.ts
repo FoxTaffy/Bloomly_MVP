@@ -14,6 +14,7 @@ export const adminService = {
       totalComments, totalRepaws, totalFollows,
       pendingReports, pendingAds,
       activeAds,
+      frozenUsers, pendingVerification, autoModFlags24h,
     ] = await Promise.all([
       prisma.user.count({ where: { deleted_at: null } }),
       prisma.user.count({ where: { deleted_at: null, created_at: { gte: dayAgo } } }),
@@ -28,6 +29,9 @@ export const adminService = {
       prisma.report.count({ where: { status: 'pending', deleted_at: null } }),
       prisma.advertisement.count({ where: { status: 'pending', deleted_at: null } }),
       prisma.advertisement.count({ where: { status: 'active',  deleted_at: null } }),
+      prisma.user.count({ where: { deleted_at: null, frozen_at: { not: null } } }),
+      prisma.verificationRequest.count({ where: { status: 'pending' } }),
+      prisma.autoModLog.count({ where: { created_at: { gte: dayAgo } } }),
     ]);
 
     // Posts per day for last 14 days
@@ -51,7 +55,7 @@ export const adminService = {
       comments: totalComments,
       repaws:   totalRepaws,
       follows:  totalFollows,
-      moderation: { pendingReports, pendingAds },
+      moderation: { pendingReports, pendingAds, frozenUsers, pendingVerification, autoModFlags24h },
       ads: { active: activeAds },
       postsHistory: postsHistory.map((r) => ({ day: r.day, count: Number(r.count) })),
       roleBreakdown: roleBreakdown.map((r) => ({ role: r.role, count: Number(r.count) })),
@@ -159,10 +163,13 @@ export const adminService = {
   },
 
   // ── Posts moderation ───────────────────────────────────────────────────────
-  async getPosts(page = 1, limit = 30, search?: string) {
+  async getPosts(page = 1, limit = 30, search?: string, filter?: 'media' | 'nsfw' | 'announcement') {
     const skip = (page - 1) * limit;
     const where: any = { deleted_at: null };
     if (search) where.content = { contains: search, mode: 'insensitive' };
+    if (filter === 'media')        where.media_urls = { isEmpty: false };
+    if (filter === 'nsfw')         where.is_nsfw = true;
+    if (filter === 'announcement') where.is_announcement = true;
     const [posts, total] = await Promise.all([
       prisma.post.findMany({
         where, skip, take: limit, orderBy: { created_at: 'desc' },
@@ -478,11 +485,11 @@ export const adminService = {
     // Top posting users
     type TopUserRow = { user_id: string; username: string | null; display_name: string | null; avatar_url: string | null; cnt: bigint };
     const topPosters = await prisma.$queryRaw<TopUserRow[]>`
-      SELECT p.user_id, u.username, u.display_name, u.avatar_url, COUNT(*)::bigint AS cnt
+      SELECT p.author_id AS user_id, u.username, u.display_name, u.avatar_url, COUNT(*)::bigint AS cnt
       FROM "Post" p
-      JOIN "User" u ON u.id = p.user_id
+      JOIN "User" u ON u.id = p.author_id
       WHERE p.deleted_at IS NULL AND u.deleted_at IS NULL
-      GROUP BY p.user_id, u.username, u.display_name, u.avatar_url
+      GROUP BY p.author_id, u.username, u.display_name, u.avatar_url
       ORDER BY cnt DESC
       LIMIT 10
     `;

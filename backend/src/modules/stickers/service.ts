@@ -242,6 +242,54 @@ export const stickersService = {
     return true;
   },
 
+  // ── real analytics for the pack owner (no fabricated numbers) ─────────────
+  async getPackStats(packId: string, days: 7 | 30) {
+    const now = new Date();
+    const periodStart = new Date(now.getTime() - days * 86_400_000);
+
+    type DayRow = { day: Date; cnt: bigint };
+    const installRows = await prisma.$queryRaw<DayRow[]>`
+      SELECT DATE_TRUNC('day', added_at) AS day, COUNT(*)::bigint AS cnt
+      FROM "UserStickerPack"
+      WHERE pack_id = ${packId}::uuid AND added_at >= ${periodStart}
+      GROUP BY 1
+      ORDER BY 1
+    `;
+    const installsByDay = new Map(installRows.map(r => [r.day.toISOString().slice(0, 10), Number(r.cnt)]));
+
+    const installs: { date: string; count: number }[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 86_400_000);
+      const key = d.toISOString().slice(0, 10);
+      installs.push({ date: key, count: installsByDay.get(key) ?? 0 });
+    }
+
+    const half = Math.floor(days / 2);
+    const prevSum = installs.slice(0, half).reduce((a, b) => a + b.count, 0);
+    const currSum = installs.slice(half).reduce((a, b) => a + b.count, 0);
+    const trendPct = prevSum > 0 ? Math.round(((currSum - prevSum) / prevSum) * 100) : (currSum > 0 ? 100 : 0);
+
+    const [pack, totalSends, usageRows] = await Promise.all([
+      prisma.stickerPack.findUnique({ where: { id: packId }, select: { stickers: true } }),
+      prisma.stickerUsage.aggregate({ where: { pack_id: packId }, _sum: { use_count: true } }),
+      prisma.stickerUsage.findMany({ where: { pack_id: packId }, select: { sticker_url: true, use_count: true } }),
+    ]);
+
+    const usageByUrl = new Map(usageRows.map(r => [r.sticker_url, r.use_count]));
+    const topStickers = (pack?.stickers ?? [])
+      .map(url => ({ url, useCount: usageByUrl.get(url) ?? 0 }))
+      .sort((a, b) => b.useCount - a.useCount)
+      .slice(0, 5);
+
+    return {
+      days,
+      installs,
+      trendPct,
+      totalSends: totalSends._sum.use_count ?? 0,
+      topStickers,
+    };
+  },
+
   // ── my collection ─────────────────────────────────────────────────────────
   async getCollection(userId: string) {
     const rows = await prisma.userStickerPack.findMany({

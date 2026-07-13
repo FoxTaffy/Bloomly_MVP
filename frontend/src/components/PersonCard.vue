@@ -7,11 +7,15 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import BIcon from './BIcon.vue'
 import type { FriendUser } from '@/stores/friends'
 import api from '@/api'
+import { Smartphone, Tablet, Monitor } from 'lucide-vue-next'
+import { deviceKind } from '@/lib/deviceIcon'
 
 interface Props {
-  user: FriendUser & { online?: boolean }
+  user: FriendUser & { online?: boolean; device?: string | null }
   isFriend?: boolean
 }
+
+const deviceIconFor = { mobile: Smartphone, tablet: Tablet, desktop: Monitor }
 
 const props = withDefaults(defineProps<Props>(), { isFriend: false })
 const emit  = defineEmits<{
@@ -30,10 +34,25 @@ function initials(u: FriendUser) {
   return ((u.display_name || u.username) ?? '?')[0].toUpperCase()
 }
 
-function bannerGradient(id: string) {
-  const n   = id.charCodeAt(0) + id.charCodeAt(id.length - 1)
+// Same look as the group cards' fallback banner (soft diagonal gradient + dot texture),
+// just deriving the base color from the user id since friends have no accent_color.
+function hashColor(id: string): string {
+  const n = id.charCodeAt(0) + id.charCodeAt(id.length - 1)
   const hue = (n * 47) % 360
-  return `linear-gradient(135deg, hsl(${hue},50%,22%) 0%, hsl(${(hue + 40) % 360},60%,16%) 100%)`
+  const h = hue / 60
+  const c = 0.65 // chroma at s=70%, l=55%
+  const x = c * (1 - Math.abs((h % 2) - 1))
+  let r = 0, g = 0, b = 0
+  if (h < 1) { r = c; g = x } else if (h < 2) { r = x; g = c }
+  else if (h < 3) { g = c; b = x } else if (h < 4) { g = x; b = c }
+  else if (h < 5) { r = x; b = c } else { r = c; b = x }
+  const m = 0.55 - c / 2
+  const toHex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+function bannerGradient(id: string) {
+  const c = hashColor(id)
+  return `linear-gradient(135deg, ${c}55, ${c}33)`
 }
 
 function openProfile() { menuOpen.value = false; router.push(`/profile/${props.user.username}`) }
@@ -81,6 +100,8 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
       :style="user.banner_url ? '' : `background: ${bannerGradient(user.id)}`"
     >
       <img v-if="user.banner_url" :src="user.banner_url" class="w-full h-full object-cover" alt="" />
+      <div v-else class="absolute inset-0 opacity-15"
+        style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 14px 14px;" />
 
       <!-- Online badge -->
       <span
@@ -94,6 +115,12 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
       >
         <span :class="['w-1.5 h-1.5 rounded-full', user.online ? 'bg-brand-success' : 'bg-white/30']" />
         {{ user.online ? 'Онлайн' : 'Офлайн' }}
+        <component
+          :is="deviceIconFor[deviceKind(user.device)!]"
+          v-if="user.online && deviceKind(user.device)"
+          class="w-2.5 h-2.5"
+          :title="user.device ?? undefined"
+        />
       </span>
     </div>
 
@@ -119,11 +146,11 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
         </div>
 
         <!-- Kebab menu -->
-        <div class="relative mt-2" ref="menuRef" @click.stop>
+        <div class="relative mt-2" ref="menuRef" @click.stop.prevent>
           <button
             class="w-8 h-8 flex items-center justify-center rounded-xl
                    bg-white/5 hover:bg-white/10 text-white/55 hover:text-white transition-colors"
-            @click.stop="menuOpen = !menuOpen"
+            @click.stop.prevent="menuOpen = !menuOpen"
           >
             <BIcon name="MoreHorizontal" class="w-4 h-4" />
           </button>
@@ -191,7 +218,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
           class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl
                  bg-brand-accent/15 hover:bg-brand-accent/30 text-brand-accent-minus
                  text-sm font-semibold transition-colors"
-          @click.stop="emit('message', user.id)"
+          @click.stop.prevent="emit('message', user.id)"
         >
           <BIcon name="MessageCircle" class="w-4 h-4" />
           {{ langStore.t.msgBtnTitle }}
@@ -206,7 +233,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
             notifyLoading ? 'opacity-60 pointer-events-none' : ''
           ]"
           :title="notifyActive ? '{{ langStore.t.disableNotifyTitle }}' : '{{ langStore.t.enableNotifyTitle }}'"
-          @click.stop="toggleNotify"
+          @click.stop.prevent="toggleNotify"
         >
           <BIcon :name="notifyActive ? 'BellRing' : 'Bell'" class="w-4 h-4" />
         </button>

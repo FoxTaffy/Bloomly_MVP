@@ -88,7 +88,7 @@
               <!-- Verification badge — only for user posts -->
               <template v-if="!effectiveGroupContext && post.author">
                 <img v-if="post.author.is_verified"
-                  src="/icons/badges/paw_offical.svg"
+                  :src="verificationBadgeIcon((post.author as any).verification_type)"
                   class="w-4 h-4 flex-shrink-0" title="Верифицирован" />
                 <!-- AD badge -->
                 <span v-if="post.author?.role === 'ad'"
@@ -668,6 +668,7 @@ import { useLangStore } from '@/stores/lang'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useAutoTranslate } from '@/composables/useAutoTranslate'
 import { onAvatarError } from '@/composables/useAvatarFallback'
+import { verificationBadgeIcon } from '@/composables/useVerificationBadge'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
@@ -1174,7 +1175,7 @@ async function blockUser() {
   isBlocking.value = true
   showMenu.value = false
   try {
-    await api.post('/blocks', { blocked_id: props.post.author_id || props.post.author?.id })
+    await api.post(`/users/${props.post.author_id || props.post.author?.id}/block`)
     emit('deleted', props.post.id)
   } catch {} finally {
     isBlocking.value = false

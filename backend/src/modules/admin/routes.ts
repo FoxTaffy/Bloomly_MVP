@@ -50,7 +50,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.post('/ads/:id/click',      { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, trackClickHandler as any);
 
   // Sticker Banners
-  fastify.get('/sticker-banners',        getBannersHandler as any);          // admin: all
+  fastify.get('/sticker-banners',        auth, getBannersHandler as any);   // admin: all
   fastify.get('/sticker-banners/active', getActiveBannersHandler as any);   // public
   fastify.post('/sticker-banners',       auth, createBannerHandler as any);
   fastify.patch('/sticker-banners/:id',  auth, updateBannerHandler as any);

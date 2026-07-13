@@ -128,6 +128,7 @@ const isActive = (key: string): boolean => {
     'dealers-den':'dealers-den',
     'shop':         'shop',
     'automation': 'automation',
+    explore:      'explore',
   }
   if (routeMap[key]) return route.name === routeMap[key]
   return props.activeNav === key
@@ -145,8 +146,8 @@ const navItems = computed(() => [
     key: 'explore',
     icon: 'Compass',
     label: langStore.t.explore,
-    disabled: true,
-    action: () => {},
+    disabled: false,
+    action: () => router.push({ name: 'explore' }),
   },
   {
     key: 'messages',

@@ -7,6 +7,7 @@ import BIcon from './BIcon.vue'
 import api from '@/api'
 import { useMessagesStore } from '@/stores/messages'
 import { useAuthStore } from '@/stores/auth'
+import { sanitizeHtml } from '@/utils/sanitizeHtml'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Story {
@@ -583,17 +584,22 @@ onUnmounted(() => {
                   @load="onImageLoad"
                   draggable="false"
                 />
-                <!-- No image: Bloomly text card or generic placeholder -->
+                <!-- No image: Bloomly text card or generic placeholder.
+                     Outer div is the ONLY scroll container (no centering on it, so long
+                     content never gets clipped); inner div uses min-h-full so short
+                     content still centers vertically like before. -->
                 <div
                   v-else-if="currentStory.isBloomly"
-                  class="w-full h-full flex flex-col items-center justify-center gap-6 px-8 bg-gradient-to-br from-[#1a1f4e] via-[#0f172a] to-[#1e1b4b]"
+                  class="w-full h-full overflow-y-auto bg-gradient-to-br from-[#1a1f4e] via-[#0f172a] to-[#1e1b4b]"
                 >
-                  <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center shadow-2xl shadow-brand-accent/30">
-                    <span class="text-white font-black text-3xl select-none" style="letter-spacing:-2px">B</span>
-                  </div>
-                  <div class="text-center space-y-3">
-                    <h2 class="text-xl font-extrabold text-white leading-tight">{{ currentStory.title }}</h2>
-                    <p v-if="currentStory.body" class="text-sm text-white/70 leading-relaxed">{{ currentStory.body }}</p>
+                  <div class="min-h-full flex flex-col items-center justify-center gap-6 px-8 py-12">
+                    <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center shadow-2xl shadow-brand-accent/30 flex-shrink-0">
+                      <span class="text-white font-black text-3xl select-none" style="letter-spacing:-2px">B</span>
+                    </div>
+                    <div class="w-full text-center space-y-3">
+                      <h2 class="text-xl font-extrabold text-white leading-tight">{{ currentStory.title }}</h2>
+                      <p v-if="currentStory.body" class="text-sm text-white/70 leading-relaxed update-body text-left" v-html="sanitizeHtml(currentStory.body)" />
+                    </div>
                   </div>
                 </div>
                 <div
@@ -709,7 +715,7 @@ onUnmounted(() => {
                   </div>
                   <span class="text-xs font-bold text-brand-accent">Обновление Bloomly</span>
                 </div>
-                <p v-if="currentStory.body && currentStory.image_url" class="text-[11px] text-white/60 leading-snug line-clamp-2">{{ currentStory.body }}</p>
+                <p v-if="currentStory.body && currentStory.image_url" class="text-[11px] text-white/60 leading-snug line-clamp-2 update-body" v-html="sanitizeHtml(currentStory.body)" />
               </div>
               <!-- Reply input — hidden when viewing own story -->
               <div
@@ -887,4 +893,13 @@ onUnmounted(() => {
 
 /* safe area for iPhone notch */
 .pb-safe { padding-bottom: env(safe-area-inset-bottom, 1.25rem); }
+
+.update-body :deep(ul) { list-style: disc; padding-left: 1.25rem; margin: 0.4rem 0; }
+.update-body :deep(ol) { list-style: decimal; padding-left: 1.25rem; margin: 0.4rem 0; }
+.update-body :deep(div),
+.update-body :deep(p) { margin: 0.5rem 0; }
+.update-body :deep(div:first-child),
+.update-body :deep(p:first-child) { margin-top: 0; }
+.update-body :deep(b),
+.update-body :deep(strong) { font-weight: 800; color: white; }
 </style>

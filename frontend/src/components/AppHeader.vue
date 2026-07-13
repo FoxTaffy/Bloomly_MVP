@@ -126,8 +126,8 @@ const connectNotifSSE = () => {
       // Auto-reconnect after 5 seconds, refreshing the token first
       if (auth.isAuthenticated || auth.user) {
         sseReconnectTimer = setTimeout(async () => {
-          // Ensure we have a fresh access token (refresh if needed)
-          if (!auth.token) await auth.tryRefresh()
+          // Access token may have merely expired (still truthy) — always refresh before retrying
+          await auth.tryRefresh()
           if (auth.token) connectNotifSSE()
         }, 5000)
       }
@@ -165,6 +165,11 @@ const notifBadgeIcon = (type: string) => {
     MENTION: 'AtSign', mention: 'AtSign',
     RELATIONSHIP_REQUEST: 'HeartHandshake',
     RELATIONSHIP_ACCEPTED: 'Heart',
+    automod_warn: 'ShieldAlert',
+    automod_freeze: 'Snowflake',
+    automod_unfreeze: 'Unlock',
+    automod_ban: 'Ban',
+    automod_clear_warns: 'CheckCircle2',
   }
   return map[type] ?? 'Bell'
 }
@@ -178,8 +183,35 @@ const notifBadgeClass = (type: string) => {
     MENTION: 'bg-amber-500 text-white', mention: 'bg-amber-500 text-white',
     RELATIONSHIP_REQUEST: 'bg-pink-500 text-white',
     RELATIONSHIP_ACCEPTED: 'bg-pink-500 text-white',
+    automod_warn: 'bg-amber-500 text-white',
+    automod_freeze: 'bg-sky-500 text-white',
+    automod_unfreeze: 'bg-emerald-500 text-white',
+    automod_ban: 'bg-rose-600 text-white',
+    automod_clear_warns: 'bg-emerald-500 text-white',
   }
   return map[type] ?? 'bg-white/20 text-white/60'
+}
+
+// ── System (AutoMod) notifications — no sender, full sentence instead of "X did Y" ──
+const AUTOMOD_TYPES = ['automod_warn', 'automod_freeze', 'automod_unfreeze', 'automod_ban', 'automod_clear_warns']
+const isAutomodNotif = (n: any) => AUTOMOD_TYPES.includes(n.type)
+
+const automodMessage = (n: any) => {
+  const meta = n.meta || {}
+  switch (n.type) {
+    case 'automod_warn':
+      return `⚠️ Предупреждение ${meta.count ?? '?'} из ${meta.limit ?? 5}${meta.reason ? ' — ' + meta.reason : ''}`
+    case 'automod_freeze':
+      return `🧊 Аккаунт временно заморожен${meta.reason ? ' — ' + meta.reason : ''}`
+    case 'automod_unfreeze':
+      return '🔓 Заморозка снята, аккаунт снова активен'
+    case 'automod_ban':
+      return `🚫 Аккаунт заблокирован${meta.reason ? ' — ' + meta.reason : ''}`
+    case 'automod_clear_warns':
+      return '✅ Предупреждения сброшены модератором'
+    default:
+      return ''
+  }
 }
 
 // ── Relationship request actions ──────────────────────────────────────────────
@@ -227,7 +259,7 @@ const openPostModal = async (postId: string) => {
 
 const closePostModal = () => { postModal.value = null }
 
-const POST_TYPES = ['LIKE', 'COMMENT', 'REPAW', 'MENTION', 'like', 'comment', 'repaw', 'mention']
+const POST_TYPES = ['LIKE', 'COMMENT', 'REPAW', 'MENTION', 'like', 'comment', 'repaw', 'mention', 'automod_warn', 'automod_ban']
 const PROFILE_TYPES = ['FOLLOW', 'RELATIONSHIP_ACCEPTED', 'follow', 'relationship_accepted']
 
 const onNotifClick = async (n: any) => {
@@ -475,7 +507,15 @@ onUnmounted(() => {
                            bg-brand-accent/5 hover:bg-brand-accent/10 cursor-pointer transition-colors"
                     @click="onNotifClick(n)">
                     <!-- Avatar + type badge -->
-                    <div class="relative flex-shrink-0 mt-0.5 cursor-pointer" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">
+                    <div v-if="isAutomodNotif(n)" class="relative flex-shrink-0 mt-0.5">
+                      <div class="w-10 h-10 rounded-full bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center">
+                        <span class="text-white font-black text-sm select-none" style="letter-spacing:-1px">B</span>
+                      </div>
+                      <div :class="['absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center', notifBadgeClass(n.type)]">
+                        <BIcon :name="notifBadgeIcon(n.type)" class="w-2.5 h-2.5" />
+                      </div>
+                    </div>
+                    <div v-else class="relative flex-shrink-0 mt-0.5 cursor-pointer" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">
                       <img :src="n.sender?.avatar_url || '/icons/badges/NN.jpg'"
                         class="w-10 h-10 rounded-full object-cover border border-brand-border"
                         @error="onAvatarError" />
@@ -486,7 +526,10 @@ onUnmounted(() => {
                     </div>
                     <!-- Text -->
                     <div class="min-w-0 flex-1">
-                      <p class="text-sm text-white leading-snug">
+                      <p v-if="isAutomodNotif(n)" class="text-sm text-white leading-snug font-semibold">
+                        {{ automodMessage(n) }}
+                      </p>
+                      <p v-else class="text-sm text-white leading-snug">
                         <span class="font-semibold cursor-pointer hover:underline" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">{{ n.sender?.display_name || n.sender?.username }}</span>
                         {{ ' ' }}{{ notifTypeLabel(n.type, n.sender?.pronouns) }}
                       </p>
@@ -520,7 +563,15 @@ onUnmounted(() => {
                            hover:bg-white/5 cursor-pointer transition-colors"
                     @click="onNotifClick(n)">
                     <!-- Avatar + type badge -->
-                    <div class="relative flex-shrink-0 mt-0.5 cursor-pointer" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">
+                    <div v-if="isAutomodNotif(n)" class="relative flex-shrink-0 mt-0.5 opacity-70">
+                      <div class="w-10 h-10 rounded-full bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center">
+                        <span class="text-white font-black text-sm select-none" style="letter-spacing:-1px">B</span>
+                      </div>
+                      <div :class="['absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center opacity-60', notifBadgeClass(n.type)]">
+                        <BIcon :name="notifBadgeIcon(n.type)" class="w-2.5 h-2.5" />
+                      </div>
+                    </div>
+                    <div v-else class="relative flex-shrink-0 mt-0.5 cursor-pointer" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">
                       <img :src="n.sender?.avatar_url || '/icons/badges/NN.jpg'"
                         class="w-10 h-10 rounded-full object-cover border border-brand-border opacity-70"
                         @error="onAvatarError" />
@@ -530,7 +581,10 @@ onUnmounted(() => {
                     </div>
                     <!-- Text -->
                     <div class="min-w-0 flex-1">
-                      <p class="text-sm text-white/65 leading-snug">
+                      <p v-if="isAutomodNotif(n)" class="text-sm text-white/65 leading-snug font-semibold">
+                        {{ automodMessage(n) }}
+                      </p>
+                      <p v-else class="text-sm text-white/65 leading-snug">
                         <span class="font-semibold text-white/80 cursor-pointer hover:underline" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">{{ n.sender?.display_name || n.sender?.username }}</span>
                         {{ ' ' }}{{ notifTypeLabel(n.type, n.sender?.pronouns) }}
                       </p>

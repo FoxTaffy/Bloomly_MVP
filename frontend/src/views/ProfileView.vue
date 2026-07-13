@@ -159,6 +159,9 @@
           ════════════════════════════════════════════════════════════════ -->
           <div class="relative w-full h-56 md:h-72 rounded-3xl overflow-hidden cursor-pointer" :style="bannerStyle"
             @click="viewedProfile.banner_url && (showBannerViewer = true)">
+            <!-- Dot texture — same fallback look as group/friend cards without a banner -->
+            <div v-if="!viewedProfile.banner_url" class="absolute inset-0 opacity-15"
+              style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 14px 14px;"></div>
             <!-- Gradient overlays -->
             <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
             <div class="absolute inset-0 bg-gradient-to-r from-black/30 to-transparent"></div>
@@ -340,12 +343,35 @@
                         <span v-if="isTogglingBookmark" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         <BIcon v-else :name="isUserBookmarked ? 'BookmarkCheck' : 'Bookmark'" class="w-4 h-4" />
                       </button>
-                      <button class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg hover:border-brand-border/80 rounded-xl text-white/55 hover:text-white transition-all">
-                        <BIcon name="MoreHorizontal" class="w-4 h-4" />
-                      </button>
+                      <div class="relative">
+                        <button ref="profileMenuBtnRef" @click.stop="toggleProfileMenu"
+                          class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg hover:border-brand-border/80 rounded-xl text-white/55 hover:text-white transition-all">
+                          <BIcon name="MoreHorizontal" class="w-4 h-4" />
+                        </button>
+                        <Teleport to="body">
+                          <div v-if="showProfileMenu" v-click-outside="() => showProfileMenu = false"
+                            class="fixed z-[9998] w-56 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1"
+                            :style="{ top: profileMenuPos.top, right: profileMenuPos.right }">
+                            <button @click="copyProfileLink" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5 hover:text-white">
+                              <BIcon :name="profileLinkCopied ? 'CheckCheck' : 'Link'" class="w-4 h-4" />
+                              {{ profileLinkCopied ? 'Скопировано!' : 'Копировать ссылку' }}
+                            </button>
+                            <div class="my-1 border-t border-brand-border/50" />
+                            <button @click="showProfileReportModal = true; showProfileMenu = false"
+                              class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-amber-400 hover:bg-amber-500/10">
+                              <BIcon name="Flag" class="w-4 h-4" /> Пожаловаться
+                            </button>
+                            <button @click="blockProfileUser" :disabled="isBlockingProfileUser"
+                              class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 disabled:opacity-50">
+                              <BIcon name="UserX" class="w-4 h-4" /> {{ isBlockingProfileUser ? 'Блокировка...' : 'Отправить в ЧС' }}
+                            </button>
+                          </div>
+                        </Teleport>
+                      </div>
                     </template>
                   </div>
                 </div>
+                <ReportModal v-if="viewedProfile" v-model="showProfileReportModal" :target-id="(viewedProfile as any).id" target-type="user" />
 
                 <!-- Name row -->
                 <div class="mt-4">
@@ -353,7 +379,7 @@
                     <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white tracking-tight">{{ profileDisplayName }}</h1>
                     <!-- Verification badge -->
                     <img v-if="(viewedProfile as any)?.is_verified"
-                      src="/icons/badges/paw_offical.svg"
+                      :src="verificationBadgeIcon((viewedProfile as any)?.verification_type)"
                       class="w-6 h-6 flex-shrink-0"
                       title="Верифицирован" />
                     <span v-if="badgePillLabel" class="inline-flex items-center justify-center w-7 h-7 rounded-lg" :class="badgePillClass" :title="badgePillLabel">
@@ -663,6 +689,29 @@
 
                     <!-- Карточка фурсоны -->
                     <template v-else>
+                      <!-- Переключатель персонажей (когда их несколько) -->
+                      <div v-if="profileFursonas.length > 1" class="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                        <button
+                          v-for="f in profileFursonas"
+                          :key="f.id"
+                          type="button"
+                          @click="selectedFursonaId = f.id"
+                          class="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full border flex-shrink-0 transition-all"
+                          :class="f.id === profileFursona?.id
+                            ? 'border-brand-accent/60 bg-brand-accent/15 shadow-[0_0_12px_rgba(167,139,250,0.15)]'
+                            : 'border-brand-border bg-brand-bg hover:border-brand-accent/30'"
+                        >
+                          <span class="w-6 h-6 rounded-full flex items-center justify-center text-sm flex-shrink-0"
+                            :style="f.colors?.length ? `background:${f.colors[0]}30;border:1px solid ${f.colors[0]}50` : 'background:rgba(255,255,255,0.08)'">
+                            {{ f.species?.length ? speciesEmoji(f.species[0]) : '🦊' }}
+                          </span>
+                          <span class="text-xs font-bold truncate max-w-[8rem]"
+                            :class="f.id === profileFursona?.id ? 'text-brand-accent' : 'text-white/60'">
+                            {{ f.name || speciesSummary(f) || '—' }}
+                          </span>
+                        </button>
+                      </div>
+
                       <!-- Шапка: имя + виды + редактирование -->
                       <div class="rounded-3xl border border-brand-border bg-brand-card shadow-xl overflow-hidden">
                         <!-- Gradient header -->
@@ -2267,9 +2316,11 @@ import AppBadge from '@/components/shared/AppBadge.vue'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import StoryViewer from '@/components/StoryViewer.vue'
+import ReportModal from '@/components/ReportModal.vue'
 import api from '@/api'
 import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
 import { onAvatarError } from '@/composables/useAvatarFallback'
+import { verificationBadgeIcon } from '@/composables/useVerificationBadge'
 import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
 import {
   User, Users, UserPlus, UserMinus, UserX, UsersRound,
@@ -2278,6 +2329,7 @@ import {
   Image, Hash, Search, MapPin, Calendar, Link, Briefcase,
   FileText, BookImage, Send, Play, X, ArrowLeft, Megaphone,
   Crown, Shield, Star, BadgeCheck, Flame, Sparkles, Award,
+  Palette, Hammer, Shirt, TrendingUp, PenLine, CalendarCheck,
   Footprints, Smile, SmilePlus, AlertCircle,
   LogOut, Camera, Eye, EyeOff, Info, Globe,
   Rabbit, PawPrint, Plus, Check, Twitter, Instagram, Youtube, Twitch, Github, Quote,
@@ -2619,9 +2671,17 @@ function openReferencesAlbum() {
 }
 
 // ── Fursona / fursuit для просматриваемого профиля ───────────────────────────
-const profileFursona = ref<Fursona | null>(null)
+// Up to 10 characters per user; `selectedFursonaId` drives which one the hero card shows.
+const profileFursonas = ref<Fursona[]>([])
+const selectedFursonaId = ref<string | null>(null)
+const profileFursona = computed(() =>
+  profileFursonas.value.find((f) => f.id === selectedFursonaId.value) ?? profileFursonas.value[0] ?? null
+)
 function speciesDisplay(sp: string): string {
   return sp === 'Other' && profileFursona.value?.species_other ? profileFursona.value.species_other : sp
+}
+function speciesSummary(f: Fursona): string {
+  return f.species?.length ? speciesDisplay(f.species[0]) : ''
 }
 const profileFursuits = ref<Fursuit[]>([])
 const profileFursonaLoading = ref(false)
@@ -2629,15 +2689,25 @@ const profileFursuitsLoading = ref(false)
 const makerGroupCache = ref<Record<string, { id: string; slug: string; name: string; avatar_url: string | null }>>({})
 
 
-async function loadProfileFursona(userId: string) {
+async function loadProfileFursonas(userId: string) {
   profileFursonaLoading.value = true
   try {
-    const res = await api.get(`/users/${userId}/fursona`)
-    if (res.data.success) profileFursona.value = res.data.data.fursona ?? null
-    else profileFursona.value = null
-  } catch { profileFursona.value = null }
-  finally { profileFursonaLoading.value = false }
+    const res = await api.get(`/users/${userId}/fursonas`)
+    profileFursonas.value = res.data.success ? (res.data.data.fursonas ?? []) : []
+    selectedFursonaId.value = profileFursonas.value[0]?.id ?? null
+  } catch {
+    profileFursonas.value = []
+    selectedFursonaId.value = null
+  } finally {
+    profileFursonaLoading.value = false
+  }
 }
+
+watch(selectedFursonaId, async (id) => {
+  const userId = viewedProfile.value?.id
+  if (!id || !userId) { userStore.referenceImages = []; return }
+  await userStore.fetchReferenceImages(userId, id)
+})
 
 async function loadProfileFursuits(userId: string) {
   profileFursuitsLoading.value = true
@@ -3010,7 +3080,7 @@ const bannerStyle = computed(() => {
   const themeId = (p as any).profile_theme as string | undefined
   const themeAccent = themeId && PROFILE_THEMES[themeId] ? PROFILE_THEMES[themeId].accent : null
   const color = themeAccent ?? p.accent_color ?? '#4C67CF'
-  return { background: `linear-gradient(135deg, ${color}55 0%, ${color}22 40%, #16192F 100%)` }
+  return { background: `linear-gradient(135deg, ${color}55, ${color}33)` }
 })
 
 const avatarRingStyle = computed(() => {
@@ -3173,9 +3243,13 @@ const achievementBadges = computed(() => {
   if (p.badge_type === 'creator')    badges.push({ key: 'creator',    label: 'Топ контрибьютор',    desc: '100+ публикаций',          iconComp: Star,       iconBg: 'bg-orange-500/20',  iconColor: 'text-orange-400' })
   // Verification type specific badges
   const vt = (p as any).verification_type
-  if (vt === 'artist')  badges.push({ key: 'artist',  label: 'Верифицированный художник', desc: 'Подтверждено модератором', iconComp: BadgeCheck, iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
-  else if (vt === 'master')  badges.push({ key: 'master',  label: 'Верифицированный мастер',  desc: 'Подтверждено модератором', iconComp: BadgeCheck, iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
-  else if (vt === 'event')   badges.push({ key: 'event',   label: 'Мероприятие',              desc: 'Подтверждено модератором', iconComp: BadgeCheck, iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' })
+  if (vt === 'artist')         badges.push({ key: 'ver-artist',    label: 'Верифицированный художник',  desc: 'Подтверждено модератором', iconComp: Palette,       iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
+  else if (vt === 'master')    badges.push({ key: 'ver-master',    label: 'Верифицированный мастер',     desc: 'Подтверждено модератором', iconComp: Hammer,        iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
+  else if (vt === 'fursuiter') badges.push({ key: 'ver-fursuiter', label: 'Верифицированный фурсьютер',  desc: 'Подтверждено модератором', iconComp: Shirt,         iconBg: 'bg-cyan-500/20',    iconColor: 'text-cyan-400' })
+  else if (vt === 'popular')   badges.push({ key: 'ver-popular',   label: 'Верифицированный блогер',     desc: 'Подтверждено модератором', iconComp: TrendingUp,    iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
+  else if (vt === 'writer')    badges.push({ key: 'ver-writer',    label: 'Верифицированный писатель',   desc: 'Подтверждено модератором', iconComp: PenLine,       iconBg: 'bg-rose-500/20',    iconColor: 'text-rose-400' })
+  else if (vt === 'organizer') badges.push({ key: 'ver-organizer', label: 'Верифицированный организатор',desc: 'Подтверждено модератором', iconComp: CalendarCheck, iconBg: 'bg-indigo-500/20',  iconColor: 'text-indigo-400' })
+  else if (vt === 'event')     badges.push({ key: 'ver-event',     label: 'Мероприятие',                 desc: 'Подтверждено модератором', iconComp: BadgeCheck,    iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' })
   else if (p.badge_type === 'verified' || (p as any).is_verified)   badges.push({ key: 'verified',   label: 'Подтверждённая страница', desc: 'Верифицированный аккаунт', iconComp: BadgeCheck, iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
   if (p.role === 'advertiser')       badges.push({ key: 'advertiser', label: 'Рекламодатель',       desc: 'Активный рекламодатель',   iconComp: Megaphone,  iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' })
   if ((p._count?.posts ?? 0) >= 10)  badges.push({ key: 'active',     label: 'Активный автор',      desc: '10+ публикаций',           iconComp: Flame,      iconBg: 'bg-red-500/20',     iconColor: 'text-red-400' })
@@ -3410,9 +3484,8 @@ async function loadProfile() {
         (result as any).relationship_with ? loadPartnerProfile((result as any).relationship_with) : Promise.resolve(),
         loadProfileSoonBadges(userId),
         fetchProfileStories(userId),
-        loadProfileFursona(userId),
+        loadProfileFursonas(userId),
         loadProfileFursuits(userId),
-        userStore.fetchReferenceImages(userId),
       ])
       if (result.pinnedPost) pinnedPost.value = result.pinnedPost
       profileStatus.emoji = ''; profileStatus.text = ''; profileStatus.expiresAt = 0; profileStatus.color = ''; profileStatus.music = null
@@ -3585,6 +3658,58 @@ async function toggleUserBookmark() {
     if (res.data.success) isUserBookmarked.value = res.data.data.bookmarked
   } catch (e) { console.error('bookmark toggle failed', e) }
   finally { isTogglingBookmark.value = false }
+}
+
+// ── Profile "..." menu (copy link / report / block) ────────────────────────
+const showProfileMenu       = ref(false)
+const profileMenuBtnRef     = ref<HTMLElement | null>(null)
+const profileMenuPos        = ref({ top: '0px', right: '0px' })
+const profileLinkCopied     = ref(false)
+const showProfileReportModal = ref(false)
+const isBlockingProfileUser = ref(false)
+
+function toggleProfileMenu() {
+  if (!showProfileMenu.value && profileMenuBtnRef.value) {
+    const rect = profileMenuBtnRef.value.getBoundingClientRect()
+    profileMenuPos.value = {
+      top: `${rect.bottom + 6}px`,
+      right: `${window.innerWidth - rect.right}px`,
+    }
+  }
+  showProfileMenu.value = !showProfileMenu.value
+}
+
+async function copyProfileLink() {
+  try {
+    await navigator.clipboard.writeText(`${window.location.origin}/profile/${(viewedProfile.value as any)?.username}`)
+    profileLinkCopied.value = true
+    setTimeout(() => { profileLinkCopied.value = false }, 2000)
+  } catch { /* ignore */ }
+  showProfileMenu.value = false
+}
+
+async function blockProfileUser() {
+  if (!viewedProfile.value || isBlockingProfileUser.value) return
+  isBlockingProfileUser.value = true
+  showProfileMenu.value = false
+  try {
+    await api.post(`/users/${viewedProfile.value.id}/block`)
+    router.push('/')
+  } catch (e) { console.error('block failed', e) }
+  finally { isBlockingProfileUser.value = false }
+}
+
+// ── Click-outside directive ─────────────────────────────────────────────────
+const vClickOutside = {
+  mounted(el: HTMLElement, binding: any) {
+    ;(el as any)._clickOutside = (e: Event) => {
+      if (!el.contains(e.target as Node)) binding.value(e)
+    }
+    document.addEventListener('click', (el as any)._clickOutside, true)
+  },
+  unmounted(el: HTMLElement) {
+    document.removeEventListener('click', (el as any)._clickOutside, true)
+  },
 }
 
 // ── Pin / unpin ───────────────────────────────────────────────────────────────

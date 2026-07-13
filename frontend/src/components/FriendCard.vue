@@ -5,10 +5,14 @@ const langStore = useLangStore()
 import { useRouter } from 'vue-router'
 import BIcon from './BIcon.vue'
 import type { Friend } from '@/stores/friends'
+import { Smartphone, Tablet, Monitor } from 'lucide-vue-next'
+import { deviceKind } from '@/lib/deviceIcon'
 
 const props = defineProps<{
   friend: Friend
 }>()
+
+const deviceIconFor = { mobile: Smartphone, tablet: Tablet, desktop: Monitor }
 
 const emit = defineEmits<{
   remove: [id: string]
@@ -42,8 +46,16 @@ function avatarInitial(name: string | null | undefined) {
       >
         {{ avatarInitial(friend.display_name || friend.username) }}
       </div>
-      <!-- Online indicator -->
+      <!-- Online indicator — shows the device icon when we know it -->
       <span
+        v-if="friend.online && deviceKind(friend.device)"
+        :title="friend.device ?? undefined"
+        class="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-brand-card bg-brand-success flex items-center justify-center"
+      >
+        <component :is="deviceIconFor[deviceKind(friend.device)!]" class="w-2 h-2 text-black/70" />
+      </span>
+      <span
+        v-else
         :class="[
           'absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-brand-card',
           friend.online ? 'bg-brand-success' : 'bg-brand-muted'

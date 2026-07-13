@@ -38,7 +38,11 @@
               <div v-else class="w-10 h-10 rounded-full bg-gradient-to-br from-brand-accent/30 to-brand-accent/10 ring-2 ring-brand-border hover:ring-brand-accent/50 transition-all flex items-center justify-center text-brand-accent font-bold">
                 {{ (other?.display_name || other?.username || '?')[0].toUpperCase() }}
               </div>
-              <span v-if="isPartnerOnline" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-brand-success rounded-full border-2 border-brand-card" />
+              <span v-if="isPartnerOnline && !partnerDeviceIcon" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-brand-success rounded-full border-2 border-brand-card" />
+              <span v-else-if="isPartnerOnline" :title="partnerDevice ?? undefined"
+                class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-brand-success rounded-full border-2 border-brand-card flex items-center justify-center">
+                <BIcon :name="partnerDeviceIcon!" class="w-2 h-2 text-black/70" />
+              </span>
             </span>
           </template>
         </template>
@@ -83,6 +87,7 @@
           <span class="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
             :class="isPartnerOnline ? 'bg-brand-success shadow-[0_0_4px_theme(colors.green.400)]' : 'bg-brand-muted'" />
           <span :class="isPartnerOnline ? 'text-brand-success' : 'text-white/55'">{{ isPartnerOnline ? 'в сети' : partnerLastSeenLabel }}</span>
+          <BIcon v-if="isPartnerOnline && partnerDeviceIcon" :name="partnerDeviceIcon!" class="w-3 h-3 text-brand-success/70" :title="partnerDevice ?? undefined" />
         </p>
       </div>
 
@@ -387,7 +392,11 @@
                     {{ (other?.display_name || other?.username || '?')[0].toUpperCase() }}
                   </div>
                   <!-- Online dot -->
-                  <span v-if="isPartnerOnline" class="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-brand-card" />
+                  <span v-if="isPartnerOnline && !partnerDeviceIcon" class="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-brand-card" />
+                  <span v-else-if="isPartnerOnline" :title="partnerDevice ?? undefined"
+                    class="absolute bottom-0.5 right-0.5 w-4 h-4 bg-green-500 rounded-full border-2 border-brand-card flex items-center justify-center">
+                    <BIcon :name="partnerDeviceIcon!" class="w-2.5 h-2.5 text-black/70" />
+                  </span>
                 </div>
               </div>
             </div>
@@ -396,8 +405,9 @@
             <div class="pt-11 pb-4 px-5 text-center border-b border-brand-border">
               <h3 class="text-base font-bold text-white truncate">{{ other?.display_name || other?.username }}</h3>
               <p class="text-sm text-white/45 mt-0.5">@{{ other?.username }}</p>
-              <p class="text-xs mt-1.5" :class="isPartnerOnline ? 'text-green-400' : 'text-white/30'">
+              <p class="text-xs mt-1.5 flex items-center justify-center gap-1" :class="isPartnerOnline ? 'text-green-400' : 'text-white/30'">
                 {{ isPartnerOnline ? '● В сети' : '● Не в сети' }}
+                <BIcon v-if="isPartnerOnline && partnerDeviceIcon" :name="partnerDeviceIcon!" class="w-3 h-3" :title="partnerDevice ?? undefined" />
               </p>
               <!-- Quick actions -->
               <div class="flex justify-center gap-2 mt-4">
@@ -1628,6 +1638,7 @@ import StickerPackPreviewModal from '@/components/StickerPackPreviewModal.vue'
 import api from '@/api'
 import { wsClient } from '@/lib/wsClient'
 import { getOrCreateKeyPair, deriveSharedKey, encryptMsg, decryptMsg, isEncrypted } from '@/lib/e2e'
+import { deviceKind } from '@/lib/deviceIcon'
 
 const props = defineProps<{
   convId: string
@@ -1664,6 +1675,7 @@ const lightboxUrl      = ref<string | null>(null)
 // Online status
 const isPartnerOnline   = ref(false)
 const partnerLastSeenAt = ref<Date | null>(null)
+const partnerDevice     = ref<string | null>(null)
 const partnerLastSeenLabel = computed(() => {
   if (!partnerLastSeenAt.value) return 'не в сети'
   const diff = Math.floor((Date.now() - partnerLastSeenAt.value.getTime()) / 60000)
@@ -1672,6 +1684,10 @@ const partnerLastSeenLabel = computed(() => {
   const h = Math.floor(diff / 60)
   if (h < 24) return `был(а) ${h} ч. назад`
   return 'не в сети'
+})
+const partnerDeviceIcon = computed(() => {
+  const kind = deviceKind(partnerDevice.value)
+  return kind === 'mobile' ? 'Smartphone' : kind === 'tablet' ? 'Tablet' : kind === 'desktop' ? 'Monitor' : null
 })
 let onlineTimer: ReturnType<typeof setInterval> | null = null
 // Media
@@ -2638,6 +2654,7 @@ async function fetchOnlineStatus() {
     const res = await api.get(`/users/online?ids=${props.other.id}`)
     const wasOnline = isPartnerOnline.value
     isPartnerOnline.value = !!res.data?.data?.[props.other.id]
+    partnerDevice.value = res.data?.deviceData?.[props.other.id] ?? null
     if (wasOnline && !isPartnerOnline.value) {
       partnerLastSeenAt.value = new Date()
     }
@@ -2666,6 +2683,7 @@ onUnmounted(() => {
 watch(() => props.other?.id, () => {
   isPartnerOnline.value = false
   partnerLastSeenAt.value = null
+  partnerDevice.value = null
   if (!props.conv?.is_group) {
     fetchOnlineStatus()
     setupE2E()

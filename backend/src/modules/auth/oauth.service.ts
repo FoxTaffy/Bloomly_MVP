@@ -107,7 +107,7 @@ const providers: Record<OAuthProvider, ProviderConfig> = {
 }
 
 // ── State + PKCE store (TTL 10 min) ──────────────────────────────────────────
-interface StateEntry { provider: OAuthProvider; codeVerifier?: string; createdAt: number; linkUserId?: string }
+interface StateEntry { provider: OAuthProvider; codeVerifier?: string; createdAt: number; linkUserId?: string; client?: 'mobile' }
 const stateStore = new Map<string, StateEntry>()
 
 function pruneExpiredStates() {
@@ -133,11 +133,11 @@ const REDIRECT_BASE = () => process.env.OAUTH_REDIRECT_BASE ?? 'http://localhost
 
 /** Строим URL редиректа на провайдера, возвращаем его + state.
  *  Если передан `linkUserId` — это mode "привязать к существующему аккаунту". */
-export function buildOAuthUrl(provider: OAuthProvider, linkUserId?: string): { url: string; state: string } {
+export function buildOAuthUrl(provider: OAuthProvider, linkUserId?: string, client?: 'mobile'): { url: string; state: string } {
   pruneExpiredStates()
   const cfg   = providers[provider]
   const state = base64urlEncode(randomBytes(16))
-  const entry: StateEntry = { provider, createdAt: Date.now(), ...(linkUserId ? { linkUserId } : {}) }
+  const entry: StateEntry = { provider, createdAt: Date.now(), ...(linkUserId ? { linkUserId } : {}), ...(client ? { client } : {}) }
 
   const params = new URLSearchParams({
     client_id:     cfg.clientId(),
@@ -163,10 +163,10 @@ export async function handleOAuthCallback(
   provider: OAuthProvider,
   code: string,
   state: string,
-): Promise<{ oauthUser: OAuthUser; linkUserId?: string }> {
+): Promise<{ oauthUser: OAuthUser; linkUserId?: string; client?: 'mobile' }> {
   const entry = stateStore.get(state)
   if (!entry || entry.provider !== provider) throw new Error('Invalid OAuth state')
-  const { linkUserId } = entry
+  const { linkUserId, client } = entry
   stateStore.delete(state)
 
   const cfg = providers[provider]
@@ -190,7 +190,7 @@ export async function handleOAuthCallback(
   if (!tokenData.access_token) throw new Error(`Token exchange failed: ${JSON.stringify(tokenData)}`)
 
   const oauthUser = await cfg.fetchUser(tokenData.access_token, { clientId: cfg.clientId() })
-  return { oauthUser, linkUserId }
+  return { oauthUser, linkUserId, client }
 }
 
 // ── Поиск / создание пользователя через OAuth ─────────────────────────────────

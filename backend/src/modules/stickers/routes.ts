@@ -19,6 +19,7 @@ import {
   addFavoriteHandler,
   removeFavoriteHandler,
   addStickersToPackHandler,
+  getPackStatsHandler,
 } from './controller.js';
 
 declare module 'fastify' {
@@ -43,6 +44,7 @@ export async function stickersRoutes(fastify: FastifyInstance) {
   fastify.delete('/:id/collect',auth, removeFromCollectionHandler as any);
   fastify.get('/:id/collected', auth, checkCollectionHandler     as any);
   fastify.post('/:id/use',      auth, usePackHandler              as any);
+  fastify.get('/:id/stats',     auth, getPackStatsHandler         as any);
 
   fastify.post('/:id/stickers', auth, addStickersToPackHandler   as any);
 

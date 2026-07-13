@@ -142,7 +142,7 @@ export const friendsService = {
   },
 
   /** Get friends list = mutual follows */
-  async getFriends(userId: string, onlineIds?: Set<string>) {
+  async getFriends(userId: string, onlineIds?: Set<string>, deviceById?: Map<string, string>) {
     const [followerRows, followingRows] = await Promise.all([
       prisma.follow.findMany({ where: { following_id: userId }, select: { follower_id: true } }),
       prisma.follow.findMany({ where: { follower_id: userId }, select: { following_id: true } }),
@@ -155,7 +155,11 @@ export const friendsService = {
       select:  FRIEND_USER_SELECT,
     });
     return users
-      .map((u) => ({ ...u, online: onlineIds ? onlineIds.has(u.id) : false }))
+      .map((u) => ({
+        ...u,
+        online: onlineIds ? onlineIds.has(u.id) : false,
+        device: onlineIds?.has(u.id) ? (deviceById?.get(u.id) ?? null) : null,
+      }))
       .sort((a, b) => {
         if (a.online !== b.online) return a.online ? -1 : 1;
         return (a.display_name || a.username).localeCompare(b.display_name || b.username);

@@ -7,6 +7,7 @@ import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
 import * as dotenv from 'dotenv';
 import { authRoutes } from './modules/auth/routes.js';
+import { parseDeviceName } from './modules/auth/device.util.js';
 import { postsRoutes } from './modules/posts/routes.js';
 import { usersRoutes } from './modules/users/routes.js';
 import { storiesRoutes } from './modules/stories/routes.js';
@@ -177,11 +178,12 @@ fastify.register(bookmarksRoutes,  { prefix: '/api/bookmarks' });
 fastify.register(seoRoutes);
 
 // ── In-memory online status tracking ─────────────────────────────────────
-// Use a Set per user so multiple browser tabs / pages work correctly
-const onlineUsers = new Map<string, Set<any>>()
+// Map per user of socket → device label ("Chrome · iPhone"), so multiple
+// browser tabs / devices work correctly and the UI can show what someone's on.
+const onlineUsers = new Map<string, Map<any, string>>()
 ;(fastify as any).onlineUsers = onlineUsers
 
-// Remove entirely if set becomes empty
+// Remove entirely if map becomes empty
 function markOffline(userId: string, socket: any) {
   const sockets = onlineUsers.get(userId)
   if (!sockets) return
@@ -190,8 +192,9 @@ function markOffline(userId: string, socket: any) {
 }
 
 fastify.register(async function (fastify) {
-  fastify.get('/api/', { websocket: true }, (connection) => {
+  fastify.get('/api/', { websocket: true }, (connection, request) => {
     let authedUserId: string | null = null
+    const deviceLabel = parseDeviceName(request.headers['user-agent'])
 
     // Track message subscription cleanup function
     let unsubscribeMessages: (() => void) | null = null
@@ -228,8 +231,8 @@ fastify.register(async function (fastify) {
               if (unsubscribeMessages) { unsubscribeMessages(); unsubscribeMessages = null }
             }
             authedUserId = payload.id
-            if (!onlineUsers.has(authedUserId)) onlineUsers.set(authedUserId, new Set())
-            onlineUsers.get(authedUserId)!.add(connection.socket)
+            if (!onlineUsers.has(authedUserId)) onlineUsers.set(authedUserId, new Map())
+            onlineUsers.get(authedUserId)!.set(connection.socket, deviceLabel)
 
             // Subscribe to incoming messages for this user
             unsubscribeMessages = messageSubscriptions.subscribe(authedUserId, (payload) => {
@@ -308,6 +311,9 @@ fastify.register(async function (fastify) {
     const ids = ((request.query as any).ids ?? '').split(',').filter(Boolean) as string[]
     const viewerId = (request.user as { id: string } | undefined)?.id
     const result: Record<string, boolean> = {}
+    // Sibling map, not nested under `data[id]` — keeps `data` a plain boolean
+    // map so existing `!!data[id]` online checks keep working untouched.
+    const deviceData: Record<string, string | null> = {}
     if (ids.length) {
       const owners = await prisma.user.findMany({
         where: { id: { in: ids } },
@@ -315,11 +321,14 @@ fastify.register(async function (fastify) {
       })
       const visibilityById = new Map(owners.map((o) => [o.id, o.online_status_visibility]))
       for (const id of ids) {
-        const isOnline = onlineUsers.has(id)
-        result[id] = isOnline && await isAllowedByPrivacy(visibilityById.get(id), id, viewerId)
+        const sockets = onlineUsers.get(id)
+        const isOnline = !!sockets && sockets.size > 0
+        const allowed = isOnline && await isAllowedByPrivacy(visibilityById.get(id), id, viewerId)
+        result[id] = allowed
+        deviceData[id] = allowed ? ([...sockets!.values()][0] ?? null) : null
       }
     }
-    return reply.send({ success: true, data: result, error: null })
+    return reply.send({ success: true, data: result, deviceData, error: null })
   })
 })
 

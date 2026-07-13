@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { updatesService } from './service.js';
+import { isAdmin } from '../../lib/roles.js';
 
 export const getActiveUpdatesHandler = async (_req: FastifyRequest, reply: FastifyReply) => {
   const updates = await updatesService.getActiveUpdates();
@@ -8,7 +9,7 @@ export const getActiveUpdatesHandler = async (_req: FastifyRequest, reply: Fasti
 
 export const getAllUpdatesHandler = async (req: FastifyRequest, reply: FastifyReply) => {
   const role = (req.user as any)?.role;
-  if (!role || !['admin', 'moderator'].includes(role)) {
+  if (!isAdmin(role)) {
     return reply.status(403).send({ success: false, error: 'Forbidden' });
   }
   const updates = await updatesService.getAllUpdates();
@@ -17,7 +18,7 @@ export const getAllUpdatesHandler = async (req: FastifyRequest, reply: FastifyRe
 
 export const createUpdateHandler = async (req: FastifyRequest, reply: FastifyReply) => {
   const role = (req.user as any)?.role;
-  if (role !== 'admin') {
+  if (!isAdmin(role)) {
     return reply.status(403).send({ success: false, error: 'Forbidden' });
   }
   const { title, body, image_url } = req.body as any;
@@ -28,7 +29,7 @@ export const createUpdateHandler = async (req: FastifyRequest, reply: FastifyRep
 
 export const deleteUpdateHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
   const role = (req.user as any)?.role;
-  if (role !== 'admin') {
+  if (!isAdmin(role)) {
     return reply.status(403).send({ success: false, error: 'Forbidden' });
   }
   try {
@@ -41,7 +42,7 @@ export const deleteUpdateHandler = async (req: FastifyRequest<{ Params: { id: st
 
 export const toggleUpdateHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
   const role = (req.user as any)?.role;
-  if (role !== 'admin') {
+  if (!isAdmin(role)) {
     return reply.status(403).send({ success: false, error: 'Forbidden' });
   }
   const { is_active } = req.body as any;

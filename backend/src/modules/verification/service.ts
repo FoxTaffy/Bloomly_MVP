@@ -148,6 +148,7 @@ export async function requestVerification(
   verificationType: VerificationType,
   evidenceUrls: string[],
   socialLinks?: string[],
+  evidenceText?: string,
 ) {
   // Check if already verified
   const user = await prisma.user.findUnique({
@@ -177,12 +178,15 @@ export async function requestVerification(
   const finalEvidenceUrls = verificationType === 'popular'
     ? (socialLinks ?? []).filter((l) => l && l.trim())
     : evidenceUrls;
+  const finalEvidenceText = evidenceText?.trim() ? evidenceText.trim().slice(0, 2000) : null;
 
-  if (!finalEvidenceUrls || finalEvidenceUrls.length === 0) {
+  // Text can stand in for (or supplement) uploaded evidence, except for "popular" which always needs a link.
+  const hasEvidence = (finalEvidenceUrls && finalEvidenceUrls.length > 0) || !!finalEvidenceText;
+  if (verificationType === 'popular' ? !finalEvidenceUrls?.length : !hasEvidence) {
     throw new Error(
       verificationType === 'popular'
         ? 'At least one social link is required for verification'
-        : 'Evidence is required for verification',
+        : 'Evidence (photo or text) is required for verification',
     );
   }
 
@@ -198,6 +202,7 @@ export async function requestVerification(
       user_id: userId,
       verification_type: verificationType,
       evidence_urls: finalEvidenceUrls,
+      evidence_text: finalEvidenceText,
       badge_type: badgeType,
       account_age_days: criteria.accountAgeDays,
       post_count: criteria.postCount,
@@ -214,7 +219,7 @@ export async function requestVerification(
 
 export async function adminGetRequests(status?: string, page = 1, limit = 20) {
   const where = status ? { status } : {};
-  const [requests, total] = await Promise.all([
+  const [rawRequests, total] = await Promise.all([
     prisma.verificationRequest.findMany({
       where,
       include: {
@@ -231,6 +236,28 @@ export async function adminGetRequests(status?: string, page = 1, limit = 20) {
     }),
     prisma.verificationRequest.count({ where }),
   ]);
+
+  // The snapshot columns (account_age_days, post_count, ...) freeze the user's stats at
+  // the moment they submitted the request — if review happens later, those go stale
+  // (e.g. showing "0 posts" for someone who has since posted a lot). Recompute live
+  // criteria so moderators see the user's *current* standing instead.
+  const requests = await Promise.all(rawRequests.map(async (req) => {
+    try {
+      const live = await checkCriteria(req.user_id);
+      return {
+        ...req,
+        account_age_days: live.accountAgeDays,
+        post_count: live.postCount,
+        has_avatar: live.hasAvatar,
+        has_bio: live.hasBio,
+        has_email: live.hasEmail,
+        follower_count: live.followerCount,
+      };
+    } catch {
+      return req; // user may have been deleted since — fall back to the snapshot
+    }
+  }));
+
   return { requests, total, page, limit };
 }
 

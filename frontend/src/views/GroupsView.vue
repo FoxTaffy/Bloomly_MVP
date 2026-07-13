@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
@@ -124,6 +124,31 @@ function switchSidebarTab(tab: typeof sidebarTab.value) {
     groupsStore.loadMyGroups()
   }
 }
+
+// ── Animated sliding pill behind the active tab (mirrors the Friends tabs) ──
+const tabBarEl = ref<HTMLElement | null>(null)
+const tabButtonEls = ref<Record<string, HTMLElement>>({})
+const tabSlider = ref({ left: 0, width: 0, ready: false })
+
+function setTabRef(key: string) {
+  return (el: any) => { if (el) tabButtonEls.value[key] = el as HTMLElement }
+}
+
+function updateTabSlider() {
+  const bar = tabBarEl.value
+  const btn = tabButtonEls.value[sidebarTab.value]
+  if (!bar || !btn) return
+  const barRect = bar.getBoundingClientRect()
+  const btnRect = btn.getBoundingClientRect()
+  tabSlider.value = { left: btnRect.left - barRect.left, width: btnRect.width, ready: true }
+}
+
+watch(sidebarTab, () => nextTick(updateTabSlider))
+onMounted(() => {
+  nextTick(updateTabSlider)
+  window.addEventListener('resize', updateTabSlider)
+})
+onUnmounted(() => window.removeEventListener('resize', updateTabSlider))
 
 async function handleCreateGroup(input: any) {
   const group = await groupsStore.createGroup({
@@ -290,7 +315,13 @@ function fmtMembers(n: number): string {
         </div>
 
         <!-- ════════ TAB BAR ════════ -->
-        <div class="flex items-center gap-2 mb-5 flex-wrap">
+        <div ref="tabBarEl" class="relative flex items-center gap-2 mb-5 flex-wrap">
+          <!-- Sliding highlight — animates to whichever tab is active -->
+          <div
+            v-if="tabSlider.ready"
+            class="absolute top-0 h-full rounded-xl bg-brand-accent/15 border border-brand-accent/40 transition-[left,width] duration-300 ease-out pointer-events-none z-0"
+            :style="{ left: tabSlider.left + 'px', width: tabSlider.width + 'px' }"
+          />
           <button
             v-for="tab in [
               { key: 'my'       as const, label: langStore.t.mySubscriptions, icon: 'Heart' },
@@ -300,9 +331,10 @@ function fmtMembers(n: number): string {
               { key: 'managed'  as const, label: langStore.t.managed,         icon: 'ShieldCheck' },
             ]"
             :key="tab.key"
-            class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all border"
+            :ref="setTabRef(tab.key)"
+            class="relative z-10 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors border"
             :class="sidebarTab === tab.key
-              ? 'bg-brand-accent/15 text-brand-accent border-brand-accent/40'
+              ? 'text-brand-accent border-transparent'
               : 'text-white/50 hover:text-white border-brand-border hover:border-brand-accent/30 bg-brand-card'"
             @click="switchSidebarTab(tab.key)"
           >

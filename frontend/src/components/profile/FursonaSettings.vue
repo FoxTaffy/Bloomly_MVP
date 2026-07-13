@@ -189,12 +189,22 @@
                   @input="updateColor(idx, ($event.target as HTMLInputElement).value)"
                 />
               </label>
+              <button
+                v-if="eyedropperSupported"
+                type="button"
+                title="Пипетка — выбрать цвет с экрана"
+                @click="pickWithEyedropper(idx)"
+                class="w-6 h-6 rounded-lg border border-brand-border flex-shrink-0 flex items-center justify-center text-white/45 hover:text-brand-accent hover:border-brand-accent/50 transition-colors"
+              >
+                <Pipette class="w-3.5 h-3.5" />
+              </button>
               <input
                 type="text"
                 :value="color"
                 maxlength="7"
                 placeholder="#a78bfa"
-                class="flex-1 bg-brand-bg border border-brand-border rounded-lg px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-brand-accent/50"
+                class="flex-1 min-w-0 bg-brand-bg border rounded-lg px-2 py-1 text-xs text-white font-mono focus:outline-none transition-colors"
+                :class="isValidHex(color) ? 'border-brand-border focus:border-brand-accent/50' : 'border-rose-500/60'"
                 @input="onHexInput(idx, ($event.target as HTMLInputElement).value)"
               />
               <button type="button" @click="pickingIdx = null"
@@ -398,6 +408,7 @@ import { useLangStore } from '@/stores/lang'
 import type { UpsertFursonaInput, FursonaReferenceImage } from '@/stores/user'
 import MediaUpload from '@/components/MediaUpload.vue'
 import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
+import { Pipette } from 'lucide-vue-next'
 
 const emit = defineEmits<{ dirty: [val: boolean] }>()
 
@@ -461,6 +472,22 @@ const COLOR_PRESETS = [
   { hex: '#ec4899', label: 'Розовый'  },
   { hex: '#f43f5e', label: 'Малиновый'},
 ]
+
+// Chrome/Edge only — feature-detected, no polyfill for unsupported browsers
+const eyedropperSupported = typeof window !== 'undefined' && 'EyeDropper' in window
+
+async function pickWithEyedropper(idx: number) {
+  try {
+    const result = await new (window as any).EyeDropper().open()
+    if (result?.sRGBHex) updateColor(idx, result.sRGBHex)
+  } catch {
+    // User cancelled the pick (Escape) — nothing to do
+  }
+}
+
+function isValidHex(val: string): boolean {
+  return /^#[0-9A-Fa-f]{6}$/.test(val)
+}
 
 // Выбирает контрастный цвет текста (чёрный/белый) по hex
 function contrastColor(hex: string): string {
@@ -556,7 +583,11 @@ function updateColor(idx: number, value: string) { form.colors[idx] = value }
 function removeColor(idx: number) { form.colors.splice(idx, 1); if (pickingIdx.value === idx) pickingIdx.value = null }
 
 function onHexInput(idx: number, val: string) {
-  if (/^#[0-9A-Fa-f]{6}$/.test(val)) updateColor(idx, val)
+  const withHash = val.startsWith('#') ? val : `#${val}`
+  const expanded = /^#[0-9A-Fa-f]{3}$/.test(withHash)
+    ? `#${withHash[1]}${withHash[1]}${withHash[2]}${withHash[2]}${withHash[3]}${withHash[3]}`
+    : withHash
+  if (isValidHex(expanded)) updateColor(idx, expanded)
 }
 
 function addTag(field: 'likes' | 'dislikes') {

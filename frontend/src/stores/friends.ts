@@ -23,6 +23,7 @@ export interface FriendRequest {
 
 export interface Friend extends FriendUser {
   online: boolean
+  device?: string | null
 }
 
 export interface FriendBirthday extends Friend {

@@ -7,15 +7,24 @@ import { useAuthStore } from '../stores/auth'
 import api from '../api'
 import BIcon from '../components/BIcon.vue'
 import MediaUpload from '../components/MediaUpload.vue'
+import PostLightbox from '../components/PostLightbox.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
 
-// Guard: only admin/moderator
+// ── Staff role hierarchy: user < moderator < admin < owner ──────────────
+const ROLE_RANK: Record<string, number> = { user: 0, moderator: 1, admin: 2, owner: 3 }
+const myRole = computed<string>(() => (auth.user as any)?.role ?? 'user')
+const myRoleRank = computed(() => ROLE_RANK[myRole.value] ?? 0)
+const isOwnerRole = computed(() => myRole.value === 'owner')
+const isAdminPlus = computed(() => myRoleRank.value >= ROLE_RANK.admin)
+const roleLabel = (role: string) => ({ owner: 'Владелец', admin: 'Администратор', moderator: 'Модератор', user: 'Пользователь' }[role] ?? role)
+
+// Guard: staff only (moderator and above)
 onMounted(async () => {
   await auth.fetchMe()
   const role = (auth.user as any)?.role
-  if (!role || !['admin', 'moderator'].includes(role)) {
+  if (!role || (ROLE_RANK[role] ?? 0) < ROLE_RANK.moderator) {
     router.replace({ name: 'home' })
   } else {
     fetchStats()
@@ -129,13 +138,16 @@ const posts = ref<any[]>([])
 const postPage = ref(1)
 const postTotal = ref(0)
 const postSearch = ref('')
+const postFilter = ref<'' | 'media' | 'nsfw' | 'announcement'>('')
 const isLoadingPosts = ref(false)
 let postSearchDebounce: ReturnType<typeof setTimeout>
 
 const fetchPosts = async () => {
   isLoadingPosts.value = true
   try {
-    const res = await api.get('/admin/posts', { params: { page: postPage.value, search: postSearch.value || undefined } })
+    const res = await api.get('/admin/posts', {
+      params: { page: postPage.value, search: postSearch.value || undefined, filter: postFilter.value || undefined },
+    })
     if (res.data.success) { posts.value = res.data.data.posts; postTotal.value = res.data.data.total }
   } catch {} finally { isLoadingPosts.value = false }
 }
@@ -243,7 +255,12 @@ const reviewVerRequest = async (id: string, action: 'approve' | 'reject', reason
   } catch {}
 }
 
-const expandedEvidence = ref<string | null>(null)
+const evidenceLightbox = ref<{ images: string[]; start: number } | null>(null)
+const openEvidenceLightbox = (images: string[], start: number) => { evidenceLightbox.value = { images, start } }
+
+const postMediaLightbox = ref<{ images: string[]; start: number } | null>(null)
+const openPostMediaLightbox = (images: string[], start: number) => { postMediaLightbox.value = { images, start } }
+
 const verTypeLabels: Record<string, string> = {
   artist: 'Художник',
   master: 'Мастер',
@@ -501,88 +518,122 @@ const switchTab = (tab: typeof activeTab.value) => {
 
 const formatNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
 const formatDate = (d: string) => new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+const formatShortDate = (d: string) => new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
 
 // Chart max for history
 const histMax = computed(() => Math.max(...(stats.value?.postsHistory ?? []).map((h: any) => h.count), 1))
 
 const navItems = computed(() => [
-  { tab: 'overview'     as const, label: 'Обзор',          icon: 'LayoutDashboard', color: '#6366f1', badge: null },
-  { tab: 'users'        as const, label: 'Пользователи',   icon: 'Users',           color: '#8b5cf6', badge: userTotal.value > 0 ? formatNum(userTotal.value) : null },
-  { tab: 'frozen'       as const, label: 'Заморожены',      icon: 'Snowflake',       color: '#0ea5e9', badge: frozenTotal.value > 0 ? String(frozenTotal.value) : null },
-  { tab: 'archived'     as const, label: 'Забанены',        icon: 'Archive',         color: '#64748b', badge: archivedTotal.value > 0 ? String(archivedTotal.value) : null },
-  { tab: 'posts'        as const, label: 'Посты',           icon: 'FileText',        color: '#0ea5e9', badge: null },
-  { tab: 'reports'      as const, label: 'Жалобы',          icon: 'Flag',            color: '#f59e0b', badge: reports.value.filter((r:any) => r.status==='pending').length || null },
-  { tab: 'ads'          as const, label: 'Реклама',         icon: 'Megaphone',       color: '#f97316', badge: ads.value.filter((a:any) => a.status==='pending').length || null },
-  { tab: 'verification' as const, label: 'Верификация',     icon: 'BadgeCheck',      color: '#06b6d4', badge: verRequests.value.filter((r:any) => r.status==='pending').length || null },
-  { tab: 'banners'      as const, label: 'Баннеры',         icon: 'Image',           color: '#a855f7', badge: null },
-  { tab: 'automod'      as const, label: 'AutoMod',          icon: 'ShieldAlert',     color: '#ef4444', badge: autoModTotal.value > 0 ? formatNum(autoModTotal.value) : null },
-  { tab: 'statistics'   as const, label: 'Статистика',       icon: 'BarChart2',       color: '#10b981', badge: null },
-  { tab: 'updates'      as const, label: 'Обновления',       icon: 'Megaphone',       color: '#4C67CF', badge: updates.value.filter((u:any) => u.is_active).length || null },
-])
+  { tab: 'overview'     as const, label: 'Сводка',          icon: 'LayoutDashboard', color: '#22d3ee', group: null,          badge: null, minRole: 'moderator' },
+  { tab: 'users'        as const, label: 'Пользователи',   icon: 'Users',           color: '#94a3b8', group: 'МОДЕРАЦИЯ',   badge: userTotal.value > 0 ? formatNum(userTotal.value) : null, minRole: 'moderator' },
+  { tab: 'frozen'       as const, label: 'Заморожены',      icon: 'Snowflake',       color: '#38bdf8', group: 'МОДЕРАЦИЯ',   badge: frozenTotal.value > 0 ? String(frozenTotal.value) : null, minRole: 'moderator' },
+  { tab: 'archived'     as const, label: 'Забанены',        icon: 'Ban',             color: '#f43f5e', group: 'МОДЕРАЦИЯ',   badge: archivedTotal.value > 0 ? String(archivedTotal.value) : null, minRole: 'moderator' },
+  { tab: 'reports'      as const, label: 'Жалобы',          icon: 'Flag',            color: '#f59e0b', group: 'МОДЕРАЦИЯ',   badge: reports.value.filter((r:any) => r.status==='pending').length || null, minRole: 'moderator' },
+  { tab: 'automod'      as const, label: 'AutoMod',          icon: 'ShieldAlert',     color: '#ef4444', group: 'МОДЕРАЦИЯ',   badge: autoModTotal.value > 0 ? formatNum(autoModTotal.value) : null, minRole: 'moderator' },
+  { tab: 'posts'        as const, label: 'Посты',           icon: 'FileText',        color: '#94a3b8', group: 'КОНТЕНТ',     badge: null, minRole: 'moderator' },
+  { tab: 'verification' as const, label: 'Верификация',     icon: 'BadgeCheck',      color: '#2dd4bf', group: 'КОНТЕНТ',     badge: verRequests.value.filter((r:any) => r.status==='pending').length || null, minRole: 'moderator' },
+  { tab: 'ads'          as const, label: 'Реклама',         icon: 'Megaphone',       color: '#f97316', group: 'КОНТЕНТ',     badge: ads.value.filter((a:any) => a.status==='pending').length || null, minRole: 'admin' },
+  { tab: 'banners'      as const, label: 'Баннеры',         icon: 'Image',           color: '#a78bfa', group: 'КОНТЕНТ',     badge: null, minRole: 'admin' },
+  { tab: 'updates'      as const, label: 'Обновления',       icon: 'Sparkles',        color: '#4C67CF', group: 'КОНТЕНТ',     badge: updates.value.filter((u:any) => u.is_active).length || null, minRole: 'admin' },
+  { tab: 'statistics'   as const, label: 'Статистика',       icon: 'BarChart2',       color: '#10b981', group: 'АНАЛИТИКА',   badge: null, minRole: 'admin' },
+].filter(item => myRoleRank.value >= ROLE_RANK[item.minRole]))
+
+const navGroups = computed(() => {
+  const groups: { label: string | null; items: typeof navItems.value }[] = []
+  for (const item of navItems.value) {
+    let g = groups.find(g => g.label === item.group)
+    if (!g) { g = { label: item.group, items: [] }; groups.push(g) }
+    g.items.push(item)
+  }
+  return groups
+})
 
 const statCards = computed(() => stats.value ? [
-  { label: 'Пользователей', icon: 'Users',          color: '#8b5cf6', value: formatNum(stats.value.users.total),            sub: `+${stats.value.users.today} сегодня` },
-  { label: 'Постов',        icon: 'FileText',        color: '#6366f1', value: formatNum(stats.value.posts.total),            sub: `+${stats.value.posts.today} сегодня` },
+  { label: 'Пользователей', icon: 'Users',          color: '#94a3b8', value: formatNum(stats.value.users.total),            sub: `+${stats.value.users.today} сегодня` },
+  { label: 'Постов',        icon: 'FileText',        color: '#22d3ee', value: formatNum(stats.value.posts.total),            sub: `+${stats.value.posts.today} сегодня` },
   { label: 'Жалоб',         icon: 'Flag',            color: '#f59e0b', value: formatNum(stats.value.moderation.pendingReports), sub: 'ожидают рассмотрения' },
   { label: 'Реклама',       icon: 'Megaphone',       color: '#f97316', value: formatNum(stats.value.moderation.pendingAds),  sub: 'ожидают проверки' },
 ] : [])
 
-const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', user: '#6366f1' }[role] ?? '#6366f1')
+// Moderation snapshot — the things staff act on first (freezes, bans, reports, automod)
+const modSnapshot = computed(() => stats.value ? [
+  { tab: 'reports'      as const, label: 'Жалобы в очереди', icon: 'Flag',        color: '#f59e0b', value: stats.value.moderation.pendingReports },
+  { tab: 'frozen'       as const, label: 'Заморожены',       icon: 'Snowflake',   color: '#38bdf8', value: stats.value.moderation.frozenUsers },
+  { tab: 'automod'      as const, label: 'AutoMod за 24ч',    icon: 'ShieldAlert', color: '#ef4444', value: stats.value.moderation.autoModFlags24h },
+  { tab: 'verification' as const, label: 'Верификация',      icon: 'BadgeCheck',  color: '#2dd4bf', value: stats.value.moderation.pendingVerification },
+] : [])
+
+const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moderator: '#22d3ee', user: '#64748b' }[role] ?? '#64748b')
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#0a0a12] text-white font-nunito flex">
+  <div class="min-h-screen bg-[#0a0d11] text-white font-nunito flex">
 
     <!-- ═══════════════════ SIDEBAR ═══════════════════════════════════════ -->
     <aside class="w-64 flex-shrink-0 hidden md:flex flex-col fixed top-0 left-0 h-full z-30
-      bg-[#0d0d1a] border-r border-white/5">
+      bg-[#0c1015] border-r border-white/5">
 
       <!-- Logo -->
       <div class="px-6 pt-6 pb-5 border-b border-white/5">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-2xl flex items-center justify-center shadow-lg shadow-brand-accent/30"
-            style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
-            <BIcon name="Shield" class="w-5 h-5 text-white" />
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center border border-cyan-400/25 shadow-lg shadow-cyan-500/10"
+            style="background:linear-gradient(135deg,#111827,#1e293b)">
+            <BIcon name="ShieldCheck" class="w-4.5 h-4.5 text-cyan-400" />
           </div>
           <div>
             <p class="font-extrabold text-white text-sm leading-none">Bloomly</p>
-            <p class="text-[10px] text-white/40 mt-0.5 font-semibold tracking-widest uppercase">Admin Panel</p>
+            <p class="text-[10px] text-cyan-400/60 mt-0.5 font-bold tracking-[0.2em] uppercase">Control Panel</p>
           </div>
         </div>
       </div>
 
       <!-- Nav items -->
-      <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        <button v-for="item in navItems" :key="item.tab" @click="switchTab(item.tab)"
-          class="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-semibold transition-all group relative"
-          :class="activeTab === item.tab
-            ? 'text-white'
-            : 'text-white/45 hover:text-white/75 hover:bg-white/5'">
-          <!-- Active bg -->
-          <div v-if="activeTab === item.tab"
-            class="absolute inset-0 rounded-2xl"
-            :style="`background:linear-gradient(135deg,${item.color}22,${item.color}10)`" />
-          <div v-if="activeTab === item.tab"
-            class="absolute inset-0 rounded-2xl border"
-            :style="`border-color:${item.color}25`" />
-          <!-- Icon -->
-          <div class="relative w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
-            :style="activeTab === item.tab ? `background:${item.color}25` : ''"
-            :class="activeTab !== item.tab ? 'group-hover:bg-white/5' : ''">
-            <BIcon :name="item.icon" class="w-3.5 h-3.5 transition-all"
-              :style="activeTab === item.tab ? `color:${item.color}` : ''" />
-          </div>
-          <span class="relative flex-1 text-left text-[13px]">{{ item.label }}</span>
-          <!-- Badge for pending counts -->
-          <span v-if="item.badge" class="relative text-[10px] font-extrabold px-1.5 py-0.5 rounded-full"
-            :style="`background:${item.color}22;color:${item.color}`">
-            {{ item.badge }}
-          </span>
-        </button>
+      <nav class="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
+        <div v-for="group in navGroups" :key="group.label ?? 'root'" class="space-y-0.5">
+          <p v-if="group.label" class="px-3 mb-1.5 text-[10px] font-extrabold text-white/25 tracking-[0.15em] uppercase">{{ group.label }}</p>
+          <button v-for="item in group.items" :key="item.tab" @click="switchTab(item.tab)"
+            class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all group relative"
+            :class="activeTab === item.tab
+              ? 'text-white'
+              : 'text-white/45 hover:text-white/75 hover:bg-white/5'">
+            <!-- Active bg -->
+            <div v-if="activeTab === item.tab"
+              class="absolute inset-0 rounded-xl"
+              :style="`background:linear-gradient(135deg,${item.color}20,${item.color}0a)`" />
+            <div v-if="activeTab === item.tab"
+              class="absolute inset-0 rounded-xl border-l-2"
+              :style="`border-color:${item.color}`" />
+            <!-- Icon -->
+            <div class="relative w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all"
+              :style="activeTab === item.tab ? `background:${item.color}22` : ''"
+              :class="activeTab !== item.tab ? 'group-hover:bg-white/5' : ''">
+              <BIcon :name="item.icon" class="w-3.5 h-3.5 transition-all"
+                :style="activeTab === item.tab ? `color:${item.color}` : ''" />
+            </div>
+            <span class="relative flex-1 text-left text-[13px]">{{ item.label }}</span>
+            <!-- Badge for pending counts -->
+            <span v-if="item.badge" class="relative text-[10px] font-extrabold px-1.5 py-0.5 rounded-full"
+              :style="`background:${item.color}22;color:${item.color}`">
+              {{ item.badge }}
+            </span>
+          </button>
+        </div>
       </nav>
 
       <!-- Footer -->
-      <div class="p-3 border-t border-white/5">
+      <div class="p-3 border-t border-white/5 space-y-2">
+        <!-- My staff identity / position -->
+        <div class="flex items-center gap-2.5 px-2.5 py-2 rounded-2xl" style="background:rgba(255,255,255,0.03)">
+          <img v-if="auth.user?.avatar_url" :src="auth.user.avatar_url" class="w-8 h-8 rounded-xl object-cover border border-white/10 flex-shrink-0" />
+          <div v-else class="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0"
+            :style="`background:${roleColor(myRole)}20;color:${roleColor(myRole)}`">
+            {{ ((auth.user as any)?.display_name || (auth.user as any)?.username || '?')[0].toUpperCase() }}
+          </div>
+          <div class="min-w-0">
+            <p class="text-xs font-bold text-white truncate">{{ (auth.user as any)?.display_name || (auth.user as any)?.username }}</p>
+            <p class="text-[10px] font-bold" :style="`color:${roleColor(myRole)}`">{{ roleLabel(myRole) }}</p>
+          </div>
+        </div>
         <button @click="router.push({ name: 'home' })"
           class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold text-white/40 hover:text-white/70 hover:bg-white/5 transition-all">
           <BIcon name="ArrowLeft" class="w-3.5 h-3.5" /> На главную
@@ -594,10 +645,10 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
     <div class="flex-1 md:ml-64 min-h-screen flex flex-col">
 
       <!-- Top bar -->
-      <header class="sticky top-0 z-20 bg-[#0a0a12]/80 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between">
+      <header class="sticky top-0 z-20 bg-[#0a0d11]/85 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between">
         <div>
           <h1 class="font-extrabold text-white text-lg leading-none">{{ navItems.find(i=>i.tab===activeTab)?.label }}</h1>
-          <p class="text-xs text-white/35 mt-0.5">Bloomly Admin Panel</p>
+          <p class="text-xs text-white/30 mt-0.5 font-semibold tracking-wide">BLOOMLY · CONTROL PANEL</p>
         </div>
         <!-- Mobile nav -->
         <div class="flex md:hidden gap-1 overflow-x-auto">
@@ -629,6 +680,27 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
           </div>
 
           <template v-else-if="stats">
+            <!-- Moderation snapshot — the queue staff actually work from -->
+            <div class="flex items-center gap-2 mb-3">
+              <span class="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span>
+              <h2 class="text-xs font-extrabold text-white/50 tracking-[0.15em] uppercase">Требует внимания</h2>
+            </div>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+              <button v-for="mc in modSnapshot" :key="mc.label" @click="switchTab(mc.tab)"
+                class="relative text-left rounded-2xl p-4 overflow-hidden border transition-all group"
+                :style="`background:${mc.color}0d;border-color:${mc.color}25`">
+                <div class="flex items-center justify-between mb-2.5">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center" :style="`background:${mc.color}20`">
+                    <BIcon :name="mc.icon" class="w-4 h-4" :style="`color:${mc.color}`" />
+                  </div>
+                  <BIcon name="ArrowUpRight" class="w-3.5 h-3.5 text-white/20 group-hover:text-white/50 transition-colors" />
+                </div>
+                <p class="text-2xl font-black text-white">{{ mc.value }}</p>
+                <p class="text-xs text-white/45 mt-0.5 font-semibold">{{ mc.label }}</p>
+              </button>
+            </div>
+
+            <h2 class="text-xs font-extrabold text-white/30 tracking-[0.15em] uppercase mb-3">Общая статистика</h2>
             <!-- Stat cards -->
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <div v-for="sc in statCards" :key="sc.label"
@@ -672,8 +744,8 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
                 </div>
               </div>
               <div class="flex justify-between mt-2 px-0.5">
-                <span class="text-[10px] text-white/30">{{ stats.postsHistory[0]?.day?.slice(5) }}</span>
-                <span class="text-[10px] text-white/30">{{ stats.postsHistory[stats.postsHistory.length-1]?.day?.slice(5) }}</span>
+                <span class="text-[10px] text-white/30">{{ stats.postsHistory[0]?.day ? formatShortDate(stats.postsHistory[0].day) : '' }}</span>
+                <span class="text-[10px] text-white/30">{{ stats.postsHistory[stats.postsHistory.length-1]?.day ? formatShortDate(stats.postsHistory[stats.postsHistory.length-1].day) : '' }}</span>
               </div>
             </div>
 
@@ -688,7 +760,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
                   style="background:rgba(255,255,255,0.04)">
                   <div class="w-2 h-2 rounded-full" :style="`background:${roleColor(rb.role)}`" />
                   <span class="text-sm font-black text-white">{{ rb.count }}</span>
-                  <span class="text-xs text-white/45 capitalize">{{ rb.role }}</span>
+                  <span class="text-xs text-white/45">{{ roleLabel(rb.role) }}</span>
                 </div>
               </div>
             </div>
@@ -702,7 +774,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
               <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
               <input v-model="userSearch" @input="onUserSearch" type="text" placeholder="Поиск пользователей…"
                 class="w-full bg-white/5 border border-white/8 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
-                  outline-none focus:border-brand-accent/40 focus:bg-white/8 transition-all" />
+                  outline-none focus:border-[#22d3ee]/40 focus:bg-white/8 transition-all" />
             </div>
             <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/8">{{ userTotal }}</span>
           </div>
@@ -727,7 +799,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
                     :style="`background:${roleColor(user.role)}20;color:${roleColor(user.role)}`">
                     {{ (user.display_name || user.username || '?')[0].toUpperCase() }}
                   </div>
-                  <div class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#0d0d1a] flex items-center justify-center"
+                  <div class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#0c1015] flex items-center justify-center"
                     :style="`background:${roleColor(user.role)}`">
                   </div>
                 </div>
@@ -747,12 +819,17 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
                   <p class="text-xs text-white/35 truncate">@{{ user.username }} · {{ user._count?.posts ?? 0 }} постов · {{ formatDate(user.created_at) }}</p>
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <select :value="user.role" @change="updateUserRole(user.id, ($event.target as HTMLSelectElement).value)"
-                    class="bg-[#0d0d1a] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white/70 outline-none focus:border-brand-accent/50 cursor-pointer transition-colors">
-                    <option value="user">user</option>
-                    <option value="moderator">moderator</option>
-                    <option value="admin">admin</option>
+                  <select v-if="isOwnerRole" :value="user.role" @change="updateUserRole(user.id, ($event.target as HTMLSelectElement).value)"
+                    class="bg-[#0c1015] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white/70 outline-none focus:border-[#22d3ee]/50 cursor-pointer transition-colors">
+                    <option value="user">Пользователь</option>
+                    <option value="moderator">Модератор</option>
+                    <option value="admin">Администратор</option>
+                    <option value="owner">Владелец</option>
                   </select>
+                  <span v-else class="text-xs font-bold px-2.5 py-1.5 rounded-xl border"
+                    :style="`color:${roleColor(user.role)};border-color:${roleColor(user.role)}30;background:${roleColor(user.role)}12`">
+                    {{ roleLabel(user.role) }}
+                  </span>
                   <!-- freeze / unfreeze -->
                   <button v-if="user.frozen_at" @click="unfreezeUser(user.id)" title="Разморозить"
                     class="w-7 h-7 rounded-xl bg-sky-500/10 border border-sky-500/15 text-sky-400 hover:bg-sky-500/20 flex items-center justify-center transition-all text-xs">
@@ -775,7 +852,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
                 <!-- Role pill (visible when row not hovered) -->
                 <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full flex-shrink-0 group-hover:hidden"
                   :style="`background:${roleColor(user.role)}20;color:${roleColor(user.role)}`">
-                  {{ user.role }}
+                  {{ roleLabel(user.role) }}
                 </span>
               </div>
             </div>
@@ -928,14 +1005,35 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
 
         <!-- ── POSTS ──────────────────────────────────────────────────── -->
         <div v-else-if="activeTab === 'posts'">
-          <div class="flex items-center gap-3 mb-5">
+          <div class="flex items-center gap-3 mb-4 flex-wrap">
             <div class="relative flex-1 max-w-sm">
               <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
               <input v-model="postSearch" @input="onPostSearch" type="text" placeholder="Поиск по постам…"
                 class="w-full bg-white/5 border border-white/8 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
-                  outline-none focus:border-brand-accent/40 focus:bg-white/8 transition-all" />
+                  outline-none focus:border-[#22d3ee]/40 focus:bg-white/8 transition-all" />
             </div>
+            <button @click="fetchPosts()"
+              class="px-3 py-2 rounded-xl bg-white/5 border border-white/8 text-xs text-white/50 hover:text-white transition-all">
+              <BIcon name="RefreshCw" class="w-3.5 h-3.5" />
+            </button>
             <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/8">{{ postTotal }}</span>
+          </div>
+
+          <!-- Filter pills -->
+          <div class="flex gap-2 mb-5 flex-wrap">
+            <button v-for="f in ([
+              { v: '', l: 'Все' },
+              { v: 'media', l: 'С медиа' },
+              { v: 'nsfw', l: 'NSFW' },
+              { v: 'announcement', l: 'Объявления' },
+            ] as const)" :key="f.v"
+              @click="postFilter = f.v; postPage = 1; fetchPosts()"
+              class="px-4 py-2 rounded-2xl text-xs font-bold border transition-all"
+              :class="postFilter === f.v
+                ? 'bg-[#22d3ee]/15 border-[#22d3ee]/25 text-[#22d3ee]'
+                : 'bg-white/5 border-white/8 text-white/40 hover:text-white/70'">
+              {{ f.l }}
+            </button>
           </div>
 
           <div class="rounded-3xl border border-white/5 overflow-hidden" style="background:rgba(255,255,255,0.02)">
@@ -949,34 +1047,77 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
                 </div>
               </div>
             </div>
+            <div v-else-if="!posts.length" class="flex flex-col items-center gap-3 py-20 text-white/25">
+              <BIcon name="FileText" class="w-10 h-10 opacity-40" />
+              <p class="text-sm font-semibold">Постов не найдено</p>
+            </div>
             <div v-else class="divide-y divide-white/5">
               <div v-for="post in posts" :key="post.id"
                 class="flex items-start gap-3 px-5 py-4 hover:bg-white/3 transition-all group">
-                <img v-if="post.author?.avatar_url" :src="post.author.avatar_url"
-                  class="w-9 h-9 rounded-full object-cover border border-white/10 flex-shrink-0 mt-0.5" />
-                <div v-else class="w-9 h-9 rounded-full border border-white/10 bg-brand-accent/15 flex items-center justify-center text-brand-accent font-bold text-sm flex-shrink-0 mt-0.5">
-                  {{ (post.author?.display_name || post.author?.username || '?')[0].toUpperCase() }}
-                </div>
+                <router-link :to="`/profile/${post.author?.username}`" target="_blank" class="flex-shrink-0">
+                  <img v-if="post.author?.avatar_url" :src="post.author.avatar_url"
+                    class="w-9 h-9 rounded-full object-cover border border-white/10 mt-0.5 hover:opacity-80 transition-opacity" />
+                  <div v-else class="w-9 h-9 rounded-full border border-white/10 bg-[#22d3ee]/15 flex items-center justify-center text-[#22d3ee] font-bold text-sm mt-0.5">
+                    {{ (post.author?.display_name || post.author?.username || '?')[0].toUpperCase() }}
+                  </div>
+                </router-link>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 mb-1 flex-wrap">
-                    <span class="text-xs font-bold text-white/45">@{{ post.author?.username }}</span>
+                    <router-link :to="`/profile/${post.author?.username}`" target="_blank"
+                      class="text-xs font-bold text-white/45 hover:text-[#22d3ee] transition-colors">@{{ post.author?.username }}</router-link>
                     <span class="text-[10px] text-white/25">{{ formatDate(post.created_at) }}</span>
                     <span v-if="post.is_nsfw"
                       class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/20 text-rose-400">
                       NSFW
                     </span>
+                    <span v-if="post.is_announcement"
+                      class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/20 text-amber-400">
+                      Объявление
+                    </span>
+                    <span v-if="post.is_paid"
+                      class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/20 text-emerald-400">
+                      Платно
+                    </span>
+                    <span v-if="post.category"
+                      class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/8 border border-white/10 text-white/40">
+                      {{ post.category }}
+                    </span>
                   </div>
+                  <p v-if="post.title" class="text-sm font-bold text-white/90 mb-0.5">{{ post.title }}</p>
                   <p class="text-sm text-white/80 line-clamp-2 leading-relaxed">{{ post.content }}</p>
-                  <div class="flex items-center gap-3 mt-1.5 text-[10px] text-white/30 font-semibold">
+
+                  <!-- Media thumbnails -->
+                  <div v-if="post.media_urls?.length" class="flex gap-1.5 mt-2">
+                    <button v-for="(url, i) in post.media_urls.slice(0, 4)" :key="i"
+                      @click="openPostMediaLightbox(post.media_urls, i)"
+                      class="relative w-14 h-14 rounded-xl overflow-hidden border border-white/10 hover:border-[#22d3ee]/40 transition-all flex-shrink-0">
+                      <img :src="url" class="w-full h-full object-cover" />
+                      <div v-if="i === 3 && post.media_urls.length > 4"
+                        class="absolute inset-0 bg-black/65 flex items-center justify-center text-white text-[10px] font-bold">
+                        +{{ post.media_urls.length - 4 }}
+                      </div>
+                    </button>
+                  </div>
+
+                  <div class="flex items-center gap-3 mt-2 text-[10px] text-white/30 font-semibold">
                     <span class="flex items-center gap-1"><BIcon name="Heart" class="w-3 h-3" />{{ post._count?.votes ?? 0 }}</span>
                     <span class="flex items-center gap-1"><BIcon name="MessageCircle" class="w-3 h-3" />{{ post._count?.comments ?? 0 }}</span>
+                    <span class="flex items-center gap-1"><BIcon name="Repeat2" class="w-3 h-3" />{{ post._count?.repaws ?? 0 }}</span>
                   </div>
                 </div>
-                <button @click="deletePost(post.id)"
-                  class="w-7 h-7 rounded-xl bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20
-                    flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all flex-shrink-0">
-                  <BIcon name="Trash2" class="w-3.5 h-3.5" />
-                </button>
+                <!-- Actions -->
+                <div class="flex flex-col gap-1.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-all">
+                  <router-link :to="`/post/${post.id}`" target="_blank"
+                    class="w-7 h-7 rounded-xl bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10
+                      flex items-center justify-center transition-all" title="Открыть на сайте">
+                    <BIcon name="ExternalLink" class="w-3.5 h-3.5" />
+                  </router-link>
+                  <button @click="deletePost(post.id)"
+                    class="w-7 h-7 rounded-xl bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20
+                      flex items-center justify-center transition-all" title="Удалить">
+                    <BIcon name="Trash2" class="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -992,6 +1133,11 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
               <BIcon name="ChevronRight" class="w-4 h-4" />
             </button>
           </div>
+
+          <PostLightbox v-if="postMediaLightbox"
+            :images="postMediaLightbox.images"
+            :start-index="postMediaLightbox.start"
+            @close="postMediaLightbox = null" />
         </div>
 
         <!-- ── REPORTS ─────────────────────────────────────────────────── -->
@@ -1066,7 +1212,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
             <p class="text-xs text-white/35 font-semibold">{{ ads.length }} объявлений</p>
             <button @click="showAdForm = !showAdForm"
               class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-lg text-white"
-              style="background:linear-gradient(135deg,#6366f1,#8b5cf6);box-shadow:0 4px 16px rgba(99,102,241,0.3)">
+              style="background:linear-gradient(135deg,#0e7490,#0891b2);box-shadow:0 4px 16px rgba(6,182,212,0.25)">
               <BIcon name="Plus" class="w-3.5 h-3.5" /> Создать
             </button>
           </div>
@@ -1074,7 +1220,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
           <!-- Create form -->
           <Transition name="filter-expand">
             <div v-if="showAdForm"
-              class="rounded-3xl border border-brand-accent/20 p-6 mb-5 shadow-xl"
+              class="rounded-3xl border border-[#22d3ee]/20 p-6 mb-5 shadow-xl"
               style="background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.04))">
               <h4 class="font-extrabold text-sm text-white mb-4">Новое объявление</h4>
               <div class="space-y-3">
@@ -1101,7 +1247,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
                   class="px-4 py-2 rounded-xl text-sm text-white/40 hover:text-white hover:bg-white/5 border border-white/8 transition-all">Отмена</button>
                 <button @click="submitAd" :disabled="isSubmittingAd || !newAd.title || !newAd.linkUrl"
                   class="px-5 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all shadow-lg"
-                  style="background:linear-gradient(135deg,#6366f1,#8b5cf6);box-shadow:0 4px 12px rgba(99,102,241,0.3)">
+                  style="background:linear-gradient(135deg,#0e7490,#0891b2);box-shadow:0 4px 12px rgba(6,182,212,0.25)">
                   {{ isSubmittingAd ? '...' : 'Создать' }}
                 </button>
               </div>
@@ -1138,7 +1284,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
                 </div>
                 <p class="font-bold text-sm text-white">{{ ad.title }}</p>
                 <p v-if="ad.description" class="text-xs text-white/40 mt-0.5 line-clamp-1">{{ ad.description }}</p>
-                <a :href="ad.link_url" target="_blank" class="text-xs text-brand-accent hover:text-brand-accent/80 mt-0.5 block truncate transition-colors">{{ ad.link_url }}</a>
+                <a :href="ad.link_url" target="_blank" class="text-xs text-[#22d3ee] hover:text-[#22d3ee]/80 mt-0.5 block truncate transition-colors">{{ ad.link_url }}</a>
               </div>
               <div v-if="ad.status === 'pending'" class="flex flex-col gap-2 flex-shrink-0">
                 <button @click="reviewAd(ad.id, 'active')"
@@ -1176,18 +1322,15 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
               <BIcon name="BadgeCheck" class="w-10 h-10 opacity-40" />
               <p class="text-sm font-semibold">Заявок нет</p>
             </div>
-            <div v-else>
+            <div v-else class="space-y-3">
               <div v-for="req in verRequests" :key="req.id"
                 class="rounded-3xl border border-white/5 overflow-hidden hover:border-blue-500/15 transition-all"
                 style="background:rgba(255,255,255,0.02)">
                 <div class="px-5 py-4 flex items-start gap-4">
-                  <img v-if="req.user?.avatar_url" :src="req.user.avatar_url"
-                    class="w-10 h-10 rounded-2xl object-cover border border-white/10 flex-shrink-0" />
-                  <div v-else class="w-10 h-10 rounded-2xl bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold flex-shrink-0">
-                    {{ (req.user?.display_name || req.user?.username || '?')[0].toUpperCase() }}
-                  </div>
+
+                  <!-- Left: identity + status + criteria -->
                   <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap mb-1.5">
+                    <div class="flex items-center gap-2 flex-wrap mb-2.5">
                       <span class="text-xs font-extrabold px-2 py-0.5 rounded-full border"
                         :class="req.status==='pending'
                           ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
@@ -1199,64 +1342,90 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
                       <span v-if="req.verification_type"
                         class="text-xs font-bold px-2 py-0.5 rounded-full border flex items-center gap-1"
                         :class="verTypeColors[req.verification_type] || 'text-blue-400 bg-blue-400/10 border-blue-400/20'">
-                        <img v-if="['artist','master','event'].includes(req.verification_type)"
+                        <img v-if="verTypeLabels[req.verification_type]"
                           :src="`/icons/badges/${req.verification_type}.svg`" class="w-3 h-3" />
                         {{ verTypeLabels[req.verification_type] || req.verification_type }}
                       </span>
-                      <span class="text-[10px] text-white/25">{{ formatDate(req.created_at) }}</span>
+                      <span class="text-[10px] text-white/25 ml-auto">{{ formatDate(req.created_at) }}</span>
                     </div>
-                    <p class="font-extrabold text-sm text-white">{{ req.user?.display_name || req.user?.username }}</p>
-                    <p class="text-xs text-white/35 mt-0.5">@{{ req.user?.username }}</p>
 
-                    <!-- Criteria chips -->
-                    <div class="flex flex-wrap gap-1.5 mt-3">
+                    <!-- Identity — click through to the profile -->
+                    <router-link :to="`/profile/${req.user?.username}`" target="_blank"
+                      class="flex items-center gap-3 group/user w-fit">
+                      <img v-if="req.user?.avatar_url" :src="req.user.avatar_url"
+                        class="w-10 h-10 rounded-2xl object-cover border border-white/10 flex-shrink-0" />
+                      <div v-else class="w-10 h-10 rounded-2xl bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold flex-shrink-0">
+                        {{ (req.user?.display_name || req.user?.username || '?')[0].toUpperCase() }}
+                      </div>
+                      <div class="min-w-0">
+                        <p class="font-extrabold text-sm text-white group-hover/user:text-blue-400 transition-colors flex items-center gap-1">
+                          {{ req.user?.display_name || req.user?.username }}
+                          <BIcon name="ExternalLink" class="w-3 h-3 opacity-0 group-hover/user:opacity-60 transition-opacity" />
+                        </p>
+                        <p class="text-xs text-white/35">@{{ req.user?.username }}</p>
+                      </div>
+                    </router-link>
+
+                    <!-- Criteria — compact two-column checklist instead of a wall of pills -->
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 mt-3 max-w-xs">
                       <span v-for="chip in [
-                        {label: req.account_age_days+'дн.', ok: req.account_age_days>=14},
+                        {label: req.account_age_days+' дн.', ok: req.account_age_days>=14},
                         {label: req.post_count+' постов', ok: req.post_count>=3},
                         {label: 'Аватар', ok: req.has_avatar},
                         {label: 'Био', ok: req.has_bio},
                         {label: 'Email', ok: req.has_email},
                         {label: req.follower_count+' подписч.', ok: req.follower_count>=5},
                       ]" :key="chip.label"
-                        class="text-[10px] font-bold px-2 py-0.5 rounded-full border"
-                        :class="chip.ok
-                          ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                          : 'text-rose-400 bg-rose-500/10 border-rose-500/15'">
-                        {{ chip.ok ? '✓' : '✗' }} {{ chip.label }}
+                        class="text-[11px] font-semibold flex items-center gap-1"
+                        :class="chip.ok ? 'text-emerald-400/80' : 'text-rose-400/80'">
+                        <span class="text-[10px]">{{ chip.ok ? '✓' : '✗' }}</span> {{ chip.label }}
                       </span>
-                    </div>
-
-                    <!-- Evidence -->
-                    <div v-if="req.evidence_urls?.length" class="mt-3">
-                      <button @click="expandedEvidence = expandedEvidence===req.id ? null : req.id"
-                        class="text-xs font-bold flex items-center gap-1 transition-colors text-blue-400 hover:text-blue-300">
-                        <BIcon name="Image" class="w-3 h-3" />
-                        Доказательства ({{ req.evidence_urls.length }})
-                        <BIcon name="ChevronRight" class="w-3 h-3 transition-transform" :class="expandedEvidence===req.id ? 'rotate-90' : ''" />
-                      </button>
-                      <div v-if="expandedEvidence===req.id" class="grid grid-cols-4 gap-2 mt-2">
-                        <a v-for="(url,i) in req.evidence_urls" :key="i" :href="url" target="_blank"
-                          class="aspect-square rounded-xl overflow-hidden border border-white/8 hover:border-blue-500/30 transition-all">
-                          <img :src="url" class="w-full h-full object-cover" />
-                        </a>
-                      </div>
                     </div>
                   </div>
 
-                  <div v-if="req.status === 'pending'" class="flex flex-col gap-2 flex-shrink-0">
-                    <button @click="reviewVerRequest(req.id,'approve')"
-                      class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
-                      ✓ Одобрить
-                    </button>
-                    <button @click="reviewVerRequest(req.id,'reject',prompt('Причина:') || undefined)"
-                      class="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 transition-all">
-                      Отклонить
-                    </button>
+                  <!-- Right: evidence, expanded, + review actions -->
+                  <div class="flex-shrink-0 w-40 sm:w-48 flex flex-col gap-3">
+                    <div v-if="req.evidence_urls?.length">
+                      <p class="text-[10px] font-bold text-white/30 uppercase tracking-wide mb-1.5">Доказательства ({{ req.evidence_urls.length }})</p>
+                      <div class="grid grid-cols-3 gap-1.5">
+                        <button v-for="(url,i) in req.evidence_urls.slice(0,6)" :key="i"
+                          @click="openEvidenceLightbox(req.evidence_urls, i)"
+                          class="relative aspect-square rounded-xl overflow-hidden border border-white/8 hover:border-blue-500/40 transition-all group/ev">
+                          <img :src="url" class="w-full h-full object-cover" />
+                          <div v-if="i===5 && req.evidence_urls.length>6"
+                            class="absolute inset-0 bg-black/65 flex items-center justify-center text-white text-xs font-bold">
+                            +{{ req.evidence_urls.length - 6 }}
+                          </div>
+                          <div class="absolute inset-0 bg-black/0 group-hover/ev:bg-black/20 transition-colors" />
+                        </button>
+                      </div>
+                    </div>
+                    <div v-if="req.evidence_text" class="bg-white/3 border border-white/8 rounded-xl px-2.5 py-2">
+                      <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wide mb-1">Текстовое доказательство</p>
+                      <p class="text-[11px] text-white/70 whitespace-pre-line line-clamp-4">{{ req.evidence_text }}</p>
+                    </div>
+                    <p v-if="!req.evidence_urls?.length && !req.evidence_text" class="text-[11px] text-white/25">Без доказательств</p>
+
+                    <div v-if="req.status === 'pending'" class="flex flex-col gap-1.5 mt-auto">
+                      <button @click="reviewVerRequest(req.id,'approve')"
+                        class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
+                        ✓ Одобрить
+                      </button>
+                      <button @click="reviewVerRequest(req.id,'reject',prompt('Причина:') || undefined)"
+                        class="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 transition-all">
+                        Отклонить
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+
+          <PostLightbox v-if="evidenceLightbox"
+            :images="evidenceLightbox.images"
+            :start-index="evidenceLightbox.start"
+            @close="evidenceLightbox = null" />
         </div>
 
         <!-- ── BANNERS ─────────────────────────────────────────────────── -->
@@ -1267,14 +1436,14 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
             </div>
             <button @click="openBannerCreate" :disabled="banners.length >= 7"
               class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all text-white disabled:opacity-30 disabled:cursor-not-allowed shadow-lg"
-              style="background:linear-gradient(135deg,#8b5cf6,#6366f1);box-shadow:0 4px 16px rgba(139,92,246,0.3)">
+              style="background:linear-gradient(135deg,#0e7490,#0891b2);box-shadow:0 4px 16px rgba(6,182,212,0.25)">
               <BIcon name="Plus" class="w-3.5 h-3.5" /> Новый баннер
             </button>
           </div>
 
           <!-- Form -->
           <div v-if="showBannerForm"
-            class="rounded-3xl border border-brand-purple/20 p-6 mb-5 shadow-xl"
+            class="rounded-3xl border border-[#a78bfa]/20 p-6 mb-5 shadow-xl"
             style="background:linear-gradient(135deg,rgba(139,92,246,0.08),rgba(99,102,241,0.04))">
             <h3 class="font-extrabold text-sm text-white mb-5">
               {{ editingBannerId ? '✏️ Редактировать баннер' : '✨ Создать баннер' }}
@@ -1358,7 +1527,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
             <div class="flex gap-3 mt-5">
               <button @click="saveBanner"
                 class="px-5 py-2.5 rounded-2xl text-sm font-bold text-white shadow-lg transition-all"
-                style="background:linear-gradient(135deg,#8b5cf6,#6366f1);box-shadow:0 4px 14px rgba(139,92,246,0.35)">
+                style="background:linear-gradient(135deg,#0e7490,#0891b2);box-shadow:0 4px 14px rgba(6,182,212,0.3)">
                 Сохранить
               </button>
               <button @click="showBannerForm = false"
@@ -1386,7 +1555,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
           <!-- List -->
           <div v-else class="space-y-3">
             <div v-for="b in banners" :key="b.id"
-              class="rounded-3xl border border-white/5 overflow-hidden hover:border-brand-purple/20 transition-all group"
+              class="rounded-3xl border border-white/5 overflow-hidden hover:border-[#a78bfa]/20 transition-all group"
               style="background:rgba(255,255,255,0.02)">
               <div class="flex items-center gap-4 p-4">
                 <!-- Thumbnail -->
@@ -1423,7 +1592,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
                     <BIcon :name="b.is_active ? 'Eye' : 'EyeOff'" class="w-3.5 h-3.5" />
                   </button>
                   <button @click="openBannerEdit(b)"
-                    class="w-8 h-8 rounded-xl bg-white/5 border border-white/8 text-white/40 hover:text-white hover:border-brand-purple/30 flex items-center justify-center transition-all">
+                    class="w-8 h-8 rounded-xl bg-white/5 border border-white/8 text-white/40 hover:text-white hover:border-[#a78bfa]/30 flex items-center justify-center transition-all">
                     <BIcon name="Pencil" class="w-3.5 h-3.5" />
                   </button>
                   <button @click="deleteBanner(b.id)"
@@ -1448,7 +1617,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
           <!-- Filters -->
           <div class="flex items-center gap-2 mb-5 flex-wrap">
             <select v-model="autoModActionFilter" @change="autoModPage=1; fetchAutoModLogs()"
-              class="bg-[#0d0d1a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white/70 outline-none focus:border-rose-500/40 cursor-pointer">
+              class="bg-[#0c1015] border border-white/10 rounded-xl px-3 py-2 text-xs text-white/70 outline-none focus:border-rose-500/40 cursor-pointer">
               <option value="">Все действия</option>
               <option value="warn">⚠️ warn</option>
               <option value="freeze">🧊 freeze</option>
@@ -1458,7 +1627,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
               <option value="clear_warns">✖ clear_warns</option>
             </select>
             <select v-model="autoModCategoryFilter" @change="autoModPage=1; fetchAutoModLogs()"
-              class="bg-[#0d0d1a] border border-white/10 rounded-xl px-3 py-2 text-xs text-white/70 outline-none focus:border-rose-500/40 cursor-pointer">
+              class="bg-[#0c1015] border border-white/10 rounded-xl px-3 py-2 text-xs text-white/70 outline-none focus:border-rose-500/40 cursor-pointer">
               <option value="">Все категории</option>
               <option value="spam">🔁 spam</option>
               <option value="toxic">🤬 toxic</option>
@@ -2024,7 +2193,7 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
               v-for="u in updates"
               :key="u.id"
               class="rounded-2xl border p-4 flex gap-4 items-start transition-all"
-              :class="u.is_active ? 'border-brand-accent/20 bg-brand-accent/5' : 'border-white/5 opacity-50'"
+              :class="u.is_active ? 'border-[#22d3ee]/20 bg-[#22d3ee]/5' : 'border-white/5 opacity-50'"
               style="background:rgba(255,255,255,0.02)"
             >
               <!-- Cover image or logo -->
@@ -2079,5 +2248,5 @@ const roleColor = (role: string) => ({ admin: '#f97316', moderator: '#8b5cf6', u
   color: white;
 }
 .adm-input::placeholder { color: rgba(255,255,255,0.25); }
-.adm-input:focus { border-color: rgba(139,92,246,0.4); background: rgba(255,255,255,0.08); }
+.adm-input:focus { border-color: rgba(34,211,238,0.45); background: rgba(255,255,255,0.08); }
 </style>
