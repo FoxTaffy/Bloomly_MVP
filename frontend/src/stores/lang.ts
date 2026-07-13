@@ -7,6 +7,22 @@ export const LANG_TO_LOCALE: Record<Lang, string> = {
   RU: 'ru-RU', EN: 'en-US', JP: 'ja-JP', CN: 'zh-CN', DE: 'de-DE', FR: 'fr-FR', ES: 'es-ES', PT: 'pt-PT',
 }
 
+export type DateField = 'day' | 'month' | 'year'
+
+/** Field order + separator for numeric date entry (e.g. birth date), derived from each locale's own convention. */
+export const DATE_FIELD_ORDER: Record<Lang, { order: DateField[]; separator: string }> = (() => {
+  const probe = new Date(2020, 0, 15) // day/month distinct enough to detect ordering
+  const result = {} as Record<Lang, { order: DateField[]; separator: string }>
+  for (const lang of Object.keys(LANG_TO_LOCALE) as Lang[]) {
+    const parts = new Intl.DateTimeFormat(LANG_TO_LOCALE[lang], { day: '2-digit', month: '2-digit', year: 'numeric' }).formatToParts(probe)
+    const order = parts.filter((p): p is Intl.DateTimeFormatPart & { type: DateField } =>
+      p.type === 'day' || p.type === 'month' || p.type === 'year').map(p => p.type)
+    const separator = parts.find(p => p.type === 'literal')?.value ?? '.'
+    result[lang] = { order, separator }
+  }
+  return result
+})()
+
 const COUNTRY_TO_LANG: Record<string, Lang> = {
   RU: 'RU', BY: 'RU', UA: 'RU', KZ: 'RU', UZ: 'RU', TJ: 'RU', KG: 'RU', TM: 'RU', MD: 'RU', AM: 'RU',
   JP: 'JP',

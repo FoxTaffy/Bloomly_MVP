@@ -567,16 +567,26 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#0a0d11] text-white font-nunito flex">
+  <div class="min-h-screen bg-[#0a0d11] text-white font-nunito flex relative isolate">
+
+    <!-- Ambient background glow (decorative, fixed, non-interactive) -->
+    <div class="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+      <div class="absolute -top-40 -left-20 w-[36rem] h-[36rem] rounded-full opacity-[0.12] blur-[120px]"
+        style="background:radial-gradient(circle,#22d3ee,transparent 70%)" />
+      <div class="absolute top-1/3 -right-32 w-[30rem] h-[30rem] rounded-full opacity-[0.10] blur-[120px]"
+        style="background:radial-gradient(circle,#8b5cf6,transparent 70%)" />
+      <div class="absolute bottom-0 left-1/4 w-[28rem] h-[28rem] rounded-full opacity-[0.08] blur-[120px]"
+        style="background:radial-gradient(circle,#f97316,transparent 70%)" />
+    </div>
 
     <!-- ═══════════════════ SIDEBAR ═══════════════════════════════════════ -->
     <aside class="w-64 flex-shrink-0 hidden md:flex flex-col fixed top-0 left-0 h-full z-30
-      bg-[#0c1015] border-r border-white/5">
+      bg-[#0c1015]/95 backdrop-blur-xl border-r border-white/5">
 
       <!-- Logo -->
       <div class="px-6 pt-6 pb-5 border-b border-white/5">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl flex items-center justify-center border border-cyan-400/25 shadow-lg shadow-cyan-500/10"
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center border border-cyan-400/25 shadow-lg shadow-cyan-500/10 transition-transform duration-300 hover:scale-105 hover:rotate-3"
             style="background:linear-gradient(135deg,#111827,#1e293b)">
             <BIcon name="ShieldCheck" class="w-4.5 h-4.5 text-cyan-400" />
           </div>
@@ -588,26 +598,26 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
       </div>
 
       <!-- Nav items -->
-      <nav class="flex-1 px-3 py-4 space-y-4 overflow-y-auto">
+      <nav class="flex-1 px-3 py-4 space-y-4 overflow-y-auto adm-scroll">
         <div v-for="group in navGroups" :key="group.label ?? 'root'" class="space-y-0.5">
           <p v-if="group.label" class="px-3 mb-1.5 text-[10px] font-extrabold text-white/25 tracking-[0.15em] uppercase">{{ group.label }}</p>
           <button v-for="item in group.items" :key="item.tab" @click="switchTab(item.tab)"
-            class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all group relative"
+            class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 group relative"
             :class="activeTab === item.tab
-              ? 'text-white'
+              ? 'text-white translate-x-0.5'
               : 'text-white/45 hover:text-white/75 hover:bg-white/5'">
             <!-- Active bg -->
             <div v-if="activeTab === item.tab"
-              class="absolute inset-0 rounded-xl"
+              class="absolute inset-0 rounded-xl transition-all duration-200"
               :style="`background:linear-gradient(135deg,${item.color}20,${item.color}0a)`" />
             <div v-if="activeTab === item.tab"
-              class="absolute inset-0 rounded-xl border-l-2"
-              :style="`border-color:${item.color}`" />
+              class="absolute inset-y-1 left-0 w-[3px] rounded-full"
+              :style="`background:${item.color};box-shadow:0 0 10px ${item.color}80`" />
             <!-- Icon -->
-            <div class="relative w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all"
-              :style="activeTab === item.tab ? `background:${item.color}22` : ''"
-              :class="activeTab !== item.tab ? 'group-hover:bg-white/5' : ''">
-              <BIcon :name="item.icon" class="w-3.5 h-3.5 transition-all"
+            <div class="relative w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200"
+              :style="activeTab === item.tab ? `background:${item.color}22;box-shadow:0 0 14px ${item.color}30` : ''"
+              :class="activeTab !== item.tab ? 'group-hover:bg-white/5 group-hover:scale-105' : 'scale-105'">
+              <BIcon :name="item.icon" class="w-3.5 h-3.5 transition-all duration-200"
                 :style="activeTab === item.tab ? `color:${item.color}` : ''" />
             </div>
             <span class="relative flex-1 text-left text-[13px]">{{ item.label }}</span>
@@ -623,7 +633,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
       <!-- Footer -->
       <div class="p-3 border-t border-white/5 space-y-2">
         <!-- My staff identity / position -->
-        <div class="flex items-center gap-2.5 px-2.5 py-2 rounded-2xl" style="background:rgba(255,255,255,0.03)">
+        <div class="flex items-center gap-2.5 px-2.5 py-2 rounded-2xl border border-white/5 transition-all hover:border-white/10" style="background:rgba(255,255,255,0.03)">
           <img v-if="auth.user?.avatar_url" :src="auth.user.avatar_url" class="w-8 h-8 rounded-xl object-cover border border-white/10 flex-shrink-0" />
           <div v-else class="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0"
             :style="`background:${roleColor(myRole)}20;color:${roleColor(myRole)}`">
@@ -635,8 +645,8 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
           </div>
         </div>
         <button @click="router.push({ name: 'home' })"
-          class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold text-white/40 hover:text-white/70 hover:bg-white/5 transition-all">
-          <BIcon name="ArrowLeft" class="w-3.5 h-3.5" /> На главную
+          class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold text-white/40 hover:text-white/70 hover:bg-white/5 transition-all group">
+          <BIcon name="ArrowLeft" class="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" /> На главную
         </button>
       </div>
     </aside>
@@ -645,7 +655,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
     <div class="flex-1 md:ml-64 min-h-screen flex flex-col">
 
       <!-- Top bar -->
-      <header class="sticky top-0 z-20 bg-[#0a0d11]/85 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between">
+      <header class="adm-header sticky top-0 z-20 bg-[#0a0d11]/85 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between">
         <div>
           <h1 class="font-extrabold text-white text-lg leading-none">{{ navItems.find(i=>i.tab===activeTab)?.label }}</h1>
           <p class="text-xs text-white/30 mt-0.5 font-semibold tracking-wide">BLOOMLY · CONTROL PANEL</p>
@@ -668,6 +678,8 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
 
       <!-- Page content -->
       <main class="flex-1 p-6 max-w-5xl mx-auto w-full">
+      <Transition name="tab-fade" mode="out-in">
+      <div :key="activeTab">
 
         <!-- ── OVERVIEW ─────────────────────────────────────────────── -->
         <div v-if="activeTab === 'overview'">
@@ -687,13 +699,13 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
             </div>
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
               <button v-for="mc in modSnapshot" :key="mc.label" @click="switchTab(mc.tab)"
-                class="relative text-left rounded-2xl p-4 overflow-hidden border transition-all group"
+                class="relative text-left rounded-2xl p-4 overflow-hidden border transition-all duration-200 group hover:-translate-y-0.5 hover:shadow-lg"
                 :style="`background:${mc.color}0d;border-color:${mc.color}25`">
                 <div class="flex items-center justify-between mb-2.5">
-                  <div class="w-8 h-8 rounded-xl flex items-center justify-center" :style="`background:${mc.color}20`">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center transition-transform duration-200 group-hover:scale-110" :style="`background:${mc.color}20`">
                     <BIcon :name="mc.icon" class="w-4 h-4" :style="`color:${mc.color}`" />
                   </div>
-                  <BIcon name="ArrowUpRight" class="w-3.5 h-3.5 text-white/20 group-hover:text-white/50 transition-colors" />
+                  <BIcon name="ArrowUpRight" class="w-3.5 h-3.5 text-white/20 group-hover:text-white/50 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
                 </div>
                 <p class="text-2xl font-black text-white">{{ mc.value }}</p>
                 <p class="text-xs text-white/45 mt-0.5 font-semibold">{{ mc.label }}</p>
@@ -704,7 +716,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
             <!-- Stat cards -->
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <div v-for="sc in statCards" :key="sc.label"
-                class="relative rounded-3xl p-5 overflow-hidden border border-white/5 hover:border-white/10 transition-all group"
+                class="relative rounded-3xl p-5 overflow-hidden border border-white/5 hover:border-white/10 transition-all duration-200 group hover:-translate-y-1 hover:shadow-xl"
                 :style="`background:linear-gradient(135deg,${sc.color}18 0%,${sc.color}06 100%)`">
                 <div class="absolute -right-3 -top-3 w-20 h-20 rounded-full blur-2xl opacity-20 transition-opacity group-hover:opacity-30"
                   :style="`background:${sc.color}`" />
@@ -2232,6 +2244,8 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
 
         </div>
 
+      </div>
+      </Transition>
       </main>
     </div>
   </div>
@@ -2241,6 +2255,11 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
 .filter-expand-enter-active, .filter-expand-leave-active { transition: all 0.2s ease; }
 .filter-expand-enter-from, .filter-expand-leave-to { opacity: 0; transform: translateY(-8px); }
 
+.tab-fade-enter-active { transition: opacity 0.22s ease, transform 0.22s ease; }
+.tab-fade-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
+.tab-fade-enter-from { opacity: 0; transform: translateY(6px); }
+.tab-fade-leave-to { opacity: 0; transform: translateY(-4px); }
+
 .adm-input {
   @apply w-full rounded-2xl px-4 py-2.5 text-sm text-white outline-none transition-all;
   background: rgba(255,255,255,0.05);
@@ -2249,4 +2268,20 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
 }
 .adm-input::placeholder { color: rgba(255,255,255,0.25); }
 .adm-input:focus { border-color: rgba(34,211,238,0.45); background: rgba(255,255,255,0.08); }
+
+/* Slim, themed scrollbar for the sidebar nav */
+.adm-scroll::-webkit-scrollbar { width: 5px; }
+.adm-scroll::-webkit-scrollbar-track { background: transparent; }
+.adm-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 999px; }
+.adm-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.16); }
+.adm-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
+
+/* Faint gradient hairline under the top bar for depth */
+.adm-header::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(34,211,238,0.25), rgba(139,92,246,0.2), transparent);
+}
 </style>

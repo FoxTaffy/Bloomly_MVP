@@ -1,68 +1,53 @@
 <template>
   <div class="flex items-center gap-1.5">
-    <input
-      ref="dayRef"
-      v-model="day"
-      type="text"
-      inputmode="numeric"
-      pattern="[0-9]*"
-      maxlength="2"
-      placeholder="ДД"
-      class="date-part w-14 text-center"
-      @input="onDayInput"
-      @keydown.backspace="onDayBackspace"
-    />
-    <span class="text-white/25 font-bold select-none">.</span>
-    <input
-      ref="monthRef"
-      v-model="month"
-      type="text"
-      inputmode="numeric"
-      pattern="[0-9]*"
-      maxlength="2"
-      placeholder="ММ"
-      class="date-part w-14 text-center"
-      @input="onMonthInput"
-      @keydown.backspace="onMonthBackspace"
-    />
-    <span class="text-white/25 font-bold select-none">.</span>
-    <input
-      ref="yearRef"
-      v-model="year"
-      type="text"
-      inputmode="numeric"
-      pattern="[0-9]*"
-      maxlength="4"
-      placeholder="ГГГГ"
-      class="date-part w-20 text-center"
-      @input="onYearInput"
-      @keydown.backspace="onYearBackspace"
-    />
+    <template v-for="(field, i) in fieldOrder.order" :key="field">
+      <span v-if="i > 0" class="text-white/25 font-bold select-none">{{ fieldOrder.separator }}</span>
+      <input
+        :ref="(el) => setRef(field, el as HTMLInputElement | null)"
+        v-model="values[field]"
+        type="text"
+        inputmode="numeric"
+        pattern="[0-9]*"
+        :maxlength="field === 'year' ? 4 : 2"
+        :placeholder="placeholders[field]"
+        class="date-part text-center"
+        :class="field === 'year' ? 'w-20' : 'w-14'"
+        @input="onFieldInput(field, i)"
+        @keydown.backspace="onFieldBackspace(field, i, $event)"
+      />
+    </template>
     <BIcon name="Calendar" class="w-4 h-4 text-white/25 ml-1 flex-shrink-0" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
 import BIcon from '@/components/BIcon.vue'
+import { useLangStore, DATE_FIELD_ORDER, type DateField } from '@/stores/lang'
 
 const props = defineProps<{ modelValue: string | null; max?: string }>()
 const emit = defineEmits<{ 'update:modelValue': [val: string | null] }>()
 
-const day   = ref('')
-const month = ref('')
-const year  = ref('')
+const langStore = useLangStore()
 
-const dayRef   = ref<HTMLInputElement | null>(null)
-const monthRef = ref<HTMLInputElement | null>(null)
-const yearRef  = ref<HTMLInputElement | null>(null)
+const fieldOrder = computed(() => DATE_FIELD_ORDER[langStore.currentLang])
+
+const placeholders = computed<Record<DateField, string>>(() =>
+  langStore.currentLang === 'RU'
+    ? { day: 'ДД', month: 'ММ', year: 'ГГГГ' }
+    : { day: 'DD', month: 'MM', year: 'YYYY' }
+)
+
+const values = reactive<Record<DateField, string>>({ day: '', month: '', year: '' })
+const refs: Partial<Record<DateField, HTMLInputElement | null>> = {}
+function setRef(field: DateField, el: HTMLInputElement | null) { refs[field] = el }
 
 function syncFromModel(v: string | null) {
   if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
     const [y, m, d] = v.split('-')
-    year.value = y; month.value = m; day.value = d
+    values.year = y; values.month = m; values.day = d
   } else {
-    year.value = ''; month.value = ''; day.value = ''
+    values.year = ''; values.month = ''; values.day = ''
   }
 }
 
@@ -70,40 +55,36 @@ watch(() => props.modelValue, syncFromModel, { immediate: true })
 
 function onlyDigits(v: string): string { return v.replace(/\D/g, '') }
 
-function onDayInput() {
-  day.value = onlyDigits(day.value).slice(0, 2)
-  if (day.value.length === 2) nextTick(() => monthRef.value?.focus())
-  tryEmit()
-}
-function onMonthInput() {
-  month.value = onlyDigits(month.value).slice(0, 2)
-  if (month.value.length === 2) nextTick(() => yearRef.value?.focus())
-  tryEmit()
-}
-function onYearInput() {
-  year.value = onlyDigits(year.value).slice(0, 4)
+function onFieldInput(field: DateField, i: number) {
+  const maxLen = field === 'year' ? 4 : 2
+  values[field] = onlyDigits(values[field]).slice(0, maxLen)
+  if (values[field].length === maxLen) {
+    const nextField = fieldOrder.value.order[i + 1]
+    if (nextField) nextTick(() => refs[nextField]?.focus())
+  }
   tryEmit()
 }
 
-function onDayBackspace() { /* nothing to jump back from */ }
-function onMonthBackspace(e: KeyboardEvent) {
-  if (month.value === '') { e.preventDefault(); dayRef.value?.focus() }
-}
-function onYearBackspace(e: KeyboardEvent) {
-  if (year.value === '') { e.preventDefault(); monthRef.value?.focus() }
+function onFieldBackspace(field: DateField, i: number, e: KeyboardEvent) {
+  if (values[field] !== '') return
+  const prevField = fieldOrder.value.order[i - 1]
+  if (!prevField) return
+  e.preventDefault()
+  refs[prevField]?.focus()
 }
 
 function tryEmit() {
-  if (day.value === '' && month.value === '' && year.value === '') {
+  if (values.day === '' && values.month === '' && values.year === '') {
     emit('update:modelValue', null)
     return
   }
-  if (day.value.length !== 2 || month.value.length !== 2 || year.value.length !== 4) return
+  if (values.day.length !== 2 || values.month.length !== 2 || values.year.length !== 4) return
 
-  const d = Number(day.value), m = Number(month.value), y = Number(year.value)
+  const d = Number(values.day), m = Number(values.month), y = Number(values.year)
   if (d < 1 || d > 31 || m < 1 || m > 12 || y < 1900) return
 
-  const candidate = `${year.value}-${month.value}-${day.value}`
+  const dd = values.day, mm = values.month, yyyy = values.year
+  const candidate = `${yyyy}-${mm}-${dd}`
   const parsed = new Date(`${candidate}T00:00:00.000Z`)
   // Reject overflowed dates (e.g. 31.02) — the UTC components must round-trip.
   if (parsed.getUTCDate() !== d || parsed.getUTCMonth() + 1 !== m || parsed.getUTCFullYear() !== y) return

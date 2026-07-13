@@ -2,12 +2,14 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import type { FriendBirthday } from '@/stores/friends'
+import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 
 const props = defineProps<{
   birthday: FriendBirthday
 }>()
 
 const router = useRouter()
+const langStore = useLangStore()
 
 function avatarInitial(name: string | null | undefined) {
   return (name ?? '?')[0].toUpperCase()
@@ -27,7 +29,7 @@ const labelClass = computed(() => {
 
 const dateStr = computed(() => {
   const d = new Date(props.birthday.nextBirthday)
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+  return d.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'long' })
 })
 </script>
 
