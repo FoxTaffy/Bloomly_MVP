@@ -315,7 +315,7 @@ export const confirmEmailChangeHandler = async (
 
 // ── OAuth: редирект на провайдера ─────────────────────────────────────────────
 export const oauthRedirectHandler = async (
-  request: FastifyRequest<{ Params: { provider: string }; Querystring: { client?: string } }>,
+  request: FastifyRequest<{ Params: { provider: string }; Querystring: { client?: string; redirect?: string } }>,
   reply: FastifyReply,
 ) => {
   const provider = request.params.provider as OAuthProvider;
@@ -326,7 +326,7 @@ export const oauthRedirectHandler = async (
 
   try {
     const client = request.query.client === 'mobile' ? 'mobile' : undefined;
-    const { url } = buildOAuthUrl(provider, undefined, client);
+    const { url } = buildOAuthUrl(provider, undefined, client, request.query.redirect);
     return reply.redirect(302, url);
   } catch (e: any) {
     return reply.code(500).send({ success: false, data: null, error: { code: 'OAUTH_ERROR', message: e.message } });
@@ -348,7 +348,7 @@ export const oauthCallbackHandler = async (
   }
 
   try {
-    const { oauthUser, linkUserId, client } = await handleOAuthCallback(provider, code, state);
+    const { oauthUser, linkUserId, client, mobileRedirect } = await handleOAuthCallback(provider, code, state);
 
     // ── РЕЖИМ ПРИВЯЗКИ (пользователь уже залогинен) ───────────────────────────
     if (linkUserId) {
@@ -373,8 +373,10 @@ export const oauthCallbackHandler = async (
     // иначе вход через Google/Yandex/etc. живёт всего 24ч и разлогинивает раньше обычного
     const refreshToken = await issueRefreshToken(request, reply, user.id, true);
     if (client === 'mobile') {
-      // Мобильное приложение не имеет cookie jar — отдаём токены через deep link
-      return reply.redirect(302, `bloomly://auth/callback?token=${token}&refreshToken=${refreshToken}`);
+      // Мобильное приложение не имеет cookie jar — отдаём токены через deep link.
+      // В Expo Go это не bloomly://, а прокси-адрес (exp://...), который прислал сам клиент.
+      const target = mobileRedirect ?? 'bloomly://auth/callback';
+      return reply.redirect(302, `${target}?token=${token}&refreshToken=${refreshToken}`);
     }
     return reply.redirect(302, `${FRONTEND_URL()}/auth/callback?token=${token}`);
   } catch (e: any) {

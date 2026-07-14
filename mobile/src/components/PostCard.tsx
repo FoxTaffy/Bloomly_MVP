@@ -6,7 +6,7 @@ import { Heart, MessageCircle, Repeat2, Pin } from 'lucide-react-native';
 import { Avatar } from './Avatar';
 import { VerifiedBadge } from './VerifiedBadge';
 import { timeAgo } from '../lib/time';
-import type { Post } from '../types/api';
+import type { Post, PostAuthor } from '../types/api';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CARD_PADDING = 32;
@@ -31,22 +31,17 @@ export function PostCard({ post, onVote, onRepaw }: PostCardProps) {
   return (
     <View className="mb-4 rounded-2xl border border-brand-border bg-brand-card p-4">
       <View className="mb-3 flex-row items-center justify-between">
-        <Link href={author ? `/profile/${author.username}` : '#'} asChild>
-          <Pressable className="flex-row items-center gap-3">
-            <Avatar uri={author?.avatar_url} name={author?.display_name ?? author?.username} size={40} />
-            <View>
-              <View className="flex-row items-center gap-1">
-                <Text className="font-bold text-brand-offwhite">
-                  {groupContext ? groupContext.name : author?.display_name ?? author?.username ?? 'Bloomly'}
-                </Text>
-                {author?.is_verified ? <VerifiedBadge size={14} /> : null}
-              </View>
-              <Text className="text-xs text-brand-muted">
-                @{author?.username ?? 'group'} · {timeAgo(post.created_at)}
-              </Text>
-            </View>
-          </Pressable>
-        </Link>
+        {author ? (
+          <Link href={`/profile/${author.username}`} asChild>
+            <Pressable className="flex-row items-center gap-3">
+              <PostAuthorHeader post={post} author={author} groupContext={groupContext} />
+            </Pressable>
+          </Link>
+        ) : (
+          <View className="flex-row items-center gap-3">
+            <PostAuthorHeader post={post} author={author} groupContext={groupContext} />
+          </View>
+        )}
         {post.is_announcement ? (
           <View className="flex-row items-center gap-1 rounded-full bg-brand-accent-plus-plus px-2 py-1">
             <Pin size={12} color="#A1B4FF" />
@@ -105,5 +100,32 @@ export function PostCard({ post, onVote, onRepaw }: PostCardProps) {
         </Pressable>
       </View>
     </View>
+  );
+}
+
+function PostAuthorHeader({
+  post,
+  author,
+  groupContext,
+}: {
+  post: Post;
+  author: PostAuthor | null;
+  groupContext?: { name: string };
+}) {
+  return (
+    <>
+      <Avatar uri={author?.avatar_url} name={author?.display_name ?? author?.username} size={40} />
+      <View>
+        <View className="flex-row items-center gap-1">
+          <Text className="font-bold text-brand-offwhite">
+            {groupContext ? groupContext.name : (author?.display_name ?? author?.username ?? 'Bloomly')}
+          </Text>
+          {author?.is_verified ? <VerifiedBadge size={14} /> : null}
+        </View>
+        <Text className="text-xs text-brand-muted">
+          @{author?.username ?? 'group'} · {timeAgo(post.created_at)}
+        </Text>
+      </View>
+    </>
   );
 }

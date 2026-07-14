@@ -23,7 +23,7 @@ export default function OAuthCallbackScreen() {
 
   return (
     <View className="flex-1 items-center justify-center gap-4 bg-brand-bg">
-      <Image source={require('../../assets/icon.png')} style={{ width: 48, height: 48, opacity: 0.7 }} />
+      <Image source={require('../../assets/bloomly-logo.png')} style={{ width: 48, height: 48, opacity: 0.7 }} />
       <ActivityIndicator color="#4C67CF" />
       <Text className="text-sm font-medium text-brand-muted">Входим через OAuth…</Text>
     </View>

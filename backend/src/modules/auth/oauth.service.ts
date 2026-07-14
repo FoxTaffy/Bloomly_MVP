@@ -107,7 +107,11 @@ const providers: Record<OAuthProvider, ProviderConfig> = {
 }
 
 // ── State + PKCE store (TTL 10 min) ──────────────────────────────────────────
-interface StateEntry { provider: OAuthProvider; codeVerifier?: string; createdAt: number; linkUserId?: string; client?: 'mobile' }
+interface StateEntry { provider: OAuthProvider; codeVerifier?: string; createdAt: number; linkUserId?: string; client?: 'mobile'; mobileRedirect?: string }
+
+// Мобильный редирект принимаем только со "своих" схем — иначе callback можно было бы
+// использовать как open-redirect для увода access/refresh токена на чужой домен.
+const MOBILE_REDIRECT_RE = /^(bloomly|exp|exps):\/\//i
 const stateStore = new Map<string, StateEntry>()
 
 function pruneExpiredStates() {
@@ -133,11 +137,22 @@ const REDIRECT_BASE = () => process.env.OAUTH_REDIRECT_BASE ?? 'http://localhost
 
 /** Строим URL редиректа на провайдера, возвращаем его + state.
  *  Если передан `linkUserId` — это mode "привязать к существующему аккаунту". */
-export function buildOAuthUrl(provider: OAuthProvider, linkUserId?: string, client?: 'mobile'): { url: string; state: string } {
+export function buildOAuthUrl(
+  provider: OAuthProvider,
+  linkUserId?: string,
+  client?: 'mobile',
+  mobileRedirect?: string,
+): { url: string; state: string } {
   pruneExpiredStates()
   const cfg   = providers[provider]
   const state = base64urlEncode(randomBytes(16))
-  const entry: StateEntry = { provider, createdAt: Date.now(), ...(linkUserId ? { linkUserId } : {}), ...(client ? { client } : {}) }
+  const safeRedirect = mobileRedirect && MOBILE_REDIRECT_RE.test(mobileRedirect) ? mobileRedirect : undefined
+  const entry: StateEntry = {
+    provider, createdAt: Date.now(),
+    ...(linkUserId ? { linkUserId } : {}),
+    ...(client ? { client } : {}),
+    ...(safeRedirect ? { mobileRedirect: safeRedirect } : {}),
+  }
 
   const params = new URLSearchParams({
     client_id:     cfg.clientId(),
@@ -163,10 +178,10 @@ export async function handleOAuthCallback(
   provider: OAuthProvider,
   code: string,
   state: string,
-): Promise<{ oauthUser: OAuthUser; linkUserId?: string; client?: 'mobile' }> {
+): Promise<{ oauthUser: OAuthUser; linkUserId?: string; client?: 'mobile'; mobileRedirect?: string }> {
   const entry = stateStore.get(state)
   if (!entry || entry.provider !== provider) throw new Error('Invalid OAuth state')
-  const { linkUserId, client } = entry
+  const { linkUserId, client, mobileRedirect } = entry
   stateStore.delete(state)
 
   const cfg = providers[provider]
@@ -190,7 +205,7 @@ export async function handleOAuthCallback(
   if (!tokenData.access_token) throw new Error(`Token exchange failed: ${JSON.stringify(tokenData)}`)
 
   const oauthUser = await cfg.fetchUser(tokenData.access_token, { clientId: cfg.clientId() })
-  return { oauthUser, linkUserId, client }
+  return { oauthUser, linkUserId, client, mobileRedirect }
 }
 
 // ── Поиск / создание пользователя через OAuth ─────────────────────────────────
