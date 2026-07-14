@@ -235,8 +235,10 @@ onMounted(async () => {
   // Support ?userId=xxx deep link (e.g. "Send message" button on profile)
   const targetUser = route.query.userId as string | undefined
   if (targetUser) {
-    const convId = await store.openConversation(targetUser)
-    await store.selectConversation(convId)
+    try {
+      const convId = await store.openConversation(targetUser)
+      await store.selectConversation(convId)
+    } catch { /* user blocked us, deleted account, etc. — just drop the deep link */ }
     router.replace({ name: 'messages' })
   }
 })
@@ -280,8 +282,10 @@ async function startDm(userId: string) {
   showNewDm.value = false
   dmSearch.value  = ''
   dmResults.value = []
-  const id = await store.openConversation(userId)
-  await store.selectConversation(id)
+  try {
+    const id = await store.openConversation(userId)
+    await store.selectConversation(id)
+  } catch { /* silent — e.g. blocked / messages disabled */ }
 }
 </script>
 

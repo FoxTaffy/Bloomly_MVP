@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, onUnmounted, reactive, nextTick } from 'vue'
+import { ref, computed, onMounted, watch, onUnmounted, onActivated, onDeactivated, reactive, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
@@ -350,12 +350,10 @@ const handleScroll = () => {
   }
 }
 
-onMounted(() => {
-  window.addEventListener('scroll', handleScroll);
-});
-onUnmounted(() => {
-  window.removeEventListener('scroll', handleScroll);
-});
+// Listener + WS are (re)attached in onActivated/onDeactivated below, not here —
+// this view is kept alive (see App.vue) so its feed/scroll survives navigating
+// away and back; onMounted only runs once, so resource setup lives where it
+// actually needs to run on every re-entry.
 
 const selectedTag = ref('')
 watch([selectedCategory, sortBy, nsfwMode, feedMode, selectedTag], () => { fetchPosts() })
@@ -741,7 +739,40 @@ const connectWebSocket = () => {
 watch(showPostForm, (v) => { if (!v) { dragCounter = 0; formDragging.value = false; showEntityPicker.value = false } })
 watch(nsfwMode, () => { fetchTrendingTags() })
 
-onMounted(() => { wsDestroyed = false; fetchPosts(); connectWebSocket(); fetchRecommendedUsers(); fetchTrendingEvents(); fetchTrendingTags(); fetchActiveAds(); if (auth.user && !groupsStore.myGroups.length) groupsStore.loadMyGroups().catch(() => {}) })
+onMounted(() => { fetchPosts(); fetchRecommendedUsers(); fetchTrendingEvents(); fetchTrendingTags(); fetchActiveAds(); if (auth.user && !groupsStore.myGroups.length) groupsStore.loadMyGroups().catch(() => {}) })
+
+// ── Keep-alive re-entry ──────────────────────────────────────────────────────
+// MainLayout is cached by <KeepAlive> (see App.vue) so the feed + scroll position
+// survive navigating away and back. onMounted only fires once (first entry), so
+// resources that must be live only while this view is actually on screen —
+// the WebSocket connection and the infinite-scroll listener — are (re)opened
+// here and torn down in onDeactivated instead of onUnmounted.
+let savedScrollY: number | null = null
+// Guards against showing a stale, cached feed if the user logs out and a
+// different account logs back in without this view ever being truly destroyed.
+let fetchedForUserId: string | null | undefined = auth.user?.id ?? null
+onActivated(() => {
+  if (auth.user?.id !== fetchedForUserId) {
+    fetchedForUserId = auth.user?.id ?? null
+    savedScrollY = null
+    fetchPosts()
+  }
+  wsDestroyed = false
+  connectWebSocket()
+  window.addEventListener('scroll', handleScroll)
+  if (savedScrollY !== null) {
+    const y = savedScrollY
+    savedScrollY = null
+    // Run after Vue Router's own scrollBehavior (which resets to top on a
+    // regular push navigation) has had its chance to run first.
+    requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)))
+  }
+})
+onDeactivated(() => {
+  savedScrollY = window.scrollY
+  disconnectWebSocket()
+  window.removeEventListener('scroll', handleScroll)
+})
 </script>
 
 <template>

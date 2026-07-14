@@ -28,6 +28,9 @@ interface ProviderConfig {
   fetchUser: (accessToken: string, extraParams?: Record<string, string>) => Promise<OAuthUser>
   /** Некоторые провайдеры (Twitter) требуют PKCE */
   usePkce?: boolean
+  /** Twitter/X требует Basic-авторизацию (client_id:client_secret) в заголовке token-запроса,
+   *  иначе отдаёт "unauthorized_client: Missing valid authorization header" */
+  useBasicAuth?: boolean
 }
 
 export interface OAuthUser {
@@ -78,6 +81,7 @@ const providers: Record<OAuthProvider, ProviderConfig> = {
     clientId:     () => process.env.TWITTER_CLIENT_ID     ?? '',
     clientSecret: () => process.env.TWITTER_CLIENT_SECRET ?? '',
     usePkce: true,
+    useBasicAuth: true,
     async fetchUser(token) {
       const r = await fetch('https://api.twitter.com/2/users/me?user.fields=profile_image_url', {
         headers: { Authorization: `Bearer ${token}` },
@@ -196,9 +200,14 @@ export async function handleOAuthCallback(
   }
   if (entry.codeVerifier) tokenParams.code_verifier = entry.codeVerifier
 
+  const tokenHeaders: Record<string, string> = { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }
+  if (cfg.useBasicAuth) {
+    tokenHeaders.Authorization = `Basic ${Buffer.from(`${cfg.clientId()}:${cfg.clientSecret()}`).toString('base64')}`
+  }
+
   const tokenRes = await fetch(cfg.tokenUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    headers: tokenHeaders,
     body: new URLSearchParams(tokenParams),
   })
   const tokenData = await tokenRes.json() as any

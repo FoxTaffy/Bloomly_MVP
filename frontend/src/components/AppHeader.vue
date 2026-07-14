@@ -47,11 +47,14 @@ function selectLang(code: typeof langOptions[number]['code']) {
 }
 
 // ── NSFW ─────────────────────────────────────────────────────────────────────
-const { toggleNsfw: _nsfwToggle } = useNsfwMode()
+// `nsfwEnabled` is a global singleton (see useNsfwMode.ts) — read it directly here
+// instead of relying solely on the `nsfwMode` prop, since many pages render
+// <AppHeader> without wiring v-model:nsfwMode, which used to make the toggle
+// look permanently OFF/inconsistent even though the underlying flag was shared.
+const { nsfwEnabled, toggleNsfw: _nsfwToggle } = useNsfwMode()
 const toggleNsfw = () => {
-  const next = !props.nsfwMode
   _nsfwToggle()
-  emit('update:nsfwMode', next)
+  emit('update:nsfwMode', nsfwEnabled.value)
 }
 
 // ── Notifications ─────────────────────────────────────────────────────────────
@@ -611,12 +614,12 @@ onUnmounted(() => {
       <!-- NSFW toggle -->
       <button @click="toggleNsfw"
         class="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 rounded-full border transition-all duration-200"
-        :class="nsfwMode ? 'bg-brand-error/15 border-brand-error/40 text-brand-error shadow-sm shadow-brand-error/20' : 'bg-brand-card border-brand-border text-white/55 hover:text-white'">
-        <BIcon :name="nsfwMode ? 'Eye' : 'EyeOff'" class="h-4 w-4" />
+        :class="nsfwEnabled ? 'bg-brand-error/15 border-brand-error/40 text-brand-error shadow-sm shadow-brand-error/20' : 'bg-brand-card border-brand-border text-white/55 hover:text-white'">
+        <BIcon :name="nsfwEnabled ? 'Eye' : 'EyeOff'" class="h-4 w-4" />
         <span class="text-xs font-bold hidden sm:block">NSFW</span>
         <div class="relative w-7 h-3.5 flex-shrink-0 hidden sm:block">
-          <div class="w-7 h-3.5 rounded-full transition-colors" :class="nsfwMode ? 'bg-rose-500' : 'bg-white/20'"></div>
-          <div class="absolute top-0.5 h-2.5 w-2.5 bg-white rounded-full shadow transition-all" :class="nsfwMode ? 'left-[calc(100%-11px)]' : 'left-0.5'"></div>
+          <div class="w-7 h-3.5 rounded-full transition-colors" :class="nsfwEnabled ? 'bg-rose-500' : 'bg-white/20'"></div>
+          <div class="absolute top-0.5 h-2.5 w-2.5 bg-white rounded-full shadow transition-all" :class="nsfwEnabled ? 'left-[calc(100%-11px)]' : 'left-0.5'"></div>
         </div>
       </button>
 

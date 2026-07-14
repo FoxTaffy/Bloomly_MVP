@@ -8,6 +8,25 @@ import type { RegisterInput, LoginInput, JwtPayload } from './types.js';
 
 const authService = new AuthService();
 
+// ── Grace-период для гонки конкурентных refresh-запросов ─────────────────────
+// Несколько вкладок/параллельных запросов могут одновременно словить 401 и
+// каждый попытаться обновить токен одним и тем же (ещё не отревокнутым на их
+// стороне) refresh_token. Ротация мгновенно ревокает старый токен, поэтому
+// второй запрос иначе получал бы "невалидный refresh token" и разлогинивал
+// пользователя, хотя первый запрос ротацию уже успешно выполнил.
+// Кэшируем результат ротации на несколько секунд и отдаём его повторно, если
+// видим тот же (уже отревокнутый) hash снова в течение окна.
+interface RotationReplay { token: string; refreshToken: string; user: any; storedAt: number }
+const recentRotations = new Map<string, RotationReplay>();
+const ROTATION_GRACE_MS = 15_000;
+
+function pruneRotationReplays() {
+  const now = Date.now();
+  for (const [k, v] of recentRotations) {
+    if (now - v.storedAt > ROTATION_GRACE_MS) recentRotations.delete(k);
+  }
+}
+
 // ── Вспомогательный селект полного профиля ────────────────────────────────────
 const FULL_USER_SELECT = {
   id: true, username: true, email: true, role: true,
@@ -452,6 +471,29 @@ export const refreshHandler = async (
   const hash   = createHash('sha256').update(raw).digest('hex');
   const record = await prisma.refreshToken.findUnique({ where: { token_hash: hash } });
 
+  if (record?.revoked) {
+    // Другой параллельный запрос (другая вкладка / burst запросов при открытии
+    // диалога) уже успел провернуть ротацию этим самым токеном — отдаём тот же
+    // результат вместо разлогинивания.
+    pruneRotationReplays();
+    const replay = recentRotations.get(hash);
+    if (replay) {
+      const cookieOpts: Parameters<typeof reply.setCookie>[2] = {
+        httpOnly: true,
+        secure:   process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path:     '/api/auth',
+      };
+      if (record.remember) cookieOpts.maxAge = 30 * 24 * 60 * 60;
+      reply.setCookie('refresh_token', replay.refreshToken, cookieOpts);
+      return reply.send({
+        success: true,
+        data: { token: replay.token, user: replay.user, ...(isMobileClient(request) ? { refreshToken: replay.refreshToken } : {}) },
+        error: null,
+      });
+    }
+  }
+
   if (!record || record.revoked || record.expires_at < new Date()) {
     reply.clearCookie('refresh_token', { path: '/api/auth' });
     return reply.code(401).send({ success: false, data: null, error: { code: 'INVALID_REFRESH_TOKEN', message: 'Refresh token invalid or expired' } });
@@ -473,6 +515,9 @@ export const refreshHandler = async (
   // Сохраняем remember-статус при ротации — иначе persistent-сессия
   // превращалась бы в session-cookie на первом же обновлении токена
   const refreshToken = await issueRefreshToken(request, reply, user.id, record.remember);
+
+  pruneRotationReplays();
+  recentRotations.set(hash, { token, refreshToken, user, storedAt: Date.now() });
 
   return reply.send({
     success: true,

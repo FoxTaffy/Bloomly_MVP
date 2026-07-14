@@ -2392,8 +2392,18 @@ function scrollToBottom(smooth = false) {
   nextTick(() => { bottomEl.value?.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant' }) })
 }
 
+// Set whenever the conversation switches so the very first population of its
+// message history (async fetch resolving after the switch) always lands at the
+// bottom, instead of being judged against a stale scrollTop=0 from before the load.
+let justOpenedConv = true
+
 watch(() => msgList.value.length, (newLen, oldLen) => {
   if (!scrollEl.value) return
+  if (justOpenedConv) {
+    justOpenedConv = false
+    scrollToBottom(false)
+    return
+  }
   const el = scrollEl.value
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100
   const grew = newLen > (oldLen ?? 0)
@@ -2409,6 +2419,10 @@ watch(() => msgList.value.length, (newLen, oldLen) => {
 }, { flush: 'post' })
 
 watch(() => props.convId, () => {
+  // If the history is already cached, msgList's length won't change when we
+  // switch — nothing will clear the flag, so clear it here to avoid a later
+  // incoming message force-scrolling the user away from a spot they scrolled up to.
+  justOpenedConv = msgList.value.length === 0
   scrollToBottom()
   searchQuery.value = ''
   showScrollDown.value = false

@@ -4,12 +4,15 @@ import axios from 'axios'
 //   api.ts → stores/auth → api.ts
 let _getToken: () => string | null = () => null
 let _onUnauthorized: () => void = () => {}
-let _refreshToken: () => Promise<string | null> = async () => null
+// Returns: new token on success · null if the session is confirmedly dead (logout) ·
+// undefined if the refresh merely failed transiently (e.g. network blip) and the
+// session may still be alive — don't force a logout for that.
+let _refreshToken: () => Promise<string | null | undefined> = async () => null
 
 export function setupApiAuth(
   getToken: () => string | null,
   onUnauthorized: () => void,
-  refreshToken: () => Promise<string | null>,
+  refreshToken: () => Promise<string | null | undefined>,
 ) {
   _getToken = getToken
   _onUnauthorized = onUnauthorized
@@ -33,7 +36,7 @@ api.interceptors.request.use(
 
 // Flag to prevent multiple concurrent refresh attempts
 let _isRefreshing = false
-let _refreshQueue: Array<(token: string | null) => void> = []
+let _refreshQueue: Array<(token: string | null | undefined) => void> = []
 
 api.interceptors.response.use(
   (response) => response,
@@ -64,14 +67,18 @@ api.interceptors.response.use(
         if (newToken) {
           originalRequest.headers.Authorization = `Bearer ${newToken}`
           return api(originalRequest)
-        } else {
+        } else if (newToken === null) {
+          // Server confirmed the session is dead — this is a real logout.
           _onUnauthorized()
+          return Promise.reject(error)
+        } else {
+          // Transient refresh failure (e.g. network blip) — session may still be
+          // valid, so just fail this one request instead of kicking the user out.
           return Promise.reject(error)
         }
       } catch {
-        _refreshQueue.forEach((cb) => cb(null))
+        _refreshQueue.forEach((cb) => cb(undefined))
         _refreshQueue = []
-        _onUnauthorized()
         return Promise.reject(error)
       } finally {
         _isRefreshing = false

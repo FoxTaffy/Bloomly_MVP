@@ -18,6 +18,7 @@ const badgeIcon: Record<string, string> = {
   GROUP_POST:  'FileText',
   GROUP_EVENT: 'Calendar',
   GROUP_JOIN:  'Users',
+  MESSAGE:     'MessageCircle',
 }
 
 const badgeColor: Record<string, string> = {
@@ -31,10 +32,13 @@ const badgeColor: Record<string, string> = {
   GROUP_POST:  'bg-brand-accent',
   GROUP_EVENT: 'bg-amber-500',
   GROUP_JOIN:  'bg-emerald-500',
+  MESSAGE:     'bg-sky-500',
 }
 
 function onClick(t: typeof toasts.value[0]) {
-  if (t.postId) {
+  if (t.convId) {
+    router.push({ name: 'messages', query: { c: t.convId } })
+  } else if (t.postId) {
     router.push(`/post/${t.postId}`)
   } else if (t.senderUsername) {
     router.push(`/profile/${t.senderUsername}`)

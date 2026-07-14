@@ -438,16 +438,18 @@ const features = [
                   leave-from-class="opacity-100 max-h-20 translate-y-0"
                   leave-to-class="opacity-0 max-h-0 -translate-y-2"
                 >
-                  <div v-if="mode === 'register'" class="input-group overflow-hidden">
-                    <UserIcon class="input-icon" />
-                    <input :value="username" @input="username = ($event.target as HTMLInputElement).value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 30)" type="text" :placeholder="langStore.t.usernamePlaceholder" required minlength="3" maxlength="30" class="fld" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false" />
+                  <div v-if="mode === 'register'" class="space-y-1.5">
+                    <div class="input-group overflow-hidden">
+                      <UserIcon class="input-icon" />
+                      <input :value="username" @input="username = ($event.target as HTMLInputElement).value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 30)" type="text" :placeholder="langStore.t.usernamePlaceholder" required minlength="3" maxlength="30" class="fld" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false" />
+                    </div>
+                    <p class="text-[11px] pl-1 transition-colors"
+                      :class="username && username.length < 3 ? 'text-red-400/70' : 'text-white/30'">
+                      <template v-if="!username">только a–z, 0–9, _ · минимум 3 символа</template>
+                      <template v-else-if="username.length < 3">нужно ещё {{ 3 - username.length }} симв.</template>
+                      <template v-else>будет: <span class="text-brand-accent/70 font-mono">{{ username }}</span></template>
+                    </p>
                   </div>
-                  <p v-if="mode === 'register'" class="text-[11px] pl-1 -mt-1 transition-colors"
-                    :class="username && username.length < 3 ? 'text-red-400/70' : 'text-white/30'">
-                    <template v-if="!username">только a–z, 0–9, _ · минимум 3 символа</template>
-                    <template v-else-if="username.length < 3">нужно ещё {{ 3 - username.length }} симв.</template>
-                    <template v-else>будет: <span class="text-brand-accent/70 font-mono">{{ username }}</span></template>
-                  </p>
                 </Transition>
 
                 <!-- Password (login / register) -->

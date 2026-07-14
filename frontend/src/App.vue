@@ -25,7 +25,11 @@ const showMobileNav = computed(() =>
 </script>
 
 <template>
-  <RouterView />
+  <RouterView v-slot="{ Component }">
+    <KeepAlive :include="['MainLayout']">
+      <component :is="Component" />
+    </KeepAlive>
+  </RouterView>
   <MobileBottomNav v-if="showMobileNav" />
   <NotifToastContainer />
 </template>

@@ -59,8 +59,11 @@ export const useAuthStore = defineStore('auth', () => {
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
-  /** Restore session on page load by using the httpOnly refresh_token cookie */
-  async function tryRefresh(): Promise<boolean> {
+  /** Restore session on page load by using the httpOnly refresh_token cookie.
+   *  `lenient=true` (mid-session, triggered by the axios 401 interceptor) keeps the
+   *  current session intact on a transient failure (network blip, 5xx) instead of
+   *  wiping it — only a server-confirmed 401 means the session is actually dead. */
+  async function tryRefresh(lenient = false): Promise<boolean> {
     try {
       const res = await api.post('/auth/refresh')
       if (res.data.success) {
@@ -69,9 +72,12 @@ export const useAuthStore = defineStore('auth', () => {
         saveUser(res.data.data.user)
         return true
       }
-    } catch {
-      clearUser()
-      user.value = null
+    } catch (e: any) {
+      const confirmedDead = e?.response?.status === 401
+      if (!lenient || confirmedDead) {
+        clearUser()
+        user.value = null
+      }
     }
     return false
   }
@@ -293,8 +299,12 @@ export const useAuthStore = defineStore('auth', () => {
       router.push({ name: 'login' })
     },
     async () => {
-      const ok = await tryRefresh()
-      return ok ? token.value : null
+      const ok = await tryRefresh(true)
+      if (ok) return token.value
+      // If we still have a user locally, tryRefresh judged this a transient
+      // failure and deliberately left the session intact — signal "retry later"
+      // rather than "session is dead" so the interceptor doesn't force a logout.
+      return user.value ? undefined : null
     },
   )
 

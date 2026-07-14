@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import api from '@/api'
 import { wsClient } from '@/lib/wsClient'
 import { useAuthStore } from '@/stores/auth'
+import { useNotifToast } from '@/composables/useNotifToast'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface MsgSender {
@@ -137,7 +138,25 @@ export const useMessagesStore = defineStore('messages', () => {
       }
 
       if (activeId.value !== convId) unreadCount.value++
-      if (!isOwn) playNotificationSound()
+      if (!isOwn) {
+        playNotificationSound()
+        // Only pop a toast for conversations the user isn't currently looking at
+        if (activeId.value !== convId) {
+          const preview = msg.text
+            ? msg.text
+            : msg.type === 'sticker' ? '🎭 Стикер'
+            : msg.type === 'voice' || msg.type === 'audio' ? '🎤 Голосовое сообщение'
+            : msg.file_url ? '📎 Медиафайл'
+            : '...'
+          useNotifToast().addMessageToast({
+            senderName: msg.sender.display_name || msg.sender.username,
+            senderAvatar: msg.sender.avatar_url,
+            senderUsername: msg.sender.username,
+            text: preview,
+            convId,
+          })
+        }
+      }
     })
 
     unsubTyping = wsClient.on('typing', (frame) => {

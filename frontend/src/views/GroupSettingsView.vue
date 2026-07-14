@@ -7,6 +7,7 @@ import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import SoonBadge from '@/components/groups/SoonBadge.vue'
+import ImageCropModal from '@/components/shared/ImageCropModal.vue'
 import { useGroupsStore, type GroupMember, type CustomRole } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useShopStore } from '@/stores/shop'
@@ -732,25 +733,10 @@ const bannerOriginalSrc = ref('')
 const presetColors = ['#4C67CF', '#66C770', '#E14664', '#FFC01F', '#CD83F5', '#E76F51', '#F7A9E2', '#00D4AA', '#FF6B6B', '#A855F7']
 
 // ── Crop Modal ──────────────────────────────────────────────────────────────
-const CROP_CONTAINER_W = computed(() => Math.min(600, window.innerWidth - 64))
-const CROP_CONTAINER_H = computed(() => Math.round(CROP_CONTAINER_W.value * (2 / 3)))
-
 const cropModal = reactive({
   show: false,
   type: 'avatar' as 'avatar' | 'banner',
   src: '',
-  naturalW: 0,
-  naturalH: 0,
-  imgX: 0,
-  imgY: 0,
-  imgW: 0,
-  imgH: 0,
-  cx: 0, cy: 0, cw: 0, ch: 0,
-  dragging: false,
-  dragOffX: 0,
-  dragOffY: 0,
-  resizing: '' as '' | 'nw' | 'ne' | 'sw' | 'se',
-  resStart: { mx: 0, my: 0, cx: 0, cy: 0, cw: 0, ch: 0 },
 })
 const cropUploading = ref(false)
 
@@ -762,7 +748,6 @@ function openCrop(file: File, type: 'avatar' | 'banner') {
     else bannerOriginalSrc.value = src
     cropModal.src = src
     cropModal.type = type
-    cropModal.imgW = 0
     cropModal.show = true
   }
   reader.readAsDataURL(file)
@@ -773,7 +758,6 @@ async function reopenCrop(type: 'avatar' | 'banner') {
   if (localSrc) {
     cropModal.src = localSrc
     cropModal.type = type
-    cropModal.imgW = 0
     cropModal.show = true
     return
   }
@@ -786,179 +770,14 @@ async function reopenCrop(type: 'avatar' | 'banner') {
   } catch {
     cropModal.src = url
     cropModal.type = type
-    cropModal.imgW = 0
     cropModal.show = true
   }
 }
 
-function onCropImageLoad(e: Event) {
-  const img = e.target as HTMLImageElement
-  cropModal.naturalW = img.naturalWidth
-  cropModal.naturalH = img.naturalHeight
-  const cw = CROP_CONTAINER_W.value
-  const ch = CROP_CONTAINER_H.value
-  const containerAspect = cw / ch
-  const imageAspect = cropModal.naturalW / cropModal.naturalH
-  let iw: number, ih: number
-  if (imageAspect > containerAspect) { iw = cw; ih = cw / imageAspect }
-  else { ih = ch; iw = ch * imageAspect }
-  cropModal.imgW = iw
-  cropModal.imgH = ih
-  cropModal.imgX = (cw - iw) / 2
-  cropModal.imgY = (ch - ih) / 2
-  if (cropModal.type === 'avatar') {
-    const size = Math.min(iw, ih) * 0.82
-    cropModal.cx = cropModal.imgX + (iw - size) / 2
-    cropModal.cy = cropModal.imgY + (ih - size) / 2
-    cropModal.cw = size
-    cropModal.ch = size
-  } else {
-    const bw = iw * 0.92
-    const bh = Math.min(bw / 3, ih * 0.92)
-    cropModal.cx = cropModal.imgX + (iw - bw) / 2
-    cropModal.cy = cropModal.imgY + (ih - bh) / 2
-    cropModal.cw = bw
-    cropModal.ch = bh
-  }
-}
-
-function onCropMouseDown(e: MouseEvent) {
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-  const mx = e.clientX - rect.left
-  const my = e.clientY - rect.top
-  if (mx >= cropModal.cx && mx <= cropModal.cx + cropModal.cw &&
-      my >= cropModal.cy && my <= cropModal.cy + cropModal.ch) {
-    cropModal.dragging = true
-    cropModal.dragOffX = mx - cropModal.cx
-    cropModal.dragOffY = my - cropModal.cy
-  }
-}
-
-function startResize(e: MouseEvent, corner: 'nw' | 'ne' | 'sw' | 'se') {
-  e.stopPropagation()
-  const container = document.getElementById('group-crop-container')!
-  const rect = container.getBoundingClientRect()
-  cropModal.resizing = corner
-  cropModal.resStart = {
-    mx: e.clientX - rect.left,
-    my: e.clientY - rect.top,
-    cx: cropModal.cx, cy: cropModal.cy,
-    cw: cropModal.cw, ch: cropModal.ch,
-  }
-}
-
-function onCropMouseMove(e: MouseEvent) {
-  if (!cropModal.show || (!cropModal.dragging && !cropModal.resizing)) return
-  const container = document.getElementById('group-crop-container')
-  if (!container) return
-  const rect = container.getBoundingClientRect()
-  const mx = e.clientX - rect.left
-  const my = e.clientY - rect.top
-  const { imgX, imgY, imgW, imgH } = cropModal
-  const minSize = 30
-  const isAvatar = cropModal.type === 'avatar'
-  if (cropModal.dragging) {
-    let nx = mx - cropModal.dragOffX
-    let ny = my - cropModal.dragOffY
-    nx = Math.max(imgX, Math.min(imgX + imgW - cropModal.cw, nx))
-    ny = Math.max(imgY, Math.min(imgY + imgH - cropModal.ch, ny))
-    cropModal.cx = nx
-    cropModal.cy = ny
-  } else {
-    const { mx: smx, my: smy, cx, cy, cw, ch } = cropModal.resStart
-    const dx = mx - smx
-    const dy = my - smy
-    let nx = cx, ny = cy, nw = cw, nh = ch
-    if (cropModal.resizing === 'se') {
-      nw = Math.max(minSize, cw + dx)
-      nh = isAvatar ? nw : Math.max(minSize, ch + dy)
-    } else if (cropModal.resizing === 'sw') {
-      nw = Math.max(minSize, cw - dx)
-      nh = isAvatar ? nw : Math.max(minSize, ch + dy)
-      nx = cx + cw - nw
-    } else if (cropModal.resizing === 'ne') {
-      nw = Math.max(minSize, cw + dx)
-      nh = isAvatar ? nw : Math.max(minSize, ch - dy)
-      ny = isAvatar ? cy + ch - nw : cy + ch - nh
-    } else if (cropModal.resizing === 'nw') {
-      nw = Math.max(minSize, cw - dx)
-      nh = isAvatar ? nw : Math.max(minSize, ch - dy)
-      nx = cx + cw - nw
-      ny = cy + ch - nh
-    }
-    nx = Math.max(imgX, nx)
-    ny = Math.max(imgY, ny)
-    nw = Math.min(nw, imgX + imgW - nx)
-    nh = Math.min(nh, imgY + imgH - ny)
-    cropModal.cx = nx
-    cropModal.cy = ny
-    cropModal.cw = nw
-    cropModal.ch = nh
-  }
-}
-
-function onCropMouseUp() {
-  cropModal.dragging = false
-  cropModal.resizing = ''
-}
-
-function onCropTouchStart(e: TouchEvent) {
-  const touch = e.touches[0]
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-  const mx = touch.clientX - rect.left
-  const my = touch.clientY - rect.top
-  if (mx >= cropModal.cx && mx <= cropModal.cx + cropModal.cw &&
-      my >= cropModal.cy && my <= cropModal.cy + cropModal.ch) {
-    cropModal.dragging = true
-    cropModal.dragOffX = mx - cropModal.cx
-    cropModal.dragOffY = my - cropModal.cy
-  }
-}
-
-function startResizeTouch(e: TouchEvent, corner: 'nw' | 'ne' | 'sw' | 'se') {
-  const touch = e.touches[0]
-  const container = document.getElementById('group-crop-container')!
-  const rect = container.getBoundingClientRect()
-  cropModal.resizing = corner
-  cropModal.resStart = {
-    mx: touch.clientX - rect.left,
-    my: touch.clientY - rect.top,
-    cx: cropModal.cx, cy: cropModal.cy,
-    cw: cropModal.cw, ch: cropModal.ch,
-  }
-}
-
-function onCropTouchMove(e: TouchEvent) {
-  if (!e.touches.length) return
-  const touch = e.touches[0]
-  onCropMouseMove({ clientX: touch.clientX, clientY: touch.clientY } as MouseEvent)
-}
-
-async function confirmCrop() {
+async function confirmCrop({ blob }: { blob: Blob; rel: { x: number; y: number; w: number; h: number } }) {
   cropUploading.value = true
+  const type = cropModal.type
   try {
-    const { imgX, imgY, imgW, imgH, naturalW, naturalH, cx, cy, cw, ch, type } = cropModal
-    const relX = (cx - imgX) / imgW
-    const relY = (cy - imgY) / imgH
-    const relW = cw / imgW
-    const relH = ch / imgH
-    const srcX = relX * naturalW
-    const srcY = relY * naturalH
-    const srcW = relW * naturalW
-    const srcH = relH * naturalH
-    const canvas = document.createElement('canvas')
-    if (type === 'avatar') { canvas.width = 400; canvas.height = 400 }
-    else { canvas.width = 1200; canvas.height = Math.round(1200 * (srcH / srcW)) }
-    const ctx = canvas.getContext('2d')!
-    await new Promise<void>((res, rej) => {
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
-      img.onload = () => { ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, canvas.width, canvas.height); res() }
-      img.onerror = rej
-      img.src = cropModal.src
-    })
-    const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', 0.92))
-    if (!blob) throw new Error('Canvas toBlob failed')
     const fd = new FormData()
     fd.append('file', blob, type === 'avatar' ? 'avatar.jpg' : 'banner.jpg')
     const result = await api.post(
@@ -1193,75 +1012,15 @@ async function deleteGroup() {
     </Transition>
 
     <!-- ═══════ CROP MODAL ═══════ -->
-    <Teleport to="body">
-      <Transition name="modal-fade">
-        <div v-if="cropModal.show" class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-          @mousemove="onCropMouseMove" @mouseup="onCropMouseUp"
-          @touchmove.prevent="onCropTouchMove" @touchend.prevent="onCropMouseUp">
-          <div class="absolute inset-0 bg-black/85 backdrop-blur-sm" @click="cancelCrop"></div>
-          <div class="relative z-10 bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full overflow-hidden select-none"
-            :style="`max-width:${CROP_CONTAINER_W + 48}px`">
-            <div class="px-6 py-4 border-b border-brand-border flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-xl flex items-center justify-center bg-brand-accent/20">
-                  <BIcon name="Crop" class="w-4 h-4 text-brand-accent" />
-                </div>
-                <div>
-                  <h3 class="font-bold text-white text-sm">{{ cropModal.type === 'avatar' ? 'Обрезать аватар' : 'Обрезать баннер' }}</h3>
-                  <p class="text-[11px] text-white/55">{{ cropModal.type === 'avatar' ? 'Квадрат 1:1 · Перемещайте и масштабируйте' : 'Прямоугольник · Перемещайте и масштабируйте' }}</p>
-                </div>
-              </div>
-              <button @click="cancelCrop" class="w-8 h-8 rounded-xl flex items-center justify-center text-white/55 hover:text-white hover:bg-white/10 transition-all">
-                <BIcon name="X" class="w-4 h-4" />
-              </button>
-            </div>
-            <div class="p-4 flex justify-center">
-              <div id="group-crop-container"
-                class="relative overflow-hidden rounded-2xl bg-black cursor-crosshair"
-                :style="`width:${CROP_CONTAINER_W}px;height:${CROP_CONTAINER_H}px;max-width:100%`"
-                @mousedown="onCropMouseDown" @touchstart.prevent="onCropTouchStart">
-                <img :src="cropModal.src" class="absolute inset-0 w-full h-full object-contain pointer-events-none" @load="onCropImageLoad" crossorigin="anonymous"/>
-                <template v-if="cropModal.imgW > 0">
-                  <div class="absolute bg-black/65 pointer-events-none" :style="`left:0;top:0;right:0;height:${cropModal.cy}px`"></div>
-                  <div class="absolute bg-black/65 pointer-events-none" :style="`left:0;bottom:0;right:0;top:${cropModal.cy+cropModal.ch}px`"></div>
-                  <div class="absolute bg-black/65 pointer-events-none" :style="`left:0;top:${cropModal.cy}px;width:${cropModal.cx}px;height:${cropModal.ch}px`"></div>
-                  <div class="absolute bg-black/65 pointer-events-none" :style="`right:0;top:${cropModal.cy}px;left:${cropModal.cx+cropModal.cw}px;height:${cropModal.ch}px`"></div>
-                  <div class="absolute border-2 border-white/90 pointer-events-none"
-                    :style="`left:${cropModal.cx}px;top:${cropModal.cy}px;width:${cropModal.cw}px;height:${cropModal.ch}px`">
-                    <div class="absolute inset-0 pointer-events-none opacity-25">
-                      <div class="absolute left-1/3 top-0 bottom-0 border-l border-white"></div>
-                      <div class="absolute left-2/3 top-0 bottom-0 border-l border-white"></div>
-                      <div class="absolute top-1/3 left-0 right-0 border-t border-white"></div>
-                      <div class="absolute top-2/3 left-0 right-0 border-t border-white"></div>
-                    </div>
-                  </div>
-                  <div v-for="corner in (['nw','ne','sw','se'] as const)" :key="corner"
-                    class="absolute w-5 h-5 pointer-events-auto" :class="`cursor-${corner}-resize`"
-                    :style="`left:${corner.includes('w') ? cropModal.cx - 4 : cropModal.cx + cropModal.cw - 17}px;top:${corner.includes('n') ? cropModal.cy - 4 : cropModal.cy + cropModal.ch - 17}px`"
-                    @mousedown.stop="startResize($event, corner)" @touchstart.stop.prevent="startResizeTouch($event, corner)">
-                    <div class="w-3.5 h-3.5 bg-white rounded-sm shadow-md border border-black/20"
-                      :class="{ 'ml-0 mt-0': corner === 'nw', 'ml-auto mt-0': corner === 'ne', 'ml-0 mt-auto': corner === 'sw', 'ml-auto mt-auto': corner === 'se' }"></div>
-                  </div>
-                </template>
-              </div>
-            </div>
-            <div class="px-6 py-4 border-t border-brand-border flex items-center justify-between">
-              <p class="text-xs text-white/35">{{ cropModal.type === 'avatar' ? 'Квадрат · Выход 400 × 400 px' : 'Прямоугольник · Выход 1200 px ширина' }}</p>
-              <div class="flex gap-3">
-                <button @click="cancelCrop" class="px-4 py-2 text-xs font-bold rounded-xl border border-brand-border text-white/55 hover:text-white hover:border-brand-muted/40 transition-all">Отмена</button>
-                <button @click="confirmCrop" :disabled="cropUploading"
-                  class="px-4 py-2 text-xs font-bold rounded-xl text-white transition-all disabled:opacity-50 shadow-lg flex items-center gap-2"
-                  :style="`background:${form.accentColor};box-shadow:0 4px 16px ${form.accentColor}44`">
-                  <span v-if="cropUploading" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                  <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                  {{ cropUploading ? 'Загрузка…' : 'Применить' }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <ImageCropModal
+      :show="cropModal.show"
+      :src="cropModal.src"
+      :type="cropModal.type"
+      :accent-color="form.accentColor"
+      :uploading="cropUploading"
+      @cancel="cancelCrop"
+      @confirm="confirmCrop"
+    />
 
     <AppHeader v-model:nsfwMode="nsfwMode" />
     <input ref="avatarInput" type="file" accept="image/*" class="sr-only" @change="onAvatarChange" />

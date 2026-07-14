@@ -8,6 +8,7 @@ export interface NotifToast {
   senderUsername: string
   message: string
   postId?: string
+  convId?: string
   createdAt: Date
 }
 
@@ -46,9 +47,26 @@ export function useNotifToast() {
     setTimeout(() => remove(id), 5000)
   }
 
+  /** New chat message — shown with the actual message preview instead of a generic label. */
+  function addMessageToast(opts: { senderName: string; senderAvatar: string | null; senderUsername: string; text: string; convId: string }) {
+    const id = String(++counter)
+    const t: NotifToast = {
+      id,
+      type: 'MESSAGE',
+      senderName: opts.senderName,
+      senderAvatar: opts.senderAvatar,
+      senderUsername: opts.senderUsername,
+      message: opts.text,
+      convId: opts.convId,
+      createdAt: new Date(),
+    }
+    toasts.value.unshift(t)
+    setTimeout(() => remove(id), 5000)
+  }
+
   function remove(id: string) {
     toasts.value = toasts.value.filter(t => t.id !== id)
   }
 
-  return { toasts, addToast, remove }
+  return { toasts, addToast, addMessageToast, remove }
 }

@@ -2692,8 +2692,10 @@ const makerGroupCache = ref<Record<string, { id: string; slug: string; name: str
 async function loadProfileFursonas(userId: string) {
   profileFursonaLoading.value = true
   try {
-    const res = await api.get(`/users/${userId}/fursonas`)
-    profileFursonas.value = res.data.success ? (res.data.data.fursonas ?? []) : []
+    // Backend model is 1:1 per user (Fursona.user_id is unique) — no `/fursonas` list endpoint exists.
+    const res = await api.get(`/users/${userId}/fursona`)
+    const fursona = res.data.success ? res.data.data.fursona : null
+    profileFursonas.value = fursona ? [fursona] : []
     selectedFursonaId.value = profileFursonas.value[0]?.id ?? null
   } catch {
     profileFursonas.value = []

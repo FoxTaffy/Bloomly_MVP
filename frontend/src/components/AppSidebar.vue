@@ -230,7 +230,7 @@ const categoryItems = computed(() => [
         <!-- Drawer content -->
         <div class="flex-1 px-3 py-4 space-y-6 overflow-y-auto">
           <!-- User profile -->
-          <div
+          <div v-if="auth.user"
             class="flex items-center gap-3 cursor-pointer group px-1"
             @click="navigate(() => router.push(`/profile/${auth.user?.username}`))">
             <img v-if="auth.avatarUrl" :src="auth.avatarUrl"
@@ -243,6 +243,14 @@ const categoryItems = computed(() => [
             <div>
               <h3 class="font-bold text-white text-sm group-hover:text-brand-accent transition-colors">{{ auth.displayName }}</h3>
               <p class="text-xs text-white/50">{{ langStore.t.goToProfile }}</p>
+            </div>
+          </div>
+          <!-- Auth still (re)loading — skeleton instead of a flash of "User" -->
+          <div v-else class="flex items-center gap-3 px-1 animate-pulse">
+            <div class="w-10 h-10 rounded-full bg-white/10"></div>
+            <div class="space-y-1.5">
+              <div class="h-3.5 w-24 rounded bg-white/10"></div>
+              <div class="h-2.5 w-16 rounded bg-white/5"></div>
             </div>
           </div>
 
@@ -318,6 +326,7 @@ const categoryItems = computed(() => [
 
     <!-- User profile block -->
     <div
+      v-if="auth.user"
       class="flex items-center gap-3 cursor-pointer group"
       @click="router.push(`/profile/${auth.user?.username}`)">
       <img
@@ -333,6 +342,14 @@ const categoryItems = computed(() => [
       <div>
         <h3 class="font-bold text-white text-sm group-hover:text-brand-accent transition-colors">{{ auth.displayName }}</h3>
         <p class="text-xs text-white/50">{{ langStore.t.goToProfile }}</p>
+      </div>
+    </div>
+    <!-- Auth still (re)loading — skeleton instead of a flash of "User" -->
+    <div v-else class="flex items-center gap-3 animate-pulse">
+      <div class="w-12 h-12 rounded-full bg-white/10"></div>
+      <div class="space-y-1.5">
+        <div class="h-3.5 w-28 rounded bg-white/10"></div>
+        <div class="h-2.5 w-20 rounded bg-white/5"></div>
       </div>
     </div>
 
