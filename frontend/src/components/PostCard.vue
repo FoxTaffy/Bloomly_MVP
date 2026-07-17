@@ -7,7 +7,7 @@
     </div>
   </div>
 
-  <div v-else class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all group select-none">
+  <div v-else class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all group">
     <!-- Announcement banner -->
     <div v-if="post.is_announcement" class="flex items-center gap-2 px-5 py-2.5 bg-brand-yellow/10 border-b border-brand-yellow/25">
       <BIcon name="Megaphone" class="w-3.5 h-3.5 text-brand-yellow flex-shrink-0" />
@@ -87,6 +87,7 @@
               </h4>
               <!-- Verification badge — only for user posts -->
               <template v-if="!effectiveGroupContext && post.author">
+                <span v-if="(post.author as any).deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
                 <img v-if="post.author.is_verified"
                   :src="verificationBadgeIcon((post.author as any).verification_type)"
                   class="w-4 h-4 flex-shrink-0" title="Верифицирован" />
@@ -101,10 +102,6 @@
                 class="inline-flex items-center gap-1 text-[10px] text-white/55 bg-brand-bg border border-brand-border px-1.5 py-0.5 rounded-md font-semibold">
                 <BIcon name="Repeat2" class="w-3 h-3" /> Репав
               </span>
-              <span v-if="isPinnedThis"
-                class="inline-flex items-center gap-1 text-[10px] text-brand-accent/70 bg-brand-accent/10 border border-brand-accent/20 px-1.5 py-0.5 rounded-md font-semibold">
-                <BIcon name="Pin" class="w-3 h-3" /> Закреплён
-              </span>
             </div>
             <p v-if="effectiveGroupContext" class="text-xs text-white/55 truncate">@{{ effectiveGroupContext.slug }} · {{ fmtDate(post.created_at) }}</p>
             <p v-else class="text-xs text-white/55 truncate">@{{ post.author.username }} · {{ fmtDate(post.created_at) }}</p>
@@ -117,13 +114,18 @@
             v-if="post.is_nsfw"
             class="px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide bg-brand-error/15 text-brand-error border border-brand-error/30"
           >NSFW</span>
+          <span
+            v-if="post.is_ai_generated"
+            :title="langStore.t.aiGenBadgeTooltip"
+            class="px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide bg-brand-purple/15 text-brand-purple border border-brand-purple/30"
+          >{{ langStore.t.aiGenBadge }}</span>
 
           <!-- Three-dot menu -->
           <div class="relative">
             <button
               ref="menuBtnRef"
               @click.stop="toggleMenu"
-              class="text-white/55 hover:text-white p-2 rounded-full hover:bg-white/5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+              class="text-white/55 hover:text-white p-2 rounded-full hover:bg-white/5 transition-colors"
             >
               <BIcon name="MoreHorizontal" class="w-5 h-5" />
             </button>
@@ -145,17 +147,33 @@
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5">
                 <BIcon name="PinOff" class="w-4 h-4 text-brand-accent" /> Открепить
               </button>
-              <button v-if="isOwn" @click="startEdit"
+              <button v-if="isEditable" @click="startEdit"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5">
                 <BIcon name="Pencil" class="w-4 h-4 text-brand-accent" /> Редактировать
               </button>
-              <button v-if="isOwn" @click="doDelete" :disabled="isDeleting"
+              <button v-if="isOwn" @click="openStats"
+                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5">
+                <BIcon name="BarChart2" class="w-4 h-4 text-brand-accent" /> Статистика
+                <BIcon name="Crown" class="w-3.5 h-3.5 text-brand-yellow ml-auto" />
+              </button>
+              <button v-if="isOwn" @click="doToggleArchive" :disabled="isArchiving"
+                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5 disabled:opacity-50">
+                <BIcon :name="post.is_archived ? 'ArchiveRestore' : 'Archive'" class="w-4 h-4 text-brand-accent" />
+                {{ post.is_archived ? 'Разархивировать' : 'Архивировать' }}
+              </button>
+              <button v-if="isOwn" @click="doToggleComments" :disabled="isTogglingComments"
+                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5 disabled:opacity-50 whitespace-nowrap">
+                <BIcon :name="post.comments_disabled ? 'MessageSquare' : 'MessageSquareOff'" class="w-4 h-4 text-brand-accent" />
+                {{ post.comments_disabled ? 'Вкл. комментарии' : 'Откл. комментарии' }}
+              </button>
+              <button v-if="canDelete" @click="doDelete" :disabled="isDeleting"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 disabled:opacity-50">
-                <BIcon name="Trash2" class="w-4 h-4" /> Удалить
+                <BIcon name="Trash2" class="w-4 h-4" />
+                {{ isOwn ? 'Удалить' : 'Удалить (модерация)' }}
               </button>
 
               <!-- Divider if owner -->
-              <div v-if="isOwn" class="my-1 border-t border-brand-border/50" />
+              <div v-if="canDelete" class="my-1 border-t border-brand-border/50" />
 
               <!-- Copy link -->
               <button @click="copyPostLink" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5 hover:text-white">
@@ -164,7 +182,7 @@
               </button>
 
               <!-- Share -->
-              <button @click="showMenu = false; toggleShareMenu($event)" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5 hover:text-white">
+              <button @click="showMenu = false; showShareModal = true" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5 hover:text-white">
                 <BIcon name="Share2" class="w-4 h-4" /> Поделиться
               </button>
 
@@ -287,9 +305,7 @@
             @click.stop="togglePostTranslate"
             class="mt-1.5 flex items-center gap-1 text-[11px] text-white/35 hover:text-brand-accent transition-colors"
           >
-            <svg v-if="!postTranslating" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
-            </svg>
+            <BIcon v-if="!postTranslating" name="Languages" class="w-3 h-3" />
             <span v-if="postTranslating" class="w-3 h-3 border border-brand-accent/60 border-t-transparent rounded-full animate-spin" />
             {{ postShowTranslation ? langStore.t.showOriginal : langStore.t.autoTranslate }}
           </button>
@@ -450,6 +466,7 @@
           </span>
           <span
             v-for="tag in post.tags" :key="tag.tag?.id ?? tag.id"
+            @click.stop="goToTag(tag.tag?.name ?? tag.name)"
             class="px-3 py-1 bg-brand-bg text-white/55 text-xs font-medium rounded-full border border-brand-border hover:bg-brand-border hover:text-white cursor-pointer transition-colors"
           >
             #{{ tag.tag?.name ?? tag.name }}
@@ -476,7 +493,7 @@
           <div class="flex items-center gap-1.5 mb-0.5">
             <span class="text-white/80 text-xs font-bold">{{ topComment.author?.display_name || topComment.author?.username }}</span>
             <span class="text-white/35 text-[10px] flex items-center gap-0.5">
-              <svg class="w-2.5 h-2.5 text-emerald-400" viewBox="0 0 24 24" fill="currentColor"><path d="M9 19V13H5l7-9 7 9h-4v6H9z"/></svg>
+              <BIcon name="ArrowBigUp" class="w-2.5 h-2.5 text-emerald-400" fill="currentColor" />
               {{ topComment.rating }}
             </span>
           </div>
@@ -488,13 +505,13 @@
       <div class="flex items-center justify-between pt-4 mt-4 border-t border-brand-border">
         <div class="flex items-center gap-2">
           <!-- Vote -->
-          <div class="flex items-center gap-0.5 bg-brand-bg rounded-full px-1 py-0.5 border border-brand-border">
+          <div class="flex items-center h-8 gap-0.5 bg-brand-bg rounded-full px-1 border border-brand-border">
             <button @click="vote(1)"
               class="p-1 rounded-full transition-all duration-150"
               :class="localVote === 1
                 ? 'text-emerald-400 drop-shadow-[0_0_6px_rgba(52,211,153,0.7)]'
                 : 'text-white/40 hover:text-emerald-400'">
-              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" :fill-opacity="localVote === 1 ? 1 : 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19V13H5l7-9 7 9h-4v6H9z"/></svg>
+              <BIcon name="ArrowBigUp" class="w-5 h-5" :fill="localVote === 1 ? 'currentColor' : 'none'" />
             </button>
             <span class="font-bold text-sm min-w-[26px] text-center tabular-nums"
               :class="localVote === 1 ? 'text-emerald-400' : localVote === -1 ? 'text-rose-400' : localRating > 0 ? 'text-emerald-300/80' : localRating < 0 ? 'text-rose-300/80' : 'text-white/60'">
@@ -505,7 +522,7 @@
               :class="localVote === -1
                 ? 'text-rose-400 drop-shadow-[0_0_6px_rgba(251,113,133,0.7)]'
                 : 'text-white/40 hover:text-rose-400'">
-              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" :fill-opacity="localVote === -1 ? 1 : 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5v6h4l-7 9-7-9h4V5h6z"/></svg>
+              <BIcon name="ArrowBigDown" class="w-5 h-5" :fill="localVote === -1 ? 'currentColor' : 'none'" />
             </button>
           </div>
 
@@ -513,7 +530,7 @@
           <button v-if="!adMode" @click="toggleRepaw"
             :disabled="authStore.user?.id === post.author?.id"
             :title="authStore.user?.id === post.author?.id ? 'Нельзя репавсить свой пост' : undefined"
-            class="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-semibold border transition-all"
+            class="flex items-center h-8 gap-1 px-2.5 rounded-full text-xs font-semibold border transition-all"
             :class="[
               localRepawed
                 ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
@@ -526,7 +543,7 @@
 
           <!-- Comments toggle -->
           <button @click="isExpanded = !isExpanded"
-            class="flex items-center gap-1 px-2.5 py-1.5 rounded-full border text-xs transition-all"
+            class="flex items-center h-8 gap-1 px-2.5 rounded-full border text-xs transition-all"
             :class="isExpanded
               ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
               : 'bg-brand-bg border-brand-border text-white/55 hover:text-white'">
@@ -535,47 +552,26 @@
           </button>
         </div>
 
-        <div class="flex items-center gap-1">
+        <div class="flex items-center h-8 gap-1">
           <!-- Favourite -->
           <button @click="toggleFavourite"
-            class="p-2 rounded-full border transition-all"
+            class="w-8 h-8 flex items-center justify-center rounded-full border transition-all"
             :class="localFavourited
               ? 'bg-yellow-500/15 border-yellow-500/40 text-yellow-400'
               : 'bg-brand-bg border-brand-border text-white/55 hover:text-yellow-400 hover:border-yellow-500/30'">
-            <BIcon :name="localFavourited ? 'BookmarkCheck' : 'Bookmark'" class="w-4.5 h-4.5" />
+            <BIcon :name="localFavourited ? 'BookmarkCheck' : 'Bookmark'" class="w-3.5 h-3.5" />
           </button>
 
           <!-- Share -->
-          <div v-if="!adMode" class="relative">
-            <button ref="shareBtnRef" @click="toggleShareMenu"
-              class="p-2 rounded-full border bg-brand-bg border-brand-border text-white/55 hover:text-white hover:border-brand-border/80 transition-all">
-              <BIcon name="Share2" class="w-4.5 h-4.5" />
-            </button>
+          <button v-if="!adMode" @click="showShareModal = true"
+            class="w-8 h-8 flex items-center justify-center rounded-full border bg-brand-bg border-brand-border text-white/55 hover:text-white hover:border-brand-border/80 transition-all">
+            <BIcon name="Share2" class="w-3.5 h-3.5" />
+          </button>
 
-            <!-- Dropdown teleported to body to escape overflow:hidden -->
-            <Teleport to="body">
-              <div
-                v-if="showShareMenu"
-                v-click-outside="() => showShareMenu = false"
-                class="fixed z-[9998] w-52 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1"
-                :style="{ top: shareMenuPos.top, right: shareMenuPos.right }"
-              >
-                <button @click="quickCopyLink" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/80 hover:bg-white/5 hover:text-white">
-                  <BIcon :name="linkCopied ? 'CheckCheck' : 'Link'" class="w-4 h-4" />
-                  {{ linkCopied ? langStore.t.copiedBtn : langStore.t.exportCopyLink }}
-                </button>
-                <button v-if="authStore.user?.id !== post.author?.id" @click="quickRepost"
-                  class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-white/5"
-                  :class="localRepawed ? 'text-brand-accent' : 'text-white/80 hover:text-white'">
-                  <BIcon name="Repeat2" class="w-4 h-4" />
-                  {{ localRepawed ? langStore.t.repawed : langStore.t.repaw }}
-                </button>
-                <button @click="quickEmbed" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/80 hover:bg-white/5 hover:text-white">
-                  <BIcon :name="embedCopied ? 'CheckCheck' : 'Code2'" class="w-4 h-4" />
-                  {{ embedCopied ? langStore.t.embedCopied : langStore.t.exportEmbed }}
-                </button>
-              </div>
-            </Teleport>
+          <!-- Views count -->
+          <div class="flex items-center h-8 gap-1 px-1.5 text-white/35 text-xs select-none" title="Просмотры">
+            <BIcon name="Eye" class="w-3.5 h-3.5" />
+            <span class="tabular-nums">{{ post.views_count ?? 0 }}</span>
           </div>
         </div>
       </div>
@@ -584,10 +580,16 @@
     <!-- ── Report modal ──────────────────────────────────────────────────── -->
     <ReportModal v-model="showReportModal" :target-id="post.id" target-type="post" />
 
+    <!-- ── Post statistics modal ─────────────────────────────────────────── -->
+    <PostStatsModal v-if="showStatsModal" :post-id="post.id" @close="showStatsModal = false" />
+
+    <!-- ── Share modal ────────────────────────────────────────────────────── -->
+    <SharePostModal v-if="showShareModal" :post-id="post.id" :post-url="postUrl" @close="showShareModal = false" />
+
     <!-- ── Comments section ──────────────────────────────────────────────── -->
     <Transition name="slide">
       <div v-if="isExpanded" class="border-t border-brand-border px-5 pb-5 pt-4">
-        <PostComments :post-id="post.id" />
+        <PostComments :post-id="post.id" :comments-disabled="!!post.comments_disabled && !isOwn" />
       </div>
     </Transition>
 
@@ -661,7 +663,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
@@ -675,6 +677,8 @@ import CustomPlayer from '@/components/CustomPlayer.vue'
 import PostComments from '@/components/PostComments.vue'
 import PostLightbox from '@/components/PostLightbox.vue'
 import ReportModal from '@/components/ReportModal.vue'
+import PostStatsModal from '@/components/PostStatsModal.vue'
+import SharePostModal from '@/components/SharePostModal.vue'
 
 // ── Module-level mention user cache (shared across all PostCard instances) ──
 type MentionUser = { id: string; username: string; display_name: string | null; avatar_url: string | null; banner_url: string | null }
@@ -738,6 +742,8 @@ const props = defineProps<{
   initialRepawed?: boolean
   initialFavourited?: boolean
   adMode?: boolean
+  /** True when the viewer is an owner/admin/moderator of this post's group — lets them moderate content they didn't author. */
+  canModerate?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -752,6 +758,10 @@ const emit = defineEmits<{
 const router = useRouter()
 const authStore = useAuthStore()
 const langStore = useLangStore()
+
+function goToTag(name: string) {
+  router.push({ path: '/search', query: { q: name } })
+}
 
 // ── Auto-translate ────────────────────────────────────────────────────────
 const {
@@ -800,6 +810,15 @@ function toggleMenu(e: MouseEvent) {
   }
   showMenu.value = !showMenu.value
 }
+
+// Меню позиционируется fixed по координатам кнопки на момент открытия —
+// при скролле страницы оно "зависает" на месте, поэтому просто закрываем его.
+function closeMenuOnScroll() {
+  if (showMenu.value) showMenu.value = false
+}
+onMounted(() => window.addEventListener('scroll', closeMenuOnScroll, true))
+onUnmounted(() => window.removeEventListener('scroll', closeMenuOnScroll, true))
+
 const isEditing   = ref(false)
 const editContent = ref('')
 const isSaving    = ref(false)
@@ -810,23 +829,10 @@ const notifyLoaded  = ref(false)    // статус загружен с серв
 const isBlocking  = ref(false)
 const isHidden    = ref(false)    // «не интересно» — скрыт из фида
 const linkCopied  = ref(false)
-const embedCopied = ref(false)
-
-const showShareMenu = ref(false)
-const shareBtnRef   = ref<HTMLElement | null>(null)
-const shareMenuPos  = ref({ top: '0px', right: '0px' })
-
-function toggleShareMenu(e?: MouseEvent) {
-  e?.stopPropagation()
-  if (!showShareMenu.value && shareBtnRef.value) {
-    const rect = shareBtnRef.value.getBoundingClientRect()
-    shareMenuPos.value = {
-      top: `${rect.bottom + 6}px`,
-      right: `${window.innerWidth - rect.right}px`,
-    }
-  }
-  showShareMenu.value = !showShareMenu.value
-}
+const isArchiving = ref(false)
+const isTogglingComments = ref(false)
+const showStatsModal = ref(false)
+const showShareModal = ref(false)
 
 // NSFW / paid reveal state
 const { nsfwEnabled, enableNsfw } = useNsfwMode()
@@ -837,6 +843,7 @@ const repawCountdown = ref(5)
 let repawTimer: ReturnType<typeof setTimeout> | null = null
 let repawCountdownTimer: ReturnType<typeof setInterval> | null = null
 const repawPending = ref(false)
+const votePending = ref(false)
 
 const lightboxOpen  = ref(false)
 const lightboxIndex = ref(0)
@@ -890,8 +897,25 @@ async function loadMentionUsers() {
   }
 }
 
-onMounted(() => { loadMentionUsers() })
+onMounted(() => {
+  loadMentionUsers()
+  recordView()
+})
 watch(() => props.post.content, () => { loadMentionUsers() })
+
+// ── View tracking ─────────────────────────────────────────────────────────
+// Dedup is enforced server-side (one PostView row per user+post), so repeat
+// mounts of the same card never inflate the count — only guard against firing
+// the request more than once per page load for the same post.
+const _viewedThisPageLoad = new Set<string>()
+function recordView() {
+  if (props.adMode || isOwn.value || !authStore.isAuthenticated) return
+  if (_viewedThisPageLoad.has(props.post.id)) return
+  _viewedThisPageLoad.add(props.post.id)
+  api.post(`/posts/${props.post.id}/view`).then((r) => {
+    if (r.data?.data?.counted) props.post.views_count = (props.post.views_count ?? 0) + 1
+  }).catch(() => {})
+}
 
 
 // ── Computed ──────────────────────────────────────────────────────────────
@@ -912,6 +936,11 @@ const topComment = computed(() => {
 const isOwn = computed(() =>
   !!authStore.user && (authStore.user.id === props.post.author_id || authStore.user.id === props.post.author?.id)
 )
+const POST_EDIT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+const isEditable = computed(() =>
+  isOwn.value && (Date.now() - new Date(props.post.created_at).getTime() < POST_EDIT_WINDOW_MS)
+)
+const canDelete = computed(() => isOwn.value || !!props.canModerate)
 const canPin = computed(() => props.isOwnProfile && isOwn.value)
 const isPinnedThis = computed(() => !!props.isPinnedPostId && props.isPinnedPostId === props.post.id)
 
@@ -982,7 +1011,8 @@ function isImg(url: string): boolean {
 
 // ── Actions ───────────────────────────────────────────────────────────────
 async function vote(value: 1 | -1) {
-  if (!authStore.isAuthenticated) return
+  if (!authStore.isAuthenticated || votePending.value) return
+  votePending.value = true
   const prev = localVote.value
   const prevRating = localRating.value
   const next: 1 | -1 | 0 = prev === value ? 0 : value
@@ -995,6 +1025,8 @@ async function vote(value: 1 | -1) {
   } catch {
     localVote.value = prev
     localRating.value = prevRating
+  } finally {
+    votePending.value = false
   }
 }
 
@@ -1133,30 +1165,6 @@ async function copyPostLink() {
   showMenu.value = false
 }
 
-async function quickCopyLink() {
-  try {
-    await navigator.clipboard.writeText(postUrl.value)
-    linkCopied.value = true
-    setTimeout(() => { linkCopied.value = false }, 2000)
-  } catch {}
-  showShareMenu.value = false
-}
-
-async function quickRepost() {
-  showShareMenu.value = false
-  await toggleRepaw()
-}
-
-async function quickEmbed() {
-  const embedCode = `<iframe src="${postUrl.value}" width="560" height="315" frameborder="0"></iframe>`
-  try {
-    await navigator.clipboard.writeText(embedCode)
-    embedCopied.value = true
-    setTimeout(() => { embedCopied.value = false }, 2000)
-  } catch {}
-  showShareMenu.value = false
-}
-
 function markNotInterested() {
   showMenu.value = false
   isHidden.value = true
@@ -1168,6 +1176,46 @@ async function toggleNotify() {
     const r = await api.post(`/users/${props.post.author?.id}/notify-toggle`)
     if (r.data.success) notifyPosts.value = r.data.data.notifyPosts
   } catch {}
+}
+
+function openStats() {
+  showMenu.value = false
+  const tier = (authStore.user as any)?.subscription_tier
+  if (tier === 'pro' || tier === 'business') {
+    showStatsModal.value = true
+  } else {
+    router.push('/subscriptions')
+  }
+}
+
+async function doToggleArchive() {
+  if (isArchiving.value) return
+  isArchiving.value = true
+  showMenu.value = false
+  try {
+    const r = await api.post(`/posts/${props.post.id}/archive`)
+    if (r.data.success) {
+      // Either direction of the toggle means the post no longer belongs in
+      // whatever list is currently showing it (feed vs. the Архив tab).
+      emit('deleted', props.post.id)
+    }
+  } catch {} finally {
+    isArchiving.value = false
+  }
+}
+
+async function doToggleComments() {
+  if (isTogglingComments.value) return
+  isTogglingComments.value = true
+  showMenu.value = false
+  try {
+    const r = await api.post(`/posts/${props.post.id}/comments-toggle`)
+    if (r.data.success) {
+      emit('updated', { ...props.post, comments_disabled: r.data.data.commentsDisabled })
+    }
+  } catch {} finally {
+    isTogglingComments.value = false
+  }
 }
 
 async function blockUser() {

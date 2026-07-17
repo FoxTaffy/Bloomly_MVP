@@ -8,10 +8,12 @@ import GroupCard from '@/components/groups/GroupCard.vue'
 import EventCard from '@/components/groups/EventCard.vue'
 import SoonBadge from '@/components/groups/SoonBadge.vue'
 import CreateGroupModal from '@/components/groups/CreateGroupModal.vue'
+import AdSlot from '@/components/ads/AdSlot.vue'
 import { useGroupsStore, type GroupType } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useLangStore } from '@/stores/lang'
+import api from '@/api'
 
 const router = useRouter()
 const { nsfwEnabled: nsfwMode } = useNsfwMode()
@@ -31,9 +33,28 @@ const pinnedGroupIds = computed(() => {
   return ids
 })
 
+// Membership tracking — used to hide "unsubscribe"/"notify" actions for groups the user hasn't joined
+const memberGroupIds = computed(() => {
+  const ids = new Set<string>()
+  groupsStore.myGroups.forEach(m => ids.add(m.group_id))
+  return ids
+})
+
 async function handleBookmark(groupId: string) {
   try {
     await groupsStore.togglePinGroup(groupId)
+  } catch {}
+}
+
+async function handleUnsubscribe(groupId: string) {
+  try {
+    await groupsStore.leaveGroup(groupId)
+  } catch {}
+}
+
+async function handleNotify(groupId: string) {
+  try {
+    await groupsStore.toggleGroupNotification(groupId)
   } catch {}
 }
 
@@ -104,7 +125,15 @@ async function loadStaticData() {
   ])
 }
 
-onMounted(async () => { await Promise.all([loadData(), loadStaticData()]) })
+const activeAds = ref<any[]>([])
+async function loadActiveAds() {
+  try {
+    const res = await api.get('/admin/ads/active')
+    if (res.data.success) activeAds.value = res.data.data.ads
+  } catch {}
+}
+
+onMounted(async () => { await Promise.all([loadData(), loadStaticData(), loadActiveAds()]) })
 
 function selectCategory(key: string) {
   selectedCategory.value = key
@@ -214,54 +243,9 @@ function fmtMembers(n: number): string {
 
       <main class="flex-1 min-w-0 pb-28">
 
-        <!-- ════════ AD BANNER PLACEHOLDER ════════ -->
-        <div class="mb-6 rounded-3xl overflow-hidden border border-brand-border relative"
-          style="background: linear-gradient(110deg, #0f0c29 0%, #1a0d35 35%, #0d1b35 65%, #0c1a0f 100%)">
-          <!-- Grid pattern overlay -->
-          <div class="absolute inset-0 opacity-[0.04] pointer-events-none"
-            style="background-image: linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px); background-size: 32px 32px" />
-          <!-- Glow effects -->
-          <div class="absolute top-0 left-1/4 w-64 h-32 rounded-full opacity-20 blur-3xl pointer-events-none"
-            style="background: radial-gradient(circle, #a855f7, transparent 70%)" />
-          <div class="absolute bottom-0 right-1/4 w-48 h-24 rounded-full opacity-15 blur-2xl pointer-events-none"
-            style="background: radial-gradient(circle, #3b82f6, transparent 70%)" />
-
-          <div class="relative z-10 px-6 py-7 flex flex-col sm:flex-row items-start sm:items-center gap-5 justify-between">
-            <div class="flex items-start gap-4">
-              <!-- Icon with glow -->
-              <div class="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 mt-0.5"
-                style="background: linear-gradient(135deg, #a855f7 0%, #3b82f6 100%); box-shadow: 0 0 20px rgba(168,85,247,0.4)">
-                <BIcon name="Megaphone" class="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <div class="flex items-center gap-2 mb-1">
-                  <span class="text-[9px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-full"
-                    style="background: linear-gradient(90deg, #a855f7, #3b82f6); color: white">РЕКЛАМА</span>
-                </div>
-                <h3 class="text-white font-black text-base leading-snug">Bloomly Business — продвижение для брендов</h3>
-                <p class="text-white/50 text-xs mt-1.5 leading-relaxed">Рекламные баннеры · Продвижение группы · Аналитика аудитории</p>
-                <div class="flex items-center gap-3 mt-2.5">
-                  <span class="text-[10px] text-white/30 flex items-center gap-1">
-                    <BIcon name="Users" class="w-3 h-3" />
-                    1,200+ брендов
-                  </span>
-                  <span class="text-[10px] text-white/30 flex items-center gap-1">
-                    <BIcon name="TrendingUp" class="w-3 h-3" />
-                    До 5х больше охвата
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div class="flex items-center gap-2 sm:shrink-0">
-              <button class="px-4 py-2.5 rounded-xl text-xs font-bold border border-white/10 text-white/60 hover:text-white/80 hover:border-white/20 transition-colors">
-                Узнать больше
-              </button>
-              <button class="px-4 py-2.5 rounded-xl text-xs font-black text-white transition-all hover:brightness-110"
-                style="background: linear-gradient(90deg, #a855f7, #3b82f6); box-shadow: 0 0 16px rgba(168,85,247,0.35)">
-                Подключиться →
-              </button>
-            </div>
-          </div>
+        <!-- ════════ AD SLOT ════════ -->
+        <div class="mb-6">
+          <AdSlot variant="hero" :ad="activeAds[0] ?? null" />
         </div>
 
         <!-- ════════ SEARCH + CATEGORIES + CREATE ════════ -->
@@ -375,8 +359,11 @@ function fmtMembers(n: number): string {
               :key="group.id"
               :group="group"
               :is-pinned="pinnedGroupIds.has(group.id)"
+              :is-member="memberGroupIds.has(group.id)"
               @click="router.push({ name: 'group-detail', params: { slugOrId: group.slug } })"
               @bookmark="handleBookmark(group.id)"
+              @notify="handleNotify(group.id)"
+              @unsubscribe="handleUnsubscribe(group.id)"
             />
           </div>
           <div v-else class="text-center py-16">

@@ -26,6 +26,11 @@ const saving = ref(false)
 
 const group = computed(() => groupsStore.currentGroup)
 const isOwner = computed(() => group.value?.owner_id === authStore.user?.id)
+// Admin (not owner) gets most of the settings page, minus finance/danger/promote-to-admin.
+const isAdmin = computed(() => {
+  if (isOwner.value || !group.value) return false
+  return groupsStore.myGroups.some(m => m.group_id === group.value!.id && m.role === 'admin')
+})
 
 // ── Toast ───────────────────────────────────────────────────────────────────
 const toast = reactive({ show: false, type: 'success' as 'success' | 'error', message: '' })
@@ -84,12 +89,17 @@ const filteredNavSections = computed(() => {
   return sections.value.filter((s: any) => s.label.toLowerCase().includes(q))
 })
 
+// Finance/danger settings are owner-only — an admin managing day-to-day operations
+// never sees or touches donations, bank card, member-visibility or group deletion.
+const OWNER_ONLY_SECTIONS = new Set(['sec-finance', 'sec-donations', 'sec-danger'])
+
 const sections = computed(() => {
-  const s = [...baseSections]
+  let s = [...baseSections]
   if (group.value?.type === 'event') s.push(...eventSections.filter((x: any) => !x.hidden))
   if (group.value?.type === 'creative') s.push(...creativeSections)
   if (group.value?.type === 'shop') s.push(...shopSections)
   s.push(...tailSections.filter((x: any) => !x.hidden))
+  if (!isOwner.value) s = s.filter((x: any) => !OWNER_ONLY_SECTIONS.has(x.id))
   return s
 })
 
@@ -105,6 +115,9 @@ const MEMBER_ROLES = [
   { value: 'volunteer',     label: 'Волонтёр',         color: '#fb923c', iconPath: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
   { value: 'guest_of_honor',label: 'Почётный гость',  color: '#fbbf24', iconPath: 'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z' },
 ]
+// Only the owner may hand out the admin role — an admin managing roles can only grant
+// moderator and below, so they can never create a peer admin.
+const assignableRoles = computed(() => isOwner.value ? MEMBER_ROLES : MEMBER_ROLES.filter(r => r.value !== 'admin'))
 const ROLE_META: Record<string, { label: string; color: string; iconPath: string }> = {
   owner:          { label: 'Владелец',        color: '#f59e0b', iconPath: 'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z' },
   admin:          { label: 'Администратор',   color: '#3b82f6', iconPath: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
@@ -188,6 +201,9 @@ const sortedMembers = computed(() => {
 const dropdownY = ref(0)
 const dropdownX = ref(0)
 
+const DROPDOWN_WIDTH = 224 // w-56
+const DROPDOWN_MAX_HEIGHT = 340
+
 function openRoleDropdown(event: MouseEvent, userId: string) {
   if (roleDropdownFor.value === userId) {
     roleDropdownFor.value = null
@@ -195,8 +211,18 @@ function openRoleDropdown(event: MouseEvent, userId: string) {
   }
   const btn = event.currentTarget as HTMLElement
   const rect = btn.getBoundingClientRect()
-  dropdownY.value = rect.bottom + 8
-  dropdownX.value = rect.right
+
+  // Clamp horizontally so the menu's right edge never lands past the viewport edge
+  // and its left edge never goes negative (e.g. narrow viewports, buttons near an edge).
+  const right = Math.min(Math.max(rect.right, DROPDOWN_WIDTH + 8), window.innerWidth - 8)
+  dropdownX.value = right
+
+  // Flip above the button if there isn't enough room below.
+  const fitsBelow = rect.bottom + 8 + DROPDOWN_MAX_HEIGHT <= window.innerHeight
+  dropdownY.value = fitsBelow
+    ? rect.bottom + 8
+    : Math.max(8, rect.top - DROPDOWN_MAX_HEIGHT - 8)
+
   roleDropdownFor.value = userId
 }
 
@@ -480,6 +506,7 @@ const form = reactive({
   donationsEnabled: false,
   bankCardMasked: '',
   supportTiers: [] as Array<{ emoji: string; name: string; price: string; desc: string }>,
+  businessEnabled: false,
 })
 
 // Slug: авто-санитизация ввода
@@ -516,6 +543,7 @@ const savedForm = reactive({
   donationsEnabled: false,
   bankCardMasked: '',
   supportTiers: [] as Array<{ emoji: string; name: string; price: string; desc: string }>,
+  businessEnabled: false,
 })
 
 function snapshotToSaved() {
@@ -539,6 +567,7 @@ function snapshotToSaved() {
     donationsEnabled: form.donationsEnabled,
     bankCardMasked: form.bankCardMasked,
     supportTiers: JSON.parse(JSON.stringify(form.supportTiers)),
+    businessEnabled: form.businessEnabled,
   })
 }
 
@@ -563,6 +592,7 @@ function resetForm() {
     donationsEnabled: savedForm.donationsEnabled,
     bankCardMasked: savedForm.bankCardMasked,
     supportTiers: JSON.parse(JSON.stringify(savedForm.supportTiers)),
+    businessEnabled: savedForm.businessEnabled,
   })
   avatarOriginalSrc.value = ''
   bannerOriginalSrc.value = ''
@@ -588,7 +618,8 @@ const isDirty = computed(() => {
     JSON.stringify(form.whatToBring) !== JSON.stringify(savedForm.whatToBring) ||
     form.donationsEnabled !== savedForm.donationsEnabled ||
     form.bankCardMasked !== savedForm.bankCardMasked ||
-    JSON.stringify(form.supportTiers) !== JSON.stringify(savedForm.supportTiers)
+    JSON.stringify(form.supportTiers) !== JSON.stringify(savedForm.supportTiers) ||
+    form.businessEnabled !== savedForm.businessEnabled
   )
 })
 
@@ -842,6 +873,7 @@ async function load() {
   form.donationsEnabled = (g as any).donations_enabled ?? false
   form.bankCardMasked = (g as any).bank_card_masked || ''
   form.supportTiers = Array.isArray((g as any).support_tiers) ? (g as any).support_tiers : []
+  form.businessEnabled = (g as any).business_enabled ?? false
   if (g.commissionInfo) {
     const c = g.commissionInfo
     commForm.value.status = c.status || 'closed'
@@ -856,7 +888,11 @@ async function load() {
   }
   snapshotToSaved()
 }
-onMounted(load)
+onMounted(async () => {
+  await load()
+  const sec = route.query.section as string | undefined
+  if (sec && sections.value.some(s => s.id === sec)) openSec(sec)
+})
 
 // ── File handlers (open crop instead of direct upload) ──────────────────────
 function onAvatarChange(e: Event) {
@@ -934,10 +970,15 @@ async function save() {
       groupBgUrl: form.groupBgUrl || undefined,
       groupFrame: form.groupFrame || undefined,
       groupTheme: form.groupTheme || undefined,
-      hideAdmins: form.hideAdmins,
-      hiddenMemberIds: form.hiddenMemberIds,
-      donationsEnabled: form.donationsEnabled,
-      bankCardMasked: form.bankCardMasked || null,
+      // Finance/member-visibility fields are owner-only server-side — an admin's save must
+      // omit them entirely, otherwise the backend rejects the whole request.
+      ...(isOwner.value ? {
+        hideAdmins: form.hideAdmins,
+        hiddenMemberIds: form.hiddenMemberIds,
+        donationsEnabled: form.donationsEnabled,
+        bankCardMasked: form.bankCardMasked || null,
+        businessEnabled: form.businessEnabled,
+      } : {}),
       supportTiers: form.supportTiers.filter((t: { name: string }) => t.name.trim()),
     })
     if (group.value.type === 'creative') {
@@ -1040,7 +1081,7 @@ async function deleteGroup() {
           <div class="h-8 w-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin mx-auto" />
         </div>
 
-        <template v-else-if="isOwner">
+        <template v-else-if="isOwner || isAdmin">
           <div class="flex flex-row-reverse gap-6 items-start">
 
             <!-- ── Right sticky sidebar ──────────────────────────────── -->
@@ -1609,7 +1650,7 @@ async function deleteGroup() {
                               @click="doSetRole(m.user_id, 'moderator')">
                               Модератор
                             </button>
-                            <button type="button" :disabled="!!memberSaving[m.user_id]"
+                            <button v-if="isOwner" type="button" :disabled="!!memberSaving[m.user_id]"
                               class="px-2.5 py-1 rounded-lg border border-[#3b82f6]/30 text-[#3b82f6] text-[10px] font-bold hover:bg-[#3b82f6]/10 transition-colors disabled:opacity-40"
                               @click="doSetRole(m.user_id, 'admin')">
                               Админ
@@ -2406,6 +2447,33 @@ async function deleteGroup() {
                       </ul>
                     </div>
 
+                    <!-- Business tab toggle -->
+                    <div class="space-y-2">
+                      <div class="flex items-center gap-2">
+                        <BIcon name="Briefcase" class="w-4 h-4 text-white/40" />
+                        <p class="text-sm font-bold text-white">Вкладка «Бизнес» (заказы)</p>
+                      </div>
+                      <div class="flex items-center justify-between px-4 py-3.5 bg-brand-bg border border-brand-border rounded-2xl transition-all">
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm font-semibold text-white">
+                            {{ form.businessEnabled ? 'Вкладка «Бизнес» включена' : 'Вкладка «Бизнес» выключена' }}
+                          </p>
+                          <p class="text-xs mt-0.5 text-white/40">Участники смогут оформлять заказы и общаться с вами в чате по каждому заказу</p>
+                        </div>
+                        <button
+                          @click="form.businessEnabled = !form.businessEnabled"
+                          class="relative w-12 h-6 rounded-full transition-all flex-shrink-0"
+                          :style="form.businessEnabled ? 'background: #10b981' : 'background: rgba(255,255,255,0.08)'">
+                          <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all"
+                            :class="form.businessEnabled ? 'left-[calc(100%-1.375rem)]' : 'left-0.5'" />
+                        </button>
+                      </div>
+                      <router-link v-if="form.businessEnabled && group" :to="{ name: 'group-business', params: { slugOrId: group.slug } }"
+                        class="inline-flex items-center gap-1 text-xs text-brand-accent hover:underline">
+                        Открыть вкладку «Бизнес» <BIcon name="ArrowRight" class="w-3 h-3" />
+                      </router-link>
+                    </div>
+
                     <!-- Support tiers -->
                     <div class="space-y-3">
                       <div class="flex items-center justify-between">
@@ -2546,8 +2614,8 @@ async function deleteGroup() {
                           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="(ROLE_META[m.role] ?? ROLE_META.member).iconPath"/></svg>
                           {{ (ROLE_META[m.role] ?? ROLE_META.member).label }}
                         </span>
-                        <!-- Eye toggle (hide/show from public) - for non-members only -->
-                        <button v-if="['owner','admin','moderator'].includes(m.role)"
+                        <!-- Eye toggle (hide/show from public) - owner-only, for non-members only -->
+                        <button v-if="isOwner && ['owner','admin','moderator'].includes(m.role)"
                           type="button"
                           @click="toggleHideMember(m.user_id)"
                           class="w-8 h-8 rounded-xl border flex items-center justify-center transition-all flex-shrink-0"
@@ -2724,7 +2792,7 @@ async function deleteGroup() {
                               @click="doSetRole(m.user_id, 'moderator')">
                               Модератор
                             </button>
-                            <button type="button" :disabled="!!memberSaving[m.user_id]"
+                            <button v-if="isOwner" type="button" :disabled="!!memberSaving[m.user_id]"
                               class="px-2.5 py-1 rounded-lg border border-[#3b82f6]/30 text-[#3b82f6] text-[10px] font-bold hover:bg-[#3b82f6]/10 transition-colors disabled:opacity-40"
                               @click="doSetRole(m.user_id, 'admin')">
                               Админ
@@ -2932,7 +3000,7 @@ async function deleteGroup() {
       <div class="px-3 pb-1 pt-0.5 mb-1 border-b border-brand-border">
         <p class="text-xs font-semibold text-white/40">Изменить роль</p>
       </div>
-      <button v-for="r in MEMBER_ROLES" :key="r.value"
+      <button v-for="r in assignableRoles" :key="r.value"
         @click="doSetRole(roleDropdownMember!.user_id, r.value)"
         class="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm hover:bg-white/5 transition-colors text-left"
         :class="roleDropdownMember!.role === r.value ? 'text-white font-bold' : 'text-white/70'">
@@ -2944,7 +3012,8 @@ async function deleteGroup() {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
         </svg>
       </button>
-      <div class="border-t border-brand-border mt-1 pt-1">
+      <!-- Admins may not remove other admins — only the owner can -->
+      <div v-if="isOwner || roleDropdownMember!.role !== 'admin'" class="border-t border-brand-border mt-1 pt-1">
         <button @click="doKickMember(roleDropdownMember!.user_id); closeRoleDropdown()"
           :disabled="memberKicking[roleDropdownMember!.user_id]"
           class="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors text-left">

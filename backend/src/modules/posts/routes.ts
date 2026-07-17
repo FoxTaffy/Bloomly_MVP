@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
-import { createPostHandler, votePostHandler, getPostsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler, getPostByIdHandler, getMyBookmarksHandler } from './controller.js';
+import { createPostHandler, votePostHandler, getPostsHandler, searchPostsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, suggestTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler, getPostByIdHandler, getMyBookmarksHandler, recordPostViewHandler, toggleArchivePostHandler, toggleCommentsDisabledHandler, getUserArchivedPostsHandler, getPostStatsHandler, getTagInsightsHandler } from './controller.js';
 
 // The authenticate decorator is declared in auth/routes.ts; this re-declaration
 // merges into the same global FastifyInstance augmentation via TypeScript.
@@ -18,6 +18,7 @@ const createPostSchema = {
       // caption). postService.createPost enforces "content OR mediaUrls" instead.
       content: { type: 'string' },
       isNsfw: { type: 'boolean' },
+      isAiGenerated: { type: 'boolean' },
       category: { type: 'string' },
       tags: { type: 'array', items: { type: 'string' } },
       mediaUrls: { type: 'array', items: { type: 'string' } },
@@ -58,18 +59,22 @@ export async function postsRoutes(fastify: FastifyInstance) {
 
   // ── Static / non-parametric ─────────────────────────────────────────────
   fastify.get('/', { schema: getPostsSchema }, getPostsHandler as any);
+  fastify.get('/search', tryAuth, searchPostsHandler as any);
   fastify.get('/personalized', auth, getPersonalizedPostsHandler as any);
   fastify.get('/trending-tags', getTrendingTagsHandler as any);
+  fastify.get('/tags/suggest', suggestTagsHandler as any);
   fastify.get('/status', auth, getUserPostStatusHandler as any);
 
   // ── Private "me" routes (must come before /user/:userId) ────────────────
   fastify.get('/me/bookmarks', auth, getMyBookmarksHandler as any);
+  fastify.get('/me/tag-insights', auth, getTagInsightsHandler as any);
 
   // ── User-specific ───────────────────────────────────────────────────────
-  fastify.get('/user/:userId',        tryAuth, getUserPostsHandler as any);
-  fastify.get('/user/:userId/media',  tryAuth, getUserMediaPostsHandler as any);
-  fastify.get('/user/:userId/repaws', tryAuth, getUserRepawsHandler as any);
-  fastify.get('/user/:userId/likes',  tryAuth, getUserFavouritesHandler as any);
+  fastify.get('/user/:userId',          tryAuth, getUserPostsHandler as any);
+  fastify.get('/user/:userId/media',    tryAuth, getUserMediaPostsHandler as any);
+  fastify.get('/user/:userId/repaws',   tryAuth, getUserRepawsHandler as any);
+  fastify.get('/user/:userId/likes',    tryAuth, getUserFavouritesHandler as any);
+  fastify.get('/user/:userId/archived', auth,    getUserArchivedPostsHandler as any);
 
   // ── Comment sub-resources ───────────────────────────────────────────────
   fastify.post('/comments/:commentId/vote', auth, voteCommentHandler as any);
@@ -85,4 +90,8 @@ export async function postsRoutes(fastify: FastifyInstance) {
   fastify.post('/:id/favourite', auth, favouritePostHandler as any);
   fastify.post('/:id/comments',  auth, createCommentHandler as any);
   fastify.get('/:id/comments',   getCommentsHandler as any);
+  fastify.post('/:id/view',      tryAuth, recordPostViewHandler as any);
+  fastify.post('/:id/archive',   auth, toggleArchivePostHandler as any);
+  fastify.post('/:id/comments-toggle', auth, toggleCommentsDisabledHandler as any);
+  fastify.get('/:id/stats',      auth, getPostStatsHandler as any);
 }

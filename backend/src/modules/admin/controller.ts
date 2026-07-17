@@ -3,6 +3,7 @@ import { adminService } from './service.js';
 import prisma from '../../config/prisma.js';
 import { isModerator, isAdmin, isOwner } from '../../lib/roles.js';
 import { notificationService } from '../notifications/service.js';
+import { usersService } from '../users/service.js';
 
 interface JwtUser { id: string; role: string }
 
@@ -43,14 +44,31 @@ export const getStatsHandler = async (req: FastifyRequest, reply: FastifyReply) 
 };
 
 export const getUsersHandler = async (
-  req: FastifyRequest<{ Querystring: { page?: string; limit?: string; search?: string } }>,
+  req: FastifyRequest<{ Querystring: { page?: string; limit?: string; search?: string; sortBy?: string } }>,
   reply: FastifyReply,
 ) => {
   if (!requireMod(req, reply)) return;
   const page  = parseInt(req.query.page  || '1');
   const limit = parseInt(req.query.limit || '30');
-  const result = await adminService.getUsers(page, limit, req.query.search);
+  const result = await adminService.getUsers(page, limit, req.query.search, req.query.sortBy);
   return reply.send({ success: true, data: result, error: null });
+};
+
+export const updateUserSubscriptionHandler = async (
+  req: FastifyRequest<{ Params: { id: string }; Body: { tier: string } }>,
+  reply: FastifyReply,
+) => {
+  if (!requireAdmin(req, reply)) return;
+  const actor = req.user as JwtUser;
+  try {
+    const user = await usersService.updateSubscriptionTier(req.params.id, req.body.tier);
+    await prisma.autoModLog.create({
+      data: { user_id: req.params.id, action: 'subscription_change', reason: `Тариф изменён на "${req.body.tier}" администратором ${actor.id}`, category: 'manual', score: 0 },
+    });
+    return reply.send({ success: true, data: { user }, error: null });
+  } catch (err: any) {
+    return reply.code(err.statusCode || 400).send({ success: false, data: null, error: { code: 'INVALID_TIER', message: err.message } });
+  }
 };
 
 export const updateUserRoleHandler = async (
@@ -155,6 +173,17 @@ export const resolveReportHandler = async (
   return reply.send({ success: true, data: { report }, error: null });
 };
 
+export const resolveReportsBatchHandler = async (
+  req: FastifyRequest<{ Body: { ids: string[]; status: 'reviewed' | 'dismissed'; note?: string } }>,
+  reply: FastifyReply,
+) => {
+  if (!requireMod(req, reply)) return;
+  const { id: resolverId } = req.user as JwtUser;
+  const { ids, status, note } = req.body;
+  await adminService.resolveReportsBatch(ids, resolverId, status, note);
+  return reply.send({ success: true, data: { count: ids.length }, error: null });
+};
+
 export const getAdsHandler = async (
   req: FastifyRequest<{ Querystring: { status?: string } }>,
   reply: FastifyReply,
@@ -170,7 +199,7 @@ export const getActiveAdsHandler = async (_req: FastifyRequest, reply: FastifyRe
 };
 
 export const submitAdHandler = async (
-  req: FastifyRequest<{ Body: { title: string; description?: string; imageUrl?: string; linkUrl: string; contactInfo?: string } }>,
+  req: FastifyRequest<{ Body: { title: string; description?: string; imageUrl?: string; linkUrl: string; contactInfo?: string; priceLabel?: string } }>,
   reply: FastifyReply,
 ) => {
   const requesterId = (req.user as JwtUser | undefined)?.id;
@@ -189,6 +218,15 @@ export const reviewAdHandler = async (
     endsAt:   req.body.endsAt   ? new Date(req.body.endsAt)   : undefined,
   });
   return reply.send({ success: true, data: { ad }, error: null });
+};
+
+export const deleteAdHandler = async (
+  req: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  if (!requireAdmin(req, reply)) return;
+  await adminService.deleteAd(req.params.id);
+  return reply.send({ success: true, data: null, error: null });
 };
 
 export const trackImpressionHandler = async (
@@ -293,6 +331,22 @@ export const freezeUserHandler = async (
     data: { user_id: req.params.id, action: 'freeze', reason: `${reason} (мод: ${actor.id})`, category: 'manual', score: 0 },
   });
   await notificationService.create({ receiverId: req.params.id, type: 'automod_freeze', meta: { reason } });
+  return reply.send({ success: true, data: null, error: null });
+};
+
+export const markDeceasedHandler = async (
+  req: FastifyRequest<{ Params: { id: string }; Body: { note?: string } }>,
+  reply: FastifyReply,
+) => {
+  if (!requireMod(req, reply)) return;
+  const note = req.body?.note ?? null;
+  await prisma.user.update({ where: { id: req.params.id }, data: { deceased_at: new Date(), deceased_note: note } });
+  return reply.send({ success: true, data: null, error: null });
+};
+
+export const unmarkDeceasedHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+  if (!requireMod(req, reply)) return;
+  await prisma.user.update({ where: { id: req.params.id }, data: { deceased_at: null, deceased_note: null } });
   return reply.send({ success: true, data: null, error: null });
 };
 

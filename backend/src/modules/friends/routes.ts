@@ -11,6 +11,7 @@ import {
   getFollowersHandler,
   getFollowingHandler,
   getBirthdaysHandler,
+  getNearbyBirthdaysHandler,
   getSuggestionsHandler,
   getFriendStatusHandler,
 } from './controller.js';
@@ -35,6 +36,9 @@ export async function friendsRoutes(fastify: FastifyInstance) {
 
   // GET /api/friends/birthdays — дни рождения друзей
   fastify.get('/birthdays', auth, getBirthdaysHandler as any);
+
+  // GET /api/friends/birthdays/nearby — др вчера/сегодня/завтра (для баннера над диалогами)
+  fastify.get('/birthdays/nearby', auth, getNearbyBirthdaysHandler as any);
 
   // GET /api/friends/suggestions — рекомендации
   fastify.get('/suggestions', auth, getSuggestionsHandler as any);

@@ -64,9 +64,7 @@
             </template>
             <template v-else>
               {{ other?.display_name || other?.username || 'Собеседник' }}
-              <span v-if="e2eActive" class="text-brand-success" title="Сквозное шифрование активно">
-                <BIcon name="Lock" class="w-3 h-3 inline-block -mt-0.5" />
-              </span>
+              <span v-if="(other as any)?.deceased_at" title="Светлая память">🪦</span>
             </template>
           </template>
         </p>
@@ -403,10 +401,13 @@
 
             <!-- User info -->
             <div class="pt-11 pb-4 px-5 text-center border-b border-brand-border">
-              <h3 class="text-base font-bold text-white truncate">{{ other?.display_name || other?.username }}</h3>
+              <h3 class="text-base font-bold text-white truncate flex items-center justify-center gap-1.5">
+                {{ other?.display_name || other?.username }}
+                <span v-if="(other as any)?.deceased_at" title="Светлая память">🪦</span>
+              </h3>
               <p class="text-sm text-white/45 mt-0.5">@{{ other?.username }}</p>
               <p class="text-xs mt-1.5 flex items-center justify-center gap-1" :class="isPartnerOnline ? 'text-green-400' : 'text-white/30'">
-                {{ isPartnerOnline ? '● В сети' : '● Не в сети' }}
+                {{ isPartnerOnline ? '● В сети' : `● ${partnerLastSeenLabel}` }}
                 <BIcon v-if="isPartnerOnline && partnerDeviceIcon" :name="partnerDeviceIcon!" class="w-3 h-3" :title="partnerDevice ?? undefined" />
               </p>
               <!-- Quick actions -->
@@ -742,7 +743,7 @@
         <template v-for="(msg, idx) in displayList" :key="msg.id">
         <!-- Date divider -->
         <div v-if="shouldShowDateDivider(idx)" class="flex items-center justify-center my-3 select-none">
-          <span class="px-3 py-1 rounded-full bg-brand-bg/70 backdrop-blur-sm border border-white/8 text-[10px] font-bold text-white/55 tracking-wide uppercase">
+          <span class="px-3 py-1 rounded-full bg-brand-bg/70 backdrop-blur-sm border border-brand-accent/25 text-[10px] font-bold text-white/55 tracking-wide uppercase">
             {{ formatDateDivider(msg.created_at) }}
           </span>
         </div>
@@ -756,7 +757,7 @@
           <template v-if="msg.type === 'system'">
             <div class="flex items-center gap-2 w-full max-w-md">
               <div class="flex-1 h-px bg-white/8" />
-              <span class="flex-shrink-0 flex items-center gap-1.5 text-[11px] text-white/40 bg-brand-bg/60 border border-white/8 px-3 py-1 rounded-full">
+              <span class="flex-shrink-0 flex items-center gap-1.5 text-[11px] text-white/40 bg-brand-bg/60 border border-brand-accent/25 px-3 py-1 rounded-full">
                 <BIcon name="Pin" class="w-2.5 h-2.5 text-amber-400/70 flex-shrink-0" />
                 {{ msg.text }}
               </span>
@@ -845,8 +846,11 @@
             <!-- Media (compact MiniPlayer) -->
             <div v-else-if="msg.file_url"
               class="rounded-2xl overflow-hidden border border-brand-border/60 mb-0.5 max-w-[280px] w-full shadow-sm"
-              :class="isMine(msg) ? 'rounded-br-md' : 'rounded-bl-md'">
-              <MiniPlayer :src="msg.file_url" :msg-type="msg.type" @click-image="openImageLightbox(msg.file_url!)" />
+              :class="[
+                isMine(msg) ? 'rounded-br-md' : 'rounded-bl-md',
+                (msg.type === 'voice' || msg.type === 'audio') ? (isMine(msg) ? 'bg-brand-accent border-brand-accent' : 'bg-brand-card') : '',
+              ]">
+              <MiniPlayer :src="msg.file_url" :msg-type="msg.type" :is-mine="isMine(msg)" @click-image="openImageLightbox(msg.file_url!)" />
             </div>
 
             <!-- ── Payment request card (chat-only order card, not linked to Dealers' Den) ── -->
@@ -917,6 +921,10 @@
                 </p>
               </div>
             </div>
+
+            <!-- ── Shared post card ── -->
+            <SharedPostCard v-else-if="msg.type === 'post_share' && msg.metadata?.postId"
+              :post-id="msg.metadata.postId" :is-mine="isMine(msg)" />
 
             <!-- ── Story reply card ─────────────────────────────────── -->
             <template v-if="parseStoryReply(msg)">
@@ -1004,8 +1012,14 @@
               </div>
             </template>
 
-            <!-- Text bubble (not shown for pure sticker, order cards, or story reply with text already shown in card) -->
-            <div v-if="!['sticker', 'payment_request', 'payment_confirmation', 'tip'].includes(msg.type) && !parseStoryReply(msg) && !/^\[story_reply:/u.test(msg.text || '') && (msg.text || !msg.file_url)"
+            <!-- Emoji-only message (1-3 emoji, no bubble — Telegram/WhatsApp-style) -->
+            <div v-if="!msg.file_url && isEmojiOnlyText(msg.text)"
+              class="text-[56px] leading-none select-none px-1 py-0.5">
+              {{ msg.text }}
+            </div>
+
+            <!-- Text bubble (not shown for pure sticker, order cards, emoji-only, or story reply with text already shown in card) -->
+            <div v-else-if="!['sticker', 'payment_request', 'payment_confirmation', 'tip'].includes(msg.type) && !parseStoryReply(msg) && !/^\[story_reply:/u.test(msg.text || '') && (msg.text || !msg.file_url)"
               @click="tappedMsgId = tappedMsgId === msg.id ? null : msg.id"
               :class="[
                 'relative px-3 py-[7px] rounded-2xl text-sm leading-relaxed break-words min-w-[60px] transition-shadow',
@@ -1074,7 +1088,11 @@
 
               <!-- Read status icons (only on my messages) -->
               <template v-if="isMine(msg)">
-                <BIcon v-if="msg._sending" name="Clock" class="w-3 h-3 text-white/55" title="Отправляется..." />
+                <button v-if="msg._failed" type="button" @click="retrySend(msg)"
+                  class="flex items-center gap-0.5 text-red-400 hover:text-red-300" title="Не отправлено — нажмите, чтобы повторить">
+                  <BIcon name="AlertCircle" class="w-3 h-3" />
+                </button>
+                <BIcon v-else-if="msg._sending" name="Clock" class="w-3 h-3 text-white/55" title="Отправляется..." />
                 <span v-else-if="isRead(msg)" class="flex items-center text-brand-accent" title="Прочитано">
                   <BIcon name="CheckCheck" class="w-3 h-3" />
                 </span>
@@ -1371,11 +1389,11 @@
         </div>
       </Transition>
 
-      <form @submit.prevent="submit" class="flex items-end gap-2">
+      <form @submit.prevent="submit" class="flex items-center gap-2">
         <!-- Attachment button -->
         <button type="button" @click="fileInputEl?.click()"
           :disabled="isUploading || isRecording"
-          class="flex-shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center text-white/55 hover:text-brand-accent hover:bg-brand-bg transition-all disabled:opacity-40"
+          class="flex-shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center text-white/55 hover:text-brand-accent hover:bg-brand-bg transition-all disabled:opacity-40"
           title="Прикрепить медиа">
           <BIcon v-if="isUploading" name="Loader2" class="w-4 h-4 animate-spin" />
           <BIcon v-else name="Paperclip" class="w-4 h-4" />
@@ -1385,7 +1403,7 @@
         <!-- Emoji button -->
         <button type="button"
           @click="showEmojiPicker = !showEmojiPicker; showStickerPanel = false"
-          :class="['flex-shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center transition-all',
+          :class="['flex-shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center transition-all',
             showEmojiPicker ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/55 hover:text-brand-accent hover:bg-brand-bg']"
           title="Эмодзи">
           <BIcon name="Smile" class="w-5 h-5" />
@@ -1394,7 +1412,7 @@
         <!-- Sticker button -->
         <button type="button"
           @click="showStickerPanel = !showStickerPanel; showEmojiPicker = false"
-          :class="['flex-shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center transition-all',
+          :class="['flex-shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center transition-all',
             showStickerPanel ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/55 hover:text-brand-accent hover:bg-brand-bg']"
           title="Стикеры">
           <BIcon name="Sticker" class="w-5 h-5" />
@@ -1402,7 +1420,7 @@
 
         <!-- Recording in progress bar (takes the place of the textarea row when recording) -->
         <button v-if="isRecording" type="button" @click="stopRecording"
-          class="flex-1 flex items-center gap-2 px-3 h-10 mb-0.5 rounded-2xl bg-brand-error/15 border border-brand-error/40 text-brand-error hover:bg-brand-error/25 transition-all">
+          class="flex-1 flex items-center gap-2 px-3 h-10 rounded-2xl bg-brand-error/15 border border-brand-error/40 text-brand-error hover:bg-brand-error/25 transition-all">
           <span class="w-2 h-2 rounded-full bg-brand-error animate-ping flex-shrink-0" />
           <span class="text-xs font-mono flex-1">{{ fmtRecording(recordingSeconds) }}</span>
           <span class="text-xs text-brand-error/70">нажмите для отправки</span>
@@ -1490,7 +1508,7 @@
           <button v-if="!draft.trim() && !pendingFileUrl && !isRecording" key="mic"
             type="button" @click="startRecording"
             :disabled="isUploading || !!mediaPreview"
-            class="flex-shrink-0 w-10 h-10 mb-0.5 rounded-2xl bg-brand-card border border-brand-border hover:bg-brand-bg text-white/55 hover:text-brand-accent transition-all flex items-center justify-center disabled:opacity-40"
+            class="flex-shrink-0 w-10 h-10 rounded-2xl bg-brand-card border border-brand-border hover:bg-brand-bg text-white/55 hover:text-brand-accent transition-all flex items-center justify-center disabled:opacity-40"
             title="Голосовое сообщение">
             <BIcon name="Mic" class="w-4 h-4" />
           </button>
@@ -1498,7 +1516,7 @@
           <button v-else key="send"
             type="submit"
             :disabled="(!draft.trim() && !pendingFileUrl) || isUploading"
-            class="flex-shrink-0 w-10 h-10 mb-0.5 rounded-2xl bg-brand-accent hover:bg-brand-accent-plus disabled:opacity-30 transition-all shadow-lg shadow-brand-accent/20 active:scale-95 flex items-center justify-center"
+            class="flex-shrink-0 w-10 h-10 rounded-2xl bg-brand-accent hover:bg-brand-accent-plus disabled:opacity-30 transition-all shadow-lg shadow-brand-accent/20 active:scale-95 flex items-center justify-center"
             title="Отправить">
             <BIcon name="SendHorizontal" class="w-4 h-4 text-white" />
           </button>
@@ -1631,13 +1649,14 @@ import CustomPlayer from '@/components/CustomPlayer.vue'
 import MiniPlayer from '@/components/MiniPlayer.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import PostLightbox from '@/components/PostLightbox.vue'
+import SharedPostCard from '@/components/SharedPostCard.vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import StickerPanel from '@/components/StickerPanel.vue'
 import StickerRenderer from '@/components/StickerRenderer.vue'
 import StickerPackPreviewModal from '@/components/StickerPackPreviewModal.vue'
 import api from '@/api'
 import { wsClient } from '@/lib/wsClient'
-import { getOrCreateKeyPair, deriveSharedKey, encryptMsg, decryptMsg, isEncrypted } from '@/lib/e2e'
+import { isEncrypted } from '@/lib/e2e'
 import { deviceKind } from '@/lib/deviceIcon'
 
 const props = defineProps<{
@@ -1678,12 +1697,17 @@ const partnerLastSeenAt = ref<Date | null>(null)
 const partnerDevice     = ref<string | null>(null)
 const partnerLastSeenLabel = computed(() => {
   if (!partnerLastSeenAt.value) return 'не в сети'
-  const diff = Math.floor((Date.now() - partnerLastSeenAt.value.getTime()) / 60000)
-  if (diff < 1) return 'был(а) только что'
-  if (diff < 60) return `был(а) ${diff} мин. назад`
+  const seenAt = partnerLastSeenAt.value
+  const diff = Math.floor((Date.now() - seenAt.getTime()) / 60000)
+  if (diff < 1) return 'был(а) в сети только что'
+  if (diff < 60) return `был(а) в сети ${diff} мин. назад`
   const h = Math.floor(diff / 60)
-  if (h < 24) return `был(а) ${h} ч. назад`
-  return 'не в сети'
+  if (h < 24) return `был(а) в сети ${h} ч. назад`
+  const now = new Date()
+  const time = seenAt.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
+  const sameYear = seenAt.getFullYear() === now.getFullYear()
+  const date = seenAt.toLocaleDateString('ru', sameYear ? { day: 'numeric', month: 'long' } : { day: 'numeric', month: 'long', year: 'numeric' })
+  return `был(а) в сети ${date} в ${time}`
 })
 const partnerDeviceIcon = computed(() => {
   const kind = deviceKind(partnerDevice.value)
@@ -1705,10 +1729,7 @@ const isRecording     = ref(false)
 const recordingSeconds = ref(0)
 let mediaRecorder: MediaRecorder | null = null
 let recordTimer: ReturnType<typeof setInterval> | null = null
-// E2E
-const sharedKey     = ref<CryptoKey | null>(null)
-const e2eActive     = ref(false)
-const decryptedCache = ref<Record<string, string>>({})
+// Legacy E2E messages — decryption removed, only used to show a placeholder for old ciphertext
 // Block/delete modals
 const showDeleteModal = ref(false)
 const showBlockModal  = ref(false)
@@ -1986,6 +2007,17 @@ const STICKER_MAP: Record<string, string> = {
 }
 function getStickerEmoji(key: string): string { return STICKER_MAP[key] ?? '🎭' }
 
+// Matches only emoji / ZWJ sequences / variation selectors / flag pairs / whitespace
+const EMOJI_ONLY_RE = /^[\p{Extended_Pictographic}‍️\u{1F1E6}-\u{1F1FF}\s]+$/u
+function isEmojiOnlyText(text: string | undefined | null): boolean {
+  if (!text) return false
+  const trimmed = text.trim()
+  if (!trimmed || !EMOJI_ONLY_RE.test(trimmed)) return false
+  const segmenter = (Intl as any).Segmenter ? new (Intl as any).Segmenter(undefined, { granularity: 'grapheme' }) : null
+  const count = segmenter ? Array.from(segmenter.segment(trimmed)).length : Array.from(trimmed).length
+  return count >= 1 && count <= 3
+}
+
 const FWD_RE = /^↩️ Переслано от (.+?)\n/
 // Format v2 (JSON): [story_reply:{"img":...,"exp":...,"name":...,"ava":...}]\nreply
 // Format v1 (legacy pipe): [story_reply:IMAGE_URL|EXPIRES_AT|AUTHOR_NAME|AUTHOR_AVATAR]\nreply
@@ -2125,6 +2157,7 @@ function startForward(msg: any) {
 function forwardMsgPreview(msg: Message): string {
   if (msg.type === 'sticker') return '🎭 Стикер'
   if (msg.type === 'voice' || msg.type === 'audio') return '🎤 Голосовое'
+  if (msg.type === 'post_share') return '📎 Пост'
   if (msg.text && isEncrypted(msg.text)) return '🔒 Зашифрованное сообщение'
   if (msg.encrypted_text && !msg.text) return '🔒 Зашифрованное сообщение'
   if (msg.text) return previewMsgText(msg.text, 60)
@@ -2303,43 +2336,12 @@ function openImageLightbox(url: string) {
   lightboxStart.value = Math.max(0, lightboxUrls.value.indexOf(url))
 }
 
-// ── E2E encryption ─────────────────────────────────────────────────────────────
-async function setupE2E() {
-  sharedKey.value = null
-  e2eActive.value = false
-  // Only DM conversations support E2E
-  if (props.conv?.is_group || !props.other?.id || !auth.user?.id) return
-  try {
-    // 1. Get or generate our key pair
-    const { privateKey, publicKeyJwk } = await getOrCreateKeyPair(auth.user.id)
-    // 2. Upload our public key to the server (idempotent PUT)
-    await api.put('/users/me/public-key', { public_key: JSON.stringify(publicKeyJwk) })
-    // 3. Fetch the partner's public key
-    const res = await api.get(`/users/${props.other.id}/public-key`)
-    const theirKeyRaw: string | null = res.data?.data?.public_key ?? null
-    if (!theirKeyRaw) return // partner has no key yet — E2E not possible
-    const theirKeyJwk = JSON.parse(theirKeyRaw) as JsonWebKey
-    // 4. Derive shared secret
-    sharedKey.value = await deriveSharedKey(privateKey, theirKeyJwk)
-    e2eActive.value = true
-  } catch {
-    // E2E setup failure is non-fatal — fall back to plain text
-    sharedKey.value = null
-    e2eActive.value = false
-  }
-}
-
 function getDisplayText(msg: Message): string {
   const text = msg.text
   if (!text) return ''
-  if (!isEncrypted(text)) return text
-  if (decryptedCache.value[msg.id]) return decryptedCache.value[msg.id]
-  if (!sharedKey.value) return '🔒 ...' // key not established yet — never show raw ciphertext
-  // Trigger async decryption
-  decryptMsg(text, sharedKey.value).then((plain) => {
-    if (plain) decryptedCache.value = { ...decryptedCache.value, [msg.id]: plain }
-  })
-  return '🔒 ...' // while decrypting
+  // Legacy messages encrypted before E2E was removed — no key to decrypt them anymore
+  if (isEncrypted(text)) return langStore.t.encryptedMessagePreview
+  return text
 }
 
 // ── Voice recording ─────────────────────────────────────────────────────────────
@@ -2494,11 +2496,6 @@ async function submit() {
   const text = draft.value.trim()
   if (!text && !pendingFileUrl.value) return
   const fileUrl = pendingFileUrl.value
-  // Encrypt text if E2E is active
-  let sendText = text
-  if (text && sharedKey.value) {
-    try { sendText = await encryptMsg(text, sharedKey.value) } catch { sendText = text }
-  }
   const rId = replyTo.value?.id ?? null
   draft.value = ''
   pendingFileUrl.value = null
@@ -2506,8 +2503,13 @@ async function submit() {
   pendingFileIsVideo.value = false
   replyTo.value = null
   resetTextarea()
-  store.sendMessage(props.convId, sendText, fileUrl, undefined, rId)
+  store.sendMessage(props.convId, text, fileUrl, undefined, rId)
   scrollToBottom(true)
+}
+
+function retrySend(msg: Message) {
+  store.removeLocalMessage(props.convId, msg.id)
+  store.sendMessage(props.convId, msg.text ?? '', msg.file_url, msg.type === 'text' ? undefined : msg.type, msg.reply_to_id ?? null)
 }
 
 function newline() { draft.value += '\n'; nextTick(autoResize) }
@@ -2669,8 +2671,13 @@ async function fetchOnlineStatus() {
     const wasOnline = isPartnerOnline.value
     isPartnerOnline.value = !!res.data?.data?.[props.other.id]
     partnerDevice.value = res.data?.deviceData?.[props.other.id] ?? null
-    if (wasOnline && !isPartnerOnline.value) {
+    if (isPartnerOnline.value) {
+      partnerLastSeenAt.value = null
+    } else if (wasOnline) {
       partnerLastSeenAt.value = new Date()
+    } else {
+      const lastSeen = res.data?.lastSeenData?.[props.other.id]
+      partnerLastSeenAt.value = lastSeen ? new Date(lastSeen) : null
     }
   } catch { /* silent */ }
 }
@@ -2680,7 +2687,6 @@ onMounted(() => {
   if (!props.conv?.is_group) {
     fetchOnlineStatus()
     onlineTimer = setInterval(fetchOnlineStatus, 30_000)
-    setupE2E()
     fetchBlockStatus()
   } else {
     fetchGroupMembers()
@@ -2700,10 +2706,8 @@ watch(() => props.other?.id, () => {
   partnerDevice.value = null
   if (!props.conv?.is_group) {
     fetchOnlineStatus()
-    setupE2E()
     fetchBlockStatus()
   }
-  decryptedCache.value = {}
 })
 
 watch(() => props.convId, () => {

@@ -69,6 +69,7 @@ export interface Group {
   group_theme: string | null
   hide_admins: boolean
   hidden_member_ids: string
+  business_enabled: boolean
   created_at: string
   owner: GroupOwner
   communityChat?: { id: string } | null
@@ -213,15 +214,61 @@ export interface GroupMessage {
 
 export type TodoStatus = 'WAITING' | 'SKETCH' | 'LINEART' | 'COLORING' | 'FINISHED'
 
+// Todo item status is a free key referencing a TodoColumn.key (custom columns) or
+// one of the default TodoStatus values — kept as `string` since groups can rename/replace columns.
 export interface ArtistQueueItem {
   id: string
   group_id: string
   title: string
   description: string | null
-  status: TodoStatus
+  status: string
   position: number
   created_at: string
   updated_at: string
+}
+
+export interface TodoColumn {
+  key: string
+  label: string
+  icon: string
+  color: string
+}
+
+// ── Orders (Business tab) ───────────────────────────────────────────────────
+export type OrderStatus = TodoStatus
+
+export interface Order {
+  id: string
+  group_id: string
+  customer_id: string
+  title: string
+  description: string | null
+  form_data: Record<string, unknown> | null
+  status: OrderStatus
+  position: number
+  deadline_at: string | null
+  conversation_id: string | null
+  created_at: string
+  updated_at: string
+  customer: { id: string; username: string; display_name: string | null; avatar_url: string | null }
+}
+
+export interface BusinessStats {
+  postsCount: number
+  messagesCount: number
+  ordersByStatus: Record<OrderStatus, number>
+}
+
+// ── Group balance (donations) ───────────────────────────────────────────────
+export interface GroupTransaction {
+  id: string
+  group_id: string
+  user_id: string | null
+  type: 'DONATION' | 'ADJUSTMENT'
+  amount: string
+  message: string | null
+  created_at: string
+  user: { id: string; username: string; display_name: string | null; avatar_url: string | null } | null
 }
 
 export type GroupPermission =
@@ -426,7 +473,7 @@ export const useGroupsStore = defineStore('groups', () => {
     return data.data.posts
   }
 
-  async function createGroupPost(groupId: string, input: { content: string; title?: string; postType?: string; isNsfw?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; mediaOriginalUrls?: string[]; tags?: string[]; visibility?: string; category?: string }) {
+  async function createGroupPost(groupId: string, input: { content: string; title?: string; postType?: string; isNsfw?: boolean; isAiGenerated?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; mediaOriginalUrls?: string[]; tags?: string[]; visibility?: string; category?: string }) {
     const { data } = await api.post(`/groups/${groupId}/posts`, input)
     return data.data.post
   }
@@ -538,6 +585,16 @@ export const useGroupsStore = defineStore('groups', () => {
 
   // ── Artist Queue (Todo) ───────────────────────────────────────────────────
 
+  async function fetchTodoColumns(groupId: string) {
+    const { data } = await api.get(`/groups/${groupId}/todo-columns`)
+    return data.data.columns as TodoColumn[]
+  }
+
+  async function updateTodoColumns(groupId: string, columns: TodoColumn[]) {
+    const { data } = await api.put(`/groups/${groupId}/todo-columns`, { columns })
+    return data.data.columns as TodoColumn[]
+  }
+
   async function fetchTodoItems(groupId: string) {
     const { data } = await api.get(`/groups/${groupId}/todo`)
     return data.data.items as ArtistQueueItem[]
@@ -559,6 +616,49 @@ export const useGroupsStore = defineStore('groups', () => {
 
   async function reorderTodoItems(groupId: string, orderedIds: string[]) {
     await api.put(`/groups/${groupId}/todo/reorder`, { orderedIds })
+  }
+
+  // ── Orders (Business tab) ─────────────────────────────────────────────────
+
+  async function fetchOrders(groupId: string): Promise<Order[]> {
+    const { data } = await api.get(`/groups/${groupId}/orders`)
+    return data.data.orders as Order[]
+  }
+
+  async function createOrder(groupId: string, payload: { title: string; description?: string; formData?: Record<string, unknown>; deadlineAt?: string }): Promise<Order> {
+    const { data } = await api.post(`/groups/${groupId}/orders`, payload)
+    return data.data.order as Order
+  }
+
+  async function updateOrderStatus(groupId: string, orderId: string, status: OrderStatus): Promise<Order> {
+    const { data } = await api.patch(`/groups/${groupId}/orders/${orderId}/status`, { status })
+    return data.data.order as Order
+  }
+
+  async function deleteOrder(groupId: string, orderId: string): Promise<void> {
+    await api.delete(`/groups/${groupId}/orders/${orderId}`)
+  }
+
+  async function fetchBusinessStats(groupId: string): Promise<BusinessStats> {
+    const { data } = await api.get(`/groups/${groupId}/orders-stats`)
+    return data.data.stats as BusinessStats
+  }
+
+  async function getOrderConversation(groupId: string, orderId: string): Promise<string> {
+    const { data } = await api.get(`/groups/${groupId}/orders/${orderId}/conversation`)
+    return data.data.conversationId as string
+  }
+
+  // ── Group balance (donations) ─────────────────────────────────────────────
+
+  async function donateToGroup(groupId: string, amount: number, message?: string): Promise<{ balance: string; transaction: GroupTransaction }> {
+    const { data } = await api.post(`/groups/${groupId}/donate`, { amount, message })
+    return data.data
+  }
+
+  async function getGroupBalance(groupId: string): Promise<{ balance: string; transactions: GroupTransaction[] }> {
+    const { data } = await api.get(`/groups/${groupId}/balance`)
+    return data.data
   }
 
   // ── Custom Roles ────────────────────────────────────────────────────
@@ -628,7 +728,10 @@ export const useGroupsStore = defineStore('groups', () => {
     loadSubEvents, createSubEvent, updateSubEvent, deleteSubEvent,
     loadGroupMessages, sendGroupMessageRest,
     fetchMembers, changeMemberRole, removeMember,
+    fetchTodoColumns, updateTodoColumns,
     fetchTodoItems, createTodoItem, updateTodoItem, deleteTodoItem, reorderTodoItems,
+    fetchOrders, createOrder, updateOrderStatus, deleteOrder, fetchBusinessStats, getOrderConversation,
+    donateToGroup, getGroupBalance,
     fetchCustomRoles, createCustomRole, updateCustomRole, deleteCustomRole,
   }
 })

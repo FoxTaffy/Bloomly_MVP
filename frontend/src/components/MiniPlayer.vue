@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import BIcon from './BIcon.vue'
 
-const props = defineProps<{ src: string; msgType?: string }>()
+const props = defineProps<{ src: string; msgType?: string; isMine?: boolean }>()
 const emit  = defineEmits(['click-image'])
 
 const mediaEl     = ref<HTMLVideoElement | HTMLAudioElement | null>(null)
@@ -192,15 +192,15 @@ watch(() => props.src, async (newSrc) => {
     <!-- Paw play button -->
     <button @click="togglePlay"
       class="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-md"
-      :class="isPlaying ? 'bg-brand-accent' : 'bg-brand-accent/80 hover:bg-brand-accent'">
-      <svg v-if="!isPlaying" viewBox="0 0 15 15" fill="currentColor" class="w-4 h-4 text-white">
+      :class="isMine ? 'bg-white/90 hover:bg-white' : (isPlaying ? 'bg-brand-accent' : 'bg-brand-accent/80 hover:bg-brand-accent')">
+      <svg v-if="!isPlaying" viewBox="0 0 15 15" fill="currentColor" class="w-4 h-4" :class="isMine ? 'text-brand-accent' : 'text-white'">
         <path d="M5 0C3.89543 0 3 0.895431 3 2V3C3 4.10457 3.89543 5 5 5C6.10457 5 7 4.10457 7 3V2C7 0.895431 6.10457 0 5 0Z"/>
         <path d="M10 0C8.89543 0 8 0.895431 8 2V3C8 4.10457 8.89543 5 10 5C11.1046 5 12 4.10457 12 3V2C12 0.895431 11.1046 0 10 0Z"/>
         <path d="M2 5C0.895431 5 0 5.89543 0 7V7.5C0 8.60457 0.895431 9.5 2 9.5C3.10457 9.5 4 8.60457 4 7.5V7C4 5.89543 3.10457 5 2 5Z"/>
         <path d="M13 5C11.8954 5 11 5.89543 11 7V7.5C11 8.60457 11.8954 9.5 13 9.5C14.1046 9.5 15 8.60457 15 7.5V7C15 5.89543 14.1046 5 13 5Z"/>
         <path d="M9.61273 7.77893C8.51793 6.44953 6.48207 6.44953 5.38727 7.77893L2.46943 11.322C1.2614 12.7889 2.30486 15 4.20516 15C4.47668 15 4.74447 14.9368 4.98732 14.8154L5.34699 14.6355C6.70234 13.9578 8.29766 13.9578 9.65301 14.6355L10.0127 14.8154C10.2555 14.9368 10.5233 15 10.7948 15C12.6951 15 13.7386 12.7889 12.5306 11.322L9.61273 7.77893Z"/>
       </svg>
-      <BIcon v-else name="Pause" class="w-4 h-4 text-white" />
+      <BIcon v-else name="Pause" class="w-4 h-4" :class="isMine ? 'text-brand-accent' : 'text-white'" />
     </button>
 
     <!-- Waveform bars -->
@@ -212,16 +212,16 @@ watch(() => props.src, async (newSrc) => {
           :style="{ height: (h * 100) + '%' }"
           :class="[
             i < filledBars
-              ? 'bg-brand-accent'
-              : 'bg-white/20',
+              ? (isMine ? 'bg-white' : 'bg-brand-accent')
+              : (isMine ? 'bg-white/30' : 'bg-white/20'),
             isPlaying && i === filledBars ? 'animate-pulse' : ''
           ]" />
       </div>
       <div class="flex items-center justify-between">
-        <span class="text-[9px] text-white/55 tabular-nums">{{ isLoading ? '...' : (isPlaying ? fmtCurrent : fmtDuration) }}</span>
+        <span class="text-[9px] tabular-nums" :class="isMine ? 'text-white/70' : 'text-white/55'">{{ isLoading ? '...' : (isPlaying ? fmtCurrent : fmtDuration) }}</span>
         <button @click.stop="cycleSpeed"
-          class="text-[9px] text-white/55 hover:text-brand-accent transition-colors font-bold tabular-nums px-1 rounded"
-          :class="playbackRate !== 1 ? 'text-brand-accent' : ''">
+          class="text-[9px] transition-colors font-bold tabular-nums px-1 rounded"
+          :class="isMine ? (playbackRate !== 1 ? 'text-white' : 'text-white/70 hover:text-white') : (playbackRate !== 1 ? 'text-brand-accent' : 'text-white/55 hover:text-brand-accent')">
           {{ playbackRate }}×
         </button>
       </div>
@@ -255,18 +255,19 @@ watch(() => props.src, async (newSrc) => {
     <div class="flex-1 min-w-0 flex flex-col gap-1">
       <div class="flex items-center justify-between gap-2">
         <button @click="togglePlay"
-          class="flex-shrink-0 w-7 h-7 rounded-full bg-brand-accent/80 hover:bg-brand-accent flex items-center justify-center transition-all active:scale-95">
-          <svg v-if="!isPlaying" viewBox="0 0 15 15" fill="currentColor" class="w-3.5 h-3.5 text-white">
+          class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-95"
+          :class="isMine ? 'bg-white/90 hover:bg-white' : 'bg-brand-accent/80 hover:bg-brand-accent'">
+          <svg v-if="!isPlaying" viewBox="0 0 15 15" fill="currentColor" class="w-3.5 h-3.5" :class="isMine ? 'text-brand-accent' : 'text-white'">
             <path d="M5 0C3.89543 0 3 0.895431 3 2V3C3 4.10457 3.89543 5 5 5C6.10457 5 7 4.10457 7 3V2C7 0.895431 6.10457 0 5 0Z"/>
             <path d="M10 0C8.89543 0 8 0.895431 8 2V3C8 4.10457 8.89543 5 10 5C11.1046 5 12 4.10457 12 3V2C12 0.895431 11.1046 0 10 0Z"/>
             <path d="M2 5C0.895431 5 0 5.89543 0 7V7.5C0 8.60457 0.895431 9.5 2 9.5C3.10457 9.5 4 8.60457 4 7.5V7C4 5.89543 3.10457 5 2 5Z"/>
             <path d="M13 5C11.8954 5 11 5.89543 11 7V7.5C11 8.60457 11.8954 9.5 13 9.5C14.1046 9.5 15 8.60457 15 7.5V7C15 5.89543 14.1046 5 13 5Z"/>
             <path d="M9.61273 7.77893C8.51793 6.44953 6.48207 6.44953 5.38727 7.77893L2.46943 11.322C1.2614 12.7889 2.30486 15 4.20516 15C4.47668 15 4.74447 14.9368 4.98732 14.8154L5.34699 14.6355C6.70234 13.9578 8.29766 13.9578 9.65301 14.6355L10.0127 14.8154C10.2555 14.9368 10.5233 15 10.7948 15C12.6951 15 13.7386 12.7889 12.5306 11.322L9.61273 7.77893Z"/>
           </svg>
-          <BIcon v-else name="Pause" class="w-3 h-3 text-white" />
+          <BIcon v-else name="Pause" class="w-3 h-3" :class="isMine ? 'text-brand-accent' : 'text-white'" />
         </button>
-        <div class="flex-1 relative h-1.5 rounded-full bg-white/10 cursor-pointer min-w-0">
-          <div class="absolute inset-y-0 left-0 rounded-full bg-brand-accent/80 transition-all" :style="{ width: progressPct + '%' }" />
+        <div class="flex-1 relative h-1.5 rounded-full cursor-pointer min-w-0" :class="isMine ? 'bg-white/20' : 'bg-white/10'">
+          <div class="absolute inset-y-0 left-0 rounded-full transition-all" :class="isMine ? 'bg-white' : 'bg-brand-accent/80'" :style="{ width: progressPct + '%' }" />
           <input type="range" min="0" :max="duration || 100" :value="currentTime"
             @input="seek" @mousedown="isDragging = true" @mouseup="isDragging = false" class="range-overlay" />
         </div>

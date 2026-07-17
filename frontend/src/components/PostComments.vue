@@ -9,7 +9,7 @@ import StickerPanel from './StickerPanel.vue'
 import StickerRenderer from './StickerRenderer.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 
-const props = defineProps<{ postId: string }>()
+const props = defineProps<{ postId: string; commentsDisabled?: boolean }>()
 
 const auth = useAuthStore()
 const langStore = useLangStore()
@@ -302,8 +302,13 @@ const deleteComment = async (commentId: string) => {
 
 <template>
   <div class="mt-4 space-y-3">
+    <!-- Comments disabled by author -->
+    <div v-if="commentsDisabled" class="flex items-center gap-2 text-sm text-white/40 bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
+      <BIcon name="MessageSquareOff" class="w-4 h-4" /> Комментарии отключены автором
+    </div>
+
     <!-- Comment input -->
-    <div v-if="auth.user" class="flex gap-3 items-start">
+    <div v-else-if="auth.user" class="flex gap-3 items-start">
       <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5" />
       <div v-else class="w-8 h-8 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
 
@@ -599,6 +604,13 @@ const deleteComment = async (commentId: string) => {
                       :title="showTranslationFor.has(reply.id) ? langStore.t.showOriginal : langStore.t.autoTranslate">
                       <span v-if="isItemTranslating(reply.id)" class="w-2.5 h-2.5 border border-brand-accent/60 border-t-transparent rounded-full animate-spin" />
                       <svg v-else class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
+                    </button>
+                    <!-- Reply to a reply: attaches to the same top-level comment (backend only nests one level deep), tagging the reply's author -->
+                    <button v-if="auth.user"
+                      @click="replyingTo = { id: comment.id, username: reply.author.username }; replyText = `@${reply.author.username} `; closeStickerPanels()"
+                      class="text-white/55 hover:text-brand-accent text-xs font-semibold flex items-center gap-1">
+                      <BIcon name="CornerDownRight" class="w-3 h-3" />
+                      {{ langStore.t.reply }}
                     </button>
                     <button v-if="reply.author.id === auth.user?.id"
                       @click="deleteComment(reply.id)"

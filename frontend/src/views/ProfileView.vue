@@ -69,13 +69,28 @@
               <div class="absolute inset-0 opacity-5" style="background-image:radial-gradient(circle at 30% 50%, #4C67CF 0%, transparent 60%), radial-gradient(circle at 70% 50%, #31458F 0%, transparent 60%)" />
               <p class="text-xs font-bold text-brand-accent uppercase tracking-widest mb-2 relative">{{ langStore.t.balanceLabel }}</p>
               <p class="text-4xl font-extrabold text-white leading-none relative">
-                {{ Number((viewedProfile as any)?.wallet?.balance ?? 0).toFixed(2) }}
+                {{ walletStore.balance.toFixed(2) }}
               </p>
-              <p class="text-sm text-brand-accent-minus font-semibold mt-1 relative">🌸 Blooms</p>
+              <p class="flex items-center justify-center gap-1 text-sm text-brand-accent-minus font-semibold mt-1 relative">
+                <BIcon name="Flower2" class="w-3.5 h-3.5" /> Blooms
+              </p>
             </div>
+
+            <!-- Top-up preset picker -->
+            <div v-if="showTopupPicker" class="bg-brand-bg border border-brand-border rounded-2xl p-4 space-y-3">
+              <p class="text-xs font-bold text-white/55">Пополнить на:</p>
+              <div class="grid grid-cols-3 gap-2">
+                <button v-for="amt in TOPUP_PRESETS" :key="amt" :disabled="toppingUp" @click="topupWallet(amt)"
+                  class="py-2 rounded-xl border border-brand-border bg-brand-card text-sm font-bold text-white hover:border-brand-accent/50 hover:text-brand-accent transition-all disabled:opacity-40">
+                  +{{ amt }}
+                </button>
+              </div>
+              <button @click="showTopupPicker = false" class="w-full py-1.5 text-xs font-semibold text-white/40 hover:text-white transition-colors">Отмена</button>
+            </div>
+
             <!-- Action buttons -->
-            <div class="grid grid-cols-2 gap-3">
-              <button disabled class="flex flex-col items-center gap-1.5 p-4 rounded-2xl border border-brand-border bg-brand-bg/50 opacity-50 cursor-not-allowed">
+            <div v-else class="grid grid-cols-2 gap-3">
+              <button @click="showTopupPicker = true" class="flex flex-col items-center gap-1.5 p-4 rounded-2xl border border-brand-border bg-brand-bg/50 hover:border-brand-accent/50 transition-all">
                 <BIcon name="Plus" class="w-5 h-5 text-brand-accent" />
                 <span class="text-xs font-bold text-white">{{ langStore.t.topUpBtn }}</span>
               </button>
@@ -84,7 +99,7 @@
                 <span class="text-xs font-bold text-white/55">{{ langStore.t.withdrawBtn }}</span>
               </button>
             </div>
-            <p class="text-center text-[11px] text-white/35">{{ langStore.t.transactionsComingSoon }}</p>
+            <p class="text-center text-[11px] text-white/35">Пополнение — тестовое, без реальной оплаты</p>
           </div>
         </div>
       </div>
@@ -377,6 +392,12 @@
                 <div class="mt-4">
                   <div class="flex items-center flex-wrap gap-2 mb-2">
                     <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white tracking-tight">{{ profileDisplayName }}</h1>
+                    <!-- Deceased badge -->
+                    <span v-if="(viewedProfile as any)?.deceased_at"
+                      class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 text-white/60 flex-shrink-0"
+                      :title="(viewedProfile as any)?.deceased_note || 'Светлая память'">
+                      🪦
+                    </span>
                     <!-- Verification badge -->
                     <img v-if="(viewedProfile as any)?.is_verified"
                       :src="verificationBadgeIcon((viewedProfile as any)?.verification_type)"
@@ -434,7 +455,7 @@
                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/50">
                       <BIcon name="Calendar" class="w-3 h-3 text-white/35" />{{ joinDate }}
                     </span>
-                    <a v-if="viewedProfile.website" :href="viewedProfile.website" target="_blank"
+                    <a v-if="viewedProfile.website" :href="websiteHref(viewedProfile.website)" target="_blank" rel="noopener noreferrer"
                       class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-accent/30 rounded-lg text-xs font-medium text-brand-accent hover:bg-brand-accent/10 transition-colors">
                       <BIcon name="Link" class="w-3 h-3" />{{ viewedProfile.website.replace(/^https?:\/\//, '') }}
                     </a>
@@ -480,6 +501,10 @@
                         @click="openEditModal('bio')">
                         <BIcon name="FileText" class="w-7 h-7 text-white/25" />
                         <p class="text-xs text-white/40">{{ langStore.t.addDescription }}</p>
+                      </div>
+                      <div v-else class="flex flex-col items-center gap-2 py-6 text-center bg-brand-bg/30 rounded-2xl border border-dashed border-brand-border/60">
+                        <BIcon name="FileText" class="w-7 h-7 text-white/25" />
+                        <p class="text-xs text-white/40">{{ langStore.t.emptyBio }}</p>
                       </div>
                       <button v-if="isOwnProfile && viewedProfile.bio" @click="openEditModal('bio')"
                         class="absolute top-2.5 right-2.5 w-7 h-7 flex items-center justify-center rounded-lg text-white/35 hover:text-brand-accent hover:bg-brand-card border border-transparent hover:border-brand-border opacity-0 group-hover/bio:opacity-100 transition-all">
@@ -572,30 +597,6 @@
                         </div>
                       </div>
 
-                      <!-- Персонаж / фурсона с именем и цветом -->
-                      <div v-if="profileFursona?.species?.length"
-                        class="flex items-center gap-3 px-4 py-3.5 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/30 transition-colors group">
-                        <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-xl"
-                          :style="profileFursona.colors?.length ? `background:${profileFursona.colors[0]}20;border:1px solid ${profileFursona.colors[0]}35` : 'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1)'">
-                          {{ speciesEmoji(profileFursona.species[0]) }}
-                        </div>
-                        <div class="flex-1 min-w-0">
-                          <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold mb-0.5">{{ langStore.t.characterLabel }}</p>
-                          <div class="flex items-center gap-2">
-                            <p class="text-sm text-white font-bold truncate">{{ profileFursona.name || primarySpeciesLabel }}</p>
-                            <span v-if="profileFursona.name" class="text-xs text-white/45 font-medium">{{ primarySpeciesLabel }}</span>
-                          </div>
-                          <div v-if="profileFursona.colors?.length" class="flex items-center gap-1.5 mt-1">
-                            <span class="w-3.5 h-3.5 rounded-md border border-black/20 flex-shrink-0 shadow-sm" :style="`background:${profileFursona.colors[0]}`"></span>
-                            <span class="text-[10px] text-white/40 font-mono">{{ profileFursona.colors[0] }}</span>
-                          </div>
-                        </div>
-                        <button v-if="isOwnProfile" @click="openEditModal('fursona')"
-                          class="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-white/35 hover:text-brand-accent hover:bg-brand-card border border-transparent hover:border-brand-border transition-all">
-                          <BIcon name="Pencil" class="w-3 h-3" />
-                        </button>
-                      </div>
-
                       <!-- Местоимения -->
                       <div v-if="viewedProfile.pronouns"
                         class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
@@ -619,7 +620,7 @@
                       <div class="min-w-0 flex-1">
                         <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">{{ langStore.t.locationCardLabel }}</p>
                         <p class="text-sm text-white/80 font-semibold truncate">{{ [viewedProfile.location, (viewedProfile as any).country].filter(Boolean).join(', ') }}</p>
-                        <a v-if="viewedProfile.website" :href="viewedProfile.website" target="_blank"
+                        <a v-if="viewedProfile.website" :href="websiteHref(viewedProfile.website)" target="_blank" rel="noopener noreferrer"
                           class="text-xs text-brand-accent hover:underline truncate block mt-0.5">{{ viewedProfile.website.replace(/^https?:\/\//, '') }}</a>
                       </div>
                     </div>
@@ -629,7 +630,8 @@
                     <p class="text-[10px] font-bold uppercase tracking-widest text-white/40">Частые теги</p>
                     <div class="flex flex-wrap gap-1.5">
                       <span v-for="tag in userHashtags.slice(0, 10)" :key="tag.name"
-                        class="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-accent/8 border border-brand-accent/20 rounded-xl text-xs font-semibold text-brand-accent/80">
+                        @click="router.push({ path: '/search', query: { q: tag.name } })"
+                        class="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-accent/8 border border-brand-accent/20 rounded-xl text-xs font-semibold text-brand-accent/80 cursor-pointer hover:bg-brand-accent/15 transition-colors">
                         #{{ tag.name }}
                         <span class="text-[10px] text-white/35">×{{ tag.count }}</span>
                       </span>
@@ -646,7 +648,41 @@
                     </div>
                   </div>
 
-                    <!-- Пусто (только редактируемый профиль) -->
+                  <!-- Любимое: фиксированные категории (Еда/Животное/Музыка/Художник/Фильм) -->
+                  <div v-if="hasFavorites || isOwnProfile" class="space-y-2">
+                    <p class="text-[10px] font-bold uppercase tracking-widest text-white/40">Любимое</p>
+                    <div class="space-y-1.5">
+                      <div v-for="cat in FAVORITE_CATEGORIES" :key="cat.key">
+                        <template v-if="isOwnProfile">
+                          <div v-if="editingFavorite === cat.key" class="flex items-center gap-2">
+                            <span class="text-[11px] text-white/40 w-20 flex-shrink-0">{{ cat.label }}</span>
+                            <input v-model="favoriteDraft" @keydown.enter.prevent="saveFavorite(cat.key)" @keydown.escape="editingFavorite = null" autofocus
+                              type="text" maxlength="80" :placeholder="cat.placeholder"
+                              class="flex-1 min-w-0 bg-brand-bg border border-brand-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-brand-accent/50 transition-colors" />
+                            <button type="button" @click="saveFavorite(cat.key)"
+                              class="flex-shrink-0 px-3 py-1.5 rounded-xl bg-brand-accent/15 text-brand-accent text-xs font-bold hover:bg-brand-accent/25 transition-all">Ок</button>
+                            <button type="button" @click="editingFavorite = null"
+                              class="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-brand-bg transition-all">
+                              <BIcon name="X" class="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          <button v-else type="button" @click="openFavoriteEdit(cat.key)"
+                            class="flex items-center gap-2 group/fav w-full text-left py-0.5">
+                            <span class="text-[11px] text-white/40 w-20 flex-shrink-0">{{ cat.label }}</span>
+                            <span v-if="(viewedProfile as any)[cat.key]" class="text-xs font-semibold text-white/75">{{ (viewedProfile as any)[cat.key] }}</span>
+                            <span v-else class="text-xs text-white/25 italic truncate">{{ cat.placeholder }}</span>
+                            <BIcon name="Pencil" class="w-3 h-3 text-white/20 opacity-0 group-hover/fav:opacity-100 transition-opacity flex-shrink-0" />
+                          </button>
+                        </template>
+                        <div v-else-if="(viewedProfile as any)[cat.key]" class="flex items-center gap-2">
+                          <span class="text-[11px] text-white/40 w-20 flex-shrink-0">{{ cat.label }}</span>
+                          <span class="text-xs font-semibold text-white/75">{{ (viewedProfile as any)[cat.key] }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                    <!-- Пусто (редактируемый профиль) -->
                     <div v-if="isOwnProfile && !viewedProfile.relationship_status && !profileFursona?.species?.length" class="pt-1">
                       <p class="text-xs text-white/30 text-center">{{ langStore.t.addInfoInSettings }}</p>
                     </div>
@@ -775,9 +811,12 @@
                                 <span class="px-3 py-1.5 rounded-xl bg-black/70 border border-rose-500/50 text-rose-400 text-xs font-bold">18+ NSFW</span>
                                 <span class="text-white/60 text-xs">Скрыто</span>
                               </div>
-                              <div v-else class="absolute top-3 left-3 flex items-center gap-1.5">
+                              <div v-else class="absolute top-3 left-3 right-3 flex flex-wrap items-center gap-1.5">
                                 <span class="px-2.5 py-1 rounded-lg bg-black/50 border border-white/15 text-[10px] font-bold text-white/85 uppercase tracking-wider backdrop-blur-sm">Reference</span>
                                 <span v-if="userStore.referenceImages.length > 1" class="px-2 py-1 rounded-lg bg-black/50 border border-white/15 text-[10px] font-bold text-white/85 backdrop-blur-sm">+{{ userStore.referenceImages.length - 1 }}</span>
+                                <span v-if="userStore.referenceImages[0].artist_name" class="px-2 py-1 rounded-lg bg-black/50 border border-white/15 text-[10px] font-semibold text-white/70 backdrop-blur-sm truncate max-w-[140px]">
+                                  Арт: {{ userStore.referenceImages[0].artist_name }}
+                                </span>
                               </div>
                               <div class="absolute bottom-3 left-4 right-4 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
                                 <span class="text-white text-sm font-bold">{{ profileFursona.name }}</span>
@@ -887,11 +926,11 @@
                                     </div>
                                   </div>
                                   <div v-if="profileFursona.colors?.length"
-                                    class="flex items-center justify-between gap-3 p-3 rounded-xl bg-brand-card border border-brand-border">
-                                    <span class="text-white/45 text-xs font-semibold uppercase tracking-wider">Цвета</span>
-                                    <div class="flex gap-1.5">
+                                    class="flex items-start justify-between gap-3 p-3 rounded-xl bg-brand-card border border-brand-border">
+                                    <span class="text-white/45 text-xs font-semibold uppercase tracking-wider flex-shrink-0 pt-0.5">Цвета</span>
+                                    <div class="flex flex-wrap gap-1.5 justify-end">
                                       <div v-for="c in profileFursona.colors" :key="c"
-                                        class="w-5 h-5 rounded-md border border-black/20"
+                                        class="w-5 h-5 rounded-md border border-black/20 flex-shrink-0"
                                         :style="`background:${c}`" :title="c"></div>
                                     </div>
                                   </div>
@@ -1171,17 +1210,24 @@
                     <!-- Tag input -->
                     <div class="relative inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-transparent hover:border-brand-border hover:bg-brand-bg transition-all">
                       <BIcon name="Hash" class="w-4 h-4 text-white/55 flex-shrink-0" />
-                      <input type="text" v-model="newPostTagInput" @keydown.enter.prevent="addProfileTag"
+                      <input type="text" v-model="newPostTagInput"
+                        @input="fetchTagSuggestions(newPostTagInput)"
+                        @keydown.enter.prevent="addProfileTag"
+                        @keydown.escape="clearTagSuggestions"
                         placeholder="тег + Enter"
                         class="bg-transparent text-xs text-white placeholder-brand-muted outline-none w-24" />
+
+                      <!-- Tag suggestions, ranked by usage -->
+                      <div v-if="showTagSuggestions" v-click-outside="clearTagSuggestions"
+                        class="absolute top-full left-0 mt-1.5 z-30 w-56 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1">
+                        <button v-for="s in tagSuggestions" :key="s.name"
+                          @click="addProfileTagFromSuggestion(s.name)"
+                          class="w-full flex items-center justify-between gap-2 px-4 py-2 text-sm text-white hover:bg-white/5">
+                          <span class="truncate">#{{ s.name }}</span>
+                          <span class="text-xs text-white/35 flex-shrink-0">{{ s.count }}</span>
+                        </button>
+                      </div>
                     </div>
-                    <!-- Category -->
-                    <select v-model="newPostCategory"
-                      class="px-3 py-2 rounded-xl text-xs text-white/55 bg-transparent border border-transparent hover:border-brand-border hover:bg-brand-bg outline-none transition-all cursor-pointer">
-                      <template v-for="c in profilePostCategories" :key="c.id || 'empty-cat'">
-                        <option :value="c.id" class="bg-brand-card">{{ c.name }}</option>
-                      </template>
-                    </select>
                     <button @click="newPostIsNsfw = !newPostIsNsfw"
                       :disabled="!isNsfwAllowed"
                       :title="!isNsfwAllowed ? 'Недоступно до 18 лет' : ''"
@@ -1189,8 +1235,17 @@
                       :class="!isNsfwAllowed ? 'opacity-30 cursor-not-allowed border-transparent text-white/55' : newPostIsNsfw ? 'border-brand-error/60 text-brand-error bg-brand-error/10' : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'">
                       NSFW
                     </button>
-                    <div class="flex-1" />
-                    <!-- Visibility -->
+                    <!-- AI-generated toggle -->
+                    <button @click="newPostIsAiGenerated = !newPostIsAiGenerated"
+                      :title="langStore.t.aiGenToggleTitle"
+                      class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all"
+                      :class="newPostIsAiGenerated ? 'border-brand-purple/60 text-brand-purple bg-brand-purple/10' : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'">
+                      <BIcon name="Bot" class="w-3.5 h-3.5" /> {{ langStore.t.aiGenBadge }}
+                    </button>
+                  </div>
+
+                  <!-- Visibility + Cancel — own row so Cancel never wraps onto its own orphan line -->
+                  <div class="flex items-center justify-between gap-2 mt-2">
                     <div class="relative">
                       <button @click.stop="showProfileVisibilityMenu = !showProfileVisibilityMenu"
                         class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all"
@@ -1214,16 +1269,15 @@
                             <BIcon name="Users" class="w-4 h-4 flex-shrink-0" /> Только Подписчикам
                             <BIcon v-if="newPostVisibility === 'subscriber_only'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
                           </button>
-                          <button @click="newPostVisibility = 'paid'; showProfileVisibilityMenu = false"
-                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
-                            :class="newPostVisibility === 'paid' ? 'text-brand-accent' : 'text-white'">
+                          <button disabled title="Скоро будет доступно"
+                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white/30 cursor-not-allowed">
                             <BIcon name="DollarSign" class="w-4 h-4 flex-shrink-0" /> Платный пост
-                            <BIcon v-if="newPostVisibility === 'paid'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
+                            <span class="ml-auto text-[10px] uppercase tracking-wide">скоро</span>
                           </button>
                         </div>
                       </Transition>
                     </div>
-                    <button @click="showPostForm = false; newPostContent = ''; newPostMediaUrls = []; newPostTags = []; newPostTagInput = ''; newPostCategory = ''; newPostVisibility = 'public'; profileMediaUploadRef?.clearAll()"
+                    <button @click="showPostForm = false; newPostContent = ''; newPostMediaUrls = []; newPostTags = []; newPostTagInput = ''; newPostVisibility = 'public'; newPostIsAiGenerated = false; profileMediaUploadRef?.clearAll()"
                       class="text-xs font-semibold text-white/55 hover:text-white transition-all">{{ langStore.t.cancel }}</button>
                   </div>
                 </div>
@@ -1233,8 +1287,8 @@
               <div>
                 <div class="space-y-3">
 
-                  <!-- POSTS / REPAWS -->
-                  <template v-if="['posts', 'repaws'].includes(activeContentTab)">
+                  <!-- POSTS / REPAWS / ARCHIVE -->
+                  <template v-if="['posts', 'repaws', 'archive'].includes(activeContentTab)">
 
                     <!-- Pinned post -->
                     <div v-if="pinnedPost && activeContentTab === 'posts'">
@@ -1282,7 +1336,13 @@
                       </div>
                     </template>
 
-                    <!-- Posts / repaws list -->
+                    <!-- Archive empty -->
+                    <div v-else-if="activeContentTab === 'archive' && tabPosts.length === 0" class="py-14 text-center text-white/55">
+                      <BIcon name="Archive" class="w-10 h-10 mx-auto mb-3 opacity-30" />
+                      <p class="font-semibold text-sm">Архив пуст</p>
+                    </div>
+
+                    <!-- Posts / repaws / archive list -->
                     <template v-else>
                       <PostCard v-for="post in tabPosts.filter((p: any) => p.id !== viewedProfile.pinned_post_id)" :key="post.id"
                         :post="post" :is-own-profile="isOwnProfile"
@@ -1514,6 +1574,47 @@
                     </div>
                   </div>
 
+                  <!-- STATS (Lite+) -->
+                  <div v-else-if="activeContentTab === 'stats'">
+                    <div v-if="(authStore.user as any)?.subscription_tier === 'free'"
+                      class="py-14 text-center text-white/55">
+                      <BIcon name="Lock" class="w-10 h-10 mx-auto mb-3 text-amber-400 opacity-70" />
+                      <p class="font-semibold text-sm mb-1 text-white/80">{{ langStore.t.statsLockedMsg }}
+                        <router-link to="/subscriptions" class="text-amber-400 hover:underline font-bold">Lite</router-link>.</p>
+                    </div>
+                    <div v-else-if="isLoadingTab" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div v-for="n in 4" :key="n" class="h-20 bg-brand-bg border border-brand-border rounded-2xl animate-pulse"></div>
+                    </div>
+                    <div v-else>
+                      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                        <div class="p-4 bg-brand-bg border border-brand-border rounded-2xl text-center">
+                          <p class="text-xl font-extrabold text-white">{{ profileStatsData?.totalFriends ?? 0 }}</p>
+                          <p class="text-[10px] text-white/55 mt-1">{{ langStore.t.statTotalFriends }}</p>
+                        </div>
+                        <div class="p-4 bg-brand-bg border border-brand-border rounded-2xl text-center">
+                          <p class="text-xl font-extrabold text-brand-accent">+{{ profileStatsData?.newFriendsLast30Days ?? 0 }}</p>
+                          <p class="text-[10px] text-white/55 mt-1">{{ langStore.t.statNewFriends30d }}</p>
+                        </div>
+                        <div class="p-4 bg-brand-bg border border-brand-border rounded-2xl text-center">
+                          <p class="text-xl font-extrabold text-white">{{ profileStatsData?.totalPosts ?? 0 }}</p>
+                          <p class="text-[10px] text-white/55 mt-1">{{ langStore.t.statTotalPosts }}</p>
+                        </div>
+                        <div class="p-4 bg-brand-bg border border-brand-border rounded-2xl text-center">
+                          <p class="text-xl font-extrabold text-white">{{ profileStatsData?.totalViews ?? 0 }}</p>
+                          <p class="text-[10px] text-white/55 mt-1">{{ langStore.t.statTotalViews }}</p>
+                        </div>
+                      </div>
+                      <div v-if="profileStatsData?.topPost">
+                        <p class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2">{{ langStore.t.statTopPost }}</p>
+                        <PostCard :post="profileStatsData.topPost" />
+                      </div>
+                      <div v-else class="py-14 text-center text-white/55">
+                        <BIcon name="BarChart3" class="w-10 h-10 mx-auto mb-3 opacity-30" />
+                        <p class="font-semibold text-sm mb-1">Пока нет публикаций</p>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               </div>
 
@@ -1537,11 +1638,13 @@
                     class="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all z-10 backdrop-blur-sm border border-white/15">
                     <BIcon name="ChevronRight" class="w-5 h-5" />
                   </button>
-                  <div class="max-w-[90vw] max-h-[90vh] flex items-center justify-center">
-                    <img v-if="isImage(lightboxUrl)" :src="lightboxUrl"
-                      class="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl select-none"
-                      style="box-shadow:0 0 80px rgba(0,0,0,0.8)" draggable="false" />
-                    <video v-else :src="lightboxUrl" controls class="max-w-full max-h-[90vh] rounded-2xl shadow-2xl"></video>
+                  <div class="max-w-[90vw] max-h-[90vh] flex items-center justify-center overflow-hidden">
+                    <Transition :name="lightboxDir > 0 ? 'lightbox-slide-next' : 'lightbox-slide-prev'" mode="out-in">
+                      <img v-if="isImage(lightboxUrl)" :key="lightboxUrl" :src="lightboxUrl"
+                        class="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl select-none"
+                        style="box-shadow:0 0 80px rgba(0,0,0,0.8)" draggable="false" />
+                      <video v-else :key="lightboxUrl" :src="lightboxUrl" controls class="max-w-full max-h-[90vh] rounded-2xl shadow-2xl"></video>
+                    </Transition>
                   </div>
                   <div v-if="lightboxList.length > 1"
                     class="absolute bottom-6 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-xl bg-black/50 border border-white/15 text-white/70 text-xs font-bold backdrop-blur-sm">
@@ -1564,9 +1667,9 @@
                   </button>
                   <button
                     @click="openGroupsModal"
-                    :class="(isOwnProfile || relation.friends || userGroupsList.some(g => g.is_pinned)) ? 'hover:bg-brand-bg/60 cursor-pointer group' : 'cursor-default'"
+                    :class="(isOwnProfile || !userGroupsHidden) ? 'hover:bg-brand-bg/60 cursor-pointer group' : 'cursor-default'"
                     class="flex flex-col items-center gap-1 py-4 px-2 transition-all">
-                    <span class="text-lg font-extrabold text-white leading-none" :class="(isOwnProfile || relation.friends || userGroupsList.some(g => g.is_pinned)) ? 'group-hover:text-brand-accent transition-colors' : ''">{{ groupsCount }}</span>
+                    <span class="text-lg font-extrabold text-white leading-none" :class="(isOwnProfile || !userGroupsHidden) ? 'group-hover:text-brand-accent transition-colors' : ''">{{ groupsCount }}</span>
                     <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">{{ langStore.t.groups }}</span>
                   </button>
                   <button @click="showFollowingModal = true"
@@ -1619,7 +1722,7 @@
               </div>
 
               <!-- Wallet card (own profile only) -->
-              <div v-if="isOwnProfile" @click="showWalletModal = true"
+              <div v-if="isOwnProfile" @click="openWalletModal()"
                 class="relative overflow-hidden bg-gradient-to-br from-brand-accent/15 to-brand-accent-plus/15 border border-brand-accent/25 hover:border-brand-accent/50 rounded-3xl shadow-xl p-4 cursor-pointer transition-all hover:scale-[1.01] group">
                 <div class="flex items-center justify-between mb-3">
                   <div class="flex items-center gap-2">
@@ -1636,7 +1739,9 @@
                   </span>
                   <span class="text-xs font-semibold text-brand-accent-minus">Blooms</span>
                 </div>
-                <p class="text-[10px] text-white/55 mt-1">🌸 {{ langStore.t.internalCurrency }}</p>
+                <p class="flex items-center gap-1 text-[10px] text-white/55 mt-1">
+                  <BIcon name="Flower2" class="w-3 h-3" /> {{ langStore.t.internalCurrency }}
+                </p>
               </div>
 
               <!-- Info card -->
@@ -1652,40 +1757,6 @@
                   </button>
                 </div>
                 <div class="px-2 pb-2 space-y-0.5">
-                  <!-- Relationship status -->
-                  <div v-if="viewedProfile.relationship_status" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
-                    <BIcon name="Heart" class="w-4 h-4 text-pink-400 flex-shrink-0" />
-                    <div class="min-w-0">
-                      <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.relationsLabel }}</p>
-                      <p class="text-xs text-brand-offwhite font-semibold truncate">{{ {
-                        single: langStore.t.relStatusSingle,
-                        in_relationship: langStore.t.relStatusInRel,
-                        relationship: langStore.t.relStatusInRel,
-                        married: langStore.t.relStatusMarried,
-                        complicated: langStore.t.relStatusComplicated,
-                        open: langStore.t.relStatusOpen,
-                        open_relationship: langStore.t.relStatusOpen,
-                        looking: langStore.t.relStatusLooking,
-                        secret: langStore.t.relStatusSecret,
-                      }[viewedProfile.relationship_status] ?? viewedProfile.relationship_status }}</p>
-                    </div>
-                  </div>
-                  <!-- Fursona species -->
-                  <div v-if="profileFursona?.species?.length" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
-                    <span class="text-base leading-none flex-shrink-0">{{ speciesEmoji(profileFursona.species[0]) }}</span>
-                    <div class="min-w-0">
-                      <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.fursonaTab }}</p>
-                      <p class="text-xs text-brand-offwhite font-semibold truncate">{{ primarySpeciesLabel }}</p>
-                    </div>
-                  </div>
-                  <!-- Pronouns -->
-                  <div v-if="viewedProfile.pronouns" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
-                    <BIcon name="Quote" class="w-4 h-4 text-brand-accent/60 flex-shrink-0" />
-                    <div class="min-w-0">
-                      <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.pronounsLabel }}</p>
-                      <p class="text-xs text-brand-offwhite font-semibold">{{ viewedProfile.pronouns }}</p>
-                    </div>
-                  </div>
                   <!-- Birth date -->
                   <div v-if="formattedBirthDate" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
                     <BIcon name="Cake" class="w-4 h-4 text-pink-400/70 flex-shrink-0" />
@@ -1703,7 +1774,7 @@
                     </div>
                   </div>
                   <!-- Website -->
-                  <a v-if="viewedProfile.website" :href="viewedProfile.website" target="_blank" rel="noopener noreferrer"
+                  <a v-if="viewedProfile.website" :href="websiteHref(viewedProfile.website)" target="_blank" rel="noopener noreferrer"
                     class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all group">
                     <BIcon name="Link" class="w-4 h-4 text-brand-accent/60 flex-shrink-0" />
                     <div class="min-w-0">
@@ -1711,6 +1782,7 @@
                       <p class="text-xs text-brand-accent font-medium truncate group-hover:underline">{{ viewedProfile.website.replace(/^https?:\/\//, '') }}</p>
                     </div>
                   </a>
+                  <!-- Отношения, фурсона и местоимения уже показаны в вкладке «О себе» — не дублируем их здесь -->
                 </div>
               </div>
 
@@ -1909,36 +1981,38 @@
 
     <!-- ─── Album Modal ────────────────────────────────────────────── -->
     <Transition name="fade">
-      <div v-if="openAlbum" class="fixed inset-0 z-[615] bg-black/95 flex flex-col" @click.self="openAlbum = null">
-        <!-- Header -->
-        <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border/60 bg-brand-card/80 backdrop-blur-md flex-shrink-0">
-          <div class="flex items-center gap-2.5">
-            <span v-if="openAlbum.emoji" class="text-xl leading-none">{{ openAlbum.emoji }}</span>
-            <BIcon v-else name="CalendarDays" class="w-5 h-5 text-brand-accent" />
-            <h3 class="text-white font-bold text-lg">{{ openAlbum.label }}</h3>
-            <span class="text-xs text-white/40 font-semibold">· {{ openAlbum.urls.length }}</span>
+      <div v-if="openAlbum" class="fixed inset-0 z-[615] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4" @click.self="openAlbum = null">
+        <div class="w-full max-w-4xl bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+          <!-- Header -->
+          <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0">
+            <div class="flex items-center gap-2.5">
+              <span v-if="openAlbum.emoji" class="text-xl leading-none">{{ openAlbum.emoji }}</span>
+              <BIcon v-else name="CalendarDays" class="w-5 h-5 text-brand-accent" />
+              <h3 class="font-bold text-white text-base">{{ openAlbum.label }}</h3>
+              <span class="text-xs font-bold bg-brand-accent/15 text-brand-accent px-2 py-0.5 rounded-full">{{ openAlbum.urls.length }}</span>
+            </div>
+            <button @click="openAlbum = null"
+              class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
+              <BIcon name="X" class="w-4 h-4" />
+            </button>
           </div>
-          <button @click="openAlbum = null"
-            class="w-9 h-9 flex items-center justify-center rounded-xl bg-brand-bg hover:bg-brand-border text-white/70 hover:text-white transition-all">
-            <BIcon name="X" class="w-4 h-4" />
-          </button>
-        </div>
-        <!-- Grid -->
-        <div class="flex-1 overflow-y-auto p-3">
-          <div class="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
-            <div v-for="(item, idx) in openAlbum.urls" :key="idx"
-              @click.stop="openMediaLightbox(item.url, openAlbum!.urls.map(u => u.url), idx)"
-              class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-brand-border/60 hover:border-brand-accent/60 bg-brand-bg transition-all">
-              <img v-if="isImage(item.url)" :src="item.url"
-                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                :class="item.is_nsfw && !nsfwMode ? 'blur-lg' : ''"
-                loading="lazy" />
-              <div v-else class="w-full h-full flex items-center justify-center bg-brand-bg/60">
-                <BIcon name="Play" class="w-8 h-8 text-white/55" />
-              </div>
-              <span v-if="item.is_nsfw" class="absolute top-1 left-1 text-[9px] font-bold px-1 py-0.5 rounded bg-rose-600/90 text-white leading-none">18+</span>
-              <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                <BIcon name="ZoomIn" class="w-6 h-6 text-white" />
+          <!-- Grid -->
+          <div class="overflow-y-auto flex-1 p-3">
+            <div class="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+              <div v-for="(item, idx) in openAlbum.urls" :key="idx"
+                @click="openMediaLightbox(item.url, openAlbum!.urls.map(u => u.url), idx)"
+                class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-brand-border/60 hover:border-brand-accent/60 bg-brand-bg transition-all">
+                <img v-if="isImage(item.url)" :src="item.url"
+                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  :class="item.is_nsfw && !nsfwMode ? 'blur-lg' : ''"
+                  loading="lazy" />
+                <div v-else class="w-full h-full flex items-center justify-center bg-brand-bg/60">
+                  <BIcon name="Play" class="w-8 h-8 text-white/55" />
+                </div>
+                <span v-if="item.is_nsfw" class="absolute top-1 left-1 text-[9px] font-bold px-1 py-0.5 rounded bg-rose-600/90 text-white leading-none">18+</span>
+                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                  <BIcon name="ZoomIn" class="w-6 h-6 text-white" />
+                </div>
               </div>
             </div>
           </div>
@@ -2303,6 +2377,7 @@ import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHead } from '@unhead/vue'
 import { useAuthStore } from '@/stores/auth'
+import { useWalletStore } from '@/stores/wallet'
 import { useUserStore, type UserProfile, type Fursona, type Fursuit } from '@/stores/user'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import PostComments from '@/components/PostComments.vue'
@@ -2318,8 +2393,11 @@ import AppSidebar from '@/components/AppSidebar.vue'
 import StoryViewer from '@/components/StoryViewer.vue'
 import ReportModal from '@/components/ReportModal.vue'
 import api from '@/api'
+import { FAVORITE_CATEGORIES } from '@/lib/interests'
 import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
+import { extractHashtags, extractCommittedHashtags } from '@/lib/hashtags'
 import { onAvatarError } from '@/composables/useAvatarFallback'
+import { useTagSuggestions } from '@/composables/useTagSuggestions'
 import { verificationBadgeIcon } from '@/composables/useVerificationBadge'
 import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
 import {
@@ -2333,7 +2411,7 @@ import {
   Footprints, Smile, SmilePlus, AlertCircle,
   LogOut, Camera, Eye, EyeOff, Info, Globe,
   Rabbit, PawPrint, Plus, Check, Twitter, Instagram, Youtube, Twitch, Github, Quote,
-  Wallet, ChevronRight, AtSign, ArrowUpRight
+  Wallet, ChevronRight, AtSign, ArrowUpRight, Archive, BarChart3
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -2495,7 +2573,7 @@ function onAvatarClick() {
 }
 
 type AboutTab = 'about' | 'fursona' | 'fursuit'
-type ContentTab = 'posts' | 'repaws' | 'media' | 'followers' | 'following' | 'mutual_groups'
+type ContentTab = 'posts' | 'repaws' | 'media' | 'archive' | 'followers' | 'following' | 'mutual_groups' | 'stats'
 
 // ── Social modals ─────────────────────────────────────────────────────────────
 const showFollowersModal = ref(false)
@@ -2692,11 +2770,9 @@ const makerGroupCache = ref<Record<string, { id: string; slug: string; name: str
 async function loadProfileFursonas(userId: string) {
   profileFursonaLoading.value = true
   try {
-    // Backend model is 1:1 per user (Fursona.user_id is unique) — no `/fursonas` list endpoint exists.
-    const res = await api.get(`/users/${userId}/fursona`)
-    const fursona = res.data.success ? res.data.data.fursona : null
-    profileFursonas.value = fursona ? [fursona] : []
-    selectedFursonaId.value = profileFursonas.value[0]?.id ?? null
+    const res = await api.get(`/users/${userId}/fursonas`)
+    profileFursonas.value = res.data.success ? (res.data.data.fursonas ?? []) : []
+    selectedFursonaId.value = profileFursonas.value.find((f) => f.is_primary)?.id ?? profileFursonas.value[0]?.id ?? null
   } catch {
     profileFursonas.value = []
     selectedFursonaId.value = null
@@ -2736,6 +2812,7 @@ async function loadProfileFursuits(userId: string) {
 const lightboxUrl = ref<string>('')
 const lightboxList = ref<string[]>([])
 const lightboxIndex = ref(0)
+const lightboxDir = ref<1 | -1>(1)
 
 function openMediaLightbox(url: string, list: string[], idx: number) {
   lightboxUrl.value = url
@@ -2746,16 +2823,20 @@ function closeLightbox() { lightboxUrl.value = '' }
 function lightboxStep(dir: -1 | 1) {
   const next = lightboxIndex.value + dir
   if (next >= 0 && next < lightboxList.value.length) {
+    lightboxDir.value = dir
     lightboxIndex.value = next
     lightboxUrl.value = lightboxList.value[next]
   }
 }
 // Клавиши для lightbox
 function onKeyDown(e: KeyboardEvent) {
-  if (!lightboxUrl.value) return
-  if (e.key === 'Escape') closeLightbox()
-  if (e.key === 'ArrowLeft') lightboxStep(-1)
-  if (e.key === 'ArrowRight') lightboxStep(1)
+  if (lightboxUrl.value) {
+    if (e.key === 'Escape') closeLightbox()
+    if (e.key === 'ArrowLeft') lightboxStep(-1)
+    if (e.key === 'ArrowRight') lightboxStep(1)
+    return
+  }
+  if (openAlbum.value && e.key === 'Escape') openAlbum.value = null
 }
 
 const relation = reactive({ aFollowsB: false, bFollowsA: false, friends: false })
@@ -2766,27 +2847,35 @@ const isTogglingFollow = ref(false)
 const newPostContent = ref('')
 const newPostMediaUrls = ref<string[]>([])
 const newPostIsNsfw = ref(false)
+const newPostIsAiGenerated = ref(false)
 const newPostTags = ref<string[]>([])
 const newPostTagInput = ref('')
-const newPostCategory = ref('')
+const { suggestions: tagSuggestions, showSuggestions: showTagSuggestions, fetchSuggestions: fetchTagSuggestions, clearSuggestions: clearTagSuggestions } = useTagSuggestions()
+
+// Auto-pick up "#hashtag"s the user writes directly in the post text (only once
+// they've finished typing the word, not on every keystroke of a partial one)
+watch(newPostContent, (content) => {
+  for (const tag of extractCommittedHashtags(content)) {
+    if (!newPostTags.value.includes(tag)) newPostTags.value.push(tag)
+  }
+})
+
 const newPostVisibility = ref('public')
 const showProfileVisibilityMenu = ref(false)
 const isCreatingPost = ref(false)
 const profileMediaUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
 
-const profilePostCategories = [
-  { id: '', name: 'Категория' },
-  { id: 'digital_art', name: 'Digital Art' },
-  { id: 'photography', name: 'Photography' },
-  { id: '3d', name: '3D' },
-  { id: 'animation', name: 'Animation' },
-  { id: 'writing', name: 'Writing' },
-  { id: 'other', name: 'Other' },
-]
 function addProfileTag() {
   const t = newPostTagInput.value.trim().replace(/^#/, '')
   if (t && !newPostTags.value.includes(t)) newPostTags.value.push(t)
   newPostTagInput.value = ''
+  clearTagSuggestions()
+}
+function addProfileTagFromSuggestion(name: string) {
+  const t = name.trim().toLowerCase()
+  if (t && !newPostTags.value.includes(t)) newPostTags.value.push(t)
+  newPostTagInput.value = ''
+  clearTagSuggestions()
 }
 function removeProfileTag(tag: string) { newPostTags.value = newPostTags.value.filter(t => t !== tag) }
 
@@ -2810,6 +2899,27 @@ const showPostForm = ref(false)
 // ── Edit modal ────────────────────────────────────────────────────────────────
 const showBadgesModal = ref(false)
 const showWalletModal = ref(false)
+const walletStore = useWalletStore()
+const showTopupPicker = ref(false)
+const toppingUp = ref(false)
+const TOPUP_PRESETS = [100, 500, 1000, 2500, 5000]
+function openWalletModal() {
+  showWalletModal.value = true
+  showTopupPicker.value = false
+  walletStore.fetchBalance().catch(() => {})
+}
+async function topupWallet(amount: number) {
+  if (toppingUp.value) return
+  toppingUp.value = true
+  try {
+    await walletStore.topup(amount)
+    showTopupPicker.value = false
+  } catch (e: any) {
+    alert(e.response?.data?.error?.message || 'Не удалось пополнить кошелёк')
+  } finally {
+    toppingUp.value = false
+  }
+}
 const showAvatarViewer = ref(false)
 const showBannerViewer = ref(false)
 
@@ -2900,15 +3010,9 @@ function openEditModal(section: 'basics' | 'bio' | 'fursona' | 'fursuit' | 'cont
   router.push({ name: 'settings-profile', query: { section: sectionMap[section] ?? 'sec-basic' } })
 }
 
-const fursonaRefImages = computed(() => {
-  const p = viewedProfile.value as any
-  if (!p) return [] as string[]
-  return Array.from(new Set([
-    p.fursona_photo_url,
-    viewedProfile.value?.avatar_url,
-    viewedProfile.value?.banner_url,
-  ].filter((v): v is string => !!v)))
-})
+const fursonaRefImages = computed(() =>
+  Array.from(new Set(userStore.referenceImages.map((r) => r.image_url).filter(Boolean))),
+)
 
 const activeFursonaRef = computed(() => selectedFursonaRef.value || fursonaRefImages.value[0] || '')
 const fursonaOtherCount = computed(() => Math.max(0, fursonaRefImages.value.length - 1))
@@ -2919,14 +3023,9 @@ const fursonaViewTabs = computed(() => [
   { key: 'features' as const,    label: langStore.t.colorPaletteLabel, count: profileFursona.value?.colors?.length ?? 0 },
 ])
 
-const fursonaRefPalette = computed(() => {
-  const p = viewedProfile.value as any
-  if (!p) return [] as string[]
-  return Array.from(new Set([
-    p.fursona_color,
-    viewedProfile.value?.accent_color,
-  ].filter((v): v is string => !!v && /^#[0-9A-Fa-f]{6}$/.test(v))))
-})
+const fursonaRefPalette = computed(() =>
+  Array.from(new Set((profileFursona.value?.colors ?? []).filter((v) => /^#[0-9A-Fa-f]{6}$/.test(v)))),
+)
 
 function selectFursonaRef(url: string) {
   selectedFursonaRef.value = url
@@ -2949,27 +3048,25 @@ watch(fursonaRefImages, (list) => {
   }
 })
 
-// ── Interests (manual) ────────────────────────────────────────────────────────
-const newInterestText = ref('')
-const showInterestInput = ref(false)
+// ── Любимое (fixed favourite categories) ────────────────────────────────────
+const editingFavorite = ref<string | null>(null)
+const favoriteDraft = ref('')
 
-async function addManualInterest() {
-  const text = newInterestText.value.trim()
-  if (!text || !viewedProfile.value) return
-  const current: string[] = (viewedProfile.value as any).interests ?? []
-  if (current.includes(text)) { newInterestText.value = ''; return }
-  const updated = [...current, text]
-  await userStore.updateProfile({ interests: updated } as any)
-  ;(viewedProfile.value as any).interests = updated
-  newInterestText.value = ''
-  showInterestInput.value = false
+const hasFavorites = computed(() =>
+  FAVORITE_CATEGORIES.some((cat) => !!(viewedProfile.value as any)?.[cat.key])
+)
+
+function openFavoriteEdit(key: string) {
+  favoriteDraft.value = (viewedProfile.value as any)?.[key] ?? ''
+  editingFavorite.value = key
 }
-async function removeManualInterest(idx: number) {
+
+async function saveFavorite(key: string) {
   if (!viewedProfile.value) return
-  const current: string[] = (viewedProfile.value as any).interests ?? []
-  const updated = current.filter((_, i) => i !== idx)
-  await userStore.updateProfile({ interests: updated } as any)
-  ;(viewedProfile.value as any).interests = updated
+  const value = favoriteDraft.value.trim() || null
+  await userStore.updateProfile({ [key]: value } as any)
+  ;(viewedProfile.value as any)[key] = value
+  editingFavorite.value = null
 }
 
 // ── S3 uploads ────────────────────────────────────────────────────────────────
@@ -3020,9 +3117,21 @@ async function onAvatarFileChange(e: Event) {
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const isOwnProfile = computed(() => !!authStore.user && authStore.user.id === viewedProfile.value?.id)
+
+const fursonaHasPersonalityContent = computed(() => {
+  const f = profileFursona.value
+  if (!f) return false
+  if (!f.likes_dislikes_visible && !isOwnProfile.value) return false
+  return (f.likes?.length ?? 0) + (f.dislikes?.length ?? 0) > 0
+})
+
+watch(() => profileFursona.value?.id, () => {
+  fursonaSubTab.value = fursonaHasPersonalityContent.value ? 'personality' : 'info'
+}, { immediate: true })
 const userGroupsCount    = ref(0)
 const userGroupsList     = ref<any[]>([])
 const userGroupsPinnedOnly = ref(false)
+const userGroupsHidden = ref(false)
 const groupsModalLoading = ref(false)
 const groupsCount = computed(() => userGroupsCount.value)
 
@@ -3031,16 +3140,18 @@ async function loadUserGroupsCount(userId: string) {
     const res = await api.get(`/groups/user/${userId}`)
     userGroupsCount.value = res.data.data?.count ?? 0
     userGroupsList.value  = res.data.data?.groups ?? []
-    userGroupsPinnedOnly.value = res.data.data?.pinned_only ?? true
+    userGroupsPinnedOnly.value = res.data.data?.pinned_only ?? false
+    userGroupsHidden.value = res.data.data?.hidden ?? false
   } catch {
     userGroupsCount.value = 0
     userGroupsList.value  = []
+    userGroupsHidden.value = false
   }
 }
 
 function openGroupsModal() {
   if (!viewedProfile.value) return
-  if (!isOwnProfile.value && !relation.friends && !userGroupsList.value.length) return
+  if (!isOwnProfile.value && userGroupsHidden.value) return
   showGroupsModal.value = true
 }
 
@@ -3109,6 +3220,11 @@ const accentStyle = computed(() => {
   const color = viewedProfile.value?.accent_color ?? '#4C67CF'
   return { backgroundColor: `${color}25`, borderColor: `${color}60`, color }
 })
+
+// ── Website: add protocol if missing so it doesn't resolve as a relative link ──
+function websiteHref(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`
+}
 
 // ── Fursona species emoji map ────────────────────────────────────────────────
 function speciesEmoji(species: string): string {
@@ -3220,11 +3336,23 @@ const contentTabs = computed(() => {
     { key: 'repaws',    label: langStore.t.repawsTab,    icon: Repeat2 },
     { key: 'media',     label: langStore.t.mediaTab,     icon: Image },
   ]
+  if (isOwnProfile.value) {
+    tabs.push({ key: 'archive', label: 'Архив', icon: Archive })
+    tabs.push({ key: 'stats', label: langStore.t.statsTab, icon: BarChart3 })
+  }
   if (!isOwnProfile.value && authStore.isAuthenticated) {
     tabs.push({ key: 'mutual_groups', label: langStore.t.feedGeneral, icon: UsersRound })
   }
   return tabs
 })
+
+const profileStatsData = ref<{
+  totalFriends: number
+  newFriendsLast30Days: number
+  totalPosts: number
+  totalViews: number
+  topPost: any | null
+} | null>(null)
 
 const profileStats = computed(() => {
   const p = viewedProfile.value
@@ -3468,6 +3596,7 @@ async function loadProfile() {
   userGroupsList.value = []
   userGroupsCount.value = 0
   userGroupsPinnedOnly.value = false
+  userGroupsHidden.value = false
   Object.assign(relation, { aFollowsB: false, bFollowsA: false, friends: false })
 
   try {
@@ -3582,6 +3711,9 @@ async function loadTabData(tab: string) {
     } else if (tab === 'media') {
       const res = await api.get(`/posts/user/${uid}/media`)
       if (res.data.success) tabPosts.value = res.data.data.posts
+    } else if (tab === 'archive') {
+      const res = await api.get(`/posts/user/${uid}/archived`)
+      if (res.data.success) tabPosts.value = res.data.data.posts
     } else if (tab === 'hashtags') {
       if (!tabPosts.value.length) {
         const res = await api.get(`/posts/user/${uid}`)
@@ -3605,9 +3737,14 @@ async function loadTabData(tab: string) {
     } else if (tab === 'mutual_groups') {
       const res = await api.get(`/groups/common/${uid}`)
       if (res.data.success) mutualGroups.value = res.data.data.groups
+    } else if (tab === 'stats') {
+      if ((authStore.user as any)?.subscription_tier !== 'free') {
+        const res = await api.get('/users/me/profile-stats')
+        if (res.data.success) profileStatsData.value = res.data.data.stats
+      }
     }
     // Fetch repaw/vote/favourite status for loaded posts
-    if (['posts', 'repaws', 'media', 'likes'].includes(tab) && authStore.isAuthenticated && tabPosts.value.length) {
+    if (['posts', 'repaws', 'media', 'archive', 'likes'].includes(tab) && authStore.isAuthenticated && tabPosts.value.length) {
       const ids = tabPosts.value.map((p: any) => p.id).join(',')
       try {
         const st = await api.get(`/posts/status?ids=${ids}`)
@@ -3735,14 +3872,18 @@ async function unpinPost() {
 // ── Create post ───────────────────────────────────────────────────────────────
 async function createPost() {
   if ((!newPostContent.value.trim() && newPostMediaUrls.value.length === 0) || isCreatingPost.value) return
+  // Catch a trailing "#hashtag" that was never followed by a space/newline before hitting send
+  for (const tag of extractHashtags(newPostContent.value)) {
+    if (!newPostTags.value.includes(tag)) newPostTags.value.push(tag)
+  }
   isCreatingPost.value = true
   try {
     const res = await api.post('/posts', {
       content: newPostContent.value.trim(),
       isNsfw: newPostIsNsfw.value,
+      isAiGenerated: newPostIsAiGenerated.value,
       mediaUrls: newPostMediaUrls.value,
       tags: newPostTags.value,
-      category: newPostCategory.value || undefined,
       visibility: newPostVisibility.value,
     })
     if (res.data.success) {
@@ -3750,9 +3891,9 @@ async function createPost() {
       newPostContent.value = ''
       newPostMediaUrls.value = []
       newPostIsNsfw.value = false
+      newPostIsAiGenerated.value = false
       newPostTags.value = []
       newPostTagInput.value = ''
-      newPostCategory.value = ''
       newPostVisibility.value = 'public'
       profileMediaUploadRef.value?.clearAll()
       if (viewedProfile.value?._count) viewedProfile.value._count.posts++
@@ -3811,6 +3952,16 @@ watch(() => route.params.username, () => { aboutTab.value = 'about'; activeConte
 /* Lightbox overlay transition */
 .lightbox-fade-enter-active, .lightbox-fade-leave-active { transition: opacity 0.2s ease }
 .lightbox-fade-enter-from, .lightbox-fade-leave-to { opacity: 0 }
+
+/* Lightbox next/prev slide transition */
+.lightbox-slide-next-enter-active, .lightbox-slide-next-leave-active,
+.lightbox-slide-prev-enter-active, .lightbox-slide-prev-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.lightbox-slide-next-enter-from { opacity: 0; transform: translateX(48px) scale(0.98); }
+.lightbox-slide-next-leave-to   { opacity: 0; transform: translateX(-48px) scale(0.98); }
+.lightbox-slide-prev-enter-from { opacity: 0; transform: translateX(-48px) scale(0.98); }
+.lightbox-slide-prev-leave-to   { opacity: 0; transform: translateX(48px) scale(0.98); }
 
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(-4px) }

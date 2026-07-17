@@ -35,6 +35,7 @@ export interface Message {
   forwarded_from_sender?: MsgSender | null
   sender: MsgSender
   _sending?: boolean
+  _failed?: boolean
 }
 
 export interface PinnedMessage {
@@ -309,7 +310,7 @@ export const useMessagesStore = defineStore('messages', () => {
     await fetchMessages(convId, oldest)
   }
 
-  function sendMessage(convId: string, content: string, fileUrl?: string | null, mediaType?: string, replyToId?: string | null) {
+  async function sendMessage(convId: string, content: string, fileUrl?: string | null, mediaType?: string, replyToId?: string | null) {
     const auth = useAuthStore()
     // Optimistic message
     const tempId = `tmp_${Date.now()}`
@@ -332,7 +333,29 @@ export const useMessagesStore = defineStore('messages', () => {
       _sending: true,
     }
     if (messages.value[convId]) messages.value[convId].push(temp)
-    wsClient.send({ type: 'message', conversationId: convId, content: content ?? '', file_url: fileUrl ?? undefined, media_type: mediaType ?? undefined, reply_to_id: replyToId ?? undefined })
+
+    // Persist over REST — the WS 'message' frame silently no-ops when the socket
+    // isn't OPEN (reconnecting, backgrounded tab, etc.), which used to leave the
+    // optimistic bubble stuck on "sending" forever with nothing ever saved server-side.
+    try {
+      const res = await api.post(`/messages/conversations/${convId}/messages`, {
+        content: content ?? '',
+        file_url: fileUrl ?? undefined,
+        media_type: mediaType ?? undefined,
+        reply_to_id: replyToId ?? undefined,
+      })
+      const msg = res.data?.data?.message as Message | undefined
+      const list = messages.value[convId]
+      if (list && msg) {
+        const idx = list.findIndex((m) => m.id === tempId)
+        if (idx !== -1) list.splice(idx, 1, { ...msg, _sending: false })
+        else if (!list.some((m) => m.id === msg.id)) list.push(msg)
+      }
+    } catch {
+      const list = messages.value[convId]
+      const idx = list?.findIndex((m) => m.id === tempId) ?? -1
+      if (list && idx !== -1) list.splice(idx, 1, { ...list[idx], _sending: false, _failed: true })
+    }
   }
 
   /** Chat-only order card — not wired to Dealers' Den, purely a rich message type. */
@@ -347,6 +370,16 @@ export const useMessagesStore = defineStore('messages', () => {
 
   async function sendTip(convId: string, amount: number, note?: string) {
     const res = await api.post(`/messages/conversations/${convId}/messages`, { type: 'tip', metadata: { amount, note } })
+    const msg = res.data?.data?.message as Message | undefined
+    if (msg && messages.value[convId] && !messages.value[convId].some((m) => m.id === msg.id)) {
+      messages.value[convId].push(msg)
+    }
+    return msg
+  }
+
+  /** Shares a post into a chat as a rich card message. */
+  async function sendPostShare(convId: string, postId: string) {
+    const res = await api.post(`/messages/conversations/${convId}/messages`, { type: 'post_share', metadata: { postId } })
     const msg = res.data?.data?.message as Message | undefined
     if (msg && messages.value[convId] && !messages.value[convId].some((m) => m.id === msg.id)) {
       messages.value[convId].push(msg)
@@ -548,6 +581,12 @@ export const useMessagesStore = defineStore('messages', () => {
     }
   }
 
+  /** Remove a message from local state only (used to clear a failed send before retrying). */
+  function removeLocalMessage(convId: string, msgId: string) {
+    const list = messages.value[convId]
+    if (list) messages.value[convId] = list.filter((m) => m.id !== msgId)
+  }
+
   return {
     conversations,
     activeId,
@@ -567,8 +606,10 @@ export const useMessagesStore = defineStore('messages', () => {
     fetchMessages,
     loadMoreMessages,
     sendMessage,
+    removeLocalMessage,
     sendPaymentRequest,
     sendTip,
+    sendPostShare,
     payRequest,
     deleteMessage,
     editMessage,

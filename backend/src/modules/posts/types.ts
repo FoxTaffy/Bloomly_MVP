@@ -2,6 +2,7 @@ export interface CreatePostInput {
   content: string;
   authorId: string;
   isNsfw?: boolean;
+  isAiGenerated?: boolean;
   isAnnouncement?: boolean;
   subscriberOnly?: boolean;
   isPaid?: boolean;

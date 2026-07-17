@@ -64,7 +64,7 @@ const plans = computed<Plan[]>(() => {
       color: 'text-sky-400',
       gradient: 'from-sky-500/12 to-sky-500/3',
       iconBg: 'bg-sky-400/10 text-sky-400 border-sky-400/25',
-      features: [t.featAllFree, t.featProfileTheme, t.featLiteBadge, t.featPrioritySearch, t.featUnlimitedMsgs, t.featStorage5gb],
+      features: [t.featAllFree, t.featProfileTheme, t.featLiteBadge, t.featProfileStats, t.featPrioritySearch, t.featUnlimitedMsgs, t.featStorage5gb],
     },
     {
       id: 'pro', label: 'Pro',

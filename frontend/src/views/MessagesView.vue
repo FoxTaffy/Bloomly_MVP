@@ -44,6 +44,9 @@
               </button>
             </div>
 
+            <!-- Birthday banner — friends whose birthday is yesterday/today/tomorrow -->
+            <BirthdayBanner @message="startDm" />
+
             <!-- Conversations list — tabs (Личные/Беседы/Группы) are ConversationList's own built-in category switcher -->
             <ConversationList
               :active-id="store.activeId"
@@ -195,6 +198,7 @@ import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
 import BIcon from '@/components/BIcon.vue'
 import ConversationList from '@/components/ConversationList.vue'
+import BirthdayBanner from '@/components/BirthdayBanner.vue'
 import ChatWindow from '@/components/ChatWindow.vue'
 import { useMessagesStore, type MsgSender } from '@/stores/messages'
 import { useAuthStore } from '@/stores/auth'

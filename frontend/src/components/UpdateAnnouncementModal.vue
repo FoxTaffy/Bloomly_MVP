@@ -13,8 +13,6 @@ interface BloomlyUpdate {
   is_active: boolean
 }
 
-// Shared with StoriesBar.vue — same key keeps the story bubble and this
-// popup in sync about what the user has already seen.
 const SEEN_KEY = 'bloomly_seen_stories'
 
 const update = ref<BloomlyUpdate | null>(null)

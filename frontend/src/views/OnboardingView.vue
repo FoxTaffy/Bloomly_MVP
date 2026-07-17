@@ -247,31 +247,28 @@
             </div>
           </Transition>
 
-          <!-- ══ ШАГ 3: Интересы ══ -->
+          <!-- ══ ШАГ 3: Любимое ══ -->
           <Transition name="slide" mode="out-in">
             <div v-if="step === 3" key="step3">
               <div class="step-header">
                 <div class="step-icon">✨</div>
                 <div>
-                  <h2 class="step-title">Интересы</h2>
-                  <p class="step-desc">Выбери то, что тебе близко</p>
+                  <h2 class="step-title">Любимое</h2>
+                  <p class="step-desc">Расскажи, что тебе близко (необязательно)</p>
                 </div>
               </div>
 
-              <div class="flex flex-wrap gap-2 max-h-64 overflow-y-auto pr-1 custom-scroll">
-                <button
-                  v-for="tag in INTERESTS_OPTIONS"
-                  :key="tag"
-                  type="button"
-                  @click="toggleInterest(tag)"
-                  class="interest-chip"
-                  :class="form.interests.includes(tag) ? 'interest-chip--active' : ''"
-                >{{ tag }}</button>
-              </div>
-              <div class="flex items-center gap-2 mt-3">
-                <div class="flex-1 h-px bg-white/6"></div>
-                <span class="text-xs text-white/30 font-bold">Выбрано: {{ form.interests.length }}</span>
-                <div class="flex-1 h-px bg-white/6"></div>
+              <div class="space-y-4">
+                <div v-for="cat in FAVORITE_CATEGORIES" :key="cat.key">
+                  <label class="field-label">{{ cat.label }}</label>
+                  <input
+                    v-model="form.favorites[cat.key]"
+                    maxlength="80"
+                    :placeholder="cat.placeholder"
+                    class="fld"
+                    style="padding-left: 16px"
+                  />
+                </div>
               </div>
             </div>
           </Transition>
@@ -380,6 +377,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
+import { FAVORITE_CATEGORIES } from '@/lib/interests'
 
 const router = useRouter()
 const auth   = useAuthStore()
@@ -393,7 +391,7 @@ const isLoading   = ref(false)
 const saveError   = ref<string | null>(null)
 const validationError = ref<string | null>(null)
 
-const stepLabels = ['О себе', 'Фурсона', 'Интересы']
+const stepLabels = ['О себе', 'Фурсона', 'Любимое']
 
 const form = ref({
   display_name:        auth.user?.display_name ?? '',
@@ -403,7 +401,13 @@ const form = ref({
   fursona_gender:      '',
   fursona_color:       '#a855f7',
   fursona_description: '',
-  interests:           [] as string[],
+  favorites: {
+    fav_food:   '',
+    fav_animal: '',
+    fav_music:  '',
+    fav_artist: '',
+    fav_film:   '',
+  },
 })
 
 const PRONOUNS_OPTIONS = ['он/его', 'она/её', 'они/их', 'оно/его', 'без местоимений']
@@ -417,16 +421,6 @@ const SPECIES_OPTIONS = [
 const COLOR_PRESETS = [
   '#a855f7', '#6366f1', '#3b82f6', '#06b6d4', '#10b981',
   '#f59e0b', '#ef4444', '#ec4899', '#f97316', '#84cc16',
-]
-
-const INTERESTS_OPTIONS = [
-  'Рисование', 'Анимация', 'Комиксы', 'Написание историй', 'Поэзия',
-  'Видеоигры', 'RPG', 'Аниме', 'Косплей', 'Музыка', 'Танцы',
-  'Программирование', 'Технологии', 'Скульптура', 'Вязание/Шитьё',
-  'Фотография', 'Видеосъёмка', 'Кулинария', 'Природа', 'Животные',
-  'Фурсьюты', 'Создание костюмов', 'DIY', 'Научная фантастика',
-  'Фэнтези', 'D&D / Настольные игры', 'Кино', 'Мультфильмы', 'Стриминг',
-  'Спорт', 'Фитнес', 'Путешествия', 'Чтение', 'Астрономия',
 ]
 
 const particles = Array.from({ length: 60 }, (_, i) => ({
@@ -453,12 +447,6 @@ onMounted(() => {
     card.addEventListener('mouseleave', () => { mouseX.value = 50; mouseY.value = 50 })
   }
 })
-
-function toggleInterest(tag: string) {
-  const idx = form.value.interests.indexOf(tag)
-  if (idx === -1) form.value.interests.push(tag)
-  else form.value.interests.splice(idx, 1)
-}
 
 function validate(): boolean {
   validationError.value = null
@@ -495,7 +483,10 @@ async function saveProfile() {
     if (form.value.fursona_gender) payload.fursona_gender = form.value.fursona_gender
     if (form.value.fursona_color) payload.fursona_color = form.value.fursona_color
     if (form.value.fursona_description.trim()) payload.fursona_description = form.value.fursona_description.trim()
-    if (form.value.interests.length) payload.interests = form.value.interests
+    for (const cat of FAVORITE_CATEGORIES) {
+      const value = form.value.favorites[cat.key].trim()
+      if (value) payload[cat.key] = value
+    }
 
     const { data } = await api.patch('/users/me', payload)
     if (!data.success) throw new Error('Не удалось сохранить профиль')

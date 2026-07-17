@@ -10,10 +10,11 @@ const props = defineProps<{
   multiple?: boolean
 }>()
 
-const emit = defineEmits<{ (e: 'uploaded', urls: string[], originalUrls: string[]): void }>()
+const emit = defineEmits<{ (e: 'uploaded', urls: string[], originalUrls: string[], hasVideo: boolean): void }>()
 
-type PreviewEntry = { localUrl: string; uploading: boolean; progress: number; finalUrl?: string; finalOriginalUrl?: string; name: string; size: number; isVideo: boolean }
+type PreviewEntry = { id: number; localUrl: string; uploading: boolean; progress: number; finalUrl?: string; finalOriginalUrl?: string; name: string; size: number; isVideo: boolean }
 
+let nextPreviewId = 0
 const previews = ref<PreviewEntry[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 const isDragging = ref(false)
@@ -75,7 +76,10 @@ function compressImage(file: File): Promise<File> {
   })
 }
 
-// ── Upload with index-based reactivity ────────────────────────────────────
+// ── Upload with id-based reactivity ───────────────────────────────────────
+// Entries are tracked by stable `id`, not array position — reordering (or
+// removing an earlier item) while another upload is in flight must not make
+// that upload write its progress/result into the wrong slot.
 // Exposed so parent can call directly
 const processFiles = (files: FileList | File[] | null) => {
   if (!files) return
@@ -84,14 +88,15 @@ const processFiles = (files: FileList | File[] | null) => {
     if (!isFileAccepted(file)) { rejected = true; return }
     // Content-based dedup: skip if same name+size is already queued
     if (previews.value.some(p => p.name === file.name && p.size === file.size)) return
-    const idx = previews.value.length
-    previews.value.push({ localUrl: URL.createObjectURL(file), uploading: true, progress: 0, name: file.name, size: file.size, isVideo: file.type.startsWith('video/') })
-    uploadFile(file, idx)
+    const id = nextPreviewId++
+    previews.value.push({ id, localUrl: URL.createObjectURL(file), uploading: true, progress: 0, name: file.name, size: file.size, isVideo: file.type.startsWith('video/') })
+    uploadFile(file, id)
   })
   if (rejected) flashRejected()
 }
 
-const uploadFile = async (file: File, idx: number) => {
+const uploadFile = async (file: File, id: number) => {
+  const entry = () => previews.value.find(p => p.id === id)
   try {
     const compressed = await compressImage(file)
     const formData = new FormData()
@@ -99,29 +104,31 @@ const uploadFile = async (file: File, idx: number) => {
 
     // Smooth fake progress (Cloudflare buffers the request, real progress events unreliable)
     let fakeTimer: ReturnType<typeof setInterval> | null = setInterval(() => {
-      if (previews.value[idx] && previews.value[idx].progress < 90) {
-        previews.value[idx].progress = Math.min(90, previews.value[idx].progress + Math.random() * 8 + 2)
-      }
+      const e = entry()
+      if (e && e.progress < 90) e.progress = Math.min(90, e.progress + Math.random() * 8 + 2)
     }, 150)
 
     const res = await api.post(`/media/upload?folder=${props.folder || props.type || 'posts'}`, formData, {
       headers: { 'Content-Type': undefined },
       onUploadProgress: (p) => {
-        if (p.total && p.total > 0) {
-          previews.value[idx].progress = Math.min(92, Math.round((p.loaded / p.total) * 95))
+        const e = entry()
+        if (e && p.total && p.total > 0) {
+          e.progress = Math.min(92, Math.round((p.loaded / p.total) * 95))
         }
       },
     })
 
     if (fakeTimer) { clearInterval(fakeTimer); fakeTimer = null }
-    previews.value[idx].progress = 100
-    previews.value[idx].finalUrl = res.data.data.url
-    previews.value[idx].finalOriginalUrl = res.data.data.originalUrl || res.data.data.url
-    setTimeout(() => { previews.value[idx].uploading = false }, 350)
+    const e = entry()
+    if (!e) return // removed while uploading
+    e.progress = 100
+    e.finalUrl = res.data.data.url
+    e.finalOriginalUrl = res.data.data.originalUrl || res.data.data.url
+    setTimeout(() => { const e2 = entry(); if (e2) e2.uploading = false }, 350)
     emitAll()
   } catch (err: any) {
-    previews.value[idx].uploading = false
-    previews.value[idx].progress = 0
+    const e = entry()
+    if (e) { e.uploading = false; e.progress = 0 }
     console.error('Upload failed:', err?.response?.data ?? err?.message)
   }
 }
@@ -130,26 +137,64 @@ const emitAll = () => {
   const seen = new Set<string>()
   const urls: string[] = []
   const originalUrls: string[] = []
+  let hasVideo = false
   for (const p of previews.value) {
     if (!p.finalUrl || seen.has(p.finalUrl)) continue
     seen.add(p.finalUrl)
     urls.push(p.finalUrl)
     originalUrls.push(p.finalOriginalUrl || p.finalUrl)
+    if (p.isVideo) hasVideo = true
   }
-  emit('uploaded', urls, originalUrls)
+  emit('uploaded', urls, originalUrls, hasVideo)
 }
 
 const remove = (idx: number) => { previews.value.splice(idx, 1); emitAll() }
 
-const clearAll = () => { previews.value = []; emit('uploaded', [], []) }
+const clearAll = () => { previews.value = []; emit('uploaded', [], [], false) }
 
-const onDrop = (e: DragEvent) => { isDragging.value = false; processFiles(e.dataTransfer?.files ?? null) }
-const onDragOver = (e: DragEvent) => { e.preventDefault(); isDragging.value = true }
+const REORDER_MIME = 'application/x-bloomly-reorder-index'
+
+const onDrop = (e: DragEvent) => {
+  isDragging.value = false
+  // A thumbnail being dragged to reorder also carries the browser's synthesized
+  // image File in dataTransfer.files — without this guard it re-uploads as a duplicate.
+  if (e.dataTransfer?.types.includes(REORDER_MIME)) return
+  processFiles(e.dataTransfer?.files ?? null)
+}
+const onDragOver = (e: DragEvent) => { e.preventDefault(); if (draggedIdx.value === null) isDragging.value = true }
 const onDragLeave = (e: DragEvent) => {
   // Only hide if leaving the component entirely (not moving to a child)
   if (!(e.currentTarget as Element)?.contains(e.relatedTarget as Node)) {
     isDragging.value = false
   }
+}
+
+// ── Thumbnail reordering (drag to swap places) ──────────────────────────────
+const draggedIdx = ref<number | null>(null)
+const dragOverIdx = ref<number | null>(null)
+
+function onThumbDragStart(idx: number, e: DragEvent) {
+  draggedIdx.value = idx
+  e.dataTransfer?.setData(REORDER_MIME, String(idx))
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+}
+function onThumbDragOver(idx: number, e: DragEvent) {
+  e.preventDefault()
+  if (draggedIdx.value !== null) dragOverIdx.value = idx
+}
+function onThumbDrop(idx: number, e: DragEvent) {
+  e.stopPropagation()
+  const from = draggedIdx.value
+  dragOverIdx.value = null
+  draggedIdx.value = null
+  if (from === null || from === idx) return
+  const [moved] = previews.value.splice(from, 1)
+  previews.value.splice(idx, 0, moved)
+  emitAll()
+}
+function onThumbDragEnd() {
+  draggedIdx.value = null
+  dragOverIdx.value = null
 }
 
 // ── Paste (Ctrl+V) handler ─────────────────────────────────────────────────
@@ -222,8 +267,16 @@ defineExpose({
       <div class="grid grid-cols-4 gap-2">
         <div
           v-for="(p, idx) in previews"
-          :key="idx"
-          class="relative aspect-square rounded-xl overflow-hidden bg-white/5 border border-white/10 group/thumb"
+          :key="p.id"
+          draggable="true"
+          @dragstart="onThumbDragStart(idx, $event)"
+          @dragover="onThumbDragOver(idx, $event)"
+          @dragleave="dragOverIdx === idx && (dragOverIdx = null)"
+          @drop.prevent="onThumbDrop(idx, $event)"
+          @dragend="onThumbDragEnd"
+          class="relative aspect-square rounded-xl overflow-hidden bg-white/5 border-2 group/thumb cursor-grab active:cursor-grabbing transition-all"
+          :class="dragOverIdx === idx && draggedIdx !== idx ? 'border-violet-500/70 scale-95' : 'border-white/10'"
+          :style="draggedIdx === idx ? 'opacity: 0.4' : ''"
         >
           <video v-if="p.isVideo" :src="p.localUrl" muted playsinline class="w-full h-full object-cover transition-opacity duration-300" :class="p.uploading ? 'opacity-30' : 'opacity-100'" />
           <img v-else :src="p.localUrl" class="w-full h-full object-cover transition-opacity duration-300" :class="p.uploading ? 'opacity-30' : 'opacity-100'" />
@@ -275,7 +328,10 @@ defineExpose({
         <!-- Add more tile -->
         <button
           @click="fileInput?.click()"
-          class="aspect-square rounded-xl border-2 border-dashed border-white/15 hover:border-violet-500/50 hover:bg-violet-500/8 flex flex-col items-center justify-center gap-1 transition-all group/add"
+          @dragover="onThumbDragOver(previews.length, $event)"
+          @drop.prevent="onThumbDrop(previews.length, $event)"
+          class="aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-1 transition-all group/add"
+          :class="dragOverIdx === previews.length ? 'border-violet-500/70 bg-violet-500/8' : 'border-white/15 hover:border-violet-500/50 hover:bg-violet-500/8'"
         >
           <Plus class="w-5 h-5 text-white/30 group-hover/add:text-violet-400 transition-colors" />
           <span class="text-[9px] font-bold text-white/25 group-hover/add:text-violet-400 transition-colors">Ещё</span>

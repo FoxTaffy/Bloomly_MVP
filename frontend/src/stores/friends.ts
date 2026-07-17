@@ -12,6 +12,7 @@ export interface FriendUser {
   badge_type: string | null
   location: string | null
   birth_date: string | null
+  deceased_at: string | null
 }
 
 export interface FriendRequest {
@@ -31,6 +32,13 @@ export interface FriendBirthday extends Friend {
   nextBirthday: string
 }
 
+/** Birthday within [-1, +1] days of today — yesterday / today / tomorrow */
+export interface NearbyBirthday extends Friend {
+  daysOffset: -1 | 0 | 1
+  age: number
+  occurredAt: string
+}
+
 export interface FriendStatus {
   status: 'none' | 'pending' | 'accepted'
   friendshipId?: string
@@ -46,6 +54,7 @@ export const useFriendsStore = defineStore('friends', () => {
   const outgoing       = ref<FriendRequest[]>([])
   const suggestions    = ref<FriendUser[]>([])
   const birthdays      = ref<FriendBirthday[]>([])
+  const nearbyBirthdays = ref<NearbyBirthday[]>([])
   const isLoading      = ref(false)
   const requestsCount  = ref(0)
 
@@ -95,6 +104,11 @@ export const useFriendsStore = defineStore('friends', () => {
     birthdays.value = data.data
   }
 
+  async function loadNearbyBirthdays() {
+    const { data } = await api.get<{ success: boolean; data: NearbyBirthday[] }>('/friends/birthdays/nearby')
+    nearbyBirthdays.value = data.data
+  }
+
   async function sendRequest(targetId: string) {
     await api.post('/friends/request', { targetId })
     await loadSuggestions()
@@ -132,6 +146,7 @@ export const useFriendsStore = defineStore('friends', () => {
     outgoing,
     suggestions,
     birthdays,
+    nearbyBirthdays,
     isLoading,
     requestsCount,
     loadFriends,
@@ -141,6 +156,7 @@ export const useFriendsStore = defineStore('friends', () => {
     loadOutgoing,
     loadSuggestions,
     loadBirthdays,
+    loadNearbyBirthdays,
     sendRequest,
     acceptRequest,
     rejectRequest,

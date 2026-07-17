@@ -49,11 +49,11 @@ export async function updateUsernameHandler(
 }
 
 export async function searchUsersHandler(
-  request: FastifyRequest<{ Querystring: { q?: string } }>,
+  request: FastifyRequest<{ Querystring: { q?: string; limit?: string; page?: string } }>,
   reply: FastifyReply,
 ) {
-  const q = (request.query as any).q ?? '';
-  const users = await usersService.searchUsers(q);
+  const { q = '', limit, page } = request.query as any;
+  const users = await usersService.searchUsers(q, limit ? parseInt(limit, 10) : 8, page ? parseInt(page, 10) : 1);
   return reply.send({ success: true, data: { users }, error: null });
 }
 
@@ -158,6 +158,20 @@ export async function getPublicKeyHandler(
 ) {
   const key = await usersService.getPublicKey(request.params.id);
   return reply.send({ success: true, data: { public_key: key }, error: null });
+}
+
+export async function getProfileStatsHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = request.user as JwtPayload;
+    const stats = await usersService.getProfileStats(userId);
+    return reply.send({ success: true, data: { stats }, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 500;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'PROFILE_STATS_ERROR', message: e.message } });
+  }
 }
 
 export async function updateSubscriptionHandler(
@@ -295,63 +309,104 @@ export async function restoreAvatarHistoryHandler(
   }
 }
 
-// ── Fursona handlers ──────────────────────────────────────────────────────────
+// ── Fursona handlers (1:N per user) ─────────────────────────────────────────
 
-export async function getFursonaHandler(
+export async function getFursonasHandler(
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) {
   const viewer = (request as any).user as JwtPayload | undefined;
-  const fursona = await usersService.getFursona(request.params.id, viewer?.id);
-  if (!fursona) {
-    return reply.code(404).send({ success: false, data: null, error: { code: 'FURSONA_NOT_FOUND', message: 'Fursona not found' } });
-  }
-  return reply.send({ success: true, data: { fursona }, error: null });
+  const fursonas = await usersService.getFursonas(request.params.id, viewer?.id);
+  return reply.send({ success: true, data: { fursonas }, error: null });
 }
 
-export async function upsertFursonaHandler(
+export async function createFursonaHandler(
   request: FastifyRequest<{ Body: UpsertFursonaInput }>,
   reply: FastifyReply,
 ) {
   const { id: userId } = request.user as JwtPayload;
   try {
-    const fursona = await usersService.upsertFursona(userId, request.body);
-    return reply.send({ success: true, data: { fursona }, error: null });
+    const fursona = await usersService.createFursona(userId, request.body);
+    return reply.code(201).send({ success: true, data: { fursona }, error: null });
   } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'FURSONA_UPDATE_ERROR', message: e.message } });
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSONA_CREATE_ERROR', message: e.message } });
   }
 }
 
-// ── Fursona reference gallery handlers ────────────────────────────────────────
-
-export async function getReferenceImagesHandler(
-  request: FastifyRequest<{ Params: { id: string } }>,
+export async function updateFursonaHandler(
+  request: FastifyRequest<{ Params: { fursonaId: string }; Body: UpsertFursonaInput }>,
   reply: FastifyReply,
 ) {
-  const referenceImages = await usersService.getReferenceImages(request.params.id);
+  const { id: userId } = request.user as JwtPayload;
+  try {
+    const fursona = await usersService.updateFursona(userId, request.params.fursonaId, request.body);
+    return reply.send({ success: true, data: { fursona }, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSONA_UPDATE_ERROR', message: e.message } });
+  }
+}
+
+export async function deleteFursonaHandler(
+  request: FastifyRequest<{ Params: { fursonaId: string } }>,
+  reply: FastifyReply,
+) {
+  const { id: userId } = request.user as JwtPayload;
+  try {
+    const result = await usersService.deleteFursona(userId, request.params.fursonaId);
+    return reply.send({ success: true, data: result, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSONA_DELETE_ERROR', message: e.message } });
+  }
+}
+
+export async function setPrimaryFursonaHandler(
+  request: FastifyRequest<{ Params: { fursonaId: string } }>,
+  reply: FastifyReply,
+) {
+  const { id: userId } = request.user as JwtPayload;
+  try {
+    const result = await usersService.setPrimaryFursona(userId, request.params.fursonaId);
+    return reply.send({ success: true, data: result, error: null });
+  } catch (e: any) {
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSONA_PRIMARY_ERROR', message: e.message } });
+  }
+}
+
+// ── Fursona reference gallery handlers (1:N per Fursona) ─────────────────────
+
+export async function getReferenceImagesHandler(
+  request: FastifyRequest<{ Params: { id: string; fursonaId: string } }>,
+  reply: FastifyReply,
+) {
+  const referenceImages = await usersService.getReferenceImages(request.params.id, request.params.fursonaId);
   return reply.send({ success: true, data: { referenceImages }, error: null });
 }
 
 export async function addReferenceImageHandler(
-  request: FastifyRequest<{ Body: UpsertReferenceImageInput }>,
+  request: FastifyRequest<{ Params: { fursonaId: string }; Body: UpsertReferenceImageInput }>,
   reply: FastifyReply,
 ) {
   const { id: userId } = request.user as JwtPayload;
   try {
-    const referenceImage = await usersService.addReferenceImage(userId, request.body);
+    const referenceImage = await usersService.addReferenceImage(userId, request.params.fursonaId, request.body);
     return reply.code(201).send({ success: true, data: { referenceImage }, error: null });
   } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'REFERENCE_CREATE_ERROR', message: e.message } });
+    const code = e.statusCode ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'REFERENCE_CREATE_ERROR', message: e.message } });
   }
 }
 
 export async function updateReferenceImageHandler(
-  request: FastifyRequest<{ Params: { refId: string }; Body: UpsertReferenceImageInput }>,
+  request: FastifyRequest<{ Params: { fursonaId: string; refId: string }; Body: UpsertReferenceImageInput }>,
   reply: FastifyReply,
 ) {
   const { id: userId } = request.user as JwtPayload;
   try {
-    const referenceImage = await usersService.updateReferenceImage(userId, request.params.refId, request.body);
+    const referenceImage = await usersService.updateReferenceImage(userId, request.params.fursonaId, request.params.refId, request.body);
     return reply.send({ success: true, data: { referenceImage }, error: null });
   } catch (e: any) {
     const code = e.statusCode ?? 400;
@@ -360,12 +415,12 @@ export async function updateReferenceImageHandler(
 }
 
 export async function deleteReferenceImageHandler(
-  request: FastifyRequest<{ Params: { refId: string } }>,
+  request: FastifyRequest<{ Params: { fursonaId: string; refId: string } }>,
   reply: FastifyReply,
 ) {
   const { id: userId } = request.user as JwtPayload;
   try {
-    await usersService.deleteReferenceImage(userId, request.params.refId);
+    await usersService.deleteReferenceImage(userId, request.params.fursonaId, request.params.refId);
     return reply.send({ success: true, data: null, error: null });
   } catch (e: any) {
     const code = e.statusCode ?? 400;
@@ -379,11 +434,11 @@ export async function deleteReferenceImageHandler(
  * The original MinIO URL is never returned to the browser.
  */
 export async function getWatermarkedReferenceImageHandler(
-  request: FastifyRequest<{ Params: { id: string; refId: string } }>,
+  request: FastifyRequest<{ Params: { id: string; fursonaId: string; refId: string } }>,
   reply: FastifyReply,
 ) {
   try {
-    const result = await usersService.getWatermarkedReferenceImage(request.params.id, request.params.refId);
+    const result = await usersService.getWatermarkedReferenceImage(request.params.id, request.params.fursonaId, request.params.refId);
     if (!result) {
       return reply.code(404).send({ success: false, data: null, error: { code: 'REFERENCE_NOT_FOUND', message: 'Reference image not found' } });
     }

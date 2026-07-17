@@ -97,6 +97,9 @@ const tabs = computed(() => [
   { key: 'following' as MainTab, icon: 'UserPlus',   label: langStore.t.tabFollowing,    count: friendsStore.following.length },
 ])
 
+// Счётчики подгружаются асинхронно после первого замера плашки — пересчитываем при их изменении
+watch(() => tabs.value.map(t => t.count).join(','), () => nextTick(updateTabSlider))
+
 // ── Actions ───────────────────────────────────────────────────────────────────
 async function handleRemove(friendId: string) { confirmRemoveId.value = friendId }
 async function confirmRemove() {

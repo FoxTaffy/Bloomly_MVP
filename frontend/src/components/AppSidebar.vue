@@ -7,6 +7,7 @@ import { useLangStore } from '@/stores/lang'
 import { useGroupsStore } from '@/stores/groups'
 import { useMessagesStore } from '@/stores/messages'
 import { useMobileSidebar } from '@/composables/useMobileSidebar'
+import { useGroupAdminTools } from '@/composables/useGroupAdminTools'
 import BIcon from './BIcon.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 
@@ -28,78 +29,10 @@ const groupsStore = useGroupsStore()
 const messagesStore = useMessagesStore()
 const mobileSidebar = useMobileSidebar()
 
-const ADMIN_ROUTES = new Set([
-  'group-detail', 'group-settings',
-  'my-applications', 'my-tickets', 'my-todolist',
-])
-
-// Show admin tools when on own group page or any related admin page
-const adminGroup = computed(() => {
-  if (!ADMIN_ROUTES.has(route.name as string) || !auth.user) return null
-
-  let g = groupsStore.currentGroup
-
-  if (!g && route.query.group) {
-    const m = groupsStore.myGroups.find(m => m.group_id === route.query.group)
-    g = m?.group ?? null
-  }
-
-  if (!g) return null
-
-  const isOwner = g.owner_id === auth.user.id
-  const isAdmin = groupsStore.myGroups.some(
-    m => m.group_id === g!.id && ['owner', 'admin'].includes(m.role)
-  )
-  return (isOwner || isAdmin) ? g : null
-})
-
-// Per-type admin tool list (after the universal "Настройки группы" button)
-const adminTools = computed(() => {
-  const g = adminGroup.value
-  if (!g) return []
-  const gid = g.id
-  const slug = (g as any).slug ?? g.id
-  const t = g.type
-
-  const go = (name: string, query?: Record<string, string>) =>
-    () => router.push({ name, ...(query ? { query } : {}), ...(name === 'group-settings' ? { params: { slugOrId: slug } } : {}) })
-
-  if (t === 'event') return [
-    { key: 'applications', icon: 'ClipboardList',  label: 'Заявки участников', action: go('my-applications', { group: gid }) },
-    { key: 'tickets',      icon: 'Ticket',          label: 'Билеты',           action: go('my-tickets',      { group: gid }) },
-    { key: 'status',       icon: 'CalendarCheck',   label: 'Статус события',   action: go('group-settings') },
-    { key: 'schedule',     icon: 'Clock',           label: 'Программа',        action: go('group-settings') },
-  ]
-
-  if (t === 'artist') return [
-    { key: 'orders',  icon: 'Palette',       label: 'Мои заказы',  action: go('my-applications', { group: gid }) },
-    { key: 'queue',   icon: 'List',          label: 'Очередь',     action: go('my-applications', { group: gid }) },
-    { key: 'todo',    icon: 'CheckSquare',   label: 'Todolist',    action: go('my-todolist',     { group: gid }) },
-    { key: 'price',   icon: 'Tag',           label: 'Прайс',       action: go('group-settings') },
-  ]
-
-  if (t === 'creative') return [
-    { key: 'orders', icon: 'Scissors',     label: 'Заказы',  action: go('my-applications', { group: gid }) },
-    { key: 'todo',   icon: 'CheckSquare',  label: 'Todolist', action: go('my-todolist',     { group: gid }) },
-    { key: 'price',  icon: 'Tag',          label: 'Прайс',   action: go('group-settings') },
-  ]
-
-  if (t === 'news') return [
-    { key: 'posts', icon: 'Newspaper', label: 'Публикации', action: go('group-detail', { slugOrId: slug } as any) },
-    { key: 'team',  icon: 'Users',     label: 'Редакция',   action: go('group-settings') },
-  ]
-
-  if (t === 'shop') return [
-    { key: 'goods',  icon: 'ShoppingBag', label: 'Товары',  action: go('group-settings') },
-    { key: 'orders', icon: 'Package',     label: 'Заказы',  action: go('my-applications', { group: gid }) },
-  ]
-
-  // community / static / brand
-  return [
-    { key: 'members', icon: 'Users',         label: 'Участники', action: go('group-detail') },
-    { key: 'posts',   icon: 'Megaphone',     label: 'Посты',     action: go('group-detail') },
-  ]
-})
+// Show admin tools when on own group page or any related admin page — tool set
+// and "already on this group's tools page" sync logic live in the composable so
+// GroupAdminToolsView and this sidebar never drift apart.
+const { adminGroup, adminTools, isToolActive } = useGroupAdminTools()
 
 function navigate(fn: () => void) {
   mobileSidebar.close()
@@ -127,7 +60,6 @@ const isActive = (key: string): boolean => {
     subscriptions:'subscriptions',
     'dealers-den':'dealers-den',
     'shop':         'shop',
-    'automation': 'automation',
     explore:      'explore',
   }
   if (routeMap[key]) return route.name === routeMap[key]
@@ -195,9 +127,9 @@ const navItems = computed(() => [
 const categoryItems = computed(() => [
   { key: 'shop',        icon: 'ShoppingBag', label: langStore.t.shop ?? 'Магазин', disabled: false, action: () => router.push({ name: 'shop' }) },
   { key: 'dealers-den', icon: 'Tag',         label: langStore.t.dealersDen,  disabled: false, action: () => router.push({ name: 'dealers-den' }) },
-  { key: 'automation',  icon: 'Zap',         label: 'Автоматизация',         disabled: false, action: () => router.push({ name: 'automation' }) },
+  { key: 'automation',  icon: 'Zap',         label: 'Автоматизация',         disabled: false, action: () => router.push({ name: 'settings-profile', query: { section: 'sec-automation' } }) },
   { key: 'gifts',       icon: 'Gift',        label: langStore.t.gifts,       disabled: true,  action: () => {} },
-  { key: 'help',        icon: 'HelpCircle',  label: langStore.t.help,        disabled: true,  action: () => {} },
+  { key: 'help',        icon: 'CircleHelp',  label: langStore.t.help,        disabled: false, action: () => router.push({ name: 'help' }) },
 ])
 </script>
 
@@ -308,9 +240,18 @@ const categoryItems = computed(() => [
                 <BIcon name="Settings" class="w-5 h-5" />
                 <span class="flex-1 text-left">Настройки группы</span>
               </button>
+              <button
+                @click="navigate(() => router.push({ name: 'group-admin-tools', params: { slugOrId: (adminGroup as any).slug } }))"
+                class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-white/65 hover:bg-brand-card/50 hover:text-white">
+                <BIcon name="LayoutDashboard" class="w-5 h-5" />
+                <span class="flex-1 text-left">Все инструменты</span>
+              </button>
               <button v-for="tool in adminTools" :key="tool.key"
                 @click="navigate(tool.action)"
-                class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-white/65 hover:bg-brand-card/50 hover:text-white">
+                :class="[
+                  'w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all',
+                  isToolActive(tool) ? 'bg-brand-card text-white' : 'text-white/65 hover:bg-brand-card/50 hover:text-white'
+                ]">
                 <BIcon :name="tool.icon" class="w-5 h-5" />
                 <span class="flex-1 text-left">{{ tool.label }}</span>
               </button>
@@ -404,9 +345,18 @@ const categoryItems = computed(() => [
           <BIcon name="Settings" class="w-5 h-5" />
           <span class="flex-1 text-left">Настройки группы</span>
         </button>
+        <button
+          @click="router.push({ name: 'group-admin-tools', params: { slugOrId: (adminGroup as any).slug } })"
+          class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-white/65 hover:bg-brand-card/50 hover:text-white">
+          <BIcon name="LayoutDashboard" class="w-5 h-5" />
+          <span class="flex-1 text-left">Все инструменты</span>
+        </button>
         <button v-for="tool in adminTools" :key="tool.key"
           @click="tool.action()"
-          class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-white/65 hover:bg-brand-card/50 hover:text-white">
+          :class="[
+            'w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all',
+            isToolActive(tool) ? 'bg-brand-card text-white' : 'text-white/65 hover:bg-brand-card/50 hover:text-white'
+          ]">
           <BIcon :name="tool.icon" class="w-5 h-5" />
           <span class="flex-1 text-left">{{ tool.label }}</span>
         </button>

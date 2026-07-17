@@ -68,6 +68,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/search',
+    name: 'search',
+    component: () => import('@/views/SearchView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/messages',
     name: 'messages',
     component: () => import('@/views/MessagesView.vue'),
@@ -119,6 +125,18 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/groups/:slugOrId/business',
+    name: 'group-business',
+    component: () => import('@/views/GroupBusinessView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/groups/:slugOrId/admin',
+    name: 'group-admin-tools',
+    component: () => import('@/views/GroupAdminToolsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/events/:eventId',
     name: 'event-detail',
     component: () => import('@/views/EventDetailView.vue'),
@@ -161,8 +179,12 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/automation',
-    name: 'automation',
-    component: () => import('@/views/AutomationView.vue'),
+    redirect: () => ({ name: 'settings-profile', query: { section: 'sec-automation' } }),
+  },
+  {
+    path: '/help',
+    name: 'help',
+    component: () => import('@/views/HelpView.vue'),
     meta: { requiresAuth: true },
   },
   {

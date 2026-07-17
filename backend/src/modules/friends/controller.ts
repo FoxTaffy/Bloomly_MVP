@@ -98,6 +98,11 @@ export async function getBirthdaysHandler(req: AuthRequest, reply: FastifyReply)
   return reply.send({ success: true, data: result });
 }
 
+export async function getNearbyBirthdaysHandler(req: AuthRequest, reply: FastifyReply) {
+  const result = await friendsService.getNearbyBirthdays((req.user as any).id);
+  return reply.send({ success: true, data: result });
+}
+
 export async function getSuggestionsHandler(req: AuthRequest, reply: FastifyReply) {
   const result = await friendsService.getSuggestions((req.user as any).id);
   return reply.send({ success: true, data: result });

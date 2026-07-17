@@ -1,6 +1,8 @@
 import prisma from '../../config/prisma.js';
 import { getGroupBadgeLevel } from '../../lib/badges.js';
+import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isTrustedMediaUrl } from '../media/service.js';
+import { notificationService } from '../notifications/service.js';
 import type {
   CreateGroupInput,
   UpdateGroupInput,
@@ -12,9 +14,27 @@ import type {
   MemberRole,
   SubEventInput,
   UpdateSubEventInput,
+  CreateOrderInput,
+  OrderStatus,
 } from './types.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+// Group role hierarchy: owner > admin > moderator > everyone else (member/dealer/volunteer/guest_of_honor).
+const ROLE_WEIGHT: Record<string, number> = { owner: 3, admin: 2, moderator: 1 };
+function roleWeight(role?: string | null): number {
+  return role ? (ROLE_WEIGHT[role] ?? 0) : 0;
+}
+
+// Default Todolist kanban columns — used whenever a group hasn't customized its own.
+export const DEFAULT_TODO_COLUMNS = [
+  { key: 'WAITING', label: 'В ожидании', icon: 'Clock', color: '#94a3b8' },
+  { key: 'SKETCH', label: 'Скетч', icon: 'Pencil', color: '#f59e0b' },
+  { key: 'LINEART', label: 'Линии', icon: 'PenTool', color: '#3b82f6' },
+  { key: 'COLORING', label: 'Цвет', icon: 'Palette', color: '#8b5cf6' },
+  { key: 'FINISHED', label: 'Готово', icon: 'CheckCircle2', color: '#10b981' },
+];
+export interface TodoColumn { key: string; label: string; icon: string; color: string }
+
 const GROUP_SELECT = {
   id: true,
   slug: true,
@@ -54,6 +74,7 @@ const GROUP_SELECT = {
   donations_enabled: true,
   bank_card_masked: true,
   support_tiers: true,
+  business_enabled: true,
   _count: { select: { members: true, events: true, posts: { where: { post: { deleted_at: null } } } } },
   owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
   communityChat: { select: { id: true } },
@@ -78,10 +99,18 @@ const GROUP_LIST_SELECT = {
   rating_count: true,
   members_count: true,
   created_at: true,
+  business_enabled: true,
   communityChat: { select: { id: true } },
   _count: { select: { members: true, events: true } },
   owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
 };
+
+const ORDER_CUSTOMER_SELECT = {
+  id: true,
+  username: true,
+  display_name: true,
+  avatar_url: true,
+} as const;
 
 const EVENT_SELECT = {
   id: true,
@@ -238,6 +267,7 @@ export const groupService = {
     if (input.donationsEnabled !== undefined) data.donations_enabled = input.donationsEnabled;
     if (input.bankCardMasked !== undefined) data.bank_card_masked = input.bankCardMasked || null;
     if (input.supportTiers !== undefined) data.support_tiers = input.supportTiers;
+    if (input.businessEnabled !== undefined) data.business_enabled = input.businessEnabled;
 
     return prisma.group.update({ where: { id: groupId }, data, select: GROUP_SELECT });
   },
@@ -313,13 +343,24 @@ export const groupService = {
     });
   },
 
-  async setMemberRole(groupId: string, userId: string, role: MemberRole) {
+  async setMemberRole(groupId: string, requesterId: string, userId: string, role: MemberRole) {
     if (role === 'owner') throw new Error('Cannot assign owner role via this endpoint');
     // Cannot change the role of the current owner
     const current = await prisma.groupMember.findUnique({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
     });
     if (current?.role === 'owner') throw new Error('Cannot change the role of the group owner');
+
+    const requester = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: requesterId } },
+    });
+    const requesterWeight = roleWeight(requester?.role);
+    if (requesterWeight < 2) throw new Error('Not authorized'); // must be admin or owner
+    // Admins (not owner) may only grant roles below admin — they cannot create peer admins.
+    if (requesterWeight < 3 && role === 'admin') {
+      throw new Error('Only the group owner can assign the admin role');
+    }
+
     return prisma.groupMember.update({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
       data: { role },
@@ -341,11 +382,13 @@ export const groupService = {
     const requester = await prisma.groupMember.findUnique({
       where: { group_id_user_id: { group_id: groupId, user_id: requesterId } },
     });
-    if (!requester || (requester.role !== 'owner' && requester.role !== 'admin')) {
-      throw new Error('Not authorized');
-    }
-    if (requester.role === 'admin' && target.role === 'admin') {
-      throw new Error('Admins cannot remove other admins');
+    const requesterWeight = roleWeight(requester?.role);
+    const targetWeight = roleWeight(target.role);
+    if (requesterWeight < 1) throw new Error('Not authorized'); // must be at least moderator
+    // Can only remove members with a strictly lower role weight (moderators can kick plain
+    // members, admins can kick moderators/members but not other admins, etc).
+    if (targetWeight >= requesterWeight) {
+      throw new Error('Not authorized to remove a member with an equal or higher role');
     }
     const result = await prisma.groupMember.delete({
       where: { group_id_user_id: { group_id: groupId, user_id: targetUserId } },
@@ -603,6 +646,26 @@ export const groupService = {
     return member ? ['owner', 'admin'].includes(member.role) : false;
   },
 
+  async isOwner(groupId: string, userId: string): Promise<boolean> {
+    const member = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+    });
+    return member?.role === 'owner';
+  },
+
+  // Weight of the requester's role in this group: owner=3, admin=2, moderator=1, else 0.
+  async getRoleWeight(groupId: string, userId: string): Promise<number> {
+    const member = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+    });
+    return roleWeight(member?.role);
+  },
+
+  // owner/admin/moderator can moderate content (delete others' posts/comments) in this group.
+  async isAtLeastModerator(groupId: string, userId: string): Promise<boolean> {
+    return (await groupService.getRoleWeight(groupId, userId)) >= 1;
+  },
+
   // ── Group posts ──────────────────────────────────────────────────────────
   async getGroupPosts(groupId: string, page = 1, limit = 20, hasMedia = false) {
     const skip = (page - 1) * limit;
@@ -677,37 +740,32 @@ export const groupService = {
     return memberships.map((m) => ({ ...m.group, badge_level: getGroupBadgeLevel(m.group.members_count), role: m.role }));
   },
 
-  // ── Groups visible to viewer (friend-gated) ───────────────────────────────
+  // ── Groups visible to viewer (privacy-gated) ──────────────────────────────
   async getUserGroupsForViewer(userId: string, requesterId: string | null) {
     const isOwn = requesterId === userId;
 
-    let isFriend = false;
-    if (requesterId && !isOwn) {
-      const friendship = await prisma.friendship.findFirst({
-        where: {
-          OR: [
-            { requester_id: requesterId, addressee_id: userId, status: 'accepted' },
-            { requester_id: userId, addressee_id: requesterId, status: 'accepted' },
-          ],
-        },
-      });
-      isFriend = !!friendship;
+    const owner = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { groups_visibility: true, groups_pinned_only: true },
+    });
+    if (!owner) return { groups: [], count: 0, pinned_only: false, hidden: false };
+
+    if (!isOwn) {
+      const visible = await isAllowedByPrivacy(owner.groups_visibility, userId, requesterId ?? undefined);
+      if (!visible) return { groups: [], count: 0, pinned_only: false, hidden: true };
     }
 
-    const canSeeAll = isOwn || isFriend;
+    const pinnedOnly = !isOwn && owner.groups_pinned_only;
 
-    const [totalCount, memberships] = await Promise.all([
-      prisma.groupMember.count({ where: { user_id: userId, group: { deleted_at: null } } }),
-      prisma.groupMember.findMany({
-        where: {
-          user_id: userId,
-          group: { deleted_at: null },
-          ...(canSeeAll ? {} : { is_pinned: true }),
-        },
-        include: { group: { select: GROUP_LIST_SELECT } },
-        orderBy: [{ is_pinned: 'desc' }, { joined_at: 'desc' }],
-      }),
-    ]);
+    const memberships = await prisma.groupMember.findMany({
+      where: {
+        user_id: userId,
+        group: { deleted_at: null },
+        ...(pinnedOnly ? { is_pinned: true } : {}),
+      },
+      include: { group: { select: GROUP_LIST_SELECT } },
+      orderBy: [{ is_pinned: 'desc' }, { joined_at: 'desc' }],
+    });
 
     const groups = memberships.map((m) => ({
       ...m.group,
@@ -716,7 +774,7 @@ export const groupService = {
       is_pinned: m.is_pinned,
     }));
 
-    return { groups, count: totalCount, pinned_only: !canSeeAll };
+    return { groups, count: groups.length, pinned_only: pinnedOnly, hidden: false };
   },
 
   // ── Toggle pin for own membership ─────────────────────────────────────────
@@ -807,13 +865,13 @@ export const groupService = {
   },
 
   // ── Create post in group ──────────────────────────────────────────────────
-  async createGroupPost(groupId: string, userId: string, input: { content: string; title?: string; postType?: string; isNsfw?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; mediaOriginalUrls?: string[]; tags?: string[]; visibility?: string; category?: string }) {
+  async createGroupPost(groupId: string, userId: string, input: { content: string; title?: string; postType?: string; isNsfw?: boolean; isAiGenerated?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; mediaOriginalUrls?: string[]; tags?: string[]; visibility?: string; category?: string }) {
     // Check user is admin/owner
     const member = await prisma.groupMember.findUnique({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
     });
-    if (!member || !['owner', 'admin'].includes(member.role)) {
-      throw new Error('Only admins and owners can post in the group');
+    if (roleWeight(member?.role) < 1) {
+      throw new Error('Only owners, admins and moderators can post in the group');
     }
 
     const content = (input.content ?? '').trim();
@@ -843,6 +901,7 @@ export const groupService = {
           content,
           author_id: userId,
           is_nsfw: input.isNsfw ?? false,
+          is_ai_generated: input.isAiGenerated ?? false,
           is_announcement: input.isAnnouncement ?? false,
           media_urls: mediaUrls,
           media_original_urls: mediaOriginalUrls,
@@ -850,7 +909,7 @@ export const groupService = {
           post_type: input.postType || 'general',
           category: input.category || null,
           subscriber_only: input.visibility === 'subscriber_only',
-          is_paid: input.visibility === 'paid',
+          is_paid: false, // Paid posts are temporarily disabled
         },
       });
 
@@ -884,6 +943,24 @@ export const groupService = {
           groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true } } } },
         },
       });
+    }).then(async (created) => {
+      // Notify group members who opted into post notifications for this group.
+      const subscribers = await prisma.groupMember.findMany({
+        where: { group_id: groupId, notify_posts: true, user_id: { not: userId } },
+        select: { user_id: true },
+      });
+      await Promise.all(
+        subscribers.map((s) =>
+          notificationService.create({
+            receiverId: s.user_id,
+            senderId:   userId,
+            type:       'GROUP_POST',
+            postId:     created!.id,
+            refId:      groupId,
+          }).catch(() => {})
+        ),
+      );
+      return created;
     });
   },
 
@@ -1014,8 +1091,8 @@ export const groupService = {
     await prisma.groupMessage.update({ where: { id: messageId }, data: { deleted_at: new Date() } });
   },
 
-  // ── Search (for maker picker) ─────────────────────────────────────────────
-  async searchGroups(q: string, limit = 8) {
+  // ── Search (for maker picker + global search) ──────────────────────────────
+  async searchGroups(q: string, limit = 8, page = 1) {
     const query = q.trim();
     if (!query) return [];
     return prisma.group.findMany({
@@ -1027,8 +1104,9 @@ export const groupService = {
           { slug: { contains: query, mode: 'insensitive' } },
         ],
       },
-      select: { id: true, name: true, slug: true, avatar_url: true, type: true },
+      select: { id: true, name: true, slug: true, avatar_url: true, type: true, members_count: true, is_verified: true },
       orderBy: [{ is_verified: 'desc' }, { members_count: 'desc' }],
+      skip: (Math.max(1, page) - 1) * limit,
       take: limit,
     });
   },
@@ -1056,6 +1134,40 @@ export const groupService = {
 
   // ── Artist Queue (Todo) ───────────────────────────────────────────────────
 
+  async getTodoColumns(groupId: string): Promise<TodoColumn[]> {
+    const g = await prisma.group.findUnique({ where: { id: groupId }, select: { todo_columns: true } });
+    const cols = Array.isArray(g?.todo_columns) ? (g!.todo_columns as unknown as TodoColumn[]) : [];
+    return cols.length ? cols : DEFAULT_TODO_COLUMNS;
+  },
+
+  async updateTodoColumns(groupId: string, columns: Array<{ key?: string; label?: string; icon?: string; color?: string }>): Promise<TodoColumn[]> {
+    const seen = new Set<string>();
+    const clean: TodoColumn[] = columns.slice(0, 8).map((c, i) => {
+      let key = String(c.key || c.label || `col${i}`).trim().toUpperCase().replace(/[^A-Z0-9_]/g, '').slice(0, 24) || `COL${i}`;
+      while (seen.has(key)) key = `${key}_${i}`;
+      seen.add(key);
+      return {
+        key,
+        label: String(c.label ?? key).trim().slice(0, 40) || key,
+        color: /^#[0-9a-f]{6}$/i.test(c.color ?? '') ? (c.color as string) : '#94a3b8',
+        icon: String(c.icon || 'Circle').trim().slice(0, 40),
+      };
+    }).filter(c => c.label);
+    if (!clean.length) throw new Error('At least one column is required');
+
+    const validKeys = clean.map(c => c.key);
+    const fallbackKey = clean[0].key;
+
+    await prisma.$transaction([
+      prisma.group.update({ where: { id: groupId }, data: { todo_columns: clean as any } }),
+      prisma.groupTodoItem.updateMany({
+        where: { group_id: groupId, deleted_at: null, status: { notIn: validKeys } },
+        data: { status: fallbackKey },
+      }),
+    ]);
+    return clean;
+  },
+
   async getTodoItems(groupId: string) {
     return prisma.groupTodoItem.findMany({
       where: { group_id: groupId, deleted_at: null },
@@ -1073,12 +1185,17 @@ export const groupService = {
       });
       data.position = (last?.position ?? -1) + 1;
     }
+    let status = data.status;
+    if (!status) {
+      const cols = await groupService.getTodoColumns(groupId);
+      status = cols[0]?.key ?? 'WAITING';
+    }
     return prisma.groupTodoItem.create({
       data: {
         group_id: groupId,
         title: data.title.trim(),
         description: data.description?.trim() || null,
-        status: (data.status as any) ?? 'WAITING',
+        status,
         position: data.position,
       },
     });
@@ -1109,6 +1226,149 @@ export const groupService = {
         })
       )
     );
+  },
+
+  // ── Orders (Business tab) ──────────────────────────────────────────────────
+  async getOrders(groupId: string, requesterId: string) {
+    const isAdmin = await groupService.isOwnerOrAdmin(groupId, requesterId);
+    return prisma.order.findMany({
+      where: {
+        group_id: groupId,
+        deleted_at: null,
+        ...(isAdmin ? {} : { customer_id: requesterId }),
+      },
+      include: { customer: { select: ORDER_CUSTOMER_SELECT } },
+      orderBy: [{ position: 'asc' }, { created_at: 'asc' }],
+    });
+  },
+
+  async createOrder(groupId: string, customerId: string, input: CreateOrderInput) {
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      select: { deleted_at: true, business_enabled: true, owner_id: true },
+    });
+    if (!group || group.deleted_at) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
+    if (!group.business_enabled) throw Object.assign(new Error('Business mode is not enabled for this group'), { statusCode: 400 });
+    const member = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: customerId } },
+    });
+    if (!member) throw Object.assign(new Error('Not a group member'), { statusCode: 403 });
+    if (!input.title?.trim()) throw Object.assign(new Error('Title is required'), { statusCode: 400 });
+
+    return prisma.$transaction(async (tx) => {
+      const last = await tx.order.findFirst({
+        where: { group_id: groupId, deleted_at: null },
+        orderBy: { position: 'desc' },
+        select: { position: true },
+      });
+      const conversation = await tx.conversation.create({
+        data: {
+          type: 'direct',
+          participants: {
+            create: [
+              { user_id: customerId, label: 'customer' },
+              { user_id: group.owner_id },
+            ],
+          },
+        },
+      });
+      return tx.order.create({
+        data: {
+          group_id: groupId,
+          customer_id: customerId,
+          title: input.title.trim(),
+          description: input.description?.trim() || null,
+          form_data: (input.formData ?? undefined) as any,
+          deadline_at: input.deadlineAt ? new Date(input.deadlineAt) : null,
+          position: (last?.position ?? -1) + 1,
+          conversation_id: conversation.id,
+        },
+        include: { customer: { select: ORDER_CUSTOMER_SELECT } },
+      });
+    });
+  },
+
+  async updateOrderStatus(orderId: string, requesterId: string, status: OrderStatus) {
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order || order.deleted_at) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
+    if (!(await groupService.isOwnerOrAdmin(order.group_id, requesterId))) {
+      throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
+    }
+    return prisma.order.update({
+      where: { id: orderId },
+      data: { status },
+      include: { customer: { select: ORDER_CUSTOMER_SELECT } },
+    });
+  },
+
+  async deleteOrder(orderId: string, requesterId: string) {
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order || order.deleted_at) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
+    if (!(await groupService.isOwnerOrAdmin(order.group_id, requesterId))) {
+      throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
+    }
+    return prisma.order.update({ where: { id: orderId }, data: { deleted_at: new Date() } });
+  },
+
+  async getBusinessStats(groupId: string) {
+    const [postsCount, messagesCount, statusCounts] = await Promise.all([
+      prisma.groupPost.count({ where: { group_id: groupId, post: { deleted_at: null } } }),
+      prisma.groupMessage.count({ where: { group_id: groupId, deleted_at: null } }),
+      prisma.order.groupBy({ by: ['status'], where: { group_id: groupId, deleted_at: null }, _count: true }),
+    ]);
+    const ordersByStatus: Record<OrderStatus, number> = { WAITING: 0, SKETCH: 0, LINEART: 0, COLORING: 0, FINISHED: 0 };
+    for (const row of statusCounts as unknown as { status: OrderStatus; _count: number }[]) {
+      ordersByStatus[row.status] = row._count;
+    }
+    return { postsCount, messagesCount, ordersByStatus };
+  },
+
+  // ── Group balance (funded by member donations from their Wallet) ──────────
+  async donateToGroup(groupId: string, userId: string, amount: number, message?: string) {
+    const clean = Math.round(amount * 100) / 100;
+    if (!Number.isFinite(clean) || clean < 1) {
+      throw Object.assign(new Error('Amount must be at least 1'), { statusCode: 400 });
+    }
+    const group = await prisma.group.findUnique({ where: { id: groupId }, select: { deleted_at: true, donations_enabled: true } });
+    if (!group || group.deleted_at) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
+    if (!group.donations_enabled) throw Object.assign(new Error('Donations are not enabled for this group'), { statusCode: 400 });
+
+    const wallet = await prisma.wallet.findUnique({ where: { user_id: userId } });
+    if (!wallet || Number(wallet.balance) < clean) {
+      throw Object.assign(new Error('Insufficient wallet balance'), { statusCode: 402 });
+    }
+
+    const [, updatedGroup, transaction] = await prisma.$transaction([
+      prisma.wallet.update({ where: { user_id: userId }, data: { balance: { decrement: clean } } }),
+      prisma.group.update({ where: { id: groupId }, data: { balance: { increment: clean } } }),
+      prisma.groupTransaction.create({
+        data: { group_id: groupId, user_id: userId, type: 'DONATION', amount: clean, message: message?.trim().slice(0, 280) || null },
+        include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
+      }),
+    ]);
+    return { balance: updatedGroup.balance, transaction };
+  },
+
+  async getGroupBalance(groupId: string) {
+    const [group, transactions] = await Promise.all([
+      prisma.group.findUnique({ where: { id: groupId }, select: { balance: true } }),
+      prisma.groupTransaction.findMany({
+        where: { group_id: groupId },
+        include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
+        orderBy: { created_at: 'desc' },
+        take: 50,
+      }),
+    ]);
+    return { balance: group?.balance ?? 0, transactions };
+  },
+
+  async getOrderConversation(orderId: string, requesterId: string): Promise<string> {
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order || order.deleted_at) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
+    const isAdmin = await groupService.isOwnerOrAdmin(order.group_id, requesterId);
+    if (order.customer_id !== requesterId && !isAdmin) throw Object.assign(new Error('Forbidden'), { statusCode: 403 });
+    if (!order.conversation_id) throw Object.assign(new Error('No conversation for this order'), { statusCode: 404 });
+    return order.conversation_id;
   },
 
   // ── Trending groups (by member count + recent activity) ──────────────────

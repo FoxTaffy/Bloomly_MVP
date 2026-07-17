@@ -19,6 +19,7 @@
                 :to="'/profile/' + post.author.username"
                 class="font-bold text-white hover:text-brand-accent transition-colors text-sm truncate"
               >{{ post.author.display_name || post.author.username }}</router-link>
+              <span v-if="(post.author as any).deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
               <!-- Verification badge -->
               <img v-if="post.author.is_verified"
                 :src="verificationBadgeIcon(post.author.verification_type)"
@@ -64,7 +65,7 @@
               class="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition text-left">
               <PinOff class="w-4 h-4 flex-shrink-0" /> Открепить
             </button>
-            <button v-if="isOwn" @click="startEdit"
+            <button v-if="isEditable" @click="startEdit"
               class="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition text-left">
               <Pencil class="w-4 h-4 flex-shrink-0" /> Редактировать
             </button>
@@ -275,6 +276,7 @@ const localRating  = ref<number>(props.post.rating ?? 0)
 const localRepaws  = ref<number>(props.post._count?.repaws ?? 0)
 const localVote    = ref<1 | -1 | 0>(0)
 const localRepawed = ref(false)
+const votePending  = ref(false)
 const showMenu     = ref(false)
 const isExpanded   = ref(false)
 const isEditing    = ref(false)
@@ -287,6 +289,10 @@ const paidRevealed = ref(false)
 // ── Computed ───────────────────────────────────────────────────────────────
 const isOwn = computed(() =>
   authStore.user?.id === props.post.author_id || authStore.user?.id === props.post.author?.id
+)
+const POST_EDIT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+const isEditable = computed(() =>
+  isOwn.value && (Date.now() - new Date(props.post.created_at).getTime() < POST_EDIT_WINDOW_MS)
 )
 const canPin = computed(() => props.isOwnProfile && isOwn.value)
 const isPinnedThis = computed(() => props.pinnedPostId === props.post.id)
@@ -345,14 +351,18 @@ async function goToUser(username: string) {
 }
 
 async function vote(value: 1 | -1) {
-  if (!authStore.isAuthenticated) return
+  if (!authStore.isAuthenticated || votePending.value) return
+  votePending.value = true
   try {
     const r = await api.post(`/posts/${props.post.id}/vote`, { value })
     if (r.data.success) {
       localRating.value = r.data.data.rating ?? localRating.value
       localVote.value = localVote.value === value ? 0 : value
     }
-  } catch {}
+  } catch {
+  } finally {
+    votePending.value = false
+  }
 }
 
 async function toggleRepaw() {

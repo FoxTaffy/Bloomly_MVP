@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
 import MobileBottomNav from '@/components/MobileBottomNav.vue'
 import NotifToastContainer from '@/components/NotifToastContainer.vue'
+import UpdateAnnouncementModal from '@/components/UpdateAnnouncementModal.vue'
 usePresence()
 
 const auth  = useAuthStore()
@@ -32,4 +33,5 @@ const showMobileNav = computed(() =>
   </RouterView>
   <MobileBottomNav v-if="showMobileNav" />
   <NotifToastContainer />
+  <UpdateAnnouncementModal v-if="auth.token" />
 </template>

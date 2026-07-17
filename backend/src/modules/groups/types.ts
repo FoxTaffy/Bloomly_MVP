@@ -50,6 +50,7 @@ export interface UpdateGroupInput {
   donationsEnabled?: boolean;
   bankCardMasked?: string | null;
   supportTiers?: Array<{ emoji: string; name: string; price: string; desc: string }>;
+  businessEnabled?: boolean;
 }
 
 export interface CreateEventInput {
@@ -154,4 +155,17 @@ export interface UpdateSubEventInput {
   startsAt?: string;
   endsAt?: string;
   description?: string;
+}
+
+export type OrderStatus = 'WAITING' | 'SKETCH' | 'LINEART' | 'COLORING' | 'FINISHED';
+
+export interface CreateOrderInput {
+  title: string;
+  description?: string;
+  formData?: Record<string, unknown>;
+  deadlineAt?: string; // ISO
+}
+
+export interface UpdateOrderInput {
+  status?: OrderStatus;
 }

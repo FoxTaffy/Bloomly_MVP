@@ -10,7 +10,7 @@ import {
 export async function updatesRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
 
-  // Public — active updates for the stories bar
+  // Public — active updates for the announcement modal
   fastify.get('/', getActiveUpdatesHandler as any);
 
   // Admin — all updates

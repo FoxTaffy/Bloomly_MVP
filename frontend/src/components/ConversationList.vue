@@ -29,10 +29,9 @@
       </div>
     </div>
 
-    <!-- Category tabs (hidden when convFilter is set) -->
+    <!-- Category tabs (hidden when convFilter is set) — 4 equal tabs: Личное / Беседы / Группы / Бизнес -->
     <div v-if="!props.convFilter || props.convFilter === 'all'" class="flex-shrink-0 px-3 pt-2 pb-2 border-b border-brand-border">
-      <!-- Main tabs -->
-      <div class="flex gap-1 bg-brand-bg rounded-2xl p-1 mb-2">
+      <div class="flex gap-1 bg-brand-bg rounded-2xl p-1">
         <button @click="activeCategory = 'personal'"
           :class="['flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-bold transition-all duration-200',
             activeCategory === 'personal' || activeCategory === 'all' ? 'bg-brand-accent text-white' : 'text-white/50 hover:text-white/80']">
@@ -58,15 +57,15 @@
           <span v-if="getCategoryCount('community')"
             :class="['text-[9px] rounded-full px-1 min-w-[14px] text-center font-bold', activeCategory === 'community' ? 'bg-white/25 text-white' : 'bg-brand-accent/20 text-brand-accent']">{{ getCategoryCount('community') }}</span>
         </button>
+        <button @click="activeCategory = 'customer'"
+          :class="['flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-bold transition-all duration-200',
+            activeCategory === 'customer' ? 'bg-brand-accent text-white' : 'text-white/50 hover:text-white/80']">
+          <BIcon name="Briefcase" class="w-3 h-3" />
+          {{ langStore.t.tabOrders }}
+          <span v-if="getCategoryCount('customer')"
+            :class="['text-[9px] rounded-full px-1 min-w-[14px] text-center font-bold', activeCategory === 'customer' ? 'bg-white/25 text-white' : 'bg-brand-accent/20 text-brand-accent']">{{ getCategoryCount('customer') }}</span>
+        </button>
       </div>
-      <!-- Zakazы small button -->
-      <button @click="activeCategory = activeCategory === 'customer' ? 'personal' : 'customer'"
-        :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-semibold transition-all duration-200',
-          activeCategory === 'customer' ? 'bg-gradient-to-r from-brand-purple/25 to-brand-pink/20 text-brand-pink border border-brand-pink/40 shadow-sm' : 'text-white/40 hover:text-white/70 hover:bg-brand-bg border border-transparent']">
-        <BIcon name="Briefcase" class="w-3 h-3" />
-        {{ langStore.t.tabOrders }}
-        <span v-if="getCategoryCount('customer')" class="text-[9px] bg-brand-pink/25 text-brand-pink rounded-full px-1.5">{{ getCategoryCount('customer') }}</span>
-      </button>
     </div>
 
     <!-- List -->
@@ -190,12 +189,16 @@
                   {{ conv.is_group ? (conv.name || langStore.t.tabGroups) : isNotes(conv) ? langStore.t.notesBtn : (getOther(conv)?.display_name || getOther(conv)?.username || '?') }}
               </span>
               <BIcon v-if="conv.is_group" name="Users" class="w-3 h-3 text-white/55 flex-shrink-0" />
+              <span v-if="!conv.is_group && (getOther(conv) as any)?.deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
             </div>
             <span class="text-[10px] text-white/45 flex-shrink-0 tabular-nums">{{ formatTime(conv.last_message?.created_at || conv.updated_at) }}</span>
           </div>
           <p :class="['text-xs truncate mt-0.5', isUnread(conv) ? 'text-brand-offwhite/70 font-medium' : 'text-white/50']">
             <template v-if="conv.is_group && conv.last_message">
               <span class="text-brand-accent/80">{{ conv.last_message.sender?.display_name || conv.last_message.sender?.username }}: </span>
+            </template>
+            <template v-else-if="!conv.is_group && conv.last_message?.sender_id === auth.user?.id">
+              <span class="text-white/40">{{ langStore.t.youPrefix }} </span>
             </template>
             {{ lastMessagePreview(conv.last_message) }}
           </p>
@@ -466,18 +469,37 @@
               </div>
               <div class="flex-1">
                 <h3 class="font-bold text-white text-sm">{{ deleteConvTarget.is_group ? langStore.t.contextLeaveGroup : langStore.t.contextDeleteConv }}</h3>
-                <p class="text-[11px] text-white/55">{{ deleteConvTarget.is_group ? langStore.t.leaveGroupHint : langStore.t.deleteConvHint }}</p>
+                <p class="text-[11px] text-white/55">{{ deleteConvTarget.is_group ? langStore.t.leaveGroupHint : langStore.t.deleteConvChooseHint }}</p>
               </div>
               <button @click="deleteConvTarget = null" class="p-1.5 rounded-xl text-white/55 hover:text-white hover:bg-white/8 transition-all">
                 <BIcon name="X" class="w-4 h-4" />
               </button>
             </div>
-            <div class="flex gap-2 px-5 py-4">
+            <template v-if="!deleteConvTarget.is_group">
+              <div class="flex flex-col gap-2 px-5 pt-4">
+                <button @click="confirmDelete('me')"
+                  class="w-full px-4 py-2.5 rounded-xl text-sm font-medium bg-brand-bg border border-brand-border text-brand-offwhite hover:border-brand-accent/50 hover:text-white transition-all text-left">
+                  {{ langStore.t.deleteOnlyMeTitle }}
+                  <span class="block text-xs text-white/55 font-normal">{{ langStore.t.deleteOnlyMeHint }}</span>
+                </button>
+                <button @click="confirmDelete('all')"
+                  class="w-full px-4 py-2.5 rounded-xl text-sm font-medium bg-brand-error/10 border border-brand-error/30 text-brand-error hover:bg-brand-error/20 transition-all text-left">
+                  {{ langStore.t.deleteForAllTitle }}
+                  <span class="block text-xs opacity-70 font-normal">{{ langStore.t.deleteForAllHint }}</span>
+                </button>
+              </div>
+              <div class="px-5 py-4">
+                <button @click="deleteConvTarget = null" class="w-full py-2 rounded-xl text-sm text-white/55 hover:text-white hover:bg-brand-bg/50 transition-colors">
+                  {{ langStore.t.cancelBtn }}
+                </button>
+              </div>
+            </template>
+            <div v-else class="flex gap-2 px-5 py-4">
               <button @click="deleteConvTarget = null" class="flex-1 py-2 rounded-xl border border-brand-border text-sm text-white/55 hover:text-white hover:bg-brand-bg/50 transition-colors">
                 {{ langStore.t.cancelBtn }}
               </button>
-              <button @click="confirmDelete" class="flex-1 py-2 rounded-xl bg-brand-error/10 border border-brand-error/30 text-brand-error text-sm font-semibold hover:bg-brand-error/20 transition-all">
-                {{ deleteConvTarget.is_group ? langStore.t.leaveBtn : langStore.t.deleteBtn }}
+              <button @click="confirmDelete('me')" class="flex-1 py-2 rounded-xl bg-brand-error/10 border border-brand-error/30 text-brand-error text-sm font-semibold hover:bg-brand-error/20 transition-all">
+                {{ langStore.t.leaveBtn }}
               </button>
             </div>
           </div>
@@ -530,12 +552,12 @@ const menuConvId = ref<string | null>(null)
 // Delete / leave confirm
 const deleteConvTarget = ref<Conversation | null>(null)
 
-async function confirmDelete() {
+async function confirmDelete(scope: 'me' | 'all') {
   if (!deleteConvTarget.value) return
   const conv = deleteConvTarget.value
   deleteConvTarget.value = null
   try {
-    await store.deleteConversation(conv.id, 'me')
+    await store.deleteConversation(conv.id, scope)
     if (store.activeId === conv.id) store.closeConversation()
   } catch { /* silent */ }
 }
@@ -715,6 +737,7 @@ function lastMessagePreview(msg: Conversation['last_message']): string {
   if (msg.type === 'payment_request') return `💳 ${msg.metadata?.status === 'paid' ? 'Оплачено' : 'Запрос оплаты'} · ${formatMoneyPreview(msg.metadata?.amount)}`
   if (msg.type === 'payment_confirmation') return `✅ Оплачено · ${formatMoneyPreview(msg.metadata?.amount)}`
   if (msg.type === 'tip') return `🎉 Чаевые · ${formatMoneyPreview(msg.metadata?.amount)}`
+  if (msg.type === 'post_share') return '📎 Поделился(-ась) постом'
   // encrypted_text field (new schema)
   if (!msg.text && msg.encrypted_text) return t.encryptedMessagePreview
   // legacy: ciphertext stored in text field (ECDH E2E)
@@ -726,9 +749,9 @@ function lastMessagePreview(msg: Conversation['last_message']): string {
   // plain text
   if (msg.text) return msg.text
   // forwarded file/sticker with no text
-  if (msg.forwarded_from_sender_id && msg.file_url) return '↩️ ' + t.mediaFilePreview
+  if (msg.forwarded_from_sender_id && msg.file_url) return '↩️ ' + (msg.type === 'image' ? t.imagePreview : msg.type === 'video' ? t.videoPreview : t.mediaFilePreview)
   // fallback for image/video/file
-  if (msg.file_url) return t.mediaFilePreview
+  if (msg.file_url) return msg.type === 'image' ? t.imagePreview : msg.type === 'video' ? t.videoPreview : t.mediaFilePreview
   return t.noMessages
 }
 

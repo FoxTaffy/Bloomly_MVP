@@ -68,6 +68,11 @@ export const updateUserSchema = {
         additionalProperties: { type: 'string', maxLength: 500 },
       },
       interests:            { type: 'array', items: { type: 'string' }, nullable: true },
+      fav_food:             { type: 'string', maxLength: 80, nullable: true },
+      fav_animal:           { type: 'string', maxLength: 80, nullable: true },
+      fav_music:            { type: 'string', maxLength: 80, nullable: true },
+      fav_artist:           { type: 'string', maxLength: 80, nullable: true },
+      fav_film:             { type: 'string', maxLength: 80, nullable: true },
       relationship_with:    { type: 'string', nullable: true },
       relationship_since:   { type: 'string', nullable: true },
       profile_theme:        { type: 'string', nullable: true },
@@ -83,6 +88,8 @@ export const updateUserSchema = {
       friends_list_visibility:  { type: 'string', enum: ['everyone', 'friends', 'only_me'] },
       profile_visibility:       { type: 'string', enum: ['everyone', 'friends', 'only_me'] },
       relationship_status_visibility: { type: 'string', enum: ['everyone', 'friends', 'only_me'] },
+      groups_visibility:        { type: 'string', enum: ['everyone', 'friends', 'only_me'] },
+      groups_pinned_only:       { type: 'boolean' },
       payment_region:           { type: 'string', maxLength: 10, nullable: true },
     },
     additionalProperties: false,
@@ -161,9 +168,20 @@ export const upsertReferenceImageSchema = {
 export const referenceImageIdParamSchema = {
   params: {
     type: 'object',
-    required: ['refId'],
+    required: ['fursonaId', 'refId'],
     properties: {
+      fursonaId: { type: 'string', format: 'uuid' },
       refId: { type: 'string', format: 'uuid' },
+    },
+  },
+};
+
+export const fursonaIdParamSchema = {
+  params: {
+    type: 'object',
+    required: ['fursonaId'],
+    properties: {
+      fursonaId: { type: 'string', format: 'uuid' },
     },
   },
 };

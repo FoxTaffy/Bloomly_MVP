@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma.js';
+import { Prisma } from '@prisma/client';
 
 export const adminService = {
   // ── Overview stats ────────────────────────────────────────────────────────
@@ -63,30 +64,62 @@ export const adminService = {
   },
 
   // ── Users ─────────────────────────────────────────────────────────────────
-  async getUsers(page = 1, limit = 30, search?: string) {
+  // Default sort ("privilege") ranks owner > admin > moderator > user, since role
+  // is a plain string column and its alphabetical order doesn't match rank order.
+  async getUsers(page = 1, limit = 30, search?: string, sortBy = 'privilege') {
     const skip = (page - 1) * limit;
-    const where: any = { deleted_at: null };
-    if (search) where.OR = [
-      { username:     { contains: search, mode: 'insensitive' } },
-      { display_name: { contains: search, mode: 'insensitive' } },
-      { email:        { contains: search, mode: 'insensitive' } },
-    ];
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { created_at: 'desc' },
-        select: {
-          id: true, username: true, display_name: true, email: true,
-          role: true, badge_type: true, avatar_url: true,
-          created_at: true, deleted_at: true,
-          _count: { select: { posts: true, followers: true, following: true } },
-        },
-      }),
-      prisma.user.count({ where }),
+
+    const searchClause = search
+      ? Prisma.sql`AND (u.username ILIKE ${'%' + search + '%'} OR u.display_name ILIKE ${'%' + search + '%'} OR u.email ILIKE ${'%' + search + '%'})`
+      : Prisma.empty;
+
+    const roleRankSql = Prisma.sql`CASE u.role WHEN 'owner' THEN 3 WHEN 'admin' THEN 2 WHEN 'moderator' THEN 1 ELSE 0 END`;
+    const tierRankSql = Prisma.sql`CASE u.subscription_tier WHEN 'business' THEN 3 WHEN 'pro' THEN 2 WHEN 'lite' THEN 1 ELSE 0 END`;
+
+    const orderClauses: Record<string, Prisma.Sql> = {
+      privilege:    Prisma.sql`${roleRankSql} DESC, u.created_at DESC`,
+      newest:       Prisma.sql`u.created_at DESC`,
+      oldest:       Prisma.sql`u.created_at ASC`,
+      posts:        Prisma.sql`post_count DESC, u.created_at DESC`,
+      followers:    Prisma.sql`follower_count DESC, u.created_at DESC`,
+      subscription: Prisma.sql`${tierRankSql} DESC, u.created_at DESC`,
+      username:     Prisma.sql`u.username ASC`,
+    };
+    const orderClause = orderClauses[sortBy] ?? orderClauses.privilege;
+
+    const rows = await prisma.$queryRaw<any[]>`
+      SELECT u.id, u.username, u.display_name, u.email, u.role, u.badge_type, u.avatar_url,
+             u.subscription_tier, u.created_at, u.deleted_at, u.frozen_at, u.warn_count,
+             u.deceased_at, u.deceased_note,
+             COALESCE(p.post_count, 0)::int AS post_count,
+             COALESCE(f.follower_count, 0)::int AS follower_count,
+             COUNT(*) OVER()::int AS total_count
+      FROM "User" u
+      LEFT JOIN (SELECT author_id, COUNT(*) AS post_count FROM "Post" WHERE deleted_at IS NULL GROUP BY author_id) p ON p.author_id = u.id
+      LEFT JOIN (SELECT following_id, COUNT(*) AS follower_count FROM "Follow" GROUP BY following_id) f ON f.following_id = u.id
+      WHERE u.deleted_at IS NULL
+      ${searchClause}
+      ORDER BY ${orderClause}
+      LIMIT ${limit} OFFSET ${skip}
+    `;
+
+    const total = rows[0]?.total_count ?? 0;
+
+    const [newToday, subscribers, frozen] = await Promise.all([
+      prisma.user.count({ where: { deleted_at: null, created_at: { gte: new Date(Date.now() - 86_400_000) } } }),
+      prisma.user.count({ where: { deleted_at: null, subscription_tier: { not: 'free' } } }),
+      prisma.user.count({ where: { deleted_at: null, frozen_at: { not: null } } }),
     ]);
-    return { users, total, page, pages: Math.ceil(total / limit) };
+
+    const users = rows.map(({ post_count, follower_count, total_count, ...u }) => ({
+      ...u,
+      _count: { posts: post_count, followers: follower_count },
+    }));
+
+    return {
+      users, total, page, pages: Math.ceil(total / limit),
+      stats: { newToday, subscribers, frozen },
+    };
   },
 
   async updateUserRole(userId: string, role: string, badgeType: string | null) {
@@ -188,21 +221,59 @@ export const adminService = {
   },
 
   // ── Reports ────────────────────────────────────────────────────────────────
+  // Reports are grouped into "folders" by (target_type, target_id): repeated
+  // complaints about the same post/entity collapse into a single tile instead
+  // of flooding the queue with duplicates.
   async getReports(status?: string, page = 1, limit = 30) {
-    const skip  = (page - 1) * limit;
     const where: any = { deleted_at: null };
     if (status) where.status = status;
-    const [reports, total] = await Promise.all([
-      prisma.report.findMany({
-        where, skip, take: limit, orderBy: { created_at: 'desc' },
-        include: {
-          reporter: { select: { id: true, username: true, display_name: true, avatar_url: true } },
-          resolver: { select: { id: true, username: true } },
-        },
-      }),
-      prisma.report.count({ where }),
-    ]);
-    return { reports, total, page, pages: Math.ceil(total / limit) };
+
+    const all = await prisma.report.findMany({
+      where, orderBy: { created_at: 'desc' },
+      include: {
+        reporter: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        resolver: { select: { id: true, username: true } },
+      },
+    });
+
+    const groups = new Map<string, typeof all>();
+    for (const r of all) {
+      const key = `${r.target_type}:${r.target_id}`;
+      const arr = groups.get(key);
+      if (arr) arr.push(r); else groups.set(key, [r]);
+    }
+
+    const postIds = [...groups.values()]
+      .filter(g => g[0].target_type === 'post')
+      .map(g => g[0].target_id);
+    const posts = postIds.length
+      ? await prisma.post.findMany({
+          where: { id: { in: postIds } },
+          select: {
+            id: true, content: true, media_urls: true, is_nsfw: true, deleted_at: true,
+            author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+          },
+        })
+      : [];
+    const postMap = new Map(posts.map(p => [p.id, p]));
+
+    const folders = [...groups.values()]
+      .map(group => ({
+        target_type: group[0].target_type,
+        target_id:   group[0].target_id,
+        count:       group.length,
+        status:      group.some(r => r.status === 'pending') ? 'pending' : group[0].status,
+        created_at:  group[0].created_at,
+        reports:     group,
+        post:        group[0].target_type === 'post' ? (postMap.get(group[0].target_id) ?? null) : null,
+      }))
+      .sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
+
+    const total = folders.length;
+    const skip  = (page - 1) * limit;
+    const reports = folders.slice(skip, skip + limit);
+
+    return { reports, total, page, pages: Math.max(1, Math.ceil(total / limit)) };
   },
 
   async createReport(input: { reporterId: string; targetType: string; targetId: string; reason: string }) {
@@ -215,6 +286,14 @@ export const adminService = {
   async resolveReport(reportId: string, resolverId: string, status: 'reviewed' | 'dismissed', note?: string) {
     return prisma.report.update({
       where: { id: reportId },
+      data:  { status, resolved_by: resolverId, note, updated_at: new Date() },
+    });
+  },
+
+  // Resolve every report in a folder at once (repeated complaints on the same post)
+  async resolveReportsBatch(reportIds: string[], resolverId: string, status: 'reviewed' | 'dismissed', note?: string) {
+    return prisma.report.updateMany({
+      where: { id: { in: reportIds } },
       data:  { status, resolved_by: resolverId, note, updated_at: new Date() },
     });
   },
@@ -246,13 +325,18 @@ export const adminService = {
 
   async submitAd(input: {
     requesterId?: string; title: string; description?: string;
-    imageUrl?: string; linkUrl: string; contactInfo?: string;
+    imageUrl?: string; linkUrl: string; contactInfo?: string; priceLabel?: string;
   }) {
     return prisma.advertisement.create({ data: {
       requester_id: input.requesterId, title: input.title,
       description:  input.description, image_url: input.imageUrl,
       link_url: input.linkUrl, contact_info: input.contactInfo,
+      price_label: input.priceLabel,
     }});
+  },
+
+  async deleteAd(adId: string) {
+    return prisma.advertisement.update({ where: { id: adId }, data: { deleted_at: new Date() } });
   },
 
   async reviewAd(

@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, FlatList, KeyboardAvoidingView, Platf
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { ChevronLeft, Lock, Send, Mic, Square } from 'lucide-react-native';
+import { ChevronLeft, Wifi, Send, Mic, Square } from 'lucide-react-native';
 import {
   useAudioRecorder,
   useAudioRecorderState,
@@ -100,8 +100,8 @@ export default function ChatThreadScreen() {
         <View className="flex-1">
           <Text className="font-bold text-brand-offwhite">{title}</Text>
           <View className="flex-row items-center gap-1">
-            <Lock size={10} color={connected ? '#66C770' : '#3A4060'} />
-            <Text className="text-xs text-brand-muted">{connected ? 'Защищено E2E' : 'Подключение...'}</Text>
+            <Wifi size={10} color={connected ? '#66C770' : '#3A4060'} />
+            <Text className="text-xs text-brand-muted">{connected ? 'На связи' : 'Подключение...'}</Text>
           </View>
         </View>
       </View>

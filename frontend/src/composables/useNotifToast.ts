@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { useLangStore } from '@/stores/lang'
 
 export interface NotifToast {
   id: string
@@ -23,9 +24,21 @@ const typeLabel: Record<string, string> = {
   MENTION:              'упомянул(а) вас',
   RELATIONSHIP_REQUEST: 'хочет быть вашим партнёром 💕',
   RELATIONSHIP_ACCEPTED:'принял(а) ваш запрос в отношения ❤️',
-  GROUP_POST:           'опубликовал(а) в сообществе',
   GROUP_EVENT:          'новое событие в сообществе',
   GROUP_JOIN:           'вступил(а) в ваше сообщество',
+}
+
+/** Localized label for the two gender-aware "new post" notification types. */
+function subscriptionPostLabel(type: string, pronouns?: string | null): string | null {
+  const key = type.toUpperCase()
+  if (key !== 'FOLLOW_POST' && key !== 'GROUP_POST') return null
+  const t = useLangStore().t
+  const p = (pronouns || '').toLowerCase()
+  const isMale = p.startsWith('он')
+  const isFemale = p.startsWith('она')
+  const base = key === 'FOLLOW_POST' ? 'notifFollowPost' : 'notifGroupPost'
+  const suffix = isMale ? 'M' : isFemale ? 'F' : 'N'
+  return (t as any)[`${base}${suffix}`] ?? null
 }
 
 export function useNotifToast() {
@@ -38,7 +51,9 @@ export function useNotifToast() {
       senderName: sender.display_name || sender.username || 'Кто-то',
       senderAvatar: sender.avatar_url ?? null,
       senderUsername: sender.username ?? '',
-      message: typeLabel[String(notif.type).toUpperCase()] ?? notif.type ?? '',
+      message: subscriptionPostLabel(notif.type, sender.pronouns)
+        ?? typeLabel[String(notif.type).toUpperCase()]
+        ?? notif.type ?? '',
       postId: notif.post_id ?? undefined,
       createdAt: new Date(),
     }

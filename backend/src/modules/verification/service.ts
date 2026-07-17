@@ -69,8 +69,9 @@ export async function getProfileCompleteness(userId: string): Promise<ProfileCom
   });
   if (!user) throw new Error('User not found');
 
-  const fursona = await prisma.fursona.findUnique({
-    where: { user_id: userId },
+  const fursona = await prisma.fursona.findFirst({
+    where: { user_id: userId, deleted_at: null },
+    orderBy: [{ is_primary: 'desc' }, { created_at: 'asc' }],
     select: { name: true, species: true, likes: true, dislikes: true },
   });
 

@@ -6,9 +6,11 @@ import { useLangStore } from '@/stores/lang'
 import { useGroupsStore } from '@/stores/groups'
 import { useMobileHubStore } from '@/stores/mobileHub'
 import api from '@/api'
+import { useTagSuggestions } from '@/composables/useTagSuggestions'
 import BIcon from './BIcon.vue'
 import AppHeader from './AppHeader.vue'
 import AppSidebar from './AppSidebar.vue'
+import AdSlot from './ads/AdSlot.vue'
 import MediaUpload from './MediaUpload.vue'
 import SkeletonPost from './SkeletonPost.vue'
 import PostLightbox from './PostLightbox.vue'
@@ -21,6 +23,7 @@ import StoryMobileOnlyModal from './StoryMobileOnlyModal.vue'
 import { useAnalytics } from '@/composables/useAnalytics'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { formatCount } from '@/lib/utils'
+import { extractHashtags, extractCommittedHashtags } from '@/lib/hashtags'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 
 // MediaUpload component ref
@@ -64,7 +67,8 @@ const showStoryMobileNotice = ref(false)
 const createTab = ref<'post' | 'story'>('post')
 const mediaUrls = ref<string[]>([])
 const mediaOriginalUrls = ref<string[]>([])
-const handleMediaUploaded = (urls: string[], originalUrls: string[]) => { mediaUrls.value = urls; mediaOriginalUrls.value = originalUrls }
+const mediaHasVideo = ref(false)
+const handleMediaUploaded = (urls: string[], originalUrls: string[], hasVideo: boolean) => { mediaUrls.value = urls; mediaOriginalUrls.value = originalUrls; mediaHasVideo.value = hasVideo }
 
 // ── "Post as" entity selector ────────────────────────────────────────────────
 type PostEntity = { type: 'user' } | { type: 'group'; id: string; slug: string; name: string; avatar_url: string | null }
@@ -84,9 +88,10 @@ const closeCreateModal = () => {
   showAdvanced.value = false
   showEntityPicker.value = false
   showVisibilityMenu.value = false
-  newPost.value = { content: '', category: '', tags: [], isNsfw: false, visibility: 'public', price: '', videoTitle: '', videoDescription: '' }
+  newPost.value = { content: '', tags: [], isNsfw: false, isAiGenerated: false, visibility: 'public', price: '', videoTitle: '', videoDescription: '' }
   mediaUrls.value = []
   mediaOriginalUrls.value = []
+  mediaHasVideo.value = false
   mediaUploadRef.value?.clearAll()
 }
 
@@ -170,8 +175,18 @@ const cleanupObservers = () => { postObservers.forEach(u => u()); postObservers.
 
 onUnmounted(() => { cleanupObservers(); disconnectWebSocket(); closeStory(); if (onlineFetchTimer) clearTimeout(onlineFetchTimer) })
 
-const newPost = ref({ content: '', category: '', tags: [] as string[], isNsfw: false, visibility: 'public' as 'public' | 'subscriber_only' | 'paid', price: '' as string, videoTitle: '', videoDescription: '' })
+const newPost = ref({ content: '', tags: [] as string[], isNsfw: false, isAiGenerated: false, visibility: 'public' as 'public' | 'subscriber_only' | 'paid', price: '' as string, videoTitle: '', videoDescription: '' })
 const tagInput = ref('')
+const { suggestions: tagSuggestions, showSuggestions: showTagSuggestions, fetchSuggestions: fetchTagSuggestions, clearSuggestions: clearTagSuggestions } = useTagSuggestions()
+
+// Auto-pick up "#hashtag"s the user writes directly in the post text (only once
+// they've finished typing the word, not on every keystroke of a partial one)
+watch(() => newPost.value.content, (content) => {
+  for (const tag of extractCommittedHashtags(content)) {
+    if (!newPost.value.tags.includes(tag)) newPost.value.tags.push(tag)
+  }
+})
+
 const showAdvanced = ref(false)
 const showVisibilityMenu = ref(false)
 
@@ -202,16 +217,6 @@ const categories = [
   { id: 'other', label: 'other' }
 ]
 
-const allCategories = [
-  { id: '', name: 'All' },
-  { id: 'digital_art', name: 'Digital Art' },
-  { id: 'photography', name: 'Photography' },
-  { id: '3d', name: '3D' },
-  { id: 'animation', name: 'Animation' },
-  { id: 'writing', name: 'Writing' },
-  { id: 'other', name: 'Other' },
-]
-
 let searchDebounce: ReturnType<typeof setTimeout>
 const onHeaderSearch = () => { clearTimeout(searchDebounce); searchDebounce = setTimeout(() => fetchPosts(), 300) }
 
@@ -219,6 +224,7 @@ const handleLogout = () => { auth.logout(); router.push({ name: 'login' }) }
 
 // ── Post status (repawed / favourited / userVote) ────────────────────────────
 const postStatus = reactive<Record<string, { repawed: boolean; favourited: boolean; repawCount: number; userVote: 1 | -1 | 0 }>>({})
+const votePendingIds = new Set<string>()
 
 const initPostStatus = (loadedPosts: any[]) => {
   loadedPosts.forEach(p => {
@@ -390,9 +396,6 @@ const fetchActiveAds = async () => {
     if (res.data.success) activeAds.value = res.data.data.ads
   } catch {}
 }
-const trackAdClick = async (adId: string) => {
-  try { await api.post(`/admin/ads/${adId}/click`) } catch {}
-}
 
 // ── Recommended users (from DB) ──────────────────────────────────────────────
 const recommendedUsers = ref<any[]>([])
@@ -498,15 +501,26 @@ const fetchTrendingTags = async () => {
 }
 
 const addTag = () => {
-  const tag = tagInput.value.trim().toLowerCase()
+  const tag = tagInput.value.trim().toLowerCase().replace(/^#/, '')
   if (tag && !newPost.value.tags.includes(tag)) newPost.value.tags.push(tag)
   tagInput.value = ''
+  clearTagSuggestions()
+}
+const addTagFromSuggestion = (name: string) => {
+  const tag = name.trim().toLowerCase()
+  if (tag && !newPost.value.tags.includes(tag)) newPost.value.tags.push(tag)
+  tagInput.value = ''
+  clearTagSuggestions()
 }
 const removeTag = (t: string) => { newPost.value.tags = newPost.value.tags.filter(x => x !== t) }
 
 const createPost = async () => {
   const content = newPost.value.content.trim()
   if (!content && mediaUrls.value.length === 0) return
+  // Catch a trailing "#hashtag" that was never followed by a space/newline before hitting send
+  for (const tag of extractHashtags(content)) {
+    if (!newPost.value.tags.includes(tag)) newPost.value.tags.push(tag)
+  }
   isPosting.value = true
   try {
     let createdPost: any = null
@@ -514,6 +528,7 @@ const createPost = async () => {
       const res = await groupsStore.createGroupPost(postAsEntity.value.id, {
         content,
         isNsfw: newPost.value.isNsfw,
+        isAiGenerated: newPost.value.isAiGenerated,
         mediaUrls: mediaUrls.value,
         mediaOriginalUrls: mediaOriginalUrls.value,
         tags: newPost.value.tags,
@@ -522,9 +537,9 @@ const createPost = async () => {
     } else {
       const res = await api.post('/posts', {
         content,
-        category: newPost.value.category || undefined,
         tags: newPost.value.tags,
         isNsfw: newPost.value.isNsfw,
+        isAiGenerated: newPost.value.isAiGenerated,
         subscriberOnly: newPost.value.visibility === 'subscriber_only',
         isPaid: newPost.value.visibility === 'paid',
         price: newPost.value.visibility === 'paid' && newPost.value.price ? parseFloat(newPost.value.price) : undefined,
@@ -543,9 +558,10 @@ const createPost = async () => {
         groupContextMap[createdPost.id] = { id: ent.id, slug: ent.slug, name: ent.name, avatar_url: ent.avatar_url }
       }
     }
-    newPost.value = { content: '', category: '', tags: [], isNsfw: false, visibility: 'public', price: '', videoTitle: '', videoDescription: '' }
+    newPost.value = { content: '', tags: [], isNsfw: false, isAiGenerated: false, visibility: 'public', price: '', videoTitle: '', videoDescription: '' }
     mediaUrls.value = []
     mediaOriginalUrls.value = []
+    mediaHasVideo.value = false
     mediaUploadRef.value?.clearAll()
     showPostForm.value = false
     showVisibilityMenu.value = false
@@ -559,6 +575,8 @@ const createPost = async () => {
 }
 
 const votePost = async (postId: string, value: 1 | -1) => {
+  if (votePendingIds.has(postId)) return
+  votePendingIds.add(postId)
   // Optimistic update
   const prev = postStatus[postId]?.userVote ?? 0
   const next: 1 | -1 | 0 = prev === value ? 0 : value
@@ -573,6 +591,8 @@ const votePost = async (postId: string, value: 1 | -1) => {
     // rollback on error
     if (postStatus[postId]) postStatus[postId].userVote = prev
     console.error('Failed to vote', e)
+  } finally {
+    votePendingIds.delete(postId)
   }
 }
 
@@ -633,11 +653,9 @@ const storyViewerStoryIdx = ref(0)
 
 const openStoryViewer = (story: StoryItem, group: StoryItem[]) => {
   // Build full groups list from the storiesBar data, keeping the same order
-  // as the bar renders them: Bloomly updates bubble first, then user stories.
-  const bloomlyGroup = (storiesBarRef.value as any)?.bloomlyStoryGroup as StoryItem[] | undefined
-  const userGroups   = (storiesBarRef.value as any)?.userStories as StoryItem[][] | undefined
+  // as the bar renders them.
+  const userGroups = (storiesBarRef.value as any)?.userStories as StoryItem[][] | undefined
   const allGroups: StoryItem[][] = []
-  if (bloomlyGroup && bloomlyGroup.length) allGroups.push(bloomlyGroup)
   if (userGroups && userGroups.length) allGroups.push(...userGroups)
 
   if (allGroups.length) {
@@ -790,21 +808,10 @@ onDeactivated(() => {
       <!-- Left Sidebar -->
       <AppSidebar v-model:activeNav="activeNav">
         <template #bottom>
-          <template v-if="activeAds.length && nsfwMode">
-            <a v-for="ad in activeAds" :key="ad.id"
-              :href="ad.link_url" target="_blank" rel="noopener noreferrer"
-              @click="trackAdClick(ad.id)"
-              class="block bg-brand-card border border-brand-accent/25 rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/50 transition-all group">
-              <img v-if="ad.image_url" :src="ad.image_url" class="w-full object-cover max-h-28" />
-              <div class="px-3 py-2.5">
-                <div class="flex items-center gap-1.5 mb-1">
-                  <span class="text-[9px] font-bold uppercase tracking-wider text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">{{ langStore.t.adLabel }}</span>
-                </div>
-                <p class="text-xs font-bold text-white group-hover:text-brand-accent transition-colors leading-snug">{{ ad.title }}</p>
-                <p v-if="ad.description" class="text-[11px] text-white/55 mt-0.5 line-clamp-2">{{ ad.description }}</p>
-              </div>
-            </a>
-          </template>
+          <div class="space-y-3">
+            <AdSlot v-for="ad in activeAds" :key="ad.id" :ad="ad" />
+            <AdSlot v-if="!activeAds.length" :ad="null" />
+          </div>
         </template>
       </AppSidebar>
 
@@ -997,16 +1004,16 @@ onDeactivated(() => {
 
             <!-- Tags row -->
             <div v-if="newPost.tags.length" class="flex flex-wrap gap-1.5">
-              <span
+              <button
                 v-for="tag in newPost.tags"
                 :key="tag"
-                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-brand-accent/15 border border-brand-accent/30 text-brand-accent text-xs font-semibold"
+                type="button"
+                @click="removeTag(tag)"
+                class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-brand-accent/15 border border-brand-accent/30 text-brand-accent text-xs font-semibold hover:bg-brand-accent/25 transition-colors"
               >
                 #{{ tag }}
-                <button @click="removeTag(tag)" class="text-brand-accent/60 hover:text-brand-accent">
-                  <BIcon name="X" class="w-3 h-3" />
-                </button>
-              </span>
+                <BIcon name="X" class="w-3 h-3 text-brand-accent/60" />
+              </button>
             </div>
 
             <!-- Divider -->
@@ -1030,22 +1037,24 @@ onDeactivated(() => {
                 <input
                   type="text"
                   v-model="tagInput"
+                  @input="fetchTagSuggestions(tagInput)"
                   @keydown.enter.prevent="addTag"
+                  @keydown.escape="clearTagSuggestions"
                   placeholder="тег + Enter"
                   class="bg-transparent text-xs text-white placeholder-brand-muted outline-none w-24"
                 />
-              </div>
 
-              <!-- Category -->
-              <select
-                v-model="newPost.category"
-                class="px-3 py-2 rounded-xl text-xs text-white/55 bg-transparent border border-transparent hover:border-brand-border hover:bg-brand-bg outline-none transition-all cursor-pointer"
-              >
-                <option value="" class="bg-brand-card">{{ langStore.t.category }}</option>
-                <template v-for="c in allCategories" :key="c.id || 'empty-cat'">
-                  <option v-if="c.id" :value="c.id" class="bg-brand-card">{{ c.name }}</option>
-                </template>
-              </select>
+                <!-- Tag suggestions, ranked by usage -->
+                <div v-if="showTagSuggestions" v-click-outside="clearTagSuggestions"
+                  class="absolute top-full left-0 mt-1.5 z-30 w-56 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1">
+                  <button v-for="s in tagSuggestions" :key="s.name"
+                    @click="addTagFromSuggestion(s.name)"
+                    class="w-full flex items-center justify-between gap-2 px-4 py-2 text-sm text-white hover:bg-white/5">
+                    <span class="truncate">#{{ s.name }}</span>
+                    <span class="text-xs text-white/35 flex-shrink-0">{{ s.count }}</span>
+                  </button>
+                </div>
+              </div>
 
               <!-- NSFW toggle -->
               <button
@@ -1058,7 +1067,21 @@ onDeactivated(() => {
                 NSFW
               </button>
 
-              <!-- Visibility dropdown -->
+              <!-- AI-generated toggle -->
+              <button
+                @click="newPost.isAiGenerated = !newPost.isAiGenerated"
+                :title="langStore.t.aiGenToggleTitle"
+                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all"
+                :class="newPost.isAiGenerated
+                  ? 'border-brand-purple/60 text-brand-purple bg-brand-purple/10'
+                  : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'"
+              >
+                <BIcon name="Bot" class="w-3.5 h-3.5" /> {{ langStore.t.aiGenBadge }}
+              </button>
+            </div>
+
+            <!-- Visibility + Cancel — own row so Cancel never wraps onto its own orphan line -->
+            <div class="flex items-center justify-between gap-2 mt-2">
               <div class="relative">
                 <button
                   @click.stop="showVisibilityMenu = !showVisibilityMenu"
@@ -1096,20 +1119,17 @@ onDeactivated(() => {
                       <BIcon v-if="newPost.visibility === 'subscriber_only'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
                     </button>
                     <button
-                      @click="newPost.visibility = 'paid'; showVisibilityMenu = false"
-                      class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
-                      :class="newPost.visibility === 'paid' ? 'text-brand-accent' : 'text-white'"
+                      disabled
+                      title="Скоро будет доступно"
+                      class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white/30 cursor-not-allowed"
                     >
                       <BIcon name="DollarSign" class="w-4 h-4 flex-shrink-0" />
                       Платный пост
-                      <BIcon v-if="newPost.visibility === 'paid'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
+                      <span class="ml-auto text-[10px] uppercase tracking-wide">скоро</span>
                     </button>
                   </div>
                 </Transition>
               </div>
-
-              <!-- Spacer -->
-              <div class="flex-1" />
 
               <!-- Cancel -->
               <button
@@ -1130,18 +1150,20 @@ onDeactivated(() => {
                 placeholder="Цена (₽)"
                 class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-brand-accent transition-colors w-32"
               />
-              <input
-                v-model="newPost.videoTitle"
-                type="text"
-                placeholder="Заголовок видео"
-                class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-brand-accent transition-colors flex-1 min-w-[160px]"
-              />
-              <input
-                v-model="newPost.videoDescription"
-                type="text"
-                placeholder="Описание видео"
-                class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-brand-accent transition-colors flex-1 min-w-[160px]"
-              />
+              <template v-if="mediaHasVideo">
+                <input
+                  v-model="newPost.videoTitle"
+                  type="text"
+                  placeholder="Заголовок видео"
+                  class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-brand-accent transition-colors flex-1 min-w-[160px]"
+                />
+                <input
+                  v-model="newPost.videoDescription"
+                  type="text"
+                  placeholder="Описание видео"
+                  class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-brand-accent transition-colors flex-1 min-w-[160px]"
+                />
+              </template>
             </div>
           </div>
         </div>
@@ -1240,6 +1262,9 @@ onDeactivated(() => {
           </div>
         </Transition>
 
+        <!-- Ad placement -->
+        <AdSlot :ad="activeAds[0] ?? null" variant="hero" />
+
         <!-- Feed -->
         <div v-if="isLoadingPosts" class="space-y-4">
           <SkeletonPost v-for="n in 4" :key="n" />
@@ -1282,6 +1307,9 @@ onDeactivated(() => {
       <!-- Right Sidebar -->
       <aside class="w-80 hidden xl:block sticky top-24 self-start space-y-6">
 
+        <!-- Ad placement -->
+        <AdSlot :ad="activeAds[1] ?? activeAds[0] ?? null" />
+
         <!-- Trending Hashtags -->
         <div>
           <h3 class="font-bold text-white mb-4">{{ langStore.t.popularTags }}</h3>
@@ -1297,7 +1325,7 @@ onDeactivated(() => {
           <div v-else class="space-y-3">
             <div v-for="tag in trendingTags.slice(0, 10)" :key="tag.name"
               class="flex items-center justify-between cursor-pointer group"
-              @click="activeNav = 'home'; feedMode = 'trending'; selectedCategory = ''; sortBy = 'hot'; selectedTag = tag.name">
+              @click="router.push({ path: '/search', query: { q: tag.name } })">
               <span class="text-sm text-white/55 group-hover:text-white transition-colors">{{ tag.name }}</span>
               <div class="flex items-center gap-1.5 text-xs font-bold" :class="tag.trend === 'up' ? 'text-brand-success' : tag.trend === 'down' ? 'text-brand-error' : 'text-white/55'">
                 <BIcon :name="tag.trend === 'up' ? 'TrendingUp' : tag.trend === 'down' ? 'TrendingDown' : 'Minus'" class="w-3 h-3" />

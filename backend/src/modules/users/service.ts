@@ -85,6 +85,11 @@ const PUBLIC_SELECT = {
   role:                 true,
   social_links:         true,
   interests:            true,
+  fav_food:             true,
+  fav_animal:           true,
+  fav_music:            true,
+  fav_artist:           true,
+  fav_film:             true,
   subscription_tier:    true,
   profile_theme:        true,
   profile_bg_url:       true,
@@ -92,6 +97,7 @@ const PUBLIC_SELECT = {
   is_verified:          true,
   verified_at:          true,
   verification_type:    true,
+  deceased_at:          true,
   artist_since:         true,
   onboarding_done:      true,
   donate_url:           true,
@@ -102,6 +108,8 @@ const PUBLIC_SELECT = {
   friends_list_visibility:  true,
   profile_visibility:       true,
   relationship_status_visibility: true,
+  groups_visibility:        true,
+  groups_pinned_only:       true,
   payment_region:           true,
 } as const;
 
@@ -319,7 +327,7 @@ export const usersService = {
     });
   },
 
-  async searchUsers(query: string, limit = 8) {
+  async searchUsers(query: string, limit = 8, page = 1) {
     const q = query.trim();
     if (!q) return [];
     return prisma.user.findMany({
@@ -331,6 +339,7 @@ export const usersService = {
         ],
       },
       select: PUBLIC_SELECT,
+      skip: (Math.max(1, page) - 1) * limit,
       take: limit,
       orderBy: { created_at: 'desc' },
     });
@@ -475,6 +484,56 @@ export const usersService = {
     });
   },
 
+  /** Aggregated profile analytics (top post, friends growth, totals) — Lite+ subscribers only. */
+  async getProfileStats(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId, deleted_at: null },
+      select: { subscription_tier: true },
+    });
+    if (!user) throw Object.assign(new Error('User not found'), { statusCode: 404 });
+    if (user.subscription_tier === 'free') {
+      throw Object.assign(new Error('LITE_REQUIRED'), { statusCode: 402 });
+    }
+
+    const [followerRows, followingRows, topPost, postAgg] = await Promise.all([
+      prisma.follow.findMany({ where: { following_id: userId }, select: { follower_id: true, created_at: true } }),
+      prisma.follow.findMany({ where: { follower_id: userId }, select: { following_id: true, created_at: true } }),
+      prisma.post.findFirst({
+        where: { author_id: userId, deleted_at: null },
+        orderBy: { rating: 'desc' },
+        select: {
+          id: true, content: true, media_urls: true, created_at: true, rating: true, views_count: true, is_nsfw: true, category: true,
+          author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+          tags: { include: { tag: true } },
+          _count: { select: { votes: true, repaws: true, comments: true } },
+        },
+      }),
+      prisma.post.aggregate({
+        where: { author_id: userId, deleted_at: null },
+        _sum: { views_count: true },
+        _count: { _all: true },
+      }),
+    ]);
+
+    // Friends = mutual follows; the friendship's "since" date is whichever of the two follows came later.
+    const followingSince = new Map(followingRows.map((r) => [r.following_id, r.created_at]));
+    const mutualSince: Date[] = [];
+    for (const r of followerRows) {
+      const otherSide = followingSince.get(r.follower_id);
+      if (otherSide) mutualSince.push(r.created_at > otherSide ? r.created_at : otherSide);
+    }
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const newFriendsCount = mutualSince.filter((d) => d >= thirtyDaysAgo).length;
+
+    return {
+      totalFriends: mutualSince.length,
+      newFriendsLast30Days: newFriendsCount,
+      totalPosts: postAgg._count._all,
+      totalViews: postAgg._sum.views_count ?? 0,
+      topPost,
+    };
+  },
+
   async getPublicKey(userId: string): Promise<string | null> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -514,49 +573,145 @@ export const usersService = {
     ]);
   },
 
-  // ── Fursona ────────────────────────────────────────────────────────────────
+  // ── Fursona (1:N per user, up to 10 characters, one marked primary) ─────────
 
-  /** Return fursona for display. Strips likes/dislikes for non-owners when owner marked them private. */
-  async getFursona(userId: string, viewerId?: string) {
-    const fursona = await prisma.fursona.findUnique({
-      where: { user_id: userId },
-    });
-    if (!fursona || fursona.deleted_at) return null;
-
-    if (!fursona.likes_dislikes_visible && viewerId !== userId) {
-      return { ...fursona, likes: [], dislikes: [] };
-    }
-    return fursona;
-  },
-
-  /** Create or update the fursona for a user (upsert). */
-  async upsertFursona(userId: string, data: UpsertFursonaInput) {
-    return prisma.fursona.upsert({
-      where: { user_id: userId },
-      create: { user_id: userId, ...data },
-      update: { ...data, updated_at: new Date() },
-    });
-  },
-
-  // ── Fursona reference gallery ────────────────────────────────────────────────
-
-  async getReferenceImages(userId: string) {
-    return prisma.fursonaReferenceImage.findMany({
+  /** List all of a user's characters. Strips likes/dislikes per-character for non-owners when marked private. */
+  async getFursonas(userId: string, viewerId?: string) {
+    const fursonas = await prisma.fursona.findMany({
       where: { user_id: userId, deleted_at: null },
+      orderBy: [{ is_primary: 'desc' }, { created_at: 'asc' }],
+      include: {
+        referenceImages: {
+          where: { deleted_at: null },
+          orderBy: { created_at: 'asc' },
+          take: 1,
+          select: { image_url: true },
+        },
+      },
+    });
+    return fursonas.map(({ referenceImages, ...f }) => ({
+      ...(!f.likes_dislikes_visible && viewerId !== userId ? { ...f, likes: [], dislikes: [] } : f),
+      cover_image_url: referenceImages[0]?.image_url ?? null,
+    }));
+  },
+
+  /** Create a new character. The first one a user creates becomes primary automatically. */
+  async createFursona(userId: string, data: UpsertFursonaInput) {
+    const count = await prisma.fursona.count({ where: { user_id: userId, deleted_at: null } });
+    if (count >= 10) {
+      throw Object.assign(new Error('You can create up to 10 characters'), { statusCode: 400 });
+    }
+    const makePrimary = count === 0;
+    if (makePrimary) {
+      await prisma.fursona.updateMany({ where: { user_id: userId, is_primary: true }, data: { is_primary: false } });
+    }
+    const created = await prisma.fursona.create({
+      data: { user_id: userId, ...data, is_primary: makePrimary },
+    });
+    return { ...created, cover_image_url: null };
+  },
+
+  async updateFursona(userId: string, fursonaId: string, data: UpsertFursonaInput) {
+    const existing = await prisma.fursona.findFirst({
+      where: { id: fursonaId, user_id: userId, deleted_at: null },
+    });
+    if (!existing) throw Object.assign(new Error('Fursona not found'), { statusCode: 404 });
+
+    const updated = await prisma.fursona.update({
+      where: { id: fursonaId },
+      data: { ...data, updated_at: new Date() },
+      include: {
+        referenceImages: {
+          where: { deleted_at: null },
+          orderBy: { created_at: 'asc' },
+          take: 1,
+          select: { image_url: true },
+        },
+      },
+    });
+    const { referenceImages, ...f } = updated;
+    return { ...f, cover_image_url: referenceImages[0]?.image_url ?? null };
+  },
+
+  async deleteFursona(userId: string, fursonaId: string) {
+    const existing = await prisma.fursona.findFirst({
+      where: { id: fursonaId, user_id: userId, deleted_at: null },
+    });
+    if (!existing) throw Object.assign(new Error('Fursona not found'), { statusCode: 404 });
+
+    await prisma.fursona.update({ where: { id: fursonaId }, data: { deleted_at: new Date() } });
+
+    // Clean up this character's reference images so nothing is orphaned.
+    const refs = await prisma.fursonaReferenceImage.findMany({
+      where: { fursona_id: fursonaId, deleted_at: null },
+      select: { id: true, image_url: true },
+    });
+    if (refs.length) {
+      await prisma.fursonaReferenceImage.updateMany({
+        where: { id: { in: refs.map((r) => r.id) } },
+        data: { deleted_at: new Date() },
+      });
+      for (const r of refs) deleteFileByUrl(r.image_url).catch(() => {});
+    }
+
+    let newPrimaryId: string | null = null;
+    if (existing.is_primary) {
+      const next = await prisma.fursona.findFirst({
+        where: { user_id: userId, deleted_at: null, NOT: { id: fursonaId } },
+        orderBy: { created_at: 'desc' },
+      });
+      if (next) {
+        await prisma.fursona.update({ where: { id: next.id }, data: { is_primary: true } });
+        newPrimaryId = next.id;
+      }
+    }
+    return { id: fursonaId, newPrimaryId };
+  },
+
+  async setPrimaryFursona(userId: string, fursonaId: string) {
+    const existing = await prisma.fursona.findFirst({
+      where: { id: fursonaId, user_id: userId, deleted_at: null },
+    });
+    if (!existing) throw Object.assign(new Error('Fursona not found'), { statusCode: 404 });
+
+    await prisma.$transaction([
+      prisma.fursona.updateMany({ where: { user_id: userId, is_primary: true }, data: { is_primary: false } }),
+      prisma.fursona.update({ where: { id: fursonaId }, data: { is_primary: true } }),
+    ]);
+    return { id: fursonaId };
+  },
+
+  // ── Fursona reference gallery (1:N per Fursona) ──────────────────────────────
+
+  async getReferenceImages(userId: string, fursonaId: string) {
+    return prisma.fursonaReferenceImage.findMany({
+      where: { fursona_id: fursonaId, user_id: userId, deleted_at: null },
       orderBy: { created_at: 'asc' },
     });
   },
 
-  async addReferenceImage(userId: string, data: UpsertReferenceImageInput) {
+  async addReferenceImage(userId: string, fursonaId: string, data: UpsertReferenceImageInput) {
     if (!data.image_url) throw Object.assign(new Error('image_url is required'), { statusCode: 400 });
+
+    const fursona = await prisma.fursona.findFirst({
+      where: { id: fursonaId, user_id: userId, deleted_at: null },
+      select: { id: true },
+    });
+    if (!fursona) throw Object.assign(new Error('Fursona not found'), { statusCode: 404 });
+
+    const count = await prisma.fursonaReferenceImage.count({ where: { fursona_id: fursonaId, deleted_at: null } });
+    if (count >= 12) {
+      throw Object.assign(new Error('You can add up to 12 reference images'), { statusCode: 400 });
+    }
+
     return prisma.fursonaReferenceImage.create({
-      data: { user_id: userId, ...data, image_url: data.image_url },
+      data: { user_id: userId, fursona_id: fursonaId, ...data, image_url: data.image_url },
     });
   },
 
-  async updateReferenceImage(userId: string, refId: string, data: UpsertReferenceImageInput) {
+  async updateReferenceImage(userId: string, fursonaId: string, refId: string, data: UpsertReferenceImageInput) {
     const existing = await prisma.fursonaReferenceImage.findFirst({
-      where: { id: refId, user_id: userId, deleted_at: null },
+      where: { id: refId, fursona_id: fursonaId, user_id: userId, deleted_at: null },
     });
     if (!existing) throw Object.assign(new Error('Reference image not found'), { statusCode: 404 });
 
@@ -573,9 +728,9 @@ export const usersService = {
     });
   },
 
-  async deleteReferenceImage(userId: string, refId: string) {
+  async deleteReferenceImage(userId: string, fursonaId: string, refId: string) {
     const existing = await prisma.fursonaReferenceImage.findFirst({
-      where: { id: refId, user_id: userId, deleted_at: null },
+      where: { id: refId, fursona_id: fursonaId, user_id: userId, deleted_at: null },
     });
     if (!existing) throw Object.assign(new Error('Reference image not found'), { statusCode: 404 });
 
@@ -596,9 +751,9 @@ export const usersService = {
    * The original URL is never returned to the client — only this
    * protected stream is served through the authenticated endpoint.
    */
-  async getWatermarkedReferenceImage(userId: string, refId: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  async getWatermarkedReferenceImage(userId: string, fursonaId: string, refId: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
     const ref = await prisma.fursonaReferenceImage.findFirst({
-      where: { id: refId, user_id: userId, deleted_at: null },
+      where: { id: refId, fursona_id: fursonaId, user_id: userId, deleted_at: null },
       select: { image_url: true },
     });
     if (!ref?.image_url) return null;

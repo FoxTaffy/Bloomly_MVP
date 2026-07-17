@@ -31,6 +31,7 @@ const senderSelect = {
   display_name: true,
   avatar_url: true,
   badge_type: true,
+  deceased_at: true,
 } as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -46,8 +47,14 @@ async function enrichWithForwardedSenders<T extends { forwarded_from_sender_id?:
 }
 
 /** Validates and normalizes the metadata payload for card-style messages. */
-function validateCardMetadata(type: 'payment_request' | 'tip', metadata: unknown): Record<string, unknown> {
+function validateCardMetadata(type: 'payment_request' | 'tip' | 'post_share', metadata: unknown): Record<string, unknown> {
   const meta = (metadata ?? {}) as Record<string, unknown>;
+  if (type === 'post_share') {
+    if (typeof meta.postId !== 'string' || !meta.postId) {
+      throw Object.assign(new Error('postId is required'), { statusCode: 400 });
+    }
+    return { postId: meta.postId };
+  }
   const amount = Number(meta.amount);
   if (!Number.isFinite(amount) || amount <= 0 || amount > 10_000_000) {
     throw Object.assign(new Error('amount must be a positive number'), { statusCode: 400 });
@@ -271,10 +278,14 @@ export const messageService = {
     const text = content?.trim() ?? '';
     if (!text && !encrypted_text && !file_url && !type) throw new Error('Message must have text or media');
 
-    // Card-style messages (payment_request, tip) carry a structured metadata payload
-    // instead of being derived from file_url/media_type.
-    if (type === 'payment_request' || type === 'tip') {
+    // Card-style messages (payment_request, tip, post_share) carry a structured
+    // metadata payload instead of being derived from file_url/media_type.
+    if (type === 'payment_request' || type === 'tip' || type === 'post_share') {
       const meta = validateCardMetadata(type, metadata);
+      if (type === 'post_share') {
+        const post = await prisma.post.findUnique({ where: { id: meta.postId as string, deleted_at: null }, select: { id: true } });
+        if (!post) throw Object.assign(new Error('Post not found'), { statusCode: 404 });
+      }
       const [message] = await prisma.$transaction([
         prisma.message.create({
           data: {
@@ -436,9 +447,10 @@ export const messageService = {
       where: { conversation_id_user_id: { conversation_id: conversationId, user_id: userId } },
       data: { last_read_at: now },
     });
-    // Broadcast read receipt to other participants so they can update checkmarks
+    // Broadcast read receipt to other participants so they can update checkmarks,
+    // and to the reader's own other devices/sessions so their unread badges sync too
     const others = await prisma.conversationParticipant.findMany({
-      where: { conversation_id: conversationId, user_id: { not: userId } },
+      where: { conversation_id: conversationId },
       select: { user_id: true },
     });
     for (const { user_id } of others) {

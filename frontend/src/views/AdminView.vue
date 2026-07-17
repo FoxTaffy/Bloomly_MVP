@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import api from '../api'
@@ -32,7 +32,7 @@ onMounted(async () => {
 })
 
 // ── Tabs ──────────────────────────────────────────────────────────────
-const activeTab = ref<'overview' | 'users' | 'frozen' | 'archived' | 'posts' | 'reports' | 'ads' | 'verification' | 'banners' | 'automod' | 'statistics' | 'updates'>('overview')
+const activeTab = ref<'overview' | 'users' | 'frozen' | 'archived' | 'posts' | 'reports' | 'support' | 'ads' | 'verification' | 'banners' | 'automod' | 'statistics' | 'updates'>('overview')
 
 // ── Stats ─────────────────────────────────────────────────────────────
 const stats = ref<any>(null)
@@ -50,14 +50,41 @@ const users = ref<any[]>([])
 const userPage = ref(1)
 const userTotal = ref(0)
 const userSearch = ref('')
+const userSort = ref<'privilege' | 'newest' | 'oldest' | 'posts' | 'followers' | 'subscription' | 'username'>('privilege')
+const userQuickStats = ref({ newToday: 0, subscribers: 0, frozen: 0 })
 const isLoadingUsers = ref(false)
 let userSearchDebounce: ReturnType<typeof setTimeout>
+
+const userSortOptions = [
+  { value: 'privilege',    label: 'По привилегии' },
+  { value: 'newest',       label: 'Сначала новые' },
+  { value: 'oldest',       label: 'Сначала старые' },
+  { value: 'posts',        label: 'По постам' },
+  { value: 'followers',    label: 'По подписчикам' },
+  { value: 'subscription', label: 'По подписке' },
+  { value: 'username',     label: 'По имени' },
+]
+const userSortLabel = computed(() => userSortOptions.find(o => o.value === userSort.value)?.label ?? 'Сортировка')
+const userSortOpen = ref(false)
+const userSortRef = ref<HTMLElement | null>(null)
+const onClickOutsideUserSort = (e: MouseEvent) => {
+  if (userSortRef.value && !userSortRef.value.contains(e.target as Node)) userSortOpen.value = false
+}
+onMounted(() => document.addEventListener('mousedown', onClickOutsideUserSort))
+onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutsideUserSort))
+
+const tierLabel = (tier?: string) => ({ lite: 'Lite', pro: 'Pro', business: 'Business' }[tier ?? ''] ?? null)
+const tierColor = (tier?: string) => ({ lite: '#4C67CF', pro: '#a78bfa', business: '#f59e0b' }[tier ?? ''] ?? '#64748b')
 
 const fetchUsers = async () => {
   isLoadingUsers.value = true
   try {
-    const res = await api.get('/admin/users', { params: { page: userPage.value, search: userSearch.value || undefined } })
-    if (res.data.success) { users.value = res.data.data.users; userTotal.value = res.data.data.total }
+    const res = await api.get('/admin/users', { params: { page: userPage.value, search: userSearch.value || undefined, sortBy: userSort.value } })
+    if (res.data.success) {
+      users.value = res.data.data.users
+      userTotal.value = res.data.data.total
+      if (res.data.data.stats) userQuickStats.value = res.data.data.stats
+    }
   } catch {} finally { isLoadingUsers.value = false }
 }
 
@@ -66,12 +93,72 @@ const onUserSearch = () => {
   userSearchDebounce = setTimeout(() => { userPage.value = 1; fetchUsers() }, 300)
 }
 
+const selectUserSort = (value: typeof userSort.value) => {
+  userSort.value = value
+  userSortOpen.value = false
+  userPage.value = 1
+  fetchUsers()
+}
+
 const updateUserRole = async (userId: string, role: string) => {
   try {
     await api.patch(`/admin/users/${userId}/role`, { role })
     const u = users.value.find(u => u.id === userId)
     if (u) u.role = role
   } catch {}
+}
+
+const updateUserSubscription = async (userId: string, tier: string) => {
+  try {
+    await api.patch(`/admin/users/${userId}/subscription`, { tier })
+    const u = users.value.find(u => u.id === userId)
+    if (u) u.subscription_tier = tier
+  } catch {}
+}
+
+// ── Per-row user tier / role dropdowns ──────────────────────────────────
+const tierMenuOptions = [
+  { value: 'free',     label: 'Без подписки' },
+  { value: 'lite',     label: 'Lite' },
+  { value: 'pro',      label: 'Pro' },
+  { value: 'business', label: 'Business' },
+]
+const roleMenuOptions = [
+  { value: 'user',      label: 'Пользователь' },
+  { value: 'moderator', label: 'Модератор' },
+  { value: 'admin',     label: 'Администратор' },
+  { value: 'owner',     label: 'Владелец' },
+]
+const activeUserMenu = ref<string | null>(null)
+const userMenuPos = ref({ top: 0, right: 0 })
+const toggleUserMenu = (key: string, e: MouseEvent) => {
+  if (activeUserMenu.value === key) { activeUserMenu.value = null; return }
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  userMenuPos.value = { top: rect.bottom + 6, right: window.innerWidth - rect.right }
+  activeUserMenu.value = key
+}
+const onClickOutsideUserMenu = (e: MouseEvent) => {
+  if (!(e.target as HTMLElement).closest('[data-user-menu]')) activeUserMenu.value = null
+}
+const onScrollCloseUserMenu = () => { activeUserMenu.value = null }
+onMounted(() => {
+  document.addEventListener('mousedown', onClickOutsideUserMenu)
+  window.addEventListener('scroll', onScrollCloseUserMenu, true)
+  window.addEventListener('resize', onScrollCloseUserMenu)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onClickOutsideUserMenu)
+  window.removeEventListener('scroll', onScrollCloseUserMenu, true)
+  window.removeEventListener('resize', onScrollCloseUserMenu)
+})
+
+const selectUserTier = (userId: string, tier: string) => {
+  updateUserSubscription(userId, tier)
+  activeUserMenu.value = null
+}
+const selectUserRole = (userId: string, role: string) => {
+  updateUserRole(userId, role)
+  activeUserMenu.value = null
 }
 
 const deleteUser = async (userId: string) => {
@@ -166,9 +253,19 @@ const deletePost = async (postId: string) => {
 }
 
 // ── Reports ────────────────────────────────────────────────────────────
+// `reports` holds "folders": one tile per (target_type, target_id), collapsing
+// repeated complaints about the same post into a single card (grouped server-side).
 const reports = ref<any[]>([])
 const reportFilter = ref<'pending' | 'resolved' | 'dismissed' | ''>('')
 const isLoadingReports = ref(false)
+const expandedReportGroups = ref<Set<string>>(new Set())
+
+const reportGroupKey = (folder: any) => `${folder.target_type}:${folder.target_id}`
+const toggleReportGroup = (folder: any) => {
+  const key = reportGroupKey(folder)
+  if (expandedReportGroups.value.has(key)) expandedReportGroups.value.delete(key)
+  else expandedReportGroups.value.add(key)
+}
 
 const fetchReports = async () => {
   isLoadingReports.value = true
@@ -178,18 +275,53 @@ const fetchReports = async () => {
   } catch {} finally { isLoadingReports.value = false }
 }
 
-const resolveReport = async (reportId: string, status: 'resolved' | 'dismissed') => {
+const resolveReportGroup = async (folder: any, status: 'resolved' | 'dismissed') => {
   try {
-    await api.patch(`/admin/reports/${reportId}`, { status })
-    const r = reports.value.find(r => r.id === reportId)
-    if (r) r.status = status
+    const ids = folder.reports.filter((r: any) => r.status === 'pending').map((r: any) => r.id)
+    if (!ids.length) return
+    await api.patch('/admin/reports/resolve-batch', { ids, status })
+    folder.status = status
+    folder.reports.forEach((r: any) => { if (r.status === 'pending') r.status = status })
+  } catch {}
+}
+
+// ── Support tickets ──────────────────────────────────────────────────
+const supportTickets = ref<any[]>([])
+const supportFilter = ref<'' | 'open' | 'in_progress' | 'resolved' | 'closed'>('')
+const isLoadingSupport = ref(false)
+const supportReplyDrafts = ref<Record<string, string>>({})
+
+const SUPPORT_TYPE_LABEL: Record<string, string> = { bug: 'Баг', feedback: 'Отзыв', question: 'Вопрос', other: 'Другое' }
+const SUPPORT_STATUS_LABEL: Record<string, string> = { open: 'Открыт', in_progress: 'В работе', resolved: 'Решён', closed: 'Закрыт' }
+const SUPPORT_STATUS_COLOR: Record<string, string> = { open: '#f59e0b', in_progress: '#38bdf8', resolved: '#10b981', closed: '#6b7280' }
+
+const fetchSupportTickets = async () => {
+  isLoadingSupport.value = true
+  try {
+    const res = await api.get('/support/admin/tickets', { params: { status: supportFilter.value || undefined } })
+    if (res.data.success) supportTickets.value = res.data.data.tickets
+  } catch {} finally { isLoadingSupport.value = false }
+}
+
+const replySupportTicket = async (ticketId: string, status?: string) => {
+  const reply = supportReplyDrafts.value[ticketId]?.trim()
+  try {
+    const res = await api.patch(`/support/admin/tickets/${ticketId}`, {
+      ...(status ? { status } : {}),
+      ...(reply ? { admin_reply: reply } : {}),
+    })
+    if (res.data.success) {
+      const idx = supportTickets.value.findIndex(t => t.id === ticketId)
+      if (idx !== -1) supportTickets.value[idx] = { ...supportTickets.value[idx], ...res.data.data.ticket }
+      delete supportReplyDrafts.value[ticketId]
+    }
   } catch {}
 }
 
 // ── Ads ────────────────────────────────────────────────────────────────
 const ads = ref<any[]>([])
 const isLoadingAds = ref(false)
-const newAd = ref({ title: '', description: '', linkUrl: '', imageUrl: '' })
+const newAd = ref({ title: '', description: '', linkUrl: '', imageUrl: '', priceLabel: '' })
 const showAdForm = ref(false)
 const isSubmittingAd = ref(false)
 
@@ -210,13 +342,22 @@ const submitAd = async () => {
       description: newAd.value.description || undefined,
       linkUrl: newAd.value.linkUrl,
       imageUrl: newAd.value.imageUrl || undefined,
+      priceLabel: newAd.value.priceLabel || undefined,
     })
     if (res.data.success) {
       ads.value.unshift(res.data.data.ad)
-      newAd.value = { title: '', description: '', linkUrl: '', imageUrl: '' }
+      newAd.value = { title: '', description: '', linkUrl: '', imageUrl: '', priceLabel: '' }
       showAdForm.value = false
     }
   } catch {} finally { isSubmittingAd.value = false }
+}
+
+const deleteAd = async (adId: string) => {
+  if (!confirm('Удалить объявление?')) return
+  try {
+    await api.delete(`/admin/ads/${adId}`)
+    ads.value = ads.value.filter(a => a.id !== adId)
+  } catch {}
 }
 
 const reviewAd = async (adId: string, status: 'active' | 'rejected') => {
@@ -326,6 +467,23 @@ const freezeUser = async (userId: string) => {
   } catch {}
 }
 
+const markDeceased = async (userId: string) => {
+  const note = prompt('Заметка (необязательно):') ?? undefined
+  try {
+    await api.post(`/admin/users/${userId}/deceased`, { note: note || undefined })
+    const u = users.value.find(u => u.id === userId)
+    if (u) { u.deceased_at = new Date().toISOString(); u.deceased_note = note || null }
+  } catch {}
+}
+
+const unmarkDeceased = async (userId: string) => {
+  try {
+    await api.post(`/admin/users/${userId}/undeceased`)
+    const u = users.value.find(u => u.id === userId)
+    if (u) { u.deceased_at = null; u.deceased_note = null }
+  } catch {}
+}
+
 const clearUserWarns = async (userId: string) => {
   try {
     await api.post(`/admin/users/${userId}/clear-warns`)
@@ -368,7 +526,7 @@ const fetchBanners = async () => {
   isLoadingBanners.value = true
   try {
     const res = await api.get('/admin/sticker-banners')
-    if (res.data.success) banners.value = res.data.data
+    if (res.data.success) banners.value = res.data.data.banners
   } catch {} finally { isLoadingBanners.value = false }
 }
 
@@ -393,13 +551,13 @@ const saveBanner = async () => {
       const res = await api.patch(`/admin/sticker-banners/${editingBannerId.value}`, bannerForm.value)
       if (res.data.success) {
         const idx = banners.value.findIndex(b => b.id === editingBannerId.value)
-        if (idx !== -1) banners.value[idx] = res.data.data
+        if (idx !== -1) banners.value[idx] = res.data.data.banner
         showBannerForm.value = false
       }
     } else {
       const res = await api.post('/admin/sticker-banners', bannerForm.value)
       if (res.data.success) {
-        banners.value.push(res.data.data)
+        banners.value.push(res.data.data.banner)
         showBannerForm.value = false
       }
     }
@@ -422,7 +580,7 @@ const toggleBannerActive = async (b: any) => {
     const res = await api.patch(`/admin/sticker-banners/${b.id}`, { is_active: !b.is_active })
     if (res.data.success) {
       const idx = banners.value.findIndex(x => x.id === b.id)
-      if (idx !== -1) banners.value[idx] = res.data.data
+      if (idx !== -1) banners.value[idx] = res.data.data.banner
     }
   } catch {}
 }
@@ -508,6 +666,7 @@ const switchTab = (tab: typeof activeTab.value) => {
   if (tab === 'archived' && !archivedUsers.value.length) fetchArchivedUsers()
   if (tab === 'posts' && !posts.value.length) fetchPosts()
   if (tab === 'reports' && !reports.value.length) fetchReports()
+  if (tab === 'support' && !supportTickets.value.length) fetchSupportTickets()
   if (tab === 'ads' && !ads.value.length) fetchAds()
   if (tab === 'verification' && !verRequests.value.length) fetchVerRequests()
   if (tab === 'banners' && !banners.value.length) fetchBanners()
@@ -529,6 +688,7 @@ const navItems = computed(() => [
   { tab: 'frozen'       as const, label: 'Заморожены',      icon: 'Snowflake',       color: '#38bdf8', group: 'МОДЕРАЦИЯ',   badge: frozenTotal.value > 0 ? String(frozenTotal.value) : null, minRole: 'moderator' },
   { tab: 'archived'     as const, label: 'Забанены',        icon: 'Ban',             color: '#f43f5e', group: 'МОДЕРАЦИЯ',   badge: archivedTotal.value > 0 ? String(archivedTotal.value) : null, minRole: 'moderator' },
   { tab: 'reports'      as const, label: 'Жалобы',          icon: 'Flag',            color: '#f59e0b', group: 'МОДЕРАЦИЯ',   badge: reports.value.filter((r:any) => r.status==='pending').length || null, minRole: 'moderator' },
+  { tab: 'support'      as const, label: 'Поддержка',       icon: 'LifeBuoy',        color: '#4C67CF', group: 'МОДЕРАЦИЯ',   badge: supportTickets.value.filter((t:any) => t.status==='open').length || null, minRole: 'moderator' },
   { tab: 'automod'      as const, label: 'AutoMod',          icon: 'ShieldAlert',     color: '#ef4444', group: 'МОДЕРАЦИЯ',   badge: autoModTotal.value > 0 ? formatNum(autoModTotal.value) : null, minRole: 'moderator' },
   { tab: 'posts'        as const, label: 'Посты',           icon: 'FileText',        color: '#94a3b8', group: 'КОНТЕНТ',     badge: null, minRole: 'moderator' },
   { tab: 'verification' as const, label: 'Верификация',     icon: 'BadgeCheck',      color: '#2dd4bf', group: 'КОНТЕНТ',     badge: verRequests.value.filter((r:any) => r.status==='pending').length || null, minRole: 'moderator' },
@@ -768,7 +928,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
               </h3>
               <div class="flex flex-wrap gap-3">
                 <div v-for="rb in stats.roleBreakdown" :key="rb.role"
-                  class="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border border-white/8"
+                  class="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border border-white/[0.08]"
                   style="background:rgba(255,255,255,0.04)">
                   <div class="w-2 h-2 rounded-full" :style="`background:${roleColor(rb.role)}`" />
                   <span class="text-sm font-black text-white">{{ rb.count }}</span>
@@ -781,33 +941,70 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
 
         <!-- ── USERS ───────────────────────────────────────────────────── -->
         <div v-else-if="activeTab === 'users'">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
+            <div class="rounded-2xl px-3.5 py-2.5" style="background:rgba(255,255,255,0.035)">
+              <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide">Всего</p>
+              <p class="text-lg font-black text-white">{{ formatNum(userTotal) }}</p>
+            </div>
+            <div class="rounded-2xl px-3.5 py-2.5" style="background:rgba(16,185,129,0.07)">
+              <p class="text-[10px] font-bold text-emerald-400/70 uppercase tracking-wide">Новых сегодня</p>
+              <p class="text-lg font-black text-emerald-400">{{ userQuickStats.newToday }}</p>
+            </div>
+            <div class="rounded-2xl px-3.5 py-2.5" style="background:rgba(167,139,250,0.07)">
+              <p class="text-[10px] font-bold text-violet-300/70 uppercase tracking-wide">С подпиской</p>
+              <p class="text-lg font-black text-violet-300">{{ userQuickStats.subscribers }}</p>
+            </div>
+            <div class="rounded-2xl px-3.5 py-2.5" style="background:rgba(56,189,248,0.07)">
+              <p class="text-[10px] font-bold text-sky-400/70 uppercase tracking-wide">Заморожено</p>
+              <p class="text-lg font-black text-sky-400">{{ userQuickStats.frozen }}</p>
+            </div>
+          </div>
+
           <div class="flex items-center gap-3 mb-5">
             <div class="relative flex-1 max-w-sm">
               <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
               <input v-model="userSearch" @input="onUserSearch" type="text" placeholder="Поиск пользователей…"
-                class="w-full bg-white/5 border border-white/8 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
-                  outline-none focus:border-[#22d3ee]/40 focus:bg-white/8 transition-all" />
+                class="w-full bg-white/[0.06] border border-transparent rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
+                  outline-none focus:border-[#22d3ee]/40 focus:bg-white/[0.08] transition-all" />
             </div>
-            <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/8">{{ userTotal }}</span>
+            <div ref="userSortRef" class="relative flex-shrink-0">
+              <button type="button" @click="userSortOpen = !userSortOpen"
+                class="flex items-center gap-2 bg-white/[0.06] border border-transparent rounded-2xl pl-3.5 pr-3 py-2.5 text-xs font-bold text-white/70
+                  outline-none hover:bg-white/[0.08] focus:border-[#22d3ee]/40 cursor-pointer transition-all">
+                {{ userSortLabel }}
+                <BIcon name="ChevronDown" :class="`w-3.5 h-3.5 text-white/35 transition-transform ${userSortOpen ? 'rotate-180' : ''}`" />
+              </button>
+              <Transition name="fade-pop">
+                <div v-if="userSortOpen"
+                  class="absolute right-0 top-[calc(100%+8px)] z-30 min-w-[180px] rounded-2xl bg-[#12161d] shadow-2xl shadow-black/40 p-1.5">
+                  <button v-for="opt in userSortOptions" :key="opt.value" type="button" @click="selectUserSort(opt.value as typeof userSort)"
+                    class="w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-colors"
+                    :class="opt.value === userSort ? 'bg-[#22d3ee]/15 text-[#22d3ee]' : 'text-white/60 hover:bg-white/[0.06] hover:text-white'">
+                    {{ opt.label }}
+                  </button>
+                </div>
+              </Transition>
+            </div>
+            <span class="text-xs font-bold text-white/35 bg-white/[0.06] px-3 py-2 rounded-xl">{{ userTotal }}</span>
           </div>
 
-          <div class="rounded-3xl border border-white/5 overflow-hidden" style="background:rgba(255,255,255,0.02)">
+          <div class="rounded-3xl overflow-hidden" style="background:rgba(255,255,255,0.02)">
             <div v-if="isLoadingUsers" class="divide-y divide-white/5">
               <div v-for="n in 6" :key="n" class="flex items-center gap-3 px-5 py-3.5 animate-pulse">
-                <div class="w-9 h-9 rounded-full bg-white/8 flex-shrink-0" />
+                <div class="w-9 h-9 rounded-full bg-white/[0.08] flex-shrink-0" />
                 <div class="flex-1 space-y-2">
-                  <div class="h-3 bg-white/8 rounded-full w-32" />
+                  <div class="h-3 bg-white/[0.08] rounded-full w-32" />
                   <div class="h-2 bg-white/5 rounded-full w-24" />
                 </div>
               </div>
             </div>
             <div v-else class="divide-y divide-white/5">
               <div v-for="user in users" :key="user.id"
-                class="flex items-center gap-3 px-5 py-3 hover:bg-white/3 transition-all group">
+                class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-all group">
                 <div class="flex-shrink-0 relative">
                   <img v-if="user.avatar_url" :src="user.avatar_url"
-                    class="w-9 h-9 rounded-full object-cover border border-white/10" />
-                  <div v-else class="w-9 h-9 rounded-full border border-white/10 flex items-center justify-center text-sm font-bold"
+                    class="w-9 h-9 rounded-full object-cover border border-white/[0.06]" />
+                  <div v-else class="w-9 h-9 rounded-full border border-white/[0.06] flex items-center justify-center text-sm font-bold"
                     :style="`background:${roleColor(user.role)}20;color:${roleColor(user.role)}`">
                     {{ (user.display_name || user.username || '?')[0].toUpperCase() }}
                   </div>
@@ -818,6 +1015,10 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
                 <div class="flex-1 min-w-0">
                   <p class="font-bold text-sm text-white truncate flex items-center gap-1.5">
                     {{ user.display_name || user.username }}
+                    <span v-if="user.deceased_at" :title="user.deceased_note || 'Считается умершим'"
+                      class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/10 text-white/50 border border-white/15">
+                      🪦 умер
+                    </span>
                     <span v-if="user.frozen_at" title="Заморожен"
                       class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/20">
                       🧊 freeze
@@ -827,21 +1028,70 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
                       :class="user.warn_count >= 2 ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20' : 'bg-amber-500/15 text-amber-400 border border-amber-500/20'">
                       ⚠️ {{ user.warn_count }}/3
                     </span>
+                    <span v-if="tierLabel(user.subscription_tier)"
+                      class="inline-flex items-center gap-0.5 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full border"
+                      :style="`color:${tierColor(user.subscription_tier)};border-color:${tierColor(user.subscription_tier)}40;background:${tierColor(user.subscription_tier)}18`">
+                      ✦ {{ tierLabel(user.subscription_tier) }}
+                    </span>
                   </p>
-                  <p class="text-xs text-white/35 truncate">@{{ user.username }} · {{ user._count?.posts ?? 0 }} постов · {{ formatDate(user.created_at) }}</p>
+                  <p class="text-xs text-white/35 truncate">
+                    @{{ user.username }} · {{ user.email }} · {{ user._count?.posts ?? 0 }} постов · {{ user._count?.followers ?? 0 }} подписчиков · {{ formatDate(user.created_at) }}
+                  </p>
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <select v-if="isOwnerRole" :value="user.role" @change="updateUserRole(user.id, ($event.target as HTMLSelectElement).value)"
-                    class="bg-[#0c1015] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white/70 outline-none focus:border-[#22d3ee]/50 cursor-pointer transition-colors">
-                    <option value="user">Пользователь</option>
-                    <option value="moderator">Модератор</option>
-                    <option value="admin">Администратор</option>
-                    <option value="owner">Владелец</option>
-                  </select>
+                  <button v-if="isAdminPlus" type="button" data-user-menu title="Выдать / отозвать подписку"
+                    @click="toggleUserMenu(`tier-${user.id}`, $event)"
+                    class="flex items-center gap-1 bg-white/[0.06] border border-transparent rounded-xl pl-2.5 pr-2 py-1.5 text-xs font-bold text-white/70
+                      outline-none hover:bg-white/[0.08] focus:border-violet-400/50 cursor-pointer transition-all">
+                    {{ tierMenuOptions.find(o => o.value === (user.subscription_tier || 'free'))?.label }}
+                    <BIcon name="ChevronDown" :class="`w-3 h-3 text-white/35 transition-transform ${activeUserMenu === `tier-${user.id}` ? 'rotate-180' : ''}`" />
+                  </button>
+                  <button v-if="isOwnerRole" type="button" data-user-menu
+                    @click="toggleUserMenu(`role-${user.id}`, $event)"
+                    class="flex items-center gap-1 bg-white/[0.06] border border-transparent rounded-xl pl-2.5 pr-2 py-1.5 text-xs font-bold text-white/70
+                      outline-none hover:bg-white/[0.08] focus:border-[#22d3ee]/50 cursor-pointer transition-all">
+                    {{ roleLabel(user.role) }}
+                    <BIcon name="ChevronDown" :class="`w-3 h-3 text-white/35 transition-transform ${activeUserMenu === `role-${user.id}` ? 'rotate-180' : ''}`" />
+                  </button>
                   <span v-else class="text-xs font-bold px-2.5 py-1.5 rounded-xl border"
                     :style="`color:${roleColor(user.role)};border-color:${roleColor(user.role)}30;background:${roleColor(user.role)}12`">
                     {{ roleLabel(user.role) }}
                   </span>
+                  <Teleport to="body">
+                    <Transition name="fade-pop">
+                      <div v-if="activeUserMenu === `tier-${user.id}`" data-user-menu
+                        class="fixed z-[100] min-w-[160px] rounded-2xl bg-[#12161d] shadow-2xl shadow-black/40 p-1.5"
+                        :style="`top:${userMenuPos.top}px; right:${userMenuPos.right}px;`">
+                        <button v-for="opt in tierMenuOptions" :key="opt.value" type="button" @click="selectUserTier(user.id, opt.value)"
+                          class="w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-colors"
+                          :class="opt.value === (user.subscription_tier || 'free') ? 'bg-violet-400/15 text-violet-300' : 'text-white/60 hover:bg-white/[0.06] hover:text-white'">
+                          {{ opt.label }}
+                        </button>
+                      </div>
+                    </Transition>
+                  </Teleport>
+                  <Teleport to="body">
+                    <Transition name="fade-pop">
+                      <div v-if="activeUserMenu === `role-${user.id}`" data-user-menu
+                        class="fixed z-[100] min-w-[160px] rounded-2xl bg-[#12161d] shadow-2xl shadow-black/40 p-1.5"
+                        :style="`top:${userMenuPos.top}px; right:${userMenuPos.right}px;`">
+                        <button v-for="opt in roleMenuOptions" :key="opt.value" type="button" @click="selectUserRole(user.id, opt.value)"
+                          class="w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-colors"
+                          :class="opt.value === user.role ? 'bg-[#22d3ee]/15 text-[#22d3ee]' : 'text-white/60 hover:bg-white/[0.06] hover:text-white'">
+                          {{ opt.label }}
+                        </button>
+                      </div>
+                    </Transition>
+                  </Teleport>
+                  <!-- deceased / alive -->
+                  <button v-if="user.deceased_at" @click="unmarkDeceased(user.id)" title="Отменить (жив)"
+                    class="w-7 h-7 rounded-xl bg-white/10 border border-white/15 text-white/60 hover:bg-white/20 flex items-center justify-center transition-all text-xs">
+                    ↺
+                  </button>
+                  <button v-else @click="markDeceased(user.id)" title="Отметить как умершего"
+                    class="w-7 h-7 rounded-xl bg-white/5 border border-white/10 text-white/40 hover:bg-white/15 hover:text-white/60 flex items-center justify-center transition-all text-xs">
+                    🪦
+                  </button>
                   <!-- freeze / unfreeze -->
                   <button v-if="user.frozen_at" @click="unfreezeUser(user.id)" title="Разморозить"
                     class="w-7 h-7 rounded-xl bg-sky-500/10 border border-sky-500/15 text-sky-400 hover:bg-sky-500/20 flex items-center justify-center transition-all text-xs">
@@ -872,12 +1122,12 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
 
           <div v-if="userTotal > 20" class="flex items-center justify-center gap-2 mt-4">
             <button @click="userPage--; fetchUsers()" :disabled="userPage <= 1"
-              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
               <BIcon name="ChevronLeft" class="w-4 h-4" />
             </button>
             <span class="text-xs font-bold text-white/40 px-3">{{ userPage }} / {{ Math.ceil(userTotal/20) }}</span>
             <button @click="userPage++; fetchUsers()" :disabled="userPage >= Math.ceil(userTotal/20)"
-              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
               <BIcon name="ChevronRight" class="w-4 h-4" />
             </button>
           </div>
@@ -889,18 +1139,18 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
             <div class="relative flex-1 max-w-sm">
               <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
               <input v-model="frozenSearch" @input="onFrozenSearch" type="text" placeholder="Поиск среди замороженных…"
-                class="w-full bg-white/5 border border-white/8 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
-                  outline-none focus:border-sky-500/40 focus:bg-white/8 transition-all" />
+                class="w-full bg-white/5 border border-white/[0.08] rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
+                  outline-none focus:border-sky-500/40 focus:bg-white/[0.08] transition-all" />
             </div>
-            <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/8">{{ frozenTotal }}</span>
+            <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/[0.08]">{{ frozenTotal }}</span>
           </div>
 
           <div class="rounded-3xl border border-white/5 overflow-hidden" style="background:rgba(255,255,255,0.02)">
             <div v-if="isLoadingFrozen" class="divide-y divide-white/5">
               <div v-for="n in 4" :key="n" class="flex items-center gap-3 px-5 py-3.5 animate-pulse">
-                <div class="w-9 h-9 rounded-full bg-white/8 flex-shrink-0" />
+                <div class="w-9 h-9 rounded-full bg-white/[0.08] flex-shrink-0" />
                 <div class="flex-1 space-y-2">
-                  <div class="h-3 bg-white/8 rounded-full w-32" /><div class="h-2 bg-white/5 rounded-full w-24" />
+                  <div class="h-3 bg-white/[0.08] rounded-full w-32" /><div class="h-2 bg-white/5 rounded-full w-24" />
                 </div>
               </div>
             </div>
@@ -911,7 +1161,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
             </div>
             <div v-else class="divide-y divide-white/5">
               <div v-for="user in frozenUsers" :key="user.id"
-                class="flex items-center gap-3 px-5 py-3 hover:bg-white/3 transition-all group">
+                class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-all group">
                 <img v-if="user.avatar_url" :src="user.avatar_url"
                   class="w-9 h-9 rounded-full object-cover border border-white/10 flex-shrink-0" />
                 <div v-else class="w-9 h-9 rounded-full border border-sky-500/20 bg-sky-500/10 flex items-center justify-center text-xs font-bold text-sky-400 flex-shrink-0">
@@ -943,12 +1193,12 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
 
           <div v-if="frozenTotal > 20" class="flex items-center justify-center gap-2 mt-4">
             <button @click="frozenPage--; fetchFrozenUsers()" :disabled="frozenPage <= 1"
-              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
               <BIcon name="ChevronLeft" class="w-4 h-4" />
             </button>
             <span class="text-xs font-bold text-white/40 px-3">{{ frozenPage }} / {{ Math.ceil(frozenTotal/20) }}</span>
             <button @click="frozenPage++; fetchFrozenUsers()" :disabled="frozenPage >= Math.ceil(frozenTotal/20)"
-              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
               <BIcon name="ChevronRight" class="w-4 h-4" />
             </button>
           </div>
@@ -960,18 +1210,18 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
             <div class="relative flex-1 max-w-sm">
               <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
               <input v-model="archivedSearch" @input="onArchivedSearch" type="text" placeholder="Поиск в архиве…"
-                class="w-full bg-white/5 border border-white/8 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
-                  outline-none focus:border-rose-500/40 focus:bg-white/8 transition-all" />
+                class="w-full bg-white/5 border border-white/[0.08] rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
+                  outline-none focus:border-rose-500/40 focus:bg-white/[0.08] transition-all" />
             </div>
-            <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/8">{{ archivedTotal }}</span>
+            <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/[0.08]">{{ archivedTotal }}</span>
           </div>
 
           <div class="rounded-3xl border border-white/5 overflow-hidden" style="background:rgba(255,255,255,0.02)">
             <div v-if="isLoadingArchived" class="divide-y divide-white/5">
               <div v-for="n in 4" :key="n" class="flex items-center gap-3 px-5 py-3.5 animate-pulse">
-                <div class="w-9 h-9 rounded-full bg-white/8 flex-shrink-0" />
+                <div class="w-9 h-9 rounded-full bg-white/[0.08] flex-shrink-0" />
                 <div class="flex-1 space-y-2">
-                  <div class="h-3 bg-white/8 rounded-full w-32" /><div class="h-2 bg-white/5 rounded-full w-24" />
+                  <div class="h-3 bg-white/[0.08] rounded-full w-32" /><div class="h-2 bg-white/5 rounded-full w-24" />
                 </div>
               </div>
             </div>
@@ -982,10 +1232,10 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
             </div>
             <div v-else class="divide-y divide-white/5">
               <div v-for="user in archivedUsers" :key="user.id"
-                class="flex items-center gap-3 px-5 py-3 hover:bg-white/3 transition-all group opacity-60 hover:opacity-100">
+                class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-all group opacity-60 hover:opacity-100">
                 <img v-if="user.avatar_url" :src="user.avatar_url"
                   class="w-9 h-9 rounded-full object-cover border border-white/10 grayscale flex-shrink-0" />
-                <div v-else class="w-9 h-9 rounded-full border border-white/8 bg-white/5 flex items-center justify-center text-xs font-bold text-white/30 flex-shrink-0">
+                <div v-else class="w-9 h-9 rounded-full border border-white/[0.08] bg-white/5 flex items-center justify-center text-xs font-bold text-white/30 flex-shrink-0">
                   {{ (user.display_name || user.username || '?')[0].toUpperCase() }}
                 </div>
                 <div class="flex-1 min-w-0">
@@ -1004,12 +1254,12 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
 
           <div v-if="archivedTotal > 20" class="flex items-center justify-center gap-2 mt-4">
             <button @click="archivedPage--; fetchArchivedUsers()" :disabled="archivedPage <= 1"
-              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
               <BIcon name="ChevronLeft" class="w-4 h-4" />
             </button>
             <span class="text-xs font-bold text-white/40 px-3">{{ archivedPage }} / {{ Math.ceil(archivedTotal/20) }}</span>
             <button @click="archivedPage++; fetchArchivedUsers()" :disabled="archivedPage >= Math.ceil(archivedTotal/20)"
-              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
               <BIcon name="ChevronRight" class="w-4 h-4" />
             </button>
           </div>
@@ -1021,14 +1271,14 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
             <div class="relative flex-1 max-w-sm">
               <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
               <input v-model="postSearch" @input="onPostSearch" type="text" placeholder="Поиск по постам…"
-                class="w-full bg-white/5 border border-white/8 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
-                  outline-none focus:border-[#22d3ee]/40 focus:bg-white/8 transition-all" />
+                class="w-full bg-white/5 border border-white/[0.08] rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
+                  outline-none focus:border-[#22d3ee]/40 focus:bg-white/[0.08] transition-all" />
             </div>
             <button @click="fetchPosts()"
-              class="px-3 py-2 rounded-xl bg-white/5 border border-white/8 text-xs text-white/50 hover:text-white transition-all">
+              class="px-3 py-2 rounded-xl bg-white/5 border border-white/[0.08] text-xs text-white/50 hover:text-white transition-all">
               <BIcon name="RefreshCw" class="w-3.5 h-3.5" />
             </button>
-            <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/8">{{ postTotal }}</span>
+            <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/[0.08]">{{ postTotal }}</span>
           </div>
 
           <!-- Filter pills -->
@@ -1043,7 +1293,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
               class="px-4 py-2 rounded-2xl text-xs font-bold border transition-all"
               :class="postFilter === f.v
                 ? 'bg-[#22d3ee]/15 border-[#22d3ee]/25 text-[#22d3ee]'
-                : 'bg-white/5 border-white/8 text-white/40 hover:text-white/70'">
+                : 'bg-white/5 border-white/[0.08] text-white/40 hover:text-white/70'">
               {{ f.l }}
             </button>
           </div>
@@ -1051,10 +1301,10 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
           <div class="rounded-3xl border border-white/5 overflow-hidden" style="background:rgba(255,255,255,0.02)">
             <div v-if="isLoadingPosts" class="divide-y divide-white/5">
               <div v-for="n in 5" :key="n" class="flex items-start gap-3 px-5 py-4 animate-pulse">
-                <div class="w-9 h-9 rounded-full bg-white/8 flex-shrink-0 mt-0.5" />
+                <div class="w-9 h-9 rounded-full bg-white/[0.08] flex-shrink-0 mt-0.5" />
                 <div class="flex-1 space-y-2">
                   <div class="h-2 bg-white/5 rounded-full w-24" />
-                  <div class="h-3 bg-white/8 rounded-full w-3/4" />
+                  <div class="h-3 bg-white/[0.08] rounded-full w-3/4" />
                   <div class="h-3 bg-white/5 rounded-full w-1/2" />
                 </div>
               </div>
@@ -1065,7 +1315,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
             </div>
             <div v-else class="divide-y divide-white/5">
               <div v-for="post in posts" :key="post.id"
-                class="flex items-start gap-3 px-5 py-4 hover:bg-white/3 transition-all group">
+                class="flex items-start gap-3 px-5 py-4 hover:bg-white/[0.03] transition-all group">
                 <router-link :to="`/profile/${post.author?.username}`" target="_blank" class="flex-shrink-0">
                   <img v-if="post.author?.avatar_url" :src="post.author.avatar_url"
                     class="w-9 h-9 rounded-full object-cover border border-white/10 mt-0.5 hover:opacity-80 transition-opacity" />
@@ -1091,7 +1341,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
                       Платно
                     </span>
                     <span v-if="post.category"
-                      class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/8 border border-white/10 text-white/40">
+                      class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/[0.08] border border-white/10 text-white/40">
                       {{ post.category }}
                     </span>
                   </div>
@@ -1136,12 +1386,12 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
 
           <div v-if="postTotal > 20" class="flex items-center justify-center gap-2 mt-4">
             <button @click="postPage--; fetchPosts()" :disabled="postPage <= 1"
-              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
               <BIcon name="ChevronLeft" class="w-4 h-4" />
             </button>
             <span class="text-xs font-bold text-white/40 px-3">{{ postPage }} / {{ Math.ceil(postTotal/20) }}</span>
             <button @click="postPage++; fetchPosts()" :disabled="postPage >= Math.ceil(postTotal/20)"
-              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
               <BIcon name="ChevronRight" class="w-4 h-4" />
             </button>
           </div>
@@ -1161,57 +1411,199 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
               class="px-4 py-2 rounded-2xl text-xs font-bold border transition-all"
               :class="reportFilter === s
                 ? 'bg-amber-500/15 border-amber-500/25 text-amber-400'
-                : 'bg-white/5 border-white/8 text-white/40 hover:text-white/70'">
+                : 'bg-white/5 border-white/[0.08] text-white/40 hover:text-white/70'">
               {{ { '': 'Все', pending: 'Ожидают', resolved: 'Решены', dismissed: 'Отклонены' }[s] }}
             </button>
           </div>
 
+          <div v-if="isLoadingReports" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div v-for="n in 6" :key="n" class="rounded-3xl border border-white/5 p-4 animate-pulse"
+              style="background:rgba(255,255,255,0.02)">
+              <div class="h-3 bg-white/[0.08] rounded-full w-24 mb-3" />
+              <div class="h-16 bg-white/5 rounded-2xl mb-2" />
+              <div class="h-2 bg-white/5 rounded-full w-32" />
+            </div>
+          </div>
+          <div v-else-if="reports.length === 0"
+            class="rounded-3xl border border-white/5 flex flex-col items-center gap-3 py-16 text-white/25"
+            style="background:rgba(255,255,255,0.02)">
+            <BIcon name="Flag" class="w-10 h-10 opacity-40" />
+            <p class="text-sm font-semibold">Жалоб нет</p>
+          </div>
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div v-for="folder in reports" :key="reportGroupKey(folder)"
+              class="rounded-3xl border border-white/5 p-4 hover:border-amber-500/20 transition-all"
+              style="background:rgba(255,255,255,0.02)">
+              <!-- Header -->
+              <div class="flex items-center gap-1.5 mb-2 flex-wrap">
+                <span class="text-xs font-bold px-2 py-0.5 rounded-full border"
+                  :class="folder.status === 'pending'
+                    ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                    : folder.status === 'resolved'
+                      ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                      : 'text-white/30 bg-white/5 border-white/10'">
+                  {{ { pending: 'Ожидает', resolved: 'Решено', dismissed: 'Отклонено' }[folder.status] }}
+                </span>
+                <span v-if="folder.count > 1"
+                  class="text-xs font-bold px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400"
+                  :title="`${folder.count} жалоб на один и тот же объект`">
+                  ×{{ folder.count }}
+                </span>
+                <span class="text-[10px] text-white/25 capitalize">{{ folder.target_type }}</span>
+                <span class="text-[10px] text-white/25 ml-auto">{{ formatDate(folder.created_at) }}</span>
+              </div>
+
+              <!-- Reported post preview + link -->
+              <template v-if="folder.target_type === 'post'">
+                <router-link v-if="folder.post" :to="`/post/${folder.target_id}`" target="_blank"
+                  class="block rounded-2xl border border-white/5 p-2.5 mb-3 hover:border-[#22d3ee]/30 transition-all group">
+                  <div class="flex items-start gap-2">
+                    <img v-if="folder.post.author?.avatar_url" :src="folder.post.author.avatar_url"
+                      class="w-8 h-8 rounded-full object-cover border border-white/10 flex-shrink-0" />
+                    <div v-else
+                      class="w-8 h-8 rounded-full border border-white/10 bg-amber-500/15 flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0">
+                      {{ (folder.post.author?.display_name || folder.post.author?.username || '?')[0].toUpperCase() }}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-1.5">
+                        <p class="text-xs font-semibold text-white/70 truncate">@{{ folder.post.author?.username }}</p>
+                        <span v-if="folder.post.is_nsfw"
+                          class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/20 text-rose-400">NSFW</span>
+                      </div>
+                      <p class="text-xs text-white/60 line-clamp-2 mt-0.5">{{ folder.post.content }}</p>
+                    </div>
+                  </div>
+                  <div v-if="folder.post.media_urls?.length" class="flex gap-1.5 mt-2">
+                    <div v-for="(url, i) in folder.post.media_urls.slice(0, 3)" :key="i"
+                      class="relative w-10 h-10 rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
+                      <img :src="url" class="w-full h-full object-cover" />
+                      <div v-if="i === 2 && folder.post.media_urls.length > 3"
+                        class="absolute inset-0 bg-black/65 flex items-center justify-center text-white text-[9px] font-bold">
+                        +{{ folder.post.media_urls.length - 3 }}
+                      </div>
+                    </div>
+                  </div>
+                  <p class="text-[10px] text-[#22d3ee] mt-2 flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                    <BIcon name="ExternalLink" class="w-3 h-3" /> Открыть пост
+                  </p>
+                </router-link>
+                <p v-else class="text-xs text-white/30 italic mb-3">Пост удалён или недоступен</p>
+              </template>
+              <p v-else class="text-[10px] text-white/30 mb-3 break-all">ID: {{ folder.target_id }}</p>
+
+              <!-- Primary complaint -->
+              <p class="text-sm text-white/80 font-medium">{{ folder.reports[0].reason }}</p>
+              <p class="text-xs text-white/30 mt-0.5">от @{{ folder.reports[0].reporter?.username }}</p>
+
+              <!-- Expand full complaint list when duplicates exist -->
+              <button v-if="folder.count > 1" @click="toggleReportGroup(folder)"
+                class="text-[11px] font-bold text-amber-400/80 hover:text-amber-400 mt-2 transition-colors">
+                {{ expandedReportGroups.has(reportGroupKey(folder)) ? 'Скрыть' : 'Показать все жалобы' }} ({{ folder.count }})
+              </button>
+              <Transition name="filter-expand">
+                <div v-if="folder.count > 1 && expandedReportGroups.has(reportGroupKey(folder))"
+                  class="mt-2 space-y-1.5 border-t border-white/5 pt-2 max-h-40 overflow-y-auto">
+                  <p v-for="r in folder.reports" :key="r.id" class="text-xs text-white/50">
+                    {{ r.reason }}
+                    <span class="text-white/25">— @{{ r.reporter?.username }} · {{ formatDate(r.created_at) }}</span>
+                  </p>
+                </div>
+              </Transition>
+
+              <div v-if="folder.status === 'pending'" class="flex gap-2 mt-3">
+                <button @click="resolveReportGroup(folder, 'resolved')"
+                  class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
+                  ✓ Решено
+                </button>
+                <button @click="resolveReportGroup(folder, 'dismissed')"
+                  class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 border border-white/[0.08] text-white/40 hover:text-white transition-all">
+                  Откл.
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── SUPPORT ────────────────────────────────────────────────── -->
+        <div v-else-if="activeTab === 'support'">
+          <!-- Filter pills -->
+          <div class="flex gap-2 mb-5 flex-wrap">
+            <button v-for="s in (['', 'open', 'in_progress', 'resolved', 'closed'] as const)" :key="s"
+              @click="supportFilter = s; fetchSupportTickets()"
+              class="px-4 py-2 rounded-2xl text-xs font-bold border transition-all"
+              :class="supportFilter === s
+                ? 'bg-[#4C67CF]/15 border-[#4C67CF]/25 text-[#8fa0ec]'
+                : 'bg-white/5 border-white/[0.08] text-white/40 hover:text-white/70'">
+              {{ s === '' ? 'Все' : SUPPORT_STATUS_LABEL[s] }}
+            </button>
+          </div>
+
           <div class="rounded-3xl border border-white/5 overflow-hidden" style="background:rgba(255,255,255,0.02)">
-            <div v-if="isLoadingReports" class="divide-y divide-white/5">
+            <div v-if="isLoadingSupport" class="divide-y divide-white/5">
               <div v-for="n in 4" :key="n" class="flex gap-3 px-5 py-4 animate-pulse">
                 <div class="flex-1 space-y-2">
-                  <div class="h-3 bg-white/8 rounded-full w-48" /><div class="h-2 bg-white/5 rounded-full w-32" />
+                  <div class="h-3 bg-white/[0.08] rounded-full w-48" /><div class="h-2 bg-white/5 rounded-full w-32" />
                 </div>
               </div>
             </div>
-            <div v-else-if="reports.length === 0"
+            <div v-else-if="supportTickets.length === 0"
               class="flex flex-col items-center gap-3 py-16 text-white/25">
-              <BIcon name="Flag" class="w-10 h-10 opacity-40" />
-              <p class="text-sm font-semibold">Жалоб нет</p>
+              <BIcon name="LifeBuoy" class="w-10 h-10 opacity-40" />
+              <p class="text-sm font-semibold">Обращений нет</p>
             </div>
             <div v-else class="divide-y divide-white/5">
-              <div v-for="report in reports" :key="report.id"
-                class="flex items-start gap-4 px-5 py-4 hover:bg-white/3 transition-all">
-                <!-- Status dot -->
-                <div class="flex-shrink-0 mt-0.5">
-                  <div class="w-2.5 h-2.5 rounded-full mt-1"
-                    :style="`background:${report.status==='pending'?'#f59e0b':report.status==='resolved'?'#10b981':'#6b7280'}`" />
-                </div>
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 mb-1 flex-wrap">
-                    <span class="text-xs font-bold px-2 py-0.5 rounded-full border"
-                      :class="report.status === 'pending'
-                        ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
-                        : report.status === 'resolved'
-                          ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                          : 'text-white/30 bg-white/5 border-white/10'">
-                      {{ { pending: 'Ожидает', resolved: 'Решено', dismissed: 'Отклонено' }[report.status] }}
-                    </span>
-                    <span class="text-[10px] text-white/25 capitalize">{{ report.target_type }}</span>
-                    <span class="text-[10px] text-white/25">{{ formatDate(report.created_at) }}</span>
+              <div v-for="ticket in supportTickets" :key="ticket.id" class="px-5 py-4 hover:bg-white/[0.03] transition-all">
+                <div class="flex items-start gap-4">
+                  <div class="flex-shrink-0 mt-1.5">
+                    <div class="w-2.5 h-2.5 rounded-full" :style="`background:${SUPPORT_STATUS_COLOR[ticket.status]}`" />
                   </div>
-                  <p class="text-sm text-white/80 font-medium">{{ report.reason }}</p>
-                  <p class="text-xs text-white/30 mt-0.5">от @{{ report.reporter?.username }}</p>
-                </div>
-                <div v-if="report.status === 'pending'" class="flex gap-2 flex-shrink-0">
-                  <button @click="resolveReport(report.id, 'resolved')"
-                    class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
-                    ✓ Решено
-                  </button>
-                  <button @click="resolveReport(report.id, 'dismissed')"
-                    class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 border border-white/8 text-white/40 hover:text-white transition-all">
-                    Откл.
-                  </button>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1 flex-wrap">
+                      <span class="text-xs font-bold px-2 py-0.5 rounded-full border"
+                        :style="`color:${SUPPORT_STATUS_COLOR[ticket.status]};background:${SUPPORT_STATUS_COLOR[ticket.status]}1a;border-color:${SUPPORT_STATUS_COLOR[ticket.status]}30`">
+                        {{ SUPPORT_STATUS_LABEL[ticket.status] }}
+                      </span>
+                      <span class="text-[10px] text-white/25 uppercase font-bold">{{ SUPPORT_TYPE_LABEL[ticket.type] ?? ticket.type }}</span>
+                      <span class="text-[10px] text-white/25">{{ formatDate(ticket.created_at) }}</span>
+                    </div>
+                    <p class="text-sm text-white/80 font-bold">{{ ticket.subject }}</p>
+                    <p class="text-xs text-white/50 mt-1 whitespace-pre-wrap">{{ ticket.message }}</p>
+                    <p class="text-xs text-white/30 mt-1.5">
+                      от @{{ ticket.user?.username }}
+                      <span v-if="ticket.contact_email"> · {{ ticket.contact_email }}</span>
+                    </p>
+
+                    <div v-if="ticket.attachment_urls?.length" class="flex gap-2 mt-2 flex-wrap">
+                      <a v-for="(url, ai) in ticket.attachment_urls" :key="ai" :href="url" target="_blank" rel="noopener"
+                        class="w-16 h-16 rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
+                        <img :src="url" class="w-full h-full object-cover" />
+                      </a>
+                    </div>
+
+                    <div v-if="ticket.admin_reply" class="mt-3 px-3 py-2 rounded-xl bg-white/5 border border-white/[0.06]">
+                      <p class="text-[10px] font-bold text-white/30 mb-0.5">Ответ {{ ticket.replier?.username ? `(@${ticket.replier.username})` : '' }}</p>
+                      <p class="text-xs text-white/70 whitespace-pre-wrap">{{ ticket.admin_reply }}</p>
+                    </div>
+
+                    <div class="mt-3 flex flex-col sm:flex-row gap-2">
+                      <input v-model="supportReplyDrafts[ticket.id]" type="text" placeholder="Ответ пользователю..."
+                        class="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/[0.08] text-xs text-white placeholder-white/25 focus:outline-none focus:border-[#4C67CF]/40" />
+                      <div class="flex gap-2 flex-shrink-0">
+                        <button @click="replySupportTicket(ticket.id, 'in_progress')"
+                          class="px-3 py-1.5 rounded-xl text-xs font-bold bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/20 transition-all">
+                          В работу
+                        </button>
+                        <button @click="replySupportTicket(ticket.id, 'resolved')"
+                          class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
+                          ✓ Решено
+                        </button>
+                        <button @click="replySupportTicket(ticket.id, 'closed')"
+                          class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 border border-white/[0.08] text-white/40 hover:text-white transition-all">
+                          Закрыть
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1229,6 +1621,62 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
             </button>
           </div>
 
+          <!-- Где показывается: мини-визуал мест размещения -->
+          <div class="rounded-3xl border border-white/5 p-5 mb-5" style="background:rgba(255,255,255,0.02)">
+            <p class="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">Где показывается на сайте</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <!-- Лента (hero) -->
+              <div class="rounded-2xl border border-white/[0.08] p-3" style="background:rgba(255,255,255,0.02)">
+                <div class="w-full h-14 rounded-xl bg-white/5 flex overflow-hidden mb-2">
+                  <div class="w-10 h-full bg-white/10 flex-shrink-0" />
+                  <div class="flex-1 px-2 py-1.5 space-y-1">
+                    <div class="h-1.5 w-8 rounded-full bg-[#22d3ee]/50" />
+                    <div class="h-1.5 w-16 rounded-full bg-white/25" />
+                  </div>
+                </div>
+                <p class="text-[11px] font-bold text-white/70">Верх ленты</p>
+                <p class="text-[10px] text-white/30">Крупный блок над постами на главной</p>
+                <p class="text-[10px] font-bold text-[#22d3ee] mt-1">от 1500 ₽ / нед.</p>
+              </div>
+              <!-- Левый сайдбар -->
+              <div class="rounded-2xl border border-white/[0.08] p-3" style="background:rgba(255,255,255,0.02)">
+                <div class="w-full h-14 rounded-xl bg-white/5 flex flex-col overflow-hidden mb-2 p-1.5 gap-1">
+                  <div class="h-2 w-10 rounded bg-white/10" />
+                  <div class="h-2 w-8 rounded bg-white/10" />
+                  <div class="h-2 w-9 rounded bg-[#22d3ee]/40" />
+                </div>
+                <p class="text-[11px] font-bold text-white/70">Левое меню</p>
+                <p class="text-[10px] text-white/30">Карточка под навигацией слева</p>
+                <p class="text-[10px] font-bold text-[#22d3ee] mt-1">от 800 ₽ / нед.</p>
+              </div>
+              <!-- Правый сайдбар -->
+              <div class="rounded-2xl border border-white/[0.08] p-3" style="background:rgba(255,255,255,0.02)">
+                <div class="w-full h-14 rounded-xl bg-white/5 flex flex-col overflow-hidden mb-2 p-1.5 gap-1">
+                  <div class="h-2 w-9 rounded bg-[#22d3ee]/40" />
+                  <div class="h-2 w-full rounded bg-white/10" />
+                  <div class="h-2 w-7 rounded bg-white/10" />
+                </div>
+                <p class="text-[11px] font-bold text-white/70">Правая колонка</p>
+                <p class="text-[10px] text-white/30">Над трендовыми тегами (только xl-экраны)</p>
+                <p class="text-[10px] font-bold text-[#22d3ee] mt-1">от 600 ₽ / нед.</p>
+              </div>
+              <!-- Страница групп -->
+              <div class="rounded-2xl border border-white/[0.08] p-3" style="background:rgba(255,255,255,0.02)">
+                <div class="w-full h-14 rounded-xl bg-white/5 flex overflow-hidden mb-2">
+                  <div class="w-10 h-full bg-white/10 flex-shrink-0" />
+                  <div class="flex-1 px-2 py-1.5 space-y-1">
+                    <div class="h-1.5 w-8 rounded-full bg-[#22d3ee]/50" />
+                    <div class="h-1.5 w-16 rounded-full bg-white/25" />
+                  </div>
+                </div>
+                <p class="text-[11px] font-bold text-white/70">Страница «Группы»</p>
+                <p class="text-[10px] text-white/30">Крупный блок над поиском групп</p>
+                <p class="text-[10px] font-bold text-[#22d3ee] mt-1">от 1200 ₽ / нед.</p>
+              </div>
+            </div>
+            <p class="text-[11px] text-white/25 mt-3">Если активных объявлений нет — на этих местах показывается карточка «Здесь может быть ваша реклама» со ссылкой на заявку. Цены ориентировочные — окончательная сумма обсуждается с заявителем вручную.</p>
+          </div>
+
           <!-- Create form -->
           <Transition name="filter-expand">
             <div v-if="showAdForm"
@@ -1242,21 +1690,38 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
                   class="adm-input resize-none h-20" />
                 <input v-model="newAd.linkUrl" type="url" placeholder="Ссылка *"
                   class="adm-input" />
+                <input v-model="newAd.priceLabel" placeholder="Ценник (напр. «1500 ₽ / неделя»)"
+                  class="adm-input" />
                 <div>
                   <p class="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">Изображение (опционально)</p>
-                  <div v-if="newAd.imageUrl" class="flex items-center gap-3 p-3 bg-white/5 border border-white/8 rounded-2xl">
+                  <div v-if="newAd.imageUrl" class="flex items-center gap-3 p-3 bg-white/5 border border-white/[0.08] rounded-2xl">
                     <img :src="newAd.imageUrl" class="w-16 h-12 object-cover rounded-xl flex-shrink-0" />
                     <span class="flex-1 text-xs text-white/45 truncate">Загружено</span>
-                    <button @click="newAd.imageUrl = ''" class="w-7 h-7 rounded-full bg-white/8 hover:bg-rose-500/20 flex items-center justify-center transition-all">
+                    <button @click="newAd.imageUrl = ''" class="w-7 h-7 rounded-full bg-white/[0.08] hover:bg-rose-500/20 flex items-center justify-center transition-all">
                       <BIcon name="X" class="w-3.5 h-3.5 text-white/60" />
                     </button>
                   </div>
                   <MediaUpload v-else type="banners" @uploaded="(urls) => newAd.imageUrl = urls[0] ?? ''" />
                 </div>
               </div>
+
+              <!-- Live preview: exactly how the card renders on-site -->
+              <div v-if="newAd.title" class="mt-4">
+                <p class="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-1.5">Превью карточки</p>
+                <div class="max-w-xs bg-brand-card border border-brand-accent/25 rounded-3xl overflow-hidden shadow-xl">
+                  <img v-if="newAd.imageUrl" :src="newAd.imageUrl" class="w-full object-cover max-h-28" />
+                  <div class="px-4 py-3">
+                    <span class="text-[9px] font-bold uppercase tracking-wider text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Реклама</span>
+                    <p class="text-xs font-bold text-white leading-snug mt-1.5">{{ newAd.title }}</p>
+                    <p v-if="newAd.description" class="text-[11px] text-white/55 mt-0.5 line-clamp-2">{{ newAd.description }}</p>
+                    <p v-if="newAd.priceLabel" class="text-[11px] font-bold text-[#22d3ee] mt-1">{{ newAd.priceLabel }}</p>
+                  </div>
+                </div>
+              </div>
+
               <div class="flex gap-2 justify-end mt-4">
                 <button @click="showAdForm = false"
-                  class="px-4 py-2 rounded-xl text-sm text-white/40 hover:text-white hover:bg-white/5 border border-white/8 transition-all">Отмена</button>
+                  class="px-4 py-2 rounded-xl text-sm text-white/40 hover:text-white hover:bg-white/5 border border-white/[0.08] transition-all">Отмена</button>
                 <button @click="submitAd" :disabled="isSubmittingAd || !newAd.title || !newAd.linkUrl"
                   class="px-5 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all shadow-lg"
                   style="background:linear-gradient(135deg,#0e7490,#0891b2);box-shadow:0 4px 12px rgba(6,182,212,0.25)">
@@ -1278,8 +1743,8 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
             <div v-for="ad in ads" :key="ad.id"
               class="rounded-3xl border border-white/5 p-4 flex items-start gap-4 hover:border-white/10 transition-all"
               style="background:rgba(255,255,255,0.02)">
-              <img v-if="ad.image_url" :src="ad.image_url" class="w-16 h-16 rounded-2xl object-cover border border-white/8 flex-shrink-0" />
-              <div v-else class="w-16 h-16 rounded-2xl bg-white/5 border border-white/8 flex-shrink-0 flex items-center justify-center">
+              <img v-if="ad.image_url" :src="ad.image_url" class="w-16 h-16 rounded-2xl object-cover border border-white/[0.08] flex-shrink-0" />
+              <div v-else class="w-16 h-16 rounded-2xl bg-white/5 border border-white/[0.08] flex-shrink-0 flex items-center justify-center">
                 <BIcon name="Image" class="w-5 h-5 text-white/20" />
               </div>
               <div class="flex-1 min-w-0">
@@ -1293,19 +1758,33 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
                     {{ ad.status }}
                   </span>
                   <span class="text-[10px] text-white/30">{{ ad.impressions ?? 0 }} показов · {{ ad.clicks ?? 0 }} кликов</span>
+                  <span v-if="ad.price_label" class="text-[10px] font-bold text-[#22d3ee] bg-[#22d3ee]/10 px-2 py-0.5 rounded-full border border-[#22d3ee]/20">{{ ad.price_label }}</span>
                 </div>
                 <p class="font-bold text-sm text-white">{{ ad.title }}</p>
                 <p v-if="ad.description" class="text-xs text-white/40 mt-0.5 line-clamp-1">{{ ad.description }}</p>
                 <a :href="ad.link_url" target="_blank" class="text-xs text-[#22d3ee] hover:text-[#22d3ee]/80 mt-0.5 block truncate transition-colors">{{ ad.link_url }}</a>
+                <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+                  <router-link v-if="ad.requester" :to="`/profile/${ad.requester.username}`" target="_blank"
+                    class="text-[11px] text-white/35 hover:text-white/60 transition-colors">
+                    от @{{ ad.requester.username }}
+                  </router-link>
+                  <span v-if="ad.contact_info" class="text-[11px] text-white/25">· контакт: {{ ad.contact_info }}</span>
+                </div>
               </div>
-              <div v-if="ad.status === 'pending'" class="flex flex-col gap-2 flex-shrink-0">
-                <button @click="reviewAd(ad.id, 'active')"
-                  class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
-                  Одобрить
-                </button>
-                <button @click="reviewAd(ad.id, 'rejected')"
-                  class="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 transition-all">
-                  Отклонить
+              <div class="flex flex-col gap-2 flex-shrink-0">
+                <template v-if="ad.status === 'pending'">
+                  <button @click="reviewAd(ad.id, 'active')"
+                    class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
+                    Одобрить
+                  </button>
+                  <button @click="reviewAd(ad.id, 'rejected')"
+                    class="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 transition-all">
+                    Отклонить
+                  </button>
+                </template>
+                <button @click="deleteAd(ad.id)" title="Удалить"
+                  class="w-7 h-7 rounded-xl bg-white/5 border border-white/[0.08] text-white/40 hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-500/20 flex items-center justify-center transition-all self-end">
+                  <BIcon name="Trash2" class="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
@@ -1320,7 +1799,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
               class="px-4 py-2 rounded-2xl text-xs font-bold border transition-all"
               :class="verFilter === s
                 ? 'bg-blue-500/15 border-blue-500/25 text-blue-400'
-                : 'bg-white/5 border-white/8 text-white/40 hover:text-white/70'">
+                : 'bg-white/5 border-white/[0.08] text-white/40 hover:text-white/70'">
               {{ { '': 'Все', pending: 'Ожидают', approved: 'Одобрены', rejected: 'Отклонены' }[s] }}
             </button>
           </div>
@@ -1402,7 +1881,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
                       <div class="grid grid-cols-3 gap-1.5">
                         <button v-for="(url,i) in req.evidence_urls.slice(0,6)" :key="i"
                           @click="openEvidenceLightbox(req.evidence_urls, i)"
-                          class="relative aspect-square rounded-xl overflow-hidden border border-white/8 hover:border-blue-500/40 transition-all group/ev">
+                          class="relative aspect-square rounded-xl overflow-hidden border border-white/[0.08] hover:border-blue-500/40 transition-all group/ev">
                           <img :src="url" class="w-full h-full object-cover" />
                           <div v-if="i===5 && req.evidence_urls.length>6"
                             class="absolute inset-0 bg-black/65 flex items-center justify-center text-white text-xs font-bold">
@@ -1412,7 +1891,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
                         </button>
                       </div>
                     </div>
-                    <div v-if="req.evidence_text" class="bg-white/3 border border-white/8 rounded-xl px-2.5 py-2">
+                    <div v-if="req.evidence_text" class="bg-white/[0.03] border border-white/[0.08] rounded-xl px-2.5 py-2">
                       <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wide mb-1">Текстовое доказательство</p>
                       <p class="text-[11px] text-white/70 whitespace-pre-line line-clamp-4">{{ req.evidence_text }}</p>
                     </div>
@@ -1479,14 +1958,14 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
               </div>
               <div class="sm:col-span-2">
                 <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">Изображение баннера</label>
-                <div v-if="bannerForm.image_url" class="flex items-center gap-3 p-3 bg-white/5 border border-white/8 rounded-2xl">
+                <div v-if="bannerForm.image_url" class="flex items-center gap-3 p-3 bg-white/5 border border-white/[0.08] rounded-2xl">
                   <img :src="bannerForm.image_url" class="w-20 h-12 object-cover rounded-xl flex-shrink-0 border border-white/10" />
                   <div class="flex-1 min-w-0">
                     <p class="text-xs text-white/60">Изображение загружено</p>
                     <p class="text-[10px] text-white/30 truncate mt-0.5">{{ bannerForm.image_url }}</p>
                   </div>
                   <button type="button" @click="bannerForm.image_url = ''"
-                    class="w-7 h-7 rounded-full bg-white/8 hover:bg-rose-500/20 flex items-center justify-center transition-all flex-shrink-0">
+                    class="w-7 h-7 rounded-full bg-white/[0.08] hover:bg-rose-500/20 flex items-center justify-center transition-all flex-shrink-0">
                     <BIcon name="X" class="w-3.5 h-3.5 text-white/60" />
                   </button>
                 </div>
@@ -1509,7 +1988,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
                   class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold border transition-all"
                   :class="bannerForm.is_active
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                    : 'bg-white/5 text-white/40 border-white/8'">
+                    : 'bg-white/5 text-white/40 border-white/[0.08]'">
                   <BIcon :name="bannerForm.is_active ? 'Eye' : 'EyeOff'" class="w-4 h-4" />
                   {{ bannerForm.is_active ? 'Активен' : 'Скрыт' }}
                 </button>
@@ -1518,7 +1997,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
 
             <!-- Live preview -->
             <div v-if="bannerForm.gradient || bannerForm.image_url"
-              class="mt-5 rounded-2xl overflow-hidden h-28 relative border border-white/8">
+              class="mt-5 rounded-2xl overflow-hidden h-28 relative border border-white/[0.08]">
               <img v-if="bannerForm.image_url" :src="bannerForm.image_url" class="absolute inset-0 w-full h-full object-cover" />
               <div class="absolute inset-0" :style="bannerForm.gradient ? `background:${bannerForm.gradient};opacity:0.65` : 'background:#1a1a2e'" />
               <div class="absolute inset-0 p-4 flex flex-col justify-end">
@@ -1543,7 +2022,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
                 Сохранить
               </button>
               <button @click="showBannerForm = false"
-                class="px-5 py-2.5 rounded-2xl text-sm font-bold bg-white/5 border border-white/8 text-white/50 hover:text-white transition-all">
+                class="px-5 py-2.5 rounded-2xl text-sm font-bold bg-white/5 border border-white/[0.08] text-white/50 hover:text-white transition-all">
                 Отмена
               </button>
             </div>
@@ -1571,7 +2050,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
               style="background:rgba(255,255,255,0.02)">
               <div class="flex items-center gap-4 p-4">
                 <!-- Thumbnail -->
-                <div class="w-24 h-16 rounded-2xl overflow-hidden flex-shrink-0 border border-white/8 relative">
+                <div class="w-24 h-16 rounded-2xl overflow-hidden flex-shrink-0 border border-white/[0.08] relative">
                   <img v-if="b.image_url" :src="b.image_url" class="absolute inset-0 w-full h-full object-cover" />
                   <div class="absolute inset-0"
                     :style="b.gradient ? `background:${b.gradient};opacity:0.7` : 'background:#1a1a2e'" />
@@ -1600,11 +2079,11 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
                 <div class="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button @click="toggleBannerActive(b)"
                     class="w-8 h-8 rounded-xl border flex items-center justify-center transition-all"
-                    :class="b.is_active ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-white/5 border-white/8 text-white/35 hover:text-white'">
+                    :class="b.is_active ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-white/5 border-white/[0.08] text-white/35 hover:text-white'">
                     <BIcon :name="b.is_active ? 'Eye' : 'EyeOff'" class="w-3.5 h-3.5" />
                   </button>
                   <button @click="openBannerEdit(b)"
-                    class="w-8 h-8 rounded-xl bg-white/5 border border-white/8 text-white/40 hover:text-white hover:border-[#a78bfa]/30 flex items-center justify-center transition-all">
+                    class="w-8 h-8 rounded-xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white hover:border-[#a78bfa]/30 flex items-center justify-center transition-all">
                     <BIcon name="Pencil" class="w-3.5 h-3.5" />
                   </button>
                   <button @click="deleteBanner(b.id)"
@@ -1649,22 +2128,22 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
               <option value="manual">🛡️ manual</option>
             </select>
             <button @click="fetchAutoModLogs()"
-              class="px-3 py-2 rounded-xl bg-white/5 border border-white/8 text-xs text-white/50 hover:text-white transition-all">
+              class="px-3 py-2 rounded-xl bg-white/5 border border-white/[0.08] text-xs text-white/50 hover:text-white transition-all">
               <BIcon name="RefreshCw" class="w-3.5 h-3.5" />
             </button>
-            <span class="ml-auto text-xs font-bold text-white/30 bg-white/5 px-3 py-2 rounded-xl border border-white/8">{{ autoModTotal }} событий</span>
+            <span class="ml-auto text-xs font-bold text-white/30 bg-white/5 px-3 py-2 rounded-xl border border-white/[0.08]">{{ autoModTotal }} событий</span>
           </div>
 
           <!-- Logs -->
           <div class="rounded-3xl border border-white/5 overflow-hidden" style="background:rgba(255,255,255,0.02)">
             <div v-if="isLoadingAutoMod" class="divide-y divide-white/5">
               <div v-for="n in 8" :key="n" class="flex items-center gap-3 px-5 py-3 animate-pulse">
-                <div class="w-8 h-8 rounded-full bg-white/8 flex-shrink-0" />
+                <div class="w-8 h-8 rounded-full bg-white/[0.08] flex-shrink-0" />
                 <div class="flex-1 space-y-2">
-                  <div class="h-3 bg-white/8 rounded-full w-48" />
+                  <div class="h-3 bg-white/[0.08] rounded-full w-48" />
                   <div class="h-2 bg-white/5 rounded-full w-32" />
                 </div>
-                <div class="h-5 w-14 bg-white/8 rounded-full" />
+                <div class="h-5 w-14 bg-white/[0.08] rounded-full" />
               </div>
             </div>
             <div v-else-if="!autoModLogs.length" class="flex flex-col items-center gap-4 py-20 text-white/25">
@@ -1674,12 +2153,12 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
             </div>
             <div v-else class="divide-y divide-white/5">
               <div v-for="log in autoModLogs" :key="log.id"
-                class="flex items-start gap-3 px-5 py-3.5 hover:bg-white/2 transition-all">
+                class="flex items-start gap-3 px-5 py-3.5 hover:bg-white/[0.02] transition-all">
                 <!-- Avatar -->
                 <img v-if="log.user?.avatar_url" :src="log.user.avatar_url"
                   class="w-8 h-8 rounded-full object-cover border border-white/10 flex-shrink-0 mt-0.5" />
                 <div v-else
-                  class="w-8 h-8 rounded-full bg-white/8 border border-white/10 flex items-center justify-center text-xs font-bold text-white/50 flex-shrink-0 mt-0.5">
+                  class="w-8 h-8 rounded-full bg-white/[0.08] border border-white/10 flex items-center justify-center text-xs font-bold text-white/50 flex-shrink-0 mt-0.5">
                   {{ (log.user?.username ?? '?')[0].toUpperCase() }}
                 </div>
                 <!-- Content -->
@@ -1702,12 +2181,12 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
           <!-- Pagination -->
           <div v-if="autoModPages > 1" class="flex items-center justify-center gap-2 mt-4">
             <button @click="autoModPage--; fetchAutoModLogs()" :disabled="autoModPage <= 1"
-              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
               <BIcon name="ChevronLeft" class="w-4 h-4" />
             </button>
             <span class="text-xs font-bold text-white/40 px-3">{{ autoModPage }} / {{ autoModPages }}</span>
             <button @click="autoModPage++; fetchAutoModLogs()" :disabled="autoModPage >= autoModPages"
-              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+              class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
               <BIcon name="ChevronRight" class="w-4 h-4" />
             </button>
           </div>
@@ -1722,7 +2201,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
               class="flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-bold transition-all"
               :class="statsSubTab==='stickers'
                 ? 'text-white border border-emerald-500/30'
-                : 'text-white/40 hover:text-white/70 bg-white/3 border border-white/5'"
+                : 'text-white/40 hover:text-white/70 bg-white/[0.03] border border-white/5'"
               :style="statsSubTab==='stickers' ? 'background:rgba(16,185,129,0.12)' : ''">
               <BIcon name="Sticker" class="w-4 h-4" /> Стикеры
             </button>
@@ -1730,12 +2209,12 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
               class="flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-bold transition-all"
               :class="statsSubTab==='network'
                 ? 'text-white border border-emerald-500/30'
-                : 'text-white/40 hover:text-white/70 bg-white/3 border border-white/5'"
+                : 'text-white/40 hover:text-white/70 bg-white/[0.03] border border-white/5'"
               :style="statsSubTab==='network' ? 'background:rgba(16,185,129,0.12)' : ''">
               <BIcon name="Globe" class="w-4 h-4" /> Сеть
             </button>
             <button @click="stickerStats=null; networkStats=null; fetchStatistics()"
-              class="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs text-white/40 hover:text-white bg-white/3 border border-white/5 transition-all">
+              class="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs text-white/40 hover:text-white bg-white/[0.03] border border-white/5 transition-all">
               <BIcon name="RefreshCw" class="w-3.5 h-3.5" /> Обновить
             </button>
           </div>
@@ -1744,7 +2223,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
           <template v-if="isLoadingStatistics">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div v-for="n in 4" :key="n" class="rounded-3xl border border-white/5 p-6 animate-pulse" style="background:rgba(255,255,255,0.02)">
-                <div class="h-4 bg-white/8 rounded-full w-32 mb-4" />
+                <div class="h-4 bg-white/[0.08] rounded-full w-32 mb-4" />
                 <div class="space-y-2">
                   <div v-for="i in 5" :key="i" class="h-6 bg-white/5 rounded-xl" :style="`width:${60+i*8}%`" />
                 </div>
@@ -1786,7 +2265,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
                 </div>
                 <div class="divide-y divide-white/5">
                   <div v-for="(pack, idx) in stickerStats.topPacks.slice(0,10)" :key="pack.id"
-                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/2 transition-all">
+                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-all">
                     <span class="w-5 text-center text-xs font-black"
                       :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">
                       {{ idx+1 }}
@@ -2076,7 +2555,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
                 </div>
                 <div class="divide-y divide-white/5">
                   <div v-for="(u, idx) in networkStats.topPosters" :key="u.userId"
-                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/2 transition-all">
+                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-all">
                     <span class="w-5 text-center text-xs font-black"
                       :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">{{ idx+1 }}</span>
                     <img v-if="u.avatarUrl" :src="u.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-white/10 flex-shrink-0" />
@@ -2101,7 +2580,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
                 </div>
                 <div class="divide-y divide-white/5">
                   <div v-for="(u, idx) in networkStats.mostFollowed" :key="u.userId"
-                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/2 transition-all">
+                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-all">
                     <span class="w-5 text-center text-xs font-black"
                       :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">{{ idx+1 }}</span>
                     <img v-if="u.avatarUrl" :src="u.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-white/10 flex-shrink-0" />
@@ -2127,7 +2606,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
               </div>
               <div class="divide-y divide-white/5">
                 <div v-for="(g, idx) in networkStats.topGroups" :key="g.id"
-                  class="flex items-center gap-3 px-5 py-3 hover:bg-white/2 transition-all">
+                  class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-all">
                   <span class="w-5 text-center text-xs font-black"
                     :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">{{ idx+1 }}</span>
                   <img v-if="g.avatarUrl" :src="g.avatarUrl" class="w-8 h-8 rounded-xl object-cover border border-white/10 flex-shrink-0" />
@@ -2176,11 +2655,18 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
               placeholder="Описание изменений (необязательно)…"
               maxlength="800"
             />
-            <input
-              v-model="newUpdateImageUrl"
-              class="adm-input"
-              placeholder="URL обложки (необязательно)"
-            />
+            <div v-if="newUpdateImageUrl" class="flex items-center gap-3 p-3 bg-white/5 border border-white/[0.08] rounded-2xl">
+              <img :src="newUpdateImageUrl" class="w-20 h-12 object-cover rounded-xl flex-shrink-0 border border-white/10" />
+              <div class="min-w-0 flex-1">
+                <p class="text-xs font-bold text-white/70">Обложка загружена</p>
+                <p class="text-[10px] text-white/30 truncate mt-0.5">{{ newUpdateImageUrl }}</p>
+              </div>
+              <button type="button" @click="newUpdateImageUrl = ''"
+                class="w-7 h-7 rounded-lg bg-white/5 hover:bg-rose-500/20 hover:text-rose-400 flex items-center justify-center flex-shrink-0 transition-colors">
+                <BIcon name="X" class="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <MediaUpload v-else type="banners" accept="image/*" @uploaded="(urls) => newUpdateImageUrl = urls[0] ?? ''" />
             <button
               @click="createUpdate"
               :disabled="!newUpdateTitle.trim() || isSavingUpdate"
@@ -2228,7 +2714,7 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
                   class="px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all"
                   :class="u.is_active
                     ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
-                    : 'bg-white/6 text-white/40 hover:bg-white/10'"
+                    : 'bg-white/[0.06] text-white/40 hover:bg-white/10'"
                 >
                   {{ u.is_active ? 'Активно' : 'Скрыто' }}
                 </button>
@@ -2259,6 +2745,10 @@ const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moder
 .tab-fade-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
 .tab-fade-enter-from { opacity: 0; transform: translateY(6px); }
 .tab-fade-leave-to { opacity: 0; transform: translateY(-4px); }
+
+.fade-pop-enter-active { transition: opacity 0.15s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.fade-pop-leave-active { transition: opacity 0.1s ease, transform 0.1s ease; }
+.fade-pop-enter-from, .fade-pop-leave-to { opacity: 0; transform: scale(0.95) translateY(-4px); }
 
 .adm-input {
   @apply w-full rounded-2xl px-4 py-2.5 text-sm text-white outline-none transition-all;

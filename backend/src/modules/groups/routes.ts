@@ -40,6 +40,8 @@ import {
   sendGroupMessageHandler,
   initGroupChatHandler,
   getGroupChatInfoHandler,
+  getGroupTodoColumnsHandler,
+  updateGroupTodoColumnsHandler,
   getGroupTodoHandler,
   createGroupTodoHandler,
   updateGroupTodoHandler,
@@ -55,6 +57,14 @@ import {
   togglePinGroupHandler,
   getTrendingHandler,
   toggleGroupNotificationHandler,
+  getOrdersHandler,
+  createOrderHandler,
+  updateOrderStatusHandler,
+  deleteOrderHandler,
+  getBusinessStatsHandler,
+  donateToGroupHandler,
+  getGroupBalanceHandler,
+  getOrderConversationHandler,
 } from './controller.js';
 import { groupService } from './service.js';
 
@@ -76,8 +86,8 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.get('/user/:userId', { onRequest: [fastify.tryAuthenticate] }, getUserPublicGroupsHandler as any);
   fastify.get('/common/:userId', auth, getCommonGroupsHandler as any);
   fastify.get('/search', async (request, reply) => {           // GET /groups/search?q=
-    const q = ((request.query as any).q ?? '') as string;
-    const groups = await groupService.searchGroups(q);
+    const { q = '', limit, page } = request.query as any;
+    const groups = await groupService.searchGroups(q, limit ? parseInt(limit, 10) : 8, page ? parseInt(page, 10) : 1);
     return reply.send({ success: true, data: { groups }, error: null });
   });
   fastify.get('/:slugOrId', getGroupHandler as any);
@@ -151,9 +161,23 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.get('/:id/chat-info', getGroupChatInfoHandler as any);          // public
 
   // ── Artist Queue (Todo) ────────────────────────────────────────────────
+  fastify.get('/:id/todo-columns', getGroupTodoColumnsHandler as any);
+  fastify.put('/:id/todo-columns', auth, updateGroupTodoColumnsHandler as any);
   fastify.get('/:id/todo', getGroupTodoHandler as any);
   fastify.post('/:id/todo', auth, createGroupTodoHandler as any);
   fastify.patch('/:id/todo/:itemId', auth, updateGroupTodoHandler as any);
   fastify.delete('/:id/todo/:itemId', auth, deleteGroupTodoHandler as any);
   fastify.put('/:id/todo/reorder', auth, reorderGroupTodoHandler as any);
+
+  // ── Orders (Business tab) ───────────────────────────────────────────────
+  fastify.get('/:id/orders', auth, getOrdersHandler as any);
+  fastify.post('/:id/orders', auth, createOrderHandler as any);
+  fastify.patch('/:id/orders/:orderId/status', auth, updateOrderStatusHandler as any);
+  fastify.delete('/:id/orders/:orderId', auth, deleteOrderHandler as any);
+  fastify.get('/:id/orders-stats', auth, getBusinessStatsHandler as any);
+  fastify.get('/:id/orders/:orderId/conversation', auth, getOrderConversationHandler as any);
+
+  // ── Group balance (donations) ───────────────────────────────────────────
+  fastify.post('/:id/donate', auth, donateToGroupHandler as any);
+  fastify.get('/:id/balance', auth, getGroupBalanceHandler as any);
 }

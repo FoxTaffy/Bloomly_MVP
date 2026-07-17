@@ -67,7 +67,7 @@ export async function sendMessageHandler(
     const { content = '', encrypted_text, file_url, media_type, reply_to_id, type, metadata } = req.body ?? {} as any;
     // Only these client-settable types bypass the normal text/media inference — anything
     // else (e.g. 'system') stays server-only.
-    const cardType = type === 'payment_request' || type === 'tip' ? type : undefined;
+    const cardType = type === 'payment_request' || type === 'tip' || type === 'post_share' ? type : undefined;
     const message = await messageService.sendMessage({
       conversationId: req.params.id,
       senderId,

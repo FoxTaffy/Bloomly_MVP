@@ -87,7 +87,7 @@
                 :style="form.banner_url
                   ? `background-image:url(${form.banner_url});background-size:cover;background-position:center`
                   : `background:linear-gradient(135deg,${form.accent_color}33,${form.accent_color}0a)`">
-                <span v-if="userStore.fursona?.species?.length"
+                <span v-if="userStore.primaryFursona?.species?.length"
                   class="absolute bottom-1 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold backdrop-blur-sm"
                   style="background:rgba(0,0,0,0.55);color:#fff">
                   <span class="leading-none">🐾</span>
@@ -1206,6 +1206,92 @@
                 </div>
               </section>
 
+              <!-- ── § INTERESTS: тег-профиль по лайкам/дизлайкам ───── -->
+              <section v-show="openSection === 'sec-interests'" id="sec-interests" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3" style="background:linear-gradient(90deg,rgba(52,211,153,0.07) 0%,transparent 100%)">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(52,211,153,0.15)">
+                    <BIcon name="Heart" class="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <h2 class="font-bold text-white text-sm">{{ langStore.t.secInterests }}</h2>
+                </div>
+                <div class="p-6 space-y-6">
+                  <!-- Declared favourites, picked at onboarding, editable here -->
+                  <div>
+                    <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.interestsPickTitle }}</label>
+                    <p class="text-[11px] text-white/35 mb-3">{{ langStore.t.interestsPickHint }}</p>
+                    <div class="grid sm:grid-cols-2 gap-3">
+                      <div v-for="cat in FAVORITE_CATEGORIES" :key="cat.key">
+                        <label class="text-[11px] font-semibold text-white/45 block mb-1">{{ cat.label }}</label>
+                        <input
+                          type="text"
+                          :value="favorites[cat.key]"
+                          @change="updateFavorite(cat.key, ($event.target as HTMLInputElement).value)"
+                          :placeholder="cat.placeholder"
+                          maxlength="80"
+                          class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/50 transition-colors" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="border-t border-brand-border/50"></div>
+
+                  <!-- Behavioural tag affinity, weighed like a scale from votes cast -->
+                  <div>
+                    <div class="flex items-center justify-between mb-1">
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.interestsCloudTitle }}</label>
+                      <span v-if="tagInsights?.unlocked && tagInsights.tags.length > 0" class="flex items-center gap-3 text-[10px] font-bold flex-shrink-0">
+                        <span class="flex items-center gap-1 text-emerald-400"><span class="w-2 h-2 rounded-full bg-emerald-400"></span>{{ langStore.t.interestsLikedLabel }}</span>
+                        <span class="flex items-center gap-1 text-rose-400"><span class="w-2 h-2 rounded-full bg-rose-400"></span>{{ langStore.t.interestsDislikedLabel }}</span>
+                      </span>
+                    </div>
+                    <p class="text-[11px] text-white/35 mb-4">{{ langStore.t.interestsCloudHint }}</p>
+
+                    <div v-if="tagInsightsLoading" class="py-8 flex items-center justify-center">
+                      <span class="w-5 h-5 border-2 border-brand-accent/60 border-t-transparent rounded-full animate-spin"></span>
+                    </div>
+
+                    <div v-else-if="!tagInsights?.unlocked" class="flex flex-col items-center text-center gap-3 py-8 px-4 bg-brand-bg/60 border border-brand-border rounded-2xl">
+                      <div class="w-10 h-10 rounded-2xl flex items-center justify-center bg-white/5">
+                        <BIcon name="Lock" class="w-5 h-5 text-white/40" />
+                      </div>
+                      <p class="text-sm font-bold text-white">{{ langStore.t.interestsLockedTitle }}</p>
+                      <p class="text-xs text-white/45 max-w-xs">{{ langStore.t.interestsLockedHint }}</p>
+                      <div class="w-full max-w-xs h-2 rounded-full bg-white/10 overflow-hidden mt-1">
+                        <div class="h-full rounded-full transition-all"
+                          :style="`width:${Math.min(100, ((tagInsights?.votesGiven ?? 0) / (tagInsights?.threshold ?? 20)) * 100)}%;background:${form.accent_color}`"></div>
+                      </div>
+                      <p class="text-[11px] text-white/40 font-semibold">{{ tagInsights?.votesGiven ?? 0 }} / {{ tagInsights?.threshold ?? 20 }}</p>
+                    </div>
+
+                    <div v-else-if="tagInsights.tags.length === 0" class="py-8 text-center text-xs text-white/35">
+                      {{ langStore.t.interestsEmptyState }}
+                    </div>
+
+                    <div v-else class="flex flex-wrap items-baseline gap-x-3 gap-y-2 py-2">
+                      <span v-for="t in tagInsights.tags" :key="t.name"
+                        class="font-bold leading-none transition-transform hover:scale-110 cursor-default"
+                        :style="`font-size:${tagFontSize(t)};color:${tagColor(t)}`"
+                        :title="`#${t.name} · +${t.likes} / -${t.dislikes}`">
+                        #{{ t.name }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ── § AUTOMATION ─────────────────────────────────── -->
+              <section v-show="openSection === 'sec-automation'" id="sec-automation" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
+                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3" style="background:linear-gradient(90deg,rgba(234,179,8,0.07) 0%,transparent 100%)">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(234,179,8,0.18)">
+                    <BIcon name="Zap" class="w-4 h-4 text-brand-yellow" />
+                  </div>
+                  <h2 class="font-bold text-white text-sm">Автоматизация</h2>
+                </div>
+                <div class="p-6">
+                  <AutomationSettings />
+                </div>
+              </section>
+
               <!-- ── § LANG: Язык интерфейса ───────────────────────── -->
               <section v-show="openSection === 'sec-lang'" id="sec-lang" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3" style="background:linear-gradient(90deg,rgba(245,158,11,0.07) 0%,transparent 100%)">
@@ -1725,9 +1811,11 @@ import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import FursonaSettings from '@/components/profile/FursonaSettings.vue'
+import AutomationSettings from '@/components/profile/AutomationSettings.vue'
 import FursuitSettings from '@/components/profile/FursuitSettings.vue'
 import DateInput from '@/components/DateInput.vue'
 import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
+import { FAVORITE_CATEGORIES } from '@/lib/interests'
 import api from '@/api'
 import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
 import { PAYMENT_REGIONS } from '@/lib/paymentRegions'
@@ -1786,6 +1874,56 @@ async function loadPaymentMethods() {
   } finally {
     paymentMethodsLoading.value = false
   }
+}
+
+// ── Interests: declared tags + behavioural like/dislike tag cloud ────────────
+interface TagInsight { name: string; likes: number; dislikes: number; score: number }
+interface TagInsights { unlocked: boolean; votesGiven: number; threshold: number; tags: TagInsight[] }
+
+const favorites = computed(() => ({
+  fav_food: userStore.profile?.fav_food ?? '',
+  fav_animal: userStore.profile?.fav_animal ?? '',
+  fav_music: userStore.profile?.fav_music ?? '',
+  fav_artist: userStore.profile?.fav_artist ?? '',
+  fav_film: userStore.profile?.fav_film ?? '',
+}))
+const savingInterests = ref(false)
+const tagInsights = ref<TagInsights | null>(null)
+const tagInsightsLoading = ref(false)
+
+async function updateFavorite(key: typeof FAVORITE_CATEGORIES[number]['key'], value: string) {
+  if (savingInterests.value) return
+  savingInterests.value = true
+  try {
+    await userStore.updateProfile({ [key]: value.trim() || null } as any)
+  } finally {
+    savingInterests.value = false
+  }
+}
+
+async function loadTagInsights() {
+  tagInsightsLoading.value = true
+  try {
+    const { data } = await api.get('/posts/me/tag-insights')
+    if (data.success) tagInsights.value = data.data.insights
+  } catch {
+    tagInsights.value = null
+  } finally {
+    tagInsightsLoading.value = false
+  }
+}
+
+function tagFontSize(t: TagInsight): string {
+  const scores = tagInsights.value?.tags.map((x) => Math.abs(x.score)) ?? []
+  const max = Math.max(1, ...scores)
+  const ratio = Math.abs(t.score) / max
+  return `${(12 + ratio * 22).toFixed(1)}px`
+}
+
+function tagColor(t: TagInsight): string {
+  if (t.score > 0) return '#34d399'
+  if (t.score < 0) return '#fb7185'
+  return 'rgba(255,255,255,0.5)'
 }
 
 function onCardAdded(method: PaymentMethod) {
@@ -2178,6 +2316,8 @@ const form = reactive({
   friends_list_visibility:  'everyone' as string,
   profile_visibility:       'everyone' as string,
   relationship_status_visibility: 'everyone' as string,
+  groups_visibility:        'everyone' as string,
+  groups_pinned_only:       false,
 })
 
 // ── Saved snapshot ─────────────────────────────────────────────────────────
@@ -2221,6 +2361,8 @@ const savedForm = reactive({
   friends_list_visibility:  'everyone' as string,
   profile_visibility:       'everyone' as string,
   relationship_status_visibility: 'everyone' as string,
+  groups_visibility:        'everyone' as string,
+  groups_pinned_only:       false,
 })
 
 function snapshotToSaved() {
@@ -2263,6 +2405,8 @@ function snapshotToSaved() {
   savedForm.friends_list_visibility  = form.friends_list_visibility
   savedForm.profile_visibility       = form.profile_visibility
   savedForm.relationship_status_visibility = form.relationship_status_visibility
+  savedForm.groups_visibility        = form.groups_visibility
+  savedForm.groups_pinned_only       = form.groups_pinned_only
 }
 
 function resetForm() {
@@ -2305,6 +2449,8 @@ function resetForm() {
   form.friends_list_visibility  = savedForm.friends_list_visibility
   form.profile_visibility       = savedForm.profile_visibility
   form.relationship_status_visibility = savedForm.relationship_status_visibility
+  form.groups_visibility        = savedForm.groups_visibility
+  form.groups_pinned_only       = savedForm.groups_pinned_only
   // Clear originals so re-crop picks up the reverted server images
   avatarOriginalSrc.value = ''
   bannerOriginalSrc.value = ''
@@ -2352,7 +2498,9 @@ const isDirty = computed(() => {
     form.online_status_visibility !== savedForm.online_status_visibility ||
     form.friends_list_visibility  !== savedForm.friends_list_visibility ||
     form.profile_visibility       !== savedForm.profile_visibility ||
-    form.relationship_status_visibility !== savedForm.relationship_status_visibility
+    form.relationship_status_visibility !== savedForm.relationship_status_visibility ||
+    form.groups_visibility        !== savedForm.groups_visibility ||
+    form.groups_pinned_only       !== savedForm.groups_pinned_only
   )
   return fieldsChanged ||
     JSON.stringify(form.likes)         !== JSON.stringify(savedForm.likes) ||
@@ -2404,9 +2552,12 @@ onMounted(async () => {
   form.friends_list_visibility  = (p as any).friends_list_visibility  ?? 'everyone'
   form.profile_visibility       = (p as any).profile_visibility       ?? 'everyone'
   form.relationship_status_visibility = (p as any).relationship_status_visibility ?? 'everyone'
+  form.groups_visibility        = (p as any).groups_visibility        ?? 'everyone'
+  form.groups_pinned_only       = (p as any).groups_pinned_only       ?? false
   paymentRegion.value           = (p as any).payment_region ?? 'GLOBAL'
   snapshotToSaved()
   loadPaymentMethods()
+  loadTagInsights()
   // Pre-fill combobox search inputs with saved values
   countrySearch.value = form.country
   citySearch.value    = form.location
@@ -2750,6 +2901,8 @@ async function handleSubmit() {
     friends_list_visibility:  form.friends_list_visibility,
     profile_visibility:       form.profile_visibility,
     relationship_status_visibility: form.relationship_status_visibility,
+    groups_visibility:        form.groups_visibility,
+    groups_pinned_only:       form.groups_pinned_only,
   }
   if (/^#[0-9A-Fa-f]{6}$/.test(form.accent_color)) payload.accent_color = form.accent_color
 
@@ -2774,6 +2927,8 @@ const sections = computed(() => [
   { id: 'sec-profile-style', label: langStore.t.secProfileStyle,  color: '#f59e0b', iconPath: 'M5 3a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2H5zm0 2h14v14H5V5zm2 2v2h10V7H7zm0 4v2h7v-2H7z' },
   { id: 'sec-verification',  label: langStore.t.secVerification,  color: '#3b82f6', iconPath: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
   { id: 'sec-privacy',       label: langStore.t.secPrivacy,       color: '#ec4899', iconPath: 'M12 11c0-1.104.896-2 2-2s2 .896 2 2-.896 2-2 2-2-.896-2-2zm-6 0a6 6 0 1112 0 6 6 0 01-12 0zM3 21c0-3.314 4.03-6 9-6s9 2.686 9 6' },
+  { id: 'sec-interests',     label: langStore.t.secInterests,     color: '#34d399', iconPath: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
+  { id: 'sec-automation',    label: 'Автоматизация',              color: '#eab308', iconPath: 'M13 10V3L4 14h7v7l9-11h-7z' },
   { id: 'sec-lang',          label: langStore.t.secLang,          color: '#f59e0b', iconPath: 'M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' },
   { id: 'sec-security',      label: langStore.t.secSecurity,      color: '#10b981', iconPath: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
   { id: 'sec-billing',       label: langStore.t.secBilling,       color: '#4C67CF', iconPath: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
@@ -2795,7 +2950,7 @@ const PRONOUN_MAP: Record<'he' | 'she' | 'they', Record<Lang, string>> = {
 const pronounPresets = computed(() => (['he', 'she', 'they'] as const).map((k) => PRONOUN_MAP[k][langStore.currentLang]))
 
 const primarySpeciesLabel = computed(() => {
-  const sp = userStore.fursona?.species?.[0]
+  const sp = userStore.primaryFursona?.species?.[0]
   return sp ? speciesLabelFor(sp, langStore.currentLang) : ''
 })
 
@@ -2817,10 +2972,16 @@ const privacyOnlyMeOptions = computed(() => [
   { value: 'friends',  label: langStore.t.privacyFriends },
   { value: 'only_me',  label: langStore.t.privacyOnlyMe },
 ])
+const groupsPinnedOnlyOptions = computed(() => [
+  { value: false, label: langStore.t.groupsPinnedOnlyAll },
+  { value: true,  label: langStore.t.groupsPinnedOnlyPinned },
+])
 const privacyRows = computed(() => [
   { field: 'profile_visibility',       label: langStore.t.profileVisibilityLabel,      options: privacyOnlyMeOptions.value },
   { field: 'friends_list_visibility',  label: langStore.t.friendsListVisibilityLabel,  options: privacyOnlyMeOptions.value },
   { field: 'relationship_status_visibility', label: langStore.t.relationshipVisibilityLabel, options: privacyOnlyMeOptions.value },
+  { field: 'groups_visibility',        label: langStore.t.groupsVisibilityLabel,       options: privacyOnlyMeOptions.value },
+  { field: 'groups_pinned_only',       label: langStore.t.groupsPinnedOnlyLabel,       options: groupsPinnedOnlyOptions.value },
   { field: 'messages_privacy',         label: langStore.t.messagesPrivacyLabel,        options: privacyNobodyOptions.value },
   { field: 'comments_privacy',         label: langStore.t.commentsPrivacyLabel,        options: privacyNobodyOptions.value },
   { field: 'mentions_privacy',         label: langStore.t.mentionsPrivacyLabel,        options: privacyNobodyOptions.value },

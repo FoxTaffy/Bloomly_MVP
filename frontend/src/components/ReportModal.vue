@@ -105,6 +105,8 @@
                   </div>
                 </Transition>
 
+                <p v-if="sendError" class="text-[12px] text-red-400 px-1 pt-1">{{ sendError }}</p>
+
                 <!-- Actions -->
                 <div class="flex gap-2.5 pt-2">
                   <button
@@ -225,6 +227,7 @@ const selected = ref('')
 const extra = ref('')
 const sent = ref(false)
 const isSending = ref(false)
+const sendError = ref('')
 
 watch(() => props.modelValue, (v) => {
   if (!v) {
@@ -232,6 +235,7 @@ watch(() => props.modelValue, (v) => {
       selected.value = ''
       extra.value = ''
       sent.value = false
+      sendError.value = ''
     }, 300)
   }
 })
@@ -247,17 +251,20 @@ async function submit() {
     ? (extra.value.trim() || 'Другое')
     : REASONS.find(r => r.value === selected.value)?.label ?? selected.value
 
+  sendError.value = ''
   try {
     const effectiveId = props.targetId || props.postId || ''
     const effectiveType = props.targetType ?? 'post'
     const fullReason = props.evidence ? `${reason}\n\n— Сообщение —\n${props.evidence}` : reason
-    await api.post('/reports', {
-      target_type: effectiveType,
-      target_id: effectiveId,
+    await api.post('/admin/reports', {
+      targetType: effectiveType,
+      targetId: effectiveId,
       reason: fullReason,
-    }).catch(() => null)
+    })
     sent.value = true
     setTimeout(() => close(), 2800)
+  } catch (e) {
+    sendError.value = 'Не удалось отправить жалобу. Попробуйте ещё раз.'
   } finally {
     isSending.value = false
   }

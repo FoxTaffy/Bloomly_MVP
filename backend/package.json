@@ -1,6 +1,6 @@
 {
   "name": "bloomly-backend",
-  "version": "1.5.16",
+  "version": "1.5.42",
   "type": "module",
   "scripts": {
     "dev": "node --loader ts-node/esm src/server.ts",
@@ -8,7 +8,8 @@
     "build": "npx tsc -p tsconfig.json",
     "db:migrate": "npx prisma migrate dev",
     "db:generate": "npx prisma generate",
-    "db:seed": "node --loader ts-node/esm seed.ts"
+    "db:seed": "node --loader ts-node/esm seed.ts",
+    "db:backfill-tag-affinity": "node --loader ts-node/esm src/scripts/backfillTagAffinity.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^9.4.0",

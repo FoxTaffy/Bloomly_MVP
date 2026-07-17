@@ -16,6 +16,8 @@ import {
   Nunito_900Black,
 } from '@expo-google-fonts/nunito';
 import { useSession } from '../src/stores/session';
+import { wsClient } from '../src/lib/wsClient';
+import type { Conversation, Message } from '../src/types/api';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -40,6 +42,76 @@ export default function RootLayout() {
       if (fontsLoaded) SplashScreen.hideAsync().catch(() => {});
     });
   }, [hydrate, fontsLoaded]);
+
+  // App-wide realtime chat sync — one shared connection, alive regardless of which
+  // screen is open, so other logged-in devices (web, another phone) stay in sync.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      wsClient.disconnect();
+      return;
+    }
+    wsClient.connect();
+
+    const offNewMessage = wsClient.on('new_message', (raw) => {
+      const data = raw.data as Message | undefined;
+      if (!data) return;
+      const myId = useSession.getState().user?.id;
+
+      queryClient.setQueryData<Message[]>(['messages', data.conversation_id], (old) =>
+        old && !old.some((m) => m.id === data.id) ? [...old, data] : old,
+      );
+
+      queryClient.setQueryData<Conversation[]>(['conversations'], (old) => {
+        if (!old) return old;
+        const idx = old.findIndex((c) => c.id === data.conversation_id);
+        if (idx === -1) {
+          // Unknown conversation (e.g. first message from someone new) — refetch to pick it up
+          queryClient.invalidateQueries({ queryKey: ['conversations'] });
+          return old;
+        }
+        const updated = {
+          ...old[idx],
+          last_message: data,
+          unread_count: data.sender_id === myId ? old[idx].unread_count : old[idx].unread_count + 1,
+        };
+        const rest = old.filter((_, i) => i !== idx);
+        return [updated, ...rest];
+      });
+    });
+
+    const offMessageUpdated = wsClient.on('message_updated', (raw) => {
+      const data = raw.data as Message | undefined;
+      if (!data) return;
+      queryClient.setQueryData<Message[]>(['messages', data.conversation_id], (old) =>
+        old?.map((m) => (m.id === data.id ? data : m)),
+      );
+    });
+
+    const offMessageDeleted = wsClient.on('message_deleted', (raw) => {
+      const data = raw.data as { id: string; conversation_id: string } | undefined;
+      if (!data) return;
+      queryClient.setQueryData<Message[]>(['messages', data.conversation_id], (old) =>
+        old?.filter((m) => m.id !== data.id),
+      );
+    });
+
+    const offReadReceipt = wsClient.on('read_receipt', (raw) => {
+      const data = raw as unknown as { conversationId: string; userId: string };
+      const myId = useSession.getState().user?.id;
+      // Only our own read state (from another device) should clear our unread badge
+      if (data.userId !== myId) return;
+      queryClient.setQueryData<Conversation[]>(['conversations'], (old) =>
+        old?.map((c) => (c.id === data.conversationId ? { ...c, unread_count: 0 } : c)),
+      );
+    });
+
+    return () => {
+      offNewMessage();
+      offMessageUpdated();
+      offMessageDeleted();
+      offReadReceipt();
+    };
+  }, [isAuthenticated]);
 
   if (!isHydrated || !fontsLoaded) return null;
 

@@ -29,6 +29,8 @@ import { automodRoutes } from './modules/automod/routes.js';
 import { seoRoutes } from './modules/seo/routes.js';
 import { updatesRoutes } from './modules/updates/routes.js';
 import { bookmarksRoutes } from './modules/bookmarks/routes.js';
+import { supportRoutes } from './modules/support/routes.js';
+import { walletRoutes } from './modules/wallet/routes.js';
 import { messageService, messageSubscriptions } from './modules/messages/service.js';
 import { groupService } from './modules/groups/service.js';
 import { initCronJobs } from './cron.js';
@@ -174,6 +176,8 @@ fastify.register(activitiesRoutes, { prefix: '/api/activities' });
 fastify.register(automodRoutes,    { prefix: '/api/automod' });
 fastify.register(updatesRoutes,    { prefix: '/api/updates' });
 fastify.register(bookmarksRoutes,  { prefix: '/api/bookmarks' });
+fastify.register(supportRoutes,    { prefix: '/api/support' });
+fastify.register(walletRoutes,     { prefix: '/api/wallet' });
 // SEO: sitemap.xml and OG-proxy endpoints (no auth required, crawlers friendly)
 fastify.register(seoRoutes);
 
@@ -188,7 +192,11 @@ function markOffline(userId: string, socket: any) {
   const sockets = onlineUsers.get(userId)
   if (!sockets) return
   sockets.delete(socket)
-  if (sockets.size === 0) onlineUsers.delete(userId)
+  if (sockets.size === 0) {
+    onlineUsers.delete(userId)
+    // Persist so "last seen" survives page reloads / server restarts, not just this session's memory
+    prisma.user.update({ where: { id: userId }, data: { last_seen_at: new Date() } }).catch(() => {})
+  }
 }
 
 fastify.register(async function (fastify) {
@@ -314,21 +322,25 @@ fastify.register(async function (fastify) {
     // Sibling map, not nested under `data[id]` — keeps `data` a plain boolean
     // map so existing `!!data[id]` online checks keep working untouched.
     const deviceData: Record<string, string | null> = {}
+    const lastSeenData: Record<string, string | null> = {}
     if (ids.length) {
       const owners = await prisma.user.findMany({
         where: { id: { in: ids } },
-        select: { id: true, online_status_visibility: true },
+        select: { id: true, online_status_visibility: true, last_seen_at: true },
       })
       const visibilityById = new Map(owners.map((o) => [o.id, o.online_status_visibility]))
+      const lastSeenById = new Map(owners.map((o) => [o.id, o.last_seen_at]))
       for (const id of ids) {
         const sockets = onlineUsers.get(id)
         const isOnline = !!sockets && sockets.size > 0
-        const allowed = isOnline && await isAllowedByPrivacy(visibilityById.get(id), id, viewerId)
+        const visible = await isAllowedByPrivacy(visibilityById.get(id), id, viewerId)
+        const allowed = isOnline && visible
         result[id] = allowed
         deviceData[id] = allowed ? ([...sockets!.values()][0] ?? null) : null
+        lastSeenData[id] = (!isOnline && visible) ? (lastSeenById.get(id)?.toISOString() ?? null) : null
       }
     }
-    return reply.send({ success: true, data: result, deviceData, error: null })
+    return reply.send({ success: true, data: result, deviceData, lastSeenData, error: null })
   })
 })
 

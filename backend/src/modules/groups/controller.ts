@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { groupService } from './service.js';
 import { messageService } from '../messages/service.js';
-import type { JwtUser, GetGroupsQuery, CreateGroupInput, UpdateGroupInput, CreateEventInput, UpdateEventInput, CreateTicketTierInput, UpdateCommissionInput, RateGroupInput, CreateGroupPostInput, RsvpEventInput, SubEventInput, UpdateSubEventInput } from './types.js';
+import type { JwtUser, GetGroupsQuery, CreateGroupInput, UpdateGroupInput, CreateEventInput, UpdateEventInput, CreateTicketTierInput, UpdateCommissionInput, RateGroupInput, CreateGroupPostInput, RsvpEventInput, SubEventInput, UpdateSubEventInput, CreateOrderInput } from './types.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function ok(reply: FastifyReply, data: any, code = 200) {
@@ -65,6 +65,15 @@ export const updateGroupHandler = async (
 ) => {
   try {
     if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    // Finance and member-visibility fields are sensitive — only the owner may change them.
+    const OWNER_ONLY_FIELDS: (keyof UpdateGroupInput)[] = ['donationsEnabled', 'bankCardMasked', 'hideAdmins', 'hiddenMemberIds', 'businessEnabled'];
+    const touchesOwnerOnlyField = OWNER_ONLY_FIELDS.some((f) => request.body[f] !== undefined);
+    if (touchesOwnerOnlyField) {
+      const { id: userId } = request.user as JwtUser;
+      if (!(await groupService.isOwner(request.params.id, userId))) {
+        return fail(reply, 403, 'FORBIDDEN', 'Only the group owner can change finance or member-visibility settings');
+      }
+    }
     const group = await groupService.update(request.params.id, request.body);
     return ok(reply, { group });
   } catch (e: any) {
@@ -137,10 +146,12 @@ export const setMemberRoleHandler = async (
 ) => {
   try {
     if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
-    const member = await groupService.setMemberRole(request.params.id, request.params.userId, request.body.role as any);
+    const { id: requesterId } = request.user as JwtUser;
+    const member = await groupService.setMemberRole(request.params.id, requesterId, request.params.userId, request.body.role as any);
     return ok(reply, { member });
   } catch (e: any) {
-    return fail(reply, 400, 'SET_ROLE_ERROR', e.message);
+    const status = /not authorized/i.test(e.message) ? 403 : 400;
+    return fail(reply, status, 'SET_ROLE_ERROR', e.message);
   }
 };
 
@@ -153,7 +164,7 @@ export const removeMemberHandler = async (
     await groupService.removeMember(request.params.id, requesterId, request.params.userId);
     return ok(reply, { removed: true });
   } catch (e: any) {
-    const status = e.message === 'Not authorized' ? 403 : 400;
+    const status = /not authorized/i.test(e.message) ? 403 : 400;
     return fail(reply, status, 'REMOVE_MEMBER_ERROR', e.message);
   }
 };
@@ -715,6 +726,34 @@ export const getGroupChatInfoHandler = async (
 
 // ── Artist Queue (Todo) ───────────────────────────────────────────────────────
 
+export const getGroupTodoColumnsHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const columns = await groupService.getTodoColumns(request.params.id);
+    return ok(reply, { columns });
+  } catch (e: any) {
+    return fail(reply, 500, 'GET_TODO_COLUMNS_ERROR', e.message);
+  }
+};
+
+export const updateGroupTodoColumnsHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Body: { columns: Array<{ key?: string; label?: string; icon?: string; color?: string }> } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    if (!Array.isArray(request.body?.columns) || !request.body.columns.length) {
+      return fail(reply, 400, 'EMPTY_COLUMNS', 'At least one column is required');
+    }
+    const columns = await groupService.updateTodoColumns(request.params.id, request.body.columns);
+    return ok(reply, { columns });
+  } catch (e: any) {
+    return fail(reply, 500, 'UPDATE_TODO_COLUMNS_ERROR', e.message);
+  }
+};
+
 export const getGroupTodoHandler = async (
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
@@ -792,6 +831,115 @@ export const reorderGroupTodoHandler = async (
     return fail(reply, 500, 'REORDER_TODO_ERROR', e.message);
   }
 };
+
+// ── Orders (Business tab) ──────────────────────────────────────────────────
+
+export const getOrdersHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const membership = await groupService.getMembership(request.params.id, userId);
+    if (!membership) return fail(reply, 403, 'FORBIDDEN', 'Not a member of this group');
+    const orders = await groupService.getOrders(request.params.id, userId);
+    return ok(reply, { orders });
+  } catch (e: any) {
+    return fail(reply, e.statusCode ?? 500, 'GET_ORDERS_ERROR', e.message);
+  }
+};
+
+export const createOrderHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Body: CreateOrderInput }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const order = await groupService.createOrder(request.params.id, userId, request.body);
+    return ok(reply, { order }, 201);
+  } catch (e: any) {
+    return fail(reply, e.statusCode ?? 400, 'CREATE_ORDER_ERROR', e.message);
+  }
+};
+
+export const updateOrderStatusHandler = async (
+  request: FastifyRequest<{ Params: { id: string; orderId: string }; Body: { status: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const order = await groupService.updateOrderStatus(request.params.orderId, userId, request.body.status as any);
+    return ok(reply, { order });
+  } catch (e: any) {
+    return fail(reply, e.statusCode ?? 400, 'UPDATE_ORDER_STATUS_ERROR', e.message);
+  }
+};
+
+export const deleteOrderHandler = async (
+  request: FastifyRequest<{ Params: { id: string; orderId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    await groupService.deleteOrder(request.params.orderId, userId);
+    return ok(reply, { success: true });
+  } catch (e: any) {
+    return fail(reply, e.statusCode ?? 400, 'DELETE_ORDER_ERROR', e.message);
+  }
+};
+
+export const getBusinessStatsHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    const stats = await groupService.getBusinessStats(request.params.id);
+    return ok(reply, { stats });
+  } catch (e: any) {
+    return fail(reply, 500, 'BUSINESS_STATS_ERROR', e.message);
+  }
+};
+
+export const donateToGroupHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Body: { amount: number; message?: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const result = await groupService.donateToGroup(request.params.id, userId, Number(request.body.amount), request.body.message);
+    return ok(reply, result);
+  } catch (e: any) {
+    return fail(reply, e.statusCode ?? 400, 'DONATE_ERROR', e.message);
+  }
+};
+
+export const getGroupBalanceHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    const result = await groupService.getGroupBalance(request.params.id);
+    return ok(reply, result);
+  } catch (e: any) {
+    return fail(reply, 500, 'GROUP_BALANCE_ERROR', e.message);
+  }
+};
+
+export const getOrderConversationHandler = async (
+  request: FastifyRequest<{ Params: { id: string; orderId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const conversationId = await groupService.getOrderConversation(request.params.orderId, userId);
+    return ok(reply, { conversationId });
+  } catch (e: any) {
+    return fail(reply, e.statusCode ?? 400, 'GET_ORDER_CONVERSATION_ERROR', e.message);
+  }
+};
+
 export const getTrendingHandler = async (
   request: FastifyRequest<{ Querystring: { page?: string; limit?: string } }>,
   reply: FastifyReply,

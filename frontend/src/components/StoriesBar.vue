@@ -34,15 +34,6 @@ export interface Story {
   }
 }
 
-interface BloomlyUpdate {
-  id: string
-  title: string
-  body: string | null
-  image_url: string | null
-  created_at: string
-  is_active: boolean
-}
-
 // ── Props / Emits ────────────────────────────────────────────────────────────
 const emit = defineEmits<{
   (e: 'open', story: Story, allStories: Story[]): void
@@ -54,7 +45,6 @@ const langStore = useLangStore()
 
 // ── State ────────────────────────────────────────────────────────────────────
 const stories = ref<Story[]>([])
-const bloomlyUpdates = ref<BloomlyUpdate[]>([])
 const loading = ref(true)
 const seenIds = ref<Set<string>>(new Set())
 
@@ -69,40 +59,6 @@ function loadSeen() {
 function markSeen(id: string) {
   seenIds.value.add(id)
   try { localStorage.setItem(SEEN_KEY, JSON.stringify([...seenIds.value])) } catch {}
-}
-
-// ── Bloomly Update group ─────────────────────────────────────────────────────
-const BLOOMLY_FAR_FUTURE = '2099-01-01T00:00:00.000Z'
-
-const bloomlyStoryGroup = computed<Story[]>(() => {
-  if (!bloomlyUpdates.value.length) return []
-  // Convert each update to a Story-shaped object
-  return bloomlyUpdates.value.map(u => ({
-    id: u.id,
-    image_url: u.image_url,
-    created_at: u.created_at,
-    expires_at: BLOOMLY_FAR_FUTURE,
-    isBloomly: true,
-    title: u.title,
-    body: u.body ?? undefined,
-    user: {
-      id: 'bloomly',
-      username: 'bloomly',
-      display_name: 'Bloomly',
-      avatar_url: null,
-    },
-  }))
-})
-
-const isBloomlyGroupSeen = computed(() =>
-  bloomlyStoryGroup.value.length > 0 &&
-  bloomlyStoryGroup.value.every(s => seenIds.value.has(s.id))
-)
-
-function openBloomlyGroup() {
-  if (!bloomlyStoryGroup.value.length) return
-  bloomlyStoryGroup.value.forEach(s => markSeen(s.id))
-  emit('open', bloomlyStoryGroup.value[0], bloomlyStoryGroup.value)
 }
 
 // ── Grouped user stories ─────────────────────────────────────────────────────
@@ -123,12 +79,8 @@ const isGroupSeen = (group: Story[]) => group.every(s => seenIds.value.has(s.id)
 const fetchStories = async () => {
   loading.value = true
   try {
-    const [storiesRes, updatesRes] = await Promise.all([
-      api.get('/stories'),
-      api.get('/updates'),
-    ])
+    const storiesRes = await api.get('/stories')
     if (storiesRes.data.success) stories.value = storiesRes.data.data.stories
-    if (updatesRes.data.success) bloomlyUpdates.value = updatesRes.data.data.updates
   } catch {}
   loading.value = false
 }
@@ -174,40 +126,6 @@ function openGroup(group: Story[]) {
     >
       <div class="flex gap-3 min-w-max items-end">
 
-        <!-- ── Bloomly Updates Bubble (always first) ──────────────────────── -->
-        <button
-          v-if="bloomlyStoryGroup.length > 0"
-          class="flex flex-col items-center gap-1.5 group flex-shrink-0"
-          @click="openBloomlyGroup"
-          aria-label="Обновления Bloomly"
-        >
-          <div class="h-[10px]" />
-          <!-- Ring + Icon -->
-          <div class="relative w-[68px] h-[68px]">
-            <!-- Animated gradient ring (unseen) or muted (seen) -->
-            <div
-              class="absolute inset-0 rounded-[20px] p-[2.5px] transition-all duration-300"
-              :class="isBloomlyGroupSeen
-                ? 'bg-white/20 group-hover:bg-white/35'
-                : 'bloomly-ring'"
-            >
-              <div class="w-full h-full rounded-[17px] border-[3px] border-brand-card overflow-hidden bg-gradient-to-br from-[#4C67CF] via-[#7c3aed] to-[#4C67CF] flex items-center justify-center">
-                <!-- Bloomly "B" logo -->
-                <span class="text-white font-black text-2xl select-none" style="font-family:system-ui,sans-serif;letter-spacing:-1px">B</span>
-              </div>
-            </div>
-            <!-- New indicator dot -->
-            <div
-              v-if="!isBloomlyGroupSeen"
-              class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-brand-accent border-2 border-brand-card animate-pulse"
-            />
-          </div>
-          <span
-            class="text-[10px] font-bold transition-colors max-w-[68px] truncate"
-            :class="isBloomlyGroupSeen ? 'text-white/40 group-hover:text-white/70' : 'text-brand-accent group-hover:text-white'"
-          >Bloomly</span>
-        </button>
-
         <!-- ── Add Story Button ───────────────────────────────────────────── -->
         <button
           class="flex flex-col items-center gap-1.5 group flex-shrink-0"
@@ -245,8 +163,8 @@ function openGroup(group: Story[]) {
           <div v-else class="h-[10px]" />
 
           <div class="relative w-[68px] h-[68px]">
-            <div class="absolute inset-0 rounded-[20px] border-2 border-dashed border-white/20 group-hover:border-brand-accent/60 transition-colors duration-300"></div>
-            <div class="absolute inset-[4px] rounded-[15px] bg-brand-bg flex items-center justify-center overflow-hidden">
+            <div class="absolute inset-0 rounded-full border-2 border-dashed border-white/20 group-hover:border-brand-accent/60 transition-colors duration-300"></div>
+            <div class="absolute inset-[4px] rounded-full bg-brand-bg flex items-center justify-center overflow-hidden">
               <img
                 v-if="auth.avatarUrl"
                 :src="auth.avatarUrl"
@@ -277,7 +195,7 @@ function openGroup(group: Story[]) {
             class="flex flex-col items-center gap-1.5 flex-shrink-0"
           >
             <div class="h-[10px]" />
-            <div class="w-[68px] h-[68px] rounded-[20px] bg-white/5 animate-pulse"></div>
+            <div class="w-[68px] h-[68px] rounded-full bg-white/5 animate-pulse"></div>
             <div class="h-2.5 w-12 bg-white/5 rounded-full animate-pulse"></div>
           </div>
         </template>
@@ -293,12 +211,12 @@ function openGroup(group: Story[]) {
             <div class="h-[10px]" />
             <div class="relative w-[68px] h-[68px]">
               <div
-                class="absolute inset-0 rounded-[20px] p-[2.5px] transition-all duration-300"
+                class="absolute inset-0 rounded-full p-[2.5px] transition-all duration-300"
                 :class="isGroupSeen(group)
                   ? 'bg-white/20 group-hover:bg-white/35'
                   : 'bg-gradient-to-tr from-brand-accent via-pink-500 to-brand-purple group-hover:opacity-90'"
               >
-                <div class="w-full h-full rounded-[17px] border-[3px] border-brand-card overflow-hidden">
+                <div class="w-full h-full rounded-full border-[3px] border-brand-card overflow-hidden">
                   <img
                     v-if="group[0].user.avatar_url"
                     :src="group[0].user.avatar_url"
@@ -346,11 +264,14 @@ function openGroup(group: Story[]) {
 
           <!-- Empty state -->
           <div
-            v-if="userStories.length === 0 && bloomlyStoryGroup.length === 0"
-            class="flex items-center gap-3 text-white/30 px-4 py-2"
+            v-if="userStories.length === 0"
+            class="flex flex-col items-center gap-1.5 flex-shrink-0"
           >
-            <BIcon name="PhoneOff" class="w-4 h-4" />
-            <span class="text-xs">{{ langStore.t.noStoriesYet }}</span>
+            <div class="h-[10px]" />
+            <div class="w-[68px] h-[68px] rounded-full flex items-center justify-center bg-white/5 border border-dashed border-white/10">
+              <BIcon name="Sparkles" class="w-5 h-5 text-white/25" />
+            </div>
+            <span class="text-[10px] font-bold text-white/35 max-w-[68px] truncate">{{ langStore.t.noStoriesYet }}</span>
           </div>
         </template>
       </div>
@@ -372,17 +293,5 @@ function openGroup(group: Story[]) {
 @keyframes noteBar {
   0%, 100% { transform: scaleY(0.35) }
   50%       { transform: scaleY(1) }
-}
-
-/* Bloomly animated gradient ring */
-.bloomly-ring {
-  background: linear-gradient(135deg, #4C67CF, #7c3aed, #4C67CF, #06b6d4);
-  background-size: 300% 300%;
-  animation: bloomlyRingAnim 3s ease infinite;
-}
-@keyframes bloomlyRingAnim {
-  0%   { background-position: 0% 50% }
-  50%  { background-position: 100% 50% }
-  100% { background-position: 0% 50% }
 }
 </style>

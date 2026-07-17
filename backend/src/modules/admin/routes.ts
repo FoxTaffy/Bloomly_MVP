@@ -1,13 +1,14 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import {
-  getStatsHandler, getUsersHandler, updateUserRoleHandler, deleteUserHandler,
+  getStatsHandler, getUsersHandler, updateUserRoleHandler, updateUserSubscriptionHandler, deleteUserHandler,
   getArchivedUsersHandler, getFrozenUsersHandler, restoreUserHandler,
   getPostsAdminHandler, deletePostAdminHandler,
-  getReportsHandler, submitReportHandler, resolveReportHandler,
-  getAdsHandler, getActiveAdsHandler, submitAdHandler, reviewAdHandler,
+  getReportsHandler, submitReportHandler, resolveReportHandler, resolveReportsBatchHandler,
+  getAdsHandler, getActiveAdsHandler, submitAdHandler, reviewAdHandler, deleteAdHandler,
   trackImpressionHandler, trackClickHandler,
   getBannersHandler, getActiveBannersHandler, createBannerHandler, updateBannerHandler, deleteBannerHandler,
   getAutoModLogsHandler, unfreezeUserHandler, freezeUserHandler, clearWarnsHandler,
+  markDeceasedHandler, unmarkDeceasedHandler,
   getStickerStatsHandler, getNetworkStatsHandler,
 } from './controller.js';
 
@@ -29,8 +30,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.get('/users/archived',   auth, getArchivedUsersHandler as any);
   fastify.get('/users/frozen',     auth, getFrozenUsersHandler as any);
   fastify.patch('/users/:id/role', auth, updateUserRoleHandler as any);
+  fastify.patch('/users/:id/subscription', auth, updateUserSubscriptionHandler as any);
   fastify.delete('/users/:id',     auth, deleteUserHandler as any);
   fastify.post('/users/:id/restore', auth, restoreUserHandler as any);
+  fastify.post('/users/:id/deceased',   auth, markDeceasedHandler as any);
+  fastify.post('/users/:id/undeceased', auth, unmarkDeceasedHandler as any);
 
   // Posts
   fastify.get('/posts',         auth, getPostsAdminHandler as any);
@@ -40,12 +44,14 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.get('/reports',        auth, getReportsHandler as any);
   fastify.post('/reports',       { ...auth, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } } as RouteShorthandOptions, submitReportHandler as any);
   fastify.patch('/reports/:id',  auth, resolveReportHandler as any);
+  fastify.patch('/reports/resolve-batch', auth, resolveReportsBatchHandler as any);
 
   // Ads
   fastify.get('/ads',              auth, getAdsHandler as any);
   fastify.get('/ads/active',       getActiveAdsHandler as any);
   fastify.post('/ads',             { ...auth, config: { rateLimit: { max: 5, timeWindow: '1 hour' } } } as RouteShorthandOptions, submitAdHandler as any);
   fastify.patch('/ads/:id/review', auth, reviewAdHandler as any);
+  fastify.delete('/ads/:id',       auth, deleteAdHandler as any);
   fastify.post('/ads/:id/impression', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, trackImpressionHandler as any);
   fastify.post('/ads/:id/click',      { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, trackClickHandler as any);
 

@@ -39,7 +39,7 @@ const resetCode   = ref('')
 const otpCode     = ref('')   // код подтверждения email при регистрации
 const showPass    = ref(false)
 const showNewPass = ref(false)
-const remember    = ref(false)
+const remember    = ref(true)
 const mounted     = ref(false)
 const mouseX      = ref(50)
 const mouseY      = ref(50)
@@ -234,7 +234,7 @@ const particles = Array.from({ length: 80 }, (_, i) => ({
 
 const features = [
   { icon: '⚡', title: 'Молниеносная лента', desc: 'Алгоритм под тебя' },
-  { icon: '🔐', title: 'E2E шифрование', desc: 'Сообщения только твои' },
+  { icon: '🏆', title: 'Лучшая соцсеть', desc: 'Никакой политики' },
   { icon: '🎨', title: 'Медиа-альбомы', desc: 'Фото, видео, истории' },
 ]
 </script>

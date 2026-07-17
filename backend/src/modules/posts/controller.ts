@@ -18,14 +18,29 @@ export const getTrendingTagsHandler = async (
   }
 };
 
+export const suggestTagsHandler = async (
+  request: FastifyRequest<{ Querystring: { q?: string; limit?: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const q = request.query.q ?? '';
+    const limit = request.query.limit ? parseInt(request.query.limit, 10) : 8;
+    const tags = await postService.suggestTags(q, limit);
+    return reply.send({ success: true, data: { tags }, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to suggest tags';
+    return reply.code(500).send({ success: false, data: null, error: { code: 'SUGGEST_TAGS_ERROR', message } });
+  }
+};
+
 export const createPostHandler = async (
-  request: FastifyRequest<{ Body: { content: string; isNsfw?: boolean; subscriberOnly?: boolean; isPaid?: boolean; price?: number; rewardForUserId?: string; videoTitle?: string; videoDescription?: string; category?: string; tags?: string[] } }>,
+  request: FastifyRequest<{ Body: { content: string; isNsfw?: boolean; isAiGenerated?: boolean; subscriberOnly?: boolean; isPaid?: boolean; price?: number; rewardForUserId?: string; videoTitle?: string; videoDescription?: string; category?: string; tags?: string[] } }>,
   reply: FastifyReply,
 ) => {
   try {
     const { id: authorId } = request.user as JwtUser;
-    const { content, isNsfw, subscriberOnly, isPaid, price, rewardForUserId, videoTitle, videoDescription, category, tags, mediaUrls, mediaOriginalUrls } = request.body as any;
-    const input: CreatePostInput = { content, authorId, isNsfw, subscriberOnly, isPaid, price, rewardForUserId, videoTitle, videoDescription, category, tags, mediaUrls, mediaOriginalUrls };
+    const { content, isNsfw, isAiGenerated, subscriberOnly, isPaid, price, rewardForUserId, videoTitle, videoDescription, category, tags, mediaUrls, mediaOriginalUrls } = request.body as any;
+    const input: CreatePostInput = { content, authorId, isNsfw, isAiGenerated, subscriberOnly, isPaid, price, rewardForUserId, videoTitle, videoDescription, category, tags, mediaUrls, mediaOriginalUrls };
     const post = await postService.createPost(input);
     // fire-and-forget automod check (does not block the response)
     if (post) {
@@ -72,6 +87,26 @@ export const votePostHandler = async (
       success: false,
       data: null,
       error: { code: 'VOTE_ERROR', message },
+    });
+  }
+};
+
+export const searchPostsHandler = async (
+  request: FastifyRequest<{ Querystring: { q?: string; safeMode?: string; page?: string; limit?: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { q = '', safeMode, page, limit } = request.query;
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    const posts = await postService.searchPosts(q, safeMode === 'true', pageNum, limitNum);
+    return reply.send({ success: true, data: { posts }, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to search posts';
+    return reply.code(500).send({
+      success: false,
+      data: null,
+      error: { code: 'SEARCH_POSTS_ERROR', message },
     });
   }
 };
@@ -243,7 +278,7 @@ export const editPostHandler = async (
     return reply.send({ success: true, data: { post }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to edit post';
-    const code = message === 'Not authorized' ? 403 : 400;
+    const code = message === 'Not authorized' || message === 'Edit window expired' ? 403 : 400;
     return reply.code(code).send({ success: false, data: null, error: { code: 'EDIT_POST_ERROR', message } });
   }
 };
@@ -317,6 +352,93 @@ export const getUserFavouritesHandler = async (
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch user likes';
     return reply.code((error as any)?.statusCode ?? 500).send({ success: false, data: null, error: { code: 'USER_LIKES_ERROR', message } });
+  }
+};
+
+export const recordPostViewHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const viewer = request.user as JwtUser | undefined;
+    const result = await postService.recordView(request.params.id, viewer?.id);
+    return reply.send({ success: true, data: result, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to record view';
+    return reply.code(500).send({ success: false, data: null, error: { code: 'VIEW_ERROR', message } });
+  }
+};
+
+export const toggleArchivePostHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const result = await postService.toggleArchive(userId, request.params.id);
+    return reply.send({ success: true, data: result, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to archive post';
+    const code = message === 'Not authorized' ? 403 : 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'ARCHIVE_ERROR', message } });
+  }
+};
+
+export const toggleCommentsDisabledHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const result = await postService.toggleCommentsDisabled(userId, request.params.id);
+    return reply.send({ success: true, data: result, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to toggle comments';
+    const code = message === 'Not authorized' ? 403 : 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'COMMENTS_TOGGLE_ERROR', message } });
+  }
+};
+
+export const getUserArchivedPostsHandler = async (
+  request: FastifyRequest<{ Params: { userId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: viewerId } = request.user as JwtUser;
+    const posts = await postService.getUserArchivedPosts(request.params.userId, viewerId);
+    return reply.send({ success: true, data: { posts }, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch archived posts';
+    return reply.code((error as any)?.statusCode ?? 500).send({ success: false, data: null, error: { code: 'ARCHIVED_POSTS_ERROR', message } });
+  }
+};
+
+export const getPostStatsHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const stats = await postService.getPostStats(userId, request.params.id);
+    return reply.send({ success: true, data: { stats }, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch post stats';
+    const code = (error as any)?.statusCode ?? 500;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'POST_STATS_ERROR', message } });
+  }
+};
+
+export const getTagInsightsHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const insights = await postService.getUserTagInsights(userId);
+    return reply.send({ success: true, data: { insights }, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to fetch tag insights';
+    return reply.code(500).send({ success: false, data: null, error: { code: 'TAG_INSIGHTS_ERROR', message } });
   }
 };
 

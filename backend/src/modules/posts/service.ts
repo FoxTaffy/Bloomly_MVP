@@ -2,7 +2,21 @@ import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isTrustedMediaUrl } from '../media/service.js';
+import { groupService } from '../groups/service.js';
+import { extractKeywords } from '../../lib/textKeywords.js';
+import { interestsToTerms } from '../../lib/interestTags.js';
 import type { CreatePostInput, GetPostsQuery } from './types.js';
+
+// A group owner/admin/moderator may moderate (delete) content posted inside their own group,
+// even if they didn't author it — this is separate from the site-wide staff role.
+async function canModerateAsGroupStaff(postId: string, userId: string): Promise<boolean> {
+  const groupPost = await prisma.groupPost.findFirst({
+    where: { post_id: postId },
+    select: { group_id: true },
+  });
+  if (!groupPost) return false;
+  return groupService.isAtLeastModerator(groupPost.group_id, userId);
+}
 
 /** Throws a 403 unless the viewer is allowed to see userId's profile content. */
 async function assertProfileVisible(userId: string, viewerId?: string) {
@@ -14,7 +28,149 @@ async function assertProfileVisible(userId: string, viewerId?: string) {
 }
 
 /** Reusable author select for posts — includes verification fields */
-const AUTHOR_SELECT = { id: true, username: true, display_name: true, avatar_url: true, is_verified: true, verification_type: true } as const;
+const AUTHOR_SELECT = { id: true, username: true, display_name: true, avatar_url: true, is_verified: true, verification_type: true, deceased_at: true } as const;
+
+/** Authors can edit a post's content only within this window after creation */
+export const POST_EDIT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Number of votes (likes + dislikes combined) a user must cast before the "Interests" tag cloud unlocks in settings. */
+export const TAG_INSIGHTS_UNLOCK_THRESHOLD = 20;
+
+/** Weight given to content-derived keywords relative to an explicit hashtag (weight 1.0). */
+export const KEYWORD_WEIGHT = 0.4;
+/** Max content keywords pulled into a post's affinity terms alongside its hashtags. */
+export const KEYWORDS_PER_POST = 8;
+/** Reposts are a stronger positive signal than a plain like — you don't reshare what you're lukewarm on. */
+export const REPAW_MULTIPLIER = 1.6;
+/** How strongly behavioral tag/keyword affinity swings feed ranking vs. raw post rating. */
+const AFFINITY_RANK_WEIGHT = 3;
+/** Flat per-matched-term bonus when a post lines up with a declared "Interest". */
+const INTEREST_RANK_WEIGHT = 1.5;
+
+export type PostTerm = { term: string; source: 'tag' | 'keyword'; weight: number };
+export type AffinityMap = Map<string, { score: number; likes: number; dislikes: number }>;
+export type PostLike = { content: string; title?: string | null; is_nsfw: boolean; tags: { tag: { name: string } }[] };
+
+/**
+ * The set of hashtag + content-keyword terms a post is "about", each with a scoring weight.
+ * Exported so the tag-affinity backfill script (src/scripts/backfillTagAffinity.ts) can replay
+ * historical votes/repaws through the exact same term extraction as live voting does.
+ */
+export function getPostTerms(post: PostLike): PostTerm[] {
+  const tagNames = new Set(post.tags.map((t) => t.tag.name.toLowerCase()));
+  if (post.is_nsfw) tagNames.add('nsfw');
+
+  const terms: PostTerm[] = Array.from(tagNames, (term) => ({ term, source: 'tag' as const, weight: 1 }));
+
+  const keywords = extractKeywords(`${post.title ?? ''} ${post.content}`, {
+    exclude: tagNames,
+    limit: KEYWORDS_PER_POST,
+  });
+  for (const term of keywords) terms.push({ term, source: 'keyword', weight: KEYWORD_WEIGHT });
+
+  return terms;
+}
+
+/** Squashes a raw affinity score into a 0..1 "how much does the user like this term" reading. */
+function likeability(score: number): number {
+  return (Math.tanh(score / 4) + 1) / 2;
+}
+
+/**
+ * Splits a vote/repaw's effect across a post's terms.
+ *
+ * Likes/repaws reinforce every term uniformly — a positive signal isn't ambiguous about which
+ * tag it's "for". Dislikes work like a scale instead of an even split: terms the user already
+ * likes (say they upvote #fox and #dog constantly) are shielded, so disliking a #fox #dog #yiff
+ * post mostly comes down on #yiff — the term actually out of step with their taste — rather than
+ * eroding tags they otherwise love. Total magnitude is preserved either way, just reallocated.
+ */
+export function distributeVoteDelta(terms: PostTerm[], direction: 1 | -1, affinity: AffinityMap, multiplier = 1): Map<string, number> {
+  const deltas = new Map<string, number>();
+  if (terms.length === 0) return deltas;
+
+  if (direction > 0) {
+    for (const t of terms) deltas.set(t.term, (deltas.get(t.term) ?? 0) + t.weight * multiplier);
+    return deltas;
+  }
+
+  const totalMagnitude = terms.reduce((sum, t) => sum + t.weight, 0);
+  const blameFactors = terms.map((t) => {
+    const currentScore = affinity.get(t.term)?.score ?? 0;
+    return t.weight * Math.max(0.15, 1 - likeability(currentScore)); // floor: nothing is fully immune
+  });
+  const blameSum = blameFactors.reduce((a, b) => a + b, 0) || 1;
+  terms.forEach((t, i) => {
+    const delta = -(blameFactors[i] / blameSum) * totalMagnitude * multiplier;
+    deltas.set(t.term, (deltas.get(t.term) ?? 0) + delta);
+  });
+  return deltas;
+}
+
+/** Applies a {term: scoreDelta} map to UserTagAffinity, plus a like/dislike count adjustment (may be negative to reverse a prior vote). */
+async function applyTermDeltas(
+  tx: any,
+  userId: string,
+  scoreDeltas: Map<string, number>,
+  termSource: Map<string, 'tag' | 'keyword'>,
+  countDelta: { likes: number; dislikes: number },
+) {
+  for (const [term, delta] of scoreDeltas) {
+    if (delta === 0 && countDelta.likes === 0 && countDelta.dislikes === 0) continue;
+    await tx.userTagAffinity.upsert({
+      where: { user_id_term: { user_id: userId, term } },
+      create: {
+        user_id: userId,
+        term,
+        source: termSource.get(term) ?? 'tag',
+        score: delta,
+        likes: Math.max(0, countDelta.likes),
+        dislikes: Math.max(0, countDelta.dislikes),
+      },
+      update: {
+        score: { increment: delta },
+        likes: { increment: countDelta.likes },
+        dislikes: { increment: countDelta.dislikes },
+      },
+    });
+  }
+}
+
+function negateDeltas(deltas: Map<string, number>): Map<string, number> {
+  return new Map(Array.from(deltas, ([k, v]) => [k, -v]));
+}
+
+async function getUserAffinityMap(userId: string): Promise<AffinityMap> {
+  const rows = await prisma.userTagAffinity.findMany({ where: { user_id: userId } });
+  return new Map(rows.map((r) => [r.term, { score: r.score, likes: r.likes, dislikes: r.dislikes }]));
+}
+
+/**
+ * Re-orders an already-fetched candidate pool by how well each post's hashtags + content
+ * keywords match the user's behavioral affinity (built from their likes/dislikes/reposts, see
+ * toggleVote/toggleRepaw) and their declared "Interests". Ranking-only — never adds or drops posts.
+ */
+function rankByAffinity<T extends PostLike & { rating: number }>(
+  posts: T[],
+  affinity: AffinityMap,
+  interestTerms: Set<string>,
+): T[] {
+  if (affinity.size === 0 && interestTerms.size === 0) return posts;
+  return posts
+    .map((post) => {
+      const terms = getPostTerms(post);
+      let behavioral = 0;
+      let interestBoost = 0;
+      for (const t of terms) {
+        const a = affinity.get(t.term);
+        if (a) behavioral += a.score * t.weight;
+        if (interestTerms.has(t.term)) interestBoost += t.weight;
+      }
+      return { post, score: post.rating + behavioral * AFFINITY_RANK_WEIGHT + interestBoost * INTEREST_RANK_WEIGHT };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map((s) => s.post);
+}
 
 /** Reusable include for post queries */
 const POST_INCLUDE = {
@@ -68,9 +224,10 @@ export const postService = {
 
     const authorId = input.authorId;
     const isNsfw = input.isNsfw ?? false;
+    const isAiGenerated = input.isAiGenerated ?? false;
     const isAnnouncement = input.isAnnouncement ?? false;
     const subscriberOnly = input.subscriberOnly ?? false;
-    const isPaid = input.isPaid ?? false;
+    const isPaid = false; // Paid posts are temporarily disabled
     const price = input.price ?? null;
     const rewardForUserId = input.rewardForUserId ?? null;
     const videoTitle = input.videoTitle?.trim() || null;
@@ -90,6 +247,7 @@ export const postService = {
           content, 
           author_id: authorId, 
           is_nsfw: isNsfw,
+          is_ai_generated: isAiGenerated,
           is_announcement: isAnnouncement,
           subscriber_only: subscriberOnly,
           is_paid: isPaid,
@@ -126,6 +284,23 @@ export const postService = {
         where: { id: post.id },
         include: POST_INCLUDE,
       });
+    }).then(async (created) => {
+      // Notify followers who opted into post notifications for this author.
+      const subscribers = await prisma.follow.findMany({
+        where: { following_id: authorId, notify_posts: true },
+        select: { follower_id: true },
+      });
+      await Promise.all(
+        subscribers.map((s) =>
+          notificationService.create({
+            receiverId: s.follower_id,
+            senderId:   authorId,
+            type:       'FOLLOW_POST',
+            postId:     created!.id,
+          }).catch(() => {})
+        ),
+      );
+      return created;
     });
   },
 
@@ -146,7 +321,7 @@ export const postService = {
     const pageNum = page ? Math.max(1, parseInt(page, 10)) : 1;
     const limitNum = limit ? Math.min(100, Math.max(1, parseInt(limit, 10))) : 20;
 
-    const where: any = { deleted_at: null };
+    const where: any = { deleted_at: null, is_archived: false };
     if (safeMode) where.is_nsfw = false;
     if (hasMedia) where.media_urls = { isEmpty: false };
 
@@ -171,6 +346,38 @@ export const postService = {
     const posts = await prisma.post.findMany({
       where,
       orderBy: sort === 'hot' ? { rating: 'desc' } : { created_at: 'desc' },
+      skip: (pageNum - 1) * limitNum,
+      take: limitNum,
+      include: {
+        author: { select: AUTHOR_SELECT },
+        rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        tags: { include: { tag: true } },
+        _count: { select: { votes: true, repaws: true, comments: true } },
+        groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+      },
+    });
+    return posts.map(maskGroupAuthor);
+  },
+
+  async searchPosts(query: string, safeMode: boolean = false, pageNum: number = 1, limitNum: number = 20) {
+    const q = query.trim();
+    if (!q) return [];
+    const tagQuery = q.replace(/^#/, '');
+
+    const where: any = {
+      deleted_at: null,
+      is_archived: false,
+      OR: [
+        { content: { contains: q, mode: 'insensitive' } },
+        { title: { contains: q, mode: 'insensitive' } },
+        { tags: { some: { tag: { name: { contains: tagQuery, mode: 'insensitive' } } } } },
+      ],
+    };
+    if (safeMode) where.is_nsfw = false;
+
+    const posts = await prisma.post.findMany({
+      where,
+      orderBy: { created_at: 'desc' },
       skip: (pageNum - 1) * limitNum,
       take: limitNum,
       include: {
@@ -234,7 +441,7 @@ export const postService = {
     if (topCategories.length > 0) {
       // 60% from favourite categories
       personalizedPosts = await prisma.post.findMany({
-        where: { deleted_at: null, category: { in: topCategories }, id: excludeIds, ...nsfwFilter },
+        where: { deleted_at: null, is_archived: false, category: { in: topCategories }, id: excludeIds, ...nsfwFilter },
         orderBy: { rating: 'desc' },
         skip: pSkip,
         take: pLimit,
@@ -245,6 +452,7 @@ export const postService = {
       discoverPosts = await prisma.post.findMany({
         where: {
           deleted_at: null,
+          is_archived: false,
           OR: [{ category: { notIn: topCategories } }, { category: null }],
           id: excludeIds,
           ...nsfwFilter,
@@ -257,13 +465,24 @@ export const postService = {
     } else {
       // No activity yet — show popular new content
       discoverPosts = await prisma.post.findMany({
-        where: { deleted_at: null, id: excludeIds, ...nsfwFilter },
+        where: { deleted_at: null, is_archived: false, id: excludeIds, ...nsfwFilter },
         orderBy: [{ rating: 'desc' }, { created_at: 'desc' }],
         skip: (pageNum - 1) * limitNum,
         take: limitNum,
         include: postInclude,
       });
     }
+
+    // Weigh the fetched pool by the user's behavioral tag/keyword affinity (like a scale — terms
+    // they keep liking/reposting float up, terms they keep disliking sink) and their declared
+    // Interests, before interleaving.
+    const [affinity, user] = await Promise.all([
+      getUserAffinityMap(userId),
+      prisma.user.findUnique({ where: { id: userId }, select: { interests: true } }),
+    ]);
+    const interestTerms = interestsToTerms(user?.interests ?? []);
+    personalizedPosts = rankByAffinity(personalizedPosts, affinity, interestTerms);
+    discoverPosts = rankByAffinity(discoverPosts, affinity, interestTerms);
 
     // Interleave: 3 personalised → 2 discover
     const result: any[] = [];
@@ -282,31 +501,59 @@ export const postService = {
       const existingVote = await tx.vote.findUnique({
         where: { user_id_post_id: { user_id: userId, post_id: postId } },
       });
+      const post = await tx.post.findUnique({
+        where: { id: postId },
+        select: { content: true, title: true, is_nsfw: true, tags: { include: { tag: true } } },
+      });
+      const termSource = post ? new Map(getPostTerms(post).map((t) => [t.term, t.source])) : new Map();
+      const countFor = (v: 1 | -1) => (v === 1 ? { likes: 1, dislikes: 0 } : { likes: 0, dislikes: 1 });
+
+      /** Undo the affinity effect a previously-active vote applied, using its stored snapshot. */
+      async function reversePriorEffect() {
+        if (!post || !existingVote?.term_deltas) return;
+        const prevDeltas = new Map(Object.entries(existingVote.term_deltas as Record<string, number>));
+        const reverseCount = countFor(existingVote.value as 1 | -1);
+        await applyTermDeltas(tx, userId, negateDeltas(prevDeltas), termSource, { likes: -reverseCount.likes, dislikes: -reverseCount.dislikes });
+      }
+
+      /** Distribute+apply a fresh vote effect for `value`, returning the snapshot to store on the Vote row. */
+      async function applyFreshEffect(): Promise<Record<string, number> | undefined> {
+        if (!post) return undefined;
+        const affinity = await getUserAffinityMap(userId);
+        const deltas = distributeVoteDelta(getPostTerms(post), value, affinity);
+        await applyTermDeltas(tx, userId, deltas, termSource, countFor(value));
+        return Object.fromEntries(deltas);
+      }
 
       if (existingVote && existingVote.deleted_at === null) {
         if (existingVote.value === value) {
-          // Same vote → retract it (soft delete)
+          // Same vote → retract it (soft delete), reversing its affinity effect
+          await reversePriorEffect();
           await tx.vote.update({
             where: { user_id_post_id: { user_id: userId, post_id: postId } },
             data: { deleted_at: new Date() },
           });
         } else {
-          // Opposite vote → flip it
+          // Opposite vote → flip it: reverse the old effect, apply a fresh one for the new direction
+          await reversePriorEffect();
+          const term_deltas = await applyFreshEffect();
           await tx.vote.update({
             where: { user_id_post_id: { user_id: userId, post_id: postId } },
-            data: { value },
+            data: { value, term_deltas },
           });
         }
       } else if (existingVote && existingVote.deleted_at !== null) {
         // Previously retracted → restore with the new value
+        const term_deltas = await applyFreshEffect();
         await tx.vote.update({
           where: { user_id_post_id: { user_id: userId, post_id: postId } },
-          data: { value, deleted_at: null },
+          data: { value, deleted_at: null, term_deltas },
         });
       } else {
         // First-time vote
+        const term_deltas = await applyFreshEffect();
         await tx.vote.create({
-          data: { user_id: userId, post_id: postId, value },
+          data: { user_id: userId, post_id: postId, value, term_deltas },
         });
       }
 
@@ -336,17 +583,25 @@ export const postService = {
         }).catch(() => {});
       }
 
-      // Fire LIKE notification when a net new upvote is cast (not a retraction)
+      // Fire LIKE notification when a net new upvote is cast (not a retraction). Guarded against
+      // an already-active LIKE notification for this (sender, receiver, post) triple so a stray
+      // duplicate request (double click, retry) can't spawn two notifications for one like.
       const isNewUpvote = value === 1 && updated.author_id !== userId;
       if (isNewUpvote) {
         const isRetraction = existingVote && existingVote.deleted_at === null && existingVote.value === value;
         if (!isRetraction) {
-          notificationService.create({
-            receiverId: updated.author_id,
-            senderId: userId,
-            type: 'LIKE',
-            postId,
-          }).catch(() => {});
+          const alreadyNotified = await tx.notification.findFirst({
+            where: { receiver_id: updated.author_id, sender_id: userId, type: 'LIKE', post_id: postId, deleted_at: null },
+            select: { id: true },
+          });
+          if (!alreadyNotified) {
+            notificationService.create({
+              receiverId: updated.author_id,
+              senderId: userId,
+              type: 'LIKE',
+              postId,
+            }).catch(() => {});
+          }
         }
       }
 
@@ -359,13 +614,21 @@ export const postService = {
       const existing = await tx.repaw.findUnique({
         where: { user_id_post_id: { user_id: userId, post_id: postId } },
       });
+      const post = await tx.post.findUnique({
+        where: { id: postId },
+        select: { author_id: true, content: true, title: true, is_nsfw: true, tags: { include: { tag: true } } },
+      });
 
       if (existing) {
+        // Reverse the repost's affinity boost — a repost is a strong "I like this" signal, so
+        // un-reposting should un-teach the algorithm just as retracting a like does.
+        if (post && existing.term_deltas) {
+          const prevDeltas = new Map(Object.entries(existing.term_deltas as Record<string, number>));
+          const termSource = new Map(getPostTerms(post).map((t) => [t.term, t.source]));
+          await applyTermDeltas(tx, userId, negateDeltas(prevDeltas), termSource, { likes: -1, dislikes: 0 });
+        }
         await tx.repaw.delete({ where: { user_id_post_id: { user_id: userId, post_id: postId } } });
-        const [count, post] = await Promise.all([
-          tx.repaw.count({ where: { post_id: postId } }),
-          tx.post.findUnique({ where: { id: postId }, select: { author_id: true } }),
-        ]);
+        const count = await tx.repaw.count({ where: { post_id: postId } });
         if (post && post.author_id !== userId) {
           notificationService.deleteForAction({
             receiverId: post.author_id,
@@ -376,11 +639,16 @@ export const postService = {
         }
         return { repawed: false, repaw_count: count };
       } else {
-        await tx.repaw.create({ data: { user_id: userId, post_id: postId } });
-        const [count, post] = await Promise.all([
-          tx.repaw.count({ where: { post_id: postId } }),
-          tx.post.findUnique({ where: { id: postId }, select: { author_id: true } }),
-        ]);
+        let term_deltas: Record<string, number> | undefined;
+        if (post) {
+          const termSource = new Map(getPostTerms(post).map((t) => [t.term, t.source]));
+          const affinity = await getUserAffinityMap(userId);
+          const deltas = distributeVoteDelta(getPostTerms(post), 1, affinity, REPAW_MULTIPLIER);
+          await applyTermDeltas(tx, userId, deltas, termSource, { likes: 1, dislikes: 0 });
+          term_deltas = Object.fromEntries(deltas);
+        }
+        await tx.repaw.create({ data: { user_id: userId, post_id: postId, term_deltas } });
+        const count = await tx.repaw.count({ where: { post_id: postId } });
         if (post && post.author_id !== userId) {
           notificationService.create({
             receiverId: post.author_id,
@@ -411,7 +679,7 @@ export const postService = {
   async getUserPosts(userId: string, take = 50, viewerId?: string) {
     await assertProfileVisible(userId, viewerId);
     const posts = await prisma.post.findMany({
-      where: { author_id: userId, deleted_at: null, groupPosts: { none: {} } },
+      where: { author_id: userId, deleted_at: null, is_archived: false, groupPosts: { none: {} } },
       orderBy: { created_at: 'desc' },
       take,
       include: {
@@ -428,7 +696,7 @@ export const postService = {
   async getUserMediaPosts(userId: string, take = 50, viewerId?: string) {
     await assertProfileVisible(userId, viewerId);
     const posts = await prisma.post.findMany({
-      where: { author_id: userId, deleted_at: null, media_urls: { isEmpty: false }, groupPosts: { none: {} } },
+      where: { author_id: userId, deleted_at: null, is_archived: false, media_urls: { isEmpty: false }, groupPosts: { none: {} } },
       orderBy: { created_at: 'desc' },
       take,
       include: {
@@ -445,7 +713,7 @@ export const postService = {
   async getUserRepawedPosts(userId: string, take = 50, viewerId?: string) {
     await assertProfileVisible(userId, viewerId);
     const repaws = await prisma.repaw.findMany({
-      where: { user_id: userId, post: { groupPosts: { none: {} } } },
+      where: { user_id: userId, post: { deleted_at: null, is_archived: false, groupPosts: { none: {} } } },
       orderBy: { created_at: 'desc' },
       take,
       include: {
@@ -466,7 +734,7 @@ export const postService = {
   async getUserFavouritePosts(userId: string, take = 50, viewerId?: string) {
     await assertProfileVisible(userId, viewerId);
     const favs = await prisma.favourite.findMany({
-      where: { user_id: userId, post: { groupPosts: { none: {} } } },
+      where: { user_id: userId, post: { deleted_at: null, is_archived: false, groupPosts: { none: {} } } },
       orderBy: { created_at: 'desc' },
       take,
       include: {
@@ -548,9 +816,12 @@ export const postService = {
 
     const post = await prisma.post.findUnique({
       where: { id: postId },
-      select: { author_id: true, author: { select: { comments_privacy: true } } },
+      select: { author_id: true, comments_disabled: true, author: { select: { comments_privacy: true } } },
     });
     if (!post) throw Object.assign(new Error('Post not found'), { statusCode: 404 });
+    if (post.comments_disabled && post.author_id !== userId) {
+      throw Object.assign(new Error('COMMENTS_DISABLED'), { statusCode: 403 });
+    }
     if (!(await isAllowedByPrivacy(post.author.comments_privacy, post.author_id, userId))) {
       throw Object.assign(new Error('COMMENTS_DISABLED'), { statusCode: 403 });
     }
@@ -660,7 +931,9 @@ export const postService = {
   async deletePost(userId: string, postId: string, isAdmin: boolean) {
     const post = await prisma.post.findUnique({ where: { id: postId, deleted_at: null } });
     if (!post) throw new Error('Post not found');
-    if (!isAdmin && post.author_id !== userId) throw new Error('Not authorized');
+    if (!isAdmin && post.author_id !== userId && !(await canModerateAsGroupStaff(postId, userId))) {
+      throw new Error('Not authorized');
+    }
     return prisma.post.update({ where: { id: postId }, data: { deleted_at: new Date() } });
   },
 
@@ -668,6 +941,9 @@ export const postService = {
     const post = await prisma.post.findUnique({ where: { id: postId, deleted_at: null } });
     if (!post) throw new Error('Post not found');
     if (post.author_id !== userId) throw new Error('Not authorized');
+    if (Date.now() - post.created_at.getTime() > POST_EDIT_WINDOW_MS) {
+      throw new Error('Edit window expired');
+    }
     return prisma.post.update({
       where: { id: postId },
       data: { content },
@@ -683,8 +959,146 @@ export const postService = {
   async deleteComment(userId: string, commentId: string, isAdmin = false) {
     const comment = await prisma.comment.findUnique({ where: { id: commentId, deleted_at: null } });
     if (!comment) throw new Error('Comment not found');
-    if (!isAdmin && comment.author_id !== userId) throw new Error('Not authorized');
+    if (!isAdmin && comment.author_id !== userId && !(await canModerateAsGroupStaff(comment.post_id, userId))) {
+      throw new Error('Not authorized');
+    }
     return prisma.comment.update({ where: { id: commentId }, data: { deleted_at: new Date() } });
+  },
+
+  /**
+   * Counts at most one view per (post, viewer) — anonymous requests are ignored, since
+   * there's no stable identity to dedupe them against. Relies on the PostView unique
+   * constraint to no-op on repeat calls instead of racing a read-then-write check.
+   */
+  async recordView(postId: string, viewerId?: string): Promise<{ counted: boolean }> {
+    if (!viewerId) return { counted: false };
+    const post = await prisma.post.findUnique({ where: { id: postId, deleted_at: null }, select: { author_id: true } });
+    if (!post) return { counted: false };
+    if (viewerId === post.author_id) return { counted: false }; // не считаем просмотры автора
+    try {
+      await prisma.$transaction([
+        prisma.postView.create({ data: { post_id: postId, user_id: viewerId } }),
+        prisma.post.update({ where: { id: postId }, data: { views_count: { increment: 1 } } }),
+      ]);
+      return { counted: true };
+    } catch (err: any) {
+      if (err?.code !== 'P2002') throw err; // already viewed by this user — not an error
+      return { counted: false };
+    }
+  },
+
+  async toggleArchive(userId: string, postId: string) {
+    const post = await prisma.post.findUnique({ where: { id: postId, deleted_at: null }, select: { author_id: true, is_archived: true } });
+    if (!post) throw new Error('Post not found');
+    if (post.author_id !== userId) throw new Error('Not authorized');
+    const updated = await prisma.post.update({ where: { id: postId }, data: { is_archived: !post.is_archived } });
+    return { archived: updated.is_archived };
+  },
+
+  async toggleCommentsDisabled(userId: string, postId: string) {
+    const post = await prisma.post.findUnique({ where: { id: postId, deleted_at: null }, select: { author_id: true, comments_disabled: true } });
+    if (!post) throw new Error('Post not found');
+    if (post.author_id !== userId) throw new Error('Not authorized');
+    const updated = await prisma.post.update({ where: { id: postId }, data: { comments_disabled: !post.comments_disabled } });
+    return { commentsDisabled: updated.comments_disabled };
+  },
+
+  async getUserArchivedPosts(userId: string, viewerId: string, take = 50) {
+    if (viewerId !== userId) throw Object.assign(new Error('Not authorized'), { statusCode: 403 });
+    const posts = await prisma.post.findMany({
+      where: { author_id: userId, deleted_at: null, is_archived: true, groupPosts: { none: {} } },
+      orderBy: { created_at: 'desc' },
+      take,
+      include: {
+        author: { select: AUTHOR_SELECT },
+        rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        tags: { include: { tag: true } },
+        _count: { select: { votes: true, repaws: true, comments: true } },
+        groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
+      },
+    });
+    return posts.map(maskGroupAuthor);
+  },
+
+  async getPostStats(userId: string, postId: string) {
+    const post = await prisma.post.findUnique({
+      where: { id: postId, deleted_at: null },
+      select: {
+        author_id: true,
+        created_at: true,
+        views_count: true,
+        rating: true,
+        author: { select: { subscription_tier: true } },
+      },
+    });
+    if (!post) throw Object.assign(new Error('Post not found'), { statusCode: 404 });
+    if (post.author_id !== userId) throw Object.assign(new Error('Not authorized'), { statusCode: 403 });
+    const isPro = post.author.subscription_tier === 'pro' || post.author.subscription_tier === 'business';
+    if (!isPro) throw Object.assign(new Error('PRO_REQUIRED'), { statusCode: 402 });
+
+    const [upvotes, downvotes, comments, repaws, favourites] = await Promise.all([
+      prisma.vote.count({ where: { post_id: postId, value: 1, deleted_at: null } }),
+      prisma.vote.count({ where: { post_id: postId, value: -1, deleted_at: null } }),
+      prisma.comment.count({ where: { post_id: postId, deleted_at: null } }),
+      prisma.repaw.count({ where: { post_id: postId } }),
+      prisma.favourite.count({ where: { post_id: postId } }),
+    ]);
+
+    return {
+      viewsCount: post.views_count,
+      rating: post.rating,
+      upvotes,
+      downvotes,
+      comments,
+      repaws,
+      favourites,
+      createdAt: post.created_at,
+    };
+  },
+
+  /**
+   * Per-tag like/dislike breakdown for the settings "Interests" tag cloud — locked until the
+   * user has cast enough votes, likes or dislikes alike (see TAG_INSIGHTS_UNLOCK_THRESHOLD),
+   * to make it meaningful.
+   */
+  async getUserTagInsights(userId: string) {
+    const votesGiven = await prisma.vote.count({ where: { user_id: userId, deleted_at: null } });
+    const unlocked = votesGiven >= TAG_INSIGHTS_UNLOCK_THRESHOLD;
+
+    // Only explicit hashtags are surfaced here (not content-derived keywords) — this cloud is a
+    // curated "what you're into" view, while keywords quietly help ranking behind the scenes.
+    const tags = unlocked
+      ? (await prisma.userTagAffinity.findMany({
+          where: { user_id: userId, source: 'tag' },
+          orderBy: { score: 'desc' },
+          take: 40,
+        }))
+          .map((t) => ({ name: t.term, likes: t.likes, dislikes: t.dislikes, score: t.score }))
+          .sort((a, b) => b.score - a.score || (b.likes + b.dislikes) - (a.likes + a.dislikes))
+      : [];
+
+    return { unlocked, votesGiven, threshold: TAG_INSIGHTS_UNLOCK_THRESHOLD, tags };
+  },
+
+  /** Tag-name autocomplete for the post composer, ranked by how many posts use each tag. */
+  async suggestTags(prefix: string, limit: number = 8) {
+    const q = prefix.trim().replace(/^#/, '');
+    if (!q) return [];
+    const take = Math.min(20, Math.max(1, limit));
+
+    type RawRow = { name: string; count: bigint };
+    const rows = await prisma.$queryRaw<RawRow[]>`
+      SELECT t.name, COUNT(DISTINCT p.id)::bigint AS count
+      FROM "Tag" t
+      LEFT JOIN "PostTag" pt ON pt.tag_id = t.id
+      LEFT JOIN "Post" p ON p.id = pt.post_id AND p.deleted_at IS NULL
+      WHERE t.name ILIKE ${q + '%'}
+      GROUP BY t.id, t.name
+      ORDER BY count DESC, t.name ASC
+      LIMIT ${take}
+    `;
+
+    return rows.map((row) => ({ name: row.name, count: Number(row.count) }));
   },
 
   async getTrendingTags(includeNsfw: boolean = false) {

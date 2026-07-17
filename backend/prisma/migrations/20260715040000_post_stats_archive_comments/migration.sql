@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Post" ADD COLUMN "views_count" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Post" ADD COLUMN "is_archived" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Post" ADD COLUMN "comments_disabled" BOOLEAN NOT NULL DEFAULT false;

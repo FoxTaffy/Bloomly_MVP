@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import BIcon from '@/components/BIcon.vue'
+import { useWalletStore } from '@/stores/wallet'
+import { useGroupsStore } from '@/stores/groups'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{
   group: {
@@ -8,21 +12,23 @@ const props = defineProps<{
     name: string
     avatar_url?: string | null
     accent_color?: string | null
-    bank_card_masked?: string | null
   }
 }>()
 
 const emit = defineEmits<{ close: [] }>()
 
-const PRESETS = [100, 200, 500, 1000]
-const selectedAmount = ref<number | null>(200)
-const customAmount = ref('')
-const step = ref<'pick' | 'card' | 'success'>('pick')
-const sending = ref(false)
+const router = useRouter()
+const walletStore = useWalletStore()
+const groupsStore = useGroupsStore()
+const authStore = useAuthStore()
 
-const cardNum = ref('')
-const cardExp = ref('')
-const cardCvv = ref('')
+const PRESETS = [50, 100, 250, 500]
+const selectedAmount = ref<number | null>(100)
+const customAmount = ref('')
+const donateMessage = ref('')
+const step = ref<'pick' | 'insufficient' | 'success'>('pick')
+const sending = ref(false)
+const donateError = ref('')
 
 const accent = computed(() => props.group.accent_color || '#4C67CF')
 
@@ -30,6 +36,8 @@ const finalAmount = computed(() => {
   if (customAmount.value && !isNaN(Number(customAmount.value))) return Number(customAmount.value)
   return selectedAmount.value ?? 0
 })
+
+const insufficientBy = computed(() => Math.max(0, finalAmount.value - walletStore.balance))
 
 function pickPreset(v: number) {
   selectedAmount.value = v
@@ -42,36 +50,31 @@ function onCustomInput(e: Event) {
   selectedAmount.value = null
 }
 
-function formatCardNum(e: Event) {
-  const input = e.target as HTMLInputElement
-  const raw = input.value.replace(/\D/g, '').slice(0, 16)
-  cardNum.value = raw.replace(/(.{4})/g, '$1 ').trim()
-}
-
-function formatExp(e: Event) {
-  const input = e.target as HTMLInputElement
-  const raw = input.value.replace(/\D/g, '').slice(0, 4)
-  cardExp.value = raw.length > 2 ? raw.slice(0, 2) + '/' + raw.slice(2) : raw
-}
-
-const cardValid = computed(() =>
-  cardNum.value.replace(/\s/g, '').length === 16 &&
-  cardExp.value.length === 5 &&
-  cardCvv.value.length >= 3
-)
-
 async function sendDonate() {
-  if (step.value === 'pick') {
-    if (finalAmount.value < 10) return
-    step.value = 'card'
+  if (finalAmount.value < 10 || sending.value) return
+  if (finalAmount.value > walletStore.balance) {
+    step.value = 'insufficient'
     return
   }
-  if (!cardValid.value || sending.value) return
   sending.value = true
-  await new Promise(r => setTimeout(r, 1400))
-  step.value = 'success'
-  sending.value = false
+  donateError.value = ''
+  try {
+    await groupsStore.donateToGroup(props.group.id, finalAmount.value, donateMessage.value.trim() || undefined)
+    await walletStore.fetchBalance()
+    step.value = 'success'
+  } catch (e: any) {
+    donateError.value = e.response?.data?.error?.message || 'Не удалось отправить донат'
+  } finally {
+    sending.value = false
+  }
 }
+
+function goToWallet() {
+  emit('close')
+  if (authStore.user?.username) router.push(`/profile/${authStore.user.username}`)
+}
+
+onMounted(() => { walletStore.fetchBalance().catch(() => {}) })
 </script>
 
 <template>
@@ -115,12 +118,21 @@ async function sendDonate() {
             </div>
 
             <div class="px-6 pb-6 space-y-5">
+              <!-- Wallet balance -->
+              <div class="flex items-center justify-center gap-1.5 text-xs text-white/35">
+                <BIcon name="Wallet" class="w-3.5 h-3.5" />
+                Баланс кошелька:
+                <span class="inline-flex items-center gap-1 font-bold text-white/60">
+                  {{ walletStore.balance.toFixed(2) }} <BIcon name="Flower2" class="w-3 h-3" />
+                </span>
+              </div>
+
               <!-- Amount display -->
-              <div class="text-center py-3">
-                <p class="text-5xl font-black tabular-nums"
+              <div class="text-center py-1">
+                <p class="flex items-center justify-center gap-2 text-5xl font-black tabular-nums"
                   :style="finalAmount ? `color: ${accent}` : 'color: rgba(255,255,255,0.15)'">
                   {{ finalAmount ? finalAmount.toLocaleString('ru') : '0' }}
-                  <span class="text-2xl font-bold">₽</span>
+                  <BIcon name="Flower2" class="w-8 h-8" />
                 </p>
               </div>
 
@@ -132,7 +144,7 @@ async function sendDonate() {
                   :style="selectedAmount === preset
                     ? `background: ${accent}; color: white; box-shadow: 0 4px 14px ${accent}40`
                     : 'background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.5)'">
-                  {{ preset.toLocaleString('ru') }}₽
+                  {{ preset.toLocaleString('ru') }}
                 </button>
               </div>
 
@@ -148,109 +160,64 @@ async function sendDonate() {
                   :style="customAmount
                     ? `border-color: ${accent}50; box-shadow: 0 0 0 3px ${accent}12`
                     : 'border-color: rgba(255,255,255,0.08)'" />
-                <span v-if="customAmount" class="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 text-sm font-bold">₽</span>
+                <BIcon v-if="customAmount" name="Flower2" class="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
               </div>
 
+              <!-- Optional message -->
+              <input
+                v-model="donateMessage"
+                type="text"
+                maxlength="280"
+                placeholder="Сообщение (необязательно)"
+                class="w-full bg-white/5 border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-white/20 transition-all" />
+
               <!-- Min amount hint -->
-              <p class="text-[11px] text-white/25 text-center">Минимальная сумма — 10 ₽</p>
+              <p class="flex items-center justify-center gap-1 text-[11px] text-white/25 text-center">
+                Минимальная сумма — 10 <BIcon name="Flower2" class="w-3 h-3" />
+              </p>
+
+              <p v-if="donateError" class="text-xs text-brand-error text-center">{{ donateError }}</p>
 
               <!-- Donate button -->
               <button
                 @click="sendDonate"
-                :disabled="finalAmount < 10"
-                class="w-full py-4 rounded-2xl text-base font-extrabold transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                :style="`background: ${accent}; color: white; box-shadow: 0 6px 20px ${accent}35`">
-                Поддержать · {{ finalAmount ? finalAmount.toLocaleString('ru') + ' ₽' : '—' }}
-              </button>
-
-              <p class="text-[10px] text-white/20 text-center">
-                Нажимая кнопку, вы соглашаетесь с условиями Bloomly Pay
-              </p>
-            </div>
-          </template>
-
-          <!-- STEP: Card details -->
-          <template v-else-if="step === 'card'">
-            <div class="px-6 pt-5 pb-6 space-y-5">
-              <div class="flex items-center gap-3">
-                <button @click="step = 'pick'"
-                  class="w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all flex-shrink-0">
-                  <BIcon name="ChevronLeft" class="w-4 h-4" />
-                </button>
-                <div>
-                  <p class="text-base font-extrabold text-white">Данные карты</p>
-                  <p class="text-xs text-white/35">Перевод {{ finalAmount.toLocaleString('ru') }} ₽ → {{ group.name }}</p>
-                </div>
-                <button @click="emit('close')"
-                  class="ml-auto w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all flex-shrink-0">
-                  <BIcon name="X" class="w-4 h-4" />
-                </button>
-              </div>
-
-              <!-- Virtual card preview -->
-              <div class="relative rounded-2xl overflow-hidden p-5 h-44"
-                :style="`background: linear-gradient(135deg, ${accent}30 0%, ${accent}08 100%); border: 1px solid ${accent}20`">
-                <div class="absolute inset-0 opacity-5" style="background: radial-gradient(circle at 80% 20%, white 0%, transparent 60%)" />
-                <div class="flex items-start justify-between">
-                  <BIcon name="CreditCard" class="w-6 h-6" :style="`color: ${accent}`" />
-                  <div class="flex gap-1">
-                    <div v-for="i in 4" :key="i" class="w-2 h-2 rounded-full bg-white/20" />
-                  </div>
-                </div>
-                <p class="text-white/20 text-lg font-mono tracking-widest mt-6">
-                  {{ cardNum || '**** **** **** ****' }}
-                </p>
-                <div class="flex items-end justify-between mt-auto pt-4">
-                  <div>
-                    <p class="text-[10px] text-white/30 uppercase tracking-wide">Действует до</p>
-                    <p class="text-sm font-mono text-white/60">{{ cardExp || 'MM/YY' }}</p>
-                  </div>
-                  <p class="text-sm font-mono text-white/30">{{ cardCvv ? '***' : 'CVV' }}</p>
-                </div>
-              </div>
-
-              <!-- Inputs -->
-              <div class="space-y-3">
-                <input
-                  type="text"
-                  inputmode="numeric"
-                  placeholder="Номер карты"
-                  :value="cardNum"
-                  @input="formatCardNum"
-                  maxlength="19"
-                  class="w-full bg-white/5 border border-white/8 rounded-2xl px-4 py-3.5 text-white text-sm font-mono placeholder-white/20 outline-none focus:border-white/20 transition-all" />
-                <div class="grid grid-cols-2 gap-3">
-                  <input
-                    type="text"
-                    inputmode="numeric"
-                    placeholder="ММ/ГГ"
-                    :value="cardExp"
-                    @input="formatExp"
-                    maxlength="5"
-                    class="w-full bg-white/5 border border-white/8 rounded-2xl px-4 py-3.5 text-white text-sm font-mono placeholder-white/20 outline-none focus:border-white/20 transition-all" />
-                  <input
-                    type="password"
-                    inputmode="numeric"
-                    placeholder="CVV"
-                    v-model="cardCvv"
-                    maxlength="4"
-                    class="w-full bg-white/5 border border-white/8 rounded-2xl px-4 py-3.5 text-white text-sm font-mono placeholder-white/20 outline-none focus:border-white/20 transition-all" />
-                </div>
-              </div>
-
-              <button
-                @click="sendDonate"
-                :disabled="!cardValid || sending"
+                :disabled="finalAmount < 10 || sending"
                 class="w-full py-4 rounded-2xl text-base font-extrabold transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 :style="`background: ${accent}; color: white; box-shadow: 0 6px 20px ${accent}35`">
                 <BIcon v-if="sending" name="Loader2" class="w-5 h-5 animate-spin" />
-                <BIcon v-else name="Lock" class="w-4 h-4" />
-                {{ sending ? 'Обрабатываем…' : `Оплатить ${finalAmount.toLocaleString('ru')} ₽` }}
+                <span v-if="sending">Отправляем…</span>
+                <span v-else-if="!finalAmount">Поддержать · —</span>
+                <span v-else class="inline-flex items-center gap-1.5">
+                  Поддержать · {{ finalAmount.toLocaleString('ru') }} <BIcon name="Flower2" class="w-4 h-4" />
+                </span>
               </button>
+            </div>
+          </template>
 
-              <div class="flex items-center justify-center gap-2 text-[11px] text-white/20">
-                <BIcon name="Shield" class="w-3.5 h-3.5" />
-                Защищено Bloomly Pay · SSL 256-bit
+          <!-- STEP: Insufficient balance -->
+          <template v-else-if="step === 'insufficient'">
+            <div class="px-6 py-10 text-center space-y-5">
+              <div class="w-20 h-20 rounded-full flex items-center justify-center mx-auto bg-brand-error/15 border-2 border-brand-error/30">
+                <BIcon name="AlertCircle" class="w-9 h-9 text-brand-error" />
+              </div>
+              <div>
+                <p class="text-xl font-extrabold text-white">Недостаточно Blooms</p>
+                <p class="text-white/50 text-sm mt-1.5">
+                  Не хватает
+                  <span class="inline-flex items-center gap-1 font-bold text-brand-error">{{ insufficientBy.toFixed(2) }} <BIcon name="Flower2" class="w-3 h-3" /></span>
+                  на балансе кошелька
+                </p>
+              </div>
+              <div class="flex flex-col gap-2">
+                <button @click="goToWallet"
+                  class="w-full py-3.5 rounded-2xl text-sm font-bold text-white transition-all"
+                  :style="`background: ${accent}`">
+                  Пополнить кошелёк
+                </button>
+                <button @click="step = 'pick'"
+                  class="w-full py-3 rounded-2xl text-sm font-bold text-white/60 hover:text-white border border-white/10 hover:border-white/20 transition-all">
+                  Назад
+                </button>
               </div>
             </div>
           </template>
@@ -258,7 +225,6 @@ async function sendDonate() {
           <!-- STEP: Success -->
           <template v-else-if="step === 'success'">
             <div class="px-6 py-10 text-center space-y-5">
-              <!-- Animated checkmark -->
               <div class="w-20 h-20 rounded-full flex items-center justify-center mx-auto"
                 :style="`background: ${accent}20; border: 2px solid ${accent}40`">
                 <BIcon name="Heart" class="w-9 h-9" :style="`color: ${accent}`" />
@@ -266,7 +232,9 @@ async function sendDonate() {
               <div>
                 <p class="text-2xl font-extrabold text-white">Спасибо!</p>
                 <p class="text-white/50 text-sm mt-1.5">
-                  Ваш донат <span class="font-bold" :style="`color: ${accent}`">{{ finalAmount.toLocaleString('ru') }} ₽</span> успешно отправлен
+                  Ваш донат
+                  <span class="inline-flex items-center gap-1 font-bold" :style="`color: ${accent}`">{{ finalAmount.toLocaleString('ru') }} <BIcon name="Flower2" class="w-3 h-3" /></span>
+                  успешно отправлен
                 </p>
                 <p class="text-white/30 text-xs mt-1">для {{ group.name }}</p>
               </div>

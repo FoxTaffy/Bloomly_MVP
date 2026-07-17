@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import BIcon from '@/components/BIcon.vue'
 import type { Group } from '@/stores/groups'
 
-const props = defineProps<{ group: Group; isPinned?: boolean }>()
+const props = defineProps<{ group: Group; isPinned?: boolean; isMember?: boolean }>()
 const emit = defineEmits<{
   (e: 'click'): void
   (e: 'bookmark'): void
@@ -87,8 +87,8 @@ function bannerGradient(color: string | null | undefined) {
           </div>
         </div>
 
-        <!-- Three-dot button -->
-        <div class="relative mt-8" @click.stop>
+        <!-- Three-dot button (only for groups the user has actually joined) -->
+        <div v-if="props.isMember" class="relative mt-8" @click.stop>
           <button
             class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors"
             :class="isPinned ? 'text-amber-400/50 hover:text-amber-400 hover:bg-amber-500/10' : 'text-white/30 hover:text-white/70 hover:bg-brand-bg/60'"

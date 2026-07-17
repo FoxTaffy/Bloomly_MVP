@@ -34,6 +34,11 @@ export interface UserPublicProfile {
   pinned_post_id: string | null;
   social_links: Record<string, string> | null;
   interests: string[];
+  fav_food: string | null;
+  fav_animal: string | null;
+  fav_music: string | null;
+  fav_artist: string | null;
+  fav_film: string | null;
   created_at: Date;
   subscription_tier: string;
   profile_theme: string | null;
@@ -42,6 +47,7 @@ export interface UserPublicProfile {
   is_verified: boolean;
   verified_at: Date | null;
   verification_type: string | null;
+  deceased_at: Date | null;
   artist_since: Date | null;
   donate_url: string | null;
   messages_privacy: string;
@@ -50,6 +56,8 @@ export interface UserPublicProfile {
   online_status_visibility: string;
   friends_list_visibility: string;
   profile_visibility: string;
+  groups_visibility: string;
+  groups_pinned_only: boolean;
 }
 
 export interface UpdateUserInput {
@@ -83,6 +91,11 @@ export interface UpdateUserInput {
   birth_date_visibility?: string;
   social_links?: Record<string, string> | null;
   interests?: string[];
+  fav_food?: string | null;
+  fav_animal?: string | null;
+  fav_music?: string | null;
+  fav_artist?: string | null;
+  fav_film?: string | null;
   profile_theme?: string | null;
   profile_bg_url?: string | null;
   profile_frame?: string | null;
@@ -96,6 +109,8 @@ export interface UpdateUserInput {
   online_status_visibility?: string;
   friends_list_visibility?: string;
   profile_visibility?: string;
+  groups_visibility?: string;
+  groups_pinned_only?: boolean;
 }
 
 export interface JwtPayload {

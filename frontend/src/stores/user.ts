@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useAuthStore } from './auth'
 import api from '@/api'
 
@@ -36,6 +36,8 @@ export interface Fursona {
   likes_dislikes_visible: boolean
   likes: string[]
   dislikes: string[]
+  is_primary: boolean
+  cover_image_url: string | null
   created_at: string
   updated_at: string
 }
@@ -54,6 +56,7 @@ export interface UpsertFursonaInput {
 export interface FursonaReferenceImage {
   id: string
   user_id: string
+  fursona_id: string
   image_url: string
   is_nsfw: boolean
   artist_name: string | null
@@ -129,6 +132,11 @@ export interface UserProfile {
   created_at: string
   social_links: Record<string, string> | null
   interests: string[]
+  fav_food: string | null
+  fav_animal: string | null
+  fav_music: string | null
+  fav_artist: string | null
+  fav_film: string | null
   subscription_tier: string
   profile_theme: string | null
   profile_bg_url: string | null
@@ -147,6 +155,8 @@ export interface UserProfile {
   online_status_visibility?: string
   friends_list_visibility?: string
   profile_visibility?: string
+  groups_visibility?: string
+  groups_pinned_only?: boolean
   is_private?: boolean
 }
 
@@ -181,6 +191,11 @@ export interface UpdateProfileInput {
   relationship_since?: string | null
   social_links?: Record<string, string> | null
   interests?: string[]
+  fav_food?: string | null
+  fav_animal?: string | null
+  fav_music?: string | null
+  fav_artist?: string | null
+  fav_film?: string | null
   subscription_tier?: string
   profile_theme?: string | null
   profile_bg_url?: string | null
@@ -193,6 +208,8 @@ export interface UpdateProfileInput {
   online_status_visibility?: string
   friends_list_visibility?: string
   profile_visibility?: string
+  groups_visibility?: string
+  groups_pinned_only?: boolean
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -202,9 +219,10 @@ export const useUserStore = defineStore('user', () => {
   const isLoading      = ref(false)
   const error          = ref<string | null>(null)
 
-  // Fursona state
-  const fursona        = ref<Fursona | null>(null)
-  const fursonaLoading = ref(false)
+  // Fursona state (1:N per user, up to 10 characters)
+  const fursonas        = ref<Fursona[]>([])
+  const fursonasLoading = ref(false)
+  const primaryFursona  = computed(() => fursonas.value.find((f) => f.is_primary) ?? fursonas.value[0] ?? null)
 
   // Fursuits state
   const fursuits        = ref<Fursuit[]>([])
@@ -267,29 +285,47 @@ export const useUserStore = defineStore('user', () => {
 
   // ── Fursona actions ────────────────────────────────────────────────────────
 
-  async function fetchFursona(userId: string): Promise<void> {
-    fursonaLoading.value = true
+  async function fetchFursonas(userId: string): Promise<void> {
+    fursonasLoading.value = true
     try {
-      const res = await api.get(`/users/${userId}/fursona`)
-      if (res.data.success) fursona.value = res.data.data.fursona
+      const res = await api.get(`/users/${userId}/fursonas`)
+      if (res.data.success) fursonas.value = res.data.data.fursonas
     } catch {
-      fursona.value = null
+      fursonas.value = []
     } finally {
-      fursonaLoading.value = false
+      fursonasLoading.value = false
     }
   }
 
-  async function saveFursona(input: UpsertFursonaInput): Promise<void> {
-    fursonaLoading.value = true
-    try {
-      const res = await api.put('/users/me/fursona', input)
-      if (!res.data.success) throw new Error(res.data.error?.message ?? 'Failed to save fursona')
-      fursona.value = res.data.data.fursona
-    } catch (e: any) {
-      throw e
-    } finally {
-      fursonaLoading.value = false
+  async function createFursona(input: UpsertFursonaInput): Promise<Fursona> {
+    const res = await api.post('/users/me/fursonas', input)
+    if (!res.data.success) throw new Error(res.data.error?.message ?? 'Failed to create fursona')
+    const created = res.data.data.fursona as Fursona
+    if (created.is_primary) fursonas.value.forEach((f) => { f.is_primary = false })
+    fursonas.value.push(created)
+    return created
+  }
+
+  async function updateFursona(id: string, input: UpsertFursonaInput): Promise<void> {
+    const res = await api.put(`/users/me/fursonas/${id}`, input)
+    if (!res.data.success) throw new Error(res.data.error?.message ?? 'Failed to update fursona')
+    const updated = res.data.data.fursona as Fursona
+    const idx = fursonas.value.findIndex((f) => f.id === id)
+    if (idx !== -1) fursonas.value[idx] = updated
+  }
+
+  async function deleteFursona(id: string): Promise<void> {
+    const res = await api.delete(`/users/me/fursonas/${id}`)
+    const newPrimaryId = res.data?.data?.newPrimaryId as string | null | undefined
+    fursonas.value = fursonas.value.filter((f) => f.id !== id)
+    if (newPrimaryId) {
+      fursonas.value.forEach((f) => { f.is_primary = f.id === newPrimaryId })
     }
+  }
+
+  async function setPrimaryFursona(id: string): Promise<void> {
+    await api.patch(`/users/me/fursonas/${id}/primary`)
+    fursonas.value.forEach((f) => { f.is_primary = f.id === id })
   }
 
   // ── Fursuit actions ────────────────────────────────────────────────────────
@@ -327,12 +363,12 @@ export const useUserStore = defineStore('user', () => {
     fursuits.value = fursuits.value.filter((f) => f.id !== id)
   }
 
-  // ── Fursona reference gallery actions ────────────────────────────────────────
+  // ── Fursona reference gallery actions (per-character) ────────────────────────
 
-  async function fetchReferenceImages(userId: string): Promise<void> {
+  async function fetchReferenceImages(userId: string, fursonaId: string): Promise<void> {
     referenceImagesLoading.value = true
     try {
-      const res = await api.get(`/users/${userId}/fursona/references`)
+      const res = await api.get(`/users/${userId}/fursonas/${fursonaId}/references`)
       if (res.data.success) referenceImages.value = res.data.data.referenceImages
     } catch {
       referenceImages.value = []
@@ -341,25 +377,29 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  async function addReferenceImage(input: UpsertReferenceImageInput): Promise<FursonaReferenceImage> {
-    const res = await api.post('/users/me/fursona/references', input)
+  async function addReferenceImage(fursonaId: string, input: UpsertReferenceImageInput): Promise<FursonaReferenceImage> {
+    const res = await api.post(`/users/me/fursonas/${fursonaId}/references`, input)
     if (!res.data.success) throw new Error(res.data.error?.message ?? 'Failed to add reference image')
     const created = res.data.data.referenceImage as FursonaReferenceImage
     referenceImages.value.push(created)
+    const f = fursonas.value.find((x) => x.id === fursonaId)
+    if (f) f.cover_image_url = referenceImages.value[0].image_url
     return created
   }
 
-  async function updateReferenceImage(id: string, input: UpsertReferenceImageInput): Promise<void> {
-    const res = await api.put(`/users/me/fursona/references/${id}`, input)
+  async function updateReferenceImage(fursonaId: string, id: string, input: UpsertReferenceImageInput): Promise<void> {
+    const res = await api.put(`/users/me/fursonas/${fursonaId}/references/${id}`, input)
     if (!res.data.success) throw new Error(res.data.error?.message ?? 'Failed to update reference image')
     const updated = res.data.data.referenceImage as FursonaReferenceImage
     const idx = referenceImages.value.findIndex((r) => r.id === id)
     if (idx !== -1) referenceImages.value[idx] = updated
   }
 
-  async function deleteReferenceImage(id: string): Promise<void> {
-    await api.delete(`/users/me/fursona/references/${id}`)
+  async function deleteReferenceImage(fursonaId: string, id: string): Promise<void> {
+    await api.delete(`/users/me/fursonas/${fursonaId}/references/${id}`)
     referenceImages.value = referenceImages.value.filter((r) => r.id !== id)
+    const f = fursonas.value.find((x) => x.id === fursonaId)
+    if (f) f.cover_image_url = referenceImages.value[0]?.image_url ?? null
   }
 
   return {
@@ -370,10 +410,14 @@ export const useUserStore = defineStore('user', () => {
     fetchMyProfile,
     updateProfile,
     // Fursona
-    fursona,
-    fursonaLoading,
-    fetchFursona,
-    saveFursona,
+    fursonas,
+    fursonasLoading,
+    primaryFursona,
+    fetchFursonas,
+    createFursona,
+    updateFursona,
+    deleteFursona,
+    setPrimaryFursona,
     // Fursuit
     fursuits,
     fursuitsLoading,

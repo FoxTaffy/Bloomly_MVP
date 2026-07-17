@@ -12,6 +12,8 @@ import MentionTextarea from '@/components/MentionTextarea.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
 import AppBadge from '@/components/shared/AppBadge.vue'
 import ReportModal from '@/components/ReportModal.vue'
+import { useTagSuggestions } from '@/composables/useTagSuggestions'
+import { extractHashtags, extractCommittedHashtags } from '@/lib/hashtags'
 const EventCard = defineAsyncComponent(() => import('@/components/groups/EventCard.vue'))
 const TicketCard = defineAsyncComponent(() => import('@/components/groups/TicketCard.vue'))
 const AchievementBadge = defineAsyncComponent(() => import('@/components/groups/AchievementBadge.vue'))
@@ -141,12 +143,22 @@ const showPostForm = ref(false)
 const newPostContent = ref('')
 const newPostTitle = ref('')
 const newPostIsNsfw = ref(false)
+const newPostIsAiGenerated = ref(false)
 const newPostIsAnnouncement = ref(false)
 const newPostMediaUrls = ref<string[]>([])
 const newPostMediaOriginalUrls = ref<string[]>([])
 const newPostTags = ref<string[]>([])
 const newPostTagInput = ref('')
-const newPostCategory = ref('')
+const { suggestions: tagSuggestions, showSuggestions: showTagSuggestions, fetchSuggestions: fetchTagSuggestions, clearSuggestions: clearTagSuggestions } = useTagSuggestions()
+
+// Auto-pick up "#hashtag"s the user writes directly in the post text (only once
+// they've finished typing the word, not on every keystroke of a partial one)
+watch(newPostContent, (content) => {
+  for (const tag of extractCommittedHashtags(content)) {
+    if (!newPostTags.value.includes(tag)) newPostTags.value.push(tag)
+  }
+})
+
 const newPostVisibility = ref('public')
 const showGroupVisibilityMenu = ref(false)
 const isCreatingPost = ref(false)
@@ -165,19 +177,17 @@ const archetypeComposer = computed(() => {
 const creativePostStatuses = ['Скетч', 'Линии', 'Цвет', 'Готово']
 const selectedCreativeStatus = ref('')
 
-const groupPostCategories = [
-  { id: '', name: 'Категория' },
-  { id: 'digital_art', name: 'Digital Art' },
-  { id: 'photography', name: 'Photography' },
-  { id: '3d', name: '3D' },
-  { id: 'animation', name: 'Animation' },
-  { id: 'writing', name: 'Writing' },
-  { id: 'other', name: 'Other' },
-]
 function addGroupTag() {
   const t = newPostTagInput.value.trim().replace(/^#/, '')
   if (t && !newPostTags.value.includes(t)) newPostTags.value.push(t)
   newPostTagInput.value = ''
+  clearTagSuggestions()
+}
+function addGroupTagFromSuggestion(name: string) {
+  const t = name.trim().toLowerCase()
+  if (t && !newPostTags.value.includes(t)) newPostTags.value.push(t)
+  newPostTagInput.value = ''
+  clearTagSuggestions()
 }
 function removeGroupTag(tag: string) { newPostTags.value = newPostTags.value.filter(t => t !== tag) }
 
@@ -193,6 +203,10 @@ async function loadGroupPosts() {
 
 async function createGroupPost() {
   if (!group.value || (!newPostContent.value.trim() && newPostMediaUrls.value.length === 0) || isCreatingPost.value) return
+  // Catch a trailing "#hashtag" that was never followed by a space/newline before hitting send
+  for (const tag of extractHashtags(newPostContent.value)) {
+    if (!newPostTags.value.includes(tag)) newPostTags.value.push(tag)
+  }
   isCreatingPost.value = true
   try {
     const cfg = archetypeComposer.value
@@ -200,12 +214,13 @@ async function createGroupPost() {
     // For creative groups: stage chip goes into category for kanban grouping
     const category = selectedCreativeStatus.value
       ? selectedCreativeStatus.value.toLowerCase()
-      : (newPostCategory.value || undefined)
+      : undefined
     const post = await groupsStore.createGroupPost(group.value.id, {
       content: newPostContent.value.trim(),
       title: newPostTitle.value.trim() || undefined,
       postType: cfg.postType,
       isNsfw: newPostIsNsfw.value,
+      isAiGenerated: newPostIsAiGenerated.value,
       isAnnouncement,
       mediaUrls: newPostMediaUrls.value,
       mediaOriginalUrls: newPostMediaOriginalUrls.value,
@@ -219,10 +234,10 @@ async function createGroupPost() {
     newPostMediaUrls.value = []
     newPostMediaOriginalUrls.value = []
     newPostIsNsfw.value = false
+    newPostIsAiGenerated.value = false
     newPostIsAnnouncement.value = false
     newPostTags.value = []
     newPostTagInput.value = ''
-    newPostCategory.value = ''
     newPostVisibility.value = 'public'
     selectedCreativeStatus.value = ''
     groupMediaUploadRef.value?.clearAll()
@@ -647,6 +662,28 @@ async function loadMoreMembers() {
   finally { membersLoading.value = false }
 }
 
+// ── Role hierarchy: owner > admin > moderator > everyone else ───────────────
+const GROUP_ROLE_WEIGHT: Record<string, number> = { owner: 3, admin: 2, moderator: 1 }
+const myRoleWeight = computed(() => GROUP_ROLE_WEIGHT[membership.value?.role ?? ''] ?? 0)
+// Can I kick someone with this role? Only if I outrank them (moderators can only kick
+// plain members, admins can kick moderators/members but not other admins, etc).
+function canKickRole(role: string): boolean {
+  return myRoleWeight.value >= 1 && (GROUP_ROLE_WEIGHT[role] ?? 0) < myRoleWeight.value
+}
+const kickingMember = ref<Record<string, boolean>>({})
+async function kickMember(userId: string) {
+  if (!group.value?.id) return
+  kickingMember.value[userId] = true
+  try {
+    await groupsStore.removeMember(group.value.id, userId)
+    allMembers.value = allMembers.value.filter((m: any) => (m.user_id ?? m.user?.id) !== userId)
+  } catch (e) {
+    console.error('Kick member failed', e)
+  } finally {
+    delete kickingMember.value[userId]
+  }
+}
+
 const vClickOutside = {
   mounted(el: HTMLElement, binding: { value: () => void }) {
     ;(el as any)._clickOutside = (e: Event) => { if (!el.contains(e.target as Node)) binding.value() }
@@ -773,7 +810,7 @@ const vClickOutside = {
                     <button v-if="isMember"
                       @click="toggleNotify"
                       :disabled="isTogglingNotify"
-                      :title="notifyPosts ? 'Уведомления включены — нажмите, чтобы отключить' : 'Включить уведомления о постах'"
+                      :title="notifyPosts ? langStore.t.disableNotifyTitle : langStore.t.enableNotifyTitle"
                       class="w-9 h-9 flex items-center justify-center border rounded-xl transition-all disabled:opacity-50"
                       :class="notifyPosts
                         ? 'border-brand-yellow/50 bg-brand-yellow/10 text-brand-yellow hover:bg-brand-yellow/20'
@@ -1571,8 +1608,8 @@ const vClickOutside = {
                 </button>
               </div>
 
-              <!-- ── Post Creator (for admins/owners) ────────────────── -->
-              <div v-if="isAdmin && activeContentTab === 'posts'"
+              <!-- ── Post Creator (for owners/admins/moderators) ────────────────── -->
+              <div v-if="(isAdmin || myRoleWeight >= 1) && activeContentTab === 'posts'"
                 class="bg-brand-card border rounded-3xl shadow-xl transition-colors"
                 :class="showPostForm ? 'border-brand-accent/30' : 'border-brand-border'">
                 <button v-if="!showPostForm" @click="showPostForm = true"
@@ -1650,17 +1687,24 @@ const vClickOutside = {
                     <!-- Tag input -->
                     <div class="relative inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-transparent hover:border-brand-border hover:bg-brand-bg transition-all">
                       <BIcon name="Hash" class="w-4 h-4 text-white/55 flex-shrink-0" />
-                      <input type="text" v-model="newPostTagInput" @keydown.enter.prevent="addGroupTag"
+                      <input type="text" v-model="newPostTagInput"
+                        @input="fetchTagSuggestions(newPostTagInput)"
+                        @keydown.enter.prevent="addGroupTag"
+                        @keydown.escape="clearTagSuggestions"
                         placeholder="тег + Enter"
                         class="bg-transparent text-xs text-white placeholder-brand-muted outline-none w-24" />
+
+                      <!-- Tag suggestions, ranked by usage -->
+                      <div v-if="showTagSuggestions" v-click-outside="clearTagSuggestions"
+                        class="absolute top-full left-0 mt-1.5 z-30 w-56 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1">
+                        <button v-for="s in tagSuggestions" :key="s.name"
+                          @click="addGroupTagFromSuggestion(s.name)"
+                          class="w-full flex items-center justify-between gap-2 px-4 py-2 text-sm text-white hover:bg-white/5">
+                          <span class="truncate">#{{ s.name }}</span>
+                          <span class="text-xs text-white/35 flex-shrink-0">{{ s.count }}</span>
+                        </button>
+                      </div>
                     </div>
-                    <!-- Category -->
-                    <select v-model="newPostCategory"
-                      class="px-3 py-2 rounded-xl text-xs text-white/55 bg-transparent border border-transparent hover:border-brand-border hover:bg-brand-bg outline-none transition-all cursor-pointer">
-                      <template v-for="c in groupPostCategories" :key="c.id || 'empty-cat'">
-                        <option :value="c.id" class="bg-brand-card">{{ c.name }}</option>
-                      </template>
-                    </select>
                     <button @click="newPostIsNsfw = !newPostIsNsfw"
                       class="px-3 py-2 rounded-xl text-xs font-bold border transition-all"
                       :class="newPostIsNsfw ? 'border-brand-error/60 text-brand-error bg-brand-error/10' : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'">
@@ -1672,8 +1716,17 @@ const vClickOutside = {
                       <BIcon name="Megaphone" class="w-3.5 h-3.5" />
                       Анонс
                     </button>
-                    <div class="flex-1" />
-                    <!-- Visibility -->
+                    <!-- AI-generated toggle -->
+                    <button @click="newPostIsAiGenerated = !newPostIsAiGenerated"
+                      :title="langStore.t.aiGenToggleTitle"
+                      class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all"
+                      :class="newPostIsAiGenerated ? 'border-brand-purple/60 text-brand-purple bg-brand-purple/10' : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'">
+                      <BIcon name="Bot" class="w-3.5 h-3.5" /> {{ langStore.t.aiGenBadge }}
+                    </button>
+                  </div>
+
+                  <!-- Visibility + Cancel — own row so Cancel never wraps onto its own orphan line -->
+                  <div class="flex items-center justify-between gap-2 mt-2">
                     <div class="relative">
                       <button @click.stop="showGroupVisibilityMenu = !showGroupVisibilityMenu"
                         class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all"
@@ -1697,16 +1750,15 @@ const vClickOutside = {
                             <BIcon name="Users" class="w-4 h-4 flex-shrink-0" /> Только Подписчикам
                             <BIcon v-if="newPostVisibility === 'subscriber_only'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
                           </button>
-                          <button @click="newPostVisibility = 'paid'; showGroupVisibilityMenu = false"
-                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
-                            :class="newPostVisibility === 'paid' ? 'text-brand-accent' : 'text-white'">
+                          <button disabled title="Скоро будет доступно"
+                            class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white/30 cursor-not-allowed">
                             <BIcon name="DollarSign" class="w-4 h-4 flex-shrink-0" /> Платный пост
-                            <BIcon v-if="newPostVisibility === 'paid'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
+                            <span class="ml-auto text-[10px] uppercase tracking-wide">скоро</span>
                           </button>
                         </div>
                       </Transition>
                     </div>
-                    <button @click="showPostForm = false; newPostContent = ''; newPostMediaUrls = []; newPostMediaOriginalUrls = []; newPostTags = []; newPostTagInput = ''; newPostCategory = ''; newPostVisibility = 'public'; newPostIsAnnouncement = false; groupMediaUploadRef?.clearAll()"
+                    <button @click="showPostForm = false; newPostContent = ''; newPostMediaUrls = []; newPostMediaOriginalUrls = []; newPostTags = []; newPostTagInput = ''; newPostVisibility = 'public'; newPostIsAnnouncement = false; newPostIsAiGenerated = false; groupMediaUploadRef?.clearAll()"
                       class="text-xs font-semibold text-white/55 hover:text-white transition-all">Отмена</button>
                   </div>
                 </div>
@@ -1731,6 +1783,7 @@ const vClickOutside = {
                         :key="post.id"
                         :post="post"
                         :group-context="group"
+                        :can-moderate="myRoleWeight >= 1"
                         @deleted="onPostDeleted"
                         @updated="onPostUpdated"
                       />
@@ -1739,7 +1792,7 @@ const vClickOutside = {
                     <!-- Empty -->
                     <div v-else class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl p-8 text-center">
                       <BIcon name="Newspaper" class="w-10 h-10 mx-auto mb-3 text-white/20" />
-                      <p class="text-white/40 text-sm font-semibold">{{ isAdmin ? 'Напишите первый пост!' : 'Публикаций пока нет' }}</p>
+                      <p class="text-white/40 text-sm font-semibold">{{ (isAdmin || myRoleWeight >= 1) ? 'Напишите первый пост!' : 'Публикаций пока нет' }}</p>
                     </div>
                   </template>
 
@@ -2213,6 +2266,7 @@ const vClickOutside = {
                   </div>
                   <div class="px-3 pb-3 flex flex-wrap gap-1.5">
                     <span v-for="tag in (group as any).trending_tags" :key="tag"
+                      @click="router.push({ path: '/search', query: { q: tag } })"
                       class="px-2.5 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs font-semibold cursor-pointer hover:bg-sky-500/20 transition-all">
                       #{{ tag }}
                     </span>
@@ -2478,6 +2532,12 @@ const vClickOutside = {
                     <button @click.stop="router.push('/profile/' + m.user.username)"
                       class="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/55 hover:text-white text-xs font-semibold transition-colors">
                       <BIcon name="User" class="w-3.5 h-3.5" />
+                    </button>
+                    <button v-if="canKickRole(m.role)" @click.stop="kickMember(m.user.id)"
+                      :disabled="kickingMember[m.user.id]"
+                      title="Удалить из группы"
+                      class="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold transition-colors disabled:opacity-40">
+                      <BIcon name="UserX" class="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>

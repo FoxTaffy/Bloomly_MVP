@@ -202,8 +202,9 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
 
       <!-- Name -->
       <div class="min-w-0 leading-snug -mt-1">
-        <p class="font-semibold text-white truncate text-base leading-tight">
+        <p class="font-semibold text-white truncate text-base leading-tight flex items-center gap-1.5">
           {{ user.display_name || user.username }}
+          <span v-if="user.deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
         </p>
         <p class="text-sm text-white/50 truncate font-normal">@{{ user.username }}</p>
         <p v-if="user.location" class="text-xs text-white/40 flex items-center gap-1 mt-1 truncate">
@@ -232,7 +233,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
               : 'bg-white/5 hover:bg-brand-accent/15 text-white/55 hover:text-brand-accent-minus',
             notifyLoading ? 'opacity-60 pointer-events-none' : ''
           ]"
-          :title="notifyActive ? '{{ langStore.t.disableNotifyTitle }}' : '{{ langStore.t.enableNotifyTitle }}'"
+          :title="notifyActive ? langStore.t.disableNotifyTitle : langStore.t.enableNotifyTitle"
           @click.stop.prevent="toggleNotify"
         >
           <BIcon :name="notifyActive ? 'BellRing' : 'Bell'" class="w-4 h-4" />

@@ -154,6 +154,12 @@ const notifTypeLabel = (type: string, pronouns?: string | null) => {
     RELATIONSHIP_ACCEPTED: { m: 'принял ваш запрос в отношения ❤️', f: 'приняла ваш запрос в отношения ❤️', n: 'принял(а) ваш запрос в отношения ❤️' },
   }
   const key = type.toUpperCase()
+  // These two use the localized translations dict (all 8 languages) rather than the hardcoded RU map above.
+  if (key === 'FOLLOW_POST' || key === 'GROUP_POST') {
+    const base = key === 'FOLLOW_POST' ? 'notifFollowPost' : 'notifGroupPost'
+    const suffix = isMale ? 'M' : isFemale ? 'F' : 'N'
+    return (langStore.t as any)[`${base}${suffix}`] ?? type
+  }
   const entry = genderMap[key]
   if (!entry) return type
   return isMale ? entry.m : isFemale ? entry.f : entry.n
@@ -168,6 +174,8 @@ const notifBadgeIcon = (type: string) => {
     MENTION: 'AtSign', mention: 'AtSign',
     RELATIONSHIP_REQUEST: 'HeartHandshake',
     RELATIONSHIP_ACCEPTED: 'Heart',
+    FOLLOW_POST: 'FileText',
+    GROUP_POST: 'FileText',
     automod_warn: 'ShieldAlert',
     automod_freeze: 'Snowflake',
     automod_unfreeze: 'Unlock',
@@ -186,6 +194,8 @@ const notifBadgeClass = (type: string) => {
     MENTION: 'bg-amber-500 text-white', mention: 'bg-amber-500 text-white',
     RELATIONSHIP_REQUEST: 'bg-pink-500 text-white',
     RELATIONSHIP_ACCEPTED: 'bg-pink-500 text-white',
+    FOLLOW_POST: 'bg-violet-500 text-white',
+    GROUP_POST: 'bg-brand-accent text-white',
     automod_warn: 'bg-amber-500 text-white',
     automod_freeze: 'bg-sky-500 text-white',
     automod_unfreeze: 'bg-emerald-500 text-white',
@@ -262,7 +272,7 @@ const openPostModal = async (postId: string) => {
 
 const closePostModal = () => { postModal.value = null }
 
-const POST_TYPES = ['LIKE', 'COMMENT', 'REPAW', 'MENTION', 'like', 'comment', 'repaw', 'mention', 'automod_warn', 'automod_ban']
+const POST_TYPES = ['LIKE', 'COMMENT', 'REPAW', 'MENTION', 'FOLLOW_POST', 'GROUP_POST', 'like', 'comment', 'repaw', 'mention', 'automod_warn', 'automod_ban']
 const PROFILE_TYPES = ['FOLLOW', 'RELATIONSHIP_ACCEPTED', 'follow', 'relationship_accepted']
 
 const onNotifClick = async (n: any) => {
@@ -289,20 +299,16 @@ const onNotifClick = async (n: any) => {
   if (n.post_id) { showNotifications.value = false; router.push(`/post/${n.post_id}`) }
 }
 
-// ── Search modal ──────────────────────────────────────────────────────────────
+// ── Search modal (VK-style: live "Люди" + "Группы" preview, Enter/"show all" → /search) ──
 const showSearchModal = ref(false)
 const searchModalQuery = ref('')
-const searchModalTab = ref<'posts' | 'accounts'>('posts')
-const searchModalPosts = ref<any[]>([])
 const searchModalUsers = ref<any[]>([])
+const searchModalGroups = ref<any[]>([])
 const searchModalLoading = ref(false)
 let searchModalDebounce: ReturnType<typeof setTimeout>
 
 const openSearchModal = () => {
   showSearchModal.value = true
-  searchModalQuery.value = ''
-  searchModalPosts.value = []
-  searchModalUsers.value = []
   nextTick(() => {
     const el = document.getElementById('app-search-modal-input')
     if (el) (el as HTMLInputElement).focus()
@@ -311,25 +317,55 @@ const openSearchModal = () => {
 
 const closeSearchModal = () => { showSearchModal.value = false }
 
+const clearSearchModal = () => {
+  searchModalQuery.value = ''
+  searchModalUsers.value = []
+  searchModalGroups.value = []
+  const el = document.getElementById('app-search-modal-input')
+  if (el) (el as HTMLInputElement).focus()
+}
+
 const onSearchModalInput = () => {
   clearTimeout(searchModalDebounce)
-  if (!searchModalQuery.value.trim()) { searchModalPosts.value = []; searchModalUsers.value = []; return }
+  if (!searchModalQuery.value.trim()) { searchModalUsers.value = []; searchModalGroups.value = []; return }
   searchModalDebounce = setTimeout(async () => {
     searchModalLoading.value = true
     try {
-      if (searchModalTab.value === 'posts') {
-        const res = await api.get(`/posts/search?q=${encodeURIComponent(searchModalQuery.value)}`)
-        if (res.data.success) searchModalPosts.value = res.data.data.posts ?? []
-      } else {
-        const res = await api.get(`/users/search?q=${encodeURIComponent(searchModalQuery.value)}`)
-        if (res.data.success) searchModalUsers.value = res.data.data.users ?? []
-      }
+      const q = encodeURIComponent(searchModalQuery.value)
+      const [usersRes, groupsRes] = await Promise.all([
+        api.get(`/users/search?q=${q}&limit=5`),
+        api.get(`/groups/search?q=${q}&limit=5`),
+      ])
+      if (usersRes.data.success) searchModalUsers.value = usersRes.data.data.users ?? []
+      if (groupsRes.data.success) searchModalGroups.value = groupsRes.data.data.groups ?? []
     } catch {} finally { searchModalLoading.value = false }
   }, 300)
 }
 
-const searchGoToPost = (id: string) => { closeSearchModal(); router.push(`/post/${id}`) }
 const searchGoToUser = (username: string) => { closeSearchModal(); router.push(`/profile/${username}`) }
+const searchGoToGroup = (group: any) => { closeSearchModal(); router.push(`/groups/${group.slug || group.id}`) }
+
+// ── Default suggestions (shown when the search is opened but nothing is typed yet) ──
+const defaultSearchUsers = ref<any[]>([])
+const defaultSearchGroups = ref<any[]>([])
+
+const fetchDefaultSearchSuggestions = async () => {
+  try {
+    const [usersRes, groupsRes] = await Promise.all([
+      api.get('/users/recommended'),
+      api.get('/groups/trending?limit=3'),
+    ])
+    if (usersRes.data.success) defaultSearchUsers.value = (usersRes.data.data.users ?? []).slice(0, 3)
+    if (groupsRes.data.success) defaultSearchGroups.value = (groupsRes.data.data.groups ?? []).slice(0, 3)
+  } catch {}
+}
+
+const goToFullSearch = () => {
+  const q = searchModalQuery.value.trim()
+  if (!q) return
+  closeSearchModal()
+  router.push({ path: '/search', query: { q } })
+}
 
 // ── Stories (inside search modal) ─────────────────────────────────────────────
 const searchStories = ref<any[]>([])
@@ -365,6 +401,7 @@ const closeStory = () => {
 const onDocumentClick = () => {
   showLangDropdown.value = false
   showNotifications.value = false
+  showSearchModal.value = false
 }
 
 // ── Keyboard ──────────────────────────────────────────────────────────────────
@@ -389,7 +426,7 @@ function formatDate(d: string) {
 
 onMounted(() => {
   if (auth.isAuthenticated) {
-    fetchUnreadCount(); connectNotifSSE(); fetchSearchStories()
+    fetchUnreadCount(); connectNotifSSE(); fetchSearchStories(); fetchDefaultSearchSuggestions()
     // Keep the chat WS subscription alive app-wide, not just while the Messages page is open —
     // otherwise incoming messages are silently dropped (no handler registered) until the user
     // happens to navigate back to /messages.
@@ -436,13 +473,151 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Center: Search trigger -->
-    <button @click="openSearchModal"
-      class="flex-1 max-w-xl mx-8 hidden md:flex items-center gap-3 bg-brand-card border border-brand-border rounded-full py-2.5 pl-4 pr-5 text-sm text-white/55 hover:border-brand-accent/50 hover:text-white transition-colors cursor-text">
-      <BIcon name="Search" class="h-4 w-4 flex-shrink-0" />
-      <span class="truncate">{{ langStore.t.search }}</span>
-      <span class="ml-auto flex items-center gap-1 text-xs text-white/35 bg-brand-bg px-2 py-0.5 rounded-md border border-brand-border/60 hidden xl:flex">Ctrl K</span>
-    </button>
+    <!-- Center: Search -->
+    <div class="relative flex-1 max-w-xl mx-8 hidden md:block" @click.stop>
+      <div class="flex items-center gap-3 bg-brand-card border rounded-full py-2.5 pl-4 pr-4 text-sm transition-colors"
+        :class="showSearchModal ? 'border-brand-accent/60 ring-2 ring-brand-accent/15' : 'border-brand-border'">
+        <BIcon name="Search" class="h-4 w-4 flex-shrink-0 text-white/55" />
+        <input id="app-search-modal-input" type="text" v-model="searchModalQuery"
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          @focus="openSearchModal" @input="onSearchModalInput"
+          @keydown.esc="closeSearchModal" @keydown.enter="goToFullSearch"
+          :placeholder="langStore.t.search"
+          class="flex-1 min-w-0 bg-transparent text-white placeholder-white/55 outline-none" />
+        <button v-if="searchModalQuery" @click="clearSearchModal"
+          class="p-0.5 text-white/40 hover:text-white transition-colors flex-shrink-0">
+          <BIcon name="X" class="h-3.5 w-3.5" />
+        </button>
+        <span v-else class="ml-auto flex items-center gap-1 text-xs text-white/35 bg-brand-bg px-2 py-0.5 rounded-md border border-brand-border/60 hidden xl:flex flex-shrink-0">Ctrl K</span>
+      </div>
+
+      <!-- Search dropdown -->
+      <Transition name="filter-expand">
+        <div v-if="showSearchModal"
+          class="absolute top-full left-0 right-0 mt-2 bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden flex flex-col z-50 origin-top"
+          style="max-height: 70vh">
+          <!-- Results -->
+          <div class="flex-1 overflow-y-auto">
+            <div v-if="!searchModalQuery.trim()" class="p-4">
+              <!-- Stories bar -->
+              <div v-if="searchStories.length" class="mb-4">
+                <p class="text-[10px] font-bold uppercase tracking-widest text-white/35 mb-3 px-1">Истории</p>
+                <div class="flex gap-3 overflow-x-auto hide-scrollbar pb-1">
+                  <div v-for="story in searchStories" :key="story.id"
+                    class="flex flex-col items-center gap-1.5 cursor-pointer flex-shrink-0"
+                    @click="openStory(story)">
+                    <div class="w-14 h-14 rounded-2xl p-[2px] bg-gradient-to-tr from-brand-accent to-brand-purple">
+                      <img v-if="story.user.avatar_url" :src="story.user.avatar_url"
+                        class="w-full h-full rounded-xl border-2 border-brand-card object-cover"
+                        @error="onAvatarError" />
+                      <div v-else class="w-full h-full rounded-xl border-2 border-brand-card bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">
+                        {{ (story.user.username ?? '?')[0].toUpperCase() }}
+                      </div>
+                    </div>
+                    <span class="text-[10px] font-semibold text-white/55 max-w-[56px] truncate">{{ story.user.username }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Recommended people -->
+              <div v-if="defaultSearchUsers.length" class="flex flex-col gap-2 mb-4">
+                <p class="text-[10px] font-bold uppercase tracking-widest text-white/35 px-1">Люди</p>
+                <button v-for="user in defaultSearchUsers" :key="user.id" @click="searchGoToUser(user.username)"
+                  class="w-full flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border rounded-2xl hover:border-brand-accent/40 transition-all text-left">
+                  <img :src="user.avatar_url || '/icons/badges/NN.jpg'"
+                    class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0"
+                    @error="onAvatarError" />
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
+                    <p class="text-xs text-white/55">@{{ user.username }}</p>
+                  </div>
+                </button>
+              </div>
+
+              <!-- Recommended groups -->
+              <div v-if="defaultSearchGroups.length" class="flex flex-col gap-2">
+                <p class="text-[10px] font-bold uppercase tracking-widest text-white/35 px-1">Группы</p>
+                <button v-for="group in defaultSearchGroups" :key="group.id" @click="searchGoToGroup(group)"
+                  class="w-full flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border rounded-2xl hover:border-brand-accent/40 transition-all text-left">
+                  <img v-if="group.avatar_url" :src="group.avatar_url"
+                    class="w-10 h-10 rounded-xl object-cover border border-brand-border flex-shrink-0"
+                    @error="onAvatarError" />
+                  <div v-else class="w-10 h-10 rounded-xl bg-brand-accent/15 border border-brand-border flex items-center justify-center text-brand-accent font-bold text-sm flex-shrink-0">
+                    {{ (group.name ?? '?')[0].toUpperCase() }}
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm font-semibold text-white truncate flex items-center gap-1">
+                      {{ group.name }}
+                      <BIcon v-if="group.is_verified" name="BadgeCheck" class="h-3.5 w-3.5 text-brand-accent flex-shrink-0" />
+                    </p>
+                    <p class="text-xs text-white/55">{{ group.members_count ?? 0 }} участников</p>
+                  </div>
+                </button>
+              </div>
+
+              <!-- Nothing to suggest at all -->
+              <div v-if="!searchStories.length && !defaultSearchUsers.length && !defaultSearchGroups.length"
+                class="flex flex-col items-center justify-center py-10 text-white/55">
+                <BIcon name="Search" class="h-10 w-10 mb-3 opacity-30" />
+                <p class="text-sm">Начните вводить запрос...</p>
+              </div>
+            </div>
+            <div v-else-if="searchModalLoading" class="flex items-center justify-center py-12">
+              <BIcon name="Loader2" class="h-6 w-6 text-brand-accent animate-spin" />
+            </div>
+            <!-- Live preview: Люди first, then Группы (VK-style) -->
+            <template v-else>
+              <div v-if="searchModalUsers.length === 0 && searchModalGroups.length === 0"
+                class="flex flex-col items-center justify-center py-14 text-white/55">
+                <BIcon name="SearchX" class="h-8 w-8 mb-2 opacity-30" /><p class="text-sm">Ничего не найдено</p>
+              </div>
+              <template v-else>
+                <!-- Люди -->
+                <div v-if="searchModalUsers.length" class="px-3 pt-3 flex flex-col gap-2">
+                  <p class="text-[10px] font-bold uppercase tracking-widest text-white/35 px-1">Люди</p>
+                  <button v-for="user in searchModalUsers" :key="user.id" @click="searchGoToUser(user.username)"
+                    class="w-full flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border rounded-2xl hover:border-brand-accent/40 transition-all text-left">
+                    <img :src="user.avatar_url || '/icons/badges/NN.jpg'"
+                      class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0"
+                      @error="onAvatarError" />
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
+                      <p class="text-xs text-white/55">@{{ user.username }}</p>
+                    </div>
+                  </button>
+                </div>
+                <!-- Группы -->
+                <div v-if="searchModalGroups.length" class="px-3 pt-3 pb-3 flex flex-col gap-2">
+                  <p class="text-[10px] font-bold uppercase tracking-widest text-white/35 px-1">Группы</p>
+                  <button v-for="group in searchModalGroups" :key="group.id" @click="searchGoToGroup(group)"
+                    class="w-full flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border rounded-2xl hover:border-brand-accent/40 transition-all text-left">
+                    <img v-if="group.avatar_url" :src="group.avatar_url"
+                      class="w-10 h-10 rounded-xl object-cover border border-brand-border flex-shrink-0"
+                      @error="onAvatarError" />
+                    <div v-else class="w-10 h-10 rounded-xl bg-brand-accent/15 border border-brand-border flex items-center justify-center text-brand-accent font-bold text-sm flex-shrink-0">
+                      {{ (group.name ?? '?')[0].toUpperCase() }}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-semibold text-white truncate flex items-center gap-1">
+                        {{ group.name }}
+                        <BIcon v-if="group.is_verified" name="BadgeCheck" class="h-3.5 w-3.5 text-brand-accent flex-shrink-0" />
+                      </p>
+                      <p class="text-xs text-white/55">{{ group.members_count ?? 0 }} участников</p>
+                    </div>
+                  </button>
+                </div>
+              </template>
+              <!-- Show all results -->
+              <button @click="goToFullSearch"
+                class="w-full flex items-center justify-center gap-2 px-5 py-3.5 border-t border-brand-border text-sm font-semibold text-brand-accent hover:bg-brand-accent/5 transition-colors">
+                <BIcon name="Search" class="h-4 w-4" />
+                Показать все результаты
+              </button>
+            </template>
+          </div>
+        </div>
+      </Transition>
+    </div>
 
     <!-- Right: Actions -->
     <div class="flex items-center gap-1.5 md:gap-3">
@@ -629,112 +804,6 @@ onUnmounted(() => {
       </button>
     </div>
   </header>
-
-  <!-- ═══════════════════════════════════════════════════════════════════════
-       SEARCH MODAL (Teleported to body)
-  ═══════════════════════════════════════════════════════════════════════ -->
-  <Teleport to="body">
-    <Transition name="filter-expand">
-      <div v-if="showSearchModal" class="fixed inset-0 z-[500] flex items-start justify-center pt-[10vh] px-4" @click.self="closeSearchModal">
-        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="closeSearchModal"></div>
-        <div class="relative w-full max-w-2xl bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden flex flex-col" style="max-height: 78vh">
-          <!-- Input row -->
-          <div class="flex items-center gap-3 px-5 py-4 border-b border-brand-border flex-shrink-0">
-            <BIcon name="Search" class="h-5 w-5 text-white/55 flex-shrink-0" />
-            <input id="app-search-modal-input" type="text" v-model="searchModalQuery"
-              @input="onSearchModalInput" @keydown.esc="closeSearchModal"
-              :placeholder="langStore.t.search"
-              class="flex-1 bg-transparent text-white placeholder-brand-muted text-base outline-none" />
-            <button @click="closeSearchModal" class="p-1 text-white/55 hover:text-white transition-colors">
-              <BIcon name="X" class="h-5 w-5" />
-            </button>
-          </div>
-          <!-- Tabs -->
-          <div class="flex items-center gap-1 px-5 pt-3 pb-2 border-b border-brand-border flex-shrink-0">
-            <button v-for="tab in ([{ id: 'posts', icon: 'FileText', label: 'Посты' }, { id: 'accounts', icon: 'Users', label: 'Аккаунты' }] as const)"
-              :key="tab.id" @click="searchModalTab = tab.id"
-              :class="['flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-semibold transition-all', searchModalTab === tab.id ? 'bg-brand-accent text-white shadow-sm' : 'text-white/55 hover:text-white hover:bg-white/5']">
-              <BIcon :name="tab.icon" class="h-4 w-4" />{{ tab.label }}
-            </button>
-          </div>
-          <!-- Results -->
-          <div class="flex-1 overflow-y-auto">
-            <div v-if="!searchModalQuery.trim()" class="p-4">
-              <!-- Stories bar -->
-              <div v-if="searchStories.length" class="mb-4">
-                <p class="text-[10px] font-bold uppercase tracking-widest text-white/35 mb-3 px-1">Истории</p>
-                <div class="flex gap-3 overflow-x-auto hide-scrollbar pb-1">
-                  <div v-for="story in searchStories" :key="story.id"
-                    class="flex flex-col items-center gap-1.5 cursor-pointer flex-shrink-0"
-                    @click="openStory(story)">
-                    <div class="w-14 h-14 rounded-2xl p-[2px] bg-gradient-to-tr from-brand-accent to-brand-purple">
-                      <img v-if="story.user.avatar_url" :src="story.user.avatar_url"
-                        class="w-full h-full rounded-xl border-2 border-brand-card object-cover"
-                        @error="onAvatarError" />
-                      <div v-else class="w-full h-full rounded-xl border-2 border-brand-card bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">
-                        {{ (story.user.username ?? '?')[0].toUpperCase() }}
-                      </div>
-                    </div>
-                    <span class="text-[10px] font-semibold text-white/55 max-w-[56px] truncate">{{ story.user.username }}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="flex flex-col items-center justify-center py-10 text-white/55">
-                <BIcon name="Search" class="h-10 w-10 mb-3 opacity-30" />
-                <p class="text-sm">Начните вводить запрос...</p>
-              </div>
-            </div>
-            <div v-else-if="searchModalLoading" class="flex items-center justify-center py-12">
-              <BIcon name="Loader2" class="h-6 w-6 text-brand-accent animate-spin" />
-            </div>
-            <!-- Posts -->
-            <template v-else-if="searchModalTab === 'posts'">
-              <div v-if="searchModalPosts.length === 0" class="flex flex-col items-center justify-center py-14 text-white/55">
-                <BIcon name="FileSearch" class="h-8 w-8 mb-2 opacity-30" /><p class="text-sm">Постов не найдено</p>
-              </div>
-              <button v-for="post in searchModalPosts" :key="post.id" @click="searchGoToPost(post.id)"
-                class="w-full flex items-start gap-3 px-5 py-3.5 hover:bg-white/5 transition-colors text-left border-b border-brand-border/50 last:border-0">
-                <img :src="post.author?.avatar_url || '/icons/badges/NN.jpg'"
-                  class="w-9 h-9 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5"
-                  @error="onAvatarError" />
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2 mb-0.5">
-                    <span class="text-sm font-semibold text-white">{{ post.author?.display_name || post.author?.username }}</span>
-                    <span class="text-xs text-white/55">@{{ post.author?.username }}</span>
-                    <span v-if="post.is_nsfw" class="text-[10px] font-bold bg-brand-error/20 text-brand-error px-1.5 py-0.5 rounded-full">NSFW</span>
-                  </div>
-                  <p class="text-sm text-white/55 line-clamp-2 leading-snug">{{ post.content }}</p>
-                </div>
-                <div v-if="post.media_urls?.length" class="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 border border-brand-border">
-                  <img :src="post.media_urls[0]" class="w-full h-full object-cover" />
-                </div>
-              </button>
-            </template>
-            <!-- Accounts -->
-            <template v-else-if="searchModalTab === 'accounts'">
-              <div v-if="searchModalUsers.length === 0" class="flex flex-col items-center justify-center py-14 text-white/55">
-                <BIcon name="UserSearch" class="h-8 w-8 mb-2 opacity-30" /><p class="text-sm">Аккаунты не найдены</p>
-              </div>
-              <button v-for="user in searchModalUsers" :key="user.id" @click="searchGoToUser(user.username)"
-                class="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-white/5 transition-colors text-left border-b border-brand-border/50 last:border-0">
-                <img :src="user.avatar_url || '/icons/badges/NN.jpg'"
-                  class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0"
-                  @error="onAvatarError" />
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
-                  <p class="text-xs text-white/55">@{{ user.username }}</p>
-                  <p v-if="user.bio" class="text-xs text-white/35 mt-0.5 line-clamp-1">{{ user.bio }}</p>
-                </div>
-                <div class="flex-shrink-0 text-xs text-white/55">
-                  <span class="font-bold text-white">{{ user._count?.followers ?? 0 }}</span> подписчиков
-                </div>
-              </button>
-            </template>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
 
   <!-- ═══════════════════════════════════════════════════════════════
        POST MODAL (from notification click)

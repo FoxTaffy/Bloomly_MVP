@@ -5,16 +5,16 @@ import {
   blockUserHandler, unblockUserHandler, getBlockStatusHandler,
   setPublicKeyHandler, getPublicKeyHandler,
   notifyStatusHandler, notifyToggleHandler,
-  updateSubscriptionHandler, deleteAccountHandler,
+  updateSubscriptionHandler, deleteAccountHandler, getProfileStatsHandler,
   listPaymentMethodsHandler, addPaymentMethodHandler, deletePaymentMethodHandler, setDefaultPaymentMethodHandler,
   deleteAvatarHistoryHandler, restoreAvatarHistoryHandler,
-  getFursonaHandler, upsertFursonaHandler,
+  getFursonasHandler, createFursonaHandler, updateFursonaHandler, deleteFursonaHandler, setPrimaryFursonaHandler,
   getReferenceImagesHandler, addReferenceImageHandler, updateReferenceImageHandler, deleteReferenceImageHandler, getWatermarkedReferenceImageHandler,
   getFursuitsHandler, createFursuitHandler, updateFursuitHandler, deleteFursuitHandler,
 } from './controller.js';
 import {
   getUserParamsSchema, updateUserSchema, updateUsernameSchema, pinPostSchema,
-  updateFursonaSchema, updateFursuitSchema, fursuitIdParamSchema,
+  updateFursonaSchema, fursonaIdParamSchema, updateFursuitSchema, fursuitIdParamSchema,
   upsertReferenceImageSchema, referenceImageIdParamSchema,
 } from './schemas.js';
 
@@ -37,6 +37,9 @@ export async function usersRoutes(fastify: FastifyInstance) {
 
   // DELETE /api/users/me/pin — unpin the pinned post
   fastify.delete('/me/pin', auth, unpinPostHandler as any);
+
+  // GET /api/users/me/profile-stats — profile analytics (top post, friends growth), Lite+ only
+  fastify.get('/me/profile-stats', auth, getProfileStatsHandler as any);
 
   // Block/unblock
   fastify.post('/:id/block', auth, blockUserHandler as any);
@@ -111,28 +114,37 @@ export async function usersRoutes(fastify: FastifyInstance) {
   // DELETE /api/users/me/account — soft-delete own account
   fastify.delete('/me/account', auth, deleteAccountHandler as any);
 
-  // ── Fursona (1:1 per user) ────────────────────────────────────────────────
-  // PUT  /api/users/me/fursona  — create or update own fursona
-  fastify.put('/me/fursona', { schema: updateFursonaSchema, onRequest: [fastify.authenticate] }, upsertFursonaHandler as any);
+  // ── Fursona (1:N per user, up to 10 characters) ───────────────────────────
+  // GET  /api/users/:id/fursonas — public character list (likes/dislikes gated by owner setting)
+  fastify.get('/:id/fursonas', getFursonasHandler as any);
 
-  // GET  /api/users/:id/fursona — public fursona (likes/dislikes gated by owner setting)
-  fastify.get('/:id/fursona', getFursonaHandler as any);
+  // POST /api/users/me/fursonas — create a new character
+  fastify.post('/me/fursonas', { schema: updateFursonaSchema, onRequest: [fastify.authenticate] }, createFursonaHandler as any);
 
-  // ── Fursona reference gallery (1:N per user) ──────────────────────────────
-  // GET  /api/users/:id/fursona/references — public gallery listing
-  fastify.get('/:id/fursona/references', getReferenceImagesHandler as any);
+  // PUT  /api/users/me/fursonas/:fursonaId
+  fastify.put('/me/fursonas/:fursonaId', { schema: { ...updateFursonaSchema, ...fursonaIdParamSchema }, onRequest: [fastify.authenticate] }, updateFursonaHandler as any);
 
-  // GET  /api/users/:id/fursona/references/:refId/watermarked — watermarked image (auth required)
-  fastify.get('/:id/fursona/references/:refId/watermarked', auth, getWatermarkedReferenceImageHandler as any);
+  // DELETE /api/users/me/fursonas/:fursonaId — soft delete, reassigns primary if needed
+  fastify.delete('/me/fursonas/:fursonaId', { schema: fursonaIdParamSchema, onRequest: [fastify.authenticate] }, deleteFursonaHandler as any);
 
-  // POST /api/users/me/fursona/references — add a reference image
-  fastify.post('/me/fursona/references', { schema: upsertReferenceImageSchema, onRequest: [fastify.authenticate] }, addReferenceImageHandler as any);
+  // PATCH /api/users/me/fursonas/:fursonaId/primary — mark this character as primary
+  fastify.patch('/me/fursonas/:fursonaId/primary', { schema: fursonaIdParamSchema, onRequest: [fastify.authenticate] }, setPrimaryFursonaHandler as any);
 
-  // PUT  /api/users/me/fursona/references/:refId
-  fastify.put('/me/fursona/references/:refId', { schema: { ...upsertReferenceImageSchema, ...referenceImageIdParamSchema }, onRequest: [fastify.authenticate] }, updateReferenceImageHandler as any);
+  // ── Fursona reference gallery (1:N per Fursona) ───────────────────────────
+  // GET  /api/users/:id/fursonas/:fursonaId/references — public gallery listing
+  fastify.get('/:id/fursonas/:fursonaId/references', getReferenceImagesHandler as any);
 
-  // DELETE /api/users/me/fursona/references/:refId
-  fastify.delete('/me/fursona/references/:refId', { schema: referenceImageIdParamSchema, onRequest: [fastify.authenticate] }, deleteReferenceImageHandler as any);
+  // GET  /api/users/:id/fursonas/:fursonaId/references/:refId/watermarked — watermarked image (auth required)
+  fastify.get('/:id/fursonas/:fursonaId/references/:refId/watermarked', auth, getWatermarkedReferenceImageHandler as any);
+
+  // POST /api/users/me/fursonas/:fursonaId/references — add a reference image
+  fastify.post('/me/fursonas/:fursonaId/references', { schema: { ...upsertReferenceImageSchema, ...fursonaIdParamSchema }, onRequest: [fastify.authenticate] }, addReferenceImageHandler as any);
+
+  // PUT  /api/users/me/fursonas/:fursonaId/references/:refId
+  fastify.put('/me/fursonas/:fursonaId/references/:refId', { schema: { ...upsertReferenceImageSchema, ...referenceImageIdParamSchema }, onRequest: [fastify.authenticate] }, updateReferenceImageHandler as any);
+
+  // DELETE /api/users/me/fursonas/:fursonaId/references/:refId
+  fastify.delete('/me/fursonas/:fursonaId/references/:refId', { schema: referenceImageIdParamSchema, onRequest: [fastify.authenticate] }, deleteReferenceImageHandler as any);
 
   // ── Fursuits (1:N per user) ───────────────────────────────────────────────
   // GET  /api/users/:id/fursuits

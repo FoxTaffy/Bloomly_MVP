@@ -10,6 +10,7 @@ const FRIEND_USER_SELECT = {
   badge_type:   true,
   location:     true,
   birth_date:   true,
+  deceased_at:  true,
 } as const;
 
 export const friendsService = {
@@ -235,6 +236,31 @@ export const friendsService = {
       })
       .filter((f) => f.daysUntil <= 30)
       .sort((a, b) => a.daysUntil - b.daysUntil);
+  },
+
+  /** Friends whose birthday is yesterday, today, or tomorrow (for the messages banner) */
+  async getNearbyBirthdays(userId: string) {
+    const friends = await this.getFriends(userId);
+    const now = new Date();
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const currentYear = now.getFullYear();
+
+    return friends
+      .filter((f) => f.birth_date)
+      .map((f) => {
+        const bd = new Date(f.birth_date as Date);
+        let occurrence = new Date(currentYear, bd.getMonth(), bd.getDate());
+        let daysOffset = Math.round((occurrence.getTime() - todayMidnight.getTime()) / (1000 * 60 * 60 * 24));
+        // Birthday already passed by more than a day this year — check next year's occurrence instead
+        if (daysOffset < -1) {
+          occurrence = new Date(currentYear + 1, bd.getMonth(), bd.getDate());
+          daysOffset = Math.round((occurrence.getTime() - todayMidnight.getTime()) / (1000 * 60 * 60 * 24));
+        }
+        const age = occurrence.getFullYear() - bd.getFullYear();
+        return { ...f, daysOffset, age, occurredAt: occurrence.toISOString() };
+      })
+      .filter((f) => f.daysOffset >= -1 && f.daysOffset <= 1)
+      .sort((a, b) => a.daysOffset - b.daysOffset);
   },
 
   /** Suggested users = friends of friends (people my friends follow/are followed by) */

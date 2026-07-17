@@ -62,21 +62,38 @@ export const useAuthStore = defineStore('auth', () => {
   /** Restore session on page load by using the httpOnly refresh_token cookie.
    *  `lenient=true` (mid-session, triggered by the axios 401 interceptor) keeps the
    *  current session intact on a transient failure (network blip, 5xx) instead of
-   *  wiping it — only a server-confirmed 401 means the session is actually dead. */
+   *  wiping it — only a server-confirmed 401 means the session is actually dead.
+   *  A confirmed 401 (no/expired refresh cookie) always wipes immediately — that's
+   *  a real "not logged in", not a hiccup. Anything else (network blip, cold start,
+   *  5xx, 429) is retried with backoff before the initial (non-lenient) call gives
+   *  up, so a valid 30-day "remember me" cookie can't be thrown away by one bad
+   *  request. */
   async function tryRefresh(lenient = false): Promise<boolean> {
-    try {
-      const res = await api.post('/auth/refresh')
-      if (res.data.success) {
-        token.value = res.data.data.token
-        user.value  = res.data.data.user
-        saveUser(res.data.data.user)
-        return true
-      }
-    } catch (e: any) {
-      const confirmedDead = e?.response?.status === 401
-      if (!lenient || confirmedDead) {
-        clearUser()
-        user.value = null
+    const maxAttempts = lenient ? 1 : 3
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const res = await api.post('/auth/refresh')
+        if (res.data.success) {
+          token.value = res.data.data.token
+          user.value  = res.data.data.user
+          saveUser(res.data.data.user)
+          return true
+        }
+      } catch (e: any) {
+        const confirmedDead = e?.response?.status === 401
+        if (confirmedDead) {
+          clearUser()
+          user.value = null
+          return false
+        }
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, attempt * 400))
+          continue
+        }
+        if (!lenient) {
+          clearUser()
+          user.value = null
+        }
       }
     }
     return false
