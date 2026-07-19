@@ -10,6 +10,7 @@ import TodolistPanel from '@/components/groups/panels/TodolistPanel.vue'
 import OrdersPanel from '@/components/groups/panels/OrdersPanel.vue'
 import OverviewPanel from '@/components/groups/panels/OverviewPanel.vue'
 import BalancePanel from '@/components/groups/panels/BalancePanel.vue'
+import InboxPanel from '@/components/groups/panels/InboxPanel.vue'
 import { useGroupsStore } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useNsfwMode } from '@/composables/useNsfwMode'
@@ -33,13 +34,14 @@ interface ToolTab {
   key: string
   label: string
   icon: string
-  kind: 'overview' | 'applications' | 'tickets' | 'todolist' | 'orders' | 'balance' | 'settings'
+  kind: 'overview' | 'applications' | 'tickets' | 'todolist' | 'orders' | 'balance' | 'inbox' | 'settings'
   settingsSection?: string
   settingsDesc?: string
 }
 
 const OVERVIEW_TAB: ToolTab = { key: 'overview', label: 'Обзор', icon: 'BarChart3', kind: 'overview' }
 const BALANCE_TAB: ToolTab = { key: 'balance', label: 'Баланс', icon: 'Wallet', kind: 'balance' }
+const INBOX_TAB: ToolTab = { key: 'inbox', label: 'Обращения', icon: 'Inbox', kind: 'inbox' }
 
 const toolTabs = computed<ToolTab[]>(() => {
   const t = group.value?.type
@@ -50,6 +52,7 @@ const toolTabs = computed<ToolTab[]>(() => {
     { key: 'tickets',      label: 'Билеты',             icon: 'Ticket',        kind: 'tickets' },
     { key: 'status',       label: 'Статус события',     icon: 'CalendarCheck', kind: 'settings', settingsSection: 'sec-event', settingsDesc: 'Дата, статус и детали мероприятия' },
     { key: 'schedule',     label: 'Программа',          icon: 'Clock',         kind: 'settings', settingsSection: 'sec-event', settingsDesc: 'Расписание мероприятия' },
+    INBOX_TAB,
     BALANCE_TAB,
   ]
 
@@ -59,6 +62,7 @@ const toolTabs = computed<ToolTab[]>(() => {
     { key: 'members',  label: 'Участники', icon: 'Users',       kind: 'applications' },
     { key: 'todo',     label: 'Todolist',  icon: 'CheckSquare', kind: 'todolist' },
     { key: 'price',    label: 'Прайс',     icon: 'Tag',         kind: 'settings', settingsDesc: 'Цены и услуги — настраиваются в общих настройках' },
+    INBOX_TAB,
     BALANCE_TAB,
   ]
 
@@ -68,12 +72,14 @@ const toolTabs = computed<ToolTab[]>(() => {
     { key: 'members', label: 'Участники', icon: 'Users',       kind: 'applications' },
     { key: 'todo',    label: 'Todolist',  icon: 'CheckSquare', kind: 'todolist' },
     { key: 'price',   label: 'Прайс',     icon: 'Tag',         kind: 'settings', settingsSection: 'sec-prices', settingsDesc: 'Цены и услуги' },
+    INBOX_TAB,
     BALANCE_TAB,
   ]
 
   if (t === 'news') return [
     OVERVIEW_TAB,
     { key: 'team', label: 'Редакция', icon: 'Users', kind: 'settings', settingsSection: 'sec-members', settingsDesc: 'Состав редакции и роли' },
+    INBOX_TAB,
     BALANCE_TAB,
   ]
 
@@ -82,6 +88,7 @@ const toolTabs = computed<ToolTab[]>(() => {
     { key: 'orders',   label: 'Заказы',      icon: 'Package',     kind: 'orders' },
     { key: 'members',  label: 'Покупатели',  icon: 'Users',       kind: 'applications' },
     { key: 'goods',    label: 'Каталог',     icon: 'ShoppingBag', kind: 'settings', settingsSection: 'sec-prices', settingsDesc: 'Товары магазина' },
+    INBOX_TAB,
     BALANCE_TAB,
   ]
 
@@ -89,6 +96,7 @@ const toolTabs = computed<ToolTab[]>(() => {
   return [
     OVERVIEW_TAB,
     { key: 'members', label: 'Участники', icon: 'Users', kind: 'applications' },
+    INBOX_TAB,
     BALANCE_TAB,
   ]
 })
@@ -194,6 +202,9 @@ watch(() => route.params.slugOrId, load)
 
               <BalancePanel v-else-if="activeToolTab.kind === 'balance'"
                 :group-id="group.id" :group-slug="(group as any).slug ?? group.id" :donations-enabled="!!(group as any).donations_enabled" />
+
+              <InboxPanel v-else-if="activeToolTab.kind === 'inbox'"
+                :group-id="group.id" />
 
               <div v-else-if="activeToolTab.kind === 'settings'"
                 class="bg-brand-card border border-brand-border rounded-3xl p-8 text-center space-y-4">

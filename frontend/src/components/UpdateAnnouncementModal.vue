@@ -75,7 +75,7 @@ const close = () => {
           enter-from-class="opacity-0 scale-95 translate-y-3"
           enter-to-class="opacity-100 scale-100 translate-y-0"
         >
-          <div class="relative w-full max-w-sm max-h-[85vh] rounded-3xl overflow-hidden border border-white/10 bg-[#12121f] shadow-2xl flex flex-col">
+          <div class="relative w-full max-w-md max-h-[85vh] rounded-3xl overflow-hidden border border-white/10 bg-[#12121f] shadow-2xl flex flex-col">
             <!-- Close — pinned outside the scroll area so it's always reachable -->
             <button
               @click="close"
@@ -89,8 +89,8 @@ const close = () => {
             <!-- Scrollable body — image + text can be arbitrarily long -->
             <div class="overflow-y-auto">
               <!-- Cover -->
-              <img v-if="update.image_url" :src="update.image_url" class="w-full aspect-video object-cover flex-shrink-0" />
-              <div v-else class="w-full aspect-[2/1] bg-gradient-to-br from-[#4C67CF] via-[#7c3aed] to-[#4C67CF] flex items-center justify-center flex-shrink-0">
+              <img v-if="update.image_url" :src="update.image_url" class="w-full aspect-[3/1] object-cover flex-shrink-0" />
+              <div v-else class="w-full aspect-[3/1] bg-gradient-to-br from-[#4C67CF] via-[#7c3aed] to-[#4C67CF] flex items-center justify-center flex-shrink-0">
                 <span class="text-white font-black text-5xl select-none" style="font-family:system-ui,sans-serif;letter-spacing:-2px">B</span>
               </div>
 
@@ -130,4 +130,5 @@ const close = () => {
 .update-body :deep(p:first-child) { margin-top: 0; }
 .update-body :deep(b),
 .update-body :deep(strong) { font-weight: 800; color: white; }
+.update-body { white-space: pre-line; }
 </style>

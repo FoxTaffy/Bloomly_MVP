@@ -11,8 +11,10 @@ export interface SendMessageInput {
   file_url?: string | null;
   media_type?: string;
   reply_to_id?: string | null;
-  type?: 'payment_request' | 'tip' | 'post_share';
+  type?: 'payment_request' | 'tip' | 'post_share' | 'group_share';
   metadata?: Record<string, unknown> | null;
+  /** 2+ files sent together as one message (photo+video album), e.g. Telegram-style. */
+  attachments?: Array<{ url: string; media_type?: string }>;
 }
 
 export interface GetMessagesQuery {

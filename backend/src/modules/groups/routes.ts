@@ -38,8 +38,8 @@ import {
   deleteSubEventHandler,
   getGroupMessagesHandler,
   sendGroupMessageHandler,
-  initGroupChatHandler,
-  getGroupChatInfoHandler,
+  startGroupDmHandler,
+  getGroupInboxHandler,
   getGroupTodoColumnsHandler,
   updateGroupTodoColumnsHandler,
   getGroupTodoHandler,
@@ -157,8 +157,8 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.get('/:id/chat', getGroupMessagesHandler as any);
   fastify.post('/:id/chat', auth, sendGroupMessageHandler as any);
   // ── Community Conversation ────────────────────────────────────────────────────
-  fastify.post('/:id/init-chat', auth, initGroupChatHandler as any);    // owner only
-  fastify.get('/:id/chat-info', getGroupChatInfoHandler as any);          // public
+  fastify.post('/:id/dm', auth, startGroupDmHandler as any);        // any member: find-or-create my personal thread with the group
+  fastify.get('/:id/inbox', auth, getGroupInboxHandler as any);     // owner/admin/moderator only: shared inbox of all members' threads
 
   // ── Artist Queue (Todo) ────────────────────────────────────────────────
   fastify.get('/:id/todo-columns', getGroupTodoColumnsHandler as any);

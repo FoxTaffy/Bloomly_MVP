@@ -77,6 +77,9 @@ export const updateGroupHandler = async (
     const group = await groupService.update(request.params.id, request.body);
     return ok(reply, { group });
   } catch (e: any) {
+    if (e instanceof Error && e.message === 'CATEGORY_CHANGE_COOLDOWN') {
+      return fail(reply, 429, 'CATEGORY_CHANGE_COOLDOWN', 'Категорию можно менять не чаще одного раза в месяц');
+    }
     return fail(reply, 400, 'UPDATE_GROUP_ERROR', e.message);
   }
 };
@@ -694,33 +697,31 @@ export const sendGroupMessageHandler = async (
   }
 };
 
-// ── Community Conversation ────────────────────────────────────────────────────
+// ── Group DM ("написать сообществу") ──────────────────────────────────────────
 
-export const initGroupChatHandler = async (
+export const startGroupDmHandler = async (
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) => {
   try {
     const { id: userId } = request.user as JwtUser;
-    const group = await groupService.getGroupOwner(request.params.id);
-    if (!group) return fail(reply, 404, 'NOT_FOUND', 'Group not found');
-    if (group.owner_id !== userId) return fail(reply, 403, 'FORBIDDEN', 'Only group owner can enable community chat');
-    const result = await messageService.initCommunityChat(request.params.id, userId);
+    const result = await messageService.startGroupDm(request.params.id, userId);
     return ok(reply, result, result.alreadyExists ? 200 : 201);
   } catch (e: any) {
-    return fail(reply, e.statusCode ?? 500, 'INIT_CHAT_ERROR', e.message);
+    return fail(reply, e.statusCode ?? 500, 'START_DM_ERROR', e.message);
   }
 };
 
-export const getGroupChatInfoHandler = async (
+export const getGroupInboxHandler = async (
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) => {
   try {
-    const conversation = await messageService.getCommunityConversation(request.params.id);
-    return ok(reply, { conversation });
+    const { id: userId } = request.user as JwtUser;
+    const threads = await messageService.getGroupInbox(request.params.id, userId);
+    return ok(reply, { threads });
   } catch (e: any) {
-    return fail(reply, 500, 'GET_CHAT_ERROR', e.message);
+    return fail(reply, e.statusCode ?? 500, 'GET_INBOX_ERROR', e.message);
   }
 };
 

@@ -283,13 +283,11 @@ watch(() => props.src, async (newSrc) => {
           </Transition>
         </div>
       </div>
-      <div class="flex items-center justify-between">
-        <span class="text-[9px] text-white/55 tabular-nums">{{ fmtCurrent }}</span>
-        <div class="flex items-center gap-1.5">
-          <button @click="cycleSpeed" class="text-[9px] font-bold tabular-nums px-1 py-px rounded transition-colors"
-            :class="playbackRate !== 1 ? 'text-brand-accent' : 'text-white/55 hover:text-brand-accent'">{{ playbackRate }}×</button>
-          <span class="text-[9px] text-white/55 tabular-nums">{{ fmtDuration }}</span>
-        </div>
+      <div class="grid grid-cols-3 items-center">
+        <span class="text-[9px] text-white/55 tabular-nums text-left">{{ fmtCurrent }}</span>
+        <button @click="cycleSpeed" class="text-[9px] font-bold tabular-nums px-1 py-px rounded transition-colors justify-self-center"
+          :class="playbackRate !== 1 ? 'text-brand-accent' : 'text-white/55 hover:text-brand-accent'">{{ playbackRate }}×</button>
+        <span class="text-[9px] text-white/55 tabular-nums text-right">{{ fmtDuration }}</span>
       </div>
     </div>
   </div>

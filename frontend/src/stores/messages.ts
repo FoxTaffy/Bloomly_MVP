@@ -11,6 +11,7 @@ export interface MsgSender {
   username: string
   display_name: string | null
   avatar_url: string | null
+  banner_url?: string | null
   badge_type?: string | null
 }
 
@@ -57,12 +58,27 @@ export interface Conversation {
   name: string | null
   avatar_url: string | null
   banner_url: string | null
-  my_participant: { archived: boolean; hidden_at: string | null; last_read_at: string | null; role: string; label?: string; personal_pinned_message_id?: string | null }
+  my_participant: {
+    archived: boolean; hidden_at: string | null; last_read_at: string | null; role: string; label?: string
+    personal_pinned_message_id?: string | null; muted_until?: string | null; sound_muted?: boolean
+  }
   pinned_message: PinnedMessage | null
   last_message: Message | null
   /** Real total member count — `other_participants` is capped server-side to a handful for avatar rendering. */
   participants_count?: number
+  /** Number of unread messages in this conversation (server-computed). */
+  unread_count?: number
+  /** Set only for type='community' — the regular member whose personal thread with the group this is. */
+  group_dm_user_id?: string | null
   other_participants: Array<{ user_id: string; user: MsgSender; last_read_at?: string | null; role?: string }>
+}
+
+export interface GroupInboxThread {
+  id: string
+  customer: MsgSender
+  last_message: { id: string; text: string | null; type: string; sender_id: string; created_at: string } | null
+  updated_at: string
+  needs_reply: boolean
 }
 
 // ── Notification sound ───────────────────────────────────────────────────────
@@ -131,6 +147,9 @@ export const useMessagesStore = defineStore('messages', () => {
       if (conv) {
         conv.last_message = msg
         conv.updated_at = msg.created_at
+        if (msg.sender_id !== auth.user?.id && activeId.value !== convId) {
+          conv.unread_count = (conv.unread_count ?? 0) + 1
+        }
         conversations.value.sort(
           (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
         )
@@ -138,15 +157,20 @@ export const useMessagesStore = defineStore('messages', () => {
         fetchConversations()
       }
 
-      if (activeId.value !== convId) unreadCount.value++
+      // Own messages (e.g. sent from another device/tab) must never bump the badge —
+      // only count real incoming messages from someone else.
+      if (!isOwn && activeId.value !== convId) unreadCount.value++
       if (!isOwn) {
-        playNotificationSound()
-        // Only pop a toast for conversations the user isn't currently looking at
-        if (activeId.value !== convId) {
+        if (!isConvSoundMuted(conv)) playNotificationSound()
+        // Only pop a toast for conversations the user isn't currently looking at, and
+        // never for a fully muted one (sound-only mute still shows the toast).
+        if (activeId.value !== convId && !isConvMuted(conv)) {
           const preview = msg.text
             ? msg.text
             : msg.type === 'sticker' ? '🎭 Стикер'
-            : msg.type === 'voice' || msg.type === 'audio' ? '🎤 Голосовое сообщение'
+            : msg.type === 'voice' ? '🎤 Голосовое сообщение'
+            : msg.type === 'audio' ? '🎵 Аудио'
+            : msg.type === 'album' ? '📎 Альбом'
             : msg.file_url ? '📎 Медиафайл'
             : '...'
           useNotifToast().addMessageToast({
@@ -205,10 +229,15 @@ export const useMessagesStore = defineStore('messages', () => {
       if (!conversationId || !userId || !last_read_at) return
       const conv = conversations.value.find((c) => c.id === conversationId)
       if (!conv) return
-      // Only store if this is the partner's receipt (not ours)
       const auth = useAuthStore()
       if (userId !== auth.user?.id) {
+        // Partner's receipt — used to render the "read" checkmark on our own messages.
         partnerLastRead.value[conversationId] = last_read_at
+      } else if (conv.my_participant) {
+        // Our own read receipt, echoed back (e.g. read on another device/tab) — keeps
+        // the conversation list's unread dot/bold state in sync without a full refetch.
+        conv.my_participant.last_read_at = last_read_at
+        conv.unread_count = 0
       }
     })
   }
@@ -231,7 +260,15 @@ export const useMessagesStore = defineStore('messages', () => {
     loading.value = true
     try {
       const res = await api.get('/messages/conversations')
-      conversations.value = res.data.data.conversations ?? []
+      const fresh: Conversation[] = res.data.data.conversations ?? []
+      // Preserve a conversation opened via openConversationById() that legitimately isn't
+      // in this list — e.g. group staff peeking at a member's thread from the inbox: staff
+      // aren't a ConversationParticipant, so it never appears in their own /conversations,
+      // but it shouldn't vanish out from under them mid-view because of this refetch.
+      const activeExtra = activeId.value && !fresh.some((c) => c.id === activeId.value)
+        ? conversations.value.find((c) => c.id === activeId.value)
+        : undefined
+      conversations.value = activeExtra ? [activeExtra, ...fresh] : fresh
       // Seed partnerLastRead from loaded conversations
       for (const conv of conversations.value) {
         const partner = conv.other_participants?.[0]
@@ -310,8 +347,16 @@ export const useMessagesStore = defineStore('messages', () => {
     await fetchMessages(convId, oldest)
   }
 
-  async function sendMessage(convId: string, content: string, fileUrl?: string | null, mediaType?: string, replyToId?: string | null) {
+  async function sendMessage(
+    convId: string,
+    content: string,
+    fileUrl?: string | null,
+    mediaType?: string,
+    replyToId?: string | null,
+    attachments?: Array<{ url: string; media_type?: string }>,
+  ) {
     const auth = useAuthStore()
+    const isAlbum = !!attachments && attachments.length > 1
     // Optimistic message
     const tempId = `tmp_${Date.now()}`
     const temp: Message = {
@@ -319,8 +364,9 @@ export const useMessagesStore = defineStore('messages', () => {
       conversation_id: convId,
       sender_id: auth.user?.id ?? '',
       text: content || null,
-      type: mediaType === 'sticker' ? 'sticker' : fileUrl ? (mediaType ?? 'image') : 'text',
+      type: isAlbum ? 'album' : mediaType === 'sticker' ? 'sticker' : fileUrl ? (mediaType ?? 'image') : 'text',
       file_url: fileUrl ?? null,
+      metadata: isAlbum ? { files: attachments!.map((a) => ({ url: a.url, type: a.media_type ?? 'image' })) } : null,
       reply_to_id: replyToId ?? null,
       created_at: new Date().toISOString(),
       deleted_at: null,
@@ -343,6 +389,7 @@ export const useMessagesStore = defineStore('messages', () => {
         file_url: fileUrl ?? undefined,
         media_type: mediaType ?? undefined,
         reply_to_id: replyToId ?? undefined,
+        attachments: attachments ?? undefined,
       })
       const msg = res.data?.data?.message as Message | undefined
       const list = messages.value[convId]
@@ -380,6 +427,16 @@ export const useMessagesStore = defineStore('messages', () => {
   /** Shares a post into a chat as a rich card message. */
   async function sendPostShare(convId: string, postId: string) {
     const res = await api.post(`/messages/conversations/${convId}/messages`, { type: 'post_share', metadata: { postId } })
+    const msg = res.data?.data?.message as Message | undefined
+    if (msg && messages.value[convId] && !messages.value[convId].some((m) => m.id === msg.id)) {
+      messages.value[convId].push(msg)
+    }
+    return msg
+  }
+
+  /** Invites someone to a group by sharing it into a DM as a rich card message. */
+  async function sendGroupShare(convId: string, groupId: string) {
+    const res = await api.post(`/messages/conversations/${convId}/messages`, { type: 'group_share', metadata: { groupId } })
     const msg = res.data?.data?.message as Message | undefined
     if (msg && messages.value[convId] && !messages.value[convId].some((m) => m.id === msg.id)) {
       messages.value[convId].push(msg)
@@ -453,6 +510,11 @@ export const useMessagesStore = defineStore('messages', () => {
   async function markRead(convId: string) {
     try {
       await api.post(`/messages/conversations/${convId}/read`)
+      // Optimistic — don't wait for the read_receipt WS round-trip to clear the
+      // conversation list's unread dot/bold state for the conversation just read.
+      const conv = conversations.value.find((c) => c.id === convId)
+      if (conv?.my_participant) conv.my_participant.last_read_at = new Date().toISOString()
+      if (conv) conv.unread_count = 0
       await fetchUnreadCount()
     } catch { /* silent */ }
   }
@@ -461,6 +523,24 @@ export const useMessagesStore = defineStore('messages', () => {
     await api.patch(`/messages/conversations/${convId}/archive`, { archived })
     const conv = conversations.value.find((c) => c.id === convId)
     if (conv?.my_participant) conv.my_participant.archived = archived
+  }
+
+  /** `mutedUntil: null` unmutes. `soundMuted` silences sound only, independent of the full mute. */
+  async function setMute(convId: string, opts: { mutedUntil?: string | null; soundMuted?: boolean }) {
+    await api.patch(`/messages/conversations/${convId}/mute`, { muted_until: opts.mutedUntil, sound_muted: opts.soundMuted })
+    const conv = conversations.value.find((c) => c.id === convId)
+    if (conv?.my_participant) {
+      if (opts.mutedUntil !== undefined) conv.my_participant.muted_until = opts.mutedUntil
+      if (opts.soundMuted !== undefined) conv.my_participant.sound_muted = opts.soundMuted
+    }
+  }
+
+  function isConvMuted(conv: Conversation | undefined): boolean {
+    const until = conv?.my_participant?.muted_until
+    return !!until && new Date(until) > new Date()
+  }
+  function isConvSoundMuted(conv: Conversation | undefined): boolean {
+    return isConvMuted(conv) || !!conv?.my_participant?.sound_muted
   }
 
   async function deleteConversation(convId: string, scope: 'me' | 'all') {
@@ -505,29 +585,35 @@ export const useMessagesStore = defineStore('messages', () => {
     await api.patch(`/messages/conversations/${convId}/members/${userId}/role`, { role })
   }
 
-  // ── Community (group) conversation ─────────────────────────────────────
-  async function initGroupChat(groupId: string): Promise<{ conversation: Conversation; alreadyExists: boolean }> {
-    const res = await api.post(`/groups/${groupId}/init-chat`)
-    return res.data.data as { conversation: Conversation; alreadyExists: boolean }
+  // ── Group DM ("написать сообществу") ─────────────────────────────────────
+  // Find-or-create my personal thread with a group, then make it the active conversation.
+  async function startGroupDm(groupId: string): Promise<string | null> {
+    const res = await api.post(`/groups/${groupId}/dm`)
+    const conversation = res.data.data?.conversation as Conversation | undefined
+    if (!conversation) return null
+    const idx = conversations.value.findIndex(c => c.id === conversation.id)
+    if (idx === -1) conversations.value.unshift(conversation)
+    else conversations.value[idx] = conversation
+    activeId.value = conversation.id
+    return conversation.id
   }
 
-  async function getGroupChatInfo(groupId: string): Promise<Conversation | null> {
-    const res = await api.get(`/groups/${groupId}/chat-info`)
-    return (res.data.data?.conversation ?? null) as Conversation | null
+  async function getGroupInbox(groupId: string): Promise<GroupInboxThread[]> {
+    const res = await api.get(`/groups/${groupId}/inbox`)
+    return (res.data.data?.threads ?? []) as GroupInboxThread[]
   }
 
-  async function openGroupConversation(groupId: string): Promise<string | null> {
-    const chatInfo = await getGroupChatInfo(groupId)
-    if (!chatInfo) return null
-    const convId = chatInfo.id
-    // Ensure full conversation data (with participants) is in the list
-    const existing = conversations.value.find(c => c.id === convId)
-    if (!existing || !existing.other_participants) {
-      // Reload all – this returns full participant data from the server
-      await fetchConversations()
+  // Open a conversation the caller isn't necessarily a participant of (e.g. group staff
+  // opening a member's thread from the inbox) — fetches it standalone and activates it.
+  async function openConversationById(convId: string): Promise<void> {
+    const res = await api.get(`/messages/conversations/${convId}`)
+    const conversation = res.data.data?.conversation as Conversation | undefined
+    if (conversation) {
+      const idx = conversations.value.findIndex(c => c.id === conversation.id)
+      if (idx === -1) conversations.value.unshift(conversation)
+      else conversations.value[idx] = conversation
     }
     activeId.value = convId
-    return convId
   }
 
   // ── Pin / Unpin message ─────────────────────────────────────
@@ -566,6 +652,16 @@ export const useMessagesStore = defineStore('messages', () => {
       return res.data.data.stats as Record<string, number>
     } catch {
       return {}
+    }
+  }
+
+  /** Paginated messages of one media type, for the media-browser sub-view (Фото/Видео/Аудио/Голос/Ссылки). */
+  async function getMediaMessages(convId: string, type: string, before?: string): Promise<Message[]> {
+    try {
+      const res = await api.get(`/messages/conversations/${convId}/media`, { params: { type, before } })
+      return (res.data?.data?.messages ?? []) as Message[]
+    } catch {
+      return []
     }
   }
 
@@ -610,12 +706,16 @@ export const useMessagesStore = defineStore('messages', () => {
     sendPaymentRequest,
     sendTip,
     sendPostShare,
+    sendGroupShare,
     payRequest,
     deleteMessage,
     editMessage,
     toggleReaction,
     markRead,
     setArchived,
+    setMute,
+    isConvMuted,
+    isConvSoundMuted,
     deleteConversation,
     closeConversation,
     createGroup,
@@ -624,12 +724,13 @@ export const useMessagesStore = defineStore('messages', () => {
     addGroupMember,
     removeGroupMember,
     setGroupMemberRole,
-    initGroupChat,
-    getGroupChatInfo,
-    openGroupConversation,
+    startGroupDm,
+    getGroupInbox,
+    openConversationById,
     pinMessage,
     unpinMessage,
     getMediaStats,
+    getMediaMessages,
     forwardMessage,
   }
 })

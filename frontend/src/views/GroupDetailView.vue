@@ -593,25 +593,25 @@ async function shareGroup() {
   }
 }
 
-// ── Community chat ──────────────────────────────────────────────────
-const initChatLoading = ref(false)
+// ── Group chat ────────────────────────────────────────────────────────
+// Regular members message the group directly (personal thread, any admin can reply as
+// the group). Admins/owner instead go to their shared inbox of everyone's threads.
+const dmLoading = ref(false)
 
-async function openGroupChat() {
+async function openGroupChatOrInbox() {
   if (!group.value) return
-  const convId = await messagesStore.openGroupConversation(group.value.id)
-  if (convId) router.push({ name: 'messages' })
-}
-
-async function initCommunityChat() {
-  if (!group.value || initChatLoading.value) return
-  initChatLoading.value = true
+  if (isAdmin.value) {
+    router.push({ name: 'group-admin-tools', params: { slugOrId: group.value.slug || group.value.id }, query: { tab: 'inbox' } })
+    return
+  }
+  if (dmLoading.value) return
+  dmLoading.value = true
   try {
-    await messagesStore.initGroupChat(group.value.id)
-    // reload to refresh communityChat relation
-    await groupsStore.loadGroup(group.value.slug || group.value.id)
-    await openGroupChat()
-  } catch (e) { console.error('Init community chat failed', e) }
-  finally { initChatLoading.value = false }
+    const convId = await messagesStore.startGroupDm(group.value.id)
+    if (convId) router.push({ name: 'messages' })
+  } finally {
+    dmLoading.value = false
+  }
 }
 
 function fmt(iso: string) { return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) }
@@ -836,18 +836,18 @@ const vClickOutside = {
                       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-border bg-brand-bg text-white/55 text-sm font-bold hover:bg-brand-border/50 transition-all">
                       <BIcon name="UserMinus" class="w-4 h-4" /> Отписаться
                     </button>
-                    <!-- Community chat button -->
-                    <button v-if="(group as any).communityChat?.id"
-                      @click="openGroupChat()"
+                    <!-- Group chat: admins/owner → shared inbox; everyone else → their own thread with the group -->
+                    <button v-if="isAdmin"
+                      @click="openGroupChatOrInbox()"
                       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-border bg-brand-bg text-white/55 text-sm font-bold hover:border-brand-accent/60 hover:text-brand-accent transition-all">
-                      <BIcon name="MessageCircle" class="w-4 h-4" /> Чат
+                      <BIcon name="Inbox" class="w-4 h-4" /> Обращения
                     </button>
-                    <button v-else-if="isOwner && !(group as any).communityChat?.id"
-                      @click="initCommunityChat()"
-                      :disabled="initChatLoading"
-                      class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-border bg-brand-bg text-white/55 text-sm font-bold hover:border-brand-success/60 hover:text-brand-success transition-all disabled:opacity-50">
-                      <BIcon name="MessageSquarePlus" class="w-4 h-4" />
-                      {{ initChatLoading ? 'Создаю…' : 'Включить чат' }}
+                    <button v-else
+                      @click="openGroupChatOrInbox()"
+                      :disabled="dmLoading"
+                      class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-border bg-brand-bg text-white/55 text-sm font-bold hover:border-brand-accent/60 hover:text-brand-accent transition-all disabled:opacity-50">
+                      <BIcon name="MessageCircle" class="w-4 h-4" />
+                      {{ dmLoading ? 'Открываю…' : 'Написать в группу' }}
                     </button>
                     <button v-if="isOwner"
                       @click="router.push({ name: 'group-settings', params: { slugOrId: group!.slug } })"

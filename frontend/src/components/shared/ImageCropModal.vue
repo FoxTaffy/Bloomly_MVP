@@ -32,7 +32,7 @@
               ref="cropperRef"
               class="crop-viewport"
               :src="src"
-              :stencil-component="type === 'avatar' ? CircleStencil : RectangleStencil"
+              :stencil-component="stencilShape === 'circle' ? CircleStencil : RectangleStencil"
               :stencil-props="{ aspectRatio: type === 'avatar' ? 1 : 3, movable: true, resizable: true }"
               image-restriction="stencil"
             />
@@ -79,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { Cropper, CircleStencil, RectangleStencil } from 'vue-advanced-cropper'
 import 'vue-advanced-cropper/dist/style.css'
 
@@ -89,10 +89,13 @@ const props = defineProps<{
   show: boolean
   src: string
   type: 'avatar' | 'banner'
+  shape?: 'circle' | 'square'
   accentColor?: string
   uploading?: boolean
   hint?: string
 }>()
+
+const stencilShape = computed(() => props.shape ?? (props.type === 'avatar' ? 'circle' : 'square'))
 
 const emit = defineEmits<{
   cancel: []

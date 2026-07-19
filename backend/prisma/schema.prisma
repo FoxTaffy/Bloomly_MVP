@@ -95,6 +95,7 @@ model User {
   wallet                         Wallet?
   groupTransactions              GroupTransaction[]
   conversationParticipants       ConversationParticipant[]
+  groupDmConversations           Conversation[]             @relation("GroupDmUser")
   sentMessages                   Message[]
   blocksGiven                    Block[]                   @relation("Blocker")
   blocksReceived                 Block[]                   @relation("Blocked")
@@ -583,20 +584,25 @@ model Conversation {
   updated_at   DateTime                  @updatedAt
   deleted_at   DateTime?
   type         String                    @default("direct") @db.VarChar(20) // direct | group | community
-  is_group     Boolean                   @default(false) // kept for back-compat; type='group'||'community' ⇒ is_group=true
+  is_group     Boolean                   @default(false) // kept for back-compat; type='group' ⇒ is_group=true. type='community' is a 1:1-style thread and stays false.
   name         String?                   @db.VarChar(100)
   avatar_url   String?
   banner_url   String?
-  group_id     String?                   @unique @db.Uuid // set when type='community'
+  group_id          String?  @db.Uuid // set when type='community'; many conversations share the same group_id (one per group_dm_user_id)
+  group_dm_user_id  String?  @db.Uuid // set when type='community': the regular member's personal thread with the group; null on legacy shared group rooms
   participants ConversationParticipant[]
   messages     Message[]
   keys         ConversationKey[]
-  group        Group?                    @relation("GroupCommunityChat", fields: [group_id], references: [id], onDelete: SetNull)
+  group         Group? @relation("GroupCommunityChat", fields: [group_id], references: [id], onDelete: SetNull)
+  group_dm_user User?  @relation("GroupDmUser", fields: [group_dm_user_id], references: [id], onDelete: Cascade)
 
   pinned_message_id String?  @db.Uuid
   pinnedMessage     Message? @relation("ConvPinnedMessage", fields: [pinned_message_id], references: [id], onDelete: SetNull)
 
   order Order? @relation("OrderConversation")
+
+  @@unique([group_id, group_dm_user_id])
+  @@index([group_id])
 }
 
 model ConversationKey {
@@ -648,6 +654,8 @@ model ConversationParticipant {
   role                       String       @default("member") @db.VarChar(20)
   label                      String       @default("default") @db.VarChar(20) // default | customer
   personal_pinned_message_id String?      @db.Uuid
+  muted_until                DateTime?    // null = not muted; far-future = muted indefinitely
+  sound_muted                Boolean      @default(false) // sound off, but toast/badge still shown
   conversation               Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
   user                       User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
@@ -738,8 +746,9 @@ model Group {
   support_tiers     Json    @default("[]") // [{emoji,name,price,desc}]
 
   // Moderation / discovery
-  is_verified Boolean @default(false) // Official / verified community
-  category    String? @db.VarChar(50) // art | cosplay | fandom | dev | music | etc.
+  is_verified         Boolean   @default(false) // Official / verified community
+  category            String?   @db.VarChar(50) // art | cosplay | fandom | dev | music | etc.
+  category_changed_at DateTime? // last time category was changed — gates 1x/month cooldown
 
   // Business tab (orders/kanban) — owner-toggleable, independent of `type`
   business_enabled Boolean @default(false)
@@ -758,7 +767,7 @@ model Group {
   posts          GroupPost[]
   ratings        GroupRating[]
   groupMessages  GroupMessage[]
-  communityChat  Conversation?      @relation("GroupCommunityChat")
+  groupDmThreads Conversation[]     @relation("GroupCommunityChat")
   activities     Activity[]
   todoItems      GroupTodoItem[]
   customRoles    GroupCustomRole[]

@@ -28,12 +28,6 @@
                   <BIcon name="MessageCircle" class="w-3.5 h-3.5 text-brand-accent" />
                 </div>
                 <h2 class="font-bold text-white text-sm">{{ langStore.t.messagesPageTitle }}</h2>
-                <span
-                  v-if="store.unreadCount > 0"
-                  class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-accent text-white text-[10px] font-bold"
-                >
-                  {{ store.unreadCount > 99 ? '99+' : store.unreadCount }}
-                </span>
               </div>
               <button
                 @click="showNewDm = true"
@@ -225,7 +219,16 @@ const activeConv = computed(() =>
 
 const activeOther = computed<MsgSender | undefined>(() => {
   if (!activeConvId.value) return undefined
-  return activeConv.value?.other_participants?.[0]?.user
+  const c = activeConv.value
+  // Group DM ("написать сообществу"): the regular member sees "the group" as their
+  // chat partner; group staff (opening it from the inbox) see the real member instead.
+  if (c?.type === 'community' && c.group_dm_user_id) {
+    if (c.group_dm_user_id === auth.user?.id) {
+      return { id: c.group_id ?? c.id, username: c.name ?? 'Группа', display_name: c.name, avatar_url: c.avatar_url } as MsgSender
+    }
+    return c.other_participants?.[0]?.user
+  }
+  return c?.other_participants?.[0]?.user
 })
 
 // Show chat window for any active conversation (group, DM, notes)

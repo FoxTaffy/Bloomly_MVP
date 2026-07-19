@@ -17,6 +17,18 @@ export async function getConversationsHandler(req: FastifyRequest, reply: Fastif
   }
 }
 
+export async function getConversationByIdHandler(req: FastifyRequest, reply: FastifyReply) {
+  try {
+    const { id: userId } = req.user as JwtUser;
+    const { id } = req.params as { id: string };
+    const conversation = await messageService.getConversationById(id, userId);
+    if (!conversation) return reply.code(404).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Conversation not found' } });
+    return reply.send({ success: true, data: { conversation }, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  }
+}
+
 export async function getOrCreateConversationHandler(req: FastifyRequest, reply: FastifyReply) {
   try {
     const { id: userId } = req.user as JwtUser;
@@ -59,15 +71,19 @@ export async function getMessagesHandler(
 }
 
 export async function sendMessageHandler(
-  req: FastifyRequest<{ Params: { id: string }; Body: { content?: string; encrypted_text?: string; file_url?: string; media_type?: string; reply_to_id?: string; type?: string; metadata?: Record<string, unknown> } }>,
+  req: FastifyRequest<{ Params: { id: string }; Body: {
+    content?: string; encrypted_text?: string; file_url?: string; media_type?: string;
+    reply_to_id?: string; type?: string; metadata?: Record<string, unknown>;
+    attachments?: Array<{ url: string; media_type?: string }>;
+  } }>,
   reply: FastifyReply,
 ) {
   try {
     const { id: senderId } = req.user as JwtUser;
-    const { content = '', encrypted_text, file_url, media_type, reply_to_id, type, metadata } = req.body ?? {} as any;
+    const { content = '', encrypted_text, file_url, media_type, reply_to_id, type, metadata, attachments } = req.body ?? {} as any;
     // Only these client-settable types bypass the normal text/media inference — anything
     // else (e.g. 'system') stays server-only.
-    const cardType = type === 'payment_request' || type === 'tip' || type === 'post_share' ? type : undefined;
+    const cardType = type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share' ? type : undefined;
     const message = await messageService.sendMessage({
       conversationId: req.params.id,
       senderId,
@@ -78,6 +94,7 @@ export async function sendMessageHandler(
       reply_to_id,
       type: cardType,
       metadata: cardType ? metadata : undefined,
+      attachments: Array.isArray(attachments) ? attachments : undefined,
     });
     return reply.code(201).send({ success: true, data: { message }, error: null });
   } catch (e: any) {
@@ -180,6 +197,21 @@ export async function setArchivedHandler(
     const { id: userId } = req.user as JwtUser;
     const { archived } = req.body;
     await messageService.setArchived(req.params.id, userId, archived);
+    return reply.send({ success: true, data: null, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  }
+}
+
+export async function setMuteHandler(
+  req: FastifyRequest<{ Params: { id: string }; Body: { muted_until?: string | null; sound_muted?: boolean } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = req.user as JwtUser;
+    const { muted_until, sound_muted } = req.body ?? {};
+    const mutedUntil = muted_until === undefined ? undefined : (muted_until === null ? null : new Date(muted_until));
+    await messageService.setMute(req.params.id, userId, mutedUntil, sound_muted);
     return reply.send({ success: true, data: null, error: null });
   } catch (e: any) {
     return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
@@ -306,6 +338,20 @@ export async function getMediaStatsHandler(
     const { id: userId } = req.user as JwtUser;
     const stats = await messageService.getMediaStats(req.params.id, userId);
     return reply.send({ success: true, data: { stats }, error: null });
+  } catch (e: any) {
+    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'STATS_ERROR', message: e.message } });
+  }
+}
+
+export async function getMediaMessagesHandler(
+  req: FastifyRequest<{ Params: { id: string }; Querystring: { type: string; before?: string; limit?: string } }>,
+  reply: FastifyReply,
+) {
+  try {
+    const { id: userId } = req.user as JwtUser;
+    const { type, before, limit } = req.query;
+    const messages = await messageService.getMediaMessages(req.params.id, userId, type, before, limit ? Number(limit) : undefined);
+    return reply.send({ success: true, data: { messages }, error: null });
   } catch (e: any) {
     return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'STATS_ERROR', message: e.message } });
   }

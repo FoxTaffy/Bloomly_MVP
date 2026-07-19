@@ -8,12 +8,12 @@
       </button>
 
       <!-- Avatar / Group avatar -->
-      <div class="relative cursor-pointer flex-shrink-0" @click="conv?.type === 'community' ? goToGroup() : (conv?.is_group ? (showMembersPanel = true) : (other ? showDmPanel = true : undefined))">
+      <div class="relative cursor-pointer flex-shrink-0" @click="isGroupDm && amGroupDmCustomer ? goToGroup() : (conv?.is_group ? (showMembersPanel = true) : (other ? showDmPanel = true : undefined))">
         <!-- Group -->
         <template v-if="conv?.is_group">
           <img v-if="conv.avatar_url" :src="conv.avatar_url" :alt="conv.name ?? 'Группа'"
-            class="w-10 h-10 rounded-full object-cover ring-2 ring-brand-border hover:ring-brand-accent/50 transition-all" @error="onAvatarError" />
-          <div v-else class="grid grid-cols-2 gap-px w-10 h-10 rounded-full overflow-hidden ring-2 ring-brand-border hover:ring-brand-accent/50 transition-all bg-brand-bg">
+            class="w-10 h-10 rounded-xl object-cover ring-2 ring-brand-border hover:ring-brand-accent/50 transition-all" @error="onAvatarError" />
+          <div v-else class="grid grid-cols-2 gap-px w-10 h-10 rounded-xl overflow-hidden ring-2 ring-brand-border hover:ring-brand-accent/50 transition-all bg-brand-bg">
             <template v-for="(p, idx) in conv.other_participants.slice(0, 4)" :key="p.user_id">
               <img v-if="p.user?.avatar_url" :src="p.user.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
               <div v-else class="w-full h-full flex items-center justify-center bg-brand-accent/20 text-brand-accent text-[7px] font-bold">
@@ -48,7 +48,7 @@
         </template>
       </div>
 
-      <div class="flex-1 min-w-0" :class="(other || conv?.is_group) ? 'cursor-pointer' : ''" @click="conv?.type === 'community' ? goToGroup() : (conv?.is_group ? (showMembersPanel = true) : (other ? showDmPanel = true : undefined))">
+      <div class="flex-1 min-w-0" :class="(other || conv?.is_group) ? 'cursor-pointer' : ''" @click="isGroupDm && amGroupDmCustomer ? goToGroup() : (conv?.is_group ? (showMembersPanel = true) : (other ? showDmPanel = true : undefined))">
         <p class="font-bold text-white text-sm leading-tight truncate flex items-center gap-1.5">
           <template v-if="conv?.is_group">
             <BIcon name="Users" class="w-3.5 h-3.5 text-white/55 flex-shrink-0" />
@@ -76,10 +76,10 @@
           </span>
           Печатает...
         </p>
-        <p v-else-if="conv?.type === 'community'" class="text-xs text-white/55">сообщество · нажмите для перехода</p>
         <p v-else-if="conv?.is_group" class="text-xs text-white/55">
           {{ conv.participants_count ?? ((conv.other_participants?.length ?? 0) + 1) }} участников · нажмите для просмотра
         </p>
+        <p v-else-if="isGroupDm && amGroupDmCustomer" class="text-xs text-white/55">Переписка с группой · нажмите для перехода</p>
         <p v-else-if="!other" class="text-xs text-white/55">Только для вас</p>
         <p v-else class="text-xs flex items-center gap-1.5">
           <span class="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
@@ -149,20 +149,32 @@
               </template>
 
               <!-- DM-specific -->
-              <button v-if="!conv?.is_group" @click="goToProfile(other?.username); showMenu = false"
+              <button v-if="!conv?.is_group && !isGroupDm" @click="goToProfile(other?.username); showMenu = false"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
                 <BIcon name="User" class="w-4 h-4 text-white/55 flex-shrink-0" />
                 Профиль
               </button>
 
-              <button @click="archive(); showMenu = false"
+              <!-- Group DM: customer sees "К группе"; staff sees the customer's profile -->
+              <button v-if="isGroupDm && amGroupDmCustomer" @click="goToGroup(); showMenu = false"
+                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
+                <BIcon name="Users2" class="w-4 h-4 text-white/55 flex-shrink-0" />
+                К группе
+              </button>
+              <button v-else-if="isGroupDm" @click="goToProfile(other?.username); showMenu = false"
+                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
+                <BIcon name="User" class="w-4 h-4 text-white/55 flex-shrink-0" />
+                Профиль
+              </button>
+
+              <button v-if="!(isGroupDm && !amGroupDmCustomer)" @click="archive(); showMenu = false"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
                 <BIcon :name="conv?.my_participant?.archived ? 'ArchiveX' : 'Archive'" class="w-4 h-4 text-white/55 flex-shrink-0" />
                 {{ conv?.my_participant?.archived ? 'Разархивировать' : 'Архивировать' }}
               </button>
               <div class="border-t border-brand-border my-1" />
 
-              <button v-if="!conv?.is_group" @click="showBlockModal = true; showMenu = false"
+              <button v-if="!conv?.is_group && !isGroupDm" @click="showBlockModal = true; showMenu = false"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-left"
                 :class="isBlocked ? 'text-brand-accent hover:bg-brand-accent/8' : 'text-brand-offwhite hover:bg-brand-bg'">
                 <BIcon :name="isBlocked ? 'ShieldOff' : 'ShieldAlert'" class="w-4 h-4 flex-shrink-0"
@@ -170,7 +182,7 @@
                 {{ isBlocked ? 'Разблокировать' : 'Заблокировать' }}
               </button>
 
-              <button @click="showDeleteModal = true; showMenu = false"
+              <button v-if="!(isGroupDm && !amGroupDmCustomer)" @click="showDeleteModal = true; showMenu = false"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-error hover:bg-brand-error/8 transition-colors text-left">
                 <BIcon name="Trash2" class="w-4 h-4 flex-shrink-0" />
                 {{ conv?.is_group ? 'Покинуть группу' : 'Удалить диалог' }}
@@ -181,51 +193,73 @@
       </div>
     </div>
 
-    <!-- ── Group Members Panel (slide-over) ──────────────────────────────── -->
+    <!-- ── Group Info Modal (centered — same shell as the DM info / edit-group modals) ── -->
     <Teleport to="body">
-      <Transition name="panel-slide">
-        <div v-if="showMembersPanel" class="fixed inset-0 z-50 flex">
-          <div class="flex-1 bg-black/40 backdrop-blur-sm" @click="showMembersPanel = false" />
-          <div class="w-[85vw] sm:w-80 max-w-80 bg-brand-card border-l border-brand-border flex flex-col shadow-2xl overflow-hidden">
+      <Transition name="fade">
+        <div v-if="showMembersPanel" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md" @click.self="showMembersPanel = false">
+          <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden" style="max-height:90vh">
 
-            <!-- Cover (banner + avatar) -->
+            <!-- Cover (colored banner behind avatar + name, plain card bg for the action row) -->
             <div class="relative flex-shrink-0">
-              <!-- Banner -->
-              <div class="h-28 w-full overflow-hidden bg-gradient-to-br from-brand-accent/30 to-purple-900/40">
-                <img v-if="(conv as any)?.banner_url" :src="(conv as any).banner_url" class="w-full h-full object-cover" />
-              </div>
-              <!-- Close button -->
-              <button @click="showMembersPanel = false"
-                class="absolute top-3 right-3 w-7 h-7 rounded-xl bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-all">
-                <BIcon name="X" class="w-3.5 h-3.5" />
-              </button>
-              <!-- Avatar → centered -->
-              <div class="absolute -bottom-7 left-1/2 -translate-x-1/2">
-                <div class="w-14 h-14 rounded-2xl border-[3px] border-brand-card overflow-hidden shadow-xl">
+              <div class="relative pt-4 pb-5 px-3 text-center overflow-hidden bg-gradient-to-br from-brand-accent/30 to-purple-900/40">
+                <img v-if="(conv as any)?.banner_url" :src="(conv as any).banner_url" class="absolute inset-0 w-full h-full object-cover" />
+                <div v-else-if="bannerCollage.length" class="absolute inset-0 flex">
+                  <div v-for="m in bannerCollage" :key="m.id" class="flex-1 h-full relative">
+                    <img v-if="m.avatar_url" :src="m.avatar_url" class="w-full h-full object-cover" />
+                    <div v-else class="w-full h-full bg-brand-accent/25 flex items-center justify-center text-brand-accent font-bold text-lg">
+                      {{ (m.display_name || m.username || '?')[0].toUpperCase() }}
+                    </div>
+                  </div>
+                </div>
+                <!-- Darken for legibility of the close/settings buttons, avatar ring and text -->
+                <div v-if="(conv as any)?.banner_url || bannerCollage.length" class="absolute inset-0 bg-black/30" />
+
+                <!-- Close button -->
+                <button @click="showMembersPanel = false"
+                  class="absolute top-3 left-3 w-8 h-8 rounded-xl bg-black/30 hover:bg-black/50 flex items-center justify-center text-white transition-all">
+                  <BIcon name="X" class="w-4 h-4" />
+                </button>
+                <!-- Settings (admin only) -->
+                <button v-if="myRole === 'admin'" @click="showEditGroup = true; showMembersPanel = false"
+                  class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-black/30 hover:bg-black/50 flex items-center justify-center text-white transition-all">
+                  <BIcon name="Settings" class="w-4 h-4" />
+                </button>
+                <!-- Avatar -->
+                <div class="relative w-20 h-20 rounded-2xl overflow-hidden shadow-xl mx-auto ring-2 ring-white/20">
                   <img v-if="conv?.avatar_url" :src="conv.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
-                  <div v-else class="w-full h-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xl">
+                  <div v-else-if="bannerCollage.length" class="w-full h-full grid grid-cols-2">
+                    <div v-for="m in bannerCollage.slice(0, 4)" :key="m.id" class="relative">
+                      <img v-if="m.avatar_url" :src="m.avatar_url" class="w-full h-full object-cover" />
+                      <div v-else class="w-full h-full bg-brand-accent/25 flex items-center justify-center text-brand-accent font-bold">
+                        {{ (m.display_name || m.username || '?')[0].toUpperCase() }}
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="w-full h-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-2xl">
                     {{ (conv?.name ?? 'G')[0].toUpperCase() }}
                   </div>
                 </div>
+                <h3 class="relative text-base font-bold text-white truncate mt-2.5 drop-shadow">{{ conv?.name || 'Группа' }}</h3>
+                <p class="relative text-xs text-white/70 mt-0.5 drop-shadow">{{ groupMembers.length }} участников</p>
               </div>
-            </div>
 
-            <!-- Name + settings -->
-            <div class="pt-10 px-5 pb-3 border-b border-brand-border flex-shrink-0 text-center">
-              <h3 class="text-base font-bold text-white truncate">{{ conv?.name || 'Группа' }}</h3>
-              <p class="text-xs text-white/45 mt-0.5">{{ groupMembers.length }} участников</p>
-              <!-- Action row -->
-              <div class="flex justify-center gap-2 mt-3">
+              <!-- Action row (plain card background) -->
+              <div class="flex justify-center gap-2 px-3 py-3">
+                <button v-if="conv?.group_id" @click="showInvitePicker = true"
+                  class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg text-white/60 hover:text-brand-accent hover:bg-brand-accent/10 transition-all text-xs font-semibold">
+                  <BIcon name="Send" class="w-4 h-4" />
+                  Пригласить
+                </button>
                 <button v-if="myRole === 'admin'" @click="showAddMember = !showAddMember; addMemberSearch = ''; addMemberResults = []"
                   :class="['flex flex-col items-center gap-1 px-4 py-2 rounded-2xl transition-all text-xs font-semibold',
                     showAddMember ? 'bg-brand-accent/20 text-brand-accent' : 'bg-brand-bg text-white/60 hover:text-brand-accent hover:bg-brand-accent/10']">
                   <BIcon name="UserPlus" class="w-4 h-4" />
                   Добавить
                 </button>
-                <button v-if="myRole === 'admin'" @click="showEditGroup = true; showMembersPanel = false"
+                <button @click="goToGroup(); showMembersPanel = false"
                   class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg text-white/60 hover:text-brand-accent hover:bg-brand-accent/10 transition-all text-xs font-semibold">
-                  <BIcon name="Settings" class="w-4 h-4" />
-                  Настройки
+                  <BIcon name="Users2" class="w-4 h-4" />
+                  К группе
                 </button>
                 <button @click="showMembersPanel = false; archive()"
                   class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg text-white/60 hover:text-white/90 hover:bg-brand-bg/80 transition-all text-xs font-semibold">
@@ -235,134 +269,139 @@
               </div>
             </div>
 
-            <!-- Media stats row -->
-            <div class="px-3 py-2 border-b border-brand-border flex-shrink-0">
-              <div class="grid grid-cols-3 gap-1">
-                <button
-                  v-for="stat in mediaStatsList" :key="stat.key"
-                  @click="infoTab = 'media'"
-                  class="flex flex-col items-center gap-0.5 py-2 rounded-xl hover:bg-brand-bg transition-colors">
-                  <BIcon :name="stat.icon" class="w-4 h-4 text-brand-accent" />
-                  <span class="text-[11px] font-bold text-white">{{ stat.count }}</span>
-                  <span class="text-[9px] text-white/40">{{ stat.label }}</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Tabs -->
-            <div class="flex px-3 py-1.5 gap-1 border-b border-brand-border flex-shrink-0">
-              <button @click="infoTab = 'members'"
-                :class="['flex-1 py-1.5 rounded-xl text-xs font-bold transition-all', infoTab === 'members' ? 'bg-brand-accent/20 text-brand-accent' : 'text-white/45 hover:text-white hover:bg-brand-bg/50']">
-                Участники
-              </button>
-              <button @click="infoTab = 'media'"
-                :class="['flex-1 py-1.5 rounded-xl text-xs font-bold transition-all', infoTab === 'media' ? 'bg-brand-accent/20 text-brand-accent' : 'text-white/45 hover:text-white hover:bg-brand-bg/50']">
-                Медиа
+            <!-- Group link (real page, not a fake invite link) -->
+            <div v-if="conv?.group_id" class="flex items-center gap-2 px-4 py-2.5 border-t border-b border-brand-border flex-shrink-0">
+              <BIcon name="Link" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+              <span class="flex-1 min-w-0 text-xs text-brand-accent truncate cursor-pointer hover:underline" @click="goToGroup(); showMembersPanel = false">
+                {{ groupPageUrl }}
+              </span>
+              <button @click="copyGroupLink" class="flex-shrink-0 text-white/40 hover:text-white transition-colors" title="Скопировать ссылку">
+                <BIcon :name="groupLinkCopied ? 'Check' : 'Copy'" class="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <!-- Tab content -->
+            <!-- Scrollable body: media list → participants header → search → member list (one continuous flow, no tabs) -->
             <div class="flex-1 overflow-y-auto min-h-0">
 
-              <!-- === Members tab === -->
-              <template v-if="infoTab === 'members'">
+              <!-- Media stats list -->
+              <div v-if="mediaStatsLoading" class="flex items-center justify-center py-6 text-white/55 text-sm gap-2">
+                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> Загрузка...
+              </div>
+              <button v-for="stat in mediaStatsList.filter((s) => s.count > 0)" :key="stat.key"
+                @click="openMediaBrowser(stat.key)"
+                class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-brand-bg/40 transition-colors text-left">
+                <BIcon :name="stat.icon" class="w-4 h-4 text-brand-accent flex-shrink-0" />
+                <span class="text-sm text-white/85">{{ stat.count }} {{ stat.label.toLowerCase() }}</span>
+                <BIcon name="ChevronRight" class="w-3.5 h-3.5 text-white/25 ml-auto flex-shrink-0" />
+              </button>
 
-                <!-- Add member search panel (admin only) -->
-                <Transition name="fade">
-                  <div v-if="showAddMember && myRole === 'admin'" class="px-3 pt-3 pb-2 border-b border-brand-border/60">
-                    <div class="flex items-center gap-2 bg-brand-bg rounded-2xl px-3 py-2">
-                      <BIcon name="Search" class="w-3.5 h-3.5 text-white/35 flex-shrink-0" />
-                      <input
-                        v-model="addMemberSearch"
-                        @input="debouncedAddMemberSearch"
-                        type="text"
-                        placeholder="Поиск пользователей…"
-                        class="flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-none"
-                        autofocus />
-                      <button v-if="addMemberSearch" @click="addMemberSearch = ''; addMemberResults = []" class="text-white/30 hover:text-white">
-                        <BIcon name="X" class="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <!-- Search results -->
-                    <div v-if="addMemberResults.length" class="mt-1.5 space-y-0.5 max-h-48 overflow-y-auto">
-                      <button
-                        v-for="u in addMemberResults" :key="u.id"
-                        @click="doAddMember(u)"
-                        :disabled="groupMembers.some(m => m.user_id === u.id)"
-                        :class="['w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors text-left',
-                          groupMembers.some(m => m.user_id === u.id)
-                            ? 'opacity-40 cursor-not-allowed'
-                            : 'hover:bg-brand-accent/10 cursor-pointer']"
-                      >
-                        <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover flex-shrink-0" @error="onAvatarError" />
-                        <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold flex-shrink-0">
-                          {{ (u.display_name || u.username || '?')[0].toUpperCase() }}
-                        </div>
-                        <div class="flex-1 min-w-0">
-                          <p class="text-sm text-white font-medium truncate">{{ u.display_name || u.username }}</p>
-                          <p class="text-[11px] text-white/40 truncate">@{{ u.username }}</p>
-                        </div>
-                        <BIcon
-                          :name="groupMembers.some(m => m.user_id === u.id) ? 'Check' : 'UserPlus'"
-                          :class="['w-3.5 h-3.5 flex-shrink-0', groupMembers.some(m => m.user_id === u.id) ? 'text-brand-accent' : 'text-white/40']" />
-                      </button>
-                    </div>
-                    <p v-else-if="addMemberSearch.length >= 2 && !addMemberLoading" class="text-center text-xs text-white/30 py-3">Никто не найден</p>
-                    <p v-if="addMemberLoading" class="flex justify-center py-2">
-                      <BIcon name="Loader2" class="w-4 h-4 animate-spin text-white/40" />
-                    </p>
-                  </div>
-                </Transition>
+              <!-- Participants header -->
+              <div class="flex items-center gap-2 px-4 py-3 mt-1 border-t border-brand-border">
+                <BIcon name="Users" class="w-3.5 h-3.5 text-white/40 flex-shrink-0" />
+                <span class="text-xs font-bold text-white/50 uppercase tracking-wide">
+                  {{ groupMembers.length }} участников{{ groupOnlineCount ? `, ${groupOnlineCount} в сети` : '' }}
+                </span>
+              </div>
 
-                <p v-if="membersLoading" class="flex items-center justify-center py-8 text-white/55 text-sm gap-2">
-                  <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> Загрузка...
-                </p>
-                <div v-for="m in groupMembers" :key="m.user_id" class="flex items-center gap-3 px-4 py-2.5 hover:bg-brand-bg/40 transition-colors cursor-pointer" @click="goToProfile(m.user?.username)">
-                  <div class="relative flex-shrink-0">
-                    <img v-if="m.user?.avatar_url" :src="m.user.avatar_url" class="w-8 h-8 rounded-full object-cover" @error="onAvatarError" />
-                    <div v-else class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold">
-                      {{ (m.user?.display_name || m.user?.username || '?')[0].toUpperCase() }}
-                    </div>
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-sm text-white font-medium truncate leading-tight">{{ m.user?.display_name || m.user?.username }}</p>
-                    <p class="text-xs text-white/45 truncate">@{{ m.user?.username }}</p>
-                  </div>
-                  <div class="flex items-center gap-1.5 flex-shrink-0">
-                    <span v-if="m.role === 'admin'" class="text-[9px] bg-brand-accent/15 text-brand-accent px-1.5 py-0.5 rounded-full border border-brand-accent/25 font-bold">АДМИН</span>
-                    <template v-if="myRole === 'admin' && m.user_id !== auth.user?.id">
-                      <button @click.stop="kickMember(m.user_id)" class="p-1 rounded-lg text-white/40 hover:text-brand-error transition-colors" title="Исключить">
-                        <BIcon name="UserX" class="w-3.5 h-3.5" />
-                      </button>
-                      <button @click.stop="toggleMemberRole(m)" class="p-1 rounded-lg text-white/40 hover:text-brand-accent transition-colors" :title="m.role === 'admin' ? 'Разжаловать' : 'Назначить админом'">
-                        <BIcon :name="m.role === 'admin' ? 'ShieldOff' : 'ShieldCheck'" class="w-3.5 h-3.5" />
-                      </button>
-                    </template>
-                  </div>
-                </div>
-              </template>
-
-              <!-- === Media tab === -->
-              <template v-else-if="infoTab === 'media'">
-                <div v-if="mediaStatsLoading" class="flex items-center justify-center py-8 text-white/55 text-sm gap-2">
-                  <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> Загрузка...
-                </div>
-                <div v-else class="py-2">
-                  <button
-                    v-for="stat in mediaStatsList" :key="stat.key"
-                    class="w-full flex items-center gap-3 px-4 py-3 hover:bg-brand-bg/40 transition-colors">
-                    <div class="w-9 h-9 rounded-2xl bg-brand-accent/10 flex items-center justify-center flex-shrink-0">
-                      <BIcon :name="stat.icon" class="w-4.5 h-4.5 text-brand-accent" />
-                    </div>
-                    <div class="flex-1 min-w-0 text-left">
-                      <p class="text-sm text-white font-medium">{{ stat.label }}</p>
-                    </div>
-                    <span class="text-sm font-bold text-white/70">{{ stat.count }}</span>
-                    <BIcon v-if="stat.count > 0" name="ChevronRight" class="w-3.5 h-3.5 text-white/30" />
+              <!-- Member search -->
+              <div class="px-3 pb-2">
+                <div class="flex items-center gap-2 bg-brand-bg rounded-2xl px-3 py-2">
+                  <BIcon name="Search" class="w-3.5 h-3.5 text-white/35 flex-shrink-0" />
+                  <input
+                    v-model="memberSearchQuery"
+                    type="text"
+                    placeholder="Поиск участников…"
+                    class="flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-none" />
+                  <button v-if="memberSearchQuery" @click="memberSearchQuery = ''" class="text-white/30 hover:text-white">
+                    <BIcon name="X" class="w-3.5 h-3.5" />
                   </button>
                 </div>
-              </template>
+              </div>
 
+              <!-- Add member (admin only) -->
+              <button v-if="myRole === 'admin' && !showAddMember" @click="showAddMember = true; addMemberSearch = ''; addMemberResults = []"
+                class="w-full flex items-center gap-3 px-4 py-2.5 text-brand-accent hover:bg-brand-bg/40 transition-colors text-left text-sm font-semibold">
+                <BIcon name="UserPlus" class="w-4 h-4 flex-shrink-0" />
+                Добавить участников
+              </button>
+
+              <!-- Add member search panel (admin only) -->
+              <Transition name="fade">
+                <div v-if="showAddMember && myRole === 'admin'" class="px-3 pt-1 pb-2 border-b border-brand-border/60">
+                  <div class="flex items-center gap-2 bg-brand-bg rounded-2xl px-3 py-2">
+                    <BIcon name="Search" class="w-3.5 h-3.5 text-white/35 flex-shrink-0" />
+                    <input
+                      v-model="addMemberSearch"
+                      @input="debouncedAddMemberSearch"
+                      type="text"
+                      placeholder="Поиск пользователей…"
+                      class="flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-none"
+                      autofocus />
+                    <button @click="showAddMember = false; addMemberSearch = ''; addMemberResults = []" class="text-white/30 hover:text-white">
+                      <BIcon name="X" class="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <!-- Search results -->
+                  <div v-if="addMemberResults.length" class="mt-1.5 space-y-0.5 max-h-48 overflow-y-auto">
+                    <button
+                      v-for="u in addMemberResults" :key="u.id"
+                      @click="doAddMember(u)"
+                      :disabled="groupMembers.some(m => m.user_id === u.id)"
+                      :class="['w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors text-left',
+                        groupMembers.some(m => m.user_id === u.id)
+                          ? 'opacity-40 cursor-not-allowed'
+                          : 'hover:bg-brand-accent/10 cursor-pointer']"
+                    >
+                      <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover flex-shrink-0" @error="onAvatarError" />
+                      <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold flex-shrink-0">
+                        {{ (u.display_name || u.username || '?')[0].toUpperCase() }}
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm text-white font-medium truncate">{{ u.display_name || u.username }}</p>
+                        <p class="text-[11px] text-white/40 truncate">@{{ u.username }}</p>
+                      </div>
+                      <BIcon
+                        :name="groupMembers.some(m => m.user_id === u.id) ? 'Check' : 'UserPlus'"
+                        :class="['w-3.5 h-3.5 flex-shrink-0', groupMembers.some(m => m.user_id === u.id) ? 'text-brand-accent' : 'text-white/40']" />
+                    </button>
+                  </div>
+                  <p v-else-if="addMemberSearch.length >= 2 && !addMemberLoading" class="text-center text-xs text-white/30 py-3">Никто не найден</p>
+                  <p v-if="addMemberLoading" class="flex justify-center py-2">
+                    <BIcon name="Loader2" class="w-4 h-4 animate-spin text-white/40" />
+                  </p>
+                </div>
+              </Transition>
+
+              <!-- Member list -->
+              <p v-if="membersLoading" class="flex items-center justify-center py-8 text-white/55 text-sm gap-2">
+                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> Загрузка...
+              </p>
+              <p v-else-if="!filteredGroupMembers.length" class="text-center text-xs text-white/30 py-6">Никто не найден</p>
+              <div v-for="m in filteredGroupMembers" :key="m.user_id" class="flex items-center gap-3 px-4 py-2.5 hover:bg-brand-bg/40 transition-colors cursor-pointer" @click="goToProfile(m.user?.username)">
+                <div class="relative flex-shrink-0">
+                  <img v-if="m.user?.avatar_url" :src="m.user.avatar_url" class="w-8 h-8 rounded-full object-cover" @error="onAvatarError" />
+                  <div v-else class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold">
+                    {{ (m.user?.display_name || m.user?.username || '?')[0].toUpperCase() }}
+                  </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-white font-medium truncate leading-tight">{{ m.user?.display_name || m.user?.username }}</p>
+                  <p class="text-xs truncate" :class="groupOnlineStatus[m.user_id] ? 'text-green-400' : 'text-white/45'">
+                    {{ groupOnlineStatus[m.user_id] ? 'в сети' : `@${m.user?.username}` }}
+                  </p>
+                </div>
+                <div class="flex items-center gap-1.5 flex-shrink-0">
+                  <span v-if="m.role === 'admin'" class="text-[9px] bg-brand-accent/15 text-brand-accent px-1.5 py-0.5 rounded-full border border-brand-accent/25 font-bold">АДМИН</span>
+                  <template v-if="myRole === 'admin' && m.user_id !== auth.user?.id">
+                    <button @click.stop="kickMember(m.user_id)" class="p-1 rounded-lg text-white/40 hover:text-brand-error transition-colors" title="Исключить">
+                      <BIcon name="UserX" class="w-3.5 h-3.5" />
+                    </button>
+                    <button @click.stop="toggleMemberRole(m)" class="p-1 rounded-lg text-white/40 hover:text-brand-accent transition-colors" :title="m.role === 'admin' ? 'Разжаловать' : 'Назначить админом'">
+                      <BIcon :name="m.role === 'admin' ? 'ShieldOff' : 'ShieldCheck'" class="w-3.5 h-3.5" />
+                    </button>
+                  </template>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -372,58 +411,57 @@
     <!-- ── DM Info Modal (centered) ──────────────────────────────────── -->
     <Teleport to="body">
       <Transition name="fade">
-        <div v-if="showDmPanel" class="fixed inset-0 z-50 flex items-start justify-center pt-16 p-4 bg-black/70 backdrop-blur-md" @click.self="showDmPanel = false">
-          <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <!-- Banner gradient -->
-            <div class="relative h-28 bg-gradient-to-br from-brand-accent/25 to-purple-900/40">
-              <!-- Close button -->
-              <button @click="showDmPanel = false"
-                class="absolute top-3 right-3 w-7 h-7 rounded-xl bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-all">
-                <BIcon name="X" class="w-3.5 h-3.5" />
-              </button>
-              <!-- Avatar centered -->
-              <div class="absolute -bottom-8 left-1/2 -translate-x-1/2">
-                <div class="relative">
+        <div v-if="showDmPanel" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md" @click.self="showDmPanel = false">
+          <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden" style="max-height:90vh">
+            <!-- Cover (colored banner behind avatar + name, plain card bg for the action row) -->
+            <div class="relative flex-shrink-0">
+              <div class="relative pt-4 pb-5 px-5 text-center overflow-hidden bg-gradient-to-br from-brand-accent/30 to-purple-900/40">
+                <img v-if="other?.banner_url" :src="other.banner_url" class="absolute inset-0 w-full h-full object-cover" />
+                <div v-if="other?.banner_url" class="absolute inset-0 bg-black/30" />
+
+                <!-- Close button -->
+                <button @click="showDmPanel = false"
+                  class="absolute top-3 left-3 w-8 h-8 rounded-xl bg-black/30 hover:bg-black/50 flex items-center justify-center text-white transition-all">
+                  <BIcon name="X" class="w-4 h-4" />
+                </button>
+                <!-- Avatar -->
+                <div class="relative inline-block">
                   <img v-if="other?.avatar_url" :src="other.avatar_url" :alt="other.username"
-                    class="w-16 h-16 rounded-full object-cover border-[3px] border-brand-card shadow-xl" @error="onAvatarError" />
-                  <div v-else class="w-16 h-16 rounded-full bg-brand-accent/20 border-[3px] border-brand-card flex items-center justify-center text-brand-accent font-bold text-xl shadow-xl">
+                    class="w-20 h-20 rounded-full object-cover shadow-xl ring-2 ring-white/20" @error="onAvatarError" />
+                  <div v-else class="w-20 h-20 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-2xl shadow-xl ring-2 ring-white/20">
                     {{ (other?.display_name || other?.username || '?')[0].toUpperCase() }}
                   </div>
                   <!-- Online dot -->
-                  <span v-if="isPartnerOnline && !partnerDeviceIcon" class="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-brand-card" />
+                  <span v-if="isPartnerOnline && !partnerDeviceIcon" class="absolute bottom-1 right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-brand-card" />
                   <span v-else-if="isPartnerOnline" :title="partnerDevice ?? undefined"
-                    class="absolute bottom-0.5 right-0.5 w-4 h-4 bg-green-500 rounded-full border-2 border-brand-card flex items-center justify-center">
+                    class="absolute bottom-1 right-1 w-4.5 h-4.5 bg-green-500 rounded-full border-2 border-brand-card flex items-center justify-center">
                     <BIcon :name="partnerDeviceIcon!" class="w-2.5 h-2.5 text-black/70" />
                   </span>
                 </div>
+                <h3 class="relative text-base font-bold text-white truncate mt-2.5 flex items-center justify-center gap-1.5 drop-shadow">
+                  {{ other?.display_name || other?.username }}
+                  <span v-if="(other as any)?.deceased_at" title="Светлая память">🪦</span>
+                </h3>
+                <p class="relative text-xs mt-0.5 flex items-center justify-center gap-1 drop-shadow" :class="isPartnerOnline ? 'text-green-400' : 'text-white/70'">
+                  {{ isPartnerOnline ? '● В сети' : `● ${partnerLastSeenLabel}` }}
+                  <BIcon v-if="isPartnerOnline && partnerDeviceIcon" :name="partnerDeviceIcon!" class="w-3 h-3" :title="partnerDevice ?? undefined" />
+                </p>
               </div>
-            </div>
 
-            <!-- User info -->
-            <div class="pt-11 pb-4 px-5 text-center border-b border-brand-border">
-              <h3 class="text-base font-bold text-white truncate flex items-center justify-center gap-1.5">
-                {{ other?.display_name || other?.username }}
-                <span v-if="(other as any)?.deceased_at" title="Светлая память">🪦</span>
-              </h3>
-              <p class="text-sm text-white/45 mt-0.5">@{{ other?.username }}</p>
-              <p class="text-xs mt-1.5 flex items-center justify-center gap-1" :class="isPartnerOnline ? 'text-green-400' : 'text-white/30'">
-                {{ isPartnerOnline ? '● В сети' : `● ${partnerLastSeenLabel}` }}
-                <BIcon v-if="isPartnerOnline && partnerDeviceIcon" :name="partnerDeviceIcon!" class="w-3 h-3" :title="partnerDevice ?? undefined" />
-              </p>
-              <!-- Quick actions -->
-              <div class="flex justify-center gap-2 mt-4">
+              <!-- Quick actions (plain card background) -->
+              <div class="flex justify-center gap-2 px-5 py-3">
                 <button @click="goToProfile(other?.username); showDmPanel = false"
-                  class="flex flex-col items-center gap-1 px-4 py-2.5 rounded-2xl bg-brand-bg hover:bg-brand-accent/10 text-white/60 hover:text-brand-accent transition-all text-xs font-semibold">
+                  class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg hover:bg-brand-accent/10 text-white/60 hover:text-brand-accent transition-all text-xs font-semibold">
                   <BIcon name="User" class="w-4 h-4" />
                   Профиль
                 </button>
-                <button @click="showDmPanel = false; archive()"
-                  class="flex flex-col items-center gap-1 px-4 py-2.5 rounded-2xl bg-brand-bg hover:bg-brand-bg/80 text-white/60 hover:text-white/90 transition-all text-xs font-semibold">
+                <button v-if="!isGroupDm" @click="showDmPanel = false; archive()"
+                  class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg hover:bg-brand-bg/80 text-white/60 hover:text-white/90 transition-all text-xs font-semibold">
                   <BIcon :name="conv?.my_participant?.archived ? 'ArchiveX' : 'Archive'" class="w-4 h-4" />
                   {{ conv?.my_participant?.archived ? 'Разарх.' : 'Архив' }}
                 </button>
-                <button @click="showDmPanel = false; showBlockModal = true"
-                  :class="['flex flex-col items-center gap-1 px-4 py-2.5 rounded-2xl transition-all text-xs font-semibold',
+                <button v-if="!isGroupDm" @click="showDmPanel = false; showBlockModal = true"
+                  :class="['flex flex-col items-center gap-1 px-4 py-2 rounded-2xl transition-all text-xs font-semibold',
                     isBlocked ? 'bg-brand-accent/15 text-brand-accent hover:bg-brand-accent/25' : 'bg-brand-bg text-white/60 hover:text-brand-error hover:bg-brand-error/10']">
                   <BIcon :name="isBlocked ? 'ShieldOff' : 'ShieldAlert'" class="w-4 h-4" />
                   {{ isBlocked ? 'Разблок.' : 'Блок' }}
@@ -431,13 +469,107 @@
               </div>
             </div>
 
+            <!-- Username row (clicking anywhere in the row copies it, not just the icon) -->
+            <div class="flex items-center gap-2 px-5 py-2.5 border-t border-b border-brand-border flex-shrink-0 cursor-pointer hover:bg-brand-bg/40 transition-colors"
+              @click="copyUsername" title="Скопировать">
+              <span class="text-brand-accent font-bold text-xs flex-shrink-0">@</span>
+              <span class="flex-1 min-w-0 text-sm text-white/80 truncate">{{ other?.username }}</span>
+              <button class="flex-shrink-0 text-white/40 hover:text-white transition-colors">
+                <BIcon :name="usernameCopied ? 'Check' : 'Copy'" class="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <!-- Media stats list -->
+            <div class="flex-1 overflow-y-auto min-h-0 py-1">
+              <div v-if="mediaStatsLoading" class="flex items-center justify-center py-6 text-white/55 text-sm gap-2">
+                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> Загрузка...
+              </div>
+              <p v-else-if="!mediaStatsList.some((s) => s.count > 0)" class="text-center text-xs text-white/30 py-6">Медиа отсутствует</p>
+              <button v-for="stat in mediaStatsList.filter((s) => s.count > 0)" :key="stat.key"
+                @click="openMediaBrowser(stat.key)"
+                class="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-brand-bg/40 transition-colors text-left">
+                <BIcon :name="stat.icon" class="w-4 h-4 text-brand-accent flex-shrink-0" />
+                <span class="text-sm text-white/85">{{ stat.count }} {{ stat.label.toLowerCase() }}</span>
+                <BIcon name="ChevronRight" class="w-3.5 h-3.5 text-white/25 ml-auto flex-shrink-0" />
+              </button>
+            </div>
+
             <!-- Danger zone -->
-            <div class="px-5 py-3">
+            <div class="px-5 py-3 flex-shrink-0 border-t border-brand-border">
               <button @click="showDmPanel = false; showDeleteModal = true"
                 class="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm text-brand-error hover:bg-brand-error/10 transition-colors font-medium">
                 <BIcon name="Trash2" class="w-4 h-4" />
                 Удалить диалог
               </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- ── Media browser (opened from a media-stat row) ─────────────────── -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="mediaBrowserType" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md" @click.self="closeMediaBrowser">
+          <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden" style="max-height:90vh">
+            <!-- Header -->
+            <div class="flex items-center gap-2 px-2 py-3 border-b border-brand-border flex-shrink-0">
+              <button @click="closeMediaBrowser" class="w-8 h-8 rounded-xl hover:bg-brand-bg flex items-center justify-center text-white/70 hover:text-white transition-all flex-shrink-0">
+                <BIcon name="ArrowLeft" class="w-4 h-4" />
+              </button>
+              <h3 class="flex-1 min-w-0 text-sm font-bold text-white truncate">{{ MEDIA_TYPE_TITLES[mediaBrowserType] ?? '' }}</h3>
+              <button @click="closeMediaBrowser" class="w-8 h-8 rounded-xl hover:bg-brand-bg flex items-center justify-center text-white/70 hover:text-white transition-all flex-shrink-0">
+                <BIcon name="X" class="w-4 h-4" />
+              </button>
+            </div>
+
+            <!-- Body -->
+            <div class="flex-1 overflow-y-auto min-h-0" @scroll="onMediaBrowserScroll">
+              <p v-if="!mediaBrowserLoading && !mediaBrowserItems.length" class="text-center text-sm text-white/30 py-10">Ничего нет</p>
+
+              <template v-for="group in mediaBrowserGroups" :key="group.label">
+                <p class="px-4 pt-3 pb-1.5 text-xs font-bold text-white/40 uppercase tracking-wide">{{ group.label }}</p>
+
+                <!-- Photos / videos: grid -->
+                <div v-if="mediaBrowserType === 'image' || mediaBrowserType === 'video'" class="grid grid-cols-4 gap-0.5 px-0.5">
+                  <div v-for="m in group.items" :key="m.id" class="relative aspect-square cursor-pointer bg-black/30"
+                    @click="mediaBrowserType === 'image' ? openMediaBrowserImage(m.file_url!) : null">
+                    <img v-if="m.type === 'image'" :src="m.file_url!" class="w-full h-full object-cover" loading="lazy" />
+                    <video v-else :src="m.file_url!" class="w-full h-full object-cover" preload="metadata" />
+                    <div v-if="m.type === 'video'" class="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
+                      <BIcon name="Play" class="w-5 h-5 text-white drop-shadow" />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Audio / voice: list with inline play -->
+                <div v-else-if="mediaBrowserType === 'audio' || mediaBrowserType === 'voice'">
+                  <div v-for="m in group.items" :key="m.id" class="flex items-center gap-3 px-4 py-2.5">
+                    <audio v-if="mediaBrowserPlayingId === m.id" :src="m.file_url!" autoplay @ended="mediaBrowserPlayingId = null" class="hidden" />
+                    <button @click="toggleMediaBrowserPlay(m.id)"
+                      class="flex-shrink-0 w-9 h-9 rounded-full bg-brand-accent/80 hover:bg-brand-accent flex items-center justify-center transition-all">
+                      <BIcon :name="mediaBrowserPlayingId === m.id ? 'Pause' : 'Play'" class="w-4 h-4 text-white" />
+                    </button>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm text-white font-medium truncate">{{ m.sender?.display_name || m.sender?.username }}</p>
+                      <p class="text-xs text-white/45">{{ formatMsgTime(m.created_at) }}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Links: text list -->
+                <div v-else>
+                  <div v-for="m in group.items" :key="m.id" class="px-4 py-2.5">
+                    <p class="text-xs text-brand-accent font-semibold">{{ m.sender?.display_name || m.sender?.username }}</p>
+                    <p class="text-sm text-white/80 break-words">{{ m.text }}</p>
+                    <p class="text-xs text-white/40 mt-0.5">{{ formatMsgTime(m.created_at) }}</p>
+                  </div>
+                </div>
+              </template>
+
+              <div v-if="mediaBrowserLoading" class="flex items-center justify-center py-4 text-white/55 text-sm gap-2">
+                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> Загрузка...
+              </div>
             </div>
           </div>
         </div>
@@ -843,6 +975,22 @@
               </span>
             </div>
 
+            <!-- Album (2+ files sent together, e.g. a photo + a video) -->
+            <div v-else-if="msg.type === 'album' && getAlbumFiles(msg).length"
+              class="grid grid-cols-2 gap-0.5 mb-0.5 max-w-[280px] w-full rounded-2xl overflow-hidden shadow-sm"
+              :class="isMine(msg) ? 'rounded-br-md' : 'rounded-bl-md'">
+              <div v-for="(f, idx) in getAlbumFiles(msg)" :key="idx"
+                class="relative bg-black/20 aspect-square"
+                :class="getAlbumFiles(msg).length % 2 === 1 && idx === getAlbumFiles(msg).length - 1 ? 'col-span-2' : ''">
+                <img v-if="f.type === 'image'" :src="f.url" class="w-full h-full object-cover cursor-pointer"
+                  loading="lazy" @click="openAlbumImageLightbox(msg, f.url)" />
+                <video v-else-if="f.type === 'video'" :src="f.url" controls preload="metadata" class="w-full h-full object-cover" />
+                <div v-else class="w-full h-full flex items-center justify-center">
+                  <MiniPlayer :src="f.url" :msg-type="f.type" :is-mine="isMine(msg)" />
+                </div>
+              </div>
+            </div>
+
             <!-- Media (compact MiniPlayer) -->
             <div v-else-if="msg.file_url"
               class="rounded-2xl overflow-hidden border border-brand-border/60 mb-0.5 max-w-[280px] w-full shadow-sm"
@@ -925,6 +1073,10 @@
             <!-- ── Shared post card ── -->
             <SharedPostCard v-else-if="msg.type === 'post_share' && msg.metadata?.postId"
               :post-id="msg.metadata.postId" :is-mine="isMine(msg)" />
+
+            <!-- ── Group invite card ── -->
+            <GroupShareCard v-else-if="msg.type === 'group_share' && msg.metadata?.groupId"
+              :group-id="msg.metadata.groupId" :is-mine="isMine(msg)" />
 
             <!-- ── Story reply card ─────────────────────────────────── -->
             <template v-if="parseStoryReply(msg)">
@@ -1066,11 +1218,12 @@
             </div>
 
             <!-- Reactions row -->
-            <div v-if="msg.reactions && Object.keys(msg.reactions).length"
+            <TransitionGroup v-if="msg.reactions && Object.keys(msg.reactions).length"
+              tag="div" name="reaction-pop"
               class="flex flex-wrap gap-1 mt-1"
               :class="isMine(msg) ? 'justify-end' : 'justify-start'">
               <button v-for="(users, emoji) in msg.reactions" :key="emoji"
-                type="button" @click="store.toggleReaction(msg.id, emoji)"
+                type="button" @click="toggleChipReaction(msg, emoji, users, $event)"
                 :class="['flex items-center gap-1 px-2 py-0.5 rounded-full text-xs leading-none transition-all border active:scale-95',
                   reactionHasMe(users)
                     ? 'bg-brand-accent/20 border-brand-accent/50 text-white'
@@ -1079,7 +1232,7 @@
                 <span class="text-[13px]">{{ emoji }}</span>
                 <span class="text-[10px] font-bold">{{ users.length }}</span>
               </button>
-            </div>
+            </TransitionGroup>
 
             <!-- Time + status + actions -->
             <div class="flex items-center gap-1 mt-0.5">
@@ -1140,7 +1293,7 @@
                     @click.stop>
                     <button v-for="e in QUICK_REACTIONS" :key="e"
                       type="button"
-                      @click="pickReaction(msg, e)"
+                      @click="pickReaction(msg, e, $event)"
                       class="w-7 h-7 flex items-center justify-center text-base rounded-full hover:bg-brand-accent/15 hover:scale-125 active:scale-95 transition-all">
                       {{ e }}
                     </button>
@@ -1281,7 +1434,7 @@
               <button v-for="c in store.conversations.filter(c2 => c2.id !== convId)" :key="c.id"
                 class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-brand-bg transition-colors text-left"
                 @click="doForward(c.id)">
-                <div class="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden bg-brand-accent/20 border border-brand-border">
+                <div :class="['w-8 h-8 flex-shrink-0 overflow-hidden bg-brand-accent/20 border border-brand-border', c.is_group ? 'rounded-lg' : 'rounded-full']">
                   <img v-if="c.is_group ? c.avatar_url : c.other_participants[0]?.user?.avatar_url"
                     :src="c.is_group ? c.avatar_url! : c.other_participants[0].user.avatar_url!"
                     class="w-full h-full object-cover" @error="onAvatarError" />
@@ -1294,6 +1447,50 @@
                     {{ c.is_group ? (c.name || 'Группа') : (c.other_participants[0]?.user?.display_name || c.other_participants[0]?.user?.username || 'Собеседник') }}
                   </p>
                 </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- ── Invite-to-group picker ───────────────────────────────────────────── -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showInvitePicker" class="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          style="background:rgba(0,0,0,.55)" @click.self="showInvitePicker = false">
+          <div class="bg-brand-card border border-brand-border rounded-3xl p-5 w-full max-w-sm shadow-2xl">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-base font-bold text-white">Пригласить в «{{ conv?.name || 'группу' }}»</h3>
+              <button @click="showInvitePicker = false" class="p-1.5 rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-colors">
+                <BIcon name="X" class="w-4 h-4" />
+              </button>
+            </div>
+            <p v-if="inviteSentTo" class="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-brand-success/10 text-brand-success text-sm">
+              <BIcon name="CheckCircle2" class="w-4 h-4 flex-shrink-0" />
+              Приглашение отправлено {{ inviteSentTo }}
+            </p>
+            <div v-if="!invitableConversations.length" class="text-center text-sm text-white/40 py-6">
+              Нет личных диалогов, чтобы отправить приглашение
+            </div>
+            <div v-else class="space-y-1 max-h-64 overflow-y-auto">
+              <button v-for="c in invitableConversations" :key="c.id"
+                :disabled="invitingConvId === c.id"
+                class="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-brand-bg transition-colors text-left disabled:opacity-50"
+                @click="doInviteToGroup(c)">
+                <div class="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden bg-brand-accent/20 border border-brand-border">
+                  <img v-if="c.other_participants[0]?.user?.avatar_url" :src="c.other_participants[0].user.avatar_url!"
+                    class="w-full h-full object-cover" @error="onAvatarError" />
+                  <div v-else class="w-full h-full flex items-center justify-center text-brand-accent text-xs font-bold">
+                    {{ (c.other_participants[0]?.user?.display_name || c.other_participants[0]?.user?.username || '?')[0]?.toUpperCase() }}
+                  </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm text-white font-medium truncate leading-tight">
+                    {{ c.other_participants[0]?.user?.display_name || c.other_participants[0]?.user?.username || 'Собеседник' }}
+                  </p>
+                </div>
+                <BIcon v-if="invitingConvId === c.id" name="Loader2" class="w-4 h-4 text-brand-accent animate-spin flex-shrink-0" />
               </button>
             </div>
           </div>
@@ -1389,21 +1586,21 @@
         </div>
       </Transition>
 
-      <form @submit.prevent="submit" class="flex items-center gap-2">
+      <form @submit.prevent="submit" class="flex items-end gap-2">
         <!-- Attachment button -->
         <button type="button" @click="fileInputEl?.click()"
-          :disabled="isUploading || isRecording"
-          class="flex-shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center text-white/55 hover:text-brand-accent hover:bg-brand-bg transition-all disabled:opacity-40"
+          :disabled="isUploading || isRecording || pendingAttachments.length >= MAX_ATTACHMENTS"
+          class="flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center text-white/55 hover:text-brand-accent hover:bg-brand-bg transition-all disabled:opacity-40"
           title="Прикрепить медиа">
           <BIcon v-if="isUploading" name="Loader2" class="w-4 h-4 animate-spin" />
           <BIcon v-else name="Paperclip" class="w-4 h-4" />
         </button>
-        <input ref="fileInputEl" type="file" accept="image/*,video/*,audio/*" class="sr-only" @change="onFileChange" />
+        <input ref="fileInputEl" type="file" multiple accept="image/*,video/*,audio/*" class="sr-only" @change="onFileChange" />
 
         <!-- Emoji button -->
         <button type="button"
           @click="showEmojiPicker = !showEmojiPicker; showStickerPanel = false"
-          :class="['flex-shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center transition-all',
+          :class="['flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center transition-all',
             showEmojiPicker ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/55 hover:text-brand-accent hover:bg-brand-bg']"
           title="Эмодзи">
           <BIcon name="Smile" class="w-5 h-5" />
@@ -1412,7 +1609,7 @@
         <!-- Sticker button -->
         <button type="button"
           @click="showStickerPanel = !showStickerPanel; showEmojiPicker = false"
-          :class="['flex-shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center transition-all',
+          :class="['flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center transition-all',
             showStickerPanel ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/55 hover:text-brand-accent hover:bg-brand-bg']"
           title="Стикеры">
           <BIcon name="Sticker" class="w-5 h-5" />
@@ -1474,48 +1671,72 @@
             </button>
           </div>
 
-          <!-- Media preview -->
-          <div v-if="mediaPreview" class="mb-2 relative inline-block">
-            <video v-if="pendingFileIsVideo" :src="mediaPreview" class="h-20 rounded-2xl border border-brand-border object-cover" muted />
-            <img v-else :src="mediaPreview" class="h-20 rounded-2xl border border-brand-border object-cover" />
-            <!-- Circular upload progress -->
-            <div v-if="isUploading" class="absolute inset-0 rounded-2xl bg-black/55 flex flex-col items-center justify-center">
-              <svg class="w-10 h-10 -rotate-90" viewBox="0 0 36 36">
-                <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2.5"/>
-                <circle cx="18" cy="18" r="15" fill="none" stroke="white" stroke-width="2.5"
-                  :stroke-dasharray="`${(uploadProgress / 100) * 94.25} 94.25`"
-                  class="transition-all duration-200"/>
-              </svg>
-              <span class="text-white text-[9px] mt-0.5">{{ uploadProgress }}%</span>
+          <!-- Attachment upload error -->
+          <Transition name="attach-pop">
+            <p v-if="uploadError" class="mb-2 px-3 py-1.5 rounded-xl bg-brand-error/10 border border-brand-error/30 text-brand-error text-xs">
+              {{ uploadError }}
+            </p>
+          </Transition>
+
+          <!-- Attachment previews (multiple — e.g. a photo + a video in the same message) -->
+          <TransitionGroup v-if="pendingAttachments.length" tag="div" name="attach-pop"
+            class="mb-2 flex items-center gap-2 flex-wrap">
+            <div v-for="a in pendingAttachments" :key="a.id"
+              class="relative flex items-center gap-2 bg-brand-bg border border-brand-border rounded-2xl p-2 pr-3 max-w-[220px] shadow-sm">
+              <div class="relative flex-shrink-0 w-11 h-11 rounded-xl overflow-hidden bg-black/25 flex items-center justify-center">
+                <video v-if="a.kind === 'video'" :src="a.previewUrl!" class="w-full h-full object-cover" muted />
+                <img v-else-if="a.kind === 'image'" :src="a.previewUrl!" class="w-full h-full object-cover" />
+                <BIcon v-else-if="a.kind === 'audio'" name="Music" class="w-5 h-5 text-brand-accent" />
+                <BIcon v-else name="FileText" class="w-5 h-5 text-brand-accent" />
+                <!-- Circular upload progress -->
+                <div v-if="a.uploading" class="absolute inset-0 bg-black/60 flex items-center justify-center">
+                  <svg class="w-7 h-7 -rotate-90" viewBox="0 0 36 36">
+                    <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2.5"/>
+                    <circle cx="18" cy="18" r="15" fill="none" stroke="white" stroke-width="2.5"
+                      :stroke-dasharray="`${(a.progress / 100) * 94.25} 94.25`"
+                      class="transition-all duration-200"/>
+                  </svg>
+                </div>
+                <div v-else-if="a.failed" class="absolute inset-0 bg-brand-error/70 flex items-center justify-center">
+                  <BIcon name="AlertCircle" class="w-4 h-4 text-white" />
+                </div>
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-xs font-semibold text-white truncate">{{ a.name }}</p>
+                <p class="text-[10px] text-white/45 truncate">
+                  {{ a.failed ? 'Ошибка загрузки' : a.uploading ? `${a.progress}%` : formatFileSize(a.size) }}
+                </p>
+              </div>
+              <button type="button" @click="removePendingAttachment(a.id)"
+                class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-white/45 hover:text-brand-error hover:bg-brand-error/10 transition-colors">
+                <BIcon name="X" class="w-3.5 h-3.5" />
+              </button>
             </div>
-            <button v-else type="button" @click="clearMedia"
-              class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-brand-card border border-brand-border rounded-full flex items-center justify-center text-white/55 hover:text-brand-error transition-colors">
-              <BIcon name="X" class="w-3 h-3" />
-            </button>
-          </div>
+          </TransitionGroup>
           <textarea ref="inputEl" v-model="draft" rows="1"
-            :placeholder="mediaPreview ? 'Подпись (необязательно)...' : 'Написать сообщение...'"
-            class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 text-sm text-white placeholder-brand-muted resize-none outline-none focus:border-brand-accent/60 transition-colors max-h-32 overflow-y-auto"
+            :placeholder="pendingAttachments.length ? 'Подпись (необязательно)...' : 'Написать сообщение...'"
+            class="block w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-[9px] text-sm text-white placeholder-brand-muted resize-none outline-none focus:border-brand-accent/60 transition-colors max-h-32 overflow-y-auto"
             @keydown.enter.exact.prevent="submit"
             @keydown.enter.shift.exact="newline"
+            @paste="onPaste"
             @input="onInput"
           />
         </div>
 
         <!-- Send / Mic toggle button -->
         <Transition name="btn-swap" mode="out-in">
-          <!-- Mic: shown when no text and no file and not recording -->
-          <button v-if="!draft.trim() && !pendingFileUrl && !isRecording" key="mic"
+          <!-- Mic: shown when no text and no attachment and not recording -->
+          <button v-if="!draft.trim() && !pendingAttachments.length && !isRecording" key="mic"
             type="button" @click="startRecording"
-            :disabled="isUploading || !!mediaPreview"
+            :disabled="isUploading"
             class="flex-shrink-0 w-10 h-10 rounded-2xl bg-brand-card border border-brand-border hover:bg-brand-bg text-white/55 hover:text-brand-accent transition-all flex items-center justify-center disabled:opacity-40"
             title="Голосовое сообщение">
             <BIcon name="Mic" class="w-4 h-4" />
           </button>
-          <!-- Send: shown when there's text or file -->
+          <!-- Send: shown when there's text or at least one uploaded attachment -->
           <button v-else key="send"
             type="submit"
-            :disabled="(!draft.trim() && !pendingFileUrl) || isUploading"
+            :disabled="(!draft.trim() && !pendingAttachments.some((a) => a.uploadedUrl && !a.failed)) || isUploading"
             class="flex-shrink-0 w-10 h-10 rounded-2xl bg-brand-accent hover:bg-brand-accent-plus disabled:opacity-30 transition-all shadow-lg shadow-brand-accent/20 active:scale-95 flex items-center justify-center"
             title="Отправить">
             <BIcon name="SendHorizontal" class="w-4 h-4 text-white" />
@@ -1635,6 +1856,15 @@
       </div>
     </Transition>
   </Teleport>
+
+  <!-- ── Reaction burst flourish (flying emoji on pick) ────────────────────── -->
+  <Teleport to="body">
+    <div v-for="b in reactionBursts" :key="b.id"
+      class="reaction-burst pointer-events-none fixed z-[300] text-3xl"
+      :style="{ left: b.x + 'px', top: b.y + 'px' }">
+      {{ b.emoji }}
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -1650,6 +1880,7 @@ import MiniPlayer from '@/components/MiniPlayer.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import PostLightbox from '@/components/PostLightbox.vue'
 import SharedPostCard from '@/components/SharedPostCard.vue'
+import GroupShareCard from '@/components/GroupShareCard.vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import StickerPanel from '@/components/StickerPanel.vue'
 import StickerRenderer from '@/components/StickerRenderer.vue'
@@ -1714,12 +1945,25 @@ const partnerDeviceIcon = computed(() => {
   return kind === 'mobile' ? 'Smartphone' : kind === 'tablet' ? 'Tablet' : kind === 'desktop' ? 'Monitor' : null
 })
 let onlineTimer: ReturnType<typeof setInterval> | null = null
-// Media
-const isUploading       = ref(false)
-const uploadProgress    = ref(0)
-const pendingFileUrl    = ref<string | null>(null)
-const mediaPreview      = ref<string | null>(null)
-const pendingFileIsVideo = ref(false)
+// Media — multiple attachments can be queued at once (e.g. a photo + a video sent together)
+interface PendingAttachment {
+  id: number
+  kind: 'image' | 'video' | 'audio' | 'file'
+  name: string
+  size: number
+  previewUrl: string | null
+  uploadedUrl: string | null
+  uploading: boolean
+  progress: number
+  failed: boolean
+}
+const MAX_ATTACHMENTS = 10
+const pendingAttachments = ref<PendingAttachment[]>([])
+let attachSeq = 0
+const voiceUploading = ref(false)
+const isUploading = computed(() => voiceUploading.value || pendingAttachments.value.some((a) => a.uploading))
+const uploadError       = ref<string | null>(null)
+let uploadErrorTimer: ReturnType<typeof setTimeout> | null = null
 // Lightbox
 const lightboxUrls = ref<string[]>([])
 const lightboxStart = ref(0)
@@ -1743,7 +1987,6 @@ let   mentionTimer: ReturnType<typeof setTimeout> | null = null
 // Group conversation
 const showMembersPanel = ref(false)
 const showDmPanel      = ref(false)
-const infoTab          = ref<'members' | 'media'>('members')
 const mediaStatsData   = ref<Record<string, number>>({})
 const mediaStatsLoading = ref(false)
 const pinTarget        = ref<Message | null>(null)
@@ -1790,6 +2033,40 @@ async function onGroupBannerChange(e: Event) {
 const savingGroup      = ref(false)
 const groupMembers     = ref<Array<{ user_id: string; role: string; user: MsgSender }>>([])
 const membersLoading   = ref(false)
+// When the group has no custom banner, the banner is filled with a collage of member avatars.
+const bannerCollage = computed(() => groupMembers.value.slice(0, 8).map((m) => m.user))
+
+// Member search (within the info modal — separate from the admin "add member" search below)
+const memberSearchQuery = ref('')
+const filteredGroupMembers = computed(() => {
+  const q = memberSearchQuery.value.trim().toLowerCase()
+  if (!q) return groupMembers.value
+  return groupMembers.value.filter((m) =>
+    m.user?.username?.toLowerCase().includes(q) || m.user?.display_name?.toLowerCase().includes(q))
+})
+
+// Group page link (real URL — not a fake VK-style invite link)
+const groupPageUrl = computed(() => props.conv?.group_id ? `${location.host}/groups/${props.conv.group_id}` : '')
+const groupLinkCopied = ref(false)
+async function copyGroupLink() {
+  if (!props.conv?.group_id) return
+  try {
+    await navigator.clipboard.writeText(`${location.origin}/groups/${props.conv.group_id}`)
+    groupLinkCopied.value = true
+    setTimeout(() => { groupLinkCopied.value = false }, 1500)
+  } catch { /* clipboard blocked — silent */ }
+}
+
+const usernameCopied = ref(false)
+async function copyUsername() {
+  if (!props.other?.username) return
+  try {
+    await navigator.clipboard.writeText(props.other.username)
+    usernameCopied.value = true
+    setTimeout(() => { usernameCopied.value = false }, 1500)
+  } catch { /* clipboard blocked — silent */ }
+}
+
 // Add member
 const showAddMember     = ref(false)
 const addMemberSearch   = ref('')
@@ -1826,6 +2103,24 @@ const forwardMsg   = ref<Message | null>(null)
 const tappedMsgId  = ref<string | null>(null)
 const mentionCard  = ref<{ username: string; display_name: string | null; avatar_url: string | null; id: string; x: number; y: number } | null>(null)
 
+// Invite-to-group picker
+const showInvitePicker = ref(false)
+const invitingConvId   = ref<string | null>(null)
+const inviteSentTo     = ref<string | null>(null)
+const invitableConversations = computed(() =>
+  store.conversations.filter((c) => !c.is_group && c.other_participants?.length),
+)
+async function doInviteToGroup(target: Conversation) {
+  if (!props.conv?.group_id || invitingConvId.value) return
+  invitingConvId.value = target.id
+  try {
+    await store.sendGroupShare(target.id, props.conv.group_id)
+    inviteSentTo.value = target.other_participants[0]?.user?.display_name || target.other_participants[0]?.user?.username || 'пользователю'
+    setTimeout(() => { inviteSentTo.value = null; showInvitePicker.value = false }, 1200)
+  } catch { /* silent */ }
+  finally { invitingConvId.value = null }
+}
+
 // Edit mode
 const editingMsg = ref<Message | null>(null)
 
@@ -1859,6 +2154,13 @@ const isPartnerTyping = computed(() => {
 })
 
 const myRole = computed(() => props.conv?.my_participant?.role ?? 'member')
+
+// ── Group DM ("написать сообществу") ────────────────────────────────────────
+// A regular member's personal thread with a group. Staff (admin/owner/moderator,
+// opened via the group's inbox) aren't the thread's ConversationParticipant — any
+// message they send is shown to the member as coming from the group, not from them.
+const isGroupDm = computed(() => props.conv?.type === 'community' && !!props.conv?.group_dm_user_id)
+const amGroupDmCustomer = computed(() => isGroupDm.value && props.conv?.group_dm_user_id === auth.user?.id)
 
 // ── Pin helpers ────────────────────────────────────────────────────────────────
 const currentPin = computed<PinnedMessage | null>(() => {
@@ -1908,8 +2210,78 @@ async function loadMediaStats() {
   try { mediaStatsData.value = await store.getMediaStats(props.convId) } finally { mediaStatsLoading.value = false }
 }
 
+// ── Media browser (opened from a stat row: Фото/Видео/Аудио/Голос/Ссылки) ──────
+const MEDIA_TYPE_TITLES: Record<string, string> = {
+  image: 'Фотографии', video: 'Видео', audio: 'Аудиофайлы', voice: 'Голосовые сообщения', link: 'Ссылки',
+}
+const mediaBrowserType    = ref<string | null>(null)
+const mediaBrowserItems   = ref<Message[]>([])
+const mediaBrowserLoading = ref(false)
+const mediaBrowserHasMore = ref(true)
+const mediaBrowserPlayingId = ref<string | null>(null)
+
+async function openMediaBrowser(type: string) {
+  mediaBrowserType.value = type
+  mediaBrowserItems.value = []
+  mediaBrowserHasMore.value = true
+  mediaBrowserPlayingId.value = null
+  await loadMoreMediaBrowser()
+}
+function closeMediaBrowser() {
+  mediaBrowserType.value = null
+  mediaBrowserPlayingId.value = null
+}
+async function loadMoreMediaBrowser() {
+  if (!mediaBrowserType.value || mediaBrowserLoading.value || !mediaBrowserHasMore.value) return
+  mediaBrowserLoading.value = true
+  try {
+    const before = mediaBrowserItems.value.length
+      ? mediaBrowserItems.value[mediaBrowserItems.value.length - 1].created_at
+      : undefined
+    const batch = await store.getMediaMessages(props.convId, mediaBrowserType.value, before)
+    mediaBrowserItems.value.push(...batch)
+    if (batch.length < 60) mediaBrowserHasMore.value = false
+  } finally {
+    mediaBrowserLoading.value = false
+  }
+}
+function onMediaBrowserScroll(e: Event) {
+  const el = e.target as HTMLElement
+  if (el.scrollHeight - el.scrollTop - el.clientHeight < 150) loadMoreMediaBrowser()
+}
+function monthLabel(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const month = d.toLocaleDateString('ru', { month: 'long' })
+  const capped = month.charAt(0).toUpperCase() + month.slice(1)
+  return d.getFullYear() === now.getFullYear() ? capped : `${capped} ${d.getFullYear()}`
+}
+const mediaBrowserGroups = computed(() => {
+  const groups: Array<{ label: string; items: Message[] }> = []
+  for (const m of mediaBrowserItems.value) {
+    const label = monthLabel(m.created_at)
+    const last = groups[groups.length - 1]
+    if (last && last.label === label) last.items.push(m)
+    else groups.push({ label, items: [m] })
+  }
+  return groups
+})
+function toggleMediaBrowserPlay(msgId: string) {
+  mediaBrowserPlayingId.value = mediaBrowserPlayingId.value === msgId ? null : msgId
+}
+function openMediaBrowserImage(url: string) {
+  const urls = mediaBrowserItems.value.map((m) => m.file_url).filter(Boolean) as string[]
+  lightboxUrls.value = urls
+  lightboxStart.value = Math.max(0, urls.indexOf(url))
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
-function isMine(msg: Message) { return msg.sender_id === auth.user?.id }
+function isMine(msg: Message) {
+  // Staff viewing a member's group-DM thread: any reply from any admin/owner counts as
+  // "our side" (right-aligned), not just messages sent by this specific staffer.
+  if (isGroupDm.value && !amGroupDmCustomer.value) return msg.sender_id !== props.conv?.group_dm_user_id
+  return msg.sender_id === auth.user?.id
+}
 
 // Group helpers
 function getMsgSenderAvatar(msg: Message): string | null {
@@ -1935,6 +2307,19 @@ async function fetchGroupMembers() {
   try { groupMembers.value = await store.getGroupMembers(props.convId) }
   catch { /* silent */ }
   finally { membersLoading.value = false }
+  fetchGroupOnlineStatus()
+}
+
+// Online status for every member — reuses the same batch endpoint the DM header uses.
+const groupOnlineStatus = ref<Record<string, boolean>>({})
+const groupOnlineCount = computed(() => Object.values(groupOnlineStatus.value).filter(Boolean).length)
+async function fetchGroupOnlineStatus() {
+  if (!groupMembers.value.length) return
+  try {
+    const ids = groupMembers.value.map((m) => m.user_id).join(',')
+    const res = await api.get(`/users/online?ids=${ids}`)
+    groupOnlineStatus.value = res.data?.data ?? {}
+  } catch { /* silent */ }
 }
 
 async function kickMember(userId: string) {
@@ -2156,8 +2541,11 @@ function startForward(msg: any) {
 
 function forwardMsgPreview(msg: Message): string {
   if (msg.type === 'sticker') return '🎭 Стикер'
-  if (msg.type === 'voice' || msg.type === 'audio') return '🎤 Голосовое'
+  if (msg.type === 'voice') return '🎤 Голосовое'
+  if (msg.type === 'audio') return '🎵 Аудио'
   if (msg.type === 'post_share') return '📎 Пост'
+  if (msg.type === 'group_share') return '👥 Приглашение в группу'
+  if (msg.type === 'album') return `📎 Альбом · ${getAlbumFiles(msg).length}`
   if (msg.text && isEncrypted(msg.text)) return '🔒 Зашифрованное сообщение'
   if (msg.encrypted_text && !msg.text) return '🔒 Зашифрованное сообщение'
   if (msg.text) return previewMsgText(msg.text, 60)
@@ -2286,9 +2674,26 @@ function toggleReactionPicker(msgId: string) {
   reactionPickerFor.value = reactionPickerFor.value === msgId ? null : msgId
 }
 
-function pickReaction(msg: Message, emoji: string) {
+// Flying-emoji flourish shown at the click point when a reaction is added
+const reactionBursts = ref<Array<{ id: number; emoji: string; x: number; y: number }>>([])
+let burstSeq = 0
+function spawnReactionBurst(emoji: string, e: MouseEvent) {
+  const id = ++burstSeq
+  reactionBursts.value.push({ id, emoji, x: e.clientX, y: e.clientY })
+  setTimeout(() => { reactionBursts.value = reactionBursts.value.filter((b) => b.id !== id) }, 700)
+}
+
+function pickReaction(msg: Message, emoji: string, e?: MouseEvent) {
   reactionPickerFor.value = null
   store.toggleReaction(msg.id, emoji)
+  if (e) spawnReactionBurst(emoji, e)
+}
+
+/** Toggling an existing reaction chip — only bursts when the user is adding (not removing) their reaction. */
+function toggleChipReaction(msg: Message, emoji: string, users: string[] | undefined, e: MouseEvent) {
+  const adding = !reactionHasMe(users)
+  store.toggleReaction(msg.id, emoji)
+  if (adding) spawnReactionBurst(emoji, e)
 }
 
 // ── Copy / edit helpers ───────────────────────────────────────────────────────
@@ -2336,6 +2741,19 @@ function openImageLightbox(url: string) {
   lightboxStart.value = Math.max(0, lightboxUrls.value.indexOf(url))
 }
 
+interface AlbumFile { url: string; type: string }
+function getAlbumFiles(msg: Message): AlbumFile[] {
+  const files = (msg.metadata as any)?.files
+  return Array.isArray(files) ? files : []
+}
+
+/** Lightbox scoped to just this album's own images (not the whole conversation's media). */
+function openAlbumImageLightbox(msg: Message, url: string) {
+  const imageUrls = getAlbumFiles(msg).filter((f) => f.type === 'image').map((f) => f.url)
+  lightboxUrls.value = imageUrls.length ? imageUrls : [url]
+  lightboxStart.value = Math.max(0, lightboxUrls.value.indexOf(url))
+}
+
 function getDisplayText(msg: Message): string {
   const text = msg.text
   if (!text) return ''
@@ -2363,7 +2781,7 @@ async function startRecording() {
       isRecording.value = false
       const blob = new Blob(chunks, { type: mimeType })
       if (blob.size < 500) return
-      isUploading.value = true
+      voiceUploading.value = true
       try {
         const ext = mimeType.includes('webm') ? 'webm' : 'ogg'
         const form = new FormData()
@@ -2374,7 +2792,7 @@ async function startRecording() {
         const url = res.data?.data?.url ?? null
         if (url) store.sendMessage(props.convId, '', url, 'voice')
       } catch {}
-      finally { isUploading.value = false }
+      finally { voiceUploading.value = false }
     }
     mr.start(100)
   } catch {
@@ -2431,6 +2849,7 @@ watch(() => props.convId, () => {
   unreadInChat.value = 0
   reactionPickerFor.value = null
   cancelEdit()
+  clearAttachments()
 }, { immediate: true })
 
 let prevScrollHeight = 0
@@ -2493,17 +2912,24 @@ async function submit() {
     return
   }
 
+  if (isUploading.value) return // an attachment is still uploading — wait for it
   const text = draft.value.trim()
-  if (!text && !pendingFileUrl.value) return
-  const fileUrl = pendingFileUrl.value
+  const ready = pendingAttachments.value.filter((a) => a.uploadedUrl && !a.failed)
+  if (!text && !ready.length) return
   const rId = replyTo.value?.id ?? null
   draft.value = ''
-  pendingFileUrl.value = null
-  mediaPreview.value = null
-  pendingFileIsVideo.value = false
   replyTo.value = null
   resetTextarea()
-  store.sendMessage(props.convId, text, fileUrl, undefined, rId)
+
+  if (ready.length > 1) {
+    const attachments = ready.map((a) => ({ url: a.uploadedUrl!, media_type: a.kind === 'file' ? undefined : a.kind }))
+    clearAttachments()
+    store.sendMessage(props.convId, text, undefined, undefined, rId, attachments)
+  } else {
+    const fileUrl = ready[0]?.uploadedUrl ?? null
+    clearAttachments()
+    store.sendMessage(props.convId, text, fileUrl, undefined, rId)
+  }
   scrollToBottom(true)
 }
 
@@ -2525,41 +2951,106 @@ function resetTextarea() {
 }
 
 // ── Media upload ───────────────────────────────────────────────────────────────
-async function onFileChange(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  const isVideo = file.type.startsWith('video/')
-  pendingFileIsVideo.value = isVideo
-  mediaPreview.value = URL.createObjectURL(file)
-  isUploading.value = true
-  uploadProgress.value = 0
-  try {
-    const form = new FormData()
-    form.append('file', file)
-    const res = await api.post('/media/upload?folder=messages', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      onUploadProgress: (ev: any) => {
-        uploadProgress.value = ev.total ? Math.round((ev.loaded / ev.total) * 100) : 50
-      },
-    })
-    pendingFileUrl.value = res.data?.data?.url ?? null
-    uploadProgress.value = 100
-  } catch {
-    mediaPreview.value = null
-    pendingFileUrl.value = null
-    pendingFileIsVideo.value = false
-    uploadProgress.value = 0
-  } finally {
-    isUploading.value = false
-    if (fileInputEl.value) fileInputEl.value.value = ''
-  }
+function fileKind(file: File): 'image' | 'video' | 'audio' | 'file' {
+  if (file.type.startsWith('image/')) return 'image'
+  if (file.type.startsWith('video/')) return 'video'
+  if (file.type.startsWith('audio/')) return 'audio'
+  return 'file'
 }
 
-function clearMedia() {
-  mediaPreview.value = null
-  pendingFileUrl.value = null
-  pendingFileIsVideo.value = false
+function formatFileSize(bytes: number): string {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} Б`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} КБ`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} ГБ`
+}
+
+/** Uploads one file as its own queued attachment slot; multiple can run concurrently. */
+function addPendingFile(file: File) {
+  if (pendingAttachments.value.length >= MAX_ATTACHMENTS) return
+  const kind = fileKind(file)
+  // Must be reactive() *before* pushing — mutating a plain object kept only via this
+  // outer `item` reference bypasses Vue's reactive array proxy entirely, so progress/
+  // uploading/uploadedUrl updates would never trigger a re-render (stuck at 0% forever).
+  const item = reactive<PendingAttachment>({
+    id: ++attachSeq,
+    kind,
+    name: file.name,
+    size: file.size,
+    previewUrl: (kind === 'image' || kind === 'video') ? URL.createObjectURL(file) : null,
+    uploadedUrl: null,
+    uploading: true,
+    progress: 0,
+    failed: false,
+  })
+  pendingAttachments.value.push(item)
+
+  ;(async () => {
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await api.post('/media/upload?folder=messages', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (ev: any) => {
+          item.progress = ev.total ? Math.round((ev.loaded / ev.total) * 100) : 50
+        },
+      })
+      const url = res.data?.data?.url ?? null
+      if (!url) throw new Error('no url')
+      item.uploadedUrl = url
+      item.progress = 100
+    } catch (err: any) {
+      item.failed = true
+      const msg = err?.response?.data?.error?.message || 'Не удалось загрузить файл'
+      uploadError.value = msg
+      if (uploadErrorTimer) clearTimeout(uploadErrorTimer)
+      uploadErrorTimer = setTimeout(() => { uploadError.value = null }, 4000)
+      setTimeout(() => removePendingAttachment(item.id), 1500)
+    } finally {
+      item.uploading = false
+    }
+  })()
+}
+
+function removePendingAttachment(id: number) {
+  const idx = pendingAttachments.value.findIndex((a) => a.id === id)
+  if (idx === -1) return
+  const [removed] = pendingAttachments.value.splice(idx, 1)
+  if (removed.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(removed.previewUrl)
+}
+
+function clearAttachments() {
+  for (const a of pendingAttachments.value) {
+    if (a.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(a.previewUrl)
+  }
+  pendingAttachments.value = []
   if (fileInputEl.value) fileInputEl.value.value = ''
+}
+
+async function onFileChange(e: Event) {
+  const files = (e.target as HTMLInputElement).files
+  if (!files?.length) return
+  const room = MAX_ATTACHMENTS - pendingAttachments.value.length
+  for (const file of Array.from(files).slice(0, Math.max(0, room))) addPendingFile(file)
+  if (fileInputEl.value) fileInputEl.value.value = ''
+}
+
+/** Ctrl+V an image/file straight into the composer, same upload path as the attach button. */
+function onPaste(e: ClipboardEvent) {
+  const items = e.clipboardData?.items
+  if (!items) return
+  const files: File[] = []
+  for (const item of Array.from(items)) {
+    if (item.kind === 'file') {
+      const file = item.getAsFile()
+      if (file) files.push(file)
+    }
+  }
+  if (!files.length) return // no file on the clipboard — fall through to the browser's normal text paste
+  e.preventDefault()
+  const room = MAX_ATTACHMENTS - pendingAttachments.value.length
+  for (const file of files.slice(0, Math.max(0, room))) addPendingFile(file)
 }
 
 // ── Delete ──────────────────────────────────────────────────────────────────────
@@ -2684,11 +3175,11 @@ async function fetchOnlineStatus() {
 
 onMounted(() => {
   document.addEventListener('click', closeMenu)
-  if (!props.conv?.is_group) {
+  if (!props.conv?.is_group && !(isGroupDm.value && amGroupDmCustomer.value)) {
     fetchOnlineStatus()
     onlineTimer = setInterval(fetchOnlineStatus, 30_000)
     fetchBlockStatus()
-  } else {
+  } else if (props.conv?.is_group) {
     fetchGroupMembers()
   }
 })
@@ -2697,6 +3188,10 @@ onUnmounted(() => {
   if (onlineTimer) clearInterval(onlineTimer)
   if (recordTimer) clearInterval(recordTimer)
   if (mentionTimer) clearTimeout(mentionTimer)
+  if (uploadErrorTimer) clearTimeout(uploadErrorTimer)
+  for (const a of pendingAttachments.value) {
+    if (a.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(a.previewUrl)
+  }
   mediaRecorder?.stop()
 })
 
@@ -2704,7 +3199,7 @@ watch(() => props.other?.id, () => {
   isPartnerOnline.value = false
   partnerLastSeenAt.value = null
   partnerDevice.value = null
-  if (!props.conv?.is_group) {
+  if (!props.conv?.is_group && !(isGroupDm.value && amGroupDmCustomer.value)) {
     fetchOnlineStatus()
     fetchBlockStatus()
   }
@@ -2717,10 +3212,15 @@ watch(() => props.convId, () => {
 
 watch(showMembersPanel, (open) => {
   if (open) {
-    infoTab.value = 'members'
+    memberSearchQuery.value = ''
     if (!groupMembers.value.length) fetchGroupMembers()
+    else fetchGroupOnlineStatus()
     loadMediaStats()
   }
+})
+
+watch(showDmPanel, (open) => {
+  if (open) loadMediaStats()
 })
 
 watch(showEditGroup, (open) => {
@@ -2831,10 +3331,6 @@ watch(() => langStore.currentLang, (newLang) => {
 .btn-swap-enter-from { opacity: 0; transform: scale(0.7) rotate(-15deg); }
 .btn-swap-leave-to   { opacity: 0; transform: scale(0.7) rotate(15deg); }
 
-/* Group members side panel */
-.panel-slide-enter-active, .panel-slide-leave-active { transition: transform 0.25s ease; }
-.panel-slide-enter-from, .panel-slide-leave-to { transform: translateX(100%); }
-
 /* Emoji / sticker popover */
 .popover-up-enter-active, .popover-up-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
 .popover-up-enter-from, .popover-up-leave-to { opacity: 0; transform: translateY(8px) scale(0.95); }
@@ -2842,4 +3338,31 @@ watch(() => langStore.currentLang, (newLang) => {
 /* Floating scroll-to-bottom button */
 .scroll-btn-enter-active, .scroll-btn-leave-active { transition: opacity 0.18s ease, transform 0.18s ease; }
 .scroll-btn-enter-from, .scroll-btn-leave-to { opacity: 0; transform: translateY(12px) scale(0.85); }
+
+/* Attachment preview card */
+.attach-pop-enter-active { transition: opacity 0.18s ease, transform 0.18s cubic-bezier(.34,1.56,.64,1); }
+.attach-pop-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
+.attach-pop-enter-from, .attach-pop-leave-to { opacity: 0; transform: translateY(6px) scale(0.9); }
+
+/* Reaction chips */
+.reaction-pop-enter-active { animation: reactionPop 0.35s cubic-bezier(.34,1.56,.64,1); }
+.reaction-pop-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; position: absolute; }
+.reaction-pop-leave-to { opacity: 0; transform: scale(0.6); }
+.reaction-pop-move { transition: transform 0.25s ease; }
+@keyframes reactionPop {
+  0%   { transform: scale(0) translateY(6px); opacity: 0; }
+  60%  { transform: scale(1.25); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Reaction burst (flying emoji flourish on pick) */
+.reaction-burst {
+  animation: reactionBurstFly 0.7s ease-out forwards;
+  transform: translate(-50%, -50%);
+}
+@keyframes reactionBurstFly {
+  0%   { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  30%  { transform: translate(-50%, -65%) scale(1.5); opacity: 1; }
+  100% { transform: translate(-50%, -150%) scale(1.1); opacity: 0; }
+}
 </style>

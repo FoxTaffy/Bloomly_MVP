@@ -62,7 +62,14 @@ if (!process.env.ALLOWED_ORIGINS && process.env.NODE_ENV === 'production') {
   process.exit(1);
 }
 
-const fastify = Fastify({ logger: true, bodyLimit: 104_857_600, trustProxy: true }); // 100 MB (video uploads)
+// 4300 MB ceiling — covers the largest chat-attachment tier (4 GB) with headroom for
+// multipart overhead. Per-tier caps (2 GB free / 4 GB lite+) are enforced in the upload
+// handler itself; this is just the outer limit fastify/busboy will allow through at all.
+// NOTE: if a reverse proxy (nginx, etc.) sits in front of this API, its own body-size
+// limit (e.g. client_max_body_size) must be raised to match, or it will 413 first.
+const MAX_UPLOAD_BYTES = 4_300 * 1024 * 1024;
+
+const fastify = Fastify({ logger: true, bodyLimit: MAX_UPLOAD_BYTES, trustProxy: true });
 
 // Allow specific origins in production; fall back to wildcard for development only
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -71,10 +78,15 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 fastify.register(cors, { origin: allowedOrigins, credentials: true });
 fastify.register(cookie, { secret: cookieSecret || 'bloomly_cookie_secret_dev' });
 fastify.register(jwt, { secret: jwtSecret || 'bloomly_secret_dev_only' });
-fastify.register(multipart, { limits: { fileSize: 100 * 1024 * 1024 } }); // 100 MB (video uploads)
+fastify.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES } });
+// This is the fallback for every route that doesn't set its own `config.rateLimit`
+// (auth, reports, ads, etc. already have tight per-route limits — see their routes.ts).
+// A single active session easily fires 8-10 parallel GET requests per page load plus a
+// persistent SSE connection and ~30s polling, and several people can share one IP behind
+// NAT — 200/min made ordinary usage (not abuse) trip the limit for everyone on that IP.
 fastify.register(rateLimit, {
   global: true,
-  max: 200,
+  max: 600,
   timeWindow: '1 minute',
 } as any);
 

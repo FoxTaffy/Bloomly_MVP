@@ -66,6 +66,7 @@ const GROUP_SELECT = {
   sponsors: true,
   is_verified: true,
   category: true,
+  category_changed_at: true,
   group_bg_url: true,
   group_frame: true,
   group_theme: true,
@@ -77,7 +78,6 @@ const GROUP_SELECT = {
   business_enabled: true,
   _count: { select: { members: true, events: true, posts: { where: { post: { deleted_at: null } } } } },
   owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
-  communityChat: { select: { id: true } },
 };
 
 // Minimal select for list / discover / my-groups (no heavy text fields)
@@ -100,7 +100,6 @@ const GROUP_LIST_SELECT = {
   members_count: true,
   created_at: true,
   business_enabled: true,
-  communityChat: { select: { id: true } },
   _count: { select: { members: true, events: true } },
   owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
 };
@@ -257,7 +256,21 @@ export const groupService = {
       }
       data.slug = newSlug;
     }
-    if (input.category !== undefined) data.category = input.category || null;
+    if (input.category !== undefined) {
+      const newCategory = input.category || null;
+      const current = await prisma.group.findUnique({
+        where: { id: groupId },
+        select: { category: true, category_changed_at: true },
+      });
+      if (current && current.category !== newCategory) {
+        const COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+        if (current.category_changed_at && Date.now() - current.category_changed_at.getTime() < COOLDOWN_MS) {
+          throw new Error('CATEGORY_CHANGE_COOLDOWN');
+        }
+        data.category_changed_at = new Date();
+      }
+      data.category = newCategory;
+    }
     if (input.isVerified !== undefined) data.is_verified = input.isVerified;
     if (input.groupBgUrl !== undefined) data.group_bg_url = input.groupBgUrl || null;
     if (input.groupFrame !== undefined) data.group_frame = input.groupFrame || null;

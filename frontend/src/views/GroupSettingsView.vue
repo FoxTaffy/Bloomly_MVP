@@ -758,6 +758,28 @@ const avatarInput = ref<HTMLInputElement | null>(null)
 const bannerInput = ref<HTMLInputElement | null>(null)
 const avatarPreview = ref('')
 const bannerPreview = ref('')
+const categoryChangedAt = ref<string | null>(null)
+
+const CATEGORY_OPTIONS: { value: string; label: string }[] = [
+  { value: 'art', label: 'Art — Арт, иллюстрации' },
+  { value: 'cosplay', label: 'Cosplay — Косплей, костюмы' },
+  { value: 'fandom', label: 'Fandom — Фандом, сообщество' },
+  { value: 'dev', label: 'Dev — Разработка, технологии' },
+  { value: 'music', label: 'Music — Музыка, аудио' },
+  { value: 'fursuit', label: 'Fursuit — Фурсьюты' },
+  { value: 'writing', label: 'Writing — Литература, тексты' },
+  { value: 'events', label: 'Events — Ивенты, слёты' },
+  { value: 'other', label: 'Other — Прочее' },
+]
+
+const categoryNextChangeAt = computed(() => {
+  if (!categoryChangedAt.value) return null
+  const next = new Date(categoryChangedAt.value)
+  next.setDate(next.getDate() + 30)
+  return next.getTime() > Date.now() ? next : null
+})
+
+const categoryLocked = computed(() => !!categoryNextChangeAt.value)
 const avatarOriginalSrc = ref('')
 const bannerOriginalSrc = ref('')
 
@@ -865,6 +887,7 @@ async function load() {
   form.socialVk = sl.vk || ''
   form.socialWebsite = sl.website || ''
   form.category = g.category || ''
+  categoryChangedAt.value = g.category_changed_at || null
   form.groupBgUrl = g.group_bg_url || ''
   form.groupFrame = g.group_frame || ''
   form.groupTheme = g.group_theme || ''
@@ -1000,8 +1023,8 @@ async function save() {
     if (form.slug !== oldSlug) {
       await router.replace({ name: 'group-settings', params: { slugOrId: form.slug } })
     }
-  } catch (err) {
-    showToast('error', 'Ошибка сохранения')
+  } catch (err: any) {
+    showToast('error', err.response?.data?.error?.message || 'Ошибка сохранения')
   } finally { saving.value = false }
 }
 
@@ -1057,6 +1080,7 @@ async function deleteGroup() {
       :show="cropModal.show"
       :src="cropModal.src"
       :type="cropModal.type"
+      shape="square"
       :accent-color="form.accentColor"
       :uploading="cropUploading"
       @cancel="cancelCrop"
@@ -1093,7 +1117,7 @@ async function deleteGroup() {
                   :style="bannerPreview ? `background-image:url(${bannerPreview});background-size:cover;background-position:center` : `background:linear-gradient(135deg,${form.accentColor}33,${form.accentColor}0a)`">
                 </div>
                 <div class="px-4 pb-4 -mt-6 relative">
-                  <div class="w-12 h-12 rounded-full border-[3px] overflow-hidden mb-2 shadow-lg" :style="`border-color:${form.accentColor}66`">
+                  <div class="w-12 h-12 rounded-xl border-[3px] overflow-hidden mb-2 shadow-lg" :style="`border-color:${form.accentColor}66`">
                     <img v-if="avatarPreview" :src="avatarPreview" class="w-full h-full object-cover" />
                     <div v-else class="w-full h-full flex items-center justify-center font-bold text-lg" :style="`background:${form.accentColor}26;color:${form.accentColor}`">
                       {{ (form.name || '?')[0].toUpperCase() }}
@@ -1220,25 +1244,18 @@ async function deleteGroup() {
                     </div>
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">Категория</label>
-                      <div class="field-input flex items-center justify-between cursor-not-allowed opacity-60 select-none">
-                        <span class="text-white/80">{{ {
-                          art: 'Art — Арт, иллюстрации',
-                          cosplay: 'Cosplay — Косплей, костюмы',
-                          fandom: 'Fandom — Фандом, сообщество',
-                          dev: 'Dev — Разработка, технологии',
-                          music: 'Music — Музыка, аудио',
-                          fursuit: 'Fursuit — Фурсьюты',
-                          writing: 'Writing — Литература, тексты',
-                          events: 'Events — Ивенты, слёты',
-                          other: 'Other — Прочее',
-                        }[form.category] || '— Не выбрана —' }}</span>
-                        <svg class="w-4 h-4 text-white/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                        </svg>
-                      </div>
-                      <p class="text-white/30 text-xs mt-1.5 flex items-center gap-1.5">
+                      <select v-model="form.category" :disabled="categoryLocked"
+                        class="field-input appearance-none"
+                        :class="categoryLocked ? 'cursor-not-allowed opacity-60' : ''">
+                        <option value="">— Не выбрана —</option>
+                        <option v-for="opt in CATEGORY_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                      </select>
+                      <p v-if="categoryLocked" class="text-white/30 text-xs mt-1.5 flex items-center gap-1.5">
                         <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                        Категория задаётся при создании и не может быть изменена.
+                        Следующая смена категории будет доступна {{ categoryNextChangeAt?.toLocaleDateString('ru-RU') }}.
+                      </p>
+                      <p v-else class="text-white/30 text-xs mt-1.5">
+                        Категорию можно менять не чаще одного раза в месяц.
                       </p>
                     </div>
                     <div>
@@ -1307,14 +1324,14 @@ async function deleteGroup() {
                       </div>
                       <!-- Avatar -->
                       <div class="absolute left-6 -bottom-10">
-                        <div class="relative w-20 h-20 rounded-full cursor-pointer group/av" @click="avatarInput?.click()">
-                          <div class="w-20 h-20 rounded-full overflow-hidden border-[3px] shadow-xl" :style="`border-color:${form.accentColor}66`">
+                        <div class="relative w-20 h-20 rounded-2xl cursor-pointer group/av" @click="avatarInput?.click()">
+                          <div class="w-20 h-20 rounded-2xl overflow-hidden border-[3px] shadow-xl" :style="`border-color:${form.accentColor}66`">
                             <img v-if="avatarPreview" :src="avatarPreview" class="w-full h-full object-cover"/>
                             <div v-else class="w-full h-full flex items-center justify-center font-bold text-3xl" :style="`background:${form.accentColor}26;color:${form.accentColor}`">
                               {{ (form.name || '?')[0].toUpperCase() }}
                             </div>
                           </div>
-                          <div class="absolute inset-0 rounded-full transition-all duration-200 flex items-center justify-center bg-black/55 opacity-0 group-hover/av:opacity-100">
+                          <div class="absolute inset-0 rounded-2xl transition-all duration-200 flex items-center justify-center bg-black/55 opacity-0 group-hover/av:opacity-100">
                             <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                           </div>
                           <button v-if="avatarPreview" type="button"

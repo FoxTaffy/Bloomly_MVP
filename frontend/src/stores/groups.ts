@@ -72,7 +72,6 @@ export interface Group {
   business_enabled: boolean
   created_at: string
   owner: GroupOwner
-  communityChat?: { id: string } | null
   _count: { members: number; events: number; posts: number }
   events?: EventItem[]
   commissionInfo?: CommissionInfo | null

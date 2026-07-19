@@ -30,6 +30,7 @@ const senderSelect = {
   username: true,
   display_name: true,
   avatar_url: true,
+  banner_url: true,
   badge_type: true,
   deceased_at: true,
 } as const;
@@ -47,13 +48,19 @@ async function enrichWithForwardedSenders<T extends { forwarded_from_sender_id?:
 }
 
 /** Validates and normalizes the metadata payload for card-style messages. */
-function validateCardMetadata(type: 'payment_request' | 'tip' | 'post_share', metadata: unknown): Record<string, unknown> {
+function validateCardMetadata(type: 'payment_request' | 'tip' | 'post_share' | 'group_share', metadata: unknown): Record<string, unknown> {
   const meta = (metadata ?? {}) as Record<string, unknown>;
   if (type === 'post_share') {
     if (typeof meta.postId !== 'string' || !meta.postId) {
       throw Object.assign(new Error('postId is required'), { statusCode: 400 });
     }
     return { postId: meta.postId };
+  }
+  if (type === 'group_share') {
+    if (typeof meta.groupId !== 'string' || !meta.groupId) {
+      throw Object.assign(new Error('groupId is required'), { statusCode: 400 });
+    }
+    return { groupId: meta.groupId };
   }
   const amount = Number(meta.amount);
   if (!Number.isFinite(amount) || amount <= 0 || amount > 10_000_000) {
@@ -76,6 +83,16 @@ function validateCardMetadata(type: 'payment_request' | 'tip' | 'post_share', me
   return { amount, note };
 }
 
+/** Classifies an uploaded file's message type from its URL/extension (shared by single-file and album sends). */
+function inferFileType(fileUrl: string, mediaType?: string): string {
+  if (mediaType === 'voice') return 'voice';
+  if (/\.(?:mp4|webm|mov|avi|mkv)$/i.test(fileUrl)) return 'video';
+  if (/\.(?:mp3|wav|ogg|m4a|flac|aac)$/i.test(fileUrl)) return 'audio';
+  return 'image';
+}
+
+const MAX_ALBUM_FILES = 10;
+
 // ── Service ───────────────────────────────────────────────────────────────────
 export const messageService = {
   /**
@@ -84,8 +101,12 @@ export const messageService = {
   async getOrCreateConversation(userA: string, userB: string) {
     // Self-DM = "Notes" (single participant)
     if (userA === userB) {
+      // `every: { user_id: userA }` alone is vacuously true for a conversation with
+      // ZERO participants, which would wrongly match any orphaned direct conversation
+      // and hand a brand-new user someone else's (or nobody's) chat — `some` rules
+      // that out by requiring at least one participant, who must be userA.
       const existing = await prisma.conversation.findFirst({
-        where: { type: 'direct', participants: { every: { user_id: userA } } },
+        where: { type: 'direct', participants: { every: { user_id: userA }, some: { user_id: userA } } },
         include: { participants: { include: { user: { select: senderSelect } } } },
       })
       if (existing) return existing
@@ -180,6 +201,22 @@ export const messageService = {
       orderBy: { conversation: { updated_at: 'desc' } },
     });
 
+    // Per-conversation unread count (for the list-row badge) — one aggregated query
+    // instead of N, grouped by conversation.
+    type UnreadRow = { conversation_id: string; count: bigint };
+    const unreadRows = await prisma.$queryRaw<UnreadRow[]>`
+      SELECT m.conversation_id, COUNT(*) AS count
+      FROM "Message" m
+      JOIN "ConversationParticipant" cp
+        ON cp.conversation_id = m.conversation_id
+       AND cp.user_id = ${userId}::uuid
+      WHERE m.sender_id <> ${userId}::uuid
+        AND m.deleted_at IS NULL
+        AND (cp.last_read_at IS NULL OR m.created_at > cp.last_read_at)
+      GROUP BY m.conversation_id
+    `;
+    const unreadByConv = new Map(unreadRows.map((r) => [r.conversation_id, Number(r.count)]));
+
     return participants.map((p: any) => ({
       ...p.conversation,
       pinned_message: p.conversation.pinnedMessage ?? null,
@@ -190,9 +227,13 @@ export const messageService = {
         label: p.label,
         role: p.role,
         personal_pinned_message_id: p.personal_pinned_message_id ?? null,
+        muted_until: p.muted_until ?? null,
+        sound_muted: p.sound_muted ?? false,
       },
       last_message: p.conversation.messages[0] ?? null,
       participants_count: p.conversation._count.participants,
+      unread_count: unreadByConv.get(p.conversation.id) ?? 0,
+      group_dm_user_id: p.conversation.group_dm_user_id ?? null,
       other_participants: p.conversation.participants
         .filter((cp: any) => cp.user_id !== userId)
         .map((cp: any) => ({ user_id: cp.user_id, user: cp.user, last_read_at: cp.last_read_at ?? null })),
@@ -212,6 +253,8 @@ export const messageService = {
        AND cp.user_id = ${userId}::uuid
       WHERE m.sender_id   <> ${userId}::uuid
         AND m.deleted_at  IS NULL
+        AND cp.archived   = false
+        AND cp.hidden_at  IS NULL
         AND (
           cp.last_read_at IS NULL
           OR m.created_at > cp.last_read_at
@@ -255,7 +298,7 @@ export const messageService = {
   /**
    * Send a message, persist it and broadcast to all conversation participants.
    */
-  async sendMessage({ conversationId, senderId, content, encrypted_text, file_url, media_type, reply_to_id, type, metadata }: SendMessageInput) {
+  async sendMessage({ conversationId, senderId, content, encrypted_text, file_url, media_type, reply_to_id, type, metadata, attachments }: SendMessageInput) {
     await this._assertParticipant(conversationId, senderId);
 
     const conv = await prisma.conversation.findUnique({
@@ -276,15 +319,53 @@ export const messageService = {
     }
 
     const text = content?.trim() ?? '';
-    if (!text && !encrypted_text && !file_url && !type) throw new Error('Message must have text or media');
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+    if (!text && !encrypted_text && !file_url && !type && !hasAttachments) throw new Error('Message must have text or media');
 
-    // Card-style messages (payment_request, tip, post_share) carry a structured
-    // metadata payload instead of being derived from file_url/media_type.
-    if (type === 'payment_request' || type === 'tip' || type === 'post_share') {
+    // Album: 2+ files sent together as one message (e.g. a photo + a video in the same bubble).
+    // A single-item `attachments` array is just treated as a normal file_url send below.
+    if (hasAttachments && attachments!.length > 1) {
+      if (attachments!.length > MAX_ALBUM_FILES) {
+        throw Object.assign(new Error(`Album can have at most ${MAX_ALBUM_FILES} files`), { statusCode: 400 });
+      }
+      const files = attachments!.map((a) => ({ url: a.url, type: inferFileType(a.url, a.media_type) }));
+      const [message] = await prisma.$transaction([
+        prisma.message.create({
+          data: {
+            conversation_id: conversationId,
+            sender_id: senderId,
+            text: text || null,
+            type: 'album',
+            reply_to_id: reply_to_id ?? null,
+            metadata: { files } as any,
+          },
+          include: {
+            sender: { select: senderSelect },
+            reply_to: {
+              select: {
+                id: true, text: true, type: true, file_url: true,
+                sender: { select: { id: true, username: true, display_name: true } },
+              },
+            },
+          },
+        }),
+        prisma.conversation.update({ where: { id: conversationId }, data: { updated_at: new Date() } }),
+      ]);
+      await this._broadcastNewMessage(conversationId, message);
+      return message;
+    }
+
+    // Card-style messages (payment_request, tip, post_share, group_share) carry a
+    // structured metadata payload instead of being derived from file_url/media_type.
+    if (type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share') {
       const meta = validateCardMetadata(type, metadata);
       if (type === 'post_share') {
         const post = await prisma.post.findUnique({ where: { id: meta.postId as string, deleted_at: null }, select: { id: true } });
         if (!post) throw Object.assign(new Error('Post not found'), { statusCode: 404 });
+      }
+      if (type === 'group_share') {
+        const group = await prisma.group.findUnique({ where: { id: meta.groupId as string }, select: { id: true } });
+        if (!group) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
       }
       const [message] = await prisma.$transaction([
         prisma.message.create({
@@ -312,6 +393,12 @@ export const messageService = {
       return message;
     }
 
+    // A lone `attachments` entry (no separate file_url given) is just a plain single-file send.
+    if (!file_url && hasAttachments) {
+      file_url = attachments![0].url;
+      media_type = attachments![0].media_type ?? media_type;
+    }
+
     // Determine message type
     let msgType: string = 'text';
     if (media_type === 'sticker') {
@@ -322,7 +409,9 @@ export const messageService = {
       } else if (/\.(?:mp4|webm|mov|avi|mkv)$/i.test(file_url)) {
         msgType = 'video';
       } else if (/\.(?:mp3|wav|ogg|m4a|flac|aac)$/i.test(file_url)) {
-        msgType = 'voice';
+        // Uploaded audio file (not a mic recording, which always arrives with
+        // media_type:'voice' above) — renders as a music player, not a voice bubble.
+        msgType = 'audio';
       } else {
         msgType = 'image';
       }
@@ -364,12 +453,22 @@ export const messageService = {
    * Push a freshly created message to every participant's open sockets.
    */
   async _broadcastNewMessage(conversationId: string, message: unknown) {
-    const participants = await prisma.conversationParticipant.findMany({
-      where: { conversation_id: conversationId },
-      select: { user_id: true },
-    });
+    const [participants, conv] = await Promise.all([
+      prisma.conversationParticipant.findMany({ where: { conversation_id: conversationId }, select: { user_id: true } }),
+      prisma.conversation.findUnique({ where: { id: conversationId }, select: { group_id: true, group_dm_user_id: true } }),
+    ]);
+    const recipients = new Set(participants.map((p) => p.user_id));
+    // Group-DM thread: staff aren't participants, but any admin/owner/moderator watching
+    // the group's inbox should still get the message pushed to them live.
+    if (conv?.group_id && conv.group_dm_user_id) {
+      const staff = await prisma.groupMember.findMany({
+        where: { group_id: conv.group_id, role: { in: ['owner', 'admin', 'moderator'] } },
+        select: { user_id: true },
+      });
+      for (const s of staff) recipients.add(s.user_id);
+    }
     const wsPayload = { type: 'new_message', data: message };
-    for (const { user_id } of participants) {
+    for (const user_id of recipients) {
       messageSubscriptions.push(user_id, wsPayload);
     }
   },
@@ -443,8 +542,10 @@ export const messageService = {
    */
   async markRead(conversationId: string, userId: string) {
     const now = new Date();
-    await prisma.conversationParticipant.update({
-      where: { conversation_id_user_id: { conversation_id: conversationId, user_id: userId } },
+    // updateMany (not update): group staff reading a member's group-DM thread from the
+    // inbox aren't a ConversationParticipant, so there's no row to stamp — no-op for them.
+    await prisma.conversationParticipant.updateMany({
+      where: { conversation_id: conversationId, user_id: userId },
       data: { last_read_at: now },
     });
     // Broadcast read receipt to other participants so they can update checkmarks,
@@ -586,6 +687,22 @@ export const messageService = {
     return prisma.conversationParticipant.update({
       where: { conversation_id_user_id: { conversation_id: conversationId, user_id: userId } },
       data: { archived },
+    });
+  },
+
+  /**
+   * Mute a conversation's notifications for the calling user.
+   * `mutedUntil: null` unmutes; a far-future date reads as "muted indefinitely".
+   * `soundMuted` is independent — it silences sound only, without hiding the toast/badge.
+   */
+  async setMute(conversationId: string, userId: string, mutedUntil: Date | null | undefined, soundMuted: boolean | undefined) {
+    await this._assertParticipant(conversationId, userId);
+    return prisma.conversationParticipant.update({
+      where: { conversation_id_user_id: { conversation_id: conversationId, user_id: userId } },
+      data: {
+        ...(mutedUntil !== undefined ? { muted_until: mutedUntil } : {}),
+        ...(soundMuted !== undefined ? { sound_muted: soundMuted } : {}),
+      },
     });
   },
 
@@ -738,36 +855,40 @@ export const messageService = {
 
   // ── private ──────────────────────────────────────────────────────────────
 
-  // ── Community Chat ────────────────────────────────────────────────────────
-  /**
-   * Create a COMMUNITY conversation for a group. Idempotent.
-   * All current group members are added as participants.
-   */
-  async initCommunityChat(groupId: string, ownerId: string): Promise<{ conversation: any; alreadyExists: boolean }> {
+  // ── Group DM ("написать сообществу") ──────────────────────────────────────
+  // A regular member's personal 1:1-style thread with a group. Any admin/owner
+  // of the group may read/reply in it (see _assertParticipant's staff bypass
+  // below) without being a ConversationParticipant themselves — their replies
+  // are rendered client-side as coming from the group, not from them personally.
+
+  async _getGroupRole(groupId: string, userId: string): Promise<string | null> {
+    const gm = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      select: { role: true },
+    });
+    return gm?.role ?? null;
+  },
+
+  /** Find or create the calling user's personal thread with a group. Idempotent. */
+  async startGroupDm(groupId: string, userId: string): Promise<{ conversation: any; alreadyExists: boolean }> {
     const existing = await prisma.conversation.findUnique({
-      where: { group_id: groupId },
+      where: { group_id_group_dm_user_id: { group_id: groupId, group_dm_user_id: userId } },
       include: { participants: { include: { user: { select: senderSelect } } } },
     });
     if (existing) return { conversation: existing, alreadyExists: true };
 
-    const [group, members] = await Promise.all([
-      prisma.group.findUnique({ where: { id: groupId }, select: { name: true } }),
-      prisma.groupMember.findMany({ where: { group_id: groupId }, select: { user_id: true, role: true } }),
-    ]);
-    if (!members.length) throw Object.assign(new Error('Group has no members'), { statusCode: 400 });
+    const group = await prisma.group.findUnique({ where: { id: groupId }, select: { name: true, avatar_url: true } });
+    if (!group) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
 
     const conversation = await prisma.conversation.create({
       data: {
         type: 'community',
-        is_group: true,
-        name: group?.name ?? 'Community Chat',
+        is_group: false,
+        name: group.name,
+        avatar_url: group.avatar_url,
         group_id: groupId,
-        participants: {
-          create: members.map((m) => ({
-            user_id: m.user_id,
-            role: m.user_id === ownerId ? 'admin' : 'member',
-          })),
-        },
+        group_dm_user_id: userId,
+        participants: { create: [{ user_id: userId, role: 'member' }] },
       },
       include: { participants: { include: { user: { select: senderSelect } } } },
     });
@@ -775,23 +896,104 @@ export const messageService = {
   },
 
   /**
-   * Get the community conversation for a group (null if not initialised).
+   * Admin/owner-only: list every member's personal thread with the group ("group inbox").
    */
-  async getCommunityConversation(groupId: string) {
-    return prisma.conversation.findUnique({
-      where: { group_id: groupId },
-      select: {
-        id: true, type: true, name: true, avatar_url: true, group_id: true,
-        _count: { select: { participants: true, messages: true } },
+  async getGroupInbox(groupId: string, requesterId: string) {
+    const role = await this._getGroupRole(groupId, requesterId);
+    if (!role || !['owner', 'admin', 'moderator'].includes(role)) {
+      throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
+    }
+
+    const threads = await prisma.conversation.findMany({
+      where: { group_id: groupId, group_dm_user_id: { not: null }, deleted_at: null },
+      include: {
+        group_dm_user: { select: senderSelect },
+        messages: {
+          where: { deleted_at: null },
+          orderBy: { created_at: 'desc' },
+          take: 1,
+          select: { id: true, text: true, type: true, sender_id: true, created_at: true },
+        },
+      },
+      orderBy: { updated_at: 'desc' },
+    });
+
+    return threads.map((t: any) => {
+      const lastMessage = t.messages[0] ?? null;
+      return {
+        id: t.id,
+        customer: t.group_dm_user,
+        last_message: lastMessage,
+        updated_at: t.updated_at,
+        needs_reply: !!lastMessage && lastMessage.sender_id === t.group_dm_user_id,
+      };
+    });
+  },
+
+  /**
+   * Fetch a single conversation by id, in the same shape getConversations() returns per-row.
+   * Used by group staff to open a thread from the inbox (they aren't a ConversationParticipant).
+   */
+  async getConversationById(conversationId: string, requesterId: string) {
+    await this._assertParticipant(conversationId, requesterId);
+
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        participants: { take: 6, include: { user: { select: senderSelect } } },
+        _count: { select: { participants: true } },
+        messages: { where: { deleted_at: null }, orderBy: { created_at: 'desc' }, take: 1, include: { sender: { select: senderSelect } } },
+        pinnedMessage: {
+          select: {
+            id: true, text: true, type: true, file_url: true, created_at: true,
+            sender: { select: { id: true, username: true, display_name: true } },
+          },
+        } as any,
       },
     });
+    if (!conv) return null;
+
+    const mine = conv.participants.find((p: any) => p.user_id === requesterId);
+
+    return {
+      ...conv,
+      pinned_message: (conv as any).pinnedMessage ?? null,
+      my_participant: mine
+        ? {
+            archived: mine.archived, hidden_at: mine.hidden_at, last_read_at: mine.last_read_at,
+            label: mine.label, role: mine.role, personal_pinned_message_id: mine.personal_pinned_message_id ?? null,
+            muted_until: mine.muted_until ?? null, sound_muted: mine.sound_muted ?? false,
+          }
+        // Staff opening a member's group-DM thread: not a real participant, so there's
+        // no personal state (archive/mute/pin) to report — just enough shape to render.
+        : { archived: false, hidden_at: null, last_read_at: null, label: 'default', role: 'admin', personal_pinned_message_id: null, muted_until: null, sound_muted: false },
+      last_message: conv.messages[0] ?? null,
+      participants_count: conv._count.participants,
+      unread_count: 0,
+      other_participants: conv.participants
+        .filter((cp: any) => cp.user_id !== requesterId)
+        .map((cp: any) => ({ user_id: cp.user_id, user: cp.user, last_read_at: cp.last_read_at ?? null })),
+    };
   },
 
   async _assertParticipant(conversationId: string, userId: string) {
     const p = await prisma.conversationParticipant.findFirst({
       where: { conversation_id: conversationId, user_id: userId },
     });
-    if (!p) throw Object.assign(new Error('Not a participant'), { statusCode: 403 });
+    if (p) return;
+
+    // Group-DM staff bypass: any admin/owner/moderator of the group may act on a
+    // member's personal thread with that group without being a participant on it.
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { group_id: true, group_dm_user_id: true },
+    });
+    if (conv?.group_id && conv.group_dm_user_id) {
+      const role = await this._getGroupRole(conv.group_id, userId);
+      if (role && ['owner', 'admin', 'moderator'].includes(role)) return;
+    }
+
+    throw Object.assign(new Error('Not a participant'), { statusCode: 403 });
   },
 
   async _assertAdmin(conversationId: string, userId: string) {
@@ -850,11 +1052,6 @@ export const messageService = {
     `;
     const stats: Record<string, number> = {};
     for (const row of rows) stats[row.type] = Number(row.cnt);
-    const voiceRows = await prisma.$queryRaw<Row[]>`
-      SELECT 'voice' as type, COUNT(*) as cnt FROM "Message"
-      WHERE conversation_id = ${convId}::uuid AND deleted_at IS NULL AND type = 'audio'
-    `;
-    if (voiceRows[0]) stats.voice = Number(voiceRows[0].cnt);
     const linkRows = await prisma.$queryRaw<Row[]>`
       SELECT 'link' as type, COUNT(*) as cnt FROM "Message"
       WHERE conversation_id = ${convId}::uuid AND deleted_at IS NULL
@@ -862,6 +1059,34 @@ export const messageService = {
     `;
     if (linkRows[0]) stats.link = Number(linkRows[0].cnt);
     return stats;
+  },
+
+  /**
+   * Paginated list of messages of a given media "stat" type for the media browser
+   * (the sub-view opened from a stat row: Фото/Видео/Аудио/Голос/Ссылки).
+   */
+  async getMediaMessages(convId: string, userId: string, mediaType: string, before?: string, limit = 60) {
+    await this._assertParticipant(convId, userId);
+    const beforeClause = before ? { created_at: { lt: new Date(before) } } : {};
+
+    if (mediaType === 'link') {
+      return prisma.message.findMany({
+        where: { conversation_id: convId, deleted_at: null, text: { contains: 'http' }, ...beforeClause },
+        orderBy: { created_at: 'desc' },
+        take: limit,
+        include: { sender: { select: senderSelect } },
+      });
+    }
+
+    const validTypes = ['image', 'video', 'audio', 'voice'];
+    if (!validTypes.includes(mediaType)) return [];
+
+    return prisma.message.findMany({
+      where: { conversation_id: convId, deleted_at: null, type: mediaType, ...beforeClause },
+      orderBy: { created_at: 'desc' },
+      take: limit,
+      include: { sender: { select: senderSelect } },
+    });
   },
 
   // ── E2EE key management ────────────────────────────────────────────────

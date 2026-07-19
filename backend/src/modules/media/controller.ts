@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { uploadFile, UploadValidationError, convertGifAvatarToWebm } from './service.js';
+import prisma from '../../config/prisma.js';
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif',
@@ -9,6 +10,27 @@ const ALLOWED_MIME_TYPES = new Set([
 
 const ALLOWED_FOLDERS = ['posts', 'comments', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers'] as const;
 type Folder = typeof ALLOWED_FOLDERS[number];
+
+const GB = 1024 * 1024 * 1024;
+// Unchanged behavior for every folder except chat attachments, which get a
+// per-subscription-tier cap instead (large videos/music sent as chat attachments).
+const DEFAULT_MAX_BYTES = 100 * 1024 * 1024;
+const MESSAGE_UPLOAD_LIMITS_BY_TIER: Record<string, number> = {
+  free: 2 * GB,
+  lite: 4 * GB,
+  pro: 4 * GB,
+  business: 4 * GB,
+};
+
+async function resolveMaxBytes(folder: Folder, userId: string): Promise<number> {
+  if (folder !== 'messages') return DEFAULT_MAX_BYTES;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { subscription_tier: true } });
+  return MESSAGE_UPLOAD_LIMITS_BY_TIER[user?.subscription_tier ?? 'free'] ?? MESSAGE_UPLOAD_LIMITS_BY_TIER.free;
+}
+
+function formatMaxSize(bytes: number): string {
+  return bytes >= GB ? `${(bytes / GB).toFixed(0)} ГБ` : `${Math.round(bytes / (1024 * 1024))} МБ`;
+}
 
 /** Parses a 0..1 crop fraction from a query param; falls back to `def` if missing/invalid. */
 function parseFraction(raw: unknown, def: number): number {
@@ -42,11 +64,31 @@ export const uploadFileHandler = async (
     });
   }
 
+  const rawFolder = (request.query as any).folder ?? 'posts';
+  const folder: Folder = ALLOWED_FOLDERS.includes(rawFolder as Folder) ? (rawFolder as Folder) : 'posts';
+  const { id: userId } = request.user as { id: string };
+  const maxBytes = await resolveMaxBytes(folder, userId);
+
   try {
     const chunks: Buffer[] = [];
-    for await (const chunk of data.file) {
+    let total = 0;
+    let tooLarge = false;
+    for await (const chunk of data.file as AsyncIterable<Buffer>) {
+      total += chunk.length;
+      // Keep draining instead of breaking early so the multipart parser finishes
+      // reading the request body cleanly; just stop buffering past the cap.
+      if (total > maxBytes) { tooLarge = true; continue; }
       chunks.push(chunk as Buffer);
     }
+
+    if (tooLarge) {
+      return reply.code(413).send({
+        success: false,
+        data: null,
+        error: { code: 'FILE_TOO_LARGE', message: `Файл превышает максимальный размер (${formatMaxSize(maxBytes)})` },
+      });
+    }
+
     const buf = Buffer.concat(chunks);
 
     if (buf.length === 0) {
@@ -56,9 +98,6 @@ export const uploadFileHandler = async (
         error: { code: 'NO_FILE', message: 'Uploaded file is empty' },
       });
     }
-
-    const rawFolder = (request.query as any).folder ?? 'posts';
-    const folder: Folder = ALLOWED_FOLDERS.includes(rawFolder as Folder) ? (rawFolder as Folder) : 'posts';
 
     if (folder === 'stickers' && data.mimetype !== 'image/png') {
       return reply.code(422).send({

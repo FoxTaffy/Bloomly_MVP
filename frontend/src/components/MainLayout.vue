@@ -1241,8 +1241,8 @@ onDeactivated(() => {
                   <span class="truncate">{{ ev.location_name }}</span>
                 </div>
                 <div v-if="ev.group" class="flex items-center gap-1.5 mt-1 pt-1.5 border-t border-brand-border/40">
-                  <img v-if="ev.group.avatar_url" :src="ev.group.avatar_url" class="w-4 h-4 rounded-full object-cover" @error="onAvatarError" />
-                  <div v-else class="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold" :style="`background:${ev.group.accent_color || '#4C67CF'}33;color:${ev.group.accent_color || '#4C67CF'}`">{{ (ev.group.name || '?')[0] }}</div>
+                  <img v-if="ev.group.avatar_url" :src="ev.group.avatar_url" class="w-4 h-4 rounded-[3px] object-cover" @error="onAvatarError" />
+                  <div v-else class="w-4 h-4 rounded-[3px] flex items-center justify-center text-[8px] font-bold" :style="`background:${ev.group.accent_color || '#4C67CF'}33;color:${ev.group.accent_color || '#4C67CF'}`">{{ (ev.group.name || '?')[0] }}</div>
                   <span class="text-[10px] text-white/40 truncate">{{ ev.group.name }}</span>
                 </div>
               </div>
