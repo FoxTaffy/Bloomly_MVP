@@ -58,7 +58,7 @@ export async function postsRoutes(fastify: FastifyInstance) {
   const tryAuth: RouteShorthandOptions = { onRequest: [fastify.tryAuthenticate] };
 
   // ── Static / non-parametric ─────────────────────────────────────────────
-  fastify.get('/', { schema: getPostsSchema }, getPostsHandler as any);
+  fastify.get('/', { schema: getPostsSchema, onRequest: [fastify.tryAuthenticate] }, getPostsHandler as any);
   fastify.get('/search', tryAuth, searchPostsHandler as any);
   fastify.get('/personalized', auth, getPersonalizedPostsHandler as any);
   fastify.get('/trending-tags', getTrendingTagsHandler as any);
@@ -85,11 +85,11 @@ export async function postsRoutes(fastify: FastifyInstance) {
   fastify.get('/:id', getPostByIdHandler as any);
   fastify.delete('/:id', auth, deletePostHandler as any);
   fastify.patch('/:id',  auth, editPostHandler as any);
-  fastify.post('/:id/vote',      { schema: voteSchema, onRequest: [fastify.authenticate] }, votePostHandler as any);
-  fastify.post('/:id/repaw',     auth, repawPostHandler as any);
+  fastify.post('/:id/vote',      { schema: voteSchema, onRequest: [fastify.authenticate], config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, votePostHandler as any);
+  fastify.post('/:id/repaw',     { onRequest: [fastify.authenticate], config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, repawPostHandler as any);
   fastify.post('/:id/favourite', auth, favouritePostHandler as any);
-  fastify.post('/:id/comments',  auth, createCommentHandler as any);
-  fastify.get('/:id/comments',   getCommentsHandler as any);
+  fastify.post('/:id/comments',  { onRequest: [fastify.authenticate], config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, createCommentHandler as any);
+  fastify.get('/:id/comments',   { onRequest: [fastify.tryAuthenticate] }, getCommentsHandler as any);
   fastify.post('/:id/view',      tryAuth, recordPostViewHandler as any);
   fastify.post('/:id/archive',   auth, toggleArchivePostHandler as any);
   fastify.post('/:id/comments-toggle', auth, toggleCommentsDisabledHandler as any);

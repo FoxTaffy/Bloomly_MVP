@@ -1,5 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { usersService } from './service.js';
+import { isAdult } from '../../lib/age.js';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput, JwtPayload } from './types.js';
 
 
@@ -30,7 +31,7 @@ export async function updateMeHandler(
   const { role: _role, subscription_tier: _tier, is_verified: _v, verified_at: _va, ...safeData } = request.body as any;
   const user = await usersService.updateUser(payload.id, safeData);
 
-  return reply.send({ success: true, data: { user }, error: null });
+  return reply.send({ success: true, data: { user: { ...user, is_adult: isAdult(user.birth_date) } }, error: null });
 }
 
 export async function updateUsernameHandler(

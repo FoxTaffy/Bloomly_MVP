@@ -4,6 +4,9 @@ import { AuthService } from './service.js';
 import { buildOAuthUrl, handleOAuthCallback, findOrCreateOAuthUser, OAuthProvider } from './oauth.service.js';
 import { parseDeviceName, getClientIp } from './device.util.js';
 import prisma from '../../config/prisma.js';
+import { getSetting } from '../../lib/settings.js';
+import { isAdult } from '../../lib/age.js';
+import { createMfaToken, verifyMfaToken } from '../../lib/mfaToken.js';
 import type { RegisterInput, LoginInput, JwtPayload } from './types.js';
 
 const authService = new AuthService();
@@ -34,8 +37,13 @@ const FULL_USER_SELECT = {
   subscription_tier: true, profile_theme: true, profile_bg_url: true,
   profile_frame: true, is_verified: true, verification_type: true,
   badge_type: true, email_verified: true, onboarding_done: true,
-  payment_region: true,
+  payment_region: true, birth_date: true, two_factor_method: true,
 } as const;
+
+function withIsAdult<T extends { birth_date: Date | null }>(user: T): Omit<T, 'birth_date'> & { is_adult: boolean } {
+  const { birth_date, ...rest } = user;
+  return { ...rest, is_adult: isAdult(birth_date) };
+}
 
 // ── 15-минутный access token ──────────────────────────────────────────────────
 function issueAccessToken(request: FastifyRequest, id: string, role: string) {
@@ -53,27 +61,53 @@ function isMobileClient(request: FastifyRequest): boolean {
 // remember=false → session cookie (no maxAge) + 24-hour DB token
 // Возвращает raw-токен, чтобы мобильные клиенты могли сохранить его сами
 // (веб-клиент его игнорирует и полагается на httpOnly cookie как раньше).
+// rotateSessionId: при обновлении access-токена та же физическая сессия должна
+// оставаться одной строкой в БД (иначе список "устройства и сессии" плодит
+// дубликаты одного и того же девайса каждые 15 минут). Передаётся только из
+// refreshHandler; при логине/регистрации/OAuth — не передаётся, создаётся новая строка.
+// expectedHash: при ротации (rotateSessionId передан) перезапись строки условная —
+// проходит только если token_hash в БД всё ещё равен тому, что мы прочитали.
+// Без этого два параллельных refresh-запроса (две вкладки, гонка сети) оба проходят
+// первичную проверку валидности одной и той же ещё-не-отревокнутой записи и оба
+// безусловно перезаписывают её новым hash — тот, кто запишет вторым, "стирает"
+// ротацию первого, и cookie, отданный первому запросу, перестаёт совпадать с БД
+// (это разлогинивало пользователя без явной причины). Возвращаем null, если проиграли
+// гонку — вызывающий код обязан не выставлять cookie и обратиться к recentRotations.
 async function issueRefreshToken(
   request: FastifyRequest,
   reply: FastifyReply,
   userId: string,
   remember = false,
-): Promise<string> {
+  rotateSessionId?: string,
+  expectedHash?: string,
+): Promise<string | null> {
   const raw     = randomBytes(40).toString('hex');
   const hash    = createHash('sha256').update(raw).digest('hex');
   const ttlMs   = remember ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
   const expiry  = new Date(Date.now() + ttlMs);
   const userAgent  = request.headers['user-agent'];
   const ipAddress  = getClientIp(request);
+  const data = {
+    token_hash: hash, expires_at: expiry, remember, revoked: false,
+    device_name: parseDeviceName(userAgent),
+    user_agent: userAgent ?? null,
+    ip_address: ipAddress ?? null,
+    last_used_at: new Date(),
+  };
 
-  await prisma.refreshToken.create({
-    data: {
-      user_id: userId, token_hash: hash, expires_at: expiry, remember,
-      device_name: parseDeviceName(userAgent),
-      user_agent: userAgent ?? null,
-      ip_address: ipAddress ?? null,
-    },
-  });
+  if (rotateSessionId) {
+    if (expectedHash) {
+      const result = await prisma.refreshToken.updateMany({
+        where: { id: rotateSessionId, token_hash: expectedHash },
+        data,
+      });
+      if (result.count === 0) return null; // lost the rotation race
+    } else {
+      await prisma.refreshToken.update({ where: { id: rotateSessionId }, data });
+    }
+  } else {
+    await prisma.refreshToken.create({ data: { user_id: userId, ...data } });
+  }
 
   const cookieOpts: Parameters<typeof reply.setCookie>[2] = {
     httpOnly: true,
@@ -103,6 +137,9 @@ export const registerHandler = async (
   request: FastifyRequest<{ Body: RegisterInput }>,
   reply: FastifyReply,
 ) => {
+  if (!(await getSetting('open_registration'))) {
+    return reply.code(403).send({ success: false, data: null, error: { code: 'REGISTRATION_CLOSED', message: 'Регистрация временно закрыта' } });
+  }
   try {
     const user = await authService.createUser(request.body);
     return reply.code(201).send({
@@ -135,7 +172,7 @@ export const verifyEmailHandler = async (
     const refreshToken = await issueRefreshToken(request, reply, user.id, remember);
     return reply.send({
       success: true,
-      data: { token, user, ...(isMobileClient(request) ? { refreshToken } : {}) },
+      data: { token, user: withIsAdult(user), ...(isMobileClient(request) ? { refreshToken } : {}) },
       error: null,
     });
   } catch (e: any) {
@@ -201,7 +238,7 @@ export const confirmUnfreezeHandler = async (
     const refreshToken = await issueRefreshToken(request, reply, user.id, remember);
     return reply.send({
       success: true,
-      data: { token, user, ...(isMobileClient(request) ? { refreshToken } : {}) },
+      data: { token, user: withIsAdult(user), ...(isMobileClient(request) ? { refreshToken } : {}) },
       error: null,
     });
   } catch (e: any) {
@@ -246,6 +283,17 @@ export const loginHandler = async (
       });
     }
 
+    if (user.two_factor_method) {
+      if (user.two_factor_method === 'email') {
+        await authService.resendLoginTwoFactor(user.id);
+      }
+      return reply.code(401).send({
+        success: false,
+        data: { method: user.two_factor_method, mfaToken: createMfaToken(user.id) },
+        error: { code: 'TWO_FACTOR_REQUIRED', message: 'Требуется двухфакторная аутентификация' },
+      });
+    }
+
     const token = issueAccessToken(request, user.id, user.role);
     const refreshToken = await issueRefreshToken(request, reply, user.id, remember);
     const fullUser = await prisma.user.findUnique({ where: { id: user.id }, select: FULL_USER_SELECT });
@@ -254,7 +302,7 @@ export const loginHandler = async (
       success: true,
       data: {
         token,
-        user: fullUser ?? { id: user.id, username: user.username, email: user.email, role: user.role },
+        user: fullUser ? withIsAdult(fullUser) : { id: user.id, username: user.username, email: user.email, role: user.role },
         ...(isMobileClient(request) ? { refreshToken } : {}),
       },
       error: null,
@@ -329,6 +377,128 @@ export const confirmEmailChangeHandler = async (
     return reply.send({ success: true, data: { email }, error: null });
   } catch (e: any) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'CONFIRM_EMAIL_CHANGE_ERROR', message: e.message } });
+  }
+};
+
+// ── 2FA: подключение TOTP-приложения (требует JWT) ─────────────────────────────
+export const totpSetupHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { id } = request.user as JwtPayload;
+    const { secret, qrDataUrl } = await authService.setupTotp(id);
+    return reply.send({ success: true, data: { secret, qrDataUrl }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'TOTP_SETUP_ERROR', message: e.message } });
+  }
+};
+
+export const totpConfirmHandler = async (
+  request: FastifyRequest<{ Body: { code: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id } = request.user as JwtPayload;
+    await authService.confirmTotp(id, request.body.code);
+    return reply.send({ success: true, data: { message: 'Приложение-аутентификатор подключено' }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'TOTP_CONFIRM_ERROR', message: e.message } });
+  }
+};
+
+// ── 2FA: подключение кода на почту (требует JWT) ───────────────────────────────
+export const email2faEnableHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    const { id } = request.user as JwtPayload;
+    await authService.enableEmail2fa(id);
+    return reply.send({ success: true, data: { message: 'Код отправлен на почту' }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'ENABLE_2FA_EMAIL_ERROR', message: e.message } });
+  }
+};
+
+export const email2faConfirmHandler = async (
+  request: FastifyRequest<{ Body: { code: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id } = request.user as JwtPayload;
+    await authService.confirmEmail2fa(id, request.body.code);
+    return reply.send({ success: true, data: { message: 'Вход по коду с почты включён' }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'CONFIRM_2FA_EMAIL_ERROR', message: e.message } });
+  }
+};
+
+// ── 2FA: отключение активного метода (требует JWT) ─────────────────────────────
+export const disable2faHandler = async (
+  request: FastifyRequest<{ Body: { password?: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id } = request.user as JwtPayload;
+    await authService.disableTwoFactor(id, request.body.password);
+    return reply.send({ success: true, data: { message: 'Двухфакторная аутентификация отключена' }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'DISABLE_2FA_ERROR', message: e.message } });
+  }
+};
+
+// ── 2FA: второй шаг входа ────────────────────────────────────────────────────
+// mfaToken подписан отдельным HMAC-секретом (см. lib/mfaToken.ts) и намеренно
+// непроверяем через обычный request.jwtVerify()/authenticate — иначе он бы
+// работал как полноценный access token и позволял обойти второй фактор.
+export const loginVerify2faHandler = async (
+  request: FastifyRequest<{ Body: { mfaToken: string; code: string; remember?: boolean } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { mfaToken, code, remember = false } = request.body;
+    const userId = verifyMfaToken(mfaToken);
+    if (!userId) {
+      return reply.code(401).send({
+        success: false, data: null,
+        error: { code: 'MFA_TOKEN_INVALID', message: 'Сессия подтверждения истекла, войдите заново' },
+      });
+    }
+
+    await authService.verifyLoginTwoFactor(userId, code);
+
+    const user = await prisma.user.findUnique({ where: { id: userId, deleted_at: null } });
+    if (!user) throw new Error('Пользователь не найден');
+
+    const token = issueAccessToken(request, user.id, user.role);
+    const refreshToken = await issueRefreshToken(request, reply, user.id, remember);
+    const fullUser = await prisma.user.findUnique({ where: { id: user.id }, select: FULL_USER_SELECT });
+
+    return reply.send({
+      success: true,
+      data: {
+        token,
+        user: fullUser ? withIsAdult(fullUser) : { id: user.id, username: user.username, email: user.email, role: user.role },
+        ...(isMobileClient(request) ? { refreshToken } : {}),
+      },
+      error: null,
+    });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'MFA_VERIFY_ERROR', message: e.message } });
+  }
+};
+
+export const loginResend2faHandler = async (
+  request: FastifyRequest<{ Body: { mfaToken: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const userId = verifyMfaToken(request.body.mfaToken);
+    if (!userId) {
+      return reply.code(401).send({
+        success: false, data: null,
+        error: { code: 'MFA_TOKEN_INVALID', message: 'Сессия подтверждения истекла, войдите заново' },
+      });
+    }
+    await authService.resendLoginTwoFactor(userId);
+    return reply.send({ success: true, data: { message: 'Код отправлен повторно' }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'MFA_RESEND_ERROR', message: e.message } });
   }
 };
 
@@ -471,10 +641,61 @@ export const refreshHandler = async (
   const hash   = createHash('sha256').update(raw).digest('hex');
   const record = await prisma.refreshToken.findUnique({ where: { token_hash: hash } });
 
-  if (record?.revoked) {
-    // Другой параллельный запрос (другая вкладка / burst запросов при открытии
-    // диалога) уже успел провернуть ротацию этим самым токеном — отдаём тот же
-    // результат вместо разлогинивания.
+  // Ротация обновляет строку сессии на месте (см. issueRefreshToken), поэтому
+  // старый hash после неё уже ни на что не смотрит в БД — record будет null,
+  // а не revoked:true. Проверяем replay-кэш в обоих случаях (null или revoked),
+  // чтобы гоночный повторный запрос с тем же (уже отревокнутым/протухшим
+  // хэшем) не разлогинивал пользователя, если параллельный запрос уже
+  // провернул ротацию.
+  if (!record || record.revoked) {
+    pruneRotationReplays();
+    const replay = recentRotations.get(hash);
+    if (replay) {
+      const cookieOpts: Parameters<typeof reply.setCookie>[2] = {
+        httpOnly: true,
+        secure:   process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        path:     '/api/auth',
+      };
+      if (record?.remember) cookieOpts.maxAge = 30 * 24 * 60 * 60;
+      reply.setCookie('refresh_token', replay.refreshToken, cookieOpts);
+      return reply.send({
+        success: true,
+        data: { token: replay.token, user: replay.user, ...(isMobileClient(request) ? { refreshToken: replay.refreshToken } : {}) },
+        error: null,
+      });
+    }
+  }
+
+  if (!record || record.revoked || record.expires_at < new Date()) {
+    reply.clearCookie('refresh_token', { path: '/api/auth' });
+    return reply.code(401).send({ success: false, data: null, error: { code: 'INVALID_REFRESH_TOKEN', message: 'Refresh token invalid or expired' } });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: record.user_id, deleted_at: null },
+    select: FULL_USER_SELECT,
+  });
+  if (!user) {
+    reply.clearCookie('refresh_token', { path: '/api/auth' });
+    return reply.code(401).send({ success: false, data: null, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+  }
+
+  const token = issueAccessToken(request, user.id, user.role);
+  // Ротация: обновляем ту же строку сессии на месте (новый hash/expiry/device),
+  // а не создаём новую — иначе список "устройства и сессии" плодил бы дубликат
+  // одного и того же девайса на каждое обновление access-токена (каждые 15 мин).
+  // remember сохраняем из старой записи — иначе persistent-сессия превращалась
+  // бы в session-cookie на первом же обновлении токена.
+  const refreshToken = await issueRefreshToken(request, reply, user.id, record.remember, record.id, hash);
+
+  if (refreshToken === null) {
+    // Проиграли гонку ротации — конкурентный запрос уже перезаписал эту строку
+    // своим hash-ом. Он вот-вот (или уже) положит результат в recentRotations —
+    // подождём его коротким поллингом вместо немедленного разлогина.
+    for (let attempt = 0; attempt < 6 && !recentRotations.has(hash); attempt++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
     pruneRotationReplays();
     const replay = recentRotations.get(hash);
     if (replay) {
@@ -492,36 +713,18 @@ export const refreshHandler = async (
         error: null,
       });
     }
-  }
-
-  if (!record || record.revoked || record.expires_at < new Date()) {
     reply.clearCookie('refresh_token', { path: '/api/auth' });
     return reply.code(401).send({ success: false, data: null, error: { code: 'INVALID_REFRESH_TOKEN', message: 'Refresh token invalid or expired' } });
   }
 
-  // Ротация: инвалидируем старый, выдаём новый
-  await prisma.refreshToken.update({ where: { id: record.id }, data: { revoked: true } });
-
-  const user = await prisma.user.findUnique({
-    where: { id: record.user_id, deleted_at: null },
-    select: FULL_USER_SELECT,
-  });
-  if (!user) {
-    reply.clearCookie('refresh_token', { path: '/api/auth' });
-    return reply.code(401).send({ success: false, data: null, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
-  }
-
-  const token = issueAccessToken(request, user.id, user.role);
-  // Сохраняем remember-статус при ротации — иначе persistent-сессия
-  // превращалась бы в session-cookie на первом же обновлении токена
-  const refreshToken = await issueRefreshToken(request, reply, user.id, record.remember);
+  const publicUser = withIsAdult(user);
 
   pruneRotationReplays();
-  recentRotations.set(hash, { token, refreshToken, user, storedAt: Date.now() });
+  recentRotations.set(hash, { token, refreshToken, user: publicUser, storedAt: Date.now() });
 
   return reply.send({
     success: true,
-    data: { token, user, ...(isMobileClient(request) ? { refreshToken } : {}) },
+    data: { token, user: publicUser, ...(isMobileClient(request) ? { refreshToken } : {}) },
     error: null,
   });
 };

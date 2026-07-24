@@ -37,14 +37,25 @@ const senderSelect = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Attaches `forwarded_from_sender` (the original author of a forwarded message), respecting
+ * that author's `forward_identity_privacy` setting relative to `viewerId`. When not allowed,
+ * the sender is nulled out but `forwarded_from_sender_id` stays set — the client shows a
+ * "hidden user" placeholder instead of the identity.
+ */
 async function enrichWithForwardedSenders<T extends { forwarded_from_sender_id?: string | null }>(
   messages: T[],
+  viewerId?: string,
 ): Promise<(T & { forwarded_from_sender: typeof senderSelect | null })[]> {
   const ids = [...new Set(messages.filter(m => m.forwarded_from_sender_id).map(m => m.forwarded_from_sender_id as string))];
   if (!ids.length) return messages.map(m => ({ ...m, forwarded_from_sender: null }));
-  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: senderSelect });
-  const byId = Object.fromEntries(users.map((u: any) => [u.id, u]));
-  return messages.map(m => ({ ...m, forwarded_from_sender: m.forwarded_from_sender_id ? byId[m.forwarded_from_sender_id] ?? null : null }));
+  const users = await prisma.user.findMany({ where: { id: { in: ids } }, select: { ...senderSelect, forward_identity_privacy: true } });
+  const visible = new Map<string, typeof senderSelect | null>();
+  for (const u of users as any[]) {
+    const { forward_identity_privacy, ...pub } = u;
+    visible.set(u.id, (await isAllowedByPrivacy(forward_identity_privacy, u.id, viewerId)) ? pub : null);
+  }
+  return messages.map(m => ({ ...m, forwarded_from_sender: m.forwarded_from_sender_id ? visible.get(m.forwarded_from_sender_id) ?? null : null }));
 }
 
 /** Validates and normalizes the metadata payload for card-style messages. */
@@ -86,6 +97,9 @@ function validateCardMetadata(type: 'payment_request' | 'tip' | 'post_share' | '
 /** Classifies an uploaded file's message type from its URL/extension (shared by single-file and album sends). */
 function inferFileType(fileUrl: string, mediaType?: string): string {
   if (mediaType === 'voice') return 'voice';
+  // Silent video (no audio track) — the uploader already determined this via ffprobe;
+  // must win over the extension check below so it renders as a gif, not a full video player.
+  if (mediaType === 'gif') return 'gif';
   if (/\.(?:mp4|webm|mov|avi|mkv)$/i.test(fileUrl)) return 'video';
   if (/\.(?:mp3|wav|ogg|m4a|flac|aac)$/i.test(fileUrl)) return 'audio';
   return 'image';
@@ -292,7 +306,7 @@ export const messageService = {
       },
     });
 
-    return enrichWithForwardedSenders(messages);
+    return enrichWithForwardedSenders(messages, userId);
   },
 
   /**
@@ -406,6 +420,11 @@ export const messageService = {
     } else if (file_url) {
       if (media_type === 'voice') {
         msgType = 'voice';
+      } else if (media_type === 'gif') {
+        // Silent video (no audio track) — the uploader already determined this via
+        // ffprobe; must win over the extension check below so it renders as a gif,
+        // not a full video player.
+        msgType = 'gif';
       } else if (/\.(?:mp4|webm|mov|avi|mkv)$/i.test(file_url)) {
         msgType = 'video';
       } else if (/\.(?:mp3|wav|ogg|m4a|flac|aac)$/i.test(file_url)) {
@@ -1157,8 +1176,8 @@ export const messageService = {
     if (source.deleted_at) throw Object.assign(new Error('Cannot forward deleted message'), { statusCode: 400 });
     await this._assertParticipant(targetConvId, senderId);
 
-    const [fwdSender, [message]] = await Promise.all([
-      prisma.user.findUnique({ where: { id: source.sender_id }, select: senderSelect }),
+    const [fwdSenderRaw, [message]] = await Promise.all([
+      prisma.user.findUnique({ where: { id: source.sender_id }, select: { ...senderSelect, forward_identity_privacy: true } }),
       prisma.$transaction([
         prisma.message.create({
           data: {
@@ -1183,7 +1202,15 @@ export const messageService = {
       ]),
     ]);
 
-    const enriched = { ...message, forwarded_from_sender: fwdSender ?? null };
+    // Mask the original author per-viewer, respecting their forward_identity_privacy setting
+    // (e.g. "friends only" resolves differently for each recipient of the target conversation).
+    const { forward_identity_privacy: fwdPrivacy, ...fwdSenderPublic } = fwdSenderRaw ?? ({} as any);
+    const maskFwdSender = async (viewerId: string) => {
+      if (!fwdSenderRaw) return null;
+      return (await isAllowedByPrivacy(fwdPrivacy, fwdSenderRaw.id, viewerId)) ? fwdSenderPublic : null;
+    };
+
+    const enriched = { ...message, forwarded_from_sender: await maskFwdSender(senderId) };
 
     // Real-time push
     const participants = await prisma.conversationParticipant.findMany({
@@ -1191,7 +1218,8 @@ export const messageService = {
       select: { user_id: true },
     });
     for (const { user_id } of participants) {
-      messageSubscriptions.push(user_id, { type: 'new_message', data: enriched });
+      const payload = user_id === senderId ? enriched : { ...message, forwarded_from_sender: await maskFwdSender(user_id) };
+      messageSubscriptions.push(user_id, { type: 'new_message', data: payload });
     }
     return enriched;
   },

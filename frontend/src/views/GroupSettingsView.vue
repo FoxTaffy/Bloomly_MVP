@@ -12,6 +12,8 @@ import { useGroupsStore, type GroupMember, type CustomRole } from '@/stores/grou
 import { useAuthStore } from '@/stores/auth'
 import { useShopStore } from '@/stores/shop'
 import { useNsfwMode } from '@/composables/useNsfwMode'
+import { useConfirm } from '@/composables/useConfirm'
+import { readRawDataUrl, readScaledDataUrl } from '@/lib/utils'
 import api from '@/api'
 
 const route = useRoute()
@@ -19,6 +21,7 @@ const router = useRouter()
 const groupsStore = useGroupsStore()
 const authStore = useAuthStore()
 const shopStore = useShopStore()
+const { confirmDialog } = useConfirm()
 
 const nsfwMode = useNsfwMode().nsfwEnabled
 const activeNav = ref('groups')
@@ -320,6 +323,39 @@ async function confirmDeleteRole(roleId: string) {
   } catch (e: any) {
     showToast('error', e.response?.data?.error?.message || 'Ошибка')
   } finally { deletingRoleId.value = null }
+}
+
+// ── Event lifecycle (event_date gates SOON + participation) ────────────────
+const eventDateInput = ref('')
+const eventDateSaving = ref(false)
+const eventDateSaved = ref(false)
+
+watch(() => (group.value as any)?.event_date, (v) => {
+  eventDateInput.value = v ? String(v).substring(0, 16) : ''
+}, { immediate: true })
+
+const isGroupEventExpired = computed(() => {
+  const g = group.value as any
+  return !!g?.event_date && new Date(g.event_date) < new Date()
+})
+
+async function saveEventDate() {
+  if (!group.value || eventDateSaving.value) return
+  eventDateSaving.value = true
+  eventDateSaved.value = false
+  try {
+    await api.patch(`/groups/${group.value.id}/event-date`, {
+      eventDate: eventDateInput.value ? new Date(eventDateInput.value).toISOString() : null,
+    })
+    await groupsStore.loadGroup((group.value as any).slug ?? (group.value as any).id)
+    eventDateSaved.value = true
+    showToast('success', 'Дата мероприятия обновлена')
+    setTimeout(() => { eventDateSaved.value = false }, 2000)
+  } catch (e: any) {
+    showToast('error', e.response?.data?.error?.message || 'Ошибка сохранения')
+  } finally {
+    eventDateSaving.value = false
+  }
 }
 
 // ── SOON badge management state ─────────────────────────────────────────────
@@ -742,7 +778,7 @@ async function saveEditTier(tierId: string, eventId: string) {
 }
 
 async function deleteTier(tierId: string, eventId: string) {
-  if (!confirm('Удалить этот тип билета?')) return
+  if (!(await confirmDialog('Удалить этот тип билета?', { danger: true }))) return
   try {
     await groupsStore.deleteTicketTier(tierId)
     if (group.value) {
@@ -793,17 +829,18 @@ const cropModal = reactive({
 })
 const cropUploading = ref(false)
 
-function openCrop(file: File, type: 'avatar' | 'banner') {
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    const src = e.target!.result as string
-    if (type === 'avatar') avatarOriginalSrc.value = src
-    else bannerOriginalSrc.value = src
-    cropModal.src = src
-    cropModal.type = type
-    cropModal.show = true
+async function openCrop(file: File, type: 'avatar' | 'banner') {
+  let src: string
+  try {
+    src = await readScaledDataUrl(file, 1800)
+  } catch {
+    src = await readRawDataUrl(file)
   }
-  reader.readAsDataURL(file)
+  if (type === 'avatar') avatarOriginalSrc.value = src
+  else bannerOriginalSrc.value = src
+  cropModal.src = src
+  cropModal.type = type
+  cropModal.show = true
 }
 
 async function reopenCrop(type: 'avatar' | 'banner') {
@@ -1878,6 +1915,34 @@ async function deleteGroup() {
                     </div>
                   </div>
                   <div class="p-6 space-y-6">
+                    <!-- Event date lifecycle: gates SOON + participation for the whole group -->
+                    <div class="rounded-2xl border p-4 space-y-3"
+                      :class="isGroupEventExpired ? 'border-brand-error/30 bg-brand-error/5' : 'border-brand-border/60 bg-brand-bg/40'">
+                      <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                          <p class="text-sm font-bold text-white">Дата мероприятия</p>
+                          <p class="text-white/40 text-xs mt-0.5">
+                            Пока дата не истекла — участники могут вступать и ставить SOON. После истечения участие сбрасывается (переходит в подписку на уведомления), а SOON убирается у всех — до новой даты.
+                          </p>
+                        </div>
+                        <span v-if="isGroupEventExpired" class="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase bg-brand-error/15 text-brand-error border border-brand-error/25">
+                          Истекло
+                        </span>
+                      </div>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <input v-model="eventDateInput" type="datetime-local" class="field-input flex-1 min-w-[200px]" />
+                        <button
+                          type="button"
+                          @click="saveEventDate"
+                          :disabled="eventDateSaving"
+                          class="px-4 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+                          :style="`background:${eventSections[3].color}1a; color:${eventSections[3].color}; border:1px solid ${eventSections[3].color}30`"
+                        >
+                          {{ eventDateSaving ? 'Сохраняю…' : eventDateSaved ? '✓ Сохранено' : 'Сохранить' }}
+                        </button>
+                      </div>
+                    </div>
+
                     <!-- No events notice -->
                     <div v-if="!(group as any).events?.length" class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl p-8 text-center">
                       <div class="text-3xl mb-3">🌟</div>

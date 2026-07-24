@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGroupsStore, type Order, type OrderStatus } from '@/stores/groups'
+import { useConfirm } from '@/composables/useConfirm'
 import BIcon from '@/components/BIcon.vue'
 
 const props = defineProps<{ groupId: string; isAdmin: boolean; orders: Order[] }>()
@@ -10,6 +11,7 @@ const emit = defineEmits<{
   (e: 'removed', orderId: string): void
 }>()
 const groupsStore = useGroupsStore()
+const { confirmDialog } = useConfirm()
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; colBg: string; headerColor: string; dotColor: string; cardAccent: string }> = {
   WAITING:  { label: 'Ожидание',  colBg: 'bg-[#1a1a2e]', headerColor: 'text-white/50',    dotColor: '#6b7280', cardAccent: 'border-white/10'       },
@@ -46,7 +48,7 @@ async function moveNext(order: Order) {
 }
 
 async function removeOrder(id: string) {
-  if (!confirm('Удалить заказ?')) return
+  if (!(await confirmDialog('Удалить заказ?', { danger: true }))) return
   await groupsStore.deleteOrder(props.groupId, id)
   emit('removed', id)
 }

@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { messageService } from './service.js';
+import { moderateMessage } from '../automod/service.js';
 import type { JwtUser, GetMessagesQuery } from './types.js';
 
 // ── Conversations ─────────────────────────────────────────────────────────────
@@ -96,6 +97,7 @@ export async function sendMessageHandler(
       metadata: cardType ? metadata : undefined,
       attachments: Array.isArray(attachments) ? attachments : undefined,
     });
+    moderateMessage(senderId).catch((err) => console.error('[AUTOMOD] moderateMessage error:', err));
     return reply.code(201).send({ success: true, data: { message }, error: null });
   } catch (e: any) {
     return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });

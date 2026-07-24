@@ -112,7 +112,66 @@ export const joinGroupHandler = async (
     const membership = await groupService.join(request.params.id, userId);
     return ok(reply, { membership });
   } catch (e: any) {
+    if (e instanceof Error && e.message === 'EVENT_EXPIRED') {
+      return fail(reply, 409, 'EVENT_EXPIRED', 'Мероприятие завершилось. Пока доступна только подписка на уведомления — участие и SOON откроются, когда организатор назначит новую дату.');
+    }
     return fail(reply, 400, 'JOIN_ERROR', e.message);
+  }
+};
+
+export const subscribeGroupHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const result = await groupService.subscribe(request.params.id, userId);
+    return ok(reply, result);
+  } catch (e: any) {
+    return fail(reply, 400, 'SUBSCRIBE_ERROR', e.message);
+  }
+};
+
+export const unsubscribeGroupHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const result = await groupService.unsubscribe(request.params.id, userId);
+    return ok(reply, result);
+  } catch (e: any) {
+    return fail(reply, 400, 'UNSUBSCRIBE_ERROR', e.message);
+  }
+};
+
+export const getMySubscriptionsHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const groupIds = await groupService.getMySubscriptions(userId);
+    return ok(reply, { groupIds });
+  } catch (e: any) {
+    return fail(reply, 500, 'MY_SUBSCRIPTIONS_ERROR', e.message);
+  }
+};
+
+export const setEventDateHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Body: { eventDate: string | null } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    const eventDate = request.body.eventDate ? new Date(request.body.eventDate) : null;
+    if (eventDate && Number.isNaN(eventDate.getTime())) {
+      return fail(reply, 400, 'INVALID_DATE', 'eventDate is not a valid date');
+    }
+    const group = await groupService.setEventDate(request.params.id, eventDate);
+    return ok(reply, { group });
+  } catch (e: any) {
+    return fail(reply, 400, 'SET_EVENT_DATE_ERROR', e.message);
   }
 };
 
@@ -347,6 +406,9 @@ export const toggleSoonBadgeHandler = async (
     const result = await groupService.toggleSoonBadge(userId, request.params.eventId);
     return ok(reply, result);
   } catch (e: any) {
+    if (e instanceof Error && e.message === 'EVENT_EXPIRED') {
+      return fail(reply, 409, 'EVENT_EXPIRED', 'Мероприятие завершилось. SOON откроется, когда организатор назначит новую дату.');
+    }
     return fail(reply, 400, 'SOON_BADGE_ERROR', e.message);
   }
 };

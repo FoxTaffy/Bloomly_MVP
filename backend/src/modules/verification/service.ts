@@ -11,6 +11,8 @@ import prisma from '../../config/prisma.js';
  *   - writer:     Screenshot of drafts/manuscript with "signa"
  *   - organizer:  Photo of event material with "signa"
  *   - event:      Photo of ticket or selfie at event location
+ *   - photographer: Screenshot of RAW/EXIF data or photoshoot proof with "signa"
+ *   - programmer: Screenshot of source code/repo or project demo with "signa"
  *
  * Rules:
  *   - NO auto-approve. All requests go to manual admin review.
@@ -20,6 +22,7 @@ import prisma from '../../config/prisma.js';
 
 export const VERIFICATION_TYPES = [
   'artist', 'master', 'fursuiter', 'popular', 'writer', 'organizer', 'event',
+  'photographer', 'programmer',
 ] as const;
 
 export type VerificationType = (typeof VERIFICATION_TYPES)[number];
@@ -220,6 +223,11 @@ export async function requestVerification(
 
 export async function adminGetRequests(status?: string, page = 1, limit = 20) {
   const where = status ? { status } : {};
+  // Pending requests are a queue waiting on a moderator — surface the longest-waiting
+  // ones first (oldest first) so nothing sits forgotten. Already-decided requests
+  // (approved/rejected, or the unfiltered "all" view mixing everything) read more like
+  // an activity log, so those stay newest-first.
+  const orderBy = status === 'pending' ? { created_at: 'asc' as const } : { created_at: 'desc' as const };
   const [rawRequests, total] = await Promise.all([
     prisma.verificationRequest.findMany({
       where,
@@ -231,7 +239,7 @@ export async function adminGetRequests(status?: string, page = 1, limit = 20) {
           },
         },
       },
-      orderBy: { created_at: 'desc' },
+      orderBy,
       skip: (page - 1) * limit,
       take: limit,
     }),
@@ -295,5 +303,5 @@ export async function adminReviewRequest(
     });
   }
 
-  return { success: true };
+  return { success: true, user_id: req.user_id };
 }

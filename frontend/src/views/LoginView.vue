@@ -29,7 +29,7 @@ const showFrozenModal = ref(false)
 const showBannedModal = ref(false)
 const blockedReason   = ref('')
 
-type Mode = 'login' | 'register' | 'forgot' | 'reset' | 'verify'
+type Mode = 'login' | 'register' | 'forgot' | 'reset' | 'verify' | 'twofactor'
 const mode        = ref<Mode>('login')
 const email       = ref('')
 const username    = ref('')
@@ -40,6 +40,9 @@ const otpCode     = ref('')   // код подтверждения email при 
 const showPass    = ref(false)
 const showNewPass = ref(false)
 const remember    = ref(true)
+const mfaToken       = ref('')
+const twoFactorMethod = ref<'totp' | 'email' | null>(null)
+const twoFactorCode   = ref('')
 const mounted     = ref(false)
 const mouseX      = ref(50)
 const mouseY      = ref(50)
@@ -53,6 +56,7 @@ function sanitizeCodeInput(e: Event) {
 }
 function onOtpInput(e: Event) { otpCode.value = sanitizeCodeInput(e) }
 function onResetCodeInput(e: Event) { resetCode.value = sanitizeCodeInput(e) }
+function onTwoFactorCodeInput(e: Event) { twoFactorCode.value = sanitizeCodeInput(e) }
 
 // Для повторной отправки OTP
 const resendCountdown = ref(0)
@@ -73,6 +77,14 @@ async function onResendOtp() {
   if (resendCountdown.value > 0) return
   try {
     await auth.resendOtp(email.value, mode.value === 'verify' ? 'register' : 'reset')
+    startResendTimer()
+  } catch { /* auth.error уже записан */ }
+}
+
+async function onResendTwoFactor() {
+  if (resendCountdown.value > 0) return
+  try {
+    await auth.resendLoginTwoFactor(mfaToken.value)
     startResendTimer()
   } catch { /* auth.error уже записан */ }
 }
@@ -134,6 +146,7 @@ function switchMode(next: Mode) {
   username.value = ''; password.value = ''
   newPassword.value = ''; resetCode.value = ''; otpCode.value = ''
   showPass.value = false; showNewPass.value = false
+  mfaToken.value = ''; twoFactorMethod.value = null; twoFactorCode.value = ''
 }
 
 // ── OAuth ─────────────────────────────────────────────────────────────────────
@@ -173,6 +186,9 @@ async function onSubmit() {
     } else if (mode.value === 'reset') {
       await auth.resetPassword(email.value, resetCode.value, newPassword.value)
       switchMode('login')
+    } else if (mode.value === 'twofactor') {
+      await auth.verifyLoginTwoFactor(mfaToken.value, twoFactorCode.value, remember.value)
+      router.push({ name: 'home' })
     }
   } catch (e: any) {
     const code = e?.response?.data?.error?.code
@@ -190,6 +206,12 @@ async function onSubmit() {
       blockedReason.value = e?.response?.data?.error?.message || ''
       auth.error = null
       showBannedModal.value = true
+    } else if (mode.value === 'login' && code === 'TWO_FACTOR_REQUIRED') {
+      mfaToken.value = e?.response?.data?.data?.mfaToken || ''
+      twoFactorMethod.value = e?.response?.data?.data?.method || null
+      mode.value = 'twofactor'
+      auth.error = null
+      if (twoFactorMethod.value === 'email') startResendTimer()
     }
     /* auth.error уже записан в остальных случаях */
   }
@@ -367,17 +389,19 @@ const features = [
                 <Transition name="t-head" mode="out-in">
                   <div :key="mode">
                     <h2 class="text-2xl font-black text-white mb-1">
-                      {{ mode === 'login'    ? langStore.t.loginHeading
-                       : mode === 'register' ? langStore.t.registerHeading
-                       : mode === 'verify'   ? 'Подтверди email 📧'
-                       : mode === 'forgot'   ? 'Сброс пароля 🔑'
+                      {{ mode === 'login'      ? langStore.t.loginHeading
+                       : mode === 'register'   ? langStore.t.registerHeading
+                       : mode === 'verify'     ? 'Подтверди email 📧'
+                       : mode === 'forgot'     ? 'Сброс пароля 🔑'
+                       : mode === 'twofactor'  ? 'Подтверди вход 🔐'
                        :                      'Новый пароль 🛡️' }}
                     </h2>
                     <p class="text-sm text-white/35 font-medium">
-                      {{ mode === 'login'    ? 'Войди, чтобы продолжить — твоя лента ждёт.'
-                       : mode === 'register' ? 'Минута регистрации — и ты уже часть сообщества.'
-                       : mode === 'verify'   ? `Мы отправили 6-значный код на ${email || 'твою почту'}.`
-                       : mode === 'forgot'   ? 'Введи email — мы отправим код для восстановления.'
+                      {{ mode === 'login'      ? 'Войди, чтобы продолжить — твоя лента ждёт.'
+                       : mode === 'register'   ? 'Минута регистрации — и ты уже часть сообщества.'
+                       : mode === 'verify'     ? `Мы отправили 6-значный код на ${email || 'твою почту'}.`
+                       : mode === 'forgot'     ? 'Введи email — мы отправим код для восстановления.'
+                       : mode === 'twofactor'  ? (twoFactorMethod === 'totp' ? 'Введи код из приложения-аутентификатора.' : 'Мы отправили код подтверждения на твою почту.')
                        :                      'Введи код из письма и придумай новый пароль.' }}
                     </p>
                   </div>
@@ -402,9 +426,9 @@ const features = [
                 >{{ langStore.t.registerTab }}</button>
               </div>
 
-              <!-- Кнопка назад для forgot/reset/verify -->
+              <!-- Кнопка назад для forgot/reset/verify/twofactor -->
               <button
-                v-if="mode === 'forgot' || mode === 'reset' || mode === 'verify'"
+                v-if="mode === 'forgot' || mode === 'reset' || mode === 'verify' || mode === 'twofactor'"
                 @click="switchMode('login')"
                 class="flex items-center gap-1.5 text-xs text-white/35 hover:text-white/60 transition-colors mb-5 -mt-1"
               >
@@ -416,7 +440,7 @@ const features = [
               <form @submit.prevent="onSubmit" class="space-y-3.5">
 
                 <!-- Email (login / register / forgot / reset) -->
-                <div v-if="mode !== 'verify'" class="input-group">
+                <div v-if="mode !== 'verify' && mode !== 'twofactor'" class="input-group">
                   <EnvelopeIcon class="input-icon" />
                   <input
                     v-model="email"
@@ -530,6 +554,41 @@ const features = [
                   </div>
                 </div>
 
+                <!-- Код второго фактора (режим twofactor) -->
+                <div v-if="mode === 'twofactor'" class="space-y-3">
+                  <div class="flex items-center gap-2.5 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25">
+                    <ShieldCheckIcon class="w-4 h-4 shrink-0 text-emerald-400" />
+                    <p class="text-xs text-emerald-400 font-semibold">
+                      {{ twoFactorMethod === 'totp' ? 'Код из приложения-аутентификатора' : `Код отправлен на ${email || 'твою почту'}` }}
+                    </p>
+                  </div>
+                  <div class="input-group">
+                    <KeyIcon class="input-icon" />
+                    <input
+                      :value="twoFactorCode"
+                      @input="onTwoFactorCodeInput"
+                      type="text"
+                      inputmode="numeric"
+                      placeholder="• • • • • •"
+                      required maxlength="20" pattern="[0-9]{6}"
+                      class="fld tracking-[0.5em] text-center text-xl font-bold"
+                      autocomplete="one-time-code"
+                    />
+                  </div>
+                  <!-- Повторная отправка (только для email-метода) -->
+                  <div v-if="twoFactorMethod === 'email'" class="flex justify-end">
+                    <button
+                      type="button"
+                      @click="onResendTwoFactor"
+                      :disabled="resendCountdown > 0"
+                      class="text-xs font-semibold transition-colors"
+                      :class="resendCountdown > 0 ? 'text-white/20 cursor-default' : 'text-emerald-400 hover:text-white'"
+                    >
+                      {{ resendCountdown > 0 ? `Отправить повторно через ${resendCountdown}с` : 'Отправить код повторно' }}
+                    </button>
+                  </div>
+                </div>
+
                 <!-- Новый пароль (режим reset) -->
                 <div v-if="mode === 'reset'" class="input-group">
                   <LockClosedIcon class="input-icon" />
@@ -597,10 +656,11 @@ const features = [
                     {{ langStore.t.loadingBtn }}
                   </span>
                   <span v-else class="flex items-center justify-center gap-2.5 relative z-10">
-                    {{ mode === 'login'    ? langStore.t.submitLogin
-                     : mode === 'register' ? langStore.t.submitRegister
-                     : mode === 'verify'   ? 'Подтвердить email'
-                     : mode === 'forgot'   ? 'Отправить код'
+                    {{ mode === 'login'      ? langStore.t.submitLogin
+                     : mode === 'register'   ? langStore.t.submitRegister
+                     : mode === 'verify'     ? 'Подтвердить email'
+                     : mode === 'forgot'     ? 'Отправить код'
+                     : mode === 'twofactor'  ? 'Подтвердить вход'
                      :                      'Сменить пароль' }}
                     <ArrowRightIcon class="w-5 h-5" />
                   </span>

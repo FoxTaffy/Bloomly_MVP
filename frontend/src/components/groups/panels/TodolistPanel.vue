@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import BIcon from '@/components/BIcon.vue'
 import { useGroupsStore, type ArtistQueueItem, type TodoColumn } from '@/stores/groups'
+import { useConfirm } from '@/composables/useConfirm'
 
 const props = withDefaults(defineProps<{
   groupId?: string
@@ -11,6 +12,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ back: [] }>()
 
 const groupsStore = useGroupsStore()
+const { confirmDialog } = useConfirm()
 
 const items = ref<ArtistQueueItem[]>([])
 const loading = ref(false)
@@ -133,7 +135,8 @@ async function saveEdit(item: ArtistQueueItem) {
 }
 
 async function deleteItem(item: ArtistQueueItem) {
-  if (!props.groupId || !confirm(`Удалить задачу «${item.title}»?`)) return
+  if (!props.groupId) return
+  if (!(await confirmDialog(`Удалить задачу «${item.title}»?`, { danger: true }))) return
   deleting.value = item.id
   try {
     await groupsStore.deleteTodoItem(props.groupId, item.id)

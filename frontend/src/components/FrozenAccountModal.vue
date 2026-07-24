@@ -13,7 +13,6 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'close'): void; (e: 'unfrozen'): void }>()
 
 const auth = useAuthStore()
-const step = ref<'info' | 'code'>('info')
 const code = ref('')
 const sending = ref(false)
 const confirming = ref(false)
@@ -33,30 +32,36 @@ function startResendTimer() {
   }, 1000)
 }
 
+// Code is sent the moment the modal appears — no manual "send" step. Whenever a
+// frozen account is detected (login attempt or a mid-session freeze), the user
+// should just have to check their inbox and type the code in.
 watch(() => props.show, (v) => {
   if (v) {
-    step.value = 'info'
     code.value = ''
     localError.value = ''
     sent.value = false
+    autoSend()
+  } else if (resendInterval) {
+    clearInterval(resendInterval)
+    resendInterval = null
+    resendCountdown.value = 0
   }
-})
+}, { immediate: true })
 
 function onCodeInput(e: Event) {
   const target = e.target as HTMLInputElement
   code.value = target.value.replace(/\D+/g, '').slice(0, 6)
 }
 
-async function sendCode() {
+async function autoSend() {
   sending.value = true
   localError.value = ''
   try {
     await auth.requestUnfreeze(props.email)
-    step.value = 'code'
     sent.value = true
     startResendTimer()
   } catch {
-    localError.value = 'Не удалось отправить код. Попробуй ещё раз.'
+    localError.value = 'Не удалось отправить код. Нажми «Отправить повторно».'
   } finally {
     sending.value = false
   }
@@ -114,55 +119,42 @@ async function confirm() {
           <div class="p-7 space-y-4">
             <p class="text-sm text-white/50 leading-relaxed">{{ reason || 'Аккаунт временно заморожен модерацией.' }}</p>
 
-            <template v-if="step === 'info'">
-              <div class="flex items-start gap-2.5 p-3.5 rounded-2xl bg-sky-500/8 border border-sky-500/20">
-                <BIcon name="Mail" class="w-4 h-4 shrink-0 mt-0.5 text-sky-400" />
-                <p class="text-xs text-sky-300/90 font-semibold">Чтобы разморозить аккаунт, подтверди это письмом на <span class="text-white">{{ email }}</span>.</p>
-              </div>
+            <div class="flex items-center gap-2.5 p-3.5 rounded-2xl bg-sky-500/8 border border-sky-500/20">
+              <BIcon :name="sent ? 'ShieldCheck' : 'Mail'" class="w-4 h-4 shrink-0 text-sky-400" />
+              <p class="text-xs text-sky-300/90 font-semibold">
+                <template v-if="sent">Код отправлен на <span class="text-white">{{ email }}</span></template>
+                <template v-else>Отправляем код на <span class="text-white">{{ email }}</span>…</template>
+              </p>
+            </div>
 
-              <p v-if="localError" class="text-xs text-rose-400 font-semibold">{{ localError }}</p>
+            <input
+              :value="code"
+              @input="onCodeInput"
+              type="text"
+              inputmode="numeric"
+              placeholder="• • • • • •"
+              maxlength="6"
+              :disabled="!sent"
+              class="w-full text-center text-xl font-bold tracking-[0.5em] rounded-2xl px-4 py-3.5 outline-none text-white disabled:opacity-40"
+              style="background:rgba(255,255,255,0.04);border:1px solid rgba(56,189,248,0.3)"
+              autocomplete="one-time-code"
+            />
 
-              <button @click="sendCode" :disabled="sending"
-                class="w-full py-3.5 rounded-2xl font-black text-sm text-white transition-all disabled:opacity-50"
-                style="background:linear-gradient(135deg,#0ea5e9,#38bdf8);box-shadow:0 8px 24px rgba(14,165,233,0.35)">
-                {{ sending ? 'Отправка…' : 'Отправить код на почту' }}
+            <p v-if="localError" class="text-xs text-rose-400 font-semibold">{{ localError }}</p>
+
+            <button @click="confirm" :disabled="confirming || code.length !== 6"
+              class="w-full py-3.5 rounded-2xl font-black text-sm text-white transition-all disabled:opacity-50"
+              style="background:linear-gradient(135deg,#0ea5e9,#38bdf8);box-shadow:0 8px 24px rgba(14,165,233,0.35)">
+              {{ confirming ? 'Проверка…' : 'Разморозить аккаунт' }}
+            </button>
+
+            <div class="flex justify-center">
+              <button type="button" @click="resend" :disabled="resendCountdown > 0 || !sent"
+                class="text-xs font-semibold transition-colors"
+                :class="(resendCountdown > 0 || !sent) ? 'text-white/20' : 'text-sky-400 hover:text-white'">
+                {{ resendCountdown > 0 ? `Отправить повторно через ${resendCountdown}с` : 'Отправить код повторно' }}
               </button>
-            </template>
-
-            <template v-else>
-              <div class="flex items-center gap-2.5 p-3.5 rounded-2xl bg-sky-500/8 border border-sky-500/20">
-                <BIcon name="ShieldCheck" class="w-4 h-4 shrink-0 text-sky-400" />
-                <p class="text-xs text-sky-300/90 font-semibold">Код отправлен на <span class="text-white">{{ email }}</span></p>
-              </div>
-
-              <input
-                :value="code"
-                @input="onCodeInput"
-                type="text"
-                inputmode="numeric"
-                placeholder="• • • • • •"
-                maxlength="6"
-                class="w-full text-center text-xl font-bold tracking-[0.5em] rounded-2xl px-4 py-3.5 outline-none text-white"
-                style="background:rgba(255,255,255,0.04);border:1px solid rgba(56,189,248,0.3)"
-                autocomplete="one-time-code"
-              />
-
-              <p v-if="localError" class="text-xs text-rose-400 font-semibold">{{ localError }}</p>
-
-              <button @click="confirm" :disabled="confirming || code.length !== 6"
-                class="w-full py-3.5 rounded-2xl font-black text-sm text-white transition-all disabled:opacity-50"
-                style="background:linear-gradient(135deg,#0ea5e9,#38bdf8);box-shadow:0 8px 24px rgba(14,165,233,0.35)">
-                {{ confirming ? 'Проверка…' : 'Разморозить аккаунт' }}
-              </button>
-
-              <div class="flex justify-center">
-                <button type="button" @click="resend" :disabled="resendCountdown > 0"
-                  class="text-xs font-semibold transition-colors"
-                  :class="resendCountdown > 0 ? 'text-white/20' : 'text-sky-400 hover:text-white'">
-                  {{ resendCountdown > 0 ? `Отправить повторно через ${resendCountdown}с` : 'Отправить код повторно' }}
-                </button>
-              </div>
-            </template>
+            </div>
 
             <button @click="emit('close')" class="w-full text-center text-xs text-white/25 hover:text-white/50 transition-colors pt-1">
               Закрыть

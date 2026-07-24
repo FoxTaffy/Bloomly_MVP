@@ -30,6 +30,9 @@ const menuRef  = ref<HTMLElement | null>(null)
 const notifyActive  = ref(false)
 const notifyLoading = ref(false)
 
+const isFollowing   = ref(props.user.is_following ?? false)
+const followLoading = ref(false)
+
 function initials(u: FriendUser) {
   return ((u.display_name || u.username) ?? '?')[0].toUpperCase()
 }
@@ -80,9 +83,21 @@ async function toggleNotify() {
   }
 }
 
+async function toggleFollow() {
+  if (followLoading.value) return
+  followLoading.value = true
+  try {
+    const { data } = await api.post(`/follows/${props.user.id}/toggle`)
+    isFollowing.value = data.data?.following ?? !isFollowing.value
+    if (!isFollowing.value) notifyActive.value = false
+  } catch { /* ignore */ } finally {
+    followLoading.value = false
+  }
+}
+
 onMounted(() => {
   document.addEventListener('click', onOutside, true)
-  fetchNotifyStatus()
+  if (props.isFriend || isFollowing.value) fetchNotifyStatus()
 })
 onUnmounted(() => document.removeEventListener('click', onOutside, true))
 </script>
@@ -224,8 +239,24 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
           <BIcon name="MessageCircle" class="w-4 h-4" />
           {{ langStore.t.msgBtnTitle }}
         </button>
+        <!-- Подписка / отписка -->
+        <button
+          v-if="!isFriend"
+          :class="[
+            'w-9 h-9 flex items-center justify-center rounded-xl transition-colors flex-shrink-0',
+            isFollowing
+              ? 'bg-brand-accent/20 text-brand-accent-minus hover:bg-brand-error/15 hover:text-brand-error'
+              : 'bg-white/5 hover:bg-brand-accent/15 text-white/55 hover:text-brand-accent-minus',
+            followLoading ? 'opacity-60 pointer-events-none' : ''
+          ]"
+          :title="isFollowing ? langStore.t.unfollowBtnTitle : langStore.t.followBtnTitle"
+          @click.stop.prevent="toggleFollow"
+        >
+          <BIcon :name="isFollowing ? 'UserCheck' : 'UserPlus'" class="w-4 h-4" />
+        </button>
         <!-- Колокольчик уведомлений -->
         <button
+          v-if="isFriend || isFollowing"
           :class="[
             'w-9 h-9 flex items-center justify-center rounded-xl transition-colors flex-shrink-0',
             notifyActive

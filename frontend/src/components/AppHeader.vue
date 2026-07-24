@@ -8,6 +8,7 @@ import { useMobileSidebar } from '@/composables/useMobileSidebar'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useNotifToast } from '@/composables/useNotifToast'
 import { useMessagesStore } from '@/stores/messages'
+import { useWarningModalStore } from '@/stores/warningModal'
 import api from '@/api'
 import BIcon from './BIcon.vue'
 import PostCard from './PostCard.vue'
@@ -27,6 +28,7 @@ const auth = useAuthStore()
 const langStore = useLangStore()
 const mobileSidebar = useMobileSidebar()
 const messagesStore = useMessagesStore()
+const warningModal = useWarningModalStore()
 
 // ── Language picker ───────────────────────────────────────────────────────────
 const showLangDropdown = ref(false)
@@ -51,7 +53,7 @@ function selectLang(code: typeof langOptions[number]['code']) {
 // instead of relying solely on the `nsfwMode` prop, since many pages render
 // <AppHeader> without wiring v-model:nsfwMode, which used to make the toggle
 // look permanently OFF/inconsistent even though the underlying flag was shared.
-const { nsfwEnabled, toggleNsfw: _nsfwToggle } = useNsfwMode()
+const { nsfwEnabled, canUseNsfw, toggleNsfw: _nsfwToggle } = useNsfwMode()
 const toggleNsfw = () => {
   _nsfwToggle()
   emit('update:nsfwMode', nsfwEnabled.value)
@@ -181,6 +183,7 @@ const notifBadgeIcon = (type: string) => {
     automod_unfreeze: 'Unlock',
     automod_ban: 'Ban',
     automod_clear_warns: 'CheckCircle2',
+    admin_broadcast: 'Megaphone',
   }
   return map[type] ?? 'Bell'
 }
@@ -201,12 +204,13 @@ const notifBadgeClass = (type: string) => {
     automod_unfreeze: 'bg-emerald-500 text-white',
     automod_ban: 'bg-rose-600 text-white',
     automod_clear_warns: 'bg-emerald-500 text-white',
+    admin_broadcast: 'bg-brand-accent text-white',
   }
   return map[type] ?? 'bg-white/20 text-white/60'
 }
 
-// ── System (AutoMod) notifications — no sender, full sentence instead of "X did Y" ──
-const AUTOMOD_TYPES = ['automod_warn', 'automod_freeze', 'automod_unfreeze', 'automod_ban', 'automod_clear_warns']
+// ── System (AutoMod / admin broadcast) notifications — no sender, full sentence instead of "X did Y" ──
+const AUTOMOD_TYPES = ['automod_warn', 'automod_freeze', 'automod_unfreeze', 'automod_ban', 'automod_clear_warns', 'admin_broadcast']
 const isAutomodNotif = (n: any) => AUTOMOD_TYPES.includes(n.type)
 
 const automodMessage = (n: any) => {
@@ -222,6 +226,8 @@ const automodMessage = (n: any) => {
       return `🚫 Аккаунт заблокирован${meta.reason ? ' — ' + meta.reason : ''}`
     case 'automod_clear_warns':
       return '✅ Предупреждения сброшены модератором'
+    case 'admin_broadcast':
+      return `📣 ${meta.title ?? ''}${meta.body ? ' — ' + meta.body : ''}`
     default:
       return ''
   }
@@ -272,7 +278,7 @@ const openPostModal = async (postId: string) => {
 
 const closePostModal = () => { postModal.value = null }
 
-const POST_TYPES = ['LIKE', 'COMMENT', 'REPAW', 'MENTION', 'FOLLOW_POST', 'GROUP_POST', 'like', 'comment', 'repaw', 'mention', 'automod_warn', 'automod_ban']
+const POST_TYPES = ['LIKE', 'COMMENT', 'REPAW', 'MENTION', 'FOLLOW_POST', 'GROUP_POST', 'like', 'comment', 'repaw', 'mention', 'automod_ban']
 const PROFILE_TYPES = ['FOLLOW', 'RELATIONSHIP_ACCEPTED', 'follow', 'relationship_accepted']
 
 const onNotifClick = async (n: any) => {
@@ -282,6 +288,14 @@ const onNotifClick = async (n: any) => {
     n.is_read = true
     unreadCount.value = Math.max(0, unreadCount.value - 1)
     try { await api.post('/notifications/read', { ids: [n.id] }) } catch {}
+  }
+  // Warning notifications open the violation detail modal built from `meta` —
+  // never the post itself, since the reported post is very often already deleted
+  // (openPostModal would 404 silently and the click would appear to do nothing).
+  if (n.type === 'automod_warn') {
+    showNotifications.value = false
+    warningModal.open(n)
+    return
   }
   // Open post modal
   if (POST_TYPES.includes(n.type) && n.post_id) {
@@ -681,8 +695,8 @@ onUnmounted(() => {
                     <span class="text-[10px] font-bold tracking-widest text-white/35 uppercase">Новые</span>
                   </div>
                   <div v-for="n in notifications.filter(n => !n.is_read)" :key="n.id"
-                    class="flex items-start gap-3 px-4 py-3 mx-2 mb-0.5 rounded-2xl
-                           bg-brand-accent/5 hover:bg-brand-accent/10 cursor-pointer transition-colors"
+                    class="flex items-start gap-3 px-4 py-3 mx-2 mb-0.5 rounded-2xl cursor-pointer transition-colors"
+                    :class="n.type === 'automod_warn' ? 'bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/30' : 'bg-brand-accent/5 hover:bg-brand-accent/10'"
                     @click="onNotifClick(n)">
                     <!-- Avatar + type badge -->
                     <div v-if="isAutomodNotif(n)" class="relative flex-shrink-0 mt-0.5">
@@ -737,8 +751,8 @@ onUnmounted(() => {
                     <span class="text-[10px] font-bold tracking-widest text-white/35 uppercase">Просмотренные</span>
                   </div>
                   <div v-for="n in notifications.filter(n => n.is_read)" :key="n.id"
-                    class="flex items-start gap-3 px-4 py-3 mx-2 mb-0.5 rounded-2xl
-                           hover:bg-white/5 cursor-pointer transition-colors"
+                    class="flex items-start gap-3 px-4 py-3 mx-2 mb-0.5 rounded-2xl cursor-pointer transition-colors"
+                    :class="n.type === 'automod_warn' ? 'bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20' : 'hover:bg-white/5'"
                     @click="onNotifClick(n)">
                     <!-- Avatar + type badge -->
                     <div v-if="isAutomodNotif(n)" class="relative flex-shrink-0 mt-0.5 opacity-70">
@@ -786,8 +800,8 @@ onUnmounted(() => {
         </Transition>
       </div>
 
-      <!-- NSFW toggle -->
-      <button @click="toggleNsfw"
+      <!-- NSFW toggle (18+ only) -->
+      <button v-if="canUseNsfw" @click="toggleNsfw"
         class="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 rounded-full border transition-all duration-200"
         :class="nsfwEnabled ? 'bg-brand-error/15 border-brand-error/40 text-brand-error shadow-sm shadow-brand-error/20' : 'bg-brand-card border-brand-border text-white/55 hover:text-white'">
         <BIcon :name="nsfwEnabled ? 'Eye' : 'EyeOff'" class="h-4 w-4" />

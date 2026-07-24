@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import BIcon from '@/components/BIcon.vue'
 import { useGroupsStore, type GroupMember, type MemberRole } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
+import { useConfirm } from '@/composables/useConfirm'
 
 const props = withDefaults(defineProps<{
   groupId?: string
@@ -14,6 +15,7 @@ const emit = defineEmits<{ back: [] }>()
 
 const groupsStore = useGroupsStore()
 const auth = useAuthStore()
+const { confirmDialog } = useConfirm()
 
 const members = ref<GroupMember[]>([])
 const loading = ref(false)
@@ -108,7 +110,7 @@ async function changeRole(member: GroupMember, newRole: MemberRole) {
 async function kickMember(member: GroupMember) {
   if (!props.groupId) return
   const name = member.user.display_name || member.user.username
-  if (!confirm(`Удалить ${name} из группы?`)) return
+  if (!(await confirmDialog(`Удалить ${name} из группы?`, { danger: true }))) return
   removing.value = member.user_id
   try {
     await groupsStore.removeMember(props.groupId, member.user_id)

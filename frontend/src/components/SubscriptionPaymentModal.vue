@@ -150,7 +150,7 @@ function close() {
       <div class="fixed inset-0 z-[700] flex items-end sm:items-center justify-center" @click.self="close">
         <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="close" />
 
-        <div class="relative w-full sm:max-w-sm bg-[#13131f] border border-white/8 rounded-t-3xl sm:rounded-3xl overflow-hidden z-10 modal-glow">
+        <div class="relative w-full sm:max-w-sm bg-[#13131f] border border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden z-10 modal-glow">
           <div class="h-1 w-full bg-gradient-to-r from-brand-accent via-brand-purple to-brand-pink" />
           <div class="w-10 h-1 bg-white/10 rounded-full mx-auto mt-3 mb-1 sm:hidden" />
 

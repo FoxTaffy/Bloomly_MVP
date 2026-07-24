@@ -12,7 +12,7 @@
 
 const BREVO_URL = 'https://api.brevo.com/v3/smtp/email'
 
-type Purpose = 'register' | 'reset' | 'unfreeze' | 'change_email'
+type Purpose = 'register' | 'reset' | 'unfreeze' | 'change_email' | 'login_2fa' | 'enable_2fa_email'
 
 // Supported locales. Add a code here and a matching block in TRANSLATIONS to enable a language.
 type Lang = 'ru' | 'en' | 'uk' | 'de' | 'es' | 'fr' | 'pl' | 'pt'
@@ -32,112 +32,128 @@ interface Strings {
 
 const TRANSLATIONS: Record<Lang, Strings> = {
   ru: {
-    title:    { register: 'Подтверждение почты',  reset: 'Сброс пароля', unfreeze: 'Разморозка аккаунта', change_email: 'Смена email' },
+    title:    { register: 'Подтверждение почты',  reset: 'Сброс пароля', unfreeze: 'Разморозка аккаунта', change_email: 'Смена email', login_2fa: 'Вход в аккаунт', enable_2fa_email: 'Двухфакторная аутентификация' },
     subtitle: {
       register: 'Введи этот код на сайте Bloomly, чтобы завершить регистрацию.',
       reset:    'Введи этот код для сброса пароля.',
       unfreeze: 'Введи этот код на сайте Bloomly, чтобы разморозить аккаунт.',
       change_email: 'Введи этот код на сайте Bloomly, чтобы сменить почту аккаунта.',
+      login_2fa: 'Введи этот код, чтобы подтвердить вход в аккаунт Bloomly.',
+      enable_2fa_email: 'Введи этот код, чтобы включить вход по коду с почты.',
     },
-    subject:  { register: '🌸 Код подтверждения Bloomly', reset: '🔑 Сброс пароля Bloomly', unfreeze: '❄️ Разморозка аккаунта Bloomly', change_email: '📧 Смена email Bloomly' },
+    subject:  { register: '🌸 Код подтверждения Bloomly', reset: '🔑 Сброс пароля Bloomly', unfreeze: '❄️ Разморозка аккаунта Bloomly', change_email: '📧 Смена email Bloomly', login_2fa: '🔐 Код входа Bloomly', enable_2fa_email: '🛡️ Код для двухфакторной аутентификации Bloomly' },
     codeLabel: 'Код подтверждения',
     validity:  'Действует 15 минут',
     ignore:    'Если это не ты — просто проигнорируй письмо.',
   },
 
   en: {
-    title:    { register: 'Confirm your email', reset: 'Reset your password', unfreeze: 'Unfreeze your account', change_email: 'Change your email' },
+    title:    { register: 'Confirm your email', reset: 'Reset your password', unfreeze: 'Unfreeze your account', change_email: 'Change your email', login_2fa: 'Confirm your login', enable_2fa_email: 'Two-factor authentication' },
     subtitle: {
       register: 'Enter this code on Bloomly to finish signing up.',
       reset:    'Enter this code to reset your password.',
       unfreeze: 'Enter this code on Bloomly to unfreeze your account.',
       change_email: 'Enter this code on Bloomly to change your account email.',
+      login_2fa: 'Enter this code to confirm signing in to your Bloomly account.',
+      enable_2fa_email: 'Enter this code to enable email-code sign-in.',
     },
-    subject:  { register: '🌸 Your Bloomly verification code', reset: '🔑 Reset your Bloomly password', unfreeze: '❄️ Unfreeze your Bloomly account', change_email: '📧 Change your Bloomly email' },
+    subject:  { register: '🌸 Your Bloomly verification code', reset: '🔑 Reset your Bloomly password', unfreeze: '❄️ Unfreeze your Bloomly account', change_email: '📧 Change your Bloomly email', login_2fa: '🔐 Your Bloomly login code', enable_2fa_email: '🛡️ Your Bloomly two-factor code' },
     codeLabel: 'Verification code',
     validity:  'Valid for 15 minutes',
     ignore:    "If this wasn't you, just ignore this email.",
   },
 
   uk: {
-    title:    { register: 'Підтвердження пошти', reset: 'Скидання пароля', unfreeze: 'Розморозка акаунта', change_email: 'Зміна email' },
+    title:    { register: 'Підтвердження пошти', reset: 'Скидання пароля', unfreeze: 'Розморозка акаунта', change_email: 'Зміна email', login_2fa: 'Вхід в акаунт', enable_2fa_email: 'Двофакторна автентифікація' },
     subtitle: {
       register: 'Введи цей код на сайті Bloomly, щоб завершити реєстрацію.',
       reset:    'Введи цей код, щоб скинути пароль.',
       unfreeze: 'Введи цей код на сайті Bloomly, щоб розморозити акаунт.',
       change_email: 'Введи цей код на сайті Bloomly, щоб змінити пошту акаунта.',
+      login_2fa: 'Введи цей код, щоб підтвердити вхід в акаунт Bloomly.',
+      enable_2fa_email: 'Введи цей код, щоб увімкнути вхід за кодом з пошти.',
     },
-    subject:  { register: '🌸 Код підтвердження Bloomly', reset: '🔑 Скидання пароля Bloomly', unfreeze: '❄️ Розморозка акаунта Bloomly', change_email: '📧 Зміна email Bloomly' },
+    subject:  { register: '🌸 Код підтвердження Bloomly', reset: '🔑 Скидання пароля Bloomly', unfreeze: '❄️ Розморозка акаунта Bloomly', change_email: '📧 Зміна email Bloomly', login_2fa: '🔐 Код входу Bloomly', enable_2fa_email: '🛡️ Код двофакторної автентифікації Bloomly' },
     codeLabel: 'Код підтвердження',
     validity:  'Дійсний 15 хвилин',
     ignore:    'Якщо це не ти — просто проігноруй цей лист.',
   },
 
   de: {
-    title:    { register: 'E-Mail bestätigen', reset: 'Passwort zurücksetzen', unfreeze: 'Konto entsperren', change_email: 'E-Mail ändern' },
+    title:    { register: 'E-Mail bestätigen', reset: 'Passwort zurücksetzen', unfreeze: 'Konto entsperren', change_email: 'E-Mail ändern', login_2fa: 'Anmeldung bestätigen', enable_2fa_email: 'Zwei-Faktor-Authentifizierung' },
     subtitle: {
       register: 'Gib diesen Code auf Bloomly ein, um die Registrierung abzuschließen.',
       reset:    'Gib diesen Code ein, um dein Passwort zurückzusetzen.',
       unfreeze: 'Gib diesen Code auf Bloomly ein, um dein Konto zu entsperren.',
       change_email: 'Gib diesen Code auf Bloomly ein, um die E-Mail deines Kontos zu ändern.',
+      login_2fa: 'Gib diesen Code ein, um deine Anmeldung bei Bloomly zu bestätigen.',
+      enable_2fa_email: 'Gib diesen Code ein, um die Anmeldung per E-Mail-Code zu aktivieren.',
     },
-    subject:  { register: '🌸 Dein Bloomly-Bestätigungscode', reset: '🔑 Bloomly-Passwort zurücksetzen', unfreeze: '❄️ Bloomly-Konto entsperren', change_email: '📧 Bloomly-E-Mail ändern' },
+    subject:  { register: '🌸 Dein Bloomly-Bestätigungscode', reset: '🔑 Bloomly-Passwort zurücksetzen', unfreeze: '❄️ Bloomly-Konto entsperren', change_email: '📧 Bloomly-E-Mail ändern', login_2fa: '🔐 Dein Bloomly-Anmeldecode', enable_2fa_email: '🛡️ Dein Bloomly-Zwei-Faktor-Code' },
     codeLabel: 'Bestätigungscode',
     validity:  '15 Minuten gültig',
     ignore:    'Wenn du das nicht warst, ignoriere diese E-Mail einfach.',
   },
 
   es: {
-    title:    { register: 'Confirma tu correo', reset: 'Restablece tu contraseña', unfreeze: 'Desbloquea tu cuenta', change_email: 'Cambia tu correo' },
+    title:    { register: 'Confirma tu correo', reset: 'Restablece tu contraseña', unfreeze: 'Desbloquea tu cuenta', change_email: 'Cambia tu correo', login_2fa: 'Confirma tu inicio de sesión', enable_2fa_email: 'Autenticación de dos factores' },
     subtitle: {
       register: 'Introduce este código en Bloomly para completar el registro.',
       reset:    'Introduce este código para restablecer tu contraseña.',
       unfreeze: 'Introduce este código en Bloomly para desbloquear tu cuenta.',
       change_email: 'Introduce este código en Bloomly para cambiar el correo de tu cuenta.',
+      login_2fa: 'Introduce este código para confirmar el inicio de sesión en tu cuenta Bloomly.',
+      enable_2fa_email: 'Introduce este código para activar el inicio de sesión con código por correo.',
     },
-    subject:  { register: '🌸 Tu código de verificación de Bloomly', reset: '🔑 Restablece tu contraseña de Bloomly', unfreeze: '❄️ Desbloquea tu cuenta de Bloomly', change_email: '📧 Cambia tu correo de Bloomly' },
+    subject:  { register: '🌸 Tu código de verificación de Bloomly', reset: '🔑 Restablece tu contraseña de Bloomly', unfreeze: '❄️ Desbloquea tu cuenta de Bloomly', change_email: '📧 Cambia tu correo de Bloomly', login_2fa: '🔐 Tu código de inicio de sesión de Bloomly', enable_2fa_email: '🛡️ Tu código de doble factor de Bloomly' },
     codeLabel: 'Código de verificación',
     validity:  'Válido durante 15 minutos',
     ignore:    'Si no fuiste tú, simplemente ignora este correo.',
   },
 
   fr: {
-    title:    { register: 'Confirme ton e-mail', reset: 'Réinitialise ton mot de passe', unfreeze: 'Débloque ton compte', change_email: 'Change ton e-mail' },
+    title:    { register: 'Confirme ton e-mail', reset: 'Réinitialise ton mot de passe', unfreeze: 'Débloque ton compte', change_email: 'Change ton e-mail', login_2fa: 'Confirme ta connexion', enable_2fa_email: 'Authentification à deux facteurs' },
     subtitle: {
       register: 'Saisis ce code sur Bloomly pour terminer ton inscription.',
       reset:    'Saisis ce code pour réinitialiser ton mot de passe.',
       unfreeze: 'Saisis ce code sur Bloomly pour débloquer ton compte.',
       change_email: 'Saisis ce code sur Bloomly pour changer l\'e-mail de ton compte.',
+      login_2fa: 'Saisis ce code pour confirmer ta connexion à ton compte Bloomly.',
+      enable_2fa_email: 'Saisis ce code pour activer la connexion par code e-mail.',
     },
-    subject:  { register: '🌸 Ton code de vérification Bloomly', reset: '🔑 Réinitialise ton mot de passe Bloomly', unfreeze: '❄️ Débloque ton compte Bloomly', change_email: '📧 Change ton e-mail Bloomly' },
+    subject:  { register: '🌸 Ton code de vérification Bloomly', reset: '🔑 Réinitialise ton mot de passe Bloomly', unfreeze: '❄️ Débloque ton compte Bloomly', change_email: '📧 Change ton e-mail Bloomly', login_2fa: '🔐 Ton code de connexion Bloomly', enable_2fa_email: '🛡️ Ton code à deux facteurs Bloomly' },
     codeLabel: 'Code de vérification',
     validity:  'Valable 15 minutes',
     ignore:    "Si ce n'était pas toi, ignore simplement cet e-mail.",
   },
 
   pl: {
-    title:    { register: 'Potwierdź e-mail', reset: 'Zresetuj hasło', unfreeze: 'Odblokuj konto', change_email: 'Zmień e-mail' },
+    title:    { register: 'Potwierdź e-mail', reset: 'Zresetuj hasło', unfreeze: 'Odblokuj konto', change_email: 'Zmień e-mail', login_2fa: 'Potwierdź logowanie', enable_2fa_email: 'Uwierzytelnianie dwuskładnikowe' },
     subtitle: {
       register: 'Wpisz ten kod na Bloomly, aby dokończyć rejestrację.',
       reset:    'Wpisz ten kod, aby zresetować hasło.',
       unfreeze: 'Wpisz ten kod na Bloomly, aby odblokować konto.',
       change_email: 'Wpisz ten kod na Bloomly, aby zmienić e-mail konta.',
+      login_2fa: 'Wpisz ten kod, aby potwierdzić logowanie do konta Bloomly.',
+      enable_2fa_email: 'Wpisz ten kod, aby włączyć logowanie kodem z e-maila.',
     },
-    subject:  { register: '🌸 Twój kod weryfikacyjny Bloomly', reset: '🔑 Zresetuj hasło Bloomly', unfreeze: '❄️ Odblokuj konto Bloomly', change_email: '📧 Zmień e-mail Bloomly' },
+    subject:  { register: '🌸 Twój kod weryfikacyjny Bloomly', reset: '🔑 Zresetuj hasło Bloomly', unfreeze: '❄️ Odblokuj konto Bloomly', change_email: '📧 Zmień e-mail Bloomly', login_2fa: '🔐 Twój kod logowania Bloomly', enable_2fa_email: '🛡️ Twój kod dwuskładnikowy Bloomly' },
     codeLabel: 'Kod weryfikacyjny',
     validity:  'Ważny przez 15 minut',
     ignore:    'Jeśli to nie ty — po prostu zignoruj tę wiadomość.',
   },
 
   pt: {
-    title:    { register: 'Confirme seu e-mail', reset: 'Redefina sua senha', unfreeze: 'Desbloqueie sua conta', change_email: 'Altere seu e-mail' },
+    title:    { register: 'Confirme seu e-mail', reset: 'Redefina sua senha', unfreeze: 'Desbloqueie sua conta', change_email: 'Altere seu e-mail', login_2fa: 'Confirme seu login', enable_2fa_email: 'Autenticação de dois fatores' },
     subtitle: {
       register: 'Digite este código no Bloomly para concluir o cadastro.',
       reset:    'Digite este código para redefinir sua senha.',
       unfreeze: 'Digite este código no Bloomly para desbloquear sua conta.',
       change_email: 'Digite este código no Bloomly para alterar o e-mail da sua conta.',
+      login_2fa: 'Digite este código para confirmar o login na sua conta Bloomly.',
+      enable_2fa_email: 'Digite este código para ativar o login por código no e-mail.',
     },
-    subject:  { register: '🌸 Seu código de verificação do Bloomly', reset: '🔑 Redefina sua senha do Bloomly', unfreeze: '❄️ Desbloqueie sua conta Bloomly', change_email: '📧 Altere seu e-mail Bloomly' },
+    subject:  { register: '🌸 Seu código de verificação do Bloomly', reset: '🔑 Redefina sua senha do Bloomly', unfreeze: '❄️ Desbloqueie sua conta Bloomly', change_email: '📧 Altere seu e-mail Bloomly', login_2fa: '🔐 Seu código de login Bloomly', enable_2fa_email: '🛡️ Seu código de dois fatores Bloomly' },
     codeLabel: 'Código de verificação',
     validity:  'Válido por 15 minutos',
     ignore:    'Se não foi você, basta ignorar este e-mail.',
@@ -164,6 +180,7 @@ function otpHtml(code: string, purpose: Purpose, lang: Lang): string {
   const isReset      = purpose === 'reset'
   const isUnfreeze    = purpose === 'unfreeze'
   const isChangeEmail = purpose === 'change_email'
+  const isTwoFactor   = purpose === 'login_2fa' || purpose === 'enable_2fa_email'
 
   const topGrad     = isUnfreeze
     ? 'linear-gradient(160deg,#0ea5e9 0%,#38bdf8 55%,#7dd3fc 100%)'
@@ -171,9 +188,11 @@ function otpHtml(code: string, purpose: Purpose, lang: Lang): string {
     ? 'linear-gradient(160deg,#4f46e5 0%,#7c3aed 60%,#9333ea 100%)'
     : isChangeEmail
     ? 'linear-gradient(160deg,#0d9488 0%,#14b8a6 55%,#5eead4 100%)'
+    : isTwoFactor
+    ? 'linear-gradient(160deg,#059669 0%,#10b981 55%,#34d399 100%)'
     : 'linear-gradient(160deg,#7c3aed 0%,#a855f7 55%,#ec4899 100%)'
-  const borderClr   = isUnfreeze ? '#0ea5e9' : isReset ? '#4f46e5' : isChangeEmail ? '#0d9488' : '#9333ea'
-  const emoji       = isUnfreeze ? '❄️' : isReset ? '🔑' : isChangeEmail ? '📧' : '✉️'
+  const borderClr   = isUnfreeze ? '#0ea5e9' : isReset ? '#4f46e5' : isChangeEmail ? '#0d9488' : isTwoFactor ? '#10b981' : '#9333ea'
+  const emoji       = isUnfreeze ? '❄️' : isReset ? '🔑' : isChangeEmail ? '📧' : isTwoFactor ? '🔐' : '✉️'
 
   // Code is rendered as ONE text node (no per-digit <td>s) so selecting/copying
   // it on desktop mail clients yields a single clean string like "123456",
@@ -281,7 +300,7 @@ function otpHtml(code: string, purpose: Purpose, lang: Lang): string {
 /**
  * @param to       recipient email
  * @param code     OTP code
- * @param purpose  'register' | 'reset' | 'unfreeze' | 'change_email'
+ * @param purpose  'register' | 'reset' | 'unfreeze' | 'change_email' | 'login_2fa' | 'enable_2fa_email'
  * @param lang     locale (defaults to 'ru'); unknown codes fall back to DEFAULT_LANG
  */
 export async function sendOtpEmail(

@@ -3,10 +3,12 @@ import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, computed, onMounted } from 'vue'
 import { useGroupsStore, type ArtistQueueItem, type TodoStatus } from '@/stores/groups'
+import { useConfirm } from '@/composables/useConfirm'
 import BIcon from '@/components/BIcon.vue'
 
 const props = defineProps<{ groupId: string; isAdmin: boolean }>()
 const groupsStore = useGroupsStore()
+const { confirmDialog } = useConfirm()
 
 const items    = ref<ArtistQueueItem[]>([])
 const loading  = ref(false)
@@ -93,7 +95,7 @@ async function moveNext(item: ArtistQueueItem) {
 }
 
 async function removeItem(id: string) {
-  if (!confirm('Удалить карточку?')) return
+  if (!(await confirmDialog('Удалить карточку?', { danger: true }))) return
   await groupsStore.deleteTodoItem(props.groupId, id)
   items.value = items.value.filter(i => i.id !== id)
 }

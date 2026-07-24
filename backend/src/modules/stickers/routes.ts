@@ -25,13 +25,15 @@ import {
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    tryAuthenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
 export async function stickersRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
+  const tryAuth: RouteShorthandOptions = { onRequest: [fastify.tryAuthenticate] };
 
-  fastify.get('/',            listPacksHandler as any);
+  fastify.get('/',            tryAuth, listPacksHandler as any);
   fastify.get('/find-by-url', auth, findByUrlHandler as any);
   fastify.get('/:id',         getPackHandler   as any);
 

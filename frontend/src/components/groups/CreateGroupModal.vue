@@ -5,6 +5,7 @@ import { ref, computed, watch } from 'vue'
 import BIcon from '@/components/BIcon.vue'
 import type { GroupType } from '@/stores/groups'
 import api from '@/api'
+import { compressImageForUpload } from '@/lib/utils'
 
 // ── Emit ─────────────────────────────────────────────────────────────────────
 export interface CreateGroupPayload {
@@ -164,7 +165,8 @@ async function onAvatarChange(e: Event) {
   uploadingAvatar.value = true
   try {
     const fd = new FormData()
-    fd.append('file', file, file.name)
+    const compressed = await compressImageForUpload(file)
+    fd.append('file', compressed, compressed.name)
     const res = await api.post('/media/upload?folder=avatars', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     avatarUrl.value = res.data.data.url
   } catch (err) { console.error('Avatar upload failed:', err); avatarPreview.value = null }
@@ -178,7 +180,8 @@ async function onBannerChange(e: Event) {
   uploadingBanner.value = true
   try {
     const fd = new FormData()
-    fd.append('file', file, file.name)
+    const compressed = await compressImageForUpload(file)
+    fd.append('file', compressed, compressed.name)
     const res = await api.post('/media/upload?folder=banners', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     bannerUrl.value = res.data.data.url
   } catch (err) { console.error('Banner upload failed:', err); bannerPreview.value = null }

@@ -200,20 +200,33 @@ export const dealersDenService = {
 
     const updated = await prisma.dealerListing.update({ where: { id }, data, select: LISTING_SELECT });
 
-    // Notify wishlist users on price drop
+    // Notify wishlist users on price drop, unless they already have an unread price-drop
+    // notification for this listing — otherwise repeatedly nudging the price down floods them.
     if (input.price !== undefined && parseFloat(input.price.toString()) < parseFloat(prevPrice.toString())) {
       const wishers = await prisma.denWishlist.findMany({ where: { listing_id: id }, select: { user_id: true } });
-      await Promise.all(wishers.map(w =>
-        notificationService.create({ receiverId: w.user_id, senderId: sellerId, type: 'den_price_drop', refId: id })
-      ));
+      await Promise.all(wishers.map(async (w) => {
+        const alreadyNotified = await prisma.notification.findFirst({
+          where: { receiver_id: w.user_id, type: 'den_price_drop', ref_id: id, read: false, deleted_at: null },
+          select: { id: true },
+        });
+        if (!alreadyNotified) {
+          await notificationService.create({ receiverId: w.user_id, senderId: sellerId, type: 'den_price_drop', refId: id });
+        }
+      }));
     }
 
-    // Notify wishlist users on new commission slots
+    // Notify wishlist users on new commission slots, same dedup rationale as above.
     if (input.commissionSlotsTotal !== undefined && existing.listing_kind === 'commission_queue') {
       const wishers = await prisma.denWishlist.findMany({ where: { listing_id: id }, select: { user_id: true } });
-      await Promise.all(wishers.map(w =>
-        notificationService.create({ receiverId: w.user_id, senderId: sellerId, type: 'den_slots_available', refId: id })
-      ));
+      await Promise.all(wishers.map(async (w) => {
+        const alreadyNotified = await prisma.notification.findFirst({
+          where: { receiver_id: w.user_id, type: 'den_slots_available', ref_id: id, read: false, deleted_at: null },
+          select: { id: true },
+        });
+        if (!alreadyNotified) {
+          await notificationService.create({ receiverId: w.user_id, senderId: sellerId, type: 'den_slots_available', refId: id });
+        }
+      }));
     }
 
     return updated;
@@ -449,15 +462,15 @@ export const dealersDenService = {
       return { user_id: uid, sales_count: sales, avg_rating: avgRating, new_reviews: rv.count, score };
     }).sort((a, b) => b.score - a.score).slice(0, 10);
 
-    // Remove old top-week badges from previous top-3
+    // Remove old top-week badges from previous top-3, restoring whatever badge they had before
     const prevTop = await prisma.denWeeklyTop.findMany({
       where: { week_start: { lt: weekStart }, rank: { lte: 3 } },
       select: { user_id: true },
     });
     for (const p of prevTop) {
-      const u = await prisma.user.findUnique({ where: { id: p.user_id }, select: { badge_type: true } });
+      const u = await prisma.user.findUnique({ where: { id: p.user_id }, select: { badge_type: true, prev_badge_type: true } });
       if (u?.badge_type === 'den_top_week') {
-        await prisma.user.update({ where: { id: p.user_id }, data: { badge_type: null } });
+        await prisma.user.update({ where: { id: p.user_id }, data: { badge_type: u.prev_badge_type, prev_badge_type: null } });
       }
     }
 
@@ -471,7 +484,10 @@ export const dealersDenService = {
       });
 
       if (i < 3) {
-        await prisma.user.update({ where: { id: s.user_id }, data: { badge_type: 'den_top_week' } });
+        const s2 = await prisma.user.findUnique({ where: { id: s.user_id }, select: { badge_type: true } });
+        if (s2?.badge_type !== 'den_top_week') {
+          await prisma.user.update({ where: { id: s.user_id }, data: { prev_badge_type: s2?.badge_type ?? null, badge_type: 'den_top_week' } });
+        }
       }
     }
 

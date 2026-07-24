@@ -104,7 +104,7 @@
                   </div>
                 </div>
                 <p class="font-bold text-white text-sm truncate leading-tight">{{ form.display_name || authStore.user?.username }}</p>
-                <p class="text-xs text-white/55 truncate">@{{ authStore.user?.username }}</p>
+                <p class="text-xs text-white/70 truncate">@{{ authStore.user?.username }}</p>
               </div>
             </div>
 
@@ -278,7 +278,7 @@
                   <div class="pt-12 px-6 pb-4 flex items-end justify-between">
                     <div>
                       <p class="font-bold text-white text-sm">{{ form.display_name || authStore.user?.username }}</p>
-                      <p class="text-xs text-white/55">@{{ authStore.user?.username }}</p>
+                      <p class="text-xs text-white/70">@{{ authStore.user?.username }}</p>
                     </div>
                     <div class="flex flex-wrap gap-2 text-xs text-white/35 font-semibold">
                       <button type="button" @click="avatarFileRef?.click()"
@@ -384,7 +384,7 @@
                         @input="onUsernameInput"
                         type="text"
                         maxlength="30"
-                        placeholder="твой_никнейм"
+                        placeholder="твой_юзернейм"
                         class="field-input !pl-8"
                         :class="usernameError ? '!border-brand-error/60 !ring-brand-error/20' : ''"
                         autocomplete="username"
@@ -937,7 +937,7 @@
                       <div v-if="verificationStatus.verificationType && verTypeMeta[verificationStatus.verificationType]"
                         class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-xs font-bold"
                         :class="verTypeMeta[verificationStatus.verificationType].badgeCls">
-                        <BIcon :name="verTypeMeta[verificationStatus.verificationType].icon" class="w-4 h-4" />
+                        <img :src="verificationBadgeIcon(verificationStatus.verificationType)" class="w-6 h-6 rounded-md object-cover flex-shrink-0" />
                         {{ verTypeMeta[verificationStatus.verificationType].label }}
                       </div>
                       <div class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
@@ -957,7 +957,7 @@
                       <div v-if="verificationStatus.latestRequest.verification_type && verTypeMeta[verificationStatus.latestRequest.verification_type]"
                         class="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold"
                         :class="verTypeMeta[verificationStatus.latestRequest.verification_type].badgeCls">
-                        <BIcon :name="verTypeMeta[verificationStatus.latestRequest.verification_type].icon" class="w-3.5 h-3.5" />
+                        <img :src="verificationBadgeIcon(verificationStatus.latestRequest.verification_type)" class="w-5 h-5 rounded-md object-cover flex-shrink-0" />
                         {{ verTypeMeta[verificationStatus.latestRequest.verification_type].label }}
                       </div>
                     </div>
@@ -1041,9 +1041,8 @@
                             :class="selectedVerType === vt.id
                               ? `${vt.borderSel} ${vt.bgSel} shadow-lg`
                               : `border-brand-border bg-brand-bg ${vt.borderHov}`">
-                            <div class="flex items-center gap-2 mb-2">
-                              <BIcon :name="vt.icon" class="w-5 h-5 flex-shrink-0"
-                                :class="selectedVerType === vt.id ? vt.textSel : 'text-white/60'" />
+                            <div class="flex items-center gap-3 mb-2">
+                              <img :src="verificationBadgeIcon(vt.id)" class="w-11 h-11 rounded-xl object-cover flex-shrink-0" />
                               <span class="font-bold text-xs leading-tight"
                                 :class="selectedVerType === vt.id ? vt.textSel : 'text-white'">
                                 {{ (langStore.t as any)[vt.titleKey] }}
@@ -1078,6 +1077,8 @@
                             <span v-else-if="selectedVerType === 'popular'">{{ (langStore.t as any).verEvidenceDescPopular }}</span>
                             <span v-else-if="selectedVerType === 'writer'">{{ (langStore.t as any).verEvidenceDescWriter }}</span>
                             <span v-else-if="selectedVerType === 'organizer'">{{ (langStore.t as any).verEvidenceDescOrganizer }}</span>
+                            <span v-else-if="selectedVerType === 'photographer'">{{ (langStore.t as any).verEvidenceDescPhotographer }} ({{ authStore.user?.id?.slice(0,8) }}).</span>
+                            <span v-else-if="selectedVerType === 'programmer'">{{ (langStore.t as any).verEvidenceDescProgrammer }} ({{ authStore.user?.id?.slice(0,8) }}).</span>
                           </p>
                         </div>
 
@@ -1102,26 +1103,15 @@
                           </button>
                         </div>
 
-                        <!-- Uploaded evidence preview -->
-                        <div v-if="evidenceUrls.length > 0" class="grid grid-cols-3 gap-2 mb-3">
-                          <div v-for="(url, idx) in evidenceUrls" :key="idx" class="relative group rounded-xl overflow-hidden border border-brand-border aspect-square">
-                            <img :src="url" class="w-full h-full object-cover" />
-                            <button type="button" @click="evidenceUrls.splice(idx, 1)"
-                              class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <BIcon name="X" class="w-3 h-3 text-white" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <!-- Upload button -->
-                        <button v-if="evidenceUrls.length < 5" type="button" @click="evidenceInput?.click()"
-                          :disabled="isUploadingEvidence"
-                          class="w-full py-3 rounded-2xl border-2 border-dashed border-brand-border hover:border-blue-500/40 bg-brand-bg text-sm text-white/55 hover:text-white transition-all flex items-center justify-center gap-2">
-                          <span v-if="isUploadingEvidence" class="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></span>
-                          <BIcon v-else name="Upload" class="w-4 h-4" />
-                          {{ isUploadingEvidence ? langStore.t.verUploadingLabel : langStore.t.verUploadBtn }}
-                        </button>
-                        <input ref="evidenceInput" type="file" accept="image/*,video/*" class="hidden" @change="onEvidenceUpload" />
+                        <!-- Evidence upload -->
+                        <MediaUpload
+                          ref="evidenceUploadRef"
+                          folder="verification"
+                          accept="image/*,video/*"
+                          :multiple="true"
+                          :max-files="5"
+                          @uploaded="onEvidenceUploaded"
+                        />
 
                         <!-- Text evidence (in addition to, or instead of, photo/video) -->
                         <div v-if="selectedVerType !== 'popular'" class="mt-3">
@@ -1309,6 +1299,7 @@
                   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <button
                       v-for="opt in langOptions" :key="opt.code"
+                      type="button"
                       @click="langStore.setLang(opt.code)"
                       class="flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all"
                       :class="langStore.currentLang === opt.code
@@ -1342,6 +1333,7 @@
                       </div>
                       <!-- Toggle switch -->
                       <button
+                        type="button"
                         @click="langStore.setAutoTranslate(!langStore.autoTranslateEnabled)"
                         class="relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200"
                         :class="langStore.autoTranslateEnabled ? 'bg-amber-400' : 'bg-white/15'"
@@ -1360,6 +1352,7 @@
                         <div class="grid grid-cols-4 sm:grid-cols-8 gap-2">
                           <button
                             v-for="opt in langOptions" :key="opt.code"
+                            type="button"
                             @click="langStore.setAutoTranslateLang(opt.code)"
                             class="flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all"
                             :class="langStore.autoTranslateLang === opt.code
@@ -1402,17 +1395,15 @@
                   <h2 class="font-bold text-white text-sm">{{ langStore.t.securityLoginTitle }}</h2>
                 </div>
                 <div class="p-6 space-y-3">
-                  <!-- Email/пароль -->
+                  <!-- Пароль -->
                   <div class="flex items-center justify-between p-4 rounded-2xl border border-brand-border bg-brand-bg/60">
                     <div class="flex items-center gap-3">
                       <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
-                        <svg class="w-4.5 h-4.5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                        </svg>
+                        <BIcon name="Lock" class="w-4.5 h-4.5 text-white/70" />
                       </div>
                       <div>
-                        <p class="text-sm font-semibold text-white">{{ langStore.t.emailPasswordLabel }}</p>
-                        <p class="text-xs text-white/45">{{ authStore.user?.email }}</p>
+                        <p class="text-sm font-semibold text-white">{{ langStore.t.passwordLabel }}</p>
+                        <p class="text-xs text-white/45">••••••••</p>
                       </div>
                     </div>
                     <div class="flex items-center gap-2">
@@ -1457,7 +1448,7 @@
                   <!-- Забыли пароль — сброс кодом на почту -->
                   <Transition name="fade">
                     <div v-if="showForgotPassword" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 space-y-3">
-                      <p class="text-xs text-white/45">{{ authStore.user?.email }}</p>
+                      <p class="text-xs text-white/45">{{ maskEmail(authStore.user?.email) }}</p>
                       <button v-if="!fpCodeSent" type="button" @click="startForgotPassword" :disabled="fpSending"
                         class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/15 transition-all disabled:opacity-50">
                         {{ fpSending ? langStore.t.savingLabel : langStore.t.sendCodeBtn }}
@@ -1495,8 +1486,8 @@
                         </svg>
                       </div>
                       <div>
-                        <p class="text-sm font-semibold text-white">{{ langStore.t.emailPasswordLabel }}</p>
-                        <p class="text-xs text-white/45">{{ authStore.user?.email }}</p>
+                        <p class="text-sm font-semibold text-white">{{ langStore.t.emailLabel }}</p>
+                        <p class="text-xs text-white/45">{{ maskEmail(authStore.user?.email) }}</p>
                       </div>
                     </div>
                     <button type="button" @click="showChangeEmail = !showChangeEmail"
@@ -1531,6 +1522,113 @@
                     </div>
                   </Transition>
 
+                  <!-- Двухфакторная аутентификация: приложение-аутентификатор -->
+                  <div class="flex items-center justify-between p-4 rounded-2xl border border-brand-border bg-brand-bg/60">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
+                        <BIcon name="Smartphone" class="w-4.5 h-4.5 text-white/70" />
+                      </div>
+                      <div>
+                        <p class="text-sm font-semibold text-white">{{ langStore.t.totpMethodLabel }}</p>
+                        <p class="text-xs text-white/45">{{ authStore.user?.two_factor_method === 'totp' ? langStore.t.twoFactorActiveLabel : langStore.t.twoFactorInactiveLabel }}</p>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span v-if="authStore.user?.two_factor_method === 'totp'" class="px-2.5 py-1 rounded-lg text-xs font-bold" style="background:rgba(16,185,129,0.15);color:#34d399">{{ langStore.t.activeLabel }}</span>
+                      <button v-if="authStore.user?.two_factor_method === 'totp'" type="button" @click="showDisable2fa = !showDisable2fa"
+                        class="px-3 py-1.5 rounded-xl text-xs font-bold text-red-400 border border-red-500/20 hover:border-red-500/50 bg-red-500/5 hover:bg-red-500/10 transition-all">
+                        {{ langStore.t.disable2faBtn }}
+                      </button>
+                      <button v-else type="button" @click="showTotpSetup = !showTotpSetup; if (showTotpSetup && !totpQr) startTotpSetup()"
+                        class="px-3 py-1.5 rounded-xl text-xs font-bold text-white/60 border border-brand-border hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all">
+                        {{ langStore.t.enable2faBtn }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <Transition name="fade">
+                    <div v-if="showTotpSetup" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 space-y-3">
+                      <p v-if="authStore.user?.two_factor_method === 'email'" class="text-xs text-amber-400/90">{{ langStore.t.twoFactorReplaceHint }}</p>
+                      <div v-if="totpQr" class="flex flex-col items-center gap-3 py-2">
+                        <img :src="totpQr" alt="QR" class="w-40 h-40 rounded-xl bg-white p-2" />
+                        <p class="text-xs text-white/45 text-center">{{ langStore.t.totpScanHint }}</p>
+                        <p class="text-[11px] font-mono text-white/60 tracking-wider break-all text-center px-3">{{ totpSecret }}</p>
+                      </div>
+                      <div>
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-1.5">{{ langStore.t.otpCodeLabel }}</label>
+                        <input :value="totpCode" @input="(e:Event)=>totpCode=(e.target as HTMLInputElement).value.replace(/\D+/g,'').slice(0,6)" type="text" inputmode="numeric" maxlength="6" class="field-input" />
+                      </div>
+                      <p v-if="totpError" class="text-xs text-brand-error/80">{{ totpError }}</p>
+                      <p v-if="totpSuccess" class="text-xs text-emerald-400">{{ totpSuccess }}</p>
+                      <button type="button" @click="submitTotpConfirm" :disabled="totpSaving"
+                        class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-500/80 hover:bg-emerald-500 transition-all disabled:opacity-50">
+                        {{ totpSaving ? langStore.t.savingLabel : langStore.t.confirmBtn }}
+                      </button>
+                    </div>
+                  </Transition>
+
+                  <!-- Двухфакторная аутентификация: код на почту -->
+                  <div class="flex items-center justify-between p-4 rounded-2xl border border-brand-border bg-brand-bg/60">
+                    <div class="flex items-center gap-3">
+                      <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
+                        <BIcon name="MailCheck" class="w-4.5 h-4.5 text-white/70" />
+                      </div>
+                      <div>
+                        <p class="text-sm font-semibold text-white">{{ langStore.t.emailMethodLabel }}</p>
+                        <p class="text-xs text-white/45">{{ authStore.user?.two_factor_method === 'email' ? langStore.t.twoFactorActiveLabel : langStore.t.twoFactorInactiveLabel }}</p>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span v-if="authStore.user?.two_factor_method === 'email'" class="px-2.5 py-1 rounded-lg text-xs font-bold" style="background:rgba(16,185,129,0.15);color:#34d399">{{ langStore.t.activeLabel }}</span>
+                      <button v-if="authStore.user?.two_factor_method === 'email'" type="button" @click="showDisable2fa = !showDisable2fa"
+                        class="px-3 py-1.5 rounded-xl text-xs font-bold text-red-400 border border-red-500/20 hover:border-red-500/50 bg-red-500/5 hover:bg-red-500/10 transition-all">
+                        {{ langStore.t.disable2faBtn }}
+                      </button>
+                      <button v-else type="button" @click="showEmail2fa = !showEmail2fa"
+                        class="px-3 py-1.5 rounded-xl text-xs font-bold text-white/60 border border-brand-border hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all">
+                        {{ langStore.t.enable2faBtn }}
+                      </button>
+                    </div>
+                  </div>
+
+                  <Transition name="fade">
+                    <div v-if="showEmail2fa" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 space-y-3">
+                      <p v-if="authStore.user?.two_factor_method === 'totp'" class="text-xs text-amber-400/90">{{ langStore.t.twoFactorReplaceHint }}</p>
+                      <button v-if="!email2faCodeSent" type="button" @click="startEmail2fa" :disabled="email2faSending"
+                        class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/15 transition-all disabled:opacity-50">
+                        {{ email2faSending ? langStore.t.savingLabel : langStore.t.sendCodeBtn }}
+                      </button>
+                      <template v-else>
+                        <p class="text-xs text-emerald-400">{{ langStore.t.codeSentHint }}</p>
+                        <div>
+                          <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-1.5">{{ langStore.t.otpCodeLabel }}</label>
+                          <input :value="email2faCode" @input="(e:Event)=>email2faCode=(e.target as HTMLInputElement).value.replace(/\D+/g,'').slice(0,6)" type="text" inputmode="numeric" maxlength="6" class="field-input" />
+                        </div>
+                        <button type="button" @click="submitEmail2fa" :disabled="email2faSaving"
+                          class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-500/80 hover:bg-emerald-500 transition-all disabled:opacity-50">
+                          {{ email2faSaving ? langStore.t.savingLabel : langStore.t.confirmBtn }}
+                        </button>
+                      </template>
+                      <p v-if="email2faError" class="text-xs text-brand-error/80">{{ email2faError }}</p>
+                      <p v-if="email2faSuccess" class="text-xs text-emerald-400">{{ email2faSuccess }}</p>
+                    </div>
+                  </Transition>
+
+                  <!-- Отключение 2FA (требует пароль) -->
+                  <Transition name="fade">
+                    <div v-if="showDisable2fa" class="p-4 rounded-2xl border border-red-500/20 bg-red-500/5 space-y-3">
+                      <div>
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-1.5">{{ langStore.t.currentPasswordLabel }}</label>
+                        <input v-model="disable2faPassword" type="password" autocomplete="current-password" class="field-input" />
+                      </div>
+                      <p v-if="disable2faError" class="text-xs text-brand-error/80">{{ disable2faError }}</p>
+                      <button type="button" @click="submitDisable2fa" :disabled="disable2faSaving"
+                        class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-500/80 hover:bg-red-500 transition-all disabled:opacity-50">
+                        {{ disable2faSaving ? langStore.t.savingLabel : langStore.t.disable2faBtn }}
+                      </button>
+                    </div>
+                  </Transition>
+
                   <!-- OAuth провайдеры -->
                   <div v-if="linkedAccountsLoading" class="flex justify-center py-6">
                     <span class="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin"></span>
@@ -1555,6 +1653,7 @@
                       </div>
                       <button
                         v-if="!linkedAccounts.includes(p.key)"
+                        type="button"
                         @click="linkProvider(p.key)"
                         :disabled="linkingProvider === p.key"
                         class="px-4 py-1.5 rounded-xl text-xs font-bold text-white border border-brand-border hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all disabled:opacity-50"
@@ -1566,6 +1665,7 @@
                       </button>
                       <button
                         v-else
+                        type="button"
                         @click="unlinkProvider(p.key)"
                         :disabled="unlinkingProvider === p.key"
                         class="px-4 py-1.5 rounded-xl text-xs font-bold text-red-400 border border-red-500/20 hover:border-red-500/50 bg-red-500/5 hover:bg-red-500/10 transition-all disabled:opacity-50"
@@ -1587,6 +1687,7 @@
                       </div>
                       <button
                         v-if="sessions.filter(s => !s.current).length > 0"
+                        type="button"
                         @click="revokeOtherSessions"
                         :disabled="revokingOthers"
                         class="px-3 py-1.5 rounded-xl text-xs font-bold text-red-400 border border-red-500/20 hover:border-red-500/50 bg-red-500/5 hover:bg-red-500/10 transition-all disabled:opacity-50 whitespace-nowrap"
@@ -1620,6 +1721,7 @@
                         </div>
                         <button
                           v-if="!s.current"
+                          type="button"
                           @click="revokeSession(s.id)"
                           :disabled="revokingSessionId === s.id"
                           class="px-4 py-1.5 rounded-xl text-xs font-bold text-red-400 border border-red-500/20 hover:border-red-500/50 bg-red-500/5 hover:bg-red-500/10 transition-all disabled:opacity-50 flex-shrink-0"
@@ -1648,6 +1750,7 @@
                   </div>
                   <button
                     v-if="paymentMethods.length"
+                    type="button"
                     @click="showAddCardModal = true"
                     class="px-3 py-1.5 rounded-xl text-xs font-bold text-white border border-brand-border hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all active:scale-95 flex-shrink-0"
                   >{{ langStore.t.billingAddCard }}</button>
@@ -1665,6 +1768,7 @@
                     <p class="text-sm font-semibold text-white/70">{{ langStore.t.billingNoCards }}</p>
                     <p class="text-xs text-white/40 mt-1 max-w-xs mx-auto">{{ langStore.t.billingNoCardsHint }}</p>
                     <button
+                      type="button"
                       @click="showAddCardModal = true"
                       class="mt-4 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all active:scale-95 hover:brightness-110"
                       style="background: linear-gradient(135deg, #4C67CF 0%, #7C6FDB 55%, #CD83F5 100%);"
@@ -1690,11 +1794,13 @@
                       </span>
                       <button
                         v-else
+                        type="button"
                         @click="makeDefaultPaymentMethod(m.id)"
                         :disabled="settingDefaultId === m.id"
                         class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-white/55 hover:text-white border border-brand-border hover:border-white/20 transition-all disabled:opacity-50 flex-shrink-0 whitespace-nowrap"
                       >{{ langStore.t.billingSetDefault }}</button>
                       <button
+                        type="button"
                         @click="deletePaymentMethod(m.id)"
                         :disabled="deletingMethodId === m.id"
                         class="w-8 h-8 rounded-lg flex items-center justify-center text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50 flex-shrink-0"
@@ -1813,16 +1919,19 @@ import BIcon from '@/components/BIcon.vue'
 import FursonaSettings from '@/components/profile/FursonaSettings.vue'
 import AutomationSettings from '@/components/profile/AutomationSettings.vue'
 import FursuitSettings from '@/components/profile/FursuitSettings.vue'
+import MediaUpload from '@/components/MediaUpload.vue'
 import DateInput from '@/components/DateInput.vue'
 import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
 import { FAVORITE_CATEGORIES } from '@/lib/interests'
 import api from '@/api'
-import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
+import { PROFILE_THEMES, PROFILE_FRAMES, readRawDataUrl, readScaledDataUrl, maskEmail } from '@/lib/utils'
 import { PAYMENT_REGIONS } from '@/lib/paymentRegions'
 import { cardBrandInfo } from '@/lib/cardBrand'
 import type { PaymentMethod } from '@/types/paymentMethod'
 import AddCardModal from '@/components/AddCardModal.vue'
 import ImageCropModal from '@/components/shared/ImageCropModal.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import { verificationBadgeIcon } from '@/composables/useVerificationBadge'
 
 const userStore   = useUserStore()
 const authStore   = useAuthStore()
@@ -1830,6 +1939,7 @@ const langStore   = useLangStore()
 const groupsStore = useGroupsStore()
 const route       = useRoute()
 const router      = useRouter()
+const { confirmDialog } = useConfirm()
 
 const langOptions = [
   { code: 'RU' as const, fi: 'ru', name: 'Русский' },
@@ -1932,7 +2042,7 @@ function onCardAdded(method: PaymentMethod) {
 }
 
 async function deletePaymentMethod(id: string) {
-  if (!confirm(langStore.t.billingDeleteConfirm)) return
+  if (!(await confirmDialog(langStore.t.billingDeleteConfirm, { danger: true }))) return
   deletingMethodId.value = id
   try {
     await api.delete(`/users/me/payment-methods/${id}`)
@@ -2091,6 +2201,100 @@ async function submitChangeEmail() {
   }
 }
 
+// ── Two-factor authentication: TOTP ────────────────────────────────────────
+const showTotpSetup = ref(false)
+const totpQr      = ref('')
+const totpSecret  = ref('')
+const totpCode    = ref('')
+const totpSaving  = ref(false)
+const totpError   = ref('')
+const totpSuccess = ref('')
+
+async function startTotpSetup() {
+  totpError.value = ''; totpSuccess.value = ''
+  try {
+    const { secret, qrDataUrl } = await authStore.setupTotp()
+    totpSecret.value = secret
+    totpQr.value = qrDataUrl
+  } catch (e: any) {
+    totpError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  }
+}
+
+async function submitTotpConfirm() {
+  totpError.value = ''; totpSuccess.value = ''
+  totpSaving.value = true
+  try {
+    await authStore.confirmTotp(totpCode.value)
+    totpSuccess.value = langStore.t.twoFactorEnabledMsg
+    totpCode.value = ''
+    setTimeout(() => { showTotpSetup.value = false; totpQr.value = ''; totpSecret.value = ''; totpSuccess.value = '' }, 2000)
+  } catch (e: any) {
+    totpError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } finally {
+    totpSaving.value = false
+  }
+}
+
+// ── Two-factor authentication: код на почту ─────────────────────────────────
+const showEmail2fa       = ref(false)
+const email2faCodeSent   = ref(false)
+const email2faSending    = ref(false)
+const email2faCode       = ref('')
+const email2faSaving     = ref(false)
+const email2faError      = ref('')
+const email2faSuccess    = ref('')
+
+async function startEmail2fa() {
+  email2faError.value = ''; email2faSuccess.value = ''
+  email2faSending.value = true
+  try {
+    await authStore.enableEmail2fa()
+    email2faCodeSent.value = true
+  } catch (e: any) {
+    email2faError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } finally {
+    email2faSending.value = false
+  }
+}
+
+async function submitEmail2fa() {
+  email2faError.value = ''; email2faSuccess.value = ''
+  email2faSaving.value = true
+  try {
+    await authStore.confirmEmail2fa(email2faCode.value)
+    email2faSuccess.value = langStore.t.twoFactorEnabledMsg
+    email2faCode.value = ''
+    setTimeout(() => { showEmail2fa.value = false; email2faCodeSent.value = false; email2faSuccess.value = '' }, 2000)
+  } catch (e: any) {
+    email2faError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } finally {
+    email2faSaving.value = false
+  }
+}
+
+// ── Two-factor authentication: отключение ────────────────────────────────────
+const showDisable2fa      = ref(false)
+const disable2faPassword  = ref('')
+const disable2faSaving    = ref(false)
+const disable2faError     = ref('')
+
+async function submitDisable2fa() {
+  disable2faError.value = ''
+  disable2faSaving.value = true
+  try {
+    await authStore.disableTwoFactor(disable2faPassword.value)
+    disable2faPassword.value = ''
+    showDisable2fa.value = false
+    showTotpSetup.value = false
+    showEmail2fa.value = false
+  } catch (e: any) {
+    disable2faError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } finally {
+    disable2faSaving.value = false
+  }
+}
+
 // ── Linked OAuth accounts ──────────────────────────────────────────────────
 const linkedAccounts        = ref<string[]>([])
 const linkedAccountsLoading = ref(false)
@@ -2175,7 +2379,7 @@ async function loadSessions() {
 }
 
 async function revokeSession(id: string) {
-  if (!confirm(langStore.t.revokeConfirm)) return
+  if (!(await confirmDialog(langStore.t.revokeConfirm, { danger: true }))) return
   revokingSessionId.value = id
   try {
     await api.delete(`/auth/sessions/${id}`)
@@ -2189,7 +2393,7 @@ async function revokeSession(id: string) {
 }
 
 async function revokeOtherSessions() {
-  if (!confirm(langStore.t.revokeAllOthersConfirm)) return
+  if (!(await confirmDialog(langStore.t.revokeAllOthersConfirm, { danger: true }))) return
   revokingOthers.value = true
   try {
     await api.delete('/auth/sessions/other')
@@ -2241,13 +2445,23 @@ async function loadAvatarHistory() {
   }
 }
 
-function applyHistoryAvatar(item: MediaHistoryItem) {
-  form.avatar_url = item.url
-  form.avatar_video_url = item.video_url || ''
-  showAvatarHistory.value = false
+async function applyHistoryAvatar(item: MediaHistoryItem) {
+  try {
+    const res = await api.post(`/users/me/avatar-history/${item.id}/restore`)
+    const restored = res.data.data
+    form.avatar_url = restored.avatar_url ?? item.url
+    form.avatar_video_url = restored.avatar_video_url ?? item.video_url ?? ''
+    savedForm.avatar_url = form.avatar_url
+    savedForm.avatar_video_url = form.avatar_video_url
+    showAvatarHistory.value = false
+    await loadAvatarHistory()
+  } catch (e: any) {
+    showToast('error', e.response?.data?.error?.message ?? 'Не удалось восстановить аватар')
+  }
 }
 
 async function deleteHistoryAvatar(id: string) {
+  if (!(await confirmDialog(langStore.t.avatarHistoryDeleteConfirm, { danger: true }))) return
   try {
     await api.delete(`/users/me/avatar-history/${id}`)
     avatarHistory.value = avatarHistory.value.filter((h) => h.id !== id)
@@ -2310,6 +2524,7 @@ const form = reactive({
   social_links:        {} as Record<string, string>,
   donate_url:          '' as string,
   messages_privacy:         'everyone' as string,
+  forward_identity_privacy: 'everyone' as string,
   comments_privacy:         'everyone' as string,
   mentions_privacy:         'everyone' as string,
   online_status_visibility: 'everyone' as string,
@@ -2355,6 +2570,7 @@ const savedForm = reactive({
   social_links:        {} as Record<string, string>,
   donate_url:          '' as string,
   messages_privacy:         'everyone' as string,
+  forward_identity_privacy: 'everyone' as string,
   comments_privacy:         'everyone' as string,
   mentions_privacy:         'everyone' as string,
   online_status_visibility: 'everyone' as string,
@@ -2399,6 +2615,7 @@ function snapshotToSaved() {
   savedForm.social_links        = { ...form.social_links }
   savedForm.donate_url          = form.donate_url
   savedForm.messages_privacy         = form.messages_privacy
+  savedForm.forward_identity_privacy = form.forward_identity_privacy
   savedForm.comments_privacy         = form.comments_privacy
   savedForm.mentions_privacy         = form.mentions_privacy
   savedForm.online_status_visibility = form.online_status_visibility
@@ -2443,6 +2660,7 @@ function resetForm() {
   form.social_links        = { ...savedForm.social_links }
   form.donate_url          = savedForm.donate_url
   form.messages_privacy         = savedForm.messages_privacy
+  form.forward_identity_privacy = savedForm.forward_identity_privacy
   form.comments_privacy         = savedForm.comments_privacy
   form.mentions_privacy         = savedForm.mentions_privacy
   form.online_status_visibility = savedForm.online_status_visibility
@@ -2493,6 +2711,7 @@ const isDirty = computed(() => {
     form.profile_frame       !== savedForm.profile_frame ||
     form.donate_url          !== savedForm.donate_url ||
     form.messages_privacy         !== savedForm.messages_privacy ||
+    form.forward_identity_privacy !== savedForm.forward_identity_privacy ||
     form.comments_privacy         !== savedForm.comments_privacy ||
     form.mentions_privacy         !== savedForm.mentions_privacy ||
     form.online_status_visibility !== savedForm.online_status_visibility ||
@@ -2546,6 +2765,7 @@ onMounted(async () => {
   form.social_links        = { ...((p as any).social_links ?? {}) }
   form.donate_url          = (p as any).donate_url ?? ''
   form.messages_privacy         = (p as any).messages_privacy         ?? 'everyone'
+  form.forward_identity_privacy = (p as any).forward_identity_privacy ?? 'everyone'
   form.comments_privacy         = (p as any).comments_privacy         ?? 'everyone'
   form.mentions_privacy         = (p as any).mentions_privacy         ?? 'everyone'
   form.online_status_visibility = (p as any).online_status_visibility ?? 'everyone'
@@ -2600,8 +2820,10 @@ onMounted(async () => {
 })
 
 // ── Navigation guard ───────────────────────────────────────────────────────
-onBeforeRouteLeave((_to, _from, next) => {
+onBeforeRouteLeave(async (_to, _from, next) => {
   if (!isDirty.value) return next()
+  const leave = await confirmDialog(langStore.t.unsavedLeaveConfirm, { danger: true })
+  if (leave) return next()
   unsavedWarning.value = true
   shaking.value = true
   setTimeout(() => { shaking.value = false }, 600)
@@ -2707,20 +2929,21 @@ const cropModal = reactive({
 })
 const cropUploading = ref(false)
 
-function openCrop(file: File, type: 'avatar' | 'banner') {
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    const src = e.target!.result as string
-    // Always store the original data URL (+ file, for GIFs) so re-cropping uses the full source
-    if (type === 'avatar') { avatarOriginalSrc.value = src; avatarOriginalFile.value = file }
-    else                   bannerOriginalSrc.value = src
-    cropModal.src   = src
-    cropModal.type  = type
-    cropModal.file  = type === 'avatar' ? file : null
-    cropModal.isGif = type === 'avatar' && file.type === 'image/gif'
-    cropModal.show  = true
+async function openCrop(file: File, type: 'avatar' | 'banner') {
+  let src: string
+  try {
+    src = await readScaledDataUrl(file, 1800)
+  } catch {
+    src = await readRawDataUrl(file)
   }
-  reader.readAsDataURL(file)
+  // Store the (downscaled) data URL so re-cropping doesn't need the file again.
+  if (type === 'avatar') { avatarOriginalSrc.value = src; avatarOriginalFile.value = file }
+  else                   bannerOriginalSrc.value = src
+  cropModal.src   = src
+  cropModal.type  = type
+  cropModal.file  = type === 'avatar' ? file : null
+  cropModal.isGif = type === 'avatar' && file.type === 'image/gif'
+  cropModal.show  = true
 }
 
 /**
@@ -2847,7 +3070,11 @@ async function handleSubmit() {
   }
 
   // ── Username change (separate endpoint, uniqueness checked server-side) ──
-  if (form.username !== savedForm.username && form.username.length >= 3) {
+  if (form.username !== savedForm.username && (!form.username || usernameError.value)) {
+    showToast('error', usernameError.value ?? 'Юзернейм не может быть пустым')
+    return
+  }
+  if (form.username !== savedForm.username) {
     try {
       const res = await api.patch('/users/me/username', { username: form.username })
       if (res.data.success && authStore.user) {
@@ -2857,7 +3084,7 @@ async function handleSubmit() {
         form.username = res.data.data.user.username
       }
     } catch (e: any) {
-      const msg = e?.response?.data?.error?.message ?? 'Никнейм уже занят'
+      const msg = e?.response?.data?.error?.message ?? 'Юзернейм уже занят'
       showToast('error', msg)
       return
     }
@@ -2895,6 +3122,7 @@ async function handleSubmit() {
     social_links:        form.social_links,
     donate_url:          form.donate_url || null,
     messages_privacy:         form.messages_privacy,
+    forward_identity_privacy: form.forward_identity_privacy,
     comments_privacy:         form.comments_privacy,
     mentions_privacy:         form.mentions_privacy,
     online_status_visibility: form.online_status_visibility,
@@ -2983,6 +3211,7 @@ const privacyRows = computed(() => [
   { field: 'groups_visibility',        label: langStore.t.groupsVisibilityLabel,       options: privacyOnlyMeOptions.value },
   { field: 'groups_pinned_only',       label: langStore.t.groupsPinnedOnlyLabel,       options: groupsPinnedOnlyOptions.value },
   { field: 'messages_privacy',         label: langStore.t.messagesPrivacyLabel,        options: privacyNobodyOptions.value },
+  { field: 'forward_identity_privacy', label: langStore.t.forwardIdentityPrivacyLabel, options: privacyNobodyOptions.value },
   { field: 'comments_privacy',         label: langStore.t.commentsPrivacyLabel,        options: privacyNobodyOptions.value },
   { field: 'mentions_privacy',         label: langStore.t.mentionsPrivacyLabel,        options: privacyNobodyOptions.value },
   { field: 'online_status_visibility', label: langStore.t.onlineStatusVisibilityLabel, options: privacyNobodyOptions.value },
@@ -2994,11 +3223,10 @@ const verificationCriteria = ref<any>(null)
 const profileCompleteness = ref<any>(null)
 const isLoadingVerification = ref(false)
 const isRequestingVerification = ref(false)
-const selectedVerType = ref<'artist' | 'master' | 'event' | 'fursuiter' | 'popular' | 'writer' | 'organizer' | ''>('')
+const selectedVerType = ref<'artist' | 'master' | 'event' | 'fursuiter' | 'popular' | 'writer' | 'organizer' | 'photographer' | 'programmer' | ''>('')
 const evidenceUrls = ref<string[]>([])
 const evidenceText = ref('')
-const evidenceInput = ref<HTMLInputElement | null>(null)
-const isUploadingEvidence = ref(false)
+const evidenceUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
 const popularLinks = ref<string[]>([''])
 
 const VER_TYPES = [
@@ -3009,6 +3237,8 @@ const VER_TYPES = [
   { id: 'writer',    icon: 'PenLine',       borderSel: 'border-rose-500',   bgSel: 'bg-rose-500/10 shadow-rose-500/10',     borderHov: 'hover:border-rose-500/40',   textSel: 'text-rose-400',   badge: 'bg-rose-500',   badgeCls: 'bg-rose-500/10 border-rose-500/20 text-rose-400',          titleKey: 'verTypeWriter',    hintKey: 'verTypeWriterHint' },
   { id: 'organizer', icon: 'CalendarCheck', borderSel: 'border-indigo-500', bgSel: 'bg-indigo-500/10 shadow-indigo-500/10', borderHov: 'hover:border-indigo-500/40', textSel: 'text-indigo-400', badge: 'bg-indigo-500', badgeCls: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400',    titleKey: 'verTypeOrganizer', hintKey: 'verTypeOrganizerHint' },
   { id: 'event',     icon: 'Ticket',        borderSel: 'border-emerald-500',bgSel: 'bg-emerald-500/10 shadow-emerald-500/10',borderHov: 'hover:border-emerald-500/40',textSel: 'text-emerald-400',badge: 'bg-emerald-500',badgeCls: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',  titleKey: 'verTypeEvent',     hintKey: 'verTypeEventHint' },
+  { id: 'photographer', icon: 'Camera',     borderSel: 'border-teal-500',    bgSel: 'bg-teal-500/10 shadow-teal-500/10',     borderHov: 'hover:border-teal-500/40',   textSel: 'text-teal-400',   badge: 'bg-teal-500',   badgeCls: 'bg-teal-500/10 border-teal-500/20 text-teal-400',          titleKey: 'verTypePhotographer', hintKey: 'verTypePhotographerHint' },
+  { id: 'programmer',   icon: 'Code2',      borderSel: 'border-fuchsia-500', bgSel: 'bg-fuchsia-500/10 shadow-fuchsia-500/10',borderHov: 'hover:border-fuchsia-500/40',textSel: 'text-fuchsia-400',badge: 'bg-fuchsia-500',badgeCls: 'bg-fuchsia-500/10 border-fuchsia-500/20 text-fuchsia-400',  titleKey: 'verTypeProgrammer',  hintKey: 'verTypeProgrammerHint' },
 ] as const
 
 const verTypeMeta = computed(() => {
@@ -3036,21 +3266,8 @@ async function fetchVerificationData() {
   } catch {} finally { isLoadingVerification.value = false }
 }
 
-async function onEvidenceUpload(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file || evidenceUrls.value.length >= 5) return
-  isUploadingEvidence.value = true
-  try {
-    const fd = new FormData()
-    fd.append('file', file)
-    const res = await api.post('/media/upload?folder=evidence', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-    if (res.data?.data?.url) evidenceUrls.value.push(res.data.data.url)
-  } catch (err: any) {
-    showToast('error', 'Ошибка загрузки файла')
-  } finally {
-    isUploadingEvidence.value = false
-    if (evidenceInput.value) evidenceInput.value.value = ''
-  }
+function onEvidenceUploaded(urls: string[]) {
+  evidenceUrls.value = urls
 }
 
 async function requestVerification() {
@@ -3070,6 +3287,7 @@ async function requestVerification() {
       showToast('success', 'Заявка отправлена на проверку модераторам')
       selectedVerType.value = ''
       evidenceUrls.value = []
+      evidenceUploadRef.value?.clearAll()
       evidenceText.value = ''
       popularLinks.value = ['']
       await fetchVerificationData()
@@ -3391,7 +3609,7 @@ const mySoonEvent = computed(() => {
 
 const filteredSoonEvents = computed(() => {
   const q = soonSearch.value.toLowerCase().trim()
-  const list = soonEventsList.value.filter(e => e.id !== mySoonEventId.value)
+  const list = soonEventsList.value.filter(e => e.id !== mySoonEventId.value && !isSoonEventExpired(e))
   if (!q) return list
   return list.filter(e =>
     e.title.toLowerCase().includes(q) ||
@@ -3407,8 +3625,17 @@ function onSoonBlur() {
   setTimeout(() => { soonDropOpen.value = false }, 180)
 }
 
+function isSoonEventExpired(ev: EventItem): boolean {
+  const g = ev.group
+  return !!g && g.type === 'event' && !!g.event_date && new Date(g.event_date) < new Date()
+}
+
 async function selectSoonEvent(ev: EventItem) {
   if (soonSaving.value) return
+  if (isSoonEventExpired(ev)) {
+    showToast('error', 'Мероприятие завершилось. SOON откроется, когда организатор назначит новую дату.')
+    return
+  }
   soonSaving.value = true
   try {
     if (mySoonEventId.value && mySoonEventId.value !== ev.id) {
@@ -3420,7 +3647,7 @@ async function selectSoonEvent(ev: EventItem) {
     await loadMySoonSelection()
     showToast('success', 'Отмечено: скоро на «' + ev.title + '»')
   } catch (e: any) {
-    showToast('error', e?.response?.data?.error ?? 'Не удалось сохранить')
+    showToast('error', e?.response?.data?.error?.message ?? 'Не удалось сохранить')
   } finally {
     soonSaving.value = false
   }
@@ -3434,7 +3661,7 @@ async function clearSoonSelection() {
     mySoonEventId.value = null
     showToast('success', 'Метка Soon снята')
   } catch (e: any) {
-    showToast('error', e?.response?.data?.error ?? 'Не удалось сохранить')
+    showToast('error', e?.response?.data?.error?.message ?? 'Не удалось сохранить')
   } finally {
     soonSaving.value = false
   }

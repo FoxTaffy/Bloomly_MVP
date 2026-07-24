@@ -7,6 +7,10 @@ import { useLangStore } from '@/stores/lang'
 import MobileBottomNav from '@/components/MobileBottomNav.vue'
 import NotifToastContainer from '@/components/NotifToastContainer.vue'
 import UpdateAnnouncementModal from '@/components/UpdateAnnouncementModal.vue'
+import MaintenanceOverlay from '@/components/MaintenanceOverlay.vue'
+import WarningDetailModal from '@/components/WarningDetailModal.vue'
+import ConfirmModal from '@/components/ConfirmModal.vue'
+import FrozenAccountModal from '@/components/FrozenAccountModal.vue'
 usePresence()
 
 const auth  = useAuthStore()
@@ -34,4 +38,16 @@ const showMobileNav = computed(() =>
   <MobileBottomNav v-if="showMobileNav" />
   <NotifToastContainer />
   <UpdateAnnouncementModal v-if="auth.token" />
+  <MaintenanceOverlay />
+  <WarningDetailModal />
+  <ConfirmModal />
+  <FrozenAccountModal
+    v-if="auth.frozenPrompt"
+    :show="auth.frozenPrompt.show"
+    :email="auth.frozenPrompt.email"
+    :reason="auth.frozenPrompt.reason"
+    :remember="true"
+    @close="auth.frozenPrompt = null"
+    @unfrozen="auth.frozenPrompt = null"
+  />
 </template>

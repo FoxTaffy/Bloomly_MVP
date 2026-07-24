@@ -1,4 +1,10 @@
 import axios from 'axios'
+import { ref } from 'vue'
+
+// Flipped on by the backend's global maintenance-mode gate (every non-auth,
+// non-admin route 503s while it's on) — MaintenanceOverlay.vue watches this
+// to block the UI; cleared as soon as any request succeeds again.
+export const maintenanceActive = ref(false)
 
 // Callbacks injected by stores/auth to avoid a circular dependency:
 //   api.ts → stores/auth → api.ts
@@ -8,15 +14,21 @@ let _onUnauthorized: () => void = () => {}
 // undefined if the refresh merely failed transiently (e.g. network blip) and the
 // session may still be alive — don't force a logout for that.
 let _refreshToken: () => Promise<string | null | undefined> = async () => null
+// Called when the backend reports the account got frozen (mid-session, on any
+// authenticated request) — kicks the user out to the main menu instead of just
+// silently failing whatever action they were doing.
+let _onFrozen: (reason: string) => void = () => {}
 
 export function setupApiAuth(
   getToken: () => string | null,
   onUnauthorized: () => void,
   refreshToken: () => Promise<string | null | undefined>,
+  onFrozen?: (reason: string) => void,
 ) {
   _getToken = getToken
   _onUnauthorized = onUnauthorized
   _refreshToken = refreshToken
+  if (onFrozen) _onFrozen = onFrozen
 }
 
 const api = axios.create({
@@ -39,8 +51,19 @@ let _isRefreshing = false
 let _refreshQueue: Array<(token: string | null | undefined) => void> = []
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    maintenanceActive.value = false
+    return response
+  },
   async (error) => {
+    if (error.response?.status === 503 && error.response?.data?.error?.code === 'MAINTENANCE') {
+      maintenanceActive.value = true
+      return Promise.reject(error)
+    }
+    if (error.response?.status === 403 && error.response?.data?.error?.code === 'ACCOUNT_FROZEN') {
+      _onFrozen(error.response?.data?.error?.message || '')
+      return Promise.reject(error)
+    }
     const originalRequest = error.config
     if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/refresh')) {
       if (_isRefreshing) {

@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import BIcon from '@/components/BIcon.vue'
 import { useGroupsStore, type EventItem, type TicketTier } from '@/stores/groups'
+import { useConfirm } from '@/composables/useConfirm'
 
 const props = withDefaults(defineProps<{
   groupId?: string
@@ -11,6 +12,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ back: [] }>()
 
 const groupsStore = useGroupsStore()
+const { confirmDialog } = useConfirm()
 
 const events = ref<EventItem[]>([])
 const selectedEventId = ref<string>('')
@@ -94,7 +96,7 @@ async function saveTier() {
 }
 
 async function deleteTier(tier: TicketTier) {
-  if (!confirm(`Удалить билет «${tier.name}»?`)) return
+  if (!(await confirmDialog(`Удалить билет «${tier.name}»?`, { danger: true }))) return
   deleting.value = tier.id
   try {
     await groupsStore.deleteTicketTier(tier.id)

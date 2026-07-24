@@ -33,6 +33,11 @@ function formatName(e: Event) {
   const input = e.target as HTMLInputElement
   cardName.value = input.value.toUpperCase().replace(/[^A-ZА-ЯЁ\s'-]/g, '').slice(0, 26)
 }
+
+function formatCvv(e: Event) {
+  const input = e.target as HTMLInputElement
+  cardCvv.value = input.value.replace(/\D/g, '').slice(0, 4)
+}
 </script>
 
 <template>
@@ -90,7 +95,7 @@ function formatName(e: Event) {
         <input
           type="password" inputmode="numeric" maxlength="4"
           :placeholder="langStore.t.payModalCvvLabel"
-          v-model="cardCvv"
+          :value="cardCvv" @input="formatCvv"
           @focus="flipped = true" @blur="flipped = false"
           class="pay-input" />
       </div>

@@ -4,6 +4,8 @@ import {
   getAutoModStatsHandler,
   analyzeTextHandler,
   runPatrolHandler,
+  submitAppealHandler,
+  getOwnWarningHandler,
 } from './controller.js';
 
 export async function automodRoutes(fastify: FastifyInstance) {
@@ -20,4 +22,10 @@ export async function automodRoutes(fastify: FastifyInstance) {
 
   // POST /api/automod/patrol — manually trigger suspicious activity patrol (admin only)
   fastify.post('/patrol', auth, runPatrolHandler     as any);
+
+  // GET /api/automod/warnings/:logId — user fetches one of their own warning logs (for the violation modal)
+  fastify.get('/warnings/:logId', auth, getOwnWarningHandler as any);
+
+  // POST /api/automod/warnings/:logId/appeal — user appeals one of their own warnings
+  fastify.post('/warnings/:logId/appeal', auth, submitAppealHandler as any);
 }

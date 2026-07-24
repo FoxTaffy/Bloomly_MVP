@@ -105,6 +105,19 @@
                   </div>
                 </Transition>
 
+                <div class="pt-2">
+                  <p class="text-[11px] font-bold text-white/35 uppercase tracking-wider px-1 mb-2">Доказательства (необязательно)</p>
+                  <MediaUpload
+                    ref="evidenceUploadRef"
+                    folder="reports"
+                    accept="image/*"
+                    :multiple="true"
+                    :max-files="MAX_EVIDENCE_FILES"
+                    :max-size-mb="10"
+                    @uploaded="onEvidenceUploaded"
+                  />
+                </div>
+
                 <p v-if="sendError" class="text-[12px] text-red-400 px-1 pt-1">{{ sendError }}</p>
 
                 <!-- Actions -->
@@ -140,7 +153,10 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import BIcon from './BIcon.vue'
+import MediaUpload from './MediaUpload.vue'
 import api from '@/api'
+
+const MAX_EVIDENCE_FILES = 5
 
 const props = defineProps<{
   modelValue: boolean
@@ -228,6 +244,12 @@ const extra = ref('')
 const sent = ref(false)
 const isSending = ref(false)
 const sendError = ref('')
+const evidenceUrls = ref<string[]>([])
+const evidenceUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
+
+function onEvidenceUploaded(urls: string[]) {
+  evidenceUrls.value = urls
+}
 
 watch(() => props.modelValue, (v) => {
   if (!v) {
@@ -236,6 +258,8 @@ watch(() => props.modelValue, (v) => {
       extra.value = ''
       sent.value = false
       sendError.value = ''
+      evidenceUrls.value = []
+      evidenceUploadRef.value?.clearAll()
     }, 300)
   }
 })
@@ -260,6 +284,7 @@ async function submit() {
       targetType: effectiveType,
       targetId: effectiveId,
       reason: fullReason,
+      evidenceUrls: evidenceUrls.value,
     })
     sent.value = true
     setTimeout(() => close(), 2800)

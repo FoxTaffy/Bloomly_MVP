@@ -72,6 +72,8 @@ const TYPE_OPTIONS = computed<{ value: string; label: string; icon: string }[]>(
   { value: 'other',    label: langStore.t.helpTypeOptOther,    icon: 'Ellipsis' },
 ])
 
+const MAX_ATTACHMENT_FILES = 5
+
 const form = reactive({
   type: 'bug',
   subject: '',
@@ -232,7 +234,7 @@ onMounted(fetchTickets)
 
           <div class="mb-5">
             <label class="block text-xs font-bold text-white/40 mb-2">{{ langStore.t.helpAttachmentsLabel }}</label>
-            <MediaUpload ref="mediaUploadRef" type="posts" accept="image/*" :multiple="true" @uploaded="onAttachmentsUploaded" />
+            <MediaUpload ref="mediaUploadRef" folder="reports" accept="image/*" :multiple="true" :max-files="MAX_ATTACHMENT_FILES" :max-size-mb="10" @uploaded="onAttachmentsUploaded" />
           </div>
 
           <div class="mb-5">

@@ -64,6 +64,8 @@ export interface Group {
   is_looking_for_volunteers: boolean
   is_verified: boolean
   category: string | null
+  event_date: string | null
+  event_expired_at: string | null
   group_bg_url: string | null
   group_frame: string | null
   group_theme: string | null
@@ -75,7 +77,6 @@ export interface Group {
   _count: { members: number; events: number; posts: number }
   events?: EventItem[]
   commissionInfo?: CommissionInfo | null
-  achievements?: GroupAchievement[]
 }
 
 export interface EventItem {
@@ -108,6 +109,7 @@ export interface EventItem {
   group?: {
     id: string; slug: string; name: string; type: string
     avatar_url: string | null; banner_url: string | null; accent_color: string | null
+    event_date?: string | null; event_expired_at?: string | null
   }
 }
 
@@ -182,14 +184,6 @@ export interface CommissionInfo {
   rush_max: number
   turnaround_days: string | null
   price_list: { name: string; price: number; description: string }[] | null
-}
-
-export interface GroupAchievement {
-  id: string
-  title: string
-  icon: string
-  color: string | null
-  earned_at: string
 }
 
 export interface GroupMembership {
@@ -297,6 +291,7 @@ export const useGroupsStore = defineStore('groups', () => {
   const groups = ref<Group[]>([])
   const currentGroup = ref<Group | null>(null)
   const myGroups = ref<GroupMembership[]>([])
+  const mySubscriptions = ref<string[]>([]) // group ids the user is subscribed to (notification-only)
   const events = ref<EventItem[]>([])
   const currentEvent = ref<EventItem | null>(null)
   const mySoonBadges = ref<SoonBadge[]>([])
@@ -380,6 +375,21 @@ export const useGroupsStore = defineStore('groups', () => {
   async function leaveGroup(id: string) {
     await api.post(`/groups/${id}/leave`)
     myGroups.value = myGroups.value.filter(m => m.group_id !== id)
+  }
+
+  async function loadMySubscriptions() {
+    const { data } = await api.get('/groups/me/subscriptions')
+    mySubscriptions.value = data.data.groupIds
+  }
+
+  async function subscribeGroup(id: string) {
+    await api.post(`/groups/${id}/subscribe`)
+    if (!mySubscriptions.value.includes(id)) mySubscriptions.value.push(id)
+  }
+
+  async function unsubscribeGroup(id: string) {
+    await api.delete(`/groups/${id}/subscribe`)
+    mySubscriptions.value = mySubscriptions.value.filter(gid => gid !== id)
   }
 
   async function togglePinGroup(groupId: string) {
@@ -710,12 +720,13 @@ export const useGroupsStore = defineStore('groups', () => {
   }
 
   return {
-    groups, currentGroup, myGroups, events, currentEvent, mySoonBadges,
+    groups, currentGroup, myGroups, mySubscriptions, events, currentEvent, mySoonBadges,
     isLoading, total,
     trendingGroups, trendingTotal, isTrendingLoading,
     eventGroups, creativeGroups, staticGroups, newsGroups, shopGroups, communityGroups, brandGroups,
     loadGroups, loadGroup, loadMyGroups, createGroup, updateGroup, deleteGroup,
     joinGroup, leaveGroup, togglePinGroup,
+    loadMySubscriptions, subscribeGroup, unsubscribeGroup,
     loadEvents, loadEvent, createEvent, updateEvent,
     toggleSoonBadge, toggleSoonBadgeVisibility, loadMySoonBadges,
     updateCommission,

@@ -1,4 +1,7 @@
 import prisma from '../../config/prisma.js';
+import { isTrustedMediaUrl } from '../media/service.js';
+
+const MAX_ATTACHMENT_FILES = 5;
 
 export const SUPPORT_TICKET_TYPES = ['bug', 'feedback', 'question', 'other'] as const;
 export type SupportTicketType = (typeof SUPPORT_TICKET_TYPES)[number];
@@ -21,7 +24,9 @@ export async function createTicket(userId: string, input: {
       subject: input.subject.trim().slice(0, 150),
       message: input.message.trim().slice(0, 3000),
       contact_email: input.contactEmail?.trim().slice(0, 255) || null,
-      attachment_urls: input.attachmentUrls?.slice(0, 5) ?? [],
+      // Only accept URLs produced by our own upload endpoint, and only up to the cap —
+      // a raw client can otherwise post an arbitrarily large/external array of "attachments".
+      attachment_urls: (input.attachmentUrls ?? []).filter(isTrustedMediaUrl).slice(0, MAX_ATTACHMENT_FILES),
     },
   });
 }

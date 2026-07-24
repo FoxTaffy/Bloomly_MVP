@@ -359,12 +359,14 @@
 import { reactive, ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useLangStore } from '@/stores/lang'
+import { useConfirm } from '@/composables/useConfirm'
 import type { UpsertFursuitInput, Fursuit } from '@/stores/user'
 import MediaUpload from '@/components/MediaUpload.vue'
 import BIcon from '@/components/BIcon.vue'
 
 const userStore = useUserStore()
 const langStore = useLangStore()
+const { confirmDialog } = useConfirm()
 const t = computed(() => langStore.t)
 
 const showForm  = ref(false)
@@ -508,7 +510,7 @@ async function submitForm() {
 }
 
 async function handleDelete(id: string) {
-  if (!confirm(t.value.fursuitDeleteConfirm)) return
+  if (!(await confirmDialog(t.value.fursuitDeleteConfirm, { danger: true }))) return
   try {
     await userStore.deleteFursuit(id)
   } catch (e: any) {

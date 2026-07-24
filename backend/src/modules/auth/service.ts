@@ -1,8 +1,11 @@
 import bcrypt from 'bcryptjs';
 import { randomInt } from 'crypto';
+import { authenticator } from 'otplib';
+import { toDataURL as qrcodeToDataURL } from 'qrcode';
 import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma.js';
 import { sendOtpEmail } from './email.service.js';
+import { encryptTotpSecret, decryptTotpSecret } from '../../lib/totpCrypto.js';
 import type { RegisterInput } from './types.js';
 
 /** Криптографически стойкий 6-значный код */
@@ -12,7 +15,7 @@ function genCode(): string {
 
 // ── OTP helpers ───────────────────────────────────────────────────────────────
 
-type OtpPurpose = 'register' | 'reset' | 'unfreeze' | 'change_email';
+type OtpPurpose = 'register' | 'reset' | 'unfreeze' | 'change_email' | 'login_2fa' | 'enable_2fa_email';
 
 async function createOtp(email: string, purpose: OtpPurpose) {
   await prisma.emailOtp.deleteMany({ where: { email, purpose, used: false } });
@@ -242,5 +245,97 @@ export class AuthService {
 
     await prisma.user.update({ where: { id: userId }, data: { email: ne, email_verified: true } });
     return ne;
+  }
+
+  // ── Двухфакторная аутентификация ─────────────────────────────────────────────
+  // Пользователь может иметь только один активный метод одновременно ('totp'
+  // либо 'email'); подтверждение одного метода всегда снимает другой.
+
+  /** Шаг 1 подключения TOTP — сгенерировать секрет (ещё не активирован) + QR-код */
+  async setupTotp(userId: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId, deleted_at: null }, select: { email: true } });
+    if (!user) throw new Error('Пользователь не найден');
+
+    const secret = authenticator.generateSecret();
+    await prisma.user.update({ where: { id: userId }, data: { totp_secret: encryptTotpSecret(secret) } });
+
+    const otpauthUrl = authenticator.keyuri(user.email, 'Bloomly', secret);
+    const qrDataUrl = await qrcodeToDataURL(otpauthUrl);
+    return { secret, qrDataUrl };
+  }
+
+  /** Шаг 2 подключения TOTP — подтвердить код из приложения-аутентификатора */
+  async confirmTotp(userId: string, code: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId, deleted_at: null }, select: { totp_secret: true } });
+    if (!user?.totp_secret) throw new Error('Сначала подключите приложение-аутентификатор');
+
+    const secret = decryptTotpSecret(user.totp_secret);
+    if (!authenticator.verify({ token: code, secret })) throw new Error('Неверный код');
+
+    await prisma.user.update({ where: { id: userId }, data: { two_factor_method: 'totp' } });
+  }
+
+  /** Шаг 1 подключения email-2FA — отправить код на собственную почту */
+  async enableEmail2fa(userId: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId, deleted_at: null }, select: { email: true } });
+    if (!user) throw new Error('Пользователь не найден');
+
+    const code = await createOtp(user.email, 'enable_2fa_email');
+    await sendOtpEmail(user.email, code, 'enable_2fa_email');
+    return { email: user.email };
+  }
+
+  /** Шаг 2 подключения email-2FA — подтвердить код */
+  async confirmEmail2fa(userId: string, code: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId, deleted_at: null }, select: { email: true } });
+    if (!user) throw new Error('Пользователь не найден');
+
+    await verifyOtp(user.email, code, 'enable_2fa_email');
+    await prisma.user.update({ where: { id: userId }, data: { two_factor_method: 'email', totp_secret: null } });
+  }
+
+  /** Отключение 2FA (любого активного метода) — требует текущий пароль */
+  async disableTwoFactor(userId: string, password: string | undefined) {
+    const user = await prisma.user.findUnique({ where: { id: userId, deleted_at: null }, select: { password: true } });
+    if (!user) throw new Error('Пользователь не найден');
+
+    if (user.password) {
+      if (!password) throw new Error('Введите текущий пароль');
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) throw new Error('Неверный пароль');
+    }
+
+    await prisma.user.update({ where: { id: userId }, data: { two_factor_method: null, totp_secret: null } });
+  }
+
+  /** Проверка кода второго фактора при входе (вызывается после проверки mfaToken) */
+  async verifyLoginTwoFactor(userId: string, code: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId, deleted_at: null },
+      select: { email: true, two_factor_method: true, totp_secret: true },
+    });
+    if (!user) throw new Error('Пользователь не найден');
+
+    if (user.two_factor_method === 'totp') {
+      if (!user.totp_secret) throw new Error('Неверный код');
+      const secret = decryptTotpSecret(user.totp_secret);
+      if (!authenticator.verify({ token: code, secret })) throw new Error('Неверный код');
+    } else if (user.two_factor_method === 'email') {
+      await verifyOtp(user.email, code, 'login_2fa');
+    } else {
+      throw new Error('Двухфакторная аутентификация не включена');
+    }
+  }
+
+  /** Повторная отправка кода второго фактора при входе (только для метода email) */
+  async resendLoginTwoFactor(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId, deleted_at: null },
+      select: { email: true, two_factor_method: true },
+    });
+    if (!user || user.two_factor_method !== 'email') return;
+
+    const code = await createOtp(user.email, 'login_2fa');
+    await sendOtpEmail(user.email, code, 'login_2fa');
   }
 }

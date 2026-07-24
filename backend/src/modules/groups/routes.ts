@@ -65,6 +65,10 @@ import {
   donateToGroupHandler,
   getGroupBalanceHandler,
   getOrderConversationHandler,
+  subscribeGroupHandler,
+  unsubscribeGroupHandler,
+  getMySubscriptionsHandler,
+  setEventDateHandler,
 } from './controller.js';
 import { groupService } from './service.js';
 
@@ -83,6 +87,7 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.get('/me', auth, getMyGroupsHandler as any);
   fastify.get('/trending', getTrendingHandler as any);
   fastify.get('/discover', discoverGroupsHandler as any);
+  fastify.get('/me/subscriptions', auth, getMySubscriptionsHandler as any);
   fastify.get('/user/:userId', { onRequest: [fastify.tryAuthenticate] }, getUserPublicGroupsHandler as any);
   fastify.get('/common/:userId', auth, getCommonGroupsHandler as any);
   fastify.get('/search', async (request, reply) => {           // GET /groups/search?q=
@@ -103,6 +108,8 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.get('/:id/members', getMembersHandler as any);
   fastify.patch('/:id/members/:userId/role', auth, setMemberRoleHandler as any);
   fastify.delete('/:id/members/:userId', auth, removeMemberHandler as any);
+  fastify.post('/:id/subscribe', auth, subscribeGroupHandler as any);
+  fastify.delete('/:id/subscribe', auth, unsubscribeGroupHandler as any);
 
   // ── Custom Roles ────────────────────────────────────────────────────────
   fastify.get('/:id/roles', auth, getCustomRolesHandler as any);
@@ -127,6 +134,7 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.get('/:id/events', getGroupEventsHandler as any);       // GET /groups/:id/events
   fastify.post('/:id/events', auth, createEventHandler as any);
   fastify.patch('/events/:eventId', auth, updateEventHandler as any);
+  fastify.patch('/:id/event-date', auth, setEventDateHandler as any);
 
   // ── RSVP ─────────────────────────────────────────────────────────────────
   fastify.post('/events/:eventId/rsvp', auth, rsvpEventHandler as any);

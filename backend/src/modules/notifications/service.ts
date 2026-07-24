@@ -4,6 +4,26 @@ import prisma from '../../config/prisma.js';
 type PushFn = (data: string) => void;
 const subscribers = new Map<string, Set<PushFn>>();
 
+// Only these three social notification types are gated by a per-user toggle / quiet hours —
+// AutoMod, Dealers' Den, admin-broadcast, etc. notifications always go through.
+const PREF_BY_TYPE: Record<string, 'notify_new_fan' | 'notify_comment' | 'notify_repaw'> = {
+  FOLLOW:  'notify_new_fan',
+  COMMENT: 'notify_comment',
+  REPAW:   'notify_repaw',
+};
+
+/** HH:mm range check against server-local time, handling overnight wraparound (e.g. 23:00 → 08:00).
+ *  No per-user timezone field exists in the schema, so this compares server time, not the viewer's. */
+function isWithinQuietHours(from: string, to: string, now = new Date()): boolean {
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const [fh, fm] = from.split(':').map(Number);
+  const [th, tm] = to.split(':').map(Number);
+  const start = fh * 60 + fm;
+  const end   = th * 60 + tm;
+  if (start === end) return false;
+  return start < end ? mins >= start && mins < end : mins >= start || mins < end;
+}
+
 export const notificationService = {
   subscribe(userId: string, fn: PushFn) {
     if (!subscribers.has(userId)) subscribers.set(userId, new Set());
@@ -32,6 +52,21 @@ export const notificationService = {
     const { receiverId, senderId, type, postId, commentId, refId, meta } = input;
     if (receiverId === senderId) return null; // don't notify yourself
 
+    const prefField = PREF_BY_TYPE[type];
+    let quietHoursOn = false, quietFrom = '', quietTo = '';
+    if (prefField) {
+      const prefs = await prisma.user.findUnique({
+        where:  { id: receiverId },
+        select: { [prefField]: true, quiet_hours_enabled: true, quiet_hours_from: true, quiet_hours_to: true } as any,
+      });
+      if (prefs && (prefs as any)[prefField] === false) return null; // opted out of this notification type entirely
+      if (prefs) {
+        quietHoursOn = (prefs as any).quiet_hours_enabled;
+        quietFrom    = (prefs as any).quiet_hours_from;
+        quietTo      = (prefs as any).quiet_hours_to;
+      }
+    }
+
     const notif = await prisma.notification.create({
       data:    { receiver_id: receiverId, sender_id: senderId, type, post_id: postId, comment_id: commentId, ref_id: refId, meta },
       include: {
@@ -39,8 +74,10 @@ export const notificationService = {
       },
     });
 
-    // Real-time push
-    this.push(receiverId, { type: 'notification', data: notif });
+    // Real-time push — suppressed during quiet hours, but the row is still written so it's there on catch-up.
+    if (!quietHoursOn || !isWithinQuietHours(quietFrom, quietTo)) {
+      this.push(receiverId, { type: 'notification', data: notif });
+    }
     return notif;
   },
 

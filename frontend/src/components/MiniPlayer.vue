@@ -20,15 +20,47 @@ let   volCloseTimer: ReturnType<typeof setTimeout> | null = null
 
 const type = computed(() => {
   if (props.msgType === 'voice') return 'voice'
+  // Silent videos (no audio track) arrive with an explicit msgType 'gif' from the
+  // backend — must win over the 'video' shortcut below despite the .mp4/.webm extension.
+  if (props.msgType === 'gif') return 'gif'
   if (props.msgType === 'video') return 'video'
-  if (props.msgType === 'image') return 'image'
   if (props.msgType === 'sticker') return 'sticker'
   const u = props.src.toLowerCase().split('?')[0]
+  // GIFs get uploaded with msgType 'image' (mime type image/gif), so the extension
+  // check must win over the generic 'image' shortcut to get the pausable gif UI.
+  if (/\.gif$/.test(u)) return 'gif'
+  if (props.msgType === 'image') return 'image'
   if (/\.(mp4|webm|mov|mkv|ogv)$/.test(u)) return 'video'
   if (/\.(mp3|wav|ogg|m4a|flac|aac)$/.test(u)) return 'audio'
-  if (/\.gif$/.test(u)) return 'gif'
   return 'image'
 })
+
+// A "gif" is either a real animated .gif image (frozen via canvas, since <img> can't
+// be paused natively) or a silent video reclassified as gif-like (a real <video> we
+// can actually pause/play).
+const gifIsVideo = computed(() => /\.(mp4|webm|mov|mkv|ogv)$/i.test(props.src.split('?')[0]))
+const gifPaused  = ref(false)
+const gifImgEl   = ref<HTMLImageElement | null>(null)
+const gifCanvasEl = ref<HTMLCanvasElement | null>(null)
+
+function toggleGifPause() {
+  if (gifIsVideo.value) {
+    const v = mediaEl.value as HTMLVideoElement | null
+    if (!v) return
+    if (v.paused) v.play(); else v.pause()
+    return
+  }
+  if (!gifPaused.value) {
+    const img = gifImgEl.value
+    const canvas = gifCanvasEl.value
+    if (img && canvas && img.naturalWidth) {
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      canvas.getContext('2d')?.drawImage(img, 0, 0)
+    }
+  }
+  gifPaused.value = !gifPaused.value
+}
 
 // Pseudo-waveform bars for voice messages (deterministic from src hash)
 const BARS = 32
@@ -157,6 +189,7 @@ watch(() => props.src, async (newSrc) => {
   if (albumArt.value?.startsWith('blob:')) URL.revokeObjectURL(albumArt.value)
   albumArt.value = null
   isLoading.value = true
+  gifPaused.value = false
   if (type.value === 'audio' && /\.mp3$/i.test(newSrc.split('?')[0])) {
     albumArt.value = await extractAlbumArt(newSrc)
   }
@@ -174,12 +207,33 @@ watch(() => props.src, async (newSrc) => {
     :src="src" class="w-[260px] h-[195px] object-cover cursor-pointer block" loading="lazy"
     @click="emit('click-image')" />
 
-  <!-- gif -->
+  <!-- gif: autoplays natively, tap to freeze-frame pause (no seek/volume/duration chrome) -->
   <div v-else-if="type === 'gif'"
-    class="relative cursor-pointer w-[260px] h-[195px]"
-    @click="emit('click-image')">
-    <img :src="src" class="w-full h-full object-cover block" loading="lazy" />
-    <span class="absolute top-1.5 left-1.5 px-1.5 py-px rounded text-[9px] font-black tracking-widest text-white bg-black/55 uppercase">GIF</span>
+    class="relative cursor-pointer w-[340px] h-[255px] bg-black/10 group"
+    @click="toggleGifPause">
+    <video v-if="gifIsVideo" ref="mediaEl" :src="src" autoplay loop muted playsinline
+      class="w-full h-full object-cover block"
+      @play="gifPaused = false" @pause="gifPaused = true" />
+    <template v-else>
+      <img ref="gifImgEl" :src="src" class="w-full h-full object-cover block" :class="{ 'opacity-0': gifPaused }" loading="lazy" />
+      <canvas v-show="gifPaused" ref="gifCanvasEl" class="absolute inset-0 w-full h-full object-cover" />
+    </template>
+    <span class="absolute top-1.5 left-1.5 px-1.5 py-px rounded text-[9px] font-black tracking-widest text-white bg-black/55 uppercase pointer-events-none">GIF</span>
+    <div v-if="gifPaused" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <div class="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
+        <svg viewBox="0 0 15 15" fill="currentColor" class="w-5 h-5 text-white">
+          <path d="M5 0C3.89543 0 3 0.895431 3 2V3C3 4.10457 3.89543 5 5 5C6.10457 5 7 4.10457 7 3V2C7 0.895431 6.10457 0 5 0Z"/>
+          <path d="M10 0C8.89543 0 8 0.895431 8 2V3C8 4.10457 8.89543 5 10 5C11.1046 5 12 4.10457 12 3V2C12 0.895431 11.1046 0 10 0Z"/>
+          <path d="M2 5C0.895431 5 0 5.89543 0 7V7.5C0 8.60457 0.895431 9.5 2 9.5C3.10457 9.5 4 8.60457 4 7.5V7C4 5.89543 3.10457 5 2 5Z"/>
+          <path d="M13 5C11.8954 5 11 5.89543 11 7V7.5C11 8.60457 11.8954 9.5 13 9.5C14.1046 9.5 15 8.60457 15 7.5V7C15 5.89543 14.1046 5 13 5Z"/>
+          <path d="M9.61273 7.77893C8.51793 6.44953 6.48207 6.44953 5.38727 7.77893L2.46943 11.322C1.2614 12.7889 2.30486 15 4.20516 15C4.47668 15 4.74447 14.9368 4.98732 14.8154L5.34699 14.6355C6.70234 13.9578 8.29766 13.9578 9.65301 14.6355L10.0127 14.8154C10.2555 14.9368 10.5233 15 10.7948 15C12.6951 15 13.7386 12.7889 12.5306 11.322L9.61273 7.77893Z"/>
+        </svg>
+      </div>
+    </div>
+    <button @click.stop="emit('click-image')"
+      class="absolute top-1.5 right-1.5 z-20 w-6 h-6 rounded-lg bg-black/55 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80">
+      <BIcon name="Maximize2" class="w-3 h-3 text-white" />
+    </button>
   </div>
 
   <!-- ── Voice (Telegram-style) ──────────────────────────────────────────── -->

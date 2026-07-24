@@ -8,6 +8,7 @@ import {
   getProfileCompleteness,
 } from './service.js';
 import { isModerator } from '../../lib/roles.js';
+import prisma from '../../config/prisma.js';
 
 // GET /api/verification/status
 export async function getStatusHandler(request: FastifyRequest, reply: FastifyReply) {
@@ -66,6 +67,14 @@ export async function adminReviewHandler(request: FastifyRequest, reply: Fastify
   }
   try {
     const result = await adminReviewRequest(id, action, user.id, reason);
+    await prisma.autoModLog.create({
+      data: {
+        user_id: (result as any).user_id ?? user.id, actor_id: user.id,
+        action: action === 'approve' ? 'verify_profile' : 'reject_verification',
+        reason: action === 'approve' ? 'Профиль верифицирован' : (reason || 'Заявка на верификацию отклонена'),
+        category: 'manual', score: 0,
+      },
+    }).catch(() => {});
     return reply.send({ success: true, data: result });
   } catch (err: any) {
     return reply.code(400).send({ success: false, error: { message: err.message } });

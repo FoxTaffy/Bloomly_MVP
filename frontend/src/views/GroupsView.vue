@@ -142,6 +142,7 @@ function selectCategory(key: string) {
 }
 
 function switchSidebarTab(tab: typeof sidebarTab.value) {
+  if (tab === sidebarTab.value) return
   sidebarTab.value = tab
   if (tab === 'for_you') {
     loadData()

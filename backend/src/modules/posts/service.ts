@@ -5,7 +5,11 @@ import { isTrustedMediaUrl } from '../media/service.js';
 import { groupService } from '../groups/service.js';
 import { extractKeywords } from '../../lib/textKeywords.js';
 import { interestsToTerms } from '../../lib/interestTags.js';
+import { muteKeywordsWhere } from '../../lib/contentFilters.js';
+import { analyzeContent } from '../automod/service.js';
 import type { CreatePostInput, GetPostsQuery } from './types.js';
+
+const MAX_MEDIA_PER_POST = 20;
 
 // A group owner/admin/moderator may moderate (delete) content posted inside their own group,
 // even if they didn't author it — this is separate from the site-wide staff role.
@@ -16,6 +20,16 @@ async function canModerateAsGroupStaff(postId: string, userId: string): Promise<
   });
   if (!groupPost) return false;
   return groupService.isAtLeastModerator(groupPost.group_id, userId);
+}
+
+// Who may remove *any* comment on a post (not just their own): the post's
+// author moderating their own content, site staff, or group staff moderating
+// a post inside their group.
+async function canManageAllComments(postId: string, userId: string, isAdmin: boolean): Promise<boolean> {
+  if (isAdmin) return true;
+  const post = await prisma.post.findUnique({ where: { id: postId }, select: { author_id: true } });
+  if (post?.author_id === userId) return true;
+  return canModerateAsGroupStaff(postId, userId);
 }
 
 /** Throws a 403 unless the viewer is allowed to see userId's profile content. */
@@ -177,7 +191,7 @@ const POST_INCLUDE = {
   author: { select: AUTHOR_SELECT },
   rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
   tags: { include: { tag: true } },
-  _count: { select: { votes: true, repaws: true, comments: true } },
+  _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
   comments: {
     where: { deleted_at: null, parent_id: null, rating: { gt: 0 } },
     orderBy: { rating: 'desc' as const },
@@ -206,11 +220,23 @@ function maskGroupAuthor(post: any): any {
   return post;
 }
 
+/** Same idea as maskGroupAuthor, but for a comment posted "as" a group (Comment.group_id). */
+function maskGroupCommentAuthor(comment: any): any {
+  if (!comment) return comment;
+  if (comment.group_id && comment.group) {
+    return { ...comment, author: null };
+  }
+  return comment;
+}
+
 export const postService = {
   async createPost(input: CreatePostInput) {
     const content = (input.content ?? '').trim();
     const mediaUrls = (input.mediaUrls ?? []).filter(Boolean);
     if (!content && mediaUrls.length === 0) throw new Error('Content is required');
+    if (mediaUrls.length > MAX_MEDIA_PER_POST) {
+      throw Object.assign(new Error('TOO_MANY_MEDIA_FILES'), { statusCode: 422 });
+    }
     if (mediaUrls.some((url) => !isTrustedMediaUrl(url))) {
       throw Object.assign(new Error('INVALID_MEDIA_URL'), { statusCode: 422 });
     }
@@ -352,7 +378,7 @@ export const postService = {
         author: { select: AUTHOR_SELECT },
         rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
-        _count: { select: { votes: true, repaws: true, comments: true } },
+        _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
       },
     });
@@ -384,7 +410,7 @@ export const postService = {
         author: { select: AUTHOR_SELECT },
         rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
-        _count: { select: { votes: true, repaws: true, comments: true } },
+        _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
       },
     });
@@ -396,7 +422,7 @@ export const postService = {
       author: { select: AUTHOR_SELECT },
       rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
       tags: { include: { tag: true } },
-      _count: { select: { votes: true, repaws: true, comments: true } },
+      _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
       groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true } } } },
     };
 
@@ -430,6 +456,13 @@ export const postService = {
     const nsfwFilter = safeMode ? { is_nsfw: false } : {};
     const excludeIds = viewedPostIds.length > 0 ? { notIn: viewedPostIds } : undefined;
 
+    // Fetched once up front so the mute-keywords filter can be baked into every query's `where`.
+    const [affinity, user] = await Promise.all([
+      getUserAffinityMap(userId),
+      prisma.user.findUnique({ where: { id: userId }, select: { interests: true, mute_keywords: true } }),
+    ]);
+    const muteFilter = muteKeywordsWhere(user?.mute_keywords ?? []);
+
     let personalizedPosts: any[] = [];
     let discoverPosts: any[] = [];
 
@@ -441,7 +474,7 @@ export const postService = {
     if (topCategories.length > 0) {
       // 60% from favourite categories
       personalizedPosts = await prisma.post.findMany({
-        where: { deleted_at: null, is_archived: false, category: { in: topCategories }, id: excludeIds, ...nsfwFilter },
+        where: { deleted_at: null, is_archived: false, category: { in: topCategories }, id: excludeIds, ...nsfwFilter, ...muteFilter },
         orderBy: { rating: 'desc' },
         skip: pSkip,
         take: pLimit,
@@ -456,6 +489,7 @@ export const postService = {
           OR: [{ category: { notIn: topCategories } }, { category: null }],
           id: excludeIds,
           ...nsfwFilter,
+          ...muteFilter,
         },
         orderBy: [{ rating: 'desc' }, { created_at: 'desc' }],
         skip: dSkip,
@@ -465,7 +499,7 @@ export const postService = {
     } else {
       // No activity yet — show popular new content
       discoverPosts = await prisma.post.findMany({
-        where: { deleted_at: null, is_archived: false, id: excludeIds, ...nsfwFilter },
+        where: { deleted_at: null, is_archived: false, id: excludeIds, ...nsfwFilter, ...muteFilter },
         orderBy: [{ rating: 'desc' }, { created_at: 'desc' }],
         skip: (pageNum - 1) * limitNum,
         take: limitNum,
@@ -476,10 +510,6 @@ export const postService = {
     // Weigh the fetched pool by the user's behavioral tag/keyword affinity (like a scale — terms
     // they keep liking/reposting float up, terms they keep disliking sink) and their declared
     // Interests, before interleaving.
-    const [affinity, user] = await Promise.all([
-      getUserAffinityMap(userId),
-      prisma.user.findUnique({ where: { id: userId }, select: { interests: true } }),
-    ]);
     const interestTerms = interestsToTerms(user?.interests ?? []);
     personalizedPosts = rankByAffinity(personalizedPosts, affinity, interestTerms);
     discoverPosts = rankByAffinity(discoverPosts, affinity, interestTerms);
@@ -686,7 +716,7 @@ export const postService = {
         author: { select: AUTHOR_SELECT },
         rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
-        _count: { select: { votes: true, repaws: true, comments: true } },
+        _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
       },
     });
@@ -703,7 +733,7 @@ export const postService = {
         author: { select: AUTHOR_SELECT },
         rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
-        _count: { select: { votes: true, repaws: true, comments: true } },
+        _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
       },
     });
@@ -773,7 +803,7 @@ export const postService = {
       author: { select: AUTHOR_SELECT },
       rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
       tags: { include: { tag: true } },
-      _count: { select: { votes: true, repaws: true, comments: true } },
+      _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
       groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
     };
 
@@ -806,12 +836,15 @@ export const postService = {
     }));
   },
 
-  async createComment(userId: string, postId: string, content: string, parentId?: string, type?: string, file_url?: string) {
+  async createComment(userId: string, postId: string, content: string, parentId?: string, type?: string, file_url?: string, groupId?: string) {
     if (!content?.trim() && !file_url) {
       throw Object.assign(new Error('Content is required'), { statusCode: 400 });
     }
     if (file_url && !isTrustedMediaUrl(file_url)) {
       throw Object.assign(new Error('INVALID_MEDIA_URL'), { statusCode: 422 });
+    }
+    if (groupId && !(await groupService.isAtLeastModerator(groupId, userId))) {
+      throw Object.assign(new Error('Not authorized to comment as this group'), { statusCode: 403 });
     }
 
     const post = await prisma.post.findUnique({
@@ -830,6 +863,7 @@ export const postService = {
       data: {
         post_id: postId,
         author_id: userId,
+        group_id: groupId ?? null,
         content: content || '',
         parent_id: parentId ?? null,
         type: type ?? 'text',
@@ -837,6 +871,7 @@ export const postService = {
       },
       include: {
         author: { select: AUTHOR_SELECT },
+        group: { select: { id: true, slug: true, name: true, avatar_url: true } },
         _count: { select: { replies: true, votes: true } },
       },
     });
@@ -872,27 +907,45 @@ export const postService = {
       );
     }
 
-    return comment;
+    return maskGroupCommentAuthor(comment);
   },
 
-  async getComments(postId: string) {
+  async getComments(postId: string, viewerId?: string) {
+    let muteFilter = {};
+    let filterSpam = false;
+    if (viewerId) {
+      const prefs = await prisma.user.findUnique({ where: { id: viewerId }, select: { mute_keywords: true, filter_spam: true } });
+      muteFilter = muteKeywordsWhere(prefs?.mute_keywords ?? []);
+      filterSpam = prefs?.filter_spam ?? false;
+    }
+
     const topLevel = await prisma.comment.findMany({
-      where: { post_id: postId, parent_id: null, deleted_at: null },
+      where: { post_id: postId, parent_id: null, deleted_at: null, ...muteFilter },
       orderBy: { created_at: 'asc' },
       include: {
         author: { select: AUTHOR_SELECT },
+        group: { select: { id: true, slug: true, name: true, avatar_url: true } },
         _count: { select: { replies: true } },
         replies: {
-          where: { deleted_at: null },
+          where: { deleted_at: null, ...muteFilter },
           orderBy: { created_at: 'asc' },
           include: {
             author: { select: AUTHOR_SELECT },
+            group: { select: { id: true, slug: true, name: true, avatar_url: true } },
             _count: { select: { replies: true } },
           },
         },
       },
     });
-    return topLevel;
+    const filtered = filterSpam
+      ? topLevel
+          .filter((c) => analyzeContent(c.content).category !== 'spam')
+          .map((c) => ({ ...c, replies: c.replies.filter((r) => analyzeContent(r.content).category !== 'spam') }))
+      : topLevel;
+    return filtered.map((c) => ({
+      ...maskGroupCommentAuthor(c),
+      replies: c.replies.map(maskGroupCommentAuthor),
+    }));
   },
 
   async voteComment(userId: string, commentId: string, value: 1 | -1) {
@@ -959,10 +1012,16 @@ export const postService = {
   async deleteComment(userId: string, commentId: string, isAdmin = false) {
     const comment = await prisma.comment.findUnique({ where: { id: commentId, deleted_at: null } });
     if (!comment) throw new Error('Comment not found');
-    if (!isAdmin && comment.author_id !== userId && !(await canModerateAsGroupStaff(comment.post_id, userId))) {
+    if (comment.author_id !== userId && !(await canManageAllComments(comment.post_id, userId, isAdmin))) {
       throw new Error('Not authorized');
     }
     return prisma.comment.update({ where: { id: commentId }, data: { deleted_at: new Date() } });
+  },
+
+  /** Whether `userId` may delete any comment on this post (shown to the frontend so it can render a delete button on comments that aren't their own). */
+  async canManageComments(postId: string, userId: string | undefined, isAdmin: boolean): Promise<boolean> {
+    if (!userId) return false;
+    return canManageAllComments(postId, userId, isAdmin);
   },
 
   /**
@@ -1013,7 +1072,7 @@ export const postService = {
         author: { select: AUTHOR_SELECT },
         rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
         tags: { include: { tag: true } },
-        _count: { select: { votes: true, repaws: true, comments: true } },
+        _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
       },
     });

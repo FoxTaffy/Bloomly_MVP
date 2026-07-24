@@ -16,11 +16,14 @@ const toast      = ref('')
 const activeNav  = ref('subscriptions')
 const payingPlan = ref<Plan | null>(null)
 
-// Ранние пользователи = зарегистрировались до апреля 2026
+// Ранние пользователи = зарегистрировались до 1 января 2027 — постоянная скидка -50%
+const EARLY_USER_CUTOFF = '2027-01-01T00:00:00Z'
+const EARLY_USER_DISCOUNT = 50 // %
+
 const isEarlyUser = computed(() => {
   const created = (auth.user as any)?.created_at
   if (!created) return false
-  return new Date(created) < new Date('2026-04-01T00:00:00Z')
+  return new Date(created) < new Date(EARLY_USER_CUTOFF)
 })
 
 const currentTier = computed(() => (auth.user as any)?.subscription_tier ?? 'free')
@@ -33,7 +36,6 @@ type Plan = {
   badgeColor: string
   priceM:     number
   priceY:     number
-  discount:   number
   color:      string
   gradient:   string
   iconBg:     string
@@ -49,7 +51,7 @@ const plans = computed<Plan[]>(() => {
       icon: 'Gift',
       badge: t.planBadgeFree,
       badgeColor: 'text-white/55 bg-white/5 border-white/10',
-      priceM: 0, priceY: 0, discount: 0,
+      priceM: 0, priceY: 0,
       color: 'text-white/70',
       gradient: 'from-white/5 to-white/2',
       iconBg: 'bg-white/8 text-white/60 border-white/10',
@@ -60,7 +62,7 @@ const plans = computed<Plan[]>(() => {
       icon: 'Zap',
       badge: t.planBadgePopular,
       badgeColor: 'text-sky-400 bg-sky-400/10 border-sky-400/20',
-      priceM: 149, priceY: 99, discount: 30,
+      priceM: 149, priceY: 99,
       color: 'text-sky-400',
       gradient: 'from-sky-500/12 to-sky-500/3',
       iconBg: 'bg-sky-400/10 text-sky-400 border-sky-400/25',
@@ -71,7 +73,7 @@ const plans = computed<Plan[]>(() => {
       icon: 'Crown',
       badge: t.planBadgeBest,
       badgeColor: 'text-brand-accent bg-brand-accent/10 border-brand-accent/20',
-      priceM: 349, priceY: 249, discount: 40,
+      priceM: 349, priceY: 249,
       color: 'text-brand-accent',
       gradient: 'from-brand-accent/18 to-brand-accent/3',
       iconBg: 'bg-brand-accent/15 text-brand-accent-minus border-brand-accent/30',
@@ -83,7 +85,7 @@ const plans = computed<Plan[]>(() => {
       icon: 'Briefcase',
       badge: t.planBadgeBusiness,
       badgeColor: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
-      priceM: 899, priceY: 649, discount: 25,
+      priceM: 899, priceY: 649,
       color: 'text-amber-400',
       gradient: 'from-amber-400/12 to-amber-400/3',
       iconBg: 'bg-amber-400/10 text-amber-400 border-amber-400/25',
@@ -92,16 +94,37 @@ const plans = computed<Plan[]>(() => {
   ]
 })
 
+// Цена «по билету» — то, во сколько план обойдётся при выбранном режиме оплаты,
+// с дополнительной постоянной скидкой для ранних пользователей.
 function effectivePrice(plan: Plan): number {
   const base = billing.value === 'yearly' ? plan.priceY : plan.priceM
   if (base === 0) return 0
-  const disc = isEarlyUser.value ? plan.discount : 0
-  return Math.round(base * (1 - disc / 100))
+  return isEarlyUser.value ? Math.round(base * (1 - EARLY_USER_DISCOUNT / 100)) : base
 }
 
+// Цена-ценник для зачёркивания — всегда полная ежемесячная цена без скидок,
+// чтобы показать суммарную выгоду (годовая оплата + скидка ранним пользователям).
 function originalPrice(plan: Plan): number {
-  return billing.value === 'yearly' ? plan.priceY : plan.priceM
+  return plan.priceM
 }
+
+// Экономия от полной ежемесячной цены в процентах — то самое число в зачёркнутом ценнике.
+function totalDiscountPercent(plan: Plan): number {
+  if (!plan.priceM) return 0
+  return Math.round((1 - effectivePrice(plan) / plan.priceM) * 100)
+}
+
+// Выгода от годовой оплаты (без учёта скидки ранних пользователей) — используется на переключателе.
+function yearlySavingsPercent(plan: Plan): number {
+  if (!plan.priceM) return 0
+  return Math.round((1 - plan.priceY / plan.priceM) * 100)
+}
+
+const avgYearlySavings = computed(() => {
+  const paid = plans.value.filter(p => p.priceM > 0)
+  if (!paid.length) return 0
+  return Math.round(paid.reduce((sum, p) => sum + yearlySavingsPercent(p), 0) / paid.length)
+})
 
 function showToast(msg: string) {
   toast.value = msg
@@ -185,7 +208,7 @@ function onPaymentSuccess(planId: string) {
               class="relative z-10 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors duration-150 active:scale-95"
               :class="billing === 'yearly' ? 'text-white' : 'text-white/50 hover:text-white/80'">
               {{ langStore.t.subYearly }}
-              <span class="absolute -top-2.5 -right-3 text-[9px] font-black bg-brand-success text-white px-1.5 py-0.5 rounded-full shadow-[0_0_10px_rgba(102,199,112,0.5)]">–29%</span>
+              <span v-if="avgYearlySavings > 0" class="absolute -top-2.5 -right-3 text-[9px] font-black bg-brand-success text-white px-1.5 py-0.5 rounded-full shadow-[0_0_10px_rgba(102,199,112,0.5)]">–{{ avgYearlySavings }}%</span>
             </button>
           </div>
         </div>
@@ -254,14 +277,18 @@ function onPaymentSuccess(planId: string) {
                       <p class="text-4xl font-extrabold tracking-tight" :class="plan.featured ? 'bg-gradient-to-b from-white to-brand-accent-minus bg-clip-text text-transparent' : 'text-white'">{{ effectivePrice(plan) }} ₽</p>
                       <p class="text-sm text-white/55 mb-1.5">{{ langStore.t.subPerMonth }}</p>
                     </div>
-                    <div class="flex items-center gap-2 mt-1.5 min-h-[1.25rem]">
-                      <span v-if="isEarlyUser && plan.discount > 0"
-                        class="text-xs text-white/30 line-through">{{ originalPrice(plan) }} ₽</span>
-                      <span v-if="isEarlyUser && plan.discount > 0"
-                        class="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-lg border border-amber-400/20">
-                        –{{ plan.discount }}%
-                      </span>
-                      <span v-if="billing === 'yearly'" class="text-[10px] text-white/35">
+                    <div class="flex items-center flex-wrap gap-1.5 mt-2 min-h-[1.5rem]">
+                      <template v-if="totalDiscountPercent(plan) > 0">
+                        <span class="text-xs text-white/35 line-through decoration-white/25">{{ originalPrice(plan) }} ₽</span>
+                        <span class="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-lg border"
+                          :class="isEarlyUser
+                            ? 'text-amber-300 bg-gradient-to-r from-amber-400/25 to-amber-500/10 border-amber-400/30 shadow-[0_0_12px_rgba(251,191,36,0.25)]'
+                            : 'text-brand-success bg-brand-success/10 border-brand-success/20'">
+                          <BIcon :name="isEarlyUser ? 'Star' : 'TrendingDown'" class="w-2.5 h-2.5" :class="isEarlyUser ? 'fill-amber-300' : ''" />
+                          –{{ totalDiscountPercent(plan) }}%
+                        </span>
+                      </template>
+                      <span v-if="billing === 'yearly'" class="text-[10px] text-white/35 w-full">
                         {{ effectivePrice(plan) * 12 }} ₽{{ langStore.t.subYearlyTotal }}
                       </span>
                     </div>
@@ -357,7 +384,7 @@ function onPaymentSuccess(planId: string) {
       :plan="payingPlan"
       :price="effectivePrice(payingPlan)"
       :original-price="originalPrice(payingPlan)"
-      :discounted="isEarlyUser && payingPlan.discount > 0"
+      :discounted="totalDiscountPercent(payingPlan) > 0"
       @close="payingPlan = null"
       @success="onPaymentSuccess"
     />

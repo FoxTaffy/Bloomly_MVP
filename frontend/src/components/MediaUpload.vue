@@ -8,11 +8,13 @@ const props = defineProps<{
   folder?: string
   accept?: string
   multiple?: boolean
+  maxFiles?: number
+  maxSizeMb?: number
 }>()
 
 const emit = defineEmits<{ (e: 'uploaded', urls: string[], originalUrls: string[], hasVideo: boolean): void }>()
 
-type PreviewEntry = { id: number; localUrl: string; uploading: boolean; progress: number; finalUrl?: string; finalOriginalUrl?: string; name: string; size: number; isVideo: boolean }
+type PreviewEntry = { id: number; localUrl: string; uploading: boolean; converting: boolean; progress: number; finalUrl?: string; finalOriginalUrl?: string; name: string; size: number; isVideo: boolean }
 
 let nextPreviewId = 0
 const previews = ref<PreviewEntry[]>([])
@@ -37,6 +39,12 @@ function flashRejected() {
   const patterns = acceptPatterns()
   const imagesOnly = patterns.every(p => p.startsWith('image/'))
   rejectedMsg.value = imagesOnly ? 'Можно загружать только фото и GIF' : 'Этот тип файла здесь не поддерживается'
+  if (rejectedTimer) clearTimeout(rejectedTimer)
+  rejectedTimer = setTimeout(() => { rejectedMsg.value = '' }, 3000)
+}
+
+function flashLimitReached() {
+  rejectedMsg.value = `Можно приложить не более ${props.maxFiles} файлов`
   if (rejectedTimer) clearTimeout(rejectedTimer)
   rejectedTimer = setTimeout(() => { rejectedMsg.value = '' }, 3000)
 }
@@ -76,6 +84,42 @@ function compressImage(file: File): Promise<File> {
   })
 }
 
+// Re-encodes an oversized image at falling quality/resolution steps until it
+// fits under maxBytes, so a photo above the folder's cap (e.g. 10 MB for
+// report evidence) gets converted down instead of being rejected outright.
+function compressToTarget(file: File, maxBytes: number): Promise<File> {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith('image/') || file.size <= maxBytes) { resolve(file); return }
+    const img = new window.Image()
+    const src = URL.createObjectURL(file)
+    img.onload = async () => {
+      URL.revokeObjectURL(src)
+      const { width, height } = img
+      const QUALITIES = [0.8, 0.65, 0.5, 0.35, 0.2]
+      let scale = 1
+      let best: Blob | null = null
+      for (let attempt = 0; attempt < 12; attempt++) {
+        const w = Math.max(1, Math.round(width * scale))
+        const h = Math.max(1, Math.round(height * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        const quality = QUALITIES[Math.min(attempt, QUALITIES.length - 1)]
+        const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', quality))
+        if (blob && (!best || blob.size < best.size)) best = blob
+        if (blob && blob.size <= maxBytes) break
+        // Ran through every quality step and it's still too big — shrink dimensions and retry.
+        if (attempt >= QUALITIES.length - 1) scale *= 0.75
+      }
+      if (!best) { resolve(file); return }
+      resolve(new File([best], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }))
+    }
+    img.onerror = () => { URL.revokeObjectURL(src); resolve(file) }
+    img.src = src
+  })
+}
+
 // ── Upload with id-based reactivity ───────────────────────────────────────
 // Entries are tracked by stable `id`, not array position — reordering (or
 // removing an earlier item) while another upload is in flight must not make
@@ -84,21 +128,30 @@ function compressImage(file: File): Promise<File> {
 const processFiles = (files: FileList | File[] | null) => {
   if (!files) return
   let rejected = false
+  let capped = false
   Array.from(files).forEach((file) => {
+    if (props.maxFiles && previews.value.length >= props.maxFiles) { capped = true; return }
     if (!isFileAccepted(file)) { rejected = true; return }
     // Content-based dedup: skip if same name+size is already queued
     if (previews.value.some(p => p.name === file.name && p.size === file.size)) return
     const id = nextPreviewId++
-    previews.value.push({ id, localUrl: URL.createObjectURL(file), uploading: true, progress: 0, name: file.name, size: file.size, isVideo: file.type.startsWith('video/') })
+    previews.value.push({ id, localUrl: URL.createObjectURL(file), uploading: true, converting: file.type.startsWith('image/'), progress: 0, name: file.name, size: file.size, isVideo: file.type.startsWith('video/') })
     uploadFile(file, id)
   })
   if (rejected) flashRejected()
+  else if (capped) flashLimitReached()
 }
 
 const uploadFile = async (file: File, id: number) => {
   const entry = () => previews.value.find(p => p.id === id)
   try {
-    const compressed = await compressImage(file)
+    let compressed = await compressImage(file)
+    const maxBudgetBytes = props.maxSizeMb ? props.maxSizeMb * 1024 * 1024 : null
+    if (maxBudgetBytes && compressed.size > maxBudgetBytes) {
+      compressed = await compressToTarget(compressed, maxBudgetBytes)
+    }
+    const e0 = entry()
+    if (e0) e0.converting = false
     const formData = new FormData()
     formData.append('file', compressed)
 
@@ -211,7 +264,12 @@ const onPaste = (e: ClipboardEvent) => {
 onMounted(() => document.addEventListener('paste', onPaste))
 onUnmounted(() => document.removeEventListener('paste', onPaste))
 
-const hintLabel = () => (acceptPatterns().every(p => p.startsWith('image/')) ? 'Фото, GIF · до 100 МБ' : 'Фото, GIF, видео · до 100 МБ')
+const hintLabel = () => {
+  const maxMB = props.maxSizeMb ?? 100
+  const kinds = acceptPatterns().every(p => p.startsWith('image/')) ? 'Фото, GIF' : 'Фото, GIF, видео'
+  const limit = props.maxFiles ? `до ${maxMB} МБ, макс. ${props.maxFiles} файлов` : `до ${maxMB} МБ`
+  return `${kinds} · ${limit}`
+}
 
 // Expose to parent
 defineExpose({
@@ -284,8 +342,22 @@ defineExpose({
             <svg viewBox="0 0 24 24" class="w-2.5 h-2.5 text-white" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
           </div>
 
+          <!-- Converting (client-side compression before upload starts) -->
+          <div v-if="p.converting" class="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/40 backdrop-blur-[2px]">
+            <div class="w-9 h-9 rounded-full bg-brand-accent flex items-center justify-center shadow-md animate-spin">
+              <svg viewBox="0 0 15 15" fill="currentColor" class="w-4 h-4 text-white">
+                <path d="M5 0C3.89543 0 3 0.895431 3 2V3C3 4.10457 3.89543 5 5 5C6.10457 5 7 4.10457 7 3V2C7 0.895431 6.10457 0 5 0Z"/>
+                <path d="M10 0C8.89543 0 8 0.895431 8 2V3C8 4.10457 8.89543 5 10 5C11.1046 5 12 4.10457 12 3V2C12 0.895431 11.1046 0 10 0Z"/>
+                <path d="M2 5C0.895431 5 0 5.89543 0 7V7.5C0 8.60457 0.895431 9.5 2 9.5C3.10457 9.5 4 8.60457 4 7.5V7C4 5.89543 3.10457 5 2 5Z"/>
+                <path d="M13 5C11.8954 5 11 5.89543 11 7V7.5C11 8.60457 11.8954 9.5 13 9.5C14.1046 9.5 15 8.60457 15 7.5V7C15 5.89543 14.1046 5 13 5Z"/>
+                <path d="M9.61273 7.77893C8.51793 6.44953 6.48207 6.44953 5.38727 7.77893L2.46943 11.322C1.2614 12.7889 2.30486 15 4.20516 15C4.47668 15 4.74447 14.9368 4.98732 14.8154L5.34699 14.6355C6.70234 13.9578 8.29766 13.9578 9.65301 14.6355L10.0127 14.8154C10.2555 14.9368 10.5233 15 10.7948 15C12.6951 15 13.7386 12.7889 12.5306 11.322L9.61273 7.77893Z"/>
+              </svg>
+            </div>
+            <span class="text-[9px] text-white/80 font-bold">Обработка…</span>
+          </div>
+
           <!-- Upload progress -->
-          <div v-if="p.uploading" class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/40 backdrop-blur-[2px]">
+          <div v-else-if="p.uploading" class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/40 backdrop-blur-[2px]">
             <svg viewBox="0 0 48 48" class="w-10 h-10 drop-shadow">
               <defs>
                 <clipPath :id="`pf-${idx}`">
@@ -327,6 +399,7 @@ defineExpose({
 
         <!-- Add more tile -->
         <button
+          v-if="!maxFiles || previews.length < maxFiles"
           @click="fileInput?.click()"
           @dragover="onThumbDragOver(previews.length, $event)"
           @drop.prevent="onThumbDrop(previews.length, $event)"

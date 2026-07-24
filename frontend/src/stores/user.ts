@@ -272,6 +272,7 @@ export const useUserStore = defineStore('user', () => {
       if (auth.user) {
         if (updated.avatar_url  !== undefined) auth.user.avatar_url  = updated.avatar_url
         if (updated.display_name !== undefined) auth.user.display_name = updated.display_name
+        if ((updated as any).is_adult !== undefined) auth.user.is_adult = (updated as any).is_adult
         // Persist to sessionStorage so sidebar / AppHeader update immediately
         sessionStorage.setItem('auth_user', JSON.stringify(auth.user))
       }

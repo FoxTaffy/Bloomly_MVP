@@ -61,12 +61,35 @@ export class UploadValidationError extends Error {
   }
 }
 
+/** True if the video file has no audio stream at all — i.e. it behaves like a GIF. */
+async function hasNoAudioStream(buffer: Buffer, ext: string): Promise<boolean> {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'probe-'));
+  const inPath = path.join(dir, `in${ext || '.mp4'}`);
+  try {
+    await writeFile(inPath, buffer);
+    const { stdout } = await execFileAsync('ffprobe', [
+      '-v', 'error',
+      '-select_streams', 'a',
+      '-show_entries', 'stream=index',
+      '-of', 'csv=p=0',
+      inPath,
+    ], { maxBuffer: 1024 * 1024 * 8 });
+    return stdout.trim().length === 0;
+  } catch {
+    // Fail closed: if probing fails for any reason, treat it as a normal video
+    // rather than risk mis-tagging a real video (with sound) as a silent gif.
+    return false;
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
 export async function uploadFile(
   buffer: Buffer,
   originalName: string,
   mimeType: string,
-  folder: 'posts' | 'comments' | 'avatars' | 'banners' | 'messages' | 'backgrounds' | 'stickers' = 'posts',
-): Promise<{ url: string; originalUrl?: string }> {
+  folder: 'posts' | 'comments' | 'avatars' | 'banners' | 'messages' | 'backgrounds' | 'stickers' | 'reports' | 'verification' = 'posts',
+): Promise<{ url: string; originalUrl?: string; isSilentVideo?: boolean }> {
   // Await only if the startup promise hasn't resolved yet (no-op on subsequent calls)
   await bucketReady;
 
@@ -152,8 +175,12 @@ export async function uploadFile(
     'Content-Type': finalMimeType,
   });
 
+  const isSilentVideo = mimeType.startsWith('video/')
+    ? await hasNoAudioStream(buffer, finalExt)
+    : undefined;
+
   // URL structure: <public_base>/<bucket>/<object>
-  return { url: `${PUBLIC_URL}/${BUCKET}/${objectName}`, originalUrl };
+  return { url: `${PUBLIC_URL}/${BUCKET}/${objectName}`, originalUrl, isSilentVideo };
 }
 
 export type AvatarCropRect = { x: number; y: number; w: number; h: number }; // fractions 0..1 of the source image
@@ -255,6 +282,39 @@ export async function uploadRawToMinIO(
   const objectName = `${folder}/${randomUUID()}${ext}`;
   await minioClient.putObject(BUCKET, objectName, buffer, buffer.length, { 'Content-Type': mimeType });
   return `${PUBLIC_URL}/${BUCKET}/${objectName}`;
+}
+
+/**
+ * Real S3/MinIO usage, broken down by top-level folder (posts/, stickers/,
+ * avatars/, video/ …). Lists the whole bucket — fine at our current object
+ * counts; would need pagination limits if the bucket grows very large.
+ */
+export async function getStorageStats(): Promise<{ totalBytes: number; totalObjects: number; byFolder: { folder: string; bytes: number; count: number }[] }> {
+  await bucketReady;
+  const byFolder = new Map<string, { bytes: number; count: number }>();
+  let totalBytes = 0;
+  let totalObjects = 0;
+
+  await new Promise<void>((resolve, reject) => {
+    const stream = minioClient.listObjectsV2(BUCKET, '', true);
+    stream.on('data', (obj) => {
+      const size = obj.size ?? 0;
+      const folder = obj.name?.split('/')[0] ?? 'other';
+      const entry = byFolder.get(folder) ?? { bytes: 0, count: 0 };
+      entry.bytes += size;
+      entry.count += 1;
+      byFolder.set(folder, entry);
+      totalBytes += size;
+      totalObjects += 1;
+    });
+    stream.on('end', () => resolve());
+    stream.on('error', reject);
+  });
+
+  return {
+    totalBytes, totalObjects,
+    byFolder: [...byFolder.entries()].map(([folder, v]) => ({ folder, ...v })).sort((a, b) => b.bytes - a.bytes),
+  };
 }
 
 /**

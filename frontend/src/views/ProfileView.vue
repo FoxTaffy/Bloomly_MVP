@@ -36,8 +36,9 @@
           <div class="p-4 grid grid-cols-1 gap-3">
             <div v-for="badge in achievementBadges" :key="badge.key"
               class="flex items-center gap-4 p-4 rounded-2xl bg-brand-bg border border-brand-border hover:border-brand-accent/30 transition-all group">
-              <div class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105" :class="badge.iconBg">
-                <component :is="badge.iconComp" class="w-7 h-7" :class="badge.iconColor" />
+              <div class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 overflow-hidden transition-transform group-hover:scale-105" :class="!badge.iconImg && badge.iconBg">
+                <img v-if="badge.iconImg" :src="badge.iconImg" class="w-full h-full object-cover" />
+                <component v-else :is="badge.iconComp" class="w-7 h-7" :class="badge.iconColor" />
               </div>
               <div class="min-w-0">
                 <p class="text-sm font-extrabold text-white leading-tight">{{ badge.label }}</p>
@@ -398,11 +399,16 @@
                       :title="(viewedProfile as any)?.deceased_note || 'Светлая память'">
                       🪦
                     </span>
+                    <!-- Frozen badge -->
+                    <span v-if="(viewedProfile as any)?.frozen_at"
+                      class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-sky-500/15 text-sky-300 flex-shrink-0"
+                      title="Аккаунт заморожен">
+                      🧊
+                    </span>
                     <!-- Verification badge -->
-                    <img v-if="(viewedProfile as any)?.is_verified"
-                      :src="verificationBadgeIcon((viewedProfile as any)?.verification_type)"
-                      class="w-6 h-6 flex-shrink-0"
-                      title="Верифицирован" />
+                    <VerificationBadge v-if="(viewedProfile as any)?.is_verified"
+                      :type="(viewedProfile as any)?.verification_type"
+                      img-class="w-6 h-6 flex-shrink-0" />
                     <span v-if="badgePillLabel" class="inline-flex items-center justify-center w-7 h-7 rounded-lg" :class="badgePillClass" :title="badgePillLabel">
                       <component :is="badgePillIcon" class="w-4 h-4" />
                     </span>
@@ -814,7 +820,9 @@
                               <div v-else class="absolute top-3 left-3 right-3 flex flex-wrap items-center gap-1.5">
                                 <span class="px-2.5 py-1 rounded-lg bg-black/50 border border-white/15 text-[10px] font-bold text-white/85 uppercase tracking-wider backdrop-blur-sm">Reference</span>
                                 <span v-if="userStore.referenceImages.length > 1" class="px-2 py-1 rounded-lg bg-black/50 border border-white/15 text-[10px] font-bold text-white/85 backdrop-blur-sm">+{{ userStore.referenceImages.length - 1 }}</span>
-                                <span v-if="userStore.referenceImages[0].artist_name" class="px-2 py-1 rounded-lg bg-black/50 border border-white/15 text-[10px] font-semibold text-white/70 backdrop-blur-sm truncate max-w-[140px]">
+                                <span v-if="userStore.referenceImages[0].artist_name"
+                                  :title="userStore.referenceImages[0].artist_name"
+                                  class="px-2 py-1 rounded-lg bg-black/50 border border-white/15 text-[10px] font-semibold text-white/70 backdrop-blur-sm truncate max-w-[140px]">
                                   Арт: {{ userStore.referenceImages[0].artist_name }}
                                 </span>
                               </div>
@@ -1190,7 +1198,7 @@
                     </button>
                   </div>
                   <!-- Media previews -->
-                  <MediaUpload ref="profileMediaUploadRef" type="posts" :multiple="true" @uploaded="onProfileMediaUploaded" />
+                  <MediaUpload ref="profileMediaUploadRef" type="posts" :multiple="true" :max-files="20" @uploaded="onProfileMediaUploaded" />
 
                   <!-- Tags row -->
                   <div v-if="newPostTags.length" class="flex flex-wrap gap-1.5">
@@ -1837,8 +1845,9 @@
                 <div class="px-2 pb-2 space-y-0.5">
                   <div v-for="badge in achievementBadges" :key="badge.key"
                     class="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-brand-bg/60 transition-all group cursor-default">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110" :class="badge.iconBg">
-                      <component :is="badge.iconComp" class="w-3.5 h-3.5" :class="badge.iconColor" />
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden transition-transform group-hover:scale-110" :class="!badge.iconImg && badge.iconBg">
+                      <img v-if="badge.iconImg" :src="badge.iconImg" class="w-full h-full object-cover" />
+                      <component v-else :is="badge.iconComp" class="w-3.5 h-3.5" :class="badge.iconColor" />
                     </div>
                     <div class="min-w-0">
                       <p class="text-xs font-bold text-white leading-tight truncate">{{ badge.label }}</p>
@@ -1874,11 +1883,11 @@
     <!-- ─── Avatar Gallery Modal ──────────────────────────────────────── -->
     <Transition name="fade">
       <div v-if="showAvatarViewer"
-        class="fixed inset-0 z-[600] bg-black/90 backdrop-blur-md flex flex-col"
-        @click.self="showAvatarViewer = false">
+        class="fixed inset-0 z-[600] bg-black/60 backdrop-blur-sm flex flex-col"
+        @click="showAvatarViewer = false">
 
         <!-- Header -->
-        <div class="flex items-center justify-between px-5 py-4 flex-shrink-0">
+        <div class="flex items-center justify-between px-5 py-4 flex-shrink-0" @click.stop>
           <div class="flex items-center gap-3">
             <span class="text-white font-bold text-base">
               {{ viewedProfile?.display_name || viewedProfile?.username }}
@@ -1917,7 +1926,7 @@
           <!-- Prev -->
           <button
             v-if="avatarGallery.length > 1"
-            @click="avatarGalleryIndex = Math.max(0, avatarGalleryIndex - 1)"
+            @click.stop="avatarGalleryIndex = Math.max(0, avatarGalleryIndex - 1)"
             :disabled="avatarGalleryIndex === 0"
             class="absolute left-3 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-all disabled:opacity-20 disabled:cursor-not-allowed z-10">
             <BIcon name="ChevronLeft" class="w-6 h-6" />
@@ -1949,7 +1958,7 @@
           <!-- Next -->
           <button
             v-if="avatarGallery.length > 1"
-            @click="avatarGalleryIndex = Math.min(avatarGallery.length - 1, avatarGalleryIndex + 1)"
+            @click.stop="avatarGalleryIndex = Math.min(avatarGallery.length - 1, avatarGalleryIndex + 1)"
             :disabled="avatarGalleryIndex === avatarGallery.length - 1"
             class="absolute right-3 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-all disabled:opacity-20 disabled:cursor-not-allowed z-10">
             <BIcon name="ChevronRight" class="w-6 h-6" />
@@ -1957,7 +1966,7 @@
         </div>
 
         <!-- Thumbnail strip -->
-        <div v-if="avatarGallery.length > 1" class="flex-shrink-0 px-4 pb-5 pt-3">
+        <div v-if="avatarGallery.length > 1" class="flex-shrink-0 px-4 pb-5 pt-3" @click.stop>
           <div class="flex gap-2 overflow-x-auto justify-center">
             <button
               v-for="(item, idx) in avatarGallery" :key="item.url"
@@ -2060,7 +2069,7 @@
 
     <!-- ─── Banner Viewer Modal ─────────────────────────────────────── -->
     <Transition name="fade">
-      <div v-if="showBannerViewer" class="fixed inset-0 z-[600] bg-black/75 backdrop-blur-md flex items-center justify-center p-4" @click.self="showBannerViewer = false">
+      <div v-if="showBannerViewer" class="fixed inset-0 z-[600] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" @click="showBannerViewer = false">
         <button @click="showBannerViewer = false"
           class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all z-10">
           <BIcon name="X" class="w-5 h-5" />
@@ -2393,25 +2402,27 @@ import AppSidebar from '@/components/AppSidebar.vue'
 import StoryViewer from '@/components/StoryViewer.vue'
 import ReportModal from '@/components/ReportModal.vue'
 import api from '@/api'
+import { compressImageForUpload } from '@/lib/utils'
 import { FAVORITE_CATEGORIES } from '@/lib/interests'
 import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
 import { extractHashtags, extractCommittedHashtags } from '@/lib/hashtags'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useTagSuggestions } from '@/composables/useTagSuggestions'
 import { verificationBadgeIcon } from '@/composables/useVerificationBadge'
+import VerificationBadge from '@/components/VerificationBadge.vue'
 import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
 import {
   User, Users, UserPlus, UserMinus, UserX, UsersRound,
   Bell, MessageSquare, Pencil, Pin, Trash2, MoreHorizontal,
   ChevronUp, ChevronDown, Repeat2, MessageCircle, Heart, HeartOff,
   Image, Hash, Search, MapPin, Calendar, Link, Briefcase,
-  FileText, BookImage, Send, Play, X, ArrowLeft, Megaphone,
-  Crown, Shield, Star, BadgeCheck, Flame, Sparkles, Award,
+  FileText, BookImage, Send, Play, X, ArrowLeft,
+  Crown, Shield, BadgeCheck, Flame, Sparkles, Award,
   Palette, Hammer, Shirt, TrendingUp, PenLine, CalendarCheck,
   Footprints, Smile, SmilePlus, AlertCircle,
   LogOut, Camera, Eye, EyeOff, Info, Globe,
   Rabbit, PawPrint, Plus, Check, Twitter, Instagram, Youtube, Twitch, Github, Quote,
-  Wallet, ChevronRight, AtSign, ArrowUpRight, Archive, BarChart3
+  Wallet, ChevronRight, AtSign, ArrowUpRight, Archive, BarChart3, Code2
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -3081,7 +3092,7 @@ async function onBannerFileChange(e: Event) {
   isUploadingBanner.value = true
   try {
     const fd = new FormData()
-    fd.append('file', file)
+    fd.append('file', await compressImageForUpload(file))
     const res = await api.post('/media/upload?folder=banners', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     if (res.data.success && res.data.data?.url) {
       await userStore.updateProfile({ banner_url: res.data.data.url } as any)
@@ -3100,7 +3111,7 @@ async function onAvatarFileChange(e: Event) {
   isUploadingAvatar.value = true
   try {
     const fd = new FormData()
-    fd.append('file', file)
+    fd.append('file', await compressImageForUpload(file))
     const res = await api.post('/media/upload?folder=avatars', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     if (res.data.success && res.data.data?.url) {
       const videoUrl = res.data.data.videoUrl ?? null
@@ -3271,9 +3282,6 @@ const accentStyleSubtle = computed(() => {
 const badgePillMap: Record<string, { label: string; cls: string; icon: any }> = {
   admin:      { label: 'Администратор', cls: 'bg-amber-500/25 border border-amber-500/40 text-amber-300', icon: Crown },
   moderator:  { label: 'Модератор',     cls: 'bg-purple-500/25 border border-purple-500/40 text-purple-300', icon: Shield },
-  creator:    { label: 'Криэйтор',      cls: 'bg-orange-500/25 border border-orange-500/40 text-orange-300', icon: Star },
-  advertiser: { label: 'Рекламодатель', cls: 'bg-emerald-500/25 border border-emerald-500/40 text-emerald-300', icon: Megaphone },
-  ad:         { label: 'Рекламодатель', cls: 'bg-amber-500/25 border border-amber-500/40 text-amber-400', icon: Megaphone },
 }
 
 const badgePillClass = computed(() => {
@@ -3365,23 +3373,23 @@ const profileStats = computed(() => {
 })
 
 const achievementBadges = computed(() => {
-  const badges: { key: string; label: string; desc: string; iconComp: any; iconBg: string; iconColor: string }[] = []
+  const badges: { key: string; label: string; desc: string; iconComp: any; iconImg?: string; iconBg: string; iconColor: string }[] = []
   const p = viewedProfile.value
   if (!p) return badges
-  if (p.badge_type === 'admin')      badges.push({ key: 'admin',      label: 'Администратор',      desc: 'Управляет платформой',     iconComp: Crown,      iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
-  if (p.badge_type === 'moderator')  badges.push({ key: 'mod',        label: 'Модератор',           desc: 'Поддерживает порядок',     iconComp: Shield,     iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
-  if (p.badge_type === 'creator')    badges.push({ key: 'creator',    label: 'Топ контрибьютор',    desc: '100+ публикаций',          iconComp: Star,       iconBg: 'bg-orange-500/20',  iconColor: 'text-orange-400' })
+  if (p.role === 'admin')            badges.push({ key: 'admin',      label: 'Администратор',      desc: 'Управляет платформой',     iconComp: Crown,      iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
+  if (p.role === 'moderator')        badges.push({ key: 'mod',        label: 'Модератор',           desc: 'Поддерживает порядок',     iconComp: Shield,     iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
   // Verification type specific badges
   const vt = (p as any).verification_type
-  if (vt === 'artist')         badges.push({ key: 'ver-artist',    label: 'Верифицированный художник',  desc: 'Подтверждено модератором', iconComp: Palette,       iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
-  else if (vt === 'master')    badges.push({ key: 'ver-master',    label: 'Верифицированный мастер',     desc: 'Подтверждено модератором', iconComp: Hammer,        iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
-  else if (vt === 'fursuiter') badges.push({ key: 'ver-fursuiter', label: 'Верифицированный фурсьютер',  desc: 'Подтверждено модератором', iconComp: Shirt,         iconBg: 'bg-cyan-500/20',    iconColor: 'text-cyan-400' })
-  else if (vt === 'popular')   badges.push({ key: 'ver-popular',   label: 'Верифицированный блогер',     desc: 'Подтверждено модератором', iconComp: TrendingUp,    iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
-  else if (vt === 'writer')    badges.push({ key: 'ver-writer',    label: 'Верифицированный писатель',   desc: 'Подтверждено модератором', iconComp: PenLine,       iconBg: 'bg-rose-500/20',    iconColor: 'text-rose-400' })
-  else if (vt === 'organizer') badges.push({ key: 'ver-organizer', label: 'Верифицированный организатор',desc: 'Подтверждено модератором', iconComp: CalendarCheck, iconBg: 'bg-indigo-500/20',  iconColor: 'text-indigo-400' })
-  else if (vt === 'event')     badges.push({ key: 'ver-event',     label: 'Мероприятие',                 desc: 'Подтверждено модератором', iconComp: BadgeCheck,    iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' })
+  if (vt === 'artist')         badges.push({ key: 'ver-artist',    label: 'Верифицированный художник',  desc: 'Подтверждено модератором', iconComp: Palette,       iconImg: verificationBadgeIcon(vt), iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
+  else if (vt === 'master')    badges.push({ key: 'ver-master',    label: 'Верифицированный мастер',     desc: 'Подтверждено модератором', iconComp: Hammer,        iconImg: verificationBadgeIcon(vt), iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
+  else if (vt === 'fursuiter') badges.push({ key: 'ver-fursuiter', label: 'Верифицированный фурсьютер',  desc: 'Подтверждено модератором', iconComp: Shirt,         iconImg: verificationBadgeIcon(vt), iconBg: 'bg-cyan-500/20',    iconColor: 'text-cyan-400' })
+  else if (vt === 'popular')   badges.push({ key: 'ver-popular',   label: 'Верифицированный блогер',     desc: 'Подтверждено модератором', iconComp: TrendingUp,    iconImg: verificationBadgeIcon(vt), iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
+  else if (vt === 'writer')    badges.push({ key: 'ver-writer',    label: 'Верифицированный писатель',   desc: 'Подтверждено модератором', iconComp: PenLine,       iconImg: verificationBadgeIcon(vt), iconBg: 'bg-rose-500/20',    iconColor: 'text-rose-400' })
+  else if (vt === 'organizer') badges.push({ key: 'ver-organizer', label: 'Верифицированный организатор',desc: 'Подтверждено модератором', iconComp: CalendarCheck, iconImg: verificationBadgeIcon(vt), iconBg: 'bg-indigo-500/20',  iconColor: 'text-indigo-400' })
+  else if (vt === 'event')     badges.push({ key: 'ver-event',     label: 'Мероприятие',                 desc: 'Подтверждено модератором', iconComp: BadgeCheck,    iconImg: verificationBadgeIcon(vt), iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' })
+  else if (vt === 'photographer') badges.push({ key: 'ver-photographer', label: 'Верифицированный фотограф',    desc: 'Подтверждено модератором', iconComp: Camera, iconImg: verificationBadgeIcon(vt), iconBg: 'bg-teal-500/20',    iconColor: 'text-teal-400' })
+  else if (vt === 'programmer')   badges.push({ key: 'ver-programmer',   label: 'Верифицированный программист', desc: 'Подтверждено модератором', iconComp: Code2,  iconImg: verificationBadgeIcon(vt), iconBg: 'bg-fuchsia-500/20', iconColor: 'text-fuchsia-400' })
   else if (p.badge_type === 'verified' || (p as any).is_verified)   badges.push({ key: 'verified',   label: 'Подтверждённая страница', desc: 'Верифицированный аккаунт', iconComp: BadgeCheck, iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
-  if (p.role === 'advertiser')       badges.push({ key: 'advertiser', label: 'Рекламодатель',       desc: 'Активный рекламодатель',   iconComp: Megaphone,  iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' })
   if ((p._count?.posts ?? 0) >= 10)  badges.push({ key: 'active',     label: 'Активный автор',      desc: '10+ публикаций',           iconComp: Flame,      iconBg: 'bg-red-500/20',     iconColor: 'text-red-400' })
   if ((p._count?.followers ?? 0) >= 50) badges.push({ key: 'popular', label: 'Популярный',          desc: '50+ читателей',            iconComp: Sparkles,   iconBg: 'bg-yellow-500/20',  iconColor: 'text-yellow-400' })
   // Default badge for all
@@ -3442,7 +3450,7 @@ const placeStr = computed(() => {
   const loc = viewedProfile.value?.location
   const ctr = (viewedProfile.value as any)?.country
   if (loc && ctr) return `${loc}, ${ctr}`
-  return loc ?? ctr ?? ''
+  return loc || ctr || ''
 })
 
 // ── Together-since duration ───────────────────────────────────────────────

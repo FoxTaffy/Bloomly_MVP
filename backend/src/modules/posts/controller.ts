@@ -1,8 +1,9 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { postService } from './service.js';
 import type { CreatePostInput, JwtUser, GetPostsQuery, GetPersonalizedQuery } from './types.js';
-import { moderatePost } from '../automod/service.js';
+import { moderatePost, moderateComment } from '../automod/service.js';
 import { isModerator, isAdmin } from '../../lib/roles.js';
+import { requestIsAdult } from '../../lib/age.js';
 
 export const getTrendingTagsHandler = async (
   request: FastifyRequest<{ Querystring: { includeNsfw?: string } }>,
@@ -99,7 +100,8 @@ export const searchPostsHandler = async (
     const { q = '', safeMode, page, limit } = request.query;
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
-    const posts = await postService.searchPosts(q, safeMode === 'true', pageNum, limitNum);
+    const effectiveSafeMode = !requestIsAdult(request.user) || safeMode === 'true';
+    const posts = await postService.searchPosts(q, effectiveSafeMode, pageNum, limitNum);
     return reply.send({ success: true, data: { posts }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to search posts';
@@ -119,6 +121,9 @@ export const getPostsHandler = async (
     const query = request.query;
     if (typeof (query as any).safeMode === 'string') {
       (query as any).safeMode = (query as any).safeMode === 'true';
+    }
+    if (!requestIsAdult(request.user)) {
+      (query as any).safeMode = true;
     }
     if (typeof (query as any).hasMedia === 'string') {
       (query as any).hasMedia = (query as any).hasMedia === 'true';
@@ -141,10 +146,10 @@ export const getPersonalizedPostsHandler = async (
 ) => {
   try {
     const { id: userId } = request.user as JwtUser;
-    const safeMode = (request.query as any).safeMode === 'true';
+    const safeMode = !requestIsAdult(request.user) || (request.query as any).safeMode === 'true';
     const pageNum = request.query.page ? parseInt(request.query.page as string, 10) : 1;
     const limitNum = request.query.limit ? parseInt(request.query.limit as string, 10) : 30;
-    
+
     const posts = await postService.getPersonalizedPosts(userId, safeMode, pageNum, limitNum);
     return reply.send({ success: true, data: { posts }, error: null });
   } catch (error: unknown) {
@@ -204,14 +209,16 @@ export const getUserPostStatusHandler = async (
 };
 
 export const createCommentHandler = async (
-  request: FastifyRequest<{ Params: { id: string }; Body: { content: string; parentId?: string; type?: string; file_url?: string } }>,
+  request: FastifyRequest<{ Params: { id: string }; Body: { content: string; parentId?: string; type?: string; file_url?: string; groupId?: string } }>,
   reply: FastifyReply,
 ) => {
   try {
     const { id: userId } = request.user as JwtUser;
     const { id: postId } = request.params;
-    const { content, parentId, type, file_url } = request.body;
-    const comment = await postService.createComment(userId, postId, content, parentId, type, file_url);
+    const { content, parentId, type, file_url, groupId } = request.body;
+    const comment = await postService.createComment(userId, postId, content, parentId, type, file_url, groupId);
+    // fire-and-forget automod burst check (does not block the response)
+    moderateComment(comment.id, userId).catch((err) => console.error('[AUTOMOD] moderateComment error:', err));
     return reply.code(201).send({ success: true, data: { comment }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to create comment';
@@ -226,8 +233,12 @@ export const getCommentsHandler = async (
 ) => {
   try {
     const { id: postId } = request.params;
-    const comments = await postService.getComments(postId);
-    return reply.send({ success: true, data: { comments }, error: null });
+    const viewer = request.user as { id: string; role: string } | undefined;
+    const [comments, canModerate] = await Promise.all([
+      postService.getComments(postId, viewer?.id),
+      postService.canManageComments(postId, viewer?.id, viewer ? isModerator(viewer.role) : false),
+    ]);
+    return reply.send({ success: true, data: { comments, canModerate }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch comments';
     return reply.code(500).send({ success: false, data: null, error: { code: 'GET_COMMENTS_ERROR', message } });

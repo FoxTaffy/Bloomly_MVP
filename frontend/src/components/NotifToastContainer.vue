@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { useNotifToast } from '@/composables/useNotifToast'
+import { useWarningModalStore } from '@/stores/warningModal'
 import BIcon from './BIcon.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 
 const router = useRouter()
 const { toasts, remove } = useNotifToast()
+const warningModal = useWarningModalStore()
 
 const badgeIcon: Record<string, string> = {
   LIKE:    'Heart',
@@ -20,6 +22,7 @@ const badgeIcon: Record<string, string> = {
   GROUP_EVENT: 'Calendar',
   GROUP_JOIN:  'Users',
   MESSAGE:     'MessageCircle',
+  automod_warn: 'ShieldAlert',
 }
 
 const badgeColor: Record<string, string> = {
@@ -35,10 +38,13 @@ const badgeColor: Record<string, string> = {
   GROUP_EVENT: 'bg-amber-500',
   GROUP_JOIN:  'bg-emerald-500',
   MESSAGE:     'bg-sky-500',
+  automod_warn: 'bg-amber-500',
 }
 
 function onClick(t: typeof toasts.value[0]) {
-  if (t.convId) {
+  if (t.type === 'automod_warn') {
+    warningModal.open({ type: t.type, meta: t.meta })
+  } else if (t.convId) {
     router.push({ name: 'messages', query: { c: t.convId } })
   } else if (t.postId) {
     router.push(`/post/${t.postId}`)
@@ -56,7 +62,10 @@ function onClick(t: typeof toasts.value[0]) {
         <div
           v-for="t in toasts"
           :key="t.id"
-          class="pointer-events-auto flex items-start gap-3 px-4 py-3 bg-brand-card/95 backdrop-blur-xl border border-brand-border rounded-2xl shadow-2xl cursor-pointer hover:bg-brand-card transition-colors w-[320px]"
+          class="pointer-events-auto flex items-start gap-3 px-4 py-3 backdrop-blur-xl rounded-2xl shadow-2xl cursor-pointer transition-colors w-[320px]"
+          :class="t.type === 'automod_warn'
+            ? 'bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/15'
+            : 'bg-brand-card/95 border border-brand-border hover:bg-brand-card'"
           @click="onClick(t)"
         >
           <!-- Avatar + badge -->

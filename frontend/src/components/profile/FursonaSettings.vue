@@ -507,6 +507,7 @@
 import { reactive, ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useUserStore, FURSONA_SPECIES } from '@/stores/user'
 import { useLangStore } from '@/stores/lang'
+import { useConfirm } from '@/composables/useConfirm'
 import type { UpsertFursonaInput, Fursona, FursonaReferenceImage } from '@/stores/user'
 import MediaUpload from '@/components/MediaUpload.vue'
 import BIcon from '@/components/BIcon.vue'
@@ -517,6 +518,7 @@ const emit = defineEmits<{ dirty: [val: boolean] }>()
 
 const userStore = useUserStore()
 const langStore = useLangStore()
+const { confirmDialog } = useConfirm()
 const t = computed(() => langStore.t)
 
 function speciesLabel(sp: string): string {
@@ -824,7 +826,7 @@ async function handleSetPrimary(id: string) {
 }
 
 async function handleDelete(id: string) {
-  if (!confirm(t.value.fursonaDeleteConfirm)) return
+  if (!(await confirmDialog(t.value.fursonaDeleteConfirm, { danger: true }))) return
   try {
     await userStore.deleteFursona(id)
   } catch (e: any) {

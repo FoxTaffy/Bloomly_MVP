@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import prisma from '../../config/prisma.js';
-import { analyzeContent, patrolSuspiciousActivity } from './service.js';
+import { analyzeContent, patrolSuspiciousActivity, submitAppeal, getOwnWarningLog } from './service.js';
 import { isModerator, isAdmin } from '../../lib/roles.js';
 
 interface JwtUser { id: string; role: string }
@@ -141,4 +141,31 @@ export const runPatrolHandler = async (
   );
 
   return reply.send({ success: true, data: { message: 'Patrol started' }, error: null });
+};
+
+export const getOwnWarningHandler = async (
+  req: FastifyRequest<{ Params: { logId: string } }>,
+  reply: FastifyReply,
+) => {
+  const user = req.user as JwtUser;
+  const log = await getOwnWarningLog(req.params.logId, user.id);
+  if (!log) return reply.code(404).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Warning not found' } });
+  return reply.send({ success: true, data: { log }, error: null });
+};
+
+export const submitAppealHandler = async (
+  req: FastifyRequest<{ Params: { logId: string }; Body: { text: string } }>,
+  reply: FastifyReply,
+) => {
+  const user = req.user as JwtUser;
+  const text = req.body?.text?.trim();
+  if (!text) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_INPUT', message: 'text is required' } });
+  }
+  try {
+    const log = await submitAppeal(req.params.logId, user.id, text);
+    return reply.send({ success: true, data: { log }, error: null });
+  } catch (err: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'APPEAL_ERROR', message: err.message } });
+  }
 };

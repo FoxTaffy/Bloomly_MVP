@@ -757,7 +757,11 @@ const connectWebSocket = () => {
 watch(showPostForm, (v) => { if (!v) { dragCounter = 0; formDragging.value = false; showEntityPicker.value = false } })
 watch(nsfwMode, () => { fetchTrendingTags() })
 
-onMounted(() => { fetchPosts(); fetchRecommendedUsers(); fetchTrendingEvents(); fetchTrendingTags(); fetchActiveAds(); if (auth.user && !groupsStore.myGroups.length) groupsStore.loadMyGroups().catch(() => {}) })
+onMounted(() => {
+  fetchPosts(); fetchRecommendedUsers(); fetchTrendingEvents(); fetchTrendingTags(); fetchActiveAds()
+  if (auth.user && !groupsStore.myGroups.length) groupsStore.loadMyGroups().catch(() => {})
+  if (auth.user && !groupsStore.mySubscriptions.length) groupsStore.loadMySubscriptions().catch(() => {})
+})
 
 // ── Keep-alive re-entry ──────────────────────────────────────────────────────
 // MainLayout is cached by <KeepAlive> (see App.vue) so the feed + scroll position
@@ -993,6 +997,7 @@ onDeactivated(() => {
               ref="mediaUploadRef"
               type="posts"
               :multiple="true"
+              :max-files="20"
               @uploaded="handleMediaUploaded"
             />
 

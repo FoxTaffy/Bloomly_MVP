@@ -8,12 +8,15 @@ import type {
 } from './types.js';
 import prisma from '../../config/prisma.js';
 import { isAdmin as isAdminRole } from '../../lib/roles.js';
+import { requestIsAdult } from '../../lib/age.js';
 
 // ── Listings ──────────────────────────────────────────────────────────────────
 
 export async function listListingsHandler(req: FastifyRequest, reply: FastifyReply) {
   try {
-    const result = await dealersDenService.list(req.query as GetListingsQuery);
+    const query = req.query as GetListingsQuery;
+    if (!requestIsAdult((req as any).user)) query.excludeNsfw = '1';
+    const result = await dealersDenService.list(query);
     return reply.send({ success: true, data: result });
   } catch (err) {
     req.log.error(err);

@@ -17,6 +17,7 @@ import { isAdmin as isAdminRole } from '../../lib/roles.js';
 declare module 'fastify' {
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    tryAuthenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
@@ -31,14 +32,15 @@ function requireAdminRole(req: FastifyRequest, reply: FastifyReply, done: () => 
 
 export async function dealersDenRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
+  const tryAuth: RouteShorthandOptions = { onRequest: [fastify.tryAuthenticate] };
   const adminOnly: RouteShorthandOptions = { onRequest: [fastify.authenticate, requireAdminRole as any] };
 
   // ── Listings ──
-  fastify.get('/',              listListingsHandler as any);
+  fastify.get('/',              tryAuth, listListingsHandler as any);
   fastify.get('/me',    auth,   getMyListingsHandler as any);
   fastify.get('/:id',           getListingHandler as any);
   fastify.post('/',     auth,   createListingHandler as any);
-  fastify.patch('/:id', auth,   updateListingHandler as any);
+  fastify.patch('/:id', { onRequest: [fastify.authenticate], config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, updateListingHandler as any);
   fastify.delete('/:id', auth,  deleteListingHandler as any);
 
   // ── Auction / Raffle ──

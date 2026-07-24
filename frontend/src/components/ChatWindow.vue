@@ -1,8 +1,22 @@
 <template>
   <div class="flex flex-col h-full bg-brand-bg overflow-hidden relative">
 
+    <!-- ── Selection bar (replaces header while messages are selected) ──────── -->
+    <div v-if="selectionMode" class="flex items-center gap-3 px-4 py-3 border-b border-brand-border bg-brand-card flex-shrink-0">
+      <button @click="clearSelection" class="p-1.5 rounded-xl hover:bg-brand-bg text-white/55 hover:text-white transition-colors" title="Отменить">
+        <BIcon name="X" class="w-4 h-4" />
+      </button>
+      <p class="flex-1 text-sm font-bold text-white">Выбрано: {{ selectedMsgIds.size }}</p>
+      <button @click="startBulkForward" class="p-1.5 rounded-xl hover:bg-brand-bg text-white/55 hover:text-brand-accent transition-colors" title="Переслать">
+        <BIcon name="Forward" class="w-4 h-4" />
+      </button>
+      <button v-if="canDeleteSelected" @click="deleteSelected" class="p-1.5 rounded-xl hover:bg-brand-error/10 text-white/55 hover:text-brand-error transition-colors" title="Удалить">
+        <BIcon name="Trash2" class="w-4 h-4" />
+      </button>
+    </div>
+
     <!-- ── Header ─────────────────────────────────────────────────────────── -->
-    <div class="flex items-center gap-3 px-4 py-3 border-b border-brand-border bg-brand-card flex-shrink-0">
+    <div v-else class="flex items-center gap-3 px-4 py-3 border-b border-brand-border bg-brand-card flex-shrink-0">
       <button @click="$emit('back')" class="sm:hidden p-1.5 rounded-xl hover:bg-brand-bg text-white/55 hover:text-white transition-colors">
         <BIcon name="ArrowLeft" class="w-4 h-4" />
       </button>
@@ -881,9 +895,14 @@
         </div>
         <div
           :id="'msg-' + msg.id"
-          :class="msg.type === 'system'
-            ? 'flex justify-center my-1 px-4'
-            : ['flex gap-2', isMine(msg) ? 'justify-end' : 'justify-start']">
+          :class="[
+            msg.type === 'system'
+              ? 'flex justify-center my-1 px-4'
+              : ['flex gap-2', isMine(msg) ? 'justify-end' : 'justify-start'],
+            selectedMsgIds.has(msg.id) ? 'bg-brand-accent/10 -mx-2 px-2 py-1 rounded-2xl' : '',
+          ]"
+          @click.capture="onRowClickCapture(msg, $event)"
+          @contextmenu="openContextMenu(msg, $event)">
 
           <!-- ── System message (centered notice) ──────────────── -->
           <template v-if="msg.type === 'system'">
@@ -919,8 +938,8 @@
 
           <!-- Bubble -->
           <div class="group max-w-[72%] flex flex-col" :class="isMine(msg) ? 'items-end' : 'items-start'"
-            @dblclick="replyTo = msg"
-            @click.self="tappedMsgId = tappedMsgId === msg.id ? null : msg.id">
+            @dblclick="!selectionMode && (replyTo = msg)"
+            @click.self="toggleSelect(msg.id)">
 
             <!-- Sender name (only in group, for incoming, and only if first in group) -->
             <p v-if="conv?.is_group && !isMine(msg) && !isSameAsPrev(idx)"
@@ -952,7 +971,18 @@
               class="flex items-center gap-1.5 mb-1 px-1"
               :class="isMine(msg) ? 'justify-end' : ''">
               <BIcon name="CornerUpRight" class="w-3 h-3 flex-shrink-0 text-brand-accent" />
-              <span class="text-[10px] font-semibold text-brand-accent truncate">
+              <template v-if="msg.forwarded_from_sender">
+                <img v-if="msg.forwarded_from_sender.avatar_url" :src="msg.forwarded_from_sender.avatar_url" :alt="msg.forwarded_from_sender.username"
+                  class="w-3.5 h-3.5 rounded-full object-cover cursor-pointer flex-shrink-0 hover:opacity-80 transition-opacity"
+                  @click.stop="goToProfile(msg.forwarded_from_sender.username)" @error="onAvatarError" />
+                <span v-else class="w-3.5 h-3.5 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-[7px] font-bold cursor-pointer flex-shrink-0"
+                  @click.stop="goToProfile(msg.forwarded_from_sender.username)">
+                  {{ (msg.forwarded_from_sender.display_name || msg.forwarded_from_sender.username || '?')[0].toUpperCase() }}
+                </span>
+              </template>
+              <span class="text-[10px] font-semibold text-brand-accent truncate"
+                :class="msg.forwarded_from_sender ? 'cursor-pointer hover:underline' : ''"
+                @click.stop="msg.forwarded_from_sender && goToProfile(msg.forwarded_from_sender.username)">
                 Переслано от {{ getForwardedAuthor(msg) }}
               </span>
             </div>
@@ -993,10 +1023,11 @@
 
             <!-- Media (compact MiniPlayer) -->
             <div v-else-if="msg.file_url"
-              class="rounded-2xl overflow-hidden border border-brand-border/60 mb-0.5 max-w-[280px] w-full shadow-sm"
+              class="rounded-2xl overflow-hidden border border-brand-border/60 mb-0.5 w-full shadow-sm"
               :class="[
                 isMine(msg) ? 'rounded-br-md' : 'rounded-bl-md',
                 (msg.type === 'voice' || msg.type === 'audio') ? (isMine(msg) ? 'bg-brand-accent border-brand-accent' : 'bg-brand-card') : '',
+                (msg.type === 'gif' || isGifUrl(msg.file_url)) ? 'max-w-[340px]' : 'max-w-[280px]',
               ]">
               <MiniPlayer :src="msg.file_url" :msg-type="msg.type" :is-mine="isMine(msg)" @click-image="openImageLightbox(msg.file_url!)" />
             </div>
@@ -1187,8 +1218,19 @@
                 :class="isMine(msg) ? 'border-white/20' : 'border-brand-border'">
                 <BIcon name="CornerUpRight" class="w-3 h-3 flex-shrink-0"
                   :class="isMine(msg) ? 'text-white/60' : 'text-brand-accent'" />
+                <template v-if="msg.forwarded_from_sender">
+                  <img v-if="msg.forwarded_from_sender.avatar_url" :src="msg.forwarded_from_sender.avatar_url" :alt="msg.forwarded_from_sender.username"
+                    class="w-3.5 h-3.5 rounded-full object-cover cursor-pointer flex-shrink-0 hover:opacity-80 transition-opacity"
+                    @click.stop="goToProfile(msg.forwarded_from_sender.username)" @error="onAvatarError" />
+                  <span v-else class="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[7px] font-bold cursor-pointer flex-shrink-0"
+                    :class="isMine(msg) ? 'bg-white/15 text-white/80' : 'bg-brand-accent/20 text-brand-accent'"
+                    @click.stop="goToProfile(msg.forwarded_from_sender.username)">
+                    {{ (msg.forwarded_from_sender.display_name || msg.forwarded_from_sender.username || '?')[0].toUpperCase() }}
+                  </span>
+                </template>
                 <span class="text-[10px] font-semibold truncate"
-                  :class="isMine(msg) ? 'text-white/60' : 'text-brand-accent'">
+                  :class="[isMine(msg) ? 'text-white/60' : 'text-brand-accent', msg.forwarded_from_sender ? 'cursor-pointer hover:underline' : '']"
+                  @click.stop="msg.forwarded_from_sender && goToProfile(msg.forwarded_from_sender.username)">
                   Переслано от {{ getForwardedAuthor(msg) }}
                 </span>
               </div>
@@ -1340,6 +1382,7 @@
     <!-- ── Media lightbox (PostLightbox) ───────────────────────────────────── -->
     <PostLightbox v-if="lightboxUrls.length"
       :images="lightboxUrls"
+      :types="lightboxTypes"
       :start-index="lightboxStart"
       @close="lightboxUrls = []" />
 
@@ -1348,6 +1391,12 @@
       :show="!!stickerPackUrl"
       :sticker-url="stickerPackUrl ?? ''"
       @close="stickerPackUrl = null" />
+
+    <!-- ── "Slow down" spam nag ─────────────────────────────────────────────── -->
+    <SpamSlowdownModal
+      :show="store.spamNagActive"
+      :cooldown-until="store.spamNagCooldownUntil"
+      @close="store.dismissSpamNag()" />
 
     <!-- ── Delete conversation modal ─────────────────────────────────── -->
     <Teleport to="body">
@@ -1412,22 +1461,26 @@
     <!-- ── Forward modal ────────────────────────────────────────────────────── -->
     <Teleport to="body">
       <Transition name="fade">
-        <div v-if="forwardMsg" class="fixed inset-0 z-[200] flex items-center justify-center p-4"
-          style="background:rgba(0,0,0,.55)" @click.self="forwardMsg = null">
+        <div v-if="forwardMsg || forwardMsgs.length" class="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          style="background:rgba(0,0,0,.55)" @click.self="closeForwardModal">
           <div class="bg-brand-card border border-brand-border rounded-3xl p-5 w-full max-w-sm shadow-2xl">
             <div class="flex items-center justify-between mb-4">
-              <h3 class="text-base font-bold text-white">Переслать сообщение</h3>
-              <button @click="forwardMsg = null" class="p-1.5 rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-colors">
+              <h3 class="text-base font-bold text-white">{{ forwardList.length > 1 ? `Переслать ${forwardList.length} сообщения` : 'Переслать сообщение' }}</h3>
+              <button @click="closeForwardModal" class="p-1.5 rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-colors">
                 <BIcon name="X" class="w-4 h-4" />
               </button>
             </div>
             <!-- Quote preview -->
-            <div class="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl bg-brand-bg border border-brand-border/60">
+            <div v-if="forwardList.length === 1" class="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl bg-brand-bg border border-brand-border/60">
               <div class="w-0.5 h-7 rounded-full bg-brand-accent flex-shrink-0" />
               <div class="min-w-0">
-                <p class="text-[10px] text-brand-accent font-semibold truncate">{{ forwardMsg.sender?.display_name || forwardMsg.sender?.username }}</p>
-                <p class="text-[11px] text-white/55 truncate">{{ forwardMsgPreview(forwardMsg) }}</p>
+                <p class="text-[10px] text-brand-accent font-semibold truncate">{{ forwardList[0].sender?.display_name || forwardList[0].sender?.username }}</p>
+                <p class="text-[11px] text-white/55 truncate">{{ forwardMsgPreview(forwardList[0]) }}</p>
               </div>
+            </div>
+            <div v-else class="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl bg-brand-bg border border-brand-border/60">
+              <BIcon name="Forward" class="w-4 h-4 text-brand-accent flex-shrink-0" />
+              <p class="text-[11px] text-white/55">Выбрано сообщений: {{ forwardList.length }}</p>
             </div>
             <!-- Conv list -->
             <div class="space-y-1 max-h-52 overflow-y-auto">
@@ -1452,6 +1505,53 @@
           </div>
         </div>
       </Transition>
+    </Teleport>
+
+    <!-- ── Message context menu (right-click) ────────────────────────────────── -->
+    <Teleport to="body">
+      <div v-if="contextMenuMsg" class="fixed inset-0 z-[250]" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu">
+        <div class="absolute w-56 bg-brand-card border border-brand-border rounded-2xl shadow-2xl py-1.5 overflow-hidden"
+          :style="{ left: contextMenuPos.x + 'px', top: contextMenuPos.y + 'px' }"
+          @click.stop @contextmenu.prevent.stop>
+          <button @click="replyTo = contextMenuMsg; closeContextMenu()"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
+            <BIcon name="CornerUpLeft" class="w-4 h-4 text-white/55 flex-shrink-0" />
+            Ответить
+          </button>
+          <button v-if="isMine(contextMenuMsg) && contextMenuMsg.type === 'text' && !contextMenuMsg._sending"
+            @click="startEdit(contextMenuMsg); closeContextMenu()"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
+            <BIcon name="Pencil" class="w-4 h-4 text-white/55 flex-shrink-0" />
+            Изменить
+          </button>
+          <button @click="openPinModal(contextMenuMsg); closeContextMenu()"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
+            <BIcon name="Pin" class="w-4 h-4 text-white/55 flex-shrink-0" />
+            Закрепить
+          </button>
+          <button v-if="contextMenuMsg.text" @click="copyMessageText(contextMenuMsg); closeContextMenu()"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
+            <BIcon name="Copy" class="w-4 h-4 text-white/55 flex-shrink-0" />
+            Копировать текст
+          </button>
+          <button @click="startForward(contextMenuMsg); closeContextMenu()"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
+            <BIcon name="Forward" class="w-4 h-4 text-white/55 flex-shrink-0" />
+            Переслать
+          </button>
+          <div class="border-t border-brand-border my-1" />
+          <button @click="toggleSelect(contextMenuMsg.id); closeContextMenu()"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
+            <BIcon name="CheckSquare" class="w-4 h-4 text-white/55 flex-shrink-0" />
+            Выделить
+          </button>
+          <button v-if="isMine(contextMenuMsg) && !contextMenuMsg._sending" @click="deleteMsg(contextMenuMsg.id); closeContextMenu()"
+            class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-error hover:bg-brand-error/8 transition-colors text-left">
+            <BIcon name="Trash2" class="w-4 h-4 flex-shrink-0" />
+            Удалить
+          </button>
+        </div>
+      </div>
     </Teleport>
 
     <!-- ── Invite-to-group picker ───────────────────────────────────────────── -->
@@ -1585,6 +1685,19 @@
           <StickerPanel @pick="sendSticker" @pickEmoji="insertEmojiFromStickers" />
         </div>
       </Transition>
+      <!-- Quick replies popover -->
+      <Transition name="popover-up">
+        <div v-if="showQuickReplies"
+          class="absolute bottom-full left-3 mb-2 z-50 w-72 max-w-[80vw] max-h-80 overflow-y-auto bg-brand-card border border-brand-border rounded-2xl shadow-2xl p-2">
+          <button v-for="(reply, i) in quickReplies" :key="i" type="button" @click="useQuickReply(reply)"
+            class="w-full text-left px-3 py-2.5 rounded-xl text-sm text-white/85 hover:bg-brand-bg transition-colors">
+            {{ reply }}
+          </button>
+          <p v-if="!quickReplies.length" class="px-3 py-4 text-xs text-white/40 text-center">
+            Нет шаблонов — добавь их в настройках профиля
+          </p>
+        </div>
+      </Transition>
 
       <form @submit.prevent="submit" class="flex items-end gap-2">
         <!-- Attachment button -->
@@ -1599,7 +1712,7 @@
 
         <!-- Emoji button -->
         <button type="button"
-          @click="showEmojiPicker = !showEmojiPicker; showStickerPanel = false"
+          @click="showEmojiPicker = !showEmojiPicker; showStickerPanel = false; showQuickReplies = false"
           :class="['flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center transition-all',
             showEmojiPicker ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/55 hover:text-brand-accent hover:bg-brand-bg']"
           title="Эмодзи">
@@ -1608,11 +1721,20 @@
 
         <!-- Sticker button -->
         <button type="button"
-          @click="showStickerPanel = !showStickerPanel; showEmojiPicker = false"
+          @click="showStickerPanel = !showStickerPanel; showEmojiPicker = false; showQuickReplies = false"
           :class="['flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center transition-all',
             showStickerPanel ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/55 hover:text-brand-accent hover:bg-brand-bg']"
           title="Стикеры">
           <BIcon name="Sticker" class="w-5 h-5" />
+        </button>
+
+        <!-- Quick replies button -->
+        <button type="button"
+          @click="showQuickReplies = !showQuickReplies; showEmojiPicker = false; showStickerPanel = false"
+          :class="['flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center transition-all',
+            showQuickReplies ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/55 hover:text-brand-accent hover:bg-brand-bg']"
+          title="Быстрые ответы">
+          <BIcon name="MessageSquareDashed" class="w-5 h-5" />
         </button>
 
         <!-- Recording in progress bar (takes the place of the textarea row when recording) -->
@@ -1684,7 +1806,7 @@
             <div v-for="a in pendingAttachments" :key="a.id"
               class="relative flex items-center gap-2 bg-brand-bg border border-brand-border rounded-2xl p-2 pr-3 max-w-[220px] shadow-sm">
               <div class="relative flex-shrink-0 w-11 h-11 rounded-xl overflow-hidden bg-black/25 flex items-center justify-center">
-                <video v-if="a.kind === 'video'" :src="a.previewUrl!" class="w-full h-full object-cover" muted />
+                <video v-if="a.kind === 'video' || a.kind === 'gif'" :src="a.previewUrl!" class="w-full h-full object-cover" muted />
                 <img v-else-if="a.kind === 'image'" :src="a.previewUrl!" class="w-full h-full object-cover" />
                 <BIcon v-else-if="a.kind === 'audio'" name="Music" class="w-5 h-5 text-brand-accent" />
                 <BIcon v-else name="FileText" class="w-5 h-5 text-brand-accent" />
@@ -1885,7 +2007,9 @@ import EmojiPicker from '@/components/EmojiPicker.vue'
 import StickerPanel from '@/components/StickerPanel.vue'
 import StickerRenderer from '@/components/StickerRenderer.vue'
 import StickerPackPreviewModal from '@/components/StickerPackPreviewModal.vue'
+import SpamSlowdownModal from '@/components/SpamSlowdownModal.vue'
 import api from '@/api'
+import { compressImageForUpload } from '@/lib/utils'
 import { wsClient } from '@/lib/wsClient'
 import { isEncrypted } from '@/lib/e2e'
 import { deviceKind } from '@/lib/deviceIcon'
@@ -1948,7 +2072,7 @@ let onlineTimer: ReturnType<typeof setInterval> | null = null
 // Media — multiple attachments can be queued at once (e.g. a photo + a video sent together)
 interface PendingAttachment {
   id: number
-  kind: 'image' | 'video' | 'audio' | 'file'
+  kind: 'image' | 'video' | 'gif' | 'audio' | 'file'
   name: string
   size: number
   previewUrl: string | null
@@ -1966,6 +2090,7 @@ const uploadError       = ref<string | null>(null)
 let uploadErrorTimer: ReturnType<typeof setTimeout> | null = null
 // Lightbox
 const lightboxUrls = ref<string[]>([])
+const lightboxTypes = ref<string[]>([])
 const lightboxStart = ref(0)
 const stickerPackUrl = ref<string | null>(null)
 // Voice recording
@@ -2011,7 +2136,8 @@ async function onGroupAvatarChange(e: Event) {
   uploadingGroupAvatar.value = true
   try {
     const fd = new FormData()
-    fd.append('file', file, file.name)
+    const compressed = await compressImageForUpload(file)
+    fd.append('file', compressed, compressed.name)
     const res = await api.post('/media/upload?folder=avatars', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     editGroupAvatar.value = res.data.data.url
   } catch (err) { console.error('Avatar upload failed:', err) }
@@ -2024,7 +2150,8 @@ async function onGroupBannerChange(e: Event) {
   uploadingGroupBanner.value = true
   try {
     const fd = new FormData()
-    fd.append('file', file, file.name)
+    const compressed = await compressImageForUpload(file)
+    fd.append('file', compressed, compressed.name)
     const res = await api.post('/media/upload?folder=banners', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     editGroupBanner.value = res.data.data.url
   } catch (err) { console.error('Banner upload failed:', err) }
@@ -2097,11 +2224,71 @@ async function doAddMember(u: { id: string; username: string; display_name: stri
 // Emoji & sticker popovers
 const showEmojiPicker  = ref(false)
 const showStickerPanel = ref(false)
+// Quick replies (templates configured in profile automation settings)
+const showQuickReplies = ref(false)
+const quickReplies     = ref<string[]>([])
+async function loadQuickReplies() {
+  try {
+    const { data } = await api.get('/automation/me')
+    quickReplies.value = data.data.settings?.quick_replies ?? []
+  } catch { /* not critical — panel just stays empty */ }
+}
 // Reply / forward / mention card
 const replyTo      = ref<Message | null>(null)
 const forwardMsg   = ref<Message | null>(null)
+const forwardMsgs  = ref<Message[]>([])
 const tappedMsgId  = ref<string | null>(null)
 const mentionCard  = ref<{ username: string; display_name: string | null; avatar_url: string | null; id: string; x: number; y: number } | null>(null)
+
+// ── Message selection (multi-select toolbar) ────────────────────────────────
+const selectedMsgIds = ref<Set<string>>(new Set())
+const selectionMode  = computed(() => selectedMsgIds.value.size > 0)
+const selectedList   = computed(() => displayList.value.filter((m) => selectedMsgIds.value.has(m.id)))
+const canDeleteSelected = computed(() => selectedList.value.length > 0 && selectedList.value.every((m) => isMine(m) && !m._sending))
+
+function toggleSelect(id: string) {
+  const next = new Set(selectedMsgIds.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  selectedMsgIds.value = next
+}
+function clearSelection() {
+  selectedMsgIds.value = new Set()
+}
+function onRowClickCapture(msg: Message, e: MouseEvent) {
+  if (msg.type === 'system' || !selectionMode.value) return
+  e.preventDefault()
+  e.stopPropagation()
+  toggleSelect(msg.id)
+}
+async function deleteSelected() {
+  if (!canDeleteSelected.value) return
+  const ids = Array.from(selectedMsgIds.value)
+  clearSelection()
+  await Promise.all(ids.map((id) => store.deleteMessage(id)))
+}
+function startBulkForward() {
+  if (!selectedList.value.length) return
+  forwardMsgs.value = selectedList.value
+}
+
+// ── Message context menu (right-click) ───────────────────────────────────────
+const contextMenuMsg = ref<Message | null>(null)
+const contextMenuPos  = ref<{ x: number; y: number }>({ x: 0, y: 0 })
+const CONTEXT_MENU_W = 224
+const CONTEXT_MENU_H = 320
+function openContextMenu(msg: Message, e: MouseEvent) {
+  if (msg.type === 'system') return
+  e.preventDefault()
+  contextMenuMsg.value = msg
+  contextMenuPos.value = {
+    x: Math.min(e.clientX, window.innerWidth - CONTEXT_MENU_W - 8),
+    y: Math.min(e.clientY, window.innerHeight - CONTEXT_MENU_H - 8),
+  }
+}
+function closeContextMenu() {
+  contextMenuMsg.value = null
+}
 
 // Invite-to-group picker
 const showInvitePicker = ref(false)
@@ -2146,6 +2333,13 @@ const mediaUrls = computed(() =>
     .filter(m => m.type !== 'sticker')
     .map(m => m.file_url)
     .filter(Boolean) as string[]
+)
+// Parallel array of msg.type, kept in lock-step with mediaUrls — lets the lightbox
+// know a "video" is actually a silent gif-style clip (no player chrome) up front.
+const mediaTypes = computed(() =>
+  displayList.value
+    .filter(m => m.type !== 'sticker' && m.file_url)
+    .map(m => m.type)
 )
 
 const isPartnerTyping = computed(() => {
@@ -2272,6 +2466,7 @@ function toggleMediaBrowserPlay(msgId: string) {
 function openMediaBrowserImage(url: string) {
   const urls = mediaBrowserItems.value.map((m) => m.file_url).filter(Boolean) as string[]
   lightboxUrls.value = urls
+  lightboxTypes.value = []
   lightboxStart.value = Math.max(0, urls.indexOf(url))
 }
 
@@ -2365,13 +2560,20 @@ function insertEmoji(emoji: string) {
 }
 
 function sendSticker(url: string) {
-  store.sendMessage(props.convId, '', url, 'sticker')
   showStickerPanel.value = false
+  if (store.checkSpamGate()) return
+  store.sendMessage(props.convId, '', url, 'sticker')
 }
 
 function insertEmojiFromStickers(emoji: string) {
   insertEmoji(emoji)
   showStickerPanel.value = false
+}
+
+function useQuickReply(text: string) {
+  draft.value = text
+  showQuickReplies.value = false
+  nextTick(() => { inputEl.value?.focus(); autoResize() })
 }
 
 function isLastInGroup(idx: number) {
@@ -2486,8 +2688,10 @@ function openStoryCard(card: StoryReplyMeta, msg?: Message) {
 }
 
 function getForwardedAuthor(msg: Message): string | null {
-  if (msg.forwarded_from_sender) {
-    return msg.forwarded_from_sender.display_name || msg.forwarded_from_sender.username
+  if (msg.forwarded_from_sender_id) {
+    return msg.forwarded_from_sender
+      ? (msg.forwarded_from_sender.display_name || msg.forwarded_from_sender.username)
+      : 'Пользователь скрыт'
   }
   const m = (msg.text || '').match(FWD_RE); return m ? m[1] : null
 }
@@ -2538,6 +2742,11 @@ function scrollToMsg(msgId: string) {
 function startForward(msg: any) {
   forwardMsg.value = msg
 }
+const forwardList = computed<Message[]>(() => forwardMsg.value ? [forwardMsg.value] : forwardMsgs.value)
+function closeForwardModal() {
+  forwardMsg.value = null
+  forwardMsgs.value = []
+}
 
 function forwardMsgPreview(msg: Message): string {
   if (msg.type === 'sticker') return '🎭 Стикер'
@@ -2553,13 +2762,14 @@ function forwardMsgPreview(msg: Message): string {
   return ''
 }
 async function doForward(targetConvId: string) {
-  if (!forwardMsg.value) return
-  const original = forwardMsg.value
-  forwardMsg.value = null
+  const list = forwardList.value
+  if (!list.length) return
+  closeForwardModal()
+  clearSelection()
   try {
-    await store.forwardMessage(original.id, targetConvId)
+    await Promise.all(list.map((m) => store.forwardMessage(m.id, targetConvId)))
   } catch {
-    // silent — message still sent via WS push to target conv
+    // silent — message(s) still sent via WS push to target conv
   }
 }
 
@@ -2738,6 +2948,7 @@ function openStickerPack(url: string) {
 
 function openImageLightbox(url: string) {
   lightboxUrls.value = mediaUrls.value.length ? mediaUrls.value : [url]
+  lightboxTypes.value = mediaUrls.value.length ? mediaTypes.value : []
   lightboxStart.value = Math.max(0, lightboxUrls.value.indexOf(url))
 }
 
@@ -2747,10 +2958,15 @@ function getAlbumFiles(msg: Message): AlbumFile[] {
   return Array.isArray(files) ? files : []
 }
 
+function isGifUrl(url?: string | null): boolean {
+  return !!url && /\.gif(\?|$)/i.test(url)
+}
+
 /** Lightbox scoped to just this album's own images (not the whole conversation's media). */
 function openAlbumImageLightbox(msg: Message, url: string) {
   const imageUrls = getAlbumFiles(msg).filter((f) => f.type === 'image').map((f) => f.url)
   lightboxUrls.value = imageUrls.length ? imageUrls : [url]
+  lightboxTypes.value = []
   lightboxStart.value = Math.max(0, lightboxUrls.value.indexOf(url))
 }
 
@@ -2790,7 +3006,7 @@ async function startRecording() {
           headers: { 'Content-Type': 'multipart/form-data' },
         })
         const url = res.data?.data?.url ?? null
-        if (url) store.sendMessage(props.convId, '', url, 'voice')
+        if (url && !store.checkSpamGate()) store.sendMessage(props.convId, '', url, 'voice')
       } catch {}
       finally { voiceUploading.value = false }
     }
@@ -2916,6 +3132,7 @@ async function submit() {
   const text = draft.value.trim()
   const ready = pendingAttachments.value.filter((a) => a.uploadedUrl && !a.failed)
   if (!text && !ready.length) return
+  if (store.checkSpamGate()) return // draft stays intact — shown the "slow down" nag instead
   const rId = replyTo.value?.id ?? null
   draft.value = ''
   replyTo.value = null
@@ -2927,8 +3144,9 @@ async function submit() {
     store.sendMessage(props.convId, text, undefined, undefined, rId, attachments)
   } else {
     const fileUrl = ready[0]?.uploadedUrl ?? null
+    const kind = ready[0]?.kind
     clearAttachments()
-    store.sendMessage(props.convId, text, fileUrl, undefined, rId)
+    store.sendMessage(props.convId, text, fileUrl, kind === 'file' ? undefined : kind, rId)
   }
   scrollToBottom(true)
 }
@@ -2998,6 +3216,9 @@ function addPendingFile(file: File) {
       })
       const url = res.data?.data?.url ?? null
       if (!url) throw new Error('no url')
+      // A video with no audio track behaves like a GIF — render it with the lightweight
+      // autoplay/pause UI instead of the full player (seek bar, volume, speed, etc).
+      if (item.kind === 'video' && res.data?.data?.isSilentVideo) item.kind = 'gif'
       item.uploadedUrl = url
       item.progress = 100
     } catch (err: any) {
@@ -3175,6 +3396,7 @@ async function fetchOnlineStatus() {
 
 onMounted(() => {
   document.addEventListener('click', closeMenu)
+  loadQuickReplies()
   if (!props.conv?.is_group && !(isGroupDm.value && amGroupDmCustomer.value)) {
     fetchOnlineStatus()
     onlineTimer = setInterval(fetchOnlineStatus, 30_000)

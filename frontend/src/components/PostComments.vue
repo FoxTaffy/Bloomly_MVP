@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
+import { useGroupsStore } from '@/stores/groups'
 import { useCollectionTranslate } from '@/composables/useAutoTranslate'
 import BIcon from './BIcon.vue'
 import StickerPanel from './StickerPanel.vue'
@@ -11,9 +13,46 @@ import { onAvatarError } from '@/composables/useAvatarFallback'
 
 const props = defineProps<{ postId: string; commentsDisabled?: boolean }>()
 
+const router = useRouter()
 const auth = useAuthStore()
 const langStore = useLangStore()
+const groupsStore = useGroupsStore()
 const { enqueue: translateItem, getTranslation, isTranslating: isItemTranslating } = useCollectionTranslate()
+
+// ── "Comment as" — self or a group I own/admin, mirrors the post composer's entity picker ──
+type CommentEntity = { type: 'user' } | { type: 'group'; id: string; slug: string; name: string; avatar_url: string | null }
+const commentAsEntity = ref<CommentEntity>({ type: 'user' })
+const showEntityPicker = ref(false)
+const entityBtnRef = ref<HTMLElement | null>(null)
+const entityPickerPos = ref({ top: '0px', left: '0px' })
+const adminGroups = computed(() =>
+  groupsStore.myGroups.filter(m => ['owner', 'admin'].includes(m.role)).map(m => m.group)
+)
+function toggleEntityPicker() {
+  if (!showEntityPicker.value && entityBtnRef.value) {
+    const rect = entityBtnRef.value.getBoundingClientRect()
+    entityPickerPos.value = { top: `${rect.bottom + 6}px`, left: `${rect.left}px` }
+  }
+  showEntityPicker.value = !showEntityPicker.value
+}
+
+// ── Display identity for a comment/reply — real user, or the group it was posted as ──
+function identityAvatar(c: any): string | null {
+  return c.author?.avatar_url ?? c.group?.avatar_url ?? null
+}
+function identityName(c: any): string {
+  return c.author?.display_name || c.author?.username || c.group?.name || '?'
+}
+function identityHandle(c: any): string {
+  return c.author ? `@${c.author.username}` : c.group ? `@${c.group.slug}` : ''
+}
+function identityIsGroup(c: any): boolean {
+  return !!(c.group_id && c.group)
+}
+function openIdentity(c: any) {
+  if (c.group_id && c.group) router.push(`/groups/${c.group.slug}`)
+  else if (c.author) router.push(`/profile/${c.author.username}`)
+}
 
 const showTranslationFor = ref<Set<string>>(new Set())
 
@@ -42,6 +81,7 @@ function autoEnqueueAll() {
 }
 
 const comments       = ref<any[]>([])
+const canModerate    = ref(false) // post owner / group staff / admin — may delete any comment, not just their own
 const isLoading      = ref(false)
 const commentText    = ref('')
 const replyingTo     = ref<{ id: string; username: string } | null>(null)
@@ -137,6 +177,7 @@ const fetchComments = async () => {
     const res = await api.get(`/posts/${props.postId}/comments`)
     if (res.data.success) {
       comments.value = res.data.data.comments
+      canModerate.value = !!res.data.data.canModerate
       if (langStore.autoTranslateEnabled) autoEnqueueAll()
     }
   } catch {}
@@ -147,7 +188,10 @@ watch(() => langStore.autoTranslateEnabled, (enabled) => {
   if (enabled) autoEnqueueAll()
 })
 
-onMounted(fetchComments)
+onMounted(() => {
+  fetchComments()
+  if (auth.user && !groupsStore.myGroups.length) groupsStore.loadMyGroups().catch(() => {})
+})
 
 const formatDate = (d: string) => {
   const date = new Date(d)
@@ -159,6 +203,11 @@ const formatDate = (d: string) => {
   return `${Math.floor(diff / 86400)}д`
 }
 
+/** groupId to attach when posting "as" a group — undefined when posting as yourself. */
+function entityGroupId(): string | undefined {
+  return commentAsEntity.value.type === 'group' ? commentAsEntity.value.id : undefined
+}
+
 const submitComment = async () => {
   const hasText = !!commentText.value.trim()
   const hasFile = !!commentFileUrl.value
@@ -167,6 +216,7 @@ const submitComment = async () => {
   try {
     const res = await api.post(`/posts/${props.postId}/comments`, {
       content: commentText.value.trim(),
+      groupId: entityGroupId(),
       ...(hasFile ? { type: commentFileType.value, file_url: commentFileUrl.value } : {}),
     })
     if (res.data.success) {
@@ -186,6 +236,7 @@ const submitCommentSticker = async (url: string) => {
       content: '',
       type: 'sticker',
       file_url: url,
+      groupId: entityGroupId(),
     })
     if (res.data.success) {
       comments.value.unshift({ ...res.data.data.comment, replies: [], _count: { replies: 0 } })
@@ -208,6 +259,7 @@ const submitReply = async () => {
     const res = await api.post(`/posts/${props.postId}/comments`, {
       content: replyText.value.trim(),
       parentId: replyingTo.value.id,
+      groupId: entityGroupId(),
       ...(hasFile ? { type: replyFileType.value, file_url: replyFileUrl.value } : {}),
     })
     if (res.data.success) {
@@ -235,6 +287,7 @@ const submitReplySticker = async (url: string) => {
       type: 'sticker',
       file_url: url,
       parentId: replyingTo.value.id,
+      groupId: entityGroupId(),
     })
     if (res.data.success) {
       const parent = comments.value.find(c => c.id === replyingTo.value!.id)
@@ -298,6 +351,18 @@ const deleteComment = async (commentId: string) => {
     removeComment(comments.value)
   } catch {}
 }
+
+const vClickOutside = {
+  mounted(el: HTMLElement, binding: any) {
+    ;(el as any)._clickOutside = (e: Event) => {
+      if (!el.contains(e.target as Node)) binding.value(e)
+    }
+    document.addEventListener('click', (el as any)._clickOutside)
+  },
+  unmounted(el: HTMLElement) {
+    document.removeEventListener('click', (el as any)._clickOutside)
+  },
+}
 </script>
 
 <template>
@@ -309,8 +374,74 @@ const deleteComment = async (commentId: string) => {
 
     <!-- Comment input -->
     <div v-else-if="auth.user" class="flex gap-3 items-start">
-      <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5" />
-      <div v-else class="w-8 h-8 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
+      <div class="relative flex-shrink-0 mt-0.5">
+        <!-- Clickable avatar — opens "comment as" picker if I manage any groups -->
+        <button v-if="adminGroups.length" ref="entityBtnRef" @click.stop="toggleEntityPicker"
+          class="flex items-center gap-0.5 focus:outline-none group/av">
+          <template v-if="commentAsEntity.type === 'group'">
+            <img v-if="(commentAsEntity as any).avatar_url" :src="(commentAsEntity as any).avatar_url"
+              class="w-8 h-8 rounded-xl border-2 object-cover transition-colors"
+              :class="showEntityPicker ? 'border-brand-accent' : 'border-brand-border group-hover/av:border-brand-accent/60'"
+              @error="onAvatarError" />
+            <div v-else class="w-8 h-8 rounded-xl border-2 flex items-center justify-center text-brand-accent font-bold bg-brand-accent/20 text-xs transition-colors"
+              :class="showEntityPicker ? 'border-brand-accent' : 'border-brand-border group-hover/av:border-brand-accent/60'">
+              {{ ((commentAsEntity as any).name || '?')[0].toUpperCase() }}
+            </div>
+          </template>
+          <template v-else>
+            <img v-if="auth.avatarUrl" :src="auth.avatarUrl"
+              class="w-8 h-8 rounded-full border-2 object-cover transition-colors"
+              :class="showEntityPicker ? 'border-brand-accent' : 'border-brand-border group-hover/av:border-brand-accent/60'"
+              @error="onAvatarError" />
+            <div v-else class="w-8 h-8 rounded-full border-2 flex items-center justify-center text-brand-accent font-bold bg-brand-accent/20 text-xs transition-colors"
+              :class="showEntityPicker ? 'border-brand-accent' : 'border-brand-border group-hover/av:border-brand-accent/60'">
+              {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
+            </div>
+          </template>
+          <BIcon name="ChevronDown" class="w-3 h-3 text-white/50 group-hover/av:text-white/80 transition-all flex-shrink-0"
+            :class="showEntityPicker ? 'rotate-180 text-brand-accent' : ''" />
+        </button>
+
+        <!-- Non-clickable avatar (no groups to comment as) -->
+        <template v-else>
+          <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-brand-border" />
+          <div v-else class="w-8 h-8 rounded-full border border-brand-border flex items-center justify-center text-brand-accent font-bold text-xs bg-brand-accent/20">
+            {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
+          </div>
+        </template>
+
+        <!-- "Comment as" dropdown — teleported to escape the post card's overflow-hidden clipping -->
+        <Teleport to="body">
+        <Transition name="popover-up">
+          <div v-if="showEntityPicker" v-click-outside="() => showEntityPicker = false"
+            class="fixed z-[9998] min-w-[220px] bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1.5"
+            :style="{ top: entityPickerPos.top, left: entityPickerPos.left }">
+            <button class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
+              :class="commentAsEntity.type === 'user' ? 'text-brand-accent' : 'text-white'"
+              @click="commentAsEntity = { type: 'user' }; showEntityPicker = false">
+              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover flex-shrink-0" @error="onAvatarError" />
+              <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
+                {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
+              </div>
+              <span class="font-semibold truncate flex-1 text-left">{{ auth.user?.display_name || auth.user?.username }}</span>
+              <BIcon v-if="commentAsEntity.type === 'user'" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+            </button>
+            <div class="h-px bg-brand-border mx-3 my-1" />
+            <button v-for="grp in adminGroups" :key="grp.id"
+              class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
+              :class="commentAsEntity.type === 'group' && (commentAsEntity as any).id === grp.id ? 'text-brand-accent' : 'text-white'"
+              @click="commentAsEntity = { type: 'group', id: grp.id, slug: grp.slug, name: grp.name, avatar_url: grp.avatar_url }; showEntityPicker = false">
+              <img v-if="grp.avatar_url" :src="grp.avatar_url" class="w-7 h-7 rounded-xl object-cover flex-shrink-0" @error="onAvatarError" />
+              <div v-else class="w-7 h-7 rounded-xl bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
+                {{ (grp.name || '?')[0].toUpperCase() }}
+              </div>
+              <span class="font-semibold truncate flex-1 text-left">{{ grp.name }}</span>
+              <BIcon v-if="commentAsEntity.type === 'group' && (commentAsEntity as any).id === grp.id" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+            </button>
+          </div>
+        </Transition>
+        </Teleport>
+      </div>
 
       <div class="flex-1 relative">
         <!-- Sticker panel popover -->
@@ -388,19 +519,22 @@ const deleteComment = async (commentId: string) => {
       <div v-for="comment in comments" :key="comment.id" class="space-y-2">
         <!-- Top-level comment -->
         <div class="flex gap-3">
-          <img v-if="comment.author.avatar_url"
-            :src="comment.author.avatar_url"
-            class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5"
+          <img v-if="identityAvatar(comment)"
+            :src="identityAvatar(comment)!"
+            class="w-8 h-8 object-cover border border-brand-border flex-shrink-0 mt-0.5 cursor-pointer"
+            :class="identityIsGroup(comment) ? 'rounded-xl' : 'rounded-full'"
+            @click="openIdentity(comment)"
             @error="onAvatarError"
           />
-          <div v-else class="w-8 h-8 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs">{{ (comment.author.display_name || comment.author.username || '?')[0].toUpperCase() }}</div>
+          <div v-else @click="openIdentity(comment)" class="w-8 h-8 border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs cursor-pointer"
+            :class="identityIsGroup(comment) ? 'rounded-xl' : 'rounded-full'">{{ identityName(comment)[0].toUpperCase() }}</div>
 
           <div class="flex-1 min-w-0">
             <!-- Sticker comment — no bubble -->
             <template v-if="comment.type === 'sticker' && comment.file_url">
               <div class="flex items-center gap-2 mb-1 px-1">
-                <span class="font-bold text-white text-sm">{{ comment.author.display_name || comment.author.username }}</span>
-                <span class="text-white/55 text-xs">@{{ comment.author.username }}</span>
+                <span class="font-bold text-white text-sm cursor-pointer hover:underline" @click="openIdentity(comment)">{{ identityName(comment) }}</span>
+                <span class="text-white/55 text-xs">{{ identityHandle(comment) }}</span>
                 <span class="text-white/55 text-xs ml-auto">{{ formatDate(comment.created_at) }}</span>
               </div>
               <div class="cursor-pointer hover:scale-105 transition-transform active:scale-95 inline-block">
@@ -411,8 +545,8 @@ const deleteComment = async (commentId: string) => {
             <!-- Media comment (photo / video / GIF) — media + optional caption -->
             <template v-else-if="['image', 'video', 'gif'].includes(comment.type) && comment.file_url">
               <div class="flex items-center gap-2 mb-1 px-1">
-                <span class="font-bold text-white text-sm">{{ comment.author.display_name || comment.author.username }}</span>
-                <span class="text-white/55 text-xs">@{{ comment.author.username }}</span>
+                <span class="font-bold text-white text-sm cursor-pointer hover:underline" @click="openIdentity(comment)">{{ identityName(comment) }}</span>
+                <span class="text-white/55 text-xs">{{ identityHandle(comment) }}</span>
                 <span class="text-white/55 text-xs ml-auto">{{ formatDate(comment.created_at) }}</span>
               </div>
               <div class="rounded-2xl overflow-hidden border border-brand-border/50 max-w-[280px] bg-black/20">
@@ -425,8 +559,8 @@ const deleteComment = async (commentId: string) => {
             <!-- Text comment — with bubble -->
             <div v-else class="bg-brand-bg/50 rounded-2xl px-4 py-3 border border-brand-border/50">
               <div class="flex items-center gap-2 mb-1.5">
-                <span class="font-bold text-white text-sm">{{ comment.author.display_name || comment.author.username }}</span>
-                <span class="text-white/55 text-xs">@{{ comment.author.username }}</span>
+                <span class="font-bold text-white text-sm cursor-pointer hover:underline" @click="openIdentity(comment)">{{ identityName(comment) }}</span>
+                <span class="text-white/55 text-xs">{{ identityHandle(comment) }}</span>
                 <span class="text-white/55 text-xs ml-auto">{{ formatDate(comment.created_at) }}</span>
               </div>
               <p class="text-white/85 text-sm leading-relaxed">{{ getCommentText(comment.id, comment.content) }}</p>
@@ -460,7 +594,7 @@ const deleteComment = async (commentId: string) => {
                 <svg v-else class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
               </button>
               <button v-if="auth.user"
-                @click="replyingTo = { id: comment.id, username: comment.author.username }; replyText = ''; closeStickerPanels()"
+                @click="replyingTo = { id: comment.id, username: comment.author?.username ?? comment.group?.slug ?? '' }; replyText = ''; closeStickerPanels()"
                 class="text-white/55 hover:text-brand-accent text-xs font-semibold flex items-center gap-1">
                 <BIcon name="CornerDownRight" class="w-3 h-3" />
                 {{ langStore.t.reply }}
@@ -470,7 +604,7 @@ const deleteComment = async (commentId: string) => {
                 class="text-brand-accent text-xs font-semibold hover:text-brand-purple">
                 {{ expandedReplies.has(comment.id) ? '▲' : '▼' }} {{ comment._count.replies || comment.replies?.length }} {{ langStore.t.replies }}
               </button>
-              <button v-if="comment.author.id === auth.user?.id"
+              <button v-if="comment.author_id === auth.user?.id || canModerate"
                 @click="deleteComment(comment.id)"
                 class="ml-auto text-white/55 hover:text-rose-400 p-1">
                 <BIcon name="Trash2" class="w-3.5 h-3.5" />
@@ -542,17 +676,20 @@ const deleteComment = async (commentId: string) => {
             <!-- Nested replies -->
             <div v-if="expandedReplies.has(comment.id) && comment.replies?.length" class="mt-2 space-y-2 pl-4 border-l-2 border-brand-border">
               <div v-for="reply in comment.replies" :key="reply.id" class="flex gap-3">
-                <img v-if="reply.author.avatar_url"
-                  :src="reply.author.avatar_url"
-                  class="w-7 h-7 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5"
+                <img v-if="identityAvatar(reply)"
+                  :src="identityAvatar(reply)!"
+                  class="w-7 h-7 object-cover border border-brand-border flex-shrink-0 mt-0.5 cursor-pointer"
+                  :class="identityIsGroup(reply) ? 'rounded-xl' : 'rounded-full'"
+                  @click="openIdentity(reply)"
                   @error="onAvatarError"
                 />
-                <div v-else class="w-7 h-7 rounded-full border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px]">{{ (reply.author.display_name || reply.author.username || '?')[0].toUpperCase() }}</div>
+                <div v-else @click="openIdentity(reply)" class="w-7 h-7 border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px] cursor-pointer"
+                  :class="identityIsGroup(reply) ? 'rounded-xl' : 'rounded-full'">{{ identityName(reply)[0].toUpperCase() }}</div>
                 <div class="flex-1 min-w-0">
                   <!-- Sticker reply -->
                   <template v-if="reply.type === 'sticker' && reply.file_url">
                     <div class="flex items-center gap-2 mb-1 px-1">
-                      <span class="font-bold text-white text-xs">{{ reply.author.display_name || reply.author.username }}</span>
+                      <span class="font-bold text-white text-xs cursor-pointer hover:underline" @click="openIdentity(reply)">{{ identityName(reply) }}</span>
                       <span class="text-white/55 text-[11px] ml-auto">{{ formatDate(reply.created_at) }}</span>
                     </div>
                     <div class="cursor-pointer hover:scale-105 transition-transform active:scale-95 inline-block">
@@ -563,7 +700,7 @@ const deleteComment = async (commentId: string) => {
                   <!-- Media reply (photo / video / GIF) -->
                   <template v-else-if="['image', 'video', 'gif'].includes(reply.type) && reply.file_url">
                     <div class="flex items-center gap-2 mb-1 px-1">
-                      <span class="font-bold text-white text-xs">{{ reply.author.display_name || reply.author.username }}</span>
+                      <span class="font-bold text-white text-xs cursor-pointer hover:underline" @click="openIdentity(reply)">{{ identityName(reply) }}</span>
                       <span class="text-white/55 text-[11px] ml-auto">{{ formatDate(reply.created_at) }}</span>
                     </div>
                     <div class="rounded-2xl overflow-hidden border border-brand-border/50 max-w-[240px] bg-black/20">
@@ -576,7 +713,7 @@ const deleteComment = async (commentId: string) => {
                   <!-- Text reply -->
                   <div v-else class="bg-brand-bg/50 rounded-2xl px-4 py-2.5 border border-brand-border/50">
                     <div class="flex items-center gap-2 mb-1">
-                      <span class="font-bold text-white text-xs">{{ reply.author.display_name || reply.author.username }}</span>
+                      <span class="font-bold text-white text-xs cursor-pointer hover:underline" @click="openIdentity(reply)">{{ identityName(reply) }}</span>
                       <span class="text-white/55 text-[11px] ml-auto">{{ formatDate(reply.created_at) }}</span>
                     </div>
                     <p class="text-white/85 text-sm leading-relaxed">{{ getCommentText(reply.id, reply.content) }}</p>
@@ -607,12 +744,12 @@ const deleteComment = async (commentId: string) => {
                     </button>
                     <!-- Reply to a reply: attaches to the same top-level comment (backend only nests one level deep), tagging the reply's author -->
                     <button v-if="auth.user"
-                      @click="replyingTo = { id: comment.id, username: reply.author.username }; replyText = `@${reply.author.username} `; closeStickerPanels()"
+                      @click="replyingTo = { id: comment.id, username: identityHandle(reply).slice(1) }; replyText = `${identityHandle(reply)} `; closeStickerPanels()"
                       class="text-white/55 hover:text-brand-accent text-xs font-semibold flex items-center gap-1">
                       <BIcon name="CornerDownRight" class="w-3 h-3" />
                       {{ langStore.t.reply }}
                     </button>
-                    <button v-if="reply.author.id === auth.user?.id"
+                    <button v-if="reply.author_id === auth.user?.id || canModerate"
                       @click="deleteComment(reply.id)"
                       class="ml-auto text-white/55 hover:text-rose-400 p-1">
                       <BIcon name="Trash2" class="w-3 h-3" />

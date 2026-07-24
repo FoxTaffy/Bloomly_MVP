@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDealersDenStore, type DealerListing, type ListingKind } from '@/stores/dealersDen'
 import { useNsfwMode } from '@/composables/useNsfwMode'
+import { useConfirm } from '@/composables/useConfirm'
 import AppHeader    from '@/components/AppHeader.vue'
 import AppSidebar   from '@/components/AppSidebar.vue'
 import BIcon        from '@/components/BIcon.vue'
@@ -15,7 +16,17 @@ import DenWeeklyTop from '@/components/DenWeeklyTop.vue'
 const router = useRouter()
 const auth   = useAuthStore()
 const store  = useDealersDenStore()
-const { nsfwEnabled, enableNsfw } = useNsfwMode()
+const { confirmDialog } = useConfirm()
+const { nsfwEnabled, canUseNsfw, enableNsfw } = useNsfwMode()
+
+function handleEnableNsfw() {
+  if (canUseNsfw.value) {
+    enableNsfw()
+    return
+  }
+  alert('Укажите дату рождения в настройках профиля, чтобы подтвердить возраст 18+.')
+  router.push('/settings/profile')
+}
 
 // ── Permission ─────────────────────────────────────────────────────────────────
 const canSell = computed(() => {
@@ -206,8 +217,8 @@ function openCreateModal() {
   resetForm()
   showCreateModal.value = true
 }
-function tryCloseCreate() {
-  if (isFormDirty() && !confirm('Изменения не сохранены. Закрыть без сохранения?')) return
+async function tryCloseCreate() {
+  if (isFormDirty() && !(await confirmDialog('Изменения не сохранены. Закрыть без сохранения?'))) return
   showCreateModal.value = false
 }
 async function submitCreate() {
@@ -250,8 +261,8 @@ function openEdit(listing: DealerListing) {
   }
   showEditModal.value = true
 }
-function tryCloseEdit() {
-  if (!confirm('Изменения не сохранены. Закрыть?')) return
+async function tryCloseEdit() {
+  if (!(await confirmDialog('Изменения не сохранены. Закрыть?'))) return
   showEditModal.value = false
 }
 async function submitEdit() {
@@ -269,7 +280,7 @@ async function submitEdit() {
   } finally { isUpdating.value = false }
 }
 async function deleteListing(id: string) {
-  if (!confirm('Удалить объявление?')) return
+  if (!(await confirmDialog('Удалить объявление?', { danger: true }))) return
   try {
     await store.deleteListing(id)
   } catch (err: any) {
@@ -308,7 +319,7 @@ async function submitBid() {
 async function submitRaffleTicket(listing: DealerListing, e: Event) {
   e.stopPropagation()
   if (!auth.user) { router.push({ name: 'login' }); return }
-  if (!confirm('Купить 1 билет за ' + formatPrice(listing.price, listing.currency) + '?')) return
+  if (!(await confirmDialog('Купить 1 билет за ' + formatPrice(listing.price, listing.currency) + '?'))) return
   await store.buyRaffleTicket(listing.id)
 }
 </script>
@@ -982,7 +993,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <!-- Images -->
             <div>
               <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Фотографии / Превью</label>
-              <MediaUpload type="posts" :multiple="true" @uploaded="(urls: string[]) => { form.images = urls }" />
+              <MediaUpload type="posts" :multiple="true" :max-files="20" @uploaded="(urls: string[]) => { form.images = urls }" />
             </div>
 
             <!-- Title -->
@@ -1347,7 +1358,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <h2 class="text-lg font-extrabold text-white mb-2">Контент 18+</h2>
               <p class="text-sm text-white/55 leading-relaxed">
                 Этот лот предназначен только для взрослых.<br>
-                Включи NSFW-режим, чтобы просматривать такие материалы.
+                {{ canUseNsfw ? 'Включи NSFW-режим, чтобы просматривать такие материалы.' : 'Подтверди дату рождения в настройках профиля, чтобы просматривать такие материалы.' }}
               </p>
             </div>
             <div class="mx-6 mb-5 px-4 py-3 rounded-2xl flex items-start gap-2.5"
@@ -1365,10 +1376,10 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 Отмена
               </button>
               <button
-                @click="enableNsfw(); showNsfwConfirm = false"
+                @click="handleEnableNsfw(); showNsfwConfirm = false"
                 class="flex-1 py-2.5 rounded-2xl text-sm font-bold text-white transition-all shadow-lg"
                 style="background: linear-gradient(135deg, #c0392b, #e14664); box-shadow: 0 4px 20px rgba(225,70,100,0.3)">
-                Мне 18+, включить
+                {{ canUseNsfw ? 'Мне 18+, включить' : 'Подтвердить возраст' }}
               </button>
             </div>
           </div>

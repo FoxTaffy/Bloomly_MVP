@@ -1,4 +1,5 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useAuthStore } from '../stores/auth'
 
 // Global singleton – shared across ALL components in the same tab
 const _nsfwEnabled = ref(
@@ -17,7 +18,13 @@ if (typeof window !== 'undefined') {
 }
 
 export function useNsfwMode() {
+  const authStore = useAuthStore()
+  // Server verifies this from birth_date — missing/unset counts as a minor,
+  // so NSFW stays gated until the account confirms 18+.
+  const canUseNsfw = computed(() => authStore.user?.is_adult === true)
+
   function enableNsfw() {
+    if (!canUseNsfw.value) return
     _nsfwEnabled.value = true
     localStorage.setItem('bloomly_nsfw', 'true')
   }
@@ -33,7 +40,8 @@ export function useNsfwMode() {
   }
 
   return {
-    nsfwEnabled: _nsfwEnabled,
+    nsfwEnabled: computed(() => _nsfwEnabled.value && canUseNsfw.value),
+    canUseNsfw,
     enableNsfw,
     disableNsfw,
     toggleNsfw,

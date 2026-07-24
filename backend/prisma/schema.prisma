@@ -32,6 +32,7 @@ model User {
   location                       String?
   pronouns                       String?
   badge_type                     String?
+  prev_badge_type                String?
   job_title                      String?                   @db.VarChar(80)
   pinned_post_id                 String?                   @db.Uuid
   relationship_status            String?                   @db.VarChar(50)
@@ -105,6 +106,7 @@ model User {
   verified_at                    DateTime?
   ownedGroups                    Group[]                   @relation("GroupOwner")
   groupMemberships               GroupMember[]
+  groupSubscriptions             GroupSubscriber[]
   orders                         Order[]                   @relation("OrderCustomer")
   soonBadges                     SoonBadge[]
   verificationRequests           VerificationRequest[]
@@ -117,6 +119,8 @@ model User {
   stickerUsages                  StickerUsage[]
   stickerFavorites               StickerFavorite[]
   autoModLogs                    AutoModLog[]
+  autoModActorLogs               AutoModLog[]              @relation("AutoModActor")
+  adminBroadcasts                AdminBroadcast[]
   warn_count                     Int                       @default(0)
   frozen_at                      DateTime?
   frozen_reason                  String?                   @db.VarChar(500)
@@ -152,6 +156,7 @@ model User {
   conversationKeys               ConversationKey[]
   // Privacy (all: "everyone" | "friends" | "nobody", except *_visibility below which use "only_me" instead of "nobody")
   messages_privacy               String                    @default("everyone") @db.VarChar(20)
+  forward_identity_privacy       String                    @default("everyone") @db.VarChar(20)
   comments_privacy               String                    @default("everyone") @db.VarChar(20)
   mentions_privacy               String                    @default("everyone") @db.VarChar(20)
   online_status_visibility       String                    @default("everyone") @db.VarChar(20)
@@ -165,6 +170,21 @@ model User {
   paymentMethods                 PaymentMethod[]
   supportTickets                 SupportTicket[]           @relation("SupportTicketUser")
   repliedSupportTickets          SupportTicket[]           @relation("SupportTicketReplier")
+  two_factor_method              String?                   @db.VarChar(10)
+  totp_secret                    String?
+  // Automation settings (auto-follow-back, welcome DM, mute keywords, quiet hours, notify toggles, quick replies)
+  auto_follow_back               Boolean                   @default(false)
+  welcome_msg_enabled             Boolean                  @default(false)
+  welcome_msg_text                String                   @default("Привет! Спасибо что подписался 🐾") @db.VarChar(300)
+  mute_keywords                   String[]                 @default([])
+  quiet_hours_enabled             Boolean                  @default(false)
+  quiet_hours_from                String                   @default("23:00") @db.VarChar(5)
+  quiet_hours_to                  String                   @default("08:00") @db.VarChar(5)
+  notify_new_fan                  Boolean                  @default(true)
+  notify_comment                  Boolean                  @default(true)
+  notify_repaw                    Boolean                  @default(false)
+  quick_replies                   String[]                 @default([])
+  filter_spam                     Boolean                  @default(true)
 }
 
 model PaymentMethod {
@@ -423,6 +443,9 @@ model Comment {
   id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   post_id    String        @db.Uuid
   author_id  String        @db.Uuid
+  /// Set when the real author (still author_id) posted this comment "as" a group they
+  /// manage — the API masks author_id in the response and shows the group instead.
+  group_id   String?       @db.Uuid
   parent_id  String?       @db.Uuid
   content    String
   type       String        @default("text")
@@ -432,6 +455,7 @@ model Comment {
   updated_at DateTime      @default(now()) @updatedAt
   deleted_at DateTime?
   author     User          @relation(fields: [author_id], references: [id])
+  group      Group?        @relation(fields: [group_id], references: [id])
   parent     Comment?      @relation("CommentReplies", fields: [parent_id], references: [id])
   replies    Comment[]     @relation("CommentReplies")
   post       Post          @relation(fields: [post_id], references: [id])
@@ -439,6 +463,7 @@ model Comment {
 
   @@index([post_id])
   @@index([parent_id])
+  @@index([group_id])
 }
 
 model CommentVote {
@@ -536,6 +561,7 @@ model Report {
   priority    Int       @default(0)
   ai_category String?   @db.VarChar(50)
   ai_score    Float     @default(0)
+  evidence_urls String[] @default([])
   created_at  DateTime  @default(now())
   updated_at  DateTime  @default(now()) @updatedAt
   deleted_at  DateTime?
@@ -547,20 +573,48 @@ model Report {
 }
 
 model AutoModLog {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id    String   @db.Uuid
-  action     String   @db.VarChar(50)
-  reason     String   @db.VarChar(300)
-  category   String   @default("other") @db.VarChar(50)
-  score      Float    @default(0)
-  details    String?
-  post_id    String?  @db.Uuid
-  created_at DateTime @default(now())
-  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id            String    @db.Uuid
+  actor_id           String?   @db.Uuid // staff member who performed a manual action; null for AutoMod-originated entries
+  action             String    @db.VarChar(50)
+  reason             String    @db.VarChar(300)
+  category           String    @default("other") @db.VarChar(50)
+  score              Float     @default(0)
+  details            String?
+  post_id            String?   @db.Uuid
+  image_url          String?   // evidence photo attached by a moderator when resolving a report with a warning
+  appeal_status      String    @default("none") @db.VarChar(20) // 'none' | 'pending' | 'accepted' | 'rejected'
+  appeal_text        String?
+  appeal_created_at  DateTime?
+  appeal_resolved_at DateTime?
+  appeal_resolved_by String?   @db.Uuid
+  created_at         DateTime  @default(now())
+  user               User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  actor              User?     @relation("AutoModActor", fields: [actor_id], references: [id], onDelete: SetNull)
 
   @@index([user_id])
   @@index([created_at])
   @@index([action])
+  @@index([appeal_status])
+}
+
+model AdminBroadcast {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actor_id        String   @db.Uuid
+  title           String   @db.VarChar(200)
+  body            String   @db.VarChar(2000)
+  audience        String   @db.VarChar(30) // all | premium | new | staff
+  recipient_count Int      @default(0)
+  created_at      DateTime @default(now())
+  actor           User     @relation(fields: [actor_id], references: [id])
+
+  @@index([created_at])
+}
+
+model SiteSetting {
+  key        String   @id @db.VarChar(50)
+  value      Boolean  @default(false)
+  updated_at DateTime @default(now()) @updatedAt
 }
 
 model RelationshipRequest {
@@ -690,6 +744,7 @@ model Message {
 
   @@index([conversation_id, created_at(sort: Desc)])
   @@index([reply_to_id])
+  @@index([sender_id, created_at])
 }
 
 // ── Groups ────────────────────────────────────────────────────────────────────
@@ -750,6 +805,11 @@ model Group {
   category            String?   @db.VarChar(50) // art | cosplay | fandom | dev | music | etc.
   category_changed_at DateTime? // last time category was changed — gates 1x/month cooldown
 
+  // Event lifecycle (type == "event" only) — admin-set date; once past, SOON badges are cleared
+  // and plain members are demoted to notification-only subscribers until a new date is set.
+  event_date       DateTime? // NULL = feature inactive for this group
+  event_expired_at DateTime? // set once the expiry sweep has run for the current event_date
+
   // Business tab (orders/kanban) — owner-toggleable, independent of `type`
   business_enabled Boolean @default(false)
 
@@ -763,8 +823,8 @@ model Group {
   members        GroupMember[]
   events         Event[]
   commissionInfo CommissionInfo?
-  achievements   GroupAchievement[]
   posts          GroupPost[]
+  comments       Comment[]
   ratings        GroupRating[]
   groupMessages  GroupMessage[]
   groupDmThreads Conversation[]     @relation("GroupCommunityChat")
@@ -772,6 +832,7 @@ model Group {
   todoItems      GroupTodoItem[]
   customRoles    GroupCustomRole[]
   bookmarks      GroupBookmark[]
+  subscribers    GroupSubscriber[]
   orders         Order[]
   transactions   GroupTransaction[]
 
@@ -883,6 +944,20 @@ model GroupMember {
   joined_at    DateTime @default(now())
   is_pinned    Boolean  @default(false)
   notify_posts Boolean  @default(true)
+
+  group Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([group_id, user_id])
+  @@index([user_id])
+}
+
+// Notification-only follower — created when a participant is demoted after their group's
+// event_date lapses, or chosen directly by a user who wants updates without joining.
+model GroupSubscriber {
+  group_id   String   @db.Uuid
+  user_id    String   @db.Uuid
+  created_at DateTime @default(now())
 
   group Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
@@ -1055,21 +1130,6 @@ model GroupMessage {
   @@index([user_id])
 }
 
-// ── Group Achievements (медальки) ─────────────────────────────────────────────
-
-model GroupAchievement {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  group_id  String   @db.Uuid
-  title     String   @db.VarChar(100)
-  icon      String   @db.VarChar(60)
-  color     String?  @db.VarChar(20)
-  earned_at DateTime @default(now())
-
-  group Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
-
-  @@index([group_id])
-}
-
 // ── Verification Requests ─────────────────────────────────────────────────────
 
 model VerificationRequest {
@@ -1088,7 +1148,7 @@ model VerificationRequest {
   created_at        DateTime  @default(now())
   reviewed_at       DateTime?
   reviewed_by       String?   @db.Uuid
-  verification_type String?   @db.VarChar(30) // artist, master, fursuiter, popular, writer, organizer, event
+  verification_type String?   @db.VarChar(30) // artist, master, fursuiter, popular, writer, organizer, event, photographer, programmer
   evidence_urls     String[]  @default([])
   evidence_text     String?   @db.VarChar(2000) // optional written explanation, alongside or instead of uploaded evidence
   badge_type        String?   @db.VarChar(30) // verified, artist, master, event

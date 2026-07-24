@@ -80,6 +80,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/notifications',
+    name: 'notifications',
+    component: () => import('@/views/NotificationsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/settings/profile',
     name: 'settings-profile',
     component: () => import('@/views/SettingsProfileView.vue'),

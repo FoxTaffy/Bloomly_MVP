@@ -26,6 +26,7 @@ import { stickersRoutes } from './modules/stickers/routes.js';
 import { shopRoutes } from './modules/shop/routes.js';
 import { activitiesRoutes } from './modules/activities/routes.js';
 import { automodRoutes } from './modules/automod/routes.js';
+import { automationRoutes } from './modules/automation/routes.js';
 import { seoRoutes } from './modules/seo/routes.js';
 import { updatesRoutes } from './modules/updates/routes.js';
 import { bookmarksRoutes } from './modules/bookmarks/routes.js';
@@ -36,6 +37,9 @@ import { groupService } from './modules/groups/service.js';
 import { initCronJobs } from './cron.js';
 import prisma from './config/prisma.js';
 import { isAllowedByPrivacy } from './lib/privacy.js';
+import { getSetting } from './lib/settings.js';
+import { isAdult } from './lib/age.js';
+import { isModerator } from './lib/roles.js';
 
 dotenv.config();
 
@@ -102,6 +106,27 @@ fastify.addHook('onSend', (_request, reply, _payload, done) => {
   }
   done();
 });
+
+// Maintenance mode — toggled from the admin panel (SiteSetting). Auth and
+// admin routes stay open so staff can still log in and manage the platform;
+// staff (moderator+) are also let through everywhere else so they can use the
+// site normally while it's closed to regular users.
+fastify.addHook('onRequest', async (request, reply) => {
+  if (request.url.startsWith('/api/auth') || request.url.startsWith('/api/admin')) return;
+  if (!(await getSetting('maintenance_mode'))) return;
+
+  try {
+    await request.jwtVerify();
+    const payload = request.user as { id: string };
+    const dbUser = await prisma.user.findUnique({ where: { id: payload.id }, select: { role: true, deleted_at: true } });
+    if (dbUser && !dbUser.deleted_at && isModerator(dbUser.role)) return;
+  } catch {
+    // no/invalid token — fall through and block below
+  }
+
+  reply.code(503).send({ success: false, data: null, error: { code: 'MAINTENANCE', message: 'Платформа временно на обслуживании' } });
+});
+
 fastify.register(websocket);
 
 fastify.decorate(
@@ -113,14 +138,16 @@ fastify.decorate(
       const payload = request.user as { id: string; role: string };
       const dbUser = await prisma.user.findUnique({
         where: { id: payload.id },
-        select: { role: true, deleted_at: true, frozen_at: true, frozen_reason: true },
+        select: { role: true, deleted_at: true, frozen_at: true, frozen_reason: true, birth_date: true },
       });
       if (!dbUser || dbUser.deleted_at) {
         return reply.code(401).send({ success: false, data: null, error: { code: 'UNAUTHORIZED', message: 'User not found' } });
       }
       (request.user as any).role = dbUser.role;
-      // Frozen accounts (automod or manual) may still browse (GET) but cannot act
-      if (dbUser.frozen_at && request.method !== 'GET') {
+      (request.user as any).is_adult = isAdult(dbUser.birth_date);
+      // Frozen accounts are force-logged-out on their very next authenticated request
+      // (frontend's response interceptor catches ACCOUNT_FROZEN and clears the session).
+      if (dbUser.frozen_at) {
         return reply.code(403).send({
           success: false,
           data: null,
@@ -141,12 +168,13 @@ fastify.decorate(
       const payload = request.user as { id: string; role: string };
       const dbUser = await prisma.user.findUnique({
         where: { id: payload.id },
-        select: { role: true, deleted_at: true },
+        select: { role: true, deleted_at: true, birth_date: true },
       });
       if (!dbUser || dbUser.deleted_at) {
         (request as any).user = undefined;
       } else {
         (request.user as any).role = dbUser.role;
+        (request.user as any).is_adult = isAdult(dbUser.birth_date);
       }
     } catch {
       (request as any).user = undefined;
@@ -186,6 +214,7 @@ fastify.register(stickersRoutes, { prefix: '/api/stickers' });
 fastify.register(shopRoutes,    { prefix: '/api/shop' });
 fastify.register(activitiesRoutes, { prefix: '/api/activities' });
 fastify.register(automodRoutes,    { prefix: '/api/automod' });
+fastify.register(automationRoutes, { prefix: '/api/automation' });
 fastify.register(updatesRoutes,    { prefix: '/api/updates' });
 fastify.register(bookmarksRoutes,  { prefix: '/api/bookmarks' });
 fastify.register(supportRoutes,    { prefix: '/api/support' });

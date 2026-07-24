@@ -1,5 +1,8 @@
 import prisma from '../../config/prisma.js';
 import { Prisma } from '@prisma/client';
+import { notificationService } from '../notifications/service.js';
+import { getStorageStats } from '../media/service.js';
+import { applyAction, type TargetSnapshot } from '../automod/service.js';
 
 export const adminService = {
   // ── Overview stats ────────────────────────────────────────────────────────
@@ -16,6 +19,7 @@ export const adminService = {
       pendingReports, pendingAds,
       activeAds,
       frozenUsers, pendingVerification, autoModFlags24h,
+      premiumSubscribers,
     ] = await Promise.all([
       prisma.user.count({ where: { deleted_at: null } }),
       prisma.user.count({ where: { deleted_at: null, created_at: { gte: dayAgo } } }),
@@ -33,6 +37,7 @@ export const adminService = {
       prisma.user.count({ where: { deleted_at: null, frozen_at: { not: null } } }),
       prisma.verificationRequest.count({ where: { status: 'pending' } }),
       prisma.autoModLog.count({ where: { created_at: { gte: dayAgo } } }),
+      prisma.user.count({ where: { deleted_at: null, subscription_tier: { not: 'free' } } }),
     ]);
 
     // Posts per day for last 14 days
@@ -50,6 +55,59 @@ export const adminService = {
       SELECT role, COUNT(*)::bigint AS count FROM "User" WHERE deleted_at IS NULL GROUP BY role
     `;
 
+    // Registrations per month for the last 12 months — the frontend turns this
+    // into a cumulative "total registered" growth curve.
+    type MonthRow = { month: Date; count: bigint };
+    const yearAgo = new Date(now.getTime() - 365 * 86_400_000);
+    const [usersByMonth, postsByMonth] = await Promise.all([
+      prisma.$queryRaw<MonthRow[]>`
+        SELECT DATE_TRUNC('month', created_at) AS month, COUNT(*)::bigint AS count
+        FROM "User" WHERE deleted_at IS NULL AND created_at >= ${yearAgo}
+        GROUP BY 1 ORDER BY 1
+      `,
+      prisma.$queryRaw<MonthRow[]>`
+        SELECT DATE_TRUNC('month', created_at) AS month, COUNT(*)::bigint AS count
+        FROM "Post" WHERE deleted_at IS NULL AND created_at >= ${yearAgo}
+        GROUP BY 1 ORDER BY 1
+      `,
+    ]);
+
+    // Posts / likes / comments per day for the last 7 days
+    type DayCountRow = { day: Date; count: bigint };
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
+    const [postsPerDay, votesPerDay, commentsPerDay] = await Promise.all([
+      prisma.$queryRaw<DayCountRow[]>`
+        SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*)::bigint AS count
+        FROM "Post" WHERE deleted_at IS NULL AND created_at >= ${sevenDaysAgo} GROUP BY 1 ORDER BY 1
+      `,
+      prisma.$queryRaw<DayCountRow[]>`
+        SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*)::bigint AS count
+        FROM "Vote" WHERE deleted_at IS NULL AND created_at >= ${sevenDaysAgo} GROUP BY 1 ORDER BY 1
+      `,
+      prisma.$queryRaw<DayCountRow[]>`
+        SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*)::bigint AS count
+        FROM "Comment" WHERE deleted_at IS NULL AND created_at >= ${sevenDaysAgo} GROUP BY 1 ORDER BY 1
+      `,
+    ]);
+
+    // Reports grouped by AutoMod-assigned category (falls back to "other" for
+    // manually-filed reports the AI never scored)
+    type CategoryRow = { category: string; count: bigint };
+    const reportsByCategory = await prisma.$queryRaw<CategoryRow[]>`
+      SELECT COALESCE(ai_category, 'other') AS category, COUNT(*)::bigint AS count
+      FROM "Report" WHERE deleted_at IS NULL
+      GROUP BY 1 ORDER BY 2 DESC
+    `;
+
+    const fillDays = (rows: DayCountRow[], days: number) => {
+      const byDay = new Map(rows.map(r => [new Date(r.day).toISOString().slice(0, 10), Number(r.count)]));
+      return Array.from({ length: days }, (_, i) => {
+        const d = new Date(now.getTime() - (days - 1 - i) * 86_400_000);
+        const key = d.toISOString().slice(0, 10);
+        return { day: key, count: byDay.get(key) ?? 0 };
+      });
+    };
+
     return {
       users:   { total: totalUsers, today: newUsersDay, week: newUsersWeek, month: newUsersMonth },
       posts:   { total: totalPosts, today: newPostsDay, week: newPostsWeek },
@@ -58,8 +116,17 @@ export const adminService = {
       follows:  totalFollows,
       moderation: { pendingReports, pendingAds, frozenUsers, pendingVerification, autoModFlags24h },
       ads: { active: activeAds },
+      premiumSubscribers,
       postsHistory: postsHistory.map((r) => ({ day: r.day, count: Number(r.count) })),
       roleBreakdown: roleBreakdown.map((r) => ({ role: r.role, count: Number(r.count) })),
+      userGrowth: usersByMonth.map((r) => ({ month: r.month, count: Number(r.count) })),
+      postGrowth: postsByMonth.map((r) => ({ month: r.month, count: Number(r.count) })),
+      weeklyActivity: {
+        posts: fillDays(postsPerDay, 7),
+        likes: fillDays(votesPerDay, 7),
+        comments: fillDays(commentsPerDay, 7),
+      },
+      reportsByCategory: reportsByCategory.map((r) => ({ category: r.category, count: Number(r.count) })),
     };
   },
 
@@ -75,15 +142,26 @@ export const adminService = {
 
     const roleRankSql = Prisma.sql`CASE u.role WHEN 'owner' THEN 3 WHEN 'admin' THEN 2 WHEN 'moderator' THEN 1 ELSE 0 END`;
     const tierRankSql = Prisma.sql`CASE u.subscription_tier WHEN 'business' THEN 3 WHEN 'pro' THEN 2 WHEN 'lite' THEN 1 ELSE 0 END`;
+    const statusRankSql = Prisma.sql`CASE WHEN u.deceased_at IS NOT NULL THEN 2 WHEN u.frozen_at IS NOT NULL THEN 1 ELSE 0 END`;
+    const verifiedRankSql = Prisma.sql`CASE WHEN u.badge_type IS NOT NULL THEN 1 ELSE 0 END`;
 
     const orderClauses: Record<string, Prisma.Sql> = {
       privilege:    Prisma.sql`${roleRankSql} DESC, u.created_at DESC`,
       newest:       Prisma.sql`u.created_at DESC`,
       oldest:       Prisma.sql`u.created_at ASC`,
       posts:        Prisma.sql`post_count DESC, u.created_at DESC`,
+      posts_asc:    Prisma.sql`post_count ASC, u.created_at DESC`,
       followers:    Prisma.sql`follower_count DESC, u.created_at DESC`,
+      followers_asc: Prisma.sql`follower_count ASC, u.created_at DESC`,
       subscription: Prisma.sql`${tierRankSql} DESC, u.created_at DESC`,
       username:     Prisma.sql`u.username ASC`,
+      username_desc: Prisma.sql`u.username DESC`,
+      email_asc:    Prisma.sql`u.email ASC`,
+      email_desc:   Prisma.sql`u.email DESC`,
+      status_asc:   Prisma.sql`${statusRankSql} ASC, u.created_at DESC`,
+      status_desc:  Prisma.sql`${statusRankSql} DESC, u.created_at DESC`,
+      verification_asc:  Prisma.sql`${verifiedRankSql} ASC, u.created_at DESC`,
+      verification_desc: Prisma.sql`${verifiedRankSql} DESC, u.created_at DESC`,
     };
     const orderClause = orderClauses[sortBy] ?? orderClauses.privilege;
 
@@ -122,12 +200,71 @@ export const adminService = {
     };
   },
 
-  async updateUserRole(userId: string, role: string, badgeType: string | null) {
+  async updateUserRole(userId: string, role: string, badgeType?: string | null) {
     return prisma.user.update({
       where: { id: userId },
-      data:  { role, badge_type: badgeType },
+      data:  { role, ...(badgeType !== undefined ? { badge_type: badgeType } : {}) },
       select: { id: true, username: true, role: true, badge_type: true },
     });
+  },
+
+  // ── Team & roles ─────────────────────────────────────────────────────────
+  async getStaff() {
+    const staff = await prisma.user.findMany({
+      where: { deleted_at: null, role: { not: 'user' } },
+      select: { id: true, username: true, display_name: true, email: true, avatar_url: true, role: true, frozen_at: true, last_seen_at: true, created_at: true },
+    });
+    const rank: Record<string, number> = { owner: 3, admin: 2, moderator: 1 };
+    return staff.sort((a, b) => (rank[b.role] ?? 0) - (rank[a.role] ?? 0));
+  },
+
+  async promoteToStaff(identifier: string, role: string) {
+    const isEmail = identifier.includes('@');
+    const user = await prisma.user.findFirst({
+      where: isEmail ? { email: { equals: identifier, mode: 'insensitive' } } : { username: { equals: identifier, mode: 'insensitive' } },
+    });
+    if (!user) throw Object.assign(new Error('Пользователь не найден'), { code: 'NOT_FOUND' });
+    return prisma.user.update({
+      where: { id: user.id }, data: { role },
+      select: { id: true, username: true, display_name: true, email: true, avatar_url: true, role: true, frozen_at: true, last_seen_at: true, created_at: true },
+    });
+  },
+
+  // ── Broadcast notifications ──────────────────────────────────────────────
+  async sendBroadcast(actorId: string, title: string, body: string, audience: 'all' | 'premium' | 'new' | 'staff') {
+    const where: any = { deleted_at: null };
+    if (audience === 'premium') where.subscription_tier = { not: 'free' };
+    if (audience === 'new')     where.created_at = { gte: new Date(Date.now() - 7 * 86_400_000) };
+    if (audience === 'staff')   where.role = { not: 'user' };
+
+    const targets = (await prisma.user.findMany({ where, select: { id: true } })).filter(t => t.id !== actorId);
+
+    const broadcast = await prisma.adminBroadcast.create({
+      data: { actor_id: actorId, title, body, audience, recipient_count: targets.length },
+    });
+
+    // refId links each fan-out Notification back to this broadcast so real
+    // "opens" (Notification.read) can be counted per-broadcast later.
+    await Promise.all(
+      targets.map(t => notificationService.create({ receiverId: t.id, type: 'admin_broadcast', refId: broadcast.id, meta: { title, body } })),
+    );
+
+    return broadcast;
+  },
+
+  async getBroadcasts() {
+    const broadcasts = await prisma.adminBroadcast.findMany({
+      orderBy: { created_at: 'desc' },
+      take: 30,
+      include: { actor: { select: { username: true, display_name: true } } },
+    });
+    const opensByBroadcast = await prisma.notification.groupBy({
+      by: ['ref_id'],
+      where: { type: 'admin_broadcast', read: true, ref_id: { in: broadcasts.map(b => b.id) } },
+      _count: true,
+    });
+    const opensMap = new Map(opensByBroadcast.map(o => [o.ref_id, o._count]));
+    return broadcasts.map(b => ({ ...b, opens: opensMap.get(b.id) ?? 0 }));
   },
 
   async deleteUser(userId: string) {
@@ -220,6 +357,13 @@ export const adminService = {
     return prisma.post.update({ where: { id: postId }, data: { deleted_at: new Date() } });
   },
 
+  // Reuses the existing `is_announcement` flag as the admin "pin/feature" toggle —
+  // it's already surfaced on posts (badge + feed filter), so no new column needed.
+  async togglePostPin(postId: string) {
+    const post = await prisma.post.findUniqueOrThrow({ where: { id: postId }, select: { is_announcement: true } });
+    return prisma.post.update({ where: { id: postId }, data: { is_announcement: !post.is_announcement } });
+  },
+
   // ── Reports ────────────────────────────────────────────────────────────────
   // Reports are grouped into "folders" by (target_type, target_id): repeated
   // complaints about the same post/entity collapse into a single tile instead
@@ -257,6 +401,28 @@ export const adminService = {
       : [];
     const postMap = new Map(posts.map(p => [p.id, p]));
 
+    const userIds = [...groups.values()]
+      .filter(g => g[0].target_type === 'user')
+      .map(g => g[0].target_id);
+    const reportedUsers = userIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, username: true, display_name: true, avatar_url: true, deleted_at: true },
+        })
+      : [];
+    const userMap = new Map(reportedUsers.map(u => [u.id, u]));
+
+    const groupIds = [...groups.values()]
+      .filter(g => g[0].target_type === 'group')
+      .map(g => g[0].target_id);
+    const reportedGroups = groupIds.length
+      ? await prisma.group.findMany({
+          where: { id: { in: groupIds } },
+          select: { id: true, slug: true, name: true, avatar_url: true, deleted_at: true, owner_id: true },
+        })
+      : [];
+    const groupMap = new Map(reportedGroups.map(g => [g.id, g]));
+
     const folders = [...groups.values()]
       .map(group => ({
         target_type: group[0].target_type,
@@ -266,6 +432,8 @@ export const adminService = {
         created_at:  group[0].created_at,
         reports:     group,
         post:        group[0].target_type === 'post' ? (postMap.get(group[0].target_id) ?? null) : null,
+        reportedUser: group[0].target_type === 'user' ? (userMap.get(group[0].target_id) ?? null) : null,
+        reportedGroup: group[0].target_type === 'group' ? (groupMap.get(group[0].target_id) ?? null) : null,
       }))
       .sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
 
@@ -276,11 +444,32 @@ export const adminService = {
     return { reports, total, page, pages: Math.max(1, Math.ceil(total / limit)) };
   },
 
-  async createReport(input: { reporterId: string; targetType: string; targetId: string; reason: string }) {
+  async createReport(input: { reporterId: string; targetType: string; targetId: string; reason: string; evidenceUrls?: string[] }) {
+    // One pending report per (reporter, target) — prevents a single user from
+    // flooding the moderation queue / report-count-based auto-escalation with
+    // repeated complaints about the same profile, group or post.
+    const existing = await prisma.report.findFirst({
+      where: {
+        reporter_id: input.reporterId,
+        target_type: input.targetType,
+        target_id: input.targetId,
+        status: 'pending',
+        deleted_at: null,
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw Object.assign(new Error('Report already submitted'), { statusCode: 409, code: 'ALREADY_REPORTED' });
+    }
     return prisma.report.create({ data: {
       reporter_id: input.reporterId, target_type: input.targetType,
       target_id: input.targetId, reason: input.reason,
+      evidence_urls: input.evidenceUrls ?? [],
     }});
+  },
+
+  async deleteGroup(groupId: string) {
+    return prisma.group.update({ where: { id: groupId }, data: { deleted_at: new Date() } });
   },
 
   async resolveReport(reportId: string, resolverId: string, status: 'reviewed' | 'dismissed', note?: string) {
@@ -296,6 +485,71 @@ export const adminService = {
       where: { id: { in: reportIds } },
       data:  { status, resolved_by: resolverId, note, updated_at: new Date() },
     });
+  },
+
+  // The single "Решить проблему" action: optionally removes the reported content,
+  // always issues a warning with a moderator-written reason (and optional evidence
+  // photo) to whoever authored it, then resolves every report in the folder. This is
+  // the only path that creates a warning from the reports queue, so a warning is
+  // never sent without a recorded reason.
+  async resolveReportIssue(params: {
+    reportIds: string[];
+    targetType: string;
+    targetId: string;
+    deleteContent: boolean;
+    reason: string;
+    category: string;
+    imageUrl?: string;
+    resolverId: string;
+  }) {
+    const { reportIds, targetType, targetId, deleteContent, reason, category, imageUrl, resolverId } = params;
+
+    let warnUserId: string | null = null;
+    let postId: string | undefined;
+    let snapshot: TargetSnapshot = {};
+
+    if (targetType === 'post') {
+      const post = await prisma.post.findUnique({
+        where: { id: targetId },
+        select: { author_id: true, content: true, media_urls: true, created_at: true },
+      });
+      if (post) {
+        warnUserId = post.author_id;
+        postId = targetId;
+        snapshot = {
+          label: post.content ? post.content.slice(0, 80) : 'Публикация',
+          thumbnail: Array.isArray(post.media_urls) && post.media_urls.length ? String(post.media_urls[0]) : undefined,
+          date: post.created_at.toISOString(),
+        };
+      }
+      if (deleteContent) await this.deletePost(targetId);
+    } else if (targetType === 'user') {
+      const target = await prisma.user.findUnique({
+        where: { id: targetId },
+        select: { display_name: true, username: true, avatar_url: true, created_at: true },
+      });
+      if (target) {
+        warnUserId = targetId;
+        snapshot = { label: target.display_name || target.username, thumbnail: target.avatar_url ?? undefined, date: target.created_at.toISOString() };
+      }
+      if (deleteContent) await this.deleteUser(targetId);
+    } else if (targetType === 'group') {
+      const group = await prisma.group.findUnique({
+        where: { id: targetId },
+        select: { name: true, avatar_url: true, owner_id: true, created_at: true },
+      });
+      if (group) {
+        warnUserId = group.owner_id;
+        snapshot = { label: group.name, thumbnail: group.avatar_url ?? undefined, date: group.created_at.toISOString() };
+      }
+      if (deleteContent) await this.deleteGroup(targetId);
+    }
+
+    if (warnUserId) {
+      await applyAction(warnUserId, 'warn', category, reason, undefined, postId, resolverId, imageUrl, snapshot);
+    }
+
+    return this.resolveReportsBatch(reportIds, resolverId, 'resolved' as any, reason);
   },
 
   // ── Advertisements ─────────────────────────────────────────────────────────
@@ -391,6 +645,127 @@ export const adminService = {
 
   async deleteBanner(id: string) {
     return prisma.stickerBanner.delete({ where: { id } });
+  },
+
+  // ── Infrastructure overview ──────────────────────────────────────────────────
+  // No server/CPU/uptime metrics — deliberately not wiring Docker socket access
+  // into this container (see conversation decision). Only real, safely-obtained
+  // signals: sticker system size, Dealers' Den marketplace activity, real S3 usage.
+  async getInfraOverview() {
+    const now = new Date();
+    const monthAgo = new Date(now.getTime() - 30 * 86_400_000);
+
+    const [packCount, totalUses, activeListings, soldThisMonthAgg, topPacks, storage] = await Promise.all([
+      prisma.stickerPack.count({ where: { deleted_at: null, status: 'published' } }),
+      prisma.stickerUsage.aggregate({ _sum: { use_count: true } }),
+      prisma.dealerListing.count({ where: { status: 'active', deleted_at: null } }),
+      prisma.dealerListing.aggregate({
+        where: { status: 'sold', deleted_at: null, updated_at: { gte: monthAgo } },
+        _sum: { price: true }, _count: true,
+      }),
+      prisma.stickerPack.findMany({
+        where: { deleted_at: null, status: 'published' },
+        orderBy: { use_count: 'desc' }, take: 5,
+        select: { name: true, use_count: true },
+      }),
+      getStorageStats(),
+    ]);
+
+    return {
+      stickers: { packCount, totalUses: totalUses._sum.use_count ?? 0, topPacks: topPacks.map(p => ({ name: p.name, uses: p.use_count })) },
+      dealersDen: { activeListings, soldThisMonthCount: soldThisMonthAgg._count, soldThisMonthValue: Number(soldThisMonthAgg._sum.price ?? 0) },
+      storage,
+    };
+  },
+
+  // ── Groups & Events overview ────────────────────────────────────────────────
+  async getGroupsOverview() {
+    const now = new Date();
+
+    type GroupRow = { id: string; slug: string; name: string; type: string; member_count: bigint };
+    const groups = await prisma.$queryRaw<GroupRow[]>`
+      SELECT g.id, g.slug, g.name, g.type, COUNT(gm.user_id)::bigint AS member_count
+      FROM "Group" g
+      LEFT JOIN "GroupMember" gm ON gm.group_id = g.id
+      WHERE g.deleted_at IS NULL
+      GROUP BY g.id, g.slug, g.name, g.type
+      ORDER BY member_count DESC
+      LIMIT 6
+    `;
+
+    const [upcoming, recentPast] = await Promise.all([
+      prisma.event.findMany({
+        where: { starts_at: { gte: now }, group: { deleted_at: null } },
+        orderBy: { starts_at: 'asc' },
+        take: 5,
+        select: { id: true, title: true, starts_at: true, attendee_count: true, group: { select: { name: true, slug: true } } },
+      }),
+      prisma.event.findMany({
+        where: { starts_at: { lt: now }, group: { deleted_at: null } },
+        orderBy: { starts_at: 'desc' },
+        take: 5,
+        select: { id: true, title: true, starts_at: true, attendee_count: true, group: { select: { name: true, slug: true } } },
+      }),
+    ]);
+    const events = [...upcoming, ...recentPast].slice(0, 5);
+
+    return {
+      groups: groups.map(g => ({ id: g.id, slug: g.slug, name: g.name, type: g.type, memberCount: Number(g.member_count) })),
+      events: events.map(e => ({
+        id: e.id, title: e.title, startsAt: e.starts_at, attendeeCount: e.attendee_count,
+        groupName: e.group.name, groupSlug: e.group.slug, isUpcoming: e.starts_at.getTime() >= now.getTime(),
+      })),
+    };
+  },
+
+  // ── Premium/subscription overview ───────────────────────────────────────────
+  async getPremiumOverview() {
+    type TierRow = { subscription_tier: string; count: bigint };
+    const byTier = await prisma.$queryRaw<TierRow[]>`
+      SELECT subscription_tier, COUNT(*)::bigint AS count FROM "User"
+      WHERE deleted_at IS NULL GROUP BY subscription_tier
+    `;
+    const totalUsers = await prisma.user.count({ where: { deleted_at: null } });
+
+    const tierRank: Record<string, number> = { business: 3, pro: 2, lite: 1 };
+    const topSubscribersRaw = await prisma.user.findMany({
+      where: { deleted_at: null, subscription_tier: { not: 'free' } },
+      orderBy: { created_at: 'desc' },
+      take: 30,
+      select: { id: true, username: true, display_name: true, avatar_url: true, subscription_tier: true },
+    });
+    const topSubscribers = topSubscribersRaw
+      .sort((a, b) => (tierRank[b.subscription_tier] ?? 0) - (tierRank[a.subscription_tier] ?? 0))
+      .slice(0, 8);
+
+    // Dealers' Den turnover (GMV) — NOT platform revenue: the marketplace takes
+    // no commission today, money moves buyer→seller directly. Surfaced honestly
+    // as marketplace turnover, not "income". Sale time approximated by
+    // `updated_at` since listings have no dedicated `sold_at` column.
+    const yearAgo = new Date(Date.now() - 365 * 86_400_000);
+    type GmvRow = { month: Date; total: string; count: bigint };
+    const gmvByMonth = await prisma.$queryRaw<GmvRow[]>`
+      SELECT DATE_TRUNC('month', updated_at) AS month, SUM(price)::text AS total, COUNT(*)::bigint AS count
+      FROM "DealerListing"
+      WHERE status = 'sold' AND deleted_at IS NULL AND updated_at >= ${yearAgo}
+      GROUP BY 1 ORDER BY 1
+    `;
+    const [gmvTotalAgg, soldCount] = await Promise.all([
+      prisma.dealerListing.aggregate({ where: { status: 'sold', deleted_at: null }, _sum: { price: true } }),
+      prisma.dealerListing.count({ where: { status: 'sold', deleted_at: null } }),
+    ]);
+
+    return {
+      total: totalUsers,
+      byTier: byTier.map(r => ({ tier: r.subscription_tier, count: Number(r.count) })),
+      topSubscribers,
+      dealersDen: {
+        currency: 'USD',
+        totalGmv: Number(gmvTotalAgg._sum.price ?? 0),
+        soldCount,
+        gmvByMonth: gmvByMonth.map(r => ({ month: r.month, total: Number(r.total), count: Number(r.count) })),
+      },
+    };
   },
 
   // ── Statistics ─────────────────────────────────────────────────────────────

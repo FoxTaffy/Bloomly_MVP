@@ -13,6 +13,7 @@ export interface FriendUser {
   location: string | null
   birth_date: string | null
   deceased_at: string | null
+  is_following?: boolean
 }
 
 export interface FriendRequest {
@@ -75,12 +76,23 @@ export const useFriendsStore = defineStore('friends', () => {
 
   async function loadFollowers() {
     const { data } = await api.get<{ success: boolean; data: FriendUser[] }>('/friends/followers')
-    followers.value = data.data
+    const list = data.data
+    if (list.length) {
+      try {
+        const ids = list.map((u) => u.id).join(',')
+        const { data: bulk } = await api.get<{ success: boolean; data: Record<string, boolean> }>(
+          '/follows/check-bulk',
+          { params: { ids } }
+        )
+        list.forEach((u) => { u.is_following = bulk.data[u.id] ?? false })
+      } catch { /* leave is_following undefined — treated as false */ }
+    }
+    followers.value = list
   }
 
   async function loadFollowing() {
     const { data } = await api.get<{ success: boolean; data: FriendUser[] }>('/friends/following')
-    following.value = data.data
+    following.value = data.data.map((u) => ({ ...u, is_following: true }))
   }
 
   async function loadRequests() {

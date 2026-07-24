@@ -5,6 +5,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDealersDenStore, type DealerListingComment, type DenReview, REVIEW_TAGS } from '@/stores/dealersDen'
+import { useConfirm } from '@/composables/useConfirm'
 import AppHeader          from '@/components/AppHeader.vue'
 import AppSidebar         from '@/components/AppSidebar.vue'
 import BIcon              from '@/components/BIcon.vue'
@@ -18,6 +19,7 @@ const router = useRouter()
 const route  = useRoute()
 const auth   = useAuthStore()
 const store  = useDealersDenStore()
+const { confirmDialog } = useConfirm()
 
 const listing    = computed(() => store.currentListing)
 const activeImage = ref(0)
@@ -297,7 +299,7 @@ async function submitEdit() {
 
 async function deleteListing() {
   if (!listing.value) return
-  if (!confirm('Удалить объявление? Это действие необратимо.')) return
+  if (!(await confirmDialog('Удалить объявление? Это действие необратимо.', { danger: true }))) return
   await store.deleteListing(listing.value.id)
   router.push({ name: 'dealers-den' })
 }

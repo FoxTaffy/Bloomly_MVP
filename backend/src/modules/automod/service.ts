@@ -15,6 +15,7 @@
 import prisma from '../../config/prisma.js';
 import { isModerator } from '../../lib/roles.js';
 import { notificationService } from '../notifications/service.js';
+import { getSetting } from '../../lib/settings.js';
 
 // ── Thresholds (loosened further — AutoMod was flagging normal, active, or just
 //    chatty users as "suspicious"; these behavioral/rate checks now need a much
@@ -25,6 +26,13 @@ const SPAM_POSTS_PER_HOUR    = 60;   // more than 60 posts/hr = spam
 const STORY_BURST_PER_10S    = 15;   // 15+ stories in 10 seconds = bot-like burst
 const STORY_SPAM_PER_MINUTE  = 20;   // more than 20 stories/min = spam
 const STORY_SPAM_PER_HOUR    = 60;   // more than 60 stories/hr = spam (safety net past the route limiter)
+const COMMENT_BURST_PER_10S  = 12;   // 12+ comments in 10 seconds = bot-like burst (scripted spam)
+const COMMENT_SPAM_PER_MINUTE = 25;  // more than 25 comments/min = spam (safety net past the route limiter)
+const COMMENT_SPAM_PER_HOUR  = 150;  // more than 150 comments/hr = spam
+const MESSAGE_BURST_PER_10S  = 20;   // 20+ DMs in 10 seconds = bot-like burst
+const MESSAGE_SPAM_PER_MINUTE = 40;  // more than 40 messages/min = spam (matches the client-side "slow down" nag)
+const MESSAGE_SPAM_PER_HOUR  = 250;  // more than 250 messages/hr = spam
+const MESSAGE_SPAM_WARN_WINDOW_MS = 30 * 60_000; // repeat offense within 30min of an existing spam warn → freeze instead of warning again
 const DUPLICATE_SIMILARITY   = 0.92; // 92% bigram overlap = duplicate (was 0.85 — flagged merely-similar posts)
 const DUPLICATE_MIN_LENGTH   = 30;   // skip duplicate check for short posts/one-liners entirely (was 20)
 const FRAUD_SCORE_THRESHOLD  = 0.7;
@@ -71,6 +79,13 @@ export interface AnalysisResult {
   score:    number;   // 0..1
   reason:   string;
   shouldAct: boolean;
+}
+
+/** Any single TOXIC_PATTERNS hit rejects — unlike analyzeContent's shouldAct threshold
+ *  (tuned for full posts, needs 2+ hits), this is for validating short user-authored
+ *  strings (quick-reply templates, welcome DM text) where one slur is enough to reject. */
+export function containsToxicLanguage(text: string): boolean {
+  return TOXIC_PATTERNS.some((p) => p.test(text));
 }
 
 export function analyzeContent(text: string): AnalysisResult {
@@ -200,7 +215,47 @@ export async function checkStoryBurstRate(userId: string): Promise<{ isSpam: boo
   return { isSpam: false, reason: '' };
 }
 
+// ── Comment burst / spam frequency check ──────────────────────────────────────
+export async function checkCommentBurstRate(authorId: string): Promise<{ isSpam: boolean; reason: string }> {
+  const now = Date.now();
+  const [per10s, perMinute, perHour] = await Promise.all([
+    prisma.comment.count({ where: { author_id: authorId, deleted_at: null, created_at: { gte: new Date(now - 10_000) } } }),
+    prisma.comment.count({ where: { author_id: authorId, deleted_at: null, created_at: { gte: new Date(now - 60_000) } } }),
+    prisma.comment.count({ where: { author_id: authorId, deleted_at: null, created_at: { gte: new Date(now - 3_600_000) } } }),
+  ]);
+
+  if (per10s    >= COMMENT_BURST_PER_10S)   return { isSpam: true, reason: `Аномальный всплеск комментариев: ${per10s} за 10 секунд` };
+  if (perMinute >= COMMENT_SPAM_PER_MINUTE) return { isSpam: true, reason: `Слишком много комментариев за минуту (${perMinute})` };
+  if (perHour   >= COMMENT_SPAM_PER_HOUR)   return { isSpam: true, reason: `Слишком много комментариев за час (${perHour})` };
+  return { isSpam: false, reason: '' };
+}
+
+// ── Message burst / spam frequency check ──────────────────────────────────────
+export async function checkMessageBurstRate(senderId: string): Promise<{ isSpam: boolean; reason: string }> {
+  const now = Date.now();
+  const [per10s, perMinute, perHour] = await Promise.all([
+    prisma.message.count({ where: { sender_id: senderId, deleted_at: null, created_at: { gte: new Date(now - 10_000) } } }),
+    prisma.message.count({ where: { sender_id: senderId, deleted_at: null, created_at: { gte: new Date(now - 60_000) } } }),
+    prisma.message.count({ where: { sender_id: senderId, deleted_at: null, created_at: { gte: new Date(now - 3_600_000) } } }),
+  ]);
+
+  if (per10s    >= MESSAGE_BURST_PER_10S)   return { isSpam: true, reason: `Аномальный всплеск сообщений: ${per10s} за 10 секунд` };
+  if (perMinute >= MESSAGE_SPAM_PER_MINUTE) return { isSpam: true, reason: `Слишком много сообщений за минуту (${perMinute})` };
+  if (perHour   >= MESSAGE_SPAM_PER_HOUR)   return { isSpam: true, reason: `Слишком много сообщений за час (${perHour})` };
+  return { isSpam: false, reason: '' };
+}
+
+// Snapshot of the reported content, captured before deletion, so the user-facing
+// violation modal can still show what was removed and when.
+export interface TargetSnapshot {
+  label?: string;      // e.g. "Видео oreiro197" or a caption preview
+  thumbnail?: string;  // media URL, if any
+  date?: string;       // ISO date the content was originally published
+}
+
 // ── Main action dispatch ──────────────────────────────────────────────────────
+// Returns the id of the 'warn' AutoModLog row (so callers can link a notification
+// back to the specific log entry for appeals), or null when no action was taken.
 export async function applyAction(
   userId: string,
   action: 'warn' | 'freeze' | 'ban',
@@ -208,19 +263,22 @@ export async function applyAction(
   reason: string,
   details?: string,
   postId?: string,
-): Promise<void> {
+  actorId?: string, // set when a moderator triggers this manually (vs. the automatic pipeline)
+  imageUrl?: string,        // evidence photo attached by a moderator
+  targetSnapshot?: TargetSnapshot,
+): Promise<string | null> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { warn_count: true, deleted_at: true, frozen_at: true } });
-  if (!user || user.deleted_at) return; // already banned
+  if (!user || user.deleted_at) return null; // already banned
 
-  await prisma.autoModLog.create({
-    data: { user_id: userId, action, reason, category, score: 0, details, post_id: postId || null },
+  const log = await prisma.autoModLog.create({
+    data: { user_id: userId, actor_id: actorId ?? null, action, reason, category, score: 0, details, post_id: postId || null, image_url: imageUrl ?? null },
   });
 
   if (action === 'ban') {
     await prisma.user.update({ where: { id: userId }, data: { deleted_at: new Date(), frozen_reason: `[AUTOMOD BAN] ${reason}` } });
     await notificationService.create({ receiverId: userId, type: 'automod_ban', postId, meta: { reason } });
     console.log(`[AUTOMOD] BAN user=${userId} reason=${reason}`);
-    return;
+    return log.id;
   }
 
   if (action === 'freeze') {
@@ -229,21 +287,23 @@ export async function applyAction(
       await notificationService.create({ receiverId: userId, type: 'automod_freeze', postId, meta: { reason } });
       console.log(`[AUTOMOD] FREEZE user=${userId} reason=${reason}`);
     }
-    return;
+    return log.id;
   }
 
   if (action === 'warn') {
     const newWarnCount = (user.warn_count ?? 0) + 1;
+    const warnMeta = {
+      count: newWarnCount, limit: WARNS_BEFORE_BAN, reason, category,
+      imageUrl: imageUrl ?? undefined, autoModLogId: log.id,
+      targetLabel: targetSnapshot?.label, targetThumbnail: targetSnapshot?.thumbnail, targetDate: targetSnapshot?.date,
+    };
     if (newWarnCount >= WARNS_BEFORE_BAN) {
       // Escalate to a reversible freeze, never an automatic permanent ban.
       // A human moderator reviews the log and decides whether to lift it or ban manually.
       if (!user.frozen_at) {
         await prisma.user.update({ where: { id: userId }, data: { warn_count: newWarnCount, frozen_at: new Date(), frozen_reason: `[AUTOMOD FREEZE after ${newWarnCount} warns] ${reason}` } });
         await prisma.autoModLog.create({ data: { user_id: userId, action: 'freeze', reason: `Аккаунт заморожен после ${newWarnCount} предупреждений — проверка модератором`, category, score: 1, details } });
-        await notificationService.create({
-          receiverId: userId, type: 'automod_warn', postId,
-          meta: { count: newWarnCount, limit: WARNS_BEFORE_BAN, reason },
-        });
+        await notificationService.create({ receiverId: userId, type: 'automod_warn', postId, meta: warnMeta });
         await notificationService.create({
           receiverId: userId, type: 'automod_freeze', postId,
           meta: { reason: `Аккаунт заморожен после ${newWarnCount} предупреждений` },
@@ -254,13 +314,12 @@ export async function applyAction(
       }
     } else {
       await prisma.user.update({ where: { id: userId }, data: { warn_count: newWarnCount } });
-      await notificationService.create({
-        receiverId: userId, type: 'automod_warn', postId,
-        meta: { count: newWarnCount, limit: WARNS_BEFORE_BAN, reason },
-      });
+      await notificationService.create({ receiverId: userId, type: 'automod_warn', postId, meta: warnMeta });
       console.log(`[AUTOMOD] WARN user=${userId} count=${newWarnCount} reason=${reason}`);
     }
+    return log.id;
   }
+  return log.id;
 }
 
 // ── Soft-delete flagged post ──────────────────────────────────────────────────
@@ -270,8 +329,54 @@ export async function flagPost(postId: string, userId: string, category: string,
   console.log(`[AUTOMOD] FLAG_POST post=${postId} user=${userId} reason=${reason}`);
 }
 
+// ── Appeals ────────────────────────────────────────────────────────────────
+export async function getOwnWarningLog(logId: string, userId: string) {
+  const log = await prisma.autoModLog.findUnique({ where: { id: logId } });
+  if (!log || log.user_id !== userId) return null;
+  return log;
+}
+
+export async function submitAppeal(logId: string, userId: string, text: string) {
+  const log = await prisma.autoModLog.findUnique({ where: { id: logId } });
+  if (!log || log.user_id !== userId) throw new Error('Not found');
+  if (log.appeal_status !== 'none') throw new Error('Appeal already submitted');
+  return prisma.autoModLog.update({
+    where: { id: logId },
+    data: { appeal_status: 'pending', appeal_text: text, appeal_created_at: new Date() },
+  });
+}
+
+export async function getPendingAppeals() {
+  return prisma.autoModLog.findMany({
+    where: { appeal_status: 'pending' },
+    orderBy: { appeal_created_at: 'asc' },
+    include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
+  });
+}
+
+export async function decideAppeal(logId: string, resolverId: string, decision: 'accepted' | 'rejected') {
+  const log = await prisma.autoModLog.findUnique({ where: { id: logId } });
+  if (!log || log.appeal_status !== 'pending') throw new Error('No pending appeal');
+
+  await prisma.autoModLog.update({
+    where: { id: logId },
+    data: { appeal_status: decision, appeal_resolved_at: new Date(), appeal_resolved_by: resolverId },
+  });
+
+  if (decision === 'accepted') {
+    const user = await prisma.user.findUnique({ where: { id: log.user_id }, select: { warn_count: true } });
+    const newCount = Math.max(0, (user?.warn_count ?? 1) - 1);
+    await prisma.user.update({ where: { id: log.user_id }, data: { warn_count: newCount } });
+    await notificationService.create({ receiverId: log.user_id, type: 'automod_appeal_accepted', meta: { autoModLogId: logId } });
+  } else {
+    await notificationService.create({ receiverId: log.user_id, type: 'automod_appeal_rejected', meta: { autoModLogId: logId } });
+  }
+}
+
 // ── Main entry: called on post creation ──────────────────────────────────────
 export async function moderatePost(postId: string, authorId: string, content: string): Promise<void> {
+  if (!(await getSetting('automod_enabled'))) return; // admin-disabled — manual moderation only
+
   // Skip if user is already banned/frozen
   const user = await prisma.user.findUnique({ where: { id: authorId }, select: { deleted_at: true, frozen_at: true, role: true } });
   if (!user || user.deleted_at) return;
@@ -312,6 +417,8 @@ export async function moderatePost(postId: string, authorId: string, content: st
 
 // ── Main entry: called on story creation ──────────────────────────────────────
 export async function moderateStory(storyId: string, userId: string): Promise<void> {
+  if (!(await getSetting('automod_enabled'))) return; // admin-disabled — manual moderation only
+
   // Skip if user is already banned/frozen or is staff
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { deleted_at: true, frozen_at: true, role: true } });
   if (!user || user.deleted_at || user.frozen_at) return;
@@ -327,6 +434,58 @@ export async function moderateStory(storyId: string, userId: string): Promise<vo
   });
   await applyAction(userId, 'freeze', 'suspicious', rateCheck.reason, `story_id=${storyId}`, undefined);
   console.log(`[AUTOMOD] STORY_BURST user=${userId} reason=${rateCheck.reason}`);
+}
+
+// ── Main entry: called on comment creation ────────────────────────────────────
+export async function moderateComment(commentId: string, authorId: string): Promise<void> {
+  if (!(await getSetting('automod_enabled'))) return; // admin-disabled — manual moderation only
+
+  // Skip if user is already banned/frozen or is staff
+  const user = await prisma.user.findUnique({ where: { id: authorId }, select: { deleted_at: true, frozen_at: true, role: true } });
+  if (!user || user.deleted_at || user.frozen_at) return;
+  if (isModerator(user.role)) return; // staff exempt
+
+  const rateCheck = await checkCommentBurstRate(authorId);
+  if (!rateCheck.isSpam) return;
+
+  // Hide the comments that made up the burst, then freeze the account
+  await prisma.comment.updateMany({
+    where: { author_id: authorId, deleted_at: null, created_at: { gte: new Date(Date.now() - 60_000) } },
+    data: { deleted_at: new Date() },
+  });
+  await applyAction(authorId, 'freeze', 'spam', rateCheck.reason, `comment_id=${commentId}`, undefined);
+  console.log(`[AUTOMOD] COMMENT_BURST user=${authorId} reason=${rateCheck.reason}`);
+}
+
+// ── Main entry: called on message send ────────────────────────────────────────
+// Unlike posts/stories/comments this can't inspect content (messages are
+// client-side encrypted) — purely a send-rate check. First offense only warns
+// (with an explicit "next time = freeze" message); if the sender is still
+// spamming after that warning it escalates straight to freeze.
+export async function moderateMessage(senderId: string): Promise<void> {
+  if (!(await getSetting('automod_enabled'))) return; // admin-disabled — manual moderation only
+
+  const user = await prisma.user.findUnique({ where: { id: senderId }, select: { deleted_at: true, frozen_at: true, role: true } });
+  if (!user || user.deleted_at || user.frozen_at) return;
+  if (isModerator(user.role)) return; // staff exempt
+
+  const rateCheck = await checkMessageBurstRate(senderId);
+  if (!rateCheck.isSpam) return;
+
+  const priorWarn = await prisma.autoModLog.findFirst({
+    where: {
+      user_id: senderId, action: 'warn', category: 'spam', details: 'message_spam',
+      created_at: { gte: new Date(Date.now() - MESSAGE_SPAM_WARN_WINDOW_MS) },
+    },
+  });
+
+  if (priorWarn) {
+    await applyAction(senderId, 'freeze', 'spam', `Спам в сообщениях продолжился после предупреждения: ${rateCheck.reason}`, 'message_spam');
+    console.log(`[AUTOMOD] MESSAGE_SPAM_FREEZE user=${senderId} reason=${rateCheck.reason}`);
+  } else {
+    await applyAction(senderId, 'warn', 'spam', `Спам в личных сообщениях: ${rateCheck.reason}. Если это повторится, аккаунт будет заморожен.`, 'message_spam');
+    console.log(`[AUTOMOD] MESSAGE_SPAM_WARN user=${senderId} reason=${rateCheck.reason}`);
+  }
 }
 
 // ── Report priority scoring ───────────────────────────────────────────────────
@@ -390,12 +549,15 @@ export async function patrolSuspiciousActivity(): Promise<void> {
     await applyAction(hs.user_id, 'freeze', 'suspicious', `Подозрительная активность: ${hs.cnt} историй за 24ч`, undefined, undefined);
   }
 
-  // 3. Users with many reports against them in last hour → freeze
-  const reportedUsers = await prisma.$queryRaw<{ reporter_id_ignored: string; uid: string; cnt: bigint }[]>`
-    SELECT r.target_id as uid, COUNT(*) as cnt FROM "Report" r
+  // 3. Users with many *distinct reporters* against them in last hour → freeze.
+  // Must count distinct reporter_id, not raw report rows — otherwise a single
+  // attacker can spam reports (up to the 10/min rate limit) against one profile
+  // and trigger an automatic freeze of an innocent user.
+  const reportedUsers = await prisma.$queryRaw<{ uid: string; cnt: bigint }[]>`
+    SELECT r.target_id as uid, COUNT(DISTINCT r.reporter_id) as cnt FROM "Report" r
     WHERE r.status = 'pending' AND r.created_at >= ${oneHourAgo}
       AND r.target_type = 'user'
-    GROUP BY r.target_id HAVING COUNT(*) >= 8
+    GROUP BY r.target_id HAVING COUNT(DISTINCT r.reporter_id) >= 8
   `;
 
   for (const ru of reportedUsers) {

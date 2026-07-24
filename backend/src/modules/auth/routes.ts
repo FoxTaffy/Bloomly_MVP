@@ -5,6 +5,9 @@ import {
   verifyEmailHandler, resendOtpHandler,
   requestUnfreezeHandler, confirmUnfreezeHandler, exportDataHandler,
   requestEmailChangeHandler, confirmEmailChangeHandler,
+  totpSetupHandler, totpConfirmHandler,
+  email2faEnableHandler, email2faConfirmHandler,
+  disable2faHandler, loginVerify2faHandler, loginResend2faHandler,
   oauthRedirectHandler, oauthCallbackHandler,
   linkInitHandler, getLinkedAccountsHandler, unlinkAccountHandler,
   refreshHandler, logoutHandler,
@@ -12,6 +15,7 @@ import {
 } from './controller.js';
 import type { JwtPayload } from './types.js';
 import prisma from '../../config/prisma.js';
+import { isAdult } from '../../lib/age.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -126,6 +130,30 @@ export async function authRoutes(fastify: FastifyInstance) {
     config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
   }, resetPasswordHandler);
 
+  fastify.post('/login/2fa/verify', {
+    schema: {
+      body: {
+        type: 'object', required: ['mfaToken', 'code'],
+        properties: {
+          mfaToken: { type: 'string', minLength: 1 },
+          code:     { type: 'string', minLength: 6, maxLength: 6 },
+          remember: { type: 'boolean' },
+        },
+      },
+    },
+    config: { rateLimit: { max: 10, timeWindow: '5 minutes' } },
+  }, loginVerify2faHandler);
+
+  fastify.post('/login/2fa/resend', {
+    schema: {
+      body: {
+        type: 'object', required: ['mfaToken'],
+        properties: { mfaToken: { type: 'string', minLength: 1 } },
+      },
+    },
+    config: { rateLimit: { max: 3, timeWindow: '1 minute' } },
+  }, loginResend2faHandler);
+
   fastify.post('/export-data', {
     schema: {
       body: {
@@ -179,6 +207,35 @@ export async function authRoutes(fastify: FastifyInstance) {
     config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
   }, confirmEmailChangeHandler as any);
 
+  // ── Двухфакторная аутентификация (требует JWT) ────────────────────────────────
+  fastify.post('/2fa/totp/setup', {
+    onRequest: [fastify.authenticate],
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+  }, totpSetupHandler as any);
+
+  fastify.post('/2fa/totp/confirm', {
+    onRequest: [fastify.authenticate],
+    schema: { body: { type: 'object', required: ['code'], properties: { code: { type: 'string', minLength: 6, maxLength: 6 } } } },
+    config: { rateLimit: { max: 10, timeWindow: '15 minutes' } },
+  }, totpConfirmHandler as any);
+
+  fastify.post('/2fa/email/enable', {
+    onRequest: [fastify.authenticate],
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+  }, email2faEnableHandler as any);
+
+  fastify.post('/2fa/email/confirm', {
+    onRequest: [fastify.authenticate],
+    schema: { body: { type: 'object', required: ['code'], properties: { code: { type: 'string', minLength: 6, maxLength: 6 } } } },
+    config: { rateLimit: { max: 10, timeWindow: '15 minutes' } },
+  }, email2faConfirmHandler as any);
+
+  fastify.post('/2fa/disable', {
+    onRequest: [fastify.authenticate],
+    schema: { body: { type: 'object', properties: { password: { type: 'string' } } } },
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
+  }, disable2faHandler as any);
+
   fastify.get('/link-init/:provider',          auth, linkInitHandler as any);
   fastify.get('/linked-accounts',              auth, getLinkedAccountsHandler as any);
   fastify.delete('/linked-accounts/:provider', auth, unlinkAccountHandler as any);
@@ -202,13 +259,14 @@ export async function authRoutes(fastify: FastifyInstance) {
           subscription_tier: true, profile_theme: true, profile_bg_url: true,
           profile_frame: true, is_verified: true, verification_type: true,
           badge_type: true, email_verified: true, onboarding_done: true,
-          payment_region: true,
+          payment_region: true, birth_date: true, two_factor_method: true,
         },
       });
       if (!user) {
         return reply.code(401).send({ success: false, data: null, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
       }
-      return reply.send({ success: true, data: { user }, error: null });
+      const { birth_date, ...publicUser } = user;
+      return reply.send({ success: true, data: { user: { ...publicUser, is_adult: isAdult(birth_date) } }, error: null });
     },
   );
 

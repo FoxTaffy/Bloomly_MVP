@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import BIcon from '@/components/BIcon.vue'
+import api from '@/api'
 
 const toast     = ref('')
 const newReply  = ref('')
 const addingReply = ref(false)
-
-// ── Automation settings (localStorage) ────────────────────────────────────────
-const LS_KEY = 'bloomly_automation_v1'
 
 interface AutoSettings {
   autoFollowBack:   boolean
@@ -26,11 +24,9 @@ interface AutoSettings {
   filterSpam:       boolean
 }
 
-function loadSettings(): AutoSettings {
-  try {
-    return JSON.parse(localStorage.getItem(LS_KEY) ?? 'null') ?? defaultSettings()
-  } catch { return defaultSettings() }
-}
+// filterNsfw stays local-only on purpose: it overlaps the separate verified-18+ NSFW
+// gate (useNsfwMode.ts) and was deliberately excluded from the backend automation settings.
+const NSFW_LS_KEY = 'bloomly_automation_filter_nsfw'
 
 function defaultSettings(): AutoSettings {
   return {
@@ -46,17 +42,93 @@ function defaultSettings(): AutoSettings {
     notifyComment:    true,
     notifyRepaw:      false,
     quickReplies:     ['Спасибо! 🐾', 'Очень мило!', 'Скоро отвечу 👀'],
-    filterNsfw:       false,
+    filterNsfw:       localStorage.getItem(NSFW_LS_KEY) === 'true',
     filterSpam:       true,
   }
 }
 
-const s = ref<AutoSettings>(loadSettings())
-watch(s, (val) => { localStorage.setItem(LS_KEY, JSON.stringify(val)) }, { deep: true })
+const s = ref<AutoSettings>(defaultSettings())
+
+// camelCase (frontend) <-> snake_case (backend) field name mapping.
+// filterNsfw/autoRepost never round-trip the API — they aren't backend-backed.
+const API_KEY: Partial<Record<keyof AutoSettings, string>> = {
+  autoFollowBack: 'auto_follow_back',
+  welcomeMsg:     'welcome_msg_enabled',
+  welcomeText:    'welcome_msg_text',
+  muteKeywords:   'mute_keywords',
+  quietHoursOn:   'quiet_hours_enabled',
+  quietFrom:      'quiet_hours_from',
+  quietTo:        'quiet_hours_to',
+  notifyNewFan:   'notify_new_fan',
+  notifyComment:  'notify_comment',
+  notifyRepaw:    'notify_repaw',
+  quickReplies:   'quick_replies',
+  filterSpam:     'filter_spam',
+}
+
+function fromApi(data: Record<string, any>): Partial<AutoSettings> {
+  return {
+    autoFollowBack: data.auto_follow_back,
+    welcomeMsg:     data.welcome_msg_enabled,
+    welcomeText:    data.welcome_msg_text,
+    muteKeywords:   data.mute_keywords,
+    quietHoursOn:   data.quiet_hours_enabled,
+    quietFrom:      data.quiet_hours_from,
+    quietTo:        data.quiet_hours_to,
+    notifyNewFan:   data.notify_new_fan,
+    notifyComment:  data.notify_comment,
+    notifyRepaw:    data.notify_repaw,
+    quickReplies:   data.quick_replies,
+    filterSpam:     data.filter_spam,
+  }
+}
+
+onMounted(async () => {
+  try {
+    const { data } = await api.get('/automation/me')
+    Object.assign(s.value, fromApi(data.data.settings))
+  } catch { /* keep local defaults if the fetch fails */ }
+})
+
+async function patchSettings(partial: Partial<AutoSettings>): Promise<boolean> {
+  const body: Record<string, any> = {}
+  for (const k of Object.keys(partial) as (keyof AutoSettings)[]) {
+    const apiKey = API_KEY[k]
+    if (apiKey) body[apiKey] = (partial as any)[k]
+  }
+  if (!Object.keys(body).length) return true
+  try {
+    await api.patch('/automation/me', body)
+    return true
+  } catch (e: any) {
+    showToast(e?.response?.data?.error?.message || 'Не удалось сохранить')
+    return false
+  }
+}
 
 function toggleProp(key: keyof AutoSettings) {
-  ;(s.value as any)[key] = !(s.value as any)[key]
-  showToast('Сохранено')
+  const next = !(s.value as any)[key]
+  ;(s.value as any)[key] = next
+
+  if (key === 'filterNsfw') {
+    localStorage.setItem(NSFW_LS_KEY, String(next))
+    showToast('Сохранено')
+    return
+  }
+  if (!API_KEY[key]) { showToast('Сохранено'); return } // e.g. autoRepost (soon, locked in UI)
+
+  patchSettings({ [key]: next } as Partial<AutoSettings>).then((ok) => {
+    if (ok) showToast('Сохранено')
+    else (s.value as any)[key] = !next // revert on rejection
+  })
+}
+
+async function saveWelcomeText() {
+  if (await patchSettings({ welcomeText: s.value.welcomeText })) showToast('Сохранено')
+}
+
+async function saveQuietHours() {
+  await patchSettings({ quietFrom: s.value.quietFrom, quietTo: s.value.quietTo })
 }
 
 function showToast(msg: string) {
@@ -66,28 +138,36 @@ function showToast(msg: string) {
 
 // Mute keywords
 const newKeyword = ref('')
-function addKeyword() {
+async function addKeyword() {
   const kw = newKeyword.value.trim()
   if (!kw || s.value.muteKeywords.includes(kw)) return
-  s.value.muteKeywords.push(kw)
-  newKeyword.value = ''
-  showToast('Слово добавлено')
+  const next = [...s.value.muteKeywords, kw]
+  if (await patchSettings({ muteKeywords: next })) {
+    s.value.muteKeywords = next
+    newKeyword.value = ''
+    showToast('Слово добавлено')
+  }
 }
-function removeKeyword(kw: string) {
-  s.value.muteKeywords = s.value.muteKeywords.filter(k => k !== kw)
+async function removeKeyword(kw: string) {
+  const next = s.value.muteKeywords.filter(k => k !== kw)
+  if (await patchSettings({ muteKeywords: next })) s.value.muteKeywords = next
 }
 
 // Quick replies
-function addQuickReply() {
+async function addQuickReply() {
   const t = newReply.value.trim()
   if (!t) return
-  s.value.quickReplies.push(t)
-  newReply.value = ''
-  addingReply.value = false
-  showToast('Шаблон добавлен')
+  const next = [...s.value.quickReplies, t]
+  if (await patchSettings({ quickReplies: next })) {
+    s.value.quickReplies = next
+    newReply.value = ''
+    addingReply.value = false
+    showToast('Шаблон добавлен')
+  }
 }
-function removeQuickReply(i: number) {
-  s.value.quickReplies.splice(i, 1)
+async function removeQuickReply(i: number) {
+  const next = s.value.quickReplies.filter((_, idx) => idx !== i)
+  if (await patchSettings({ quickReplies: next })) s.value.quickReplies = next
 }
 
 // Section definitions
@@ -197,6 +277,7 @@ const sections = computed(() => [
           <!-- Toggle -->
           <button
             v-if="!item.soon"
+            type="button"
             @click="toggleProp(item.key as any)"
             class="flex-shrink-0 relative w-11 h-6 rounded-full transition-all duration-200"
             :class="(s as any)[item.key] ? 'bg-brand-accent' : 'bg-brand-border'"
@@ -221,7 +302,7 @@ const sections = computed(() => [
             class="flex-1 bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none focus:border-brand-accent/60"
             placeholder="Привет! Спасибо за подписку 🐾"
           />
-          <button @click="showToast('Сохранено')"
+          <button type="button" @click="saveWelcomeText"
             class="px-4 py-2.5 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-colors">
             <BIcon name="Check" class="w-4 h-4" />
           </button>
@@ -234,13 +315,13 @@ const sections = computed(() => [
         <div class="flex items-center gap-4 mt-3">
           <div class="flex-1">
             <label class="block text-xs font-bold text-white/50 mb-1.5">С</label>
-            <input v-model="s.quietFrom" type="time"
+            <input v-model="s.quietFrom" type="time" @change="saveQuietHours"
               class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-brand-accent/60 [color-scheme:dark]" />
           </div>
           <div class="text-white/30 mt-5">—</div>
           <div class="flex-1">
             <label class="block text-xs font-bold text-white/50 mb-1.5">До</label>
-            <input v-model="s.quietTo" type="time"
+            <input v-model="s.quietTo" type="time" @change="saveQuietHours"
               class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-brand-accent/60 [color-scheme:dark]" />
           </div>
         </div>
@@ -267,7 +348,7 @@ const sections = computed(() => [
             placeholder="Добавить слово или фразу…"
             @keydown.enter="addKeyword"
           />
-          <button @click="addKeyword"
+          <button type="button" @click="addKeyword"
             class="px-4 py-2.5 rounded-xl bg-brand-card border border-brand-border text-white text-sm font-bold hover:border-brand-accent/40 transition-colors flex items-center gap-1.5">
             <BIcon name="Plus" class="w-4 h-4" />
           </button>
@@ -278,7 +359,7 @@ const sections = computed(() => [
           <div v-for="kw in s.muteKeywords" :key="kw"
             class="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl bg-brand-error/8 border border-brand-error/20 text-brand-error text-xs font-bold">
             {{ kw }}
-            <button @click="removeKeyword(kw)"
+            <button type="button" @click="removeKeyword(kw)"
               class="w-4 h-4 rounded-full hover:bg-brand-error/20 flex items-center justify-center transition-colors">
               <BIcon name="X" class="w-3 h-3" />
             </button>
@@ -297,7 +378,7 @@ const sections = computed(() => [
           </div>
           <h3 class="font-extrabold text-white text-sm">Быстрые ответы</h3>
         </div>
-        <button @click="addingReply = true"
+        <button type="button" @click="addingReply = true"
           class="text-xs font-bold text-brand-accent hover:text-brand-accent-plus transition-colors flex items-center gap-1">
           <BIcon name="Plus" class="w-3.5 h-3.5" /> Добавить
         </button>
@@ -317,11 +398,11 @@ const sections = computed(() => [
             @keydown.esc="addingReply = false"
             autofocus
           />
-          <button @click="addQuickReply"
+          <button type="button" @click="addQuickReply"
             class="px-4 py-2.5 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-colors">
             <BIcon name="Check" class="w-4 h-4" />
           </button>
-          <button @click="addingReply = false"
+          <button type="button" @click="addingReply = false"
             class="px-3 py-2.5 rounded-xl bg-brand-card border border-brand-border text-white/50 text-sm hover:border-white/20 transition-colors">
             <BIcon name="X" class="w-4 h-4" />
           </button>
@@ -332,7 +413,7 @@ const sections = computed(() => [
           class="group flex items-center gap-3 p-3 rounded-xl bg-brand-card/60 border border-brand-border/50 hover:border-brand-border transition-colors">
           <BIcon name="MessageSquare" class="w-4 h-4 text-white/30 flex-shrink-0" />
           <span class="flex-1 text-sm text-white/75">{{ reply }}</span>
-          <button @click="removeQuickReply(i)"
+          <button type="button" @click="removeQuickReply(i)"
             class="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg flex items-center justify-center text-brand-error/60 hover:bg-brand-error/10 hover:text-brand-error transition-all">
             <BIcon name="Trash2" class="w-3.5 h-3.5" />
           </button>

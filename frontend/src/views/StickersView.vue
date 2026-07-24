@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useStickersStore, type StickerPack, type CreatePackInput } from '@/stores/stickers'
 import { useNsfwMode } from '@/composables/useNsfwMode'
+import { useConfirm } from '@/composables/useConfirm'
 import api from '@/api'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
@@ -18,7 +19,17 @@ import StickerImg from '@/components/StickerImg.vue'
 const router = useRouter()
 const auth   = useAuthStore()
 const store  = useStickersStore()
-const { nsfwEnabled, enableNsfw } = useNsfwMode()
+const { nsfwEnabled, canUseNsfw, enableNsfw } = useNsfwMode()
+const { confirmDialog } = useConfirm()
+
+function handleEnableNsfw() {
+  if (canUseNsfw.value) {
+    enableNsfw()
+    return
+  }
+  alert('Укажите дату рождения в настройках профиля, чтобы подтвердить возраст 18+.')
+  router.push('/settings/profile')
+}
 
 // ── Tabs / filter ────────────────────────────────────────────────────────────
 type MainTab = 'browse' | 'collection' | 'my'
@@ -180,10 +191,10 @@ function resetForm() {
   editingPackId.value = null
 }
 
-function tryCloseWizard() {
+async function tryCloseWizard() {
   const f = form.value
   const dirty = f.stickers.length > 0 || f.name.trim() !== '' || f.description.trim() !== ''
-  if (dirty && !window.confirm('Форма не сохранена. Закрыть без сохранения?')) return
+  if (dirty && !(await confirmDialog('Форма не сохранена. Закрыть без сохранения?'))) return
   showCreateModal.value = false
 }
 
@@ -285,7 +296,7 @@ async function submitCreate() {
 }
 
 async function deletePack(id: string) {
-  if (!confirm('Удалить пак стикеров?')) return
+  if (!(await confirmDialog('Удалить пак стикеров?', { danger: true }))) return
   await store.deletePack(id)
 }
 
@@ -1183,7 +1194,7 @@ async function toggleCollection(pack: StickerPack) {
               <h2 class="text-lg font-extrabold text-white mb-2">Контент 18+</h2>
               <p class="text-sm text-white/55 leading-relaxed">
                 Этот контент предназначен только для взрослых.<br>
-                Включи NSFW-режим, чтобы просматривать такие материалы.
+                {{ canUseNsfw ? 'Включи NSFW-режим, чтобы просматривать такие материалы.' : 'Подтверди дату рождения в настройках профиля, чтобы просматривать такие материалы.' }}
               </p>
             </div>
             <!-- Warning -->
@@ -1203,10 +1214,10 @@ async function toggleCollection(pack: StickerPack) {
                 Отмена
               </button>
               <button
-                @click="enableNsfw(); showNsfwConfirm = false"
+                @click="handleEnableNsfw(); showNsfwConfirm = false"
                 class="flex-1 py-2.5 rounded-2xl text-sm font-bold text-white transition-all shadow-lg"
                 style="background: linear-gradient(135deg, #c0392b, #e14664); box-shadow: 0 4px 20px rgba(225,70,100,0.3)">
-                Мне 18+, включить
+                {{ canUseNsfw ? 'Мне 18+, включить' : 'Подтвердить возраст' }}
               </button>
             </div>
           </div>

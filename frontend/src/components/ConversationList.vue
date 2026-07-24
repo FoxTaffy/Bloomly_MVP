@@ -545,6 +545,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
 import BIcon from '@/components/BIcon.vue'
 import api from '@/api'
+import { compressImageForUpload } from '@/lib/utils'
 import { isEncrypted } from '@/lib/e2e'
 
 const props = defineProps<{
@@ -653,7 +654,8 @@ async function onCgAvatarChange(e: Event) {
   uploadingCgAvatar.value = true
   try {
     const fd = new FormData()
-    fd.append('file', file, file.name)
+    const compressed = await compressImageForUpload(file)
+    fd.append('file', compressed, compressed.name)
     const res = await api.post('/media/upload?folder=avatars', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     cgAvatar.value = res.data.data.url
   } catch { /* silent */ }
@@ -666,7 +668,8 @@ async function onCgBannerChange(e: Event) {
   uploadingCgBanner.value = true
   try {
     const fd = new FormData()
-    fd.append('file', file, file.name)
+    const compressed = await compressImageForUpload(file)
+    fd.append('file', compressed, compressed.name)
     const res = await api.post('/media/upload?folder=banners', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     cgBanner.value = res.data.data.url
   } catch { /* silent */ }

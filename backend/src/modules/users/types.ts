@@ -51,6 +51,7 @@ export interface UserPublicProfile {
   artist_since: Date | null;
   donate_url: string | null;
   messages_privacy: string;
+  forward_identity_privacy: string;
   comments_privacy: string;
   mentions_privacy: string;
   online_status_visibility: string;
@@ -104,6 +105,7 @@ export interface UpdateUserInput {
   onboarding_done?: boolean;
   donate_url?: string | null;
   messages_privacy?: string;
+  forward_identity_privacy?: string;
   comments_privacy?: string;
   mentions_privacy?: string;
   online_status_visibility?: string;

@@ -8,13 +8,20 @@ const ALLOWED_MIME_TYPES = new Set([
   'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/mp4',
 ]);
 
-const ALLOWED_FOLDERS = ['posts', 'comments', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers'] as const;
+// Evidence attached to a complaint/support ticket is a screenshot, not media —
+// keep it to still images so a "жалоба" can't be used to smuggle large video/audio.
+const REPORTS_ALLOWED_MIME_TYPES = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif',
+]);
+
+const ALLOWED_FOLDERS = ['posts', 'comments', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers', 'reports', 'verification'] as const;
 type Folder = typeof ALLOWED_FOLDERS[number];
 
 const GB = 1024 * 1024 * 1024;
 // Unchanged behavior for every folder except chat attachments, which get a
 // per-subscription-tier cap instead (large videos/music sent as chat attachments).
 const DEFAULT_MAX_BYTES = 100 * 1024 * 1024;
+const REPORTS_MAX_BYTES = 10 * 1024 * 1024;
 const MESSAGE_UPLOAD_LIMITS_BY_TIER: Record<string, number> = {
   free: 2 * GB,
   lite: 4 * GB,
@@ -23,6 +30,7 @@ const MESSAGE_UPLOAD_LIMITS_BY_TIER: Record<string, number> = {
 };
 
 async function resolveMaxBytes(folder: Folder, userId: string): Promise<number> {
+  if (folder === 'reports') return REPORTS_MAX_BYTES;
   if (folder !== 'messages') return DEFAULT_MAX_BYTES;
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { subscription_tier: true } });
   return MESSAGE_UPLOAD_LIMITS_BY_TIER[user?.subscription_tier ?? 'free'] ?? MESSAGE_UPLOAD_LIMITS_BY_TIER.free;
@@ -38,8 +46,8 @@ function parseFraction(raw: unknown, def: number): number {
   return Number.isFinite(n) && n >= 0 && n <= 1 ? n : def;
 }
 
-function isAllowedMime(mime: string): boolean {
-  return ALLOWED_MIME_TYPES.has(mime);
+function isAllowedMime(mime: string, folder: Folder): boolean {
+  return folder === 'reports' ? REPORTS_ALLOWED_MIME_TYPES.has(mime) : ALLOWED_MIME_TYPES.has(mime);
 }
 
 export const uploadFileHandler = async (
@@ -56,16 +64,17 @@ export const uploadFileHandler = async (
     });
   }
 
-  if (!isAllowedMime(data.mimetype)) {
+  const rawFolder = (request.query as any).folder ?? 'posts';
+  const folder: Folder = ALLOWED_FOLDERS.includes(rawFolder as Folder) ? (rawFolder as Folder) : 'posts';
+
+  if (!isAllowedMime(data.mimetype, folder)) {
     return reply.code(415).send({
       success: false,
       data: null,
-      error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'File type not allowed' },
+      error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: folder === 'reports' ? 'К жалобе можно приложить только изображение' : 'File type not allowed' },
     });
   }
 
-  const rawFolder = (request.query as any).folder ?? 'posts';
-  const folder: Folder = ALLOWED_FOLDERS.includes(rawFolder as Folder) ? (rawFolder as Folder) : 'posts';
   const { id: userId } = request.user as { id: string };
   const maxBytes = await resolveMaxBytes(folder, userId);
 
@@ -129,8 +138,8 @@ export const uploadFileHandler = async (
       return reply.send({ success: true, data: { url: posterUrl, videoUrl }, error: null });
     }
 
-    const { url, originalUrl } = await uploadFile(buf, data.filename, data.mimetype, folder);
-    return reply.send({ success: true, data: { url, originalUrl }, error: null });
+    const { url, originalUrl, isSilentVideo } = await uploadFile(buf, data.filename, data.mimetype, folder);
+    return reply.send({ success: true, data: { url, originalUrl, isSilentVideo }, error: null });
   } catch (err: any) {
     if (err instanceof UploadValidationError) {
       return reply.code(422).send({

@@ -2,8 +2,21 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import BIcon from './BIcon.vue'
 
-const props = defineProps<{ src: string }>()
+const props = defineProps<{ src: string; disableAutoplay?: boolean; msgType?: string }>()
 const emit = defineEmits(['click-image'])
+
+// ── Volume persistence (shared across every player on the site) ────────────
+const VOLUME_KEY = 'bloomly_player_volume'
+const DEFAULT_VOLUME = 0.5 // half of the old 100% default
+function getStoredVolume(): number {
+  const raw = localStorage.getItem(VOLUME_KEY)
+  if (raw === null) return DEFAULT_VOLUME
+  const v = parseFloat(raw)
+  return Number.isFinite(v) && v >= 0 && v <= 1 ? v : DEFAULT_VOLUME
+}
+function storeVolume(v: number) {
+  try { localStorage.setItem(VOLUME_KEY, String(v)) } catch {}
+}
 
 // ── Refs ───────────────────────────────────────────────────────────────────
 const container   = ref<HTMLElement | null>(null)
@@ -15,11 +28,12 @@ const gifCanvas   = ref<HTMLCanvasElement | null>(null)
 const isPlaying      = ref(false)
 const isMuted        = ref(false)
 const isFullscreen   = ref(false)
+const isPip          = ref(false)
 const isLoading      = ref(true)
 const showControls   = ref(true)
 const showVolSlider  = ref(false)
 const isDragging     = ref(false)
-const volumeLevel    = ref(1)
+const volumeLevel    = ref(getStoredVolume())
 const duration       = ref(0)
 const currentTime    = ref(0)
 const buffered       = ref(0)
@@ -36,12 +50,16 @@ const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 
 // ── Media type ────────────────────────────────────────────────────────────
 const type = computed(() => {
+  // Silent videos (no audio track) arrive tagged msgType 'gif' from the backend —
+  // render with the lightweight autoplay/pause gif UI, not the full video player.
+  if (props.msgType === 'gif') return 'gif'
   const u = props.src.toLowerCase().split('?')[0]
   if (/\.(mp4|webm|mov|mkv|ogv)$/.test(u)) return 'video'
   if (/\.(mp3|wav|ogg|m4a|flac|aac)$/.test(u)) return 'audio'
   if (/\.gif$/.test(u)) return 'gif'
   return 'image'
 })
+const isGifVideo = computed(() => /\.(mp4|webm|mov|mkv|ogv)$/i.test(props.src.split('?')[0]))
 
 // ── Formatters ────────────────────────────────────────────────────────────
 function fmt(s: number) {
@@ -109,6 +127,7 @@ function setVolume(e: Event) {
   mediaEl.value.muted = v === 0
   volumeLevel.value = v
   isMuted.value = v === 0
+  storeVolume(v)
 }
 function seekStart() { isDragging.value = true }
 function seekEnd()   { isDragging.value = false }
@@ -150,6 +169,17 @@ async function toggleFullscreen() {
     isFullscreen.value = false
   }
 }
+async function togglePip() {
+  const video = mediaEl.value as HTMLVideoElement | null
+  if (!video || !document.pictureInPictureEnabled) return
+  try {
+    if (document.pictureInPictureElement) {
+      await document.exitPictureInPicture()
+    } else {
+      await video.requestPictureInPicture()
+    }
+  } catch { /* user gesture / codec restrictions — silently ignore */ }
+}
 
 // ── Controls visibility ───────────────────────────────────────────────────
 function bumpControls() {
@@ -179,7 +209,15 @@ function onKey(e: KeyboardEvent) {
 }
 
 // ── GIF ───────────────────────────────────────────────────────────────────
-function toggleGif() { gifPlaying.value = !gifPlaying.value }
+function toggleGif() {
+  if (isGifVideo.value) {
+    const v = mediaEl.value as HTMLVideoElement | null
+    if (!v) return
+    if (v.paused) v.play(); else v.pause()
+    return
+  }
+  gifPlaying.value = !gifPlaying.value
+}
 function captureGifFrame() {
   if (!gifCanvas.value || !gifImg.value) return
   const ctx = gifCanvas.value.getContext('2d')
@@ -189,15 +227,63 @@ function captureGifFrame() {
   ctx.drawImage(gifImg.value, 0, 0)
 }
 
+function onEnterPip()  { isPip.value = true }
+function onLeavePip()  { isPip.value = false }
+
+// ── Autoplay-in-view (muted, like the feed on every other social app) ───────
+// Browsers only allow unattended autoplay when the clip starts muted, so sound
+// is always opt-in via the mute button once a video is actually playing.
+let scrollObserver: IntersectionObserver | null = null
+function setupAutoplayObserver() {
+  if (type.value !== 'video' || !container.value || props.disableAutoplay) return
+  scrollObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) mediaEl.value?.play().catch(() => {})
+        else mediaEl.value?.pause()
+      }
+    },
+    { threshold: 0.6 },
+  )
+  scrollObserver.observe(container.value)
+}
+
+// Scoped to this instance's own container — a naive `!!document.fullscreenElement`
+// check would flip every OTHER player on the page into "fullscreen" styling too
+// the moment any single one of them actually goes fullscreen.
+function onFullscreenChange() {
+  isFullscreen.value = document.fullscreenElement === container.value
+}
+
 // ── Lifecycle ────────────────────────────────────────────────────────────
 onMounted(() => {
   document.addEventListener('keydown', onKey)
-  document.addEventListener('fullscreenchange', () => { isFullscreen.value = !!document.fullscreenElement })
+  document.addEventListener('fullscreenchange', onFullscreenChange)
   if (type.value === 'audio') isLoading.value = false
+  if (mediaEl.value) {
+    mediaEl.value.volume = volumeLevel.value
+    if (type.value === 'video') {
+      mediaEl.value.muted = true
+      isMuted.value = true
+      mediaEl.value.addEventListener('enterpictureinpicture', onEnterPip)
+      mediaEl.value.addEventListener('leavepictureinpicture', onLeavePip)
+      setupAutoplayObserver()
+    }
+  }
 })
 onUnmounted(() => {
   document.removeEventListener('keydown', onKey)
+  document.removeEventListener('fullscreenchange', onFullscreenChange)
+  mediaEl.value?.removeEventListener('enterpictureinpicture', onEnterPip)
+  mediaEl.value?.removeEventListener('leavepictureinpicture', onLeavePip)
+  scrollObserver?.disconnect()
   clearHide()
+})
+
+// Let the parent (e.g. the feed card behind an opened lightbox) stop this
+// instance so it doesn't keep playing — with audio — out of view.
+defineExpose({
+  pause: () => mediaEl.value?.pause(),
 })
 </script>
 
@@ -217,10 +303,15 @@ onUnmounted(() => {
     class="relative w-full rounded-2xl overflow-hidden bg-black cursor-pointer select-none group"
     @click="toggleGif"
   >
-    <img v-show="gifPlaying" ref="gifImg" :src="src"
-         class="w-full max-h-[520px] object-contain" @load="captureGifFrame" />
-    <canvas v-show="!gifPlaying" ref="gifCanvas"
-            class="w-full max-h-[520px] object-contain" />
+    <video v-if="isGifVideo" ref="mediaEl" :src="src" autoplay loop muted playsinline
+           class="w-full max-h-[520px] object-contain"
+           @play="gifPlaying = true" @pause="gifPlaying = false" />
+    <template v-else>
+      <img v-show="gifPlaying" ref="gifImg" :src="src"
+           class="w-full max-h-[520px] object-contain" @load="captureGifFrame" />
+      <canvas v-show="!gifPlaying" ref="gifCanvas"
+              class="w-full max-h-[520px] object-contain" />
+    </template>
 
     <Transition name="bfade">
       <div v-if="!gifPlaying"
@@ -312,13 +403,17 @@ onUnmounted(() => {
             <BIcon :name="volIcon" class="w-4 h-4" />
           </button>
           <Transition name="slide-width">
-            <div v-show="showVolSlider" class="w-20">
-              <div class="relative h-1.5 rounded-full bg-white/10 cursor-pointer overflow-visible">
-                <div class="absolute inset-y-0 left-0 rounded-full"
-                     style="background:linear-gradient(90deg,#4C67CF,#9055FF)"
-                     :style="{ width: (isMuted ? 0 : volumeLevel) * 100 + '%' }" />
-                <input type="range" min="0" max="1" step="0.01" :value="isMuted ? 0 : volumeLevel"
-                       @input="setVolume" class="absolute inset-0 opacity-0 cursor-pointer w-full" />
+            <div v-show="showVolSlider" class="w-24">
+              <div class="relative h-4 flex items-center cursor-pointer group/vol">
+                <div class="absolute w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div class="absolute inset-y-0 left-0 rounded-full"
+                       style="background:linear-gradient(90deg,#4C67CF,#9055FF)"
+                       :style="{ width: volumeLevel * 100 + '%' }" />
+                </div>
+                <div class="absolute w-3 h-3 rounded-full bg-white shadow-md pointer-events-none"
+                     :style="{ left: `calc(${volumeLevel * 100}% - 6px)` }" />
+                <input type="range" min="0" max="1" step="0.01" :value="volumeLevel"
+                       @input="setVolume" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
               </div>
             </div>
           </Transition>
@@ -332,18 +427,24 @@ onUnmounted(() => {
     v-else-if="type === 'video'"
     ref="container"
     tabindex="0"
-    class="relative w-full rounded-2xl overflow-hidden bg-black select-none outline-none"
-    :class="{ 'cursor-none': isPlaying && !showControls }"
+    class="relative w-full overflow-hidden bg-black select-none outline-none"
+    :class="[
+      isPlaying && !showControls ? 'cursor-none' : '',
+      isFullscreen ? 'h-full rounded-none' : 'rounded-2xl',
+    ]"
     @mousemove="bumpControls"
     @mouseleave="isPlaying && (showControls = false)"
     @dblclick="toggleFullscreen"
   >
-    <video ref="mediaEl" :src="src" class="w-full max-h-[560px] object-contain block"
+    <!-- Capped height inline, but fills the screen once actually fullscreen —
+         without this it stayed pinned to its inline size inside the fullscreen frame. -->
+    <video ref="mediaEl" :src="src" class="w-full object-contain block"
+           :class="isFullscreen ? 'h-full' : 'max-h-[560px]'"
            playsinline preload="metadata" :loop="shouldLoop"
            @loadedmetadata="onLoadedMetadata" @timeupdate="onTimeUpdate"
            @play="onPlay" @pause="onPause" @ended="onEnded"
            @waiting="onWaiting" @canplay="onCanPlay" @volumechange="onVolumeChange"
-           @click.prevent="togglePlay" />
+           @click.stop.prevent="togglePlay" />
 
     <!-- Spinner -->
     <Transition name="bfade">
@@ -363,6 +464,19 @@ onUnmounted(() => {
           <BIcon name="Play" class="w-10 h-10 text-white ml-1" />
         </div>
       </div>
+    </Transition>
+
+    <!-- Persistent mute button — the only thing visible while a muted autoplay
+         clip is quietly playing with the full control bar tucked away. -->
+    <Transition name="bfade">
+      <button
+        v-show="!showControls && isPlaying"
+        @click.stop="toggleMute"
+        :title="isMuted ? 'Включить звук' : 'Выключить звук'"
+        class="absolute top-2.5 right-2.5 z-10 w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white hover:bg-black/80 transition-colors shadow-lg"
+      >
+        <BIcon :name="volIcon" class="w-4 h-4" />
+      </button>
     </Transition>
 
     <!-- Controls overlay -->
@@ -398,9 +512,21 @@ onUnmounted(() => {
         <div class="flex items-center justify-between gap-2">
           <!-- Left -->
           <div class="flex items-center gap-1 text-white">
+            <!-- Skip back 10s -->
+            <button @click="skipSeconds(-10)" title="-10 сек"
+                    class="w-8 h-8 hidden sm:flex items-center justify-center rounded-xl hover:bg-white/15 active:scale-90 transition-all">
+              <BIcon name="RotateCcw" class="w-4 h-4" />
+            </button>
+
             <button @click="togglePlay"
                     class="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/15 active:scale-90 transition-all">
               <BIcon :name="isPlaying ? 'Pause' : 'Play'" class="w-5 h-5" :class="{'ml-0.5':!isPlaying}" />
+            </button>
+
+            <!-- Skip forward 10s -->
+            <button @click="skipSeconds(10)" title="+10 сек"
+                    class="w-8 h-8 hidden sm:flex items-center justify-center rounded-xl hover:bg-white/15 active:scale-90 transition-all">
+              <BIcon name="RotateCw" class="w-4 h-4" />
             </button>
 
             <!-- Volume -->
@@ -411,12 +537,16 @@ onUnmounted(() => {
                 <BIcon :name="volIcon" class="w-4 h-4" />
               </button>
               <Transition name="slide-width">
-                <div v-show="showVolSlider" class="w-20">
-                  <div class="relative h-1.5 rounded-full bg-white/25 cursor-pointer overflow-visible">
-                    <div class="absolute inset-y-0 left-0 rounded-full bg-white"
-                         :style="{ width: (isMuted ? 0 : volumeLevel) * 100 + '%' }" />
-                    <input type="range" min="0" max="1" step="0.01" :value="isMuted ? 0 : volumeLevel"
-                           @input="setVolume" class="absolute inset-0 opacity-0 cursor-pointer w-full" />
+                <div v-show="showVolSlider" class="w-24">
+                  <div class="relative h-4 flex items-center cursor-pointer group/vol">
+                    <div class="absolute w-full h-1.5 rounded-full bg-white/25 overflow-hidden">
+                      <div class="absolute inset-y-0 left-0 rounded-full bg-white"
+                           :style="{ width: volumeLevel * 100 + '%' }" />
+                    </div>
+                    <div class="absolute w-3 h-3 rounded-full bg-white shadow-md ring-2 ring-brand-accent/50 pointer-events-none"
+                         :style="{ left: `calc(${volumeLevel * 100}% - 6px)` }" />
+                    <input type="range" min="0" max="1" step="0.01" :value="volumeLevel"
+                           @input="setVolume" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
                   </div>
                 </div>
               </Transition>
@@ -448,6 +578,12 @@ onUnmounted(() => {
                 </div>
               </Transition>
             </div>
+            <!-- Picture-in-picture -->
+            <button v-if="!isFullscreen" @click="togglePip" title="Картинка в картинке"
+                    class="w-9 h-9 hidden sm:flex items-center justify-center rounded-xl hover:bg-white/15 active:scale-90 transition-all"
+                    :class="isPip ? 'text-brand-accent-minus' : ''">
+              <BIcon name="PictureInPicture2" class="w-4 h-4" />
+            </button>
             <!-- Fullscreen -->
             <button @click="toggleFullscreen"
                     class="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-white/15 active:scale-90 transition-all">
@@ -481,7 +617,7 @@ onUnmounted(() => {
 .slide-width-enter-from,.slide-width-leave-to{width:0!important;opacity:0}
 
 input[type=range]{-webkit-appearance:none;appearance:none}
-input[type=range]::-webkit-slider-thumb{display:none}
-input[type=range]::-moz-range-thumb{display:none;width:0;height:0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:1px;height:1px;opacity:0}
+input[type=range]::-moz-range-thumb{width:1px;height:1px;opacity:0;border:none;background:transparent}
 </style>
 

@@ -7,6 +7,7 @@ import CustomPlayer from './CustomPlayer.vue'
 const props = defineProps<{
   images: string[]
   originalImages?: string[]
+  types?: string[]
   startIndex?: number
   postId?: string
 }>()
@@ -20,6 +21,7 @@ const current = ref(props.startIndex ?? 0)
 const total = computed(() => props.images.length)
 const currentUrl = computed(() => props.images[current.value])
 const currentOriginalUrl = computed(() => props.originalImages?.[current.value] || currentUrl.value)
+const currentMsgType = computed(() => props.types?.[current.value])
 
 const downloading = ref(false)
 async function downloadOriginal() {
@@ -139,6 +141,7 @@ onUnmounted(() => {
           <CustomPlayer
             :key="currentUrl"
             :src="currentUrl"
+            :msg-type="currentMsgType"
             @click-image="() => {}"
           />
         </div>

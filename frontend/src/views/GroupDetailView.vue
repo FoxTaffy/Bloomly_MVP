@@ -16,7 +16,6 @@ import { useTagSuggestions } from '@/composables/useTagSuggestions'
 import { extractHashtags, extractCommittedHashtags } from '@/lib/hashtags'
 const EventCard = defineAsyncComponent(() => import('@/components/groups/EventCard.vue'))
 const TicketCard = defineAsyncComponent(() => import('@/components/groups/TicketCard.vue'))
-const AchievementBadge = defineAsyncComponent(() => import('@/components/groups/AchievementBadge.vue'))
 const TodoQueue = defineAsyncComponent(() => import('@/components/groups/TodoQueue.vue'))
 const GroupKanban = defineAsyncComponent(() => import('@/components/groups/GroupKanban.vue'))
 import { useGroupsStore } from '@/stores/groups'
@@ -58,6 +57,24 @@ const isAdmin = computed(() => {
   if (isOwner.value) return true
   return groupsStore.myGroups.some(m => m.group_id === group.value?.id && ['admin', 'owner'].includes(m.role))
 })
+
+// ── Event lifecycle (event_date gates SOON + participation) ────────────────
+const isEventExpired = computed(() => {
+  const g = group.value as any
+  return !!g && g.type === 'event' && !!g.event_date && new Date(g.event_date) < new Date()
+})
+const isSubscribed = computed(() => !!group.value && groupsStore.mySubscriptions.includes(group.value.id))
+const isTogglingSubscribe = ref(false)
+
+async function toggleGroupSubscribe() {
+  if (!group.value || isTogglingSubscribe.value) return
+  isTogglingSubscribe.value = true
+  try {
+    if (isSubscribed.value) await groupsStore.unsubscribeGroup(group.value.id)
+    else await groupsStore.subscribeGroup(group.value.id)
+  } catch (e) { console.error('group subscribe toggle failed', e) }
+  finally { isTogglingSubscribe.value = false }
+}
 
 // ── SEO ──────────────────────────────────────────────────────────────────────
 const BASE = 'https://bloomly.fun'
@@ -380,7 +397,7 @@ const aboutNavs = computed(() => {
 })
 
 // ── Content tabs (floating pills like profile) ─────────────────────────
-const activeContentTab = ref<'posts' | 'media' | 'archive' | 'members' | 'events' | 'achievements'>('posts')
+const activeContentTab = ref<'posts' | 'media' | 'archive' | 'members' | 'events'>('posts')
 
 watch(activeContentTab, (val) => {
   if (val === 'media' && !groupMediaLoaded.value) loadGroupMediaPosts()
@@ -400,9 +417,6 @@ const contentTabs = computed(() => {
     tabs.push({ key: 'archive', label: `Архив (${pastEvents.value.length})`, icon: 'Archive' })
   }
   tabs.push({ key: 'members', label: 'Участники', icon: 'Users' })
-  if ((group.value as any)?.achievements?.length) {
-    tabs.push({ key: 'achievements', label: 'Достижения', icon: 'Trophy' })
-  }
   return tabs
 })
 
@@ -562,9 +576,13 @@ async function setRsvp(status: 'going' | 'maybe' | 'not_going') {
 
 async function handleJoin() {
   if (!group.value) return
-  await groupsStore.joinGroup(group.value.id)
-  // Membership is now updated in the store directly — just bump local count
-  if (group.value._count) group.value._count.members++
+  try {
+    await groupsStore.joinGroup(group.value.id)
+    // Membership is now updated in the store directly — just bump local count
+    if (group.value._count) group.value._count.members++
+  } catch (e) {
+    console.error('join failed', e)
+  }
 }
 async function handleLeave() {
   if (group.value) {
@@ -822,11 +840,21 @@ const vClickOutside = {
                       class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border border-sky-500/30 text-sky-400 bg-sky-500/10 hover:bg-sky-500/20">
                       <BIcon name="Send" class="w-4 h-4" /> Предложить новость
                     </button>
-                    <button v-if="group.type === 'event' && !isMember && !isOwner"
+                    <button v-if="group.type === 'event' && !isMember && !isOwner && !isEventExpired"
                       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-bold transition-all shadow-lg"
                       :style="`background: ${group.accent_color || '#22c55e'}; box-shadow: 0 4px 14px ${group.accent_color || '#22c55e'}40`"
                       @click="handleJoin">
                       <BIcon name="CalendarCheck" class="w-4 h-4" /> Я пойду!
+                    </button>
+                    <button v-else-if="group.type === 'event' && !isMember && !isOwner && isEventExpired"
+                      @click="toggleGroupSubscribe" :disabled="isTogglingSubscribe"
+                      :title="isSubscribed ? 'Отписаться от уведомлений' : 'Следить за обновлениями — участие откроется, когда организатор назначит новую дату'"
+                      class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+                      :class="isSubscribed
+                        ? 'border border-brand-yellow/50 bg-brand-yellow/10 text-brand-yellow'
+                        : 'bg-brand-accent text-white hover:bg-brand-accent-plus shadow-lg shadow-brand-accent/25'">
+                      <BIcon :name="isSubscribed ? 'BellRing' : 'Bell'" class="w-4 h-4" />
+                      {{ isSubscribed ? 'Вы подписаны' : 'Следить за обновлениями' }}
                     </button>
                     <button v-else-if="group.type !== 'event' && !isMember && !isOwner" @click="handleJoin"
                       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-all shadow-lg shadow-brand-accent/25">
@@ -998,6 +1026,26 @@ const vClickOutside = {
 
             <!-- ── CENTER COLUMN ──────────────────────────────────────── -->
             <div class="flex-1 min-w-0 space-y-4">
+
+              <!-- ── Баннер: цикл мероприятия истёк → участие сброшено, ждём новую дату ──── -->
+              <div v-if="isEventExpired"
+                class="rounded-3xl overflow-hidden border border-brand-error/25 shadow-xl">
+                <div class="flex items-center gap-4 px-5 py-4" style="background: linear-gradient(135deg,rgba(239,68,68,0.10) 0%,rgba(239,68,68,0.04) 100%)">
+                  <div class="w-10 h-10 rounded-2xl bg-brand-error/15 border border-brand-error/25 flex items-center justify-center flex-shrink-0">
+                    <BIcon name="CalendarX" class="w-5 h-5 text-brand-error" />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-white font-bold text-sm">Мероприятие завершилось</p>
+                    <p class="text-white/55 text-xs mt-0.5">
+                      Участие сброшено, SOON-бейджи убраны. {{ isAdmin ? 'Назначьте новую дату в настройках, чтобы возобновить.' : 'Дождитесь новой даты от организатора — пока доступна только подписка на уведомления.' }}
+                    </p>
+                  </div>
+                  <button v-if="isAdmin" @click="router.push({ name: 'group-settings', params: { slugOrId: group!.slug } })"
+                    class="px-4 py-2 rounded-xl bg-brand-error/15 border border-brand-error/30 text-brand-error text-sm font-bold hover:bg-brand-error/25 transition-all flex-shrink-0">
+                    Назначить дату
+                  </button>
+                </div>
+              </div>
 
               <!-- ── Баннер: событие завершилось → предложить отзыв ──── -->
               <div v-if="group.type === 'event' && isEventPast && (isMember || isOwner) && !reviewDismissed"
@@ -1667,7 +1715,7 @@ const vClickOutside = {
                     </button>
                   </div>
 
-                  <MediaUpload ref="groupMediaUploadRef" type="posts" :multiple="true" @uploaded="onGroupMediaUploaded" />
+                  <MediaUpload ref="groupMediaUploadRef" type="posts" :multiple="true" :max-files="20" @uploaded="onGroupMediaUploaded" />
 
                   <!-- Tags row -->
                   <div v-if="newPostTags.length" class="flex flex-wrap gap-1.5">
@@ -2020,22 +2068,6 @@ const vClickOutside = {
                     <div v-else class="text-center py-10 text-white/30 text-sm">Событий пока нет</div>
                   </template>
 
-                  <!-- ── ACHIEVEMENTS TAB ───────────────────────────────── -->
-                  <template v-else-if="activeContentTab === 'achievements'">
-                    <div class="flex items-center gap-3 border-b border-brand-border pb-3 mb-4">
-                      <BIcon name="Trophy" class="w-4 h-4 text-white/30" />
-                      <span class="text-sm font-bold text-white/55">Достижения</span>
-                    </div>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      <div v-for="ach in (group as any).achievements" :key="ach.id"
-                        class="flex flex-col items-center gap-2 p-4 bg-brand-bg border border-brand-border rounded-2xl text-center">
-                        <div class="text-3xl">{{ ach.icon }}</div>
-                        <p class="text-xs font-bold text-white/70">{{ ach.title }}</p>
-                        <p class="text-[10px] text-white/30">{{ new Date(ach.earned_at).toLocaleDateString('ru-RU', { month: 'short', year: 'numeric' }) }}</p>
-                      </div>
-                    </div>
-                  </template>
-
                 </div>
               </div>
 
@@ -2274,17 +2306,6 @@ const vClickOutside = {
                 </div>
               </template>
 
-              <!-- Achievements -->
-              <div v-if="group.achievements?.length" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
-                <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
-                  <BIcon name="Award" class="w-3.5 h-3.5 text-yellow-400" />
-                  <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Достижения</p>
-                </div>
-                <div class="px-3 pb-3 space-y-2">
-                  <AchievementBadge v-for="a in group.achievements" :key="a.id" :achievement="a" />
-                </div>
-              </div>
-
               <!-- Info -->
               <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                 <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
@@ -2463,7 +2484,7 @@ const vClickOutside = {
       </div>
     </Transition>
     <Transition name="fade">
-      <div v-if="showAvatarViewer && group?.avatar_url" class="fixed inset-0 z-[600] bg-black/92 flex items-center justify-center p-4" @click.self="showAvatarViewer = false">
+      <div v-if="showAvatarViewer && group?.avatar_url" class="fixed inset-0 z-[600] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" @click="showAvatarViewer = false">
         <button @click="showAvatarViewer = false"
           class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all z-10">
           <BIcon name="X" class="w-5 h-5" />
@@ -2474,7 +2495,7 @@ const vClickOutside = {
 
     <!-- ── Banner Viewer ─────────────────────────────────────────── -->
     <Transition name="fade">
-      <div v-if="showBannerViewer && group?.banner_url" class="fixed inset-0 z-[600] bg-black/92 flex items-center justify-center p-4" @click.self="showBannerViewer = false">
+      <div v-if="showBannerViewer && group?.banner_url" class="fixed inset-0 z-[600] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" @click="showBannerViewer = false">
         <button @click="showBannerViewer = false"
           class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all z-10">
           <BIcon name="X" class="w-5 h-5" />
@@ -2505,7 +2526,9 @@ const vClickOutside = {
                 class="bg-brand-bg border border-brand-border rounded-2xl overflow-hidden hover:border-brand-accent/40 transition-all group/card cursor-pointer"
                 @click="router.push('/profile/' + m.user.username)">
                 <!-- Mini banner -->
-                <div class="h-16 bg-gradient-to-br from-brand-accent/20 to-brand-purple/20 relative">
+                <div class="h-16 relative bg-cover bg-center"
+                  :class="!m.user.banner_url ? 'bg-gradient-to-br from-brand-accent/20 to-brand-purple/20' : ''"
+                  :style="m.user.banner_url ? `background-image: url('${m.user.banner_url}')` : ''">
                   <span v-if="m.role === 'owner' || m.role === 'admin'"
                     class="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
                     :class="m.role === 'owner' ? 'bg-brand-yellow/20 text-brand-yellow border border-brand-yellow/30' : 'bg-brand-accent/20 text-brand-accent border border-brand-accent/30'">
@@ -2590,7 +2613,7 @@ const vClickOutside = {
     <Teleport to="body">
       <Transition name="slide-up">
         <button v-if="showScrollTop" @click="window.scrollTo({ top: 0, behavior: 'smooth' })"
-          class="fixed bottom-6 right-6 z-50 w-11 h-11 rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110"
+          class="fixed bottom-20 md:bottom-6 right-6 z-[210] w-11 h-11 rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110"
           style="background: linear-gradient(135deg,#CD83F5,#7C3AED)">
           <BIcon name="ArrowUp" class="w-5 h-5 text-white" />
         </button>

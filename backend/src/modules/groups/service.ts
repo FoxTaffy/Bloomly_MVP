@@ -67,6 +67,8 @@ const GROUP_SELECT = {
   is_verified: true,
   category: true,
   category_changed_at: true,
+  event_date: true,
+  event_expired_at: true,
   group_bg_url: true,
   group_frame: true,
   group_theme: true,
@@ -140,6 +142,7 @@ const EVENT_SELECT = {
     select: {
       id: true, slug: true, name: true, type: true,
       avatar_url: true, banner_url: true, accent_color: true,
+      event_date: true, event_expired_at: true,
     },
   },
 };
@@ -189,11 +192,94 @@ export const groupService = {
           orderBy: { starts_at: 'asc' },
         },
         commissionInfo: true,
-        achievements: { orderBy: { earned_at: 'desc' } },
       },
     });
     if (!raw) return null;
+    await this.ensureEventExpirySwept(raw.id);
     return { ...raw, badge_level: getGroupBadgeLevel(raw.members_count) };
+  },
+
+  // ── event lifecycle: expiring event_date, SOON clear, participant → subscriber demotion ──
+  isEventExpired(group: { type: string; event_date: Date | null }) {
+    return group.type === 'event' && !!group.event_date && group.event_date < new Date();
+  },
+
+  // Idempotent (guarded by event_expired_at) — safe to call on every read/write entry point.
+  async ensureEventExpirySwept(groupId: string) {
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      select: { id: true, type: true, event_date: true, event_expired_at: true },
+    });
+    if (!group) return null;
+    if (this.isEventExpired(group) && !group.event_expired_at) {
+      await this.sweepExpiredEvent(group.id);
+      group.event_expired_at = new Date();
+    }
+    return group;
+  },
+
+  async sweepExpiredEvent(groupId: string) {
+    await prisma.$transaction(async (tx) => {
+      const soonBadges = await tx.soonBadge.findMany({
+        where: { event: { group_id: groupId } },
+        select: { id: true, event_id: true },
+      });
+      for (const badge of soonBadges) {
+        await tx.soonBadge.delete({ where: { id: badge.id } });
+        await tx.event.update({ where: { id: badge.event_id }, data: { attendee_count: { decrement: 1 } } });
+      }
+
+      const plainMembers = await tx.groupMember.findMany({
+        where: { group_id: groupId, role: 'member' },
+        select: { user_id: true },
+      });
+      for (const m of plainMembers) {
+        await tx.groupSubscriber.upsert({
+          where: { group_id_user_id: { group_id: groupId, user_id: m.user_id } },
+          update: {},
+          create: { group_id: groupId, user_id: m.user_id },
+        });
+      }
+      if (plainMembers.length > 0) {
+        await tx.groupMember.deleteMany({ where: { group_id: groupId, role: 'member' } });
+        await tx.group.update({
+          where: { id: groupId },
+          data: { members_count: { decrement: plainMembers.length } },
+        });
+      }
+
+      await tx.group.update({ where: { id: groupId }, data: { event_expired_at: new Date() } });
+    });
+  },
+
+  async setEventDate(groupId: string, eventDate: Date | null) {
+    return prisma.group.update({
+      where: { id: groupId },
+      data: { event_date: eventDate, event_expired_at: null },
+      select: GROUP_SELECT,
+    });
+  },
+
+  async subscribe(groupId: string, userId: string) {
+    await prisma.groupSubscriber.upsert({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      update: {},
+      create: { group_id: groupId, user_id: userId },
+    });
+    return { subscribed: true };
+  },
+
+  async unsubscribe(groupId: string, userId: string) {
+    await prisma.groupSubscriber.deleteMany({ where: { group_id: groupId, user_id: userId } });
+    return { subscribed: false };
+  },
+
+  async getMySubscriptions(userId: string) {
+    const rows = await prisma.groupSubscriber.findMany({
+      where: { user_id: userId },
+      select: { group_id: true },
+    });
+    return rows.map((r) => r.group_id);
   },
 
   // ── create ────────────────────────────────────────────────────────────────
@@ -292,6 +378,10 @@ export const groupService = {
 
   // ── membership ────────────────────────────────────────────────────────────
   async join(groupId: string, userId: string) {
+    const group = await this.ensureEventExpirySwept(groupId);
+    if (!group) throw new Error('Group not found');
+    if (this.isEventExpired(group)) throw new Error('EVENT_EXPIRED');
+
     // Check if already a member
     const existing = await prisma.groupMember.findUnique({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
@@ -309,6 +399,8 @@ export const groupService = {
         data: { members_count: { increment: 1 } },
       });
     }
+    // A full member doesn't need a separate notification-only subscription anymore
+    await prisma.groupSubscriber.deleteMany({ where: { group_id: groupId, user_id: userId } });
     return membership;
   },
 
@@ -349,7 +441,7 @@ export const groupService = {
     const skip = (page - 1) * limit;
     return prisma.groupMember.findMany({
       where: { group_id: groupId },
-      include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
+      include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true, banner_url: true } } },
       orderBy: { joined_at: 'asc' },
       skip,
       take: limit,
@@ -590,6 +682,11 @@ export const groupService = {
       return { added: false };
     }
 
+    const event = await prisma.event.findUnique({ where: { id: eventId }, select: { group_id: true } });
+    if (!event) throw new Error('Event not found');
+    const group = await this.ensureEventExpirySwept(event.group_id);
+    if (group && this.isEventExpired(group)) throw new Error('EVENT_EXPIRED');
+
     await Promise.all([
       prisma.soonBadge.create({ data: { user_id: userId, event_id: eventId } }),
       prisma.event.update({ where: { id: eventId }, data: { attendee_count: { increment: 1 } } }),
@@ -692,7 +789,7 @@ export const groupService = {
           include: {
             author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
             tags: { include: { tag: true } },
-            _count: { select: { votes: true, repaws: true, comments: true } },
+            _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
           },
         },
       },
@@ -715,7 +812,7 @@ export const groupService = {
         post: {
           include: {
             author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
-            _count: { select: { votes: true, comments: true } },
+            _count: { select: { votes: true, comments: { where: { deleted_at: null } } } },
           },
         },
       },
@@ -952,7 +1049,7 @@ export const groupService = {
         include: {
           author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
           tags: { include: { tag: true } },
-          _count: { select: { votes: true, repaws: true, comments: true } },
+          _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
           groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true } } } },
         },
       });

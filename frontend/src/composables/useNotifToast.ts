@@ -10,6 +10,7 @@ export interface NotifToast {
   message: string
   postId?: string
   convId?: string
+  meta?: any
   createdAt: Date
 }
 
@@ -45,16 +46,20 @@ export function useNotifToast() {
   function addToast(notif: any) {
     const id = String(++counter)
     const sender = notif.sender ?? {}
+    const isWarn = notif.type === 'automod_warn'
     const t: NotifToast = {
       id,
       type: notif.type ?? '',
-      senderName: sender.display_name || sender.username || 'Кто-то',
+      senderName: isWarn ? 'Bloomly' : (sender.display_name || sender.username || 'Кто-то'),
       senderAvatar: sender.avatar_url ?? null,
       senderUsername: sender.username ?? '',
-      message: subscriptionPostLabel(notif.type, sender.pronouns)
-        ?? typeLabel[String(notif.type).toUpperCase()]
-        ?? notif.type ?? '',
+      message: isWarn
+        ? `⚠️ Предупреждение ${notif.meta?.count ?? '?'} из ${notif.meta?.limit ?? 5}`
+        : (subscriptionPostLabel(notif.type, sender.pronouns)
+          ?? typeLabel[String(notif.type).toUpperCase()]
+          ?? notif.type ?? ''),
       postId: notif.post_id ?? undefined,
+      meta: notif.meta,
       createdAt: new Date(),
     }
     toasts.value.unshift(t)

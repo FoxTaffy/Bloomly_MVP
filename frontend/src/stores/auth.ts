@@ -21,6 +21,8 @@ export interface User {
   is_verified?: boolean
   onboarding_done?: boolean
   payment_region?: string | null
+  is_adult?: boolean
+  two_factor_method?: 'totp' | 'email' | null
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -51,6 +53,9 @@ export const useAuthStore = defineStore('auth', () => {
   const isLoading     = ref(false)
   const isInitialized = ref(false)
   const error         = ref<string | null>(null)
+  // Populated when a mid-session request comes back ACCOUNT_FROZEN — drives the
+  // globally-mounted FrozenAccountModal (see App.vue) after the forced logout below.
+  const frozenPrompt  = ref<{ show: boolean; email: string; reason: string } | null>(null)
 
   // ── Getters ──────────────────────────────────────────────────────────────
   const isAuthenticated = computed(() => !!token.value && !!user.value)
@@ -286,6 +291,65 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /** Шаг 1 подключения TOTP — вернуть секрет + QR-код для сканирования */
+  async function setupTotp(): Promise<{ secret: string; qrDataUrl: string }> {
+    const res = await api.post('/auth/2fa/totp/setup')
+    if (!res.data.success) throw new Error(res.data.error?.message ?? 'Setup failed')
+    return res.data.data
+  }
+
+  /** Шаг 2 подключения TOTP — подтвердить код из приложения */
+  async function confirmTotp(code: string): Promise<void> {
+    const res = await api.post('/auth/2fa/totp/confirm', { code })
+    if (!res.data.success) throw new Error(res.data.error?.message ?? 'Confirm failed')
+    if (user.value) { user.value.two_factor_method = 'totp'; saveUser(user.value) }
+  }
+
+  /** Шаг 1 подключения email-2FA — отправить код на свою почту */
+  async function enableEmail2fa(): Promise<void> {
+    const res = await api.post('/auth/2fa/email/enable')
+    if (!res.data.success) throw new Error(res.data.error?.message ?? 'Enable failed')
+  }
+
+  /** Шаг 2 подключения email-2FA — подтвердить код */
+  async function confirmEmail2fa(code: string): Promise<void> {
+    const res = await api.post('/auth/2fa/email/confirm', { code })
+    if (!res.data.success) throw new Error(res.data.error?.message ?? 'Confirm failed')
+    if (user.value) { user.value.two_factor_method = 'email'; saveUser(user.value) }
+  }
+
+  /** Отключение активного метода 2FA */
+  async function disableTwoFactor(password?: string): Promise<void> {
+    const res = await api.post('/auth/2fa/disable', { password })
+    if (!res.data.success) throw new Error(res.data.error?.message ?? 'Disable failed')
+    if (user.value) { user.value.two_factor_method = null; saveUser(user.value) }
+  }
+
+  /** Второй шаг входа — подтверждение кода второго фактора */
+  async function verifyLoginTwoFactor(mfaToken: string, code: string, remember = false): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const res = await api.post('/auth/login/2fa/verify', { mfaToken, code, remember })
+      const data = res.data
+      if (!data.success) throw new Error(data.error?.message ?? 'Verification failed')
+      token.value = data.data.token
+      user.value  = data.data.user
+      saveUser(data.data.user)
+    } catch (e: any) {
+      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /** Повторная отправка кода второго фактора при входе (метод email) */
+  async function resendLoginTwoFactor(mfaToken: string): Promise<void> {
+    const res = await api.post('/auth/login/2fa/resend', { mfaToken })
+    if (!res.data.success) throw new Error(res.data.error?.message ?? 'Resend failed')
+  }
+
   async function fetchMe(): Promise<void> {
     if (!token.value) return
     try {
@@ -307,6 +371,19 @@ export const useAuthStore = defineStore('auth', () => {
     clearUser()
   }
 
+  // Account got frozen while the session was active — kick the user out to the
+  // main menu right away instead of leaving them logged in against a dead session,
+  // then surface the same code-entry modal used at login so they can unfreeze on the spot.
+  async function onFrozenDetected(reason: string): Promise<void> {
+    if (frozenPrompt.value?.show) return // already showing (avoid dupes from parallel requests)
+    const email = user.value?.email
+    if (!email) return // not actually logged in — nothing to kick out of
+    frozenPrompt.value = { show: true, email, reason }
+    await logout()
+    const { default: router } = await import('../router')
+    router.push({ name: 'home' })
+  }
+
   // Wire up axios interceptors — no circular dep since api.ts no longer imports stores
   setupApiAuth(
     () => token.value,
@@ -323,16 +400,18 @@ export const useAuthStore = defineStore('auth', () => {
       // rather than "session is dead" so the interceptor doesn't force a logout.
       return user.value ? undefined : null
     },
+    onFrozenDetected,
   )
 
   // Restore session via httpOnly refresh_token cookie on page load
   tryRefresh().finally(() => { isInitialized.value = true })
 
   return {
-    token, user, isLoading, isInitialized, error,
+    token, user, isLoading, isInitialized, error, frozenPrompt,
     isAuthenticated, displayName, avatarUrl,
     login, register, verifyEmail, resendOtp, loginWithToken,
     requestUnfreeze, confirmUnfreeze, exportData,
     forgotPassword, resetPassword, changePassword, requestEmailChange, confirmEmailChange, fetchMe, logout, tryRefresh,
+    setupTotp, confirmTotp, enableEmail2fa, confirmEmail2fa, disableTwoFactor, verifyLoginTwoFactor, resendLoginTwoFactor,
   }
 })

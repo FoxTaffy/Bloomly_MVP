@@ -21,9 +21,9 @@
               >{{ post.author.display_name || post.author.username }}</router-link>
               <span v-if="(post.author as any).deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
               <!-- Verification badge -->
-              <img v-if="post.author.is_verified"
-                :src="verificationBadgeIcon(post.author.verification_type)"
-                class="w-4 h-4 flex-shrink-0" title="Верифицирован" />
+              <VerificationBadge v-if="post.author.is_verified"
+                :type="post.author.verification_type"
+                img-class="w-4 h-4 flex-shrink-0" />
               <span v-if="showRepawLabel"
                 class="inline-flex items-center gap-1 text-[10px] text-white/55 bg-brand-card border border-brand-border px-1.5 py-0.5 rounded-md font-semibold">
                 <Repeat2 class="w-3 h-3" /> Репав
@@ -125,7 +125,8 @@
           ]"
         >
           <template v-for="(url, i) in post.media_urls" :key="i">
-            <CustomPlayer :src="url" @click-image="showLightboxUrl = url" class="w-full h-full object-cover" />
+            <CustomPlayer :src="url" @click-image="showLightboxUrl = url" class="w-full h-full object-cover"
+              :disable-autoplay="(post.is_nsfw && !nsfwEnabled) || (isPaywalled && !paidRevealed)" />
           </template>
         </div>
 
@@ -141,12 +142,12 @@
                 <AlertTriangle class="w-5 h-5 text-red-400" />
               </div>
               <h3 class="font-bold text-white text-sm mb-1.5">NSFW Контент</h3>
-              <p class="text-white/45 text-xs mb-4">Предназначен для пользователей старше 18 лет. Включите NSFW в шапке сайта.</p>
+              <p class="text-white/45 text-xs mb-4">{{ canUseNsfw ? 'Предназначен для пользователей старше 18 лет. Включите NSFW в шапке сайта.' : 'Предназначен для пользователей старше 18 лет. Подтвердите дату рождения в настройках профиля.' }}</p>
               <button
-                @click.stop="enableNsfw()"
+                @click.stop="handleEnableNsfw"
                 class="w-full py-2 bg-red-500 hover:bg-red-400 text-white font-bold text-xs rounded-xl transition-colors"
               >
-                Включить NSFW
+                {{ canUseNsfw ? 'Включить NSFW' : 'Подтвердить возраст' }}
               </button>
             </div>
           </div>
@@ -241,7 +242,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNsfwMode } from '@/composables/useNsfwMode'
-import { verificationBadgeIcon } from '@/composables/useVerificationBadge'
+import VerificationBadge from '@/components/VerificationBadge.vue'
 import api from '@/api'
 import PostComments from '@/components/PostComments.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
@@ -269,7 +270,16 @@ const emit = defineEmits<{
 // ── Composables ────────────────────────────────────────────────────────────
 const router = useRouter()
 const authStore = useAuthStore()
-const { nsfwEnabled, enableNsfw } = useNsfwMode()
+const { nsfwEnabled, canUseNsfw, enableNsfw } = useNsfwMode()
+
+function handleEnableNsfw() {
+  if (canUseNsfw.value) {
+    enableNsfw()
+    return
+  }
+  alert('Укажите дату рождения в настройках профиля, чтобы подтвердить возраст 18+.')
+  router.push('/settings/profile')
+}
 
 // ── State ──────────────────────────────────────────────────────────────────
 const localRating  = ref<number>(props.post.rating ?? 0)

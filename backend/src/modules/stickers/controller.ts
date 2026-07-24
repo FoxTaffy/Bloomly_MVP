@@ -2,6 +2,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { stickersService } from './service.js';
 import type { GetPacksQuery, CreatePackInput, UpdatePackInput } from './types.js';
 import { isAdmin } from '../../lib/roles.js';
+import { requestIsAdult } from '../../lib/age.js';
 
 export async function findByUrlHandler(req: FastifyRequest, reply: FastifyReply) {
   const { url } = req.query as { url?: string };
@@ -20,7 +21,12 @@ export async function findByUrlHandler(req: FastifyRequest, reply: FastifyReply)
 
 export async function listPacksHandler(req: FastifyRequest, reply: FastifyReply) {
   try {
-    const result = await stickersService.list(req.query as GetPacksQuery);
+    const query = req.query as GetPacksQuery;
+    if (!requestIsAdult((req as any).user)) {
+      query.excludeNsfw = '1';
+      query.nsfw = undefined;
+    }
+    const result = await stickersService.list(query);
     return reply.send({ data: result });
   } catch (err) {
     req.log.error(err);

@@ -15,7 +15,7 @@ declare module 'fastify' {
 export async function followsRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
   const tryAuth: RouteShorthandOptions = { onRequest: [fastify.tryAuthenticate] };
-  fastify.post('/:id/toggle',    auth, toggleFollowHandler as any);
+  fastify.post('/:id/toggle',    { onRequest: [fastify.authenticate], config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, toggleFollowHandler as any);
   fastify.get('/:id/check',      auth, checkFollowingHandler as any);
   fastify.get('/check-bulk',     auth, checkBulkHandler as any);
   fastify.get('/:id/followers',  tryAuth, getFollowersHandler as any);

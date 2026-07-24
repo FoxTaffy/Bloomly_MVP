@@ -7,7 +7,7 @@
     </div>
   </div>
 
-  <div v-else class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all group">
+  <div v-else ref="cardRootRef" class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all group">
     <!-- Announcement banner -->
     <div v-if="post.is_announcement" class="flex items-center gap-2 px-5 py-2.5 bg-brand-yellow/10 border-b border-brand-yellow/25">
       <BIcon name="Megaphone" class="w-3.5 h-3.5 text-brand-yellow flex-shrink-0" />
@@ -88,9 +88,9 @@
               <!-- Verification badge — only for user posts -->
               <template v-if="!effectiveGroupContext && post.author">
                 <span v-if="(post.author as any).deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
-                <img v-if="post.author.is_verified"
-                  :src="verificationBadgeIcon((post.author as any).verification_type)"
-                  class="w-4 h-4 flex-shrink-0" title="Верифицирован" />
+                <VerificationBadge v-if="post.author.is_verified"
+                  :type="(post.author as any).verification_type"
+                  img-class="w-4 h-4 flex-shrink-0" />
                 <!-- AD badge -->
                 <span v-if="post.author?.role === 'ad'"
                   class="inline-flex items-center gap-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded-md">
@@ -352,9 +352,11 @@
                 class="carousel-slide"
                 :style="isImg(url) ? { '--blur-url': `url(${url})` } : {}"
                 :data-has-blur="isImg(url) ? 'true' : 'false'"
-                @click="openLightbox(i)"
               >
-                <CustomPlayer :src="url" @click-image="openLightbox(i)" />
+                <!-- Only images open the lightbox on click (via click-image) — video/GIF
+                     stay inline and are only ever played in place, never auto-opened. -->
+                <CustomPlayer :ref="(el: any) => { playerRefs[i] = el }" :src="url" @click-image="openLightbox(i)"
+                  :disable-autoplay="(post.is_nsfw && !nsfwEnabled) || (isPaywalled && !paidRevealed)" />
               </div>
             </div>
 
@@ -419,12 +421,12 @@
                   <BIcon name="AlertTriangle" class="w-7 h-7 text-red-400" />
                 </div>
                 <h3 class="font-bold text-white text-lg mb-2">NSFW Контент</h3>
-                <p class="text-white/45 text-sm mb-5">Данный контент предназначен для пользователей старше 18 лет. Включите NSFW в верхней панели.</p>
+                <p class="text-white/45 text-sm mb-5">{{ canUseNsfw ? 'Данный контент предназначен для пользователей старше 18 лет. Включите NSFW в верхней панели.' : 'Данный контент предназначен для пользователей старше 18 лет. Подтвердите дату рождения в настройках профиля.' }}</p>
                 <button
-                  @click.stop="enableNsfw()"
+                  @click.stop="handleEnableNsfw"
                   class="w-full py-2.5 bg-red-500 hover:bg-red-400 active:bg-red-600 text-white font-bold text-sm rounded-xl transition-colors"
                 >
-                  Включить NSFW
+                  {{ canUseNsfw ? 'Включить NSFW' : 'Подтвердить возраст' }}
                 </button>
               </div>
             </div>
@@ -670,7 +672,7 @@ import { useLangStore } from '@/stores/lang'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useAutoTranslate } from '@/composables/useAutoTranslate'
 import { onAvatarError } from '@/composables/useAvatarFallback'
-import { verificationBadgeIcon } from '@/composables/useVerificationBadge'
+import VerificationBadge from '@/components/VerificationBadge.vue'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
@@ -835,8 +837,17 @@ const showStatsModal = ref(false)
 const showShareModal = ref(false)
 
 // NSFW / paid reveal state
-const { nsfwEnabled, enableNsfw } = useNsfwMode()
+const { nsfwEnabled, canUseNsfw, enableNsfw } = useNsfwMode()
 const paidRevealed = ref(false)
+
+function handleEnableNsfw() {
+  if (canUseNsfw.value) {
+    enableNsfw()
+    return
+  }
+  alert('Укажите дату рождения в настройках профиля, чтобы подтвердить возраст 18+.')
+  router.push('/settings/profile')
+}
 
 const repawUndoVisible = ref(false)
 const repawCountdown = ref(5)
@@ -851,6 +862,14 @@ const lightboxIndex = ref(0)
 // ── Carousel ──────────────────────────────────────────────────────────────
 const carouselIndex = ref(0)
 watch(() => props.post.id, () => { carouselIndex.value = 0 })
+
+// Inline video/audio players, keyed by slide index — paused before the lightbox
+// opens so its own (separate) player instance doesn't end up playing on top of
+// this one still running in the background.
+const playerRefs = ref<Record<number, { pause?: () => void } | null>>({})
+function pauseInlinePlayer(index: number) {
+  playerRefs.value[index]?.pause?.()
+}
 
 let _carouselTouchX = 0
 function carouselTouchStart(e: TouchEvent) { _carouselTouchX = e.touches[0].clientX }
@@ -897,19 +916,46 @@ async function loadMentionUsers() {
   }
 }
 
+const cardRootRef = ref<HTMLElement | null>(null)
+let viewObserver: IntersectionObserver | null = null
+let viewTimeoutId: ReturnType<typeof setTimeout> | undefined
+
 onMounted(() => {
   loadMentionUsers()
-  recordView()
+  setupViewObserver()
+})
+onUnmounted(() => {
+  clearTimeout(viewTimeoutId)
+  viewObserver?.disconnect()
 })
 watch(() => props.post.content, () => { loadMentionUsers() })
 
 // ── View tracking ─────────────────────────────────────────────────────────
-// Dedup is enforced server-side (one PostView row per user+post), so repeat
-// mounts of the same card never inflate the count — only guard against firing
-// the request more than once per page load for the same post.
+// Only counted once a card has actually been ≥50% on-screen for 1s (mirrors
+// the dwell-time gate in useAnalytics' VIEW tracking) — mounting a card that's
+// still off-screen or barely scrolled past must not count as a view.
+// Dedup is additionally enforced server-side (one PostView row per user+post).
 const _viewedThisPageLoad = new Set<string>()
-function recordView() {
+function setupViewObserver() {
   if (props.adMode || isOwn.value || !authStore.isAuthenticated) return
+  if (_viewedThisPageLoad.has(props.post.id)) return
+  const el = cardRootRef.value
+  if (!el) return
+  viewObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        viewTimeoutId = setTimeout(() => {
+          recordView()
+          viewObserver?.disconnect()
+        }, 1000)
+      } else {
+        clearTimeout(viewTimeoutId)
+      }
+    })
+  }, { threshold: 0.5 })
+  viewObserver.observe(el)
+}
+function recordView() {
   if (_viewedThisPageLoad.has(props.post.id)) return
   _viewedThisPageLoad.add(props.post.id)
   api.post(`/posts/${props.post.id}/view`).then((r) => {
@@ -1101,6 +1147,7 @@ async function goToMention(username: string) {
 }
 
 function openLightbox(index: number) {
+  pauseInlinePlayer(carouselIndex.value)
   lightboxIndex.value = index
   carouselIndex.value = index
   lightboxOpen.value = true

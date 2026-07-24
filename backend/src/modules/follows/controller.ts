@@ -1,5 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { followsService } from './service.js';
+import { requestIsAdult } from '../../lib/age.js';
 
 interface JwtUser { id: string; role: string }
 
@@ -83,7 +84,7 @@ export const getSubscriptionFeedHandler = async (
 ) => {
   try {
     const { id: userId } = req.user as JwtUser;
-    const safeMode = req.query.safeMode === 'true';
+    const safeMode = !requestIsAdult(req.user) || req.query.safeMode === 'true';
     const page    = Math.max(1, parseInt(req.query.page ?? '1', 10) || 1);
     const posts = await followsService.getSubscriptionFeed(userId, safeMode, page);
     return reply.send({ success: true, data: { posts }, error: null });

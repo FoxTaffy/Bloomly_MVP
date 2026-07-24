@@ -111,6 +111,39 @@ export const useMessagesStore = defineStore('messages', () => {
   // Read receipts: convId → partner's last_read_at (ISO)
   const partnerLastRead = ref<Record<string, string | null>>({})
 
+  // ── Client-side "slow down" spam nag (Discord-style) ────────────────────────
+  // Purely a UX nudge — the real enforcement (warn/freeze) happens server-side
+  // in automod, this just stops someone from firing off a wall of messages
+  // before that catches up. Tracked across all conversations, not per-chat.
+  const SPAM_NAG_THRESHOLD  = 40
+  const SPAM_NAG_WINDOW_MS  = 60_000
+  const SPAM_NAG_COOLDOWN_MS = 15_000
+  const _sendTimestamps: number[] = []
+  const spamNagActive = ref(false)
+  const spamNagCooldownUntil = ref(0)
+
+  /** Call before every user-initiated send. Returns true if the send should be blocked. */
+  function checkSpamGate(): boolean {
+    const now = Date.now()
+    if (now < spamNagCooldownUntil.value) {
+      spamNagActive.value = true
+      return true
+    }
+    while (_sendTimestamps.length && now - _sendTimestamps[0] > SPAM_NAG_WINDOW_MS) _sendTimestamps.shift()
+    _sendTimestamps.push(now)
+    if (_sendTimestamps.length >= SPAM_NAG_THRESHOLD) {
+      spamNagActive.value = true
+      spamNagCooldownUntil.value = now + SPAM_NAG_COOLDOWN_MS
+      _sendTimestamps.length = 0
+      return true
+    }
+    return false
+  }
+
+  function dismissSpamNag() {
+    spamNagActive.value = false
+  }
+
   let unsubWs: (() => void) | null = null
   let unsubTyping: (() => void) | null = null
   let unsubReadReceipt: (() => void) | null = null
@@ -693,6 +726,10 @@ export const useMessagesStore = defineStore('messages', () => {
     hasMoreMessages,
     typingUsers,
     partnerLastRead,
+    spamNagActive,
+    spamNagCooldownUntil,
+    checkSpamGate,
+    dismissSpamNag,
     startListening,
     stopListening,
     fetchConversations,
