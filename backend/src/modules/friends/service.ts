@@ -93,7 +93,13 @@ export const friendsService = {
     return { cancelled: true };
   },
 
-  /** Remove a friend (delete accepted friendship in either direction) */
+  /**
+   * Remove a friend. "Friend" here means either an accepted Friendship record
+   * or a mutual Follow (both users follow each other) — getFriends() treats
+   * both as friends, so removal must clear whichever relation actually exists,
+   * otherwise "friends" who only got there via mutual-follow could never be
+   * removed from the friends list.
+   */
   async removeFriend(userId: string, friendId: string) {
     const friendship = await prisma.friendship.findFirst({
       where: {
@@ -103,8 +109,18 @@ export const friendsService = {
         ],
       },
     });
-    if (!friendship) throw new Error('Friendship not found');
-    await prisma.friendship.delete({ where: { id: friendship.id } });
+
+    const [followsThem, followedByThem] = await Promise.all([
+      prisma.follow.findUnique({ where: { follower_id_following_id: { follower_id: userId, following_id: friendId } } }),
+      prisma.follow.findUnique({ where: { follower_id_following_id: { follower_id: friendId, following_id: userId } } }),
+    ]);
+
+    if (!friendship && !followsThem && !followedByThem) throw new Error('Friendship not found');
+
+    if (friendship) await prisma.friendship.delete({ where: { id: friendship.id } });
+    if (followsThem) await prisma.follow.delete({ where: { follower_id_following_id: { follower_id: userId, following_id: friendId } } });
+    if (followedByThem) await prisma.follow.delete({ where: { follower_id_following_id: { follower_id: friendId, following_id: userId } } });
+
     return { removed: true };
   },
 
