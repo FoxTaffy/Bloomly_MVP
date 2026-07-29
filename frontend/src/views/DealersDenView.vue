@@ -24,7 +24,7 @@ function handleEnableNsfw() {
     enableNsfw()
     return
   }
-  alert('Укажите дату рождения в настройках профиля, чтобы подтвердить возраст 18+.')
+  alert(langStore.t.dealersDenAgeConfirmAlert)
   router.push('/settings/profile')
 }
 
@@ -40,38 +40,38 @@ type MainTab = 'browse' | 'my'
 const activeTab = ref<MainTab>('browse')
 
 // ── Categories ─────────────────────────────────────────────────────────────────
-const CATS = [
-  { key: 'all',     label: 'Все',      icon: 'LayoutGrid' },
-  { key: 'art',     label: 'Арт',      icon: 'Palette'    },
-  { key: 'fursuit', label: 'Фурсьют',  icon: 'Sparkles'   },
-  { key: 'sticker', label: 'Стикеры',  icon: 'Smile'      },
-  { key: 'badge',   label: 'Значки',   icon: 'Award'      },
-  { key: 'print',   label: 'Принты',   icon: 'Printer'    },
-  { key: 'music',   label: 'Музыка',   icon: 'Music'      },
-  { key: 'craft',   label: 'Handmade', icon: 'Scissors'   },
-  { key: 'merch',   label: 'Мерч',     icon: 'Shirt'      },
-  { key: 'other',   label: 'Другое',   icon: 'Package'    },
-]
+const CATS = computed(() => [
+  { key: 'all',     label: langStore.t.tabAll,           icon: 'LayoutGrid' },
+  { key: 'art',     label: langStore.t.dealersDenCatArt,  icon: 'Palette'    },
+  { key: 'fursuit', label: langStore.t.fursuitTab,        icon: 'Sparkles'   },
+  { key: 'sticker', label: langStore.t.stickers,          icon: 'Smile'      },
+  { key: 'badge',   label: langStore.t.dealersDenCatBadges, icon: 'Award'    },
+  { key: 'print',   label: langStore.t.dealersDenCatPrints, icon: 'Printer'  },
+  { key: 'music',   label: langStore.t.dealersDenCatMusic, icon: 'Music'     },
+  { key: 'craft',   label: 'Handmade',                    icon: 'Scissors'   },
+  { key: 'merch',   label: langStore.t.dealersDenCatMerch, icon: 'Shirt'     },
+  { key: 'other',   label: langStore.t.other,             icon: 'Package'    },
+])
 const selectedCategory = ref('all')
 
 // ── Kind tabs ──────────────────────────────────────────────────────────────────
-const KINDS = [
-  { key: '',                  label: 'Все',        icon: 'LayoutGrid' },
-  { key: 'fixed',             label: 'Фикс. цена', icon: 'Tag'        },
-  { key: 'auction',           label: 'Аукцион',    icon: 'Hammer'     },
-  { key: 'ych',               label: 'YCH',        icon: 'Paintbrush' },
-  { key: 'raffle',            label: 'Розыгрыш',   icon: 'Gift'       },
-  { key: 'commission_queue',  label: 'Комиссии',   icon: 'ListOrdered'},
-]
+const KINDS = computed(() => [
+  { key: '',                  label: langStore.t.tabAll,                 icon: 'LayoutGrid' },
+  { key: 'fixed',             label: langStore.t.dealersDenKindFixed,    icon: 'Tag'        },
+  { key: 'auction',           label: langStore.t.dealersDenKindAuction,  icon: 'Hammer'     },
+  { key: 'ych',               label: 'YCH',                              icon: 'Paintbrush' },
+  { key: 'raffle',            label: langStore.t.dealersDenKindRaffle,   icon: 'Gift'       },
+  { key: 'commission_queue',  label: langStore.t.dealersDenKindCommissions, icon: 'ListOrdered'},
+])
 const selectedKind = ref<'' | ListingKind>('')
 
 // ── Sort ───────────────────────────────────────────────────────────────────────
-const SORTS = [
-  { key: 'newest',     label: 'Новинки' },
-  { key: 'price_asc',  label: 'Дешевле' },
-  { key: 'price_desc', label: 'Дороже' },
-  { key: 'popular',    label: 'Популярные' },
-]
+const SORTS = computed(() => [
+  { key: 'newest',     label: langStore.t.dealersDenSortNewest },
+  { key: 'price_asc',  label: langStore.t.dealersDenSortPriceAsc },
+  { key: 'price_desc', label: langStore.t.dealersDenSortPriceDesc },
+  { key: 'popular',    label: langStore.t.dealersDenSortPopular },
+])
 const selectedSort = ref('newest')
 
 // ── Search & Type ──────────────────────────────────────────────────────────────
@@ -131,12 +131,12 @@ onUnmounted(() => { clearInterval(clockTimer); clearTimeout(searchTimer) })
 function formatCountdown(endsAt: string | null): string {
   if (!endsAt) return ''
   const diff = new Date(endsAt).getTime() - now.value
-  if (diff <= 0) return 'Завершён'
+  if (diff <= 0) return langStore.t.dealersDenAuctionEnded
   const d = Math.floor(diff / 86400000)
   const h = Math.floor((diff % 86400000) / 3600000)
   const m = Math.floor((diff % 3600000) / 60000)
   const s = Math.floor((diff % 60000) / 1000)
-  if (d > 0) return `${d}д ${h}ч`
+  if (d > 0) return `${d}${langStore.t.dealersDenDayAbbr} ${h}${langStore.t.dealersDenHourAbbr}`
   if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
   return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
 }
@@ -148,23 +148,23 @@ function isAuctionHot(endsAt: string | null) {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const CURRENCIES = ['USD', 'EUR', 'RUB', 'GBP', 'JPY', 'CNY']
-const CAT_LABELS: Record<string, string> = {
-  art: 'Арт', fursuit: 'Фурсьют', badge: 'Значок', print: 'Принт',
-  music: 'Музыка', craft: 'Handmade', merch: 'Мерч', sticker: 'Стикер', other: 'Другое',
-}
-const TYPE_LABELS: Record<string, string> = { digital: 'Цифровое', physical: 'Физическое', both: 'Оба' }
+const CAT_LABELS = computed<Record<string, string>>(() => ({
+  art: langStore.t.dealersDenCatArt, fursuit: langStore.t.fursuitTab, badge: langStore.t.dealersDenCatBadge, print: langStore.t.dealersDenCatPrint,
+  music: langStore.t.dealersDenCatMusic, craft: 'Handmade', merch: langStore.t.dealersDenCatMerch, sticker: langStore.t.dealersDenCatSticker, other: langStore.t.other,
+}))
+const TYPE_LABELS = computed<Record<string, string>>(() => ({ digital: langStore.t.dealersDenTypeDigital, physical: langStore.t.dealersDenTypePhysical, both: langStore.t.dealersDenTypeBoth }))
 const TYPE_COLOR: Record<string, string> = {
   digital:  'text-brand-accent  bg-brand-accent/10  border-brand-accent/30',
   physical: 'text-brand-success bg-brand-success/10 border-brand-success/30',
   both:     'text-brand-yellow  bg-brand-yellow/10  border-brand-yellow/30',
 }
-const KIND_META: Record<string, { label: string; icon: string; color: string; border: string; bg: string }> = {
-  fixed:            { label: 'Фикс. цена', icon: 'Tag',         color: 'text-brand-accent',   border: 'border-brand-accent/40',   bg: 'bg-brand-accent/15'   },
-  auction:          { label: 'Аукцион',    icon: 'Hammer',      color: 'text-brand-yellow',   border: 'border-brand-yellow/40',   bg: 'bg-brand-yellow/15'   },
-  ych:              { label: 'YCH',        icon: 'Paintbrush',  color: 'text-brand-purple',   border: 'border-brand-purple/40',   bg: 'bg-brand-purple/15'   },
-  raffle:           { label: 'Розыгрыш',   icon: 'Gift',        color: 'text-brand-success',  border: 'border-brand-success/40',  bg: 'bg-brand-success/15'  },
-  commission_queue: { label: 'Комиссии',   icon: 'ListOrdered', color: 'text-violet-400',     border: 'border-violet-400/40',     bg: 'bg-violet-400/15'     },
-}
+const KIND_META = computed<Record<string, { label: string; icon: string; color: string; border: string; bg: string }>>(() => ({
+  fixed:            { label: langStore.t.dealersDenKindFixed,    icon: 'Tag',         color: 'text-brand-accent',   border: 'border-brand-accent/40',   bg: 'bg-brand-accent/15'   },
+  auction:          { label: langStore.t.dealersDenKindAuction,  icon: 'Hammer',      color: 'text-brand-yellow',   border: 'border-brand-yellow/40',   bg: 'bg-brand-yellow/15'   },
+  ych:              { label: 'YCH',                              icon: 'Paintbrush',  color: 'text-brand-purple',   border: 'border-brand-purple/40',   bg: 'bg-brand-purple/15'   },
+  raffle:           { label: langStore.t.dealersDenKindRaffle,   icon: 'Gift',        color: 'text-brand-success',  border: 'border-brand-success/40',  bg: 'bg-brand-success/15'  },
+  commission_queue: { label: langStore.t.dealersDenKindCommissions, icon: 'ListOrdered', color: 'text-violet-400', border: 'border-violet-400/40',     bg: 'bg-violet-400/15'     },
+}))
 
 function isSoldOut(l: DealerListing) {
   return l.status === 'sold' || (l.quantity > 0 && l.quantity_sold >= l.quantity)
@@ -218,7 +218,7 @@ function openCreateModal() {
   showCreateModal.value = true
 }
 async function tryCloseCreate() {
-  if (isFormDirty() && !(await confirmDialog('Изменения не сохранены. Закрыть без сохранения?'))) return
+  if (isFormDirty() && !(await confirmDialog(langStore.t.dealersDenUnsavedCloseConfirm))) return
   showCreateModal.value = false
 }
 async function submitCreate() {
@@ -241,7 +241,7 @@ async function submitCreate() {
     })
     showCreateModal.value = false
   } catch (err: any) {
-    createError.value = err?.response?.data?.message ?? err?.response?.data?.error ?? 'Не удалось создать объявление'
+    createError.value = err?.response?.data?.message ?? err?.response?.data?.error ?? langStore.t.dealersDenCreateFailed
   } finally { isCreating.value = false }
 }
 
@@ -262,7 +262,7 @@ function openEdit(listing: DealerListing) {
   showEditModal.value = true
 }
 async function tryCloseEdit() {
-  if (!(await confirmDialog('Изменения не сохранены. Закрыть?'))) return
+  if (!(await confirmDialog(langStore.t.dealersDenUnsavedCloseConfirmShort))) return
   showEditModal.value = false
 }
 async function submitEdit() {
@@ -276,15 +276,15 @@ async function submitEdit() {
     })
     showEditModal.value = false
   } catch (err: any) {
-    editError.value = err?.response?.data?.message ?? err?.response?.data?.error ?? 'Не удалось сохранить изменения'
+    editError.value = err?.response?.data?.message ?? err?.response?.data?.error ?? langStore.t.dealersDenSaveChangesFailed
   } finally { isUpdating.value = false }
 }
 async function deleteListing(id: string) {
-  if (!(await confirmDialog('Удалить объявление?', { danger: true }))) return
+  if (!(await confirmDialog(langStore.t.dealersDenDeleteListingConfirm, { danger: true }))) return
   try {
     await store.deleteListing(id)
   } catch (err: any) {
-    alert(err?.response?.data?.error ?? 'Не удалось удалить объявление')
+    alert(err?.response?.data?.error ?? langStore.t.dealersDenDeleteFailed)
   }
 }
 
@@ -313,13 +313,13 @@ async function submitBid() {
     await store.placeBid(bidListing.value.id, bidAmount.value, bidMessage.value || undefined)
     showBidModal.value = false
   } catch (err: any) {
-    bidError.value = err?.response?.data?.message ?? err?.response?.data?.error ?? 'Ошибка. Попробуйте снова.'
+    bidError.value = err?.response?.data?.message ?? err?.response?.data?.error ?? langStore.t.dealersDenGenericRetryError
   } finally { isBidding.value = false }
 }
 async function submitRaffleTicket(listing: DealerListing, e: Event) {
   e.stopPropagation()
   if (!auth.user) { router.push({ name: 'login' }); return }
-  if (!(await confirmDialog('Купить 1 билет за ' + formatPrice(listing.price, listing.currency) + '?'))) return
+  if (!(await confirmDialog(langStore.t.dealersDenBuyTicketConfirm + ' ' + formatPrice(listing.price, listing.currency) + '?'))) return
   await store.buyRaffleTicket(listing.id)
 }
 </script>
@@ -359,13 +359,13 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
           <!-- Floating decorative chips -->
           <div class="absolute top-3 right-12 rotate-12 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-3 py-1.5 hidden md:flex items-center gap-1.5">
-            <BIcon name="Hammer" class="w-3.5 h-3.5 text-brand-yellow" /><span class="text-white text-xs font-bold">Аукцион</span>
+            <BIcon name="Hammer" class="w-3.5 h-3.5 text-brand-yellow" /><span class="text-white text-xs font-bold">{{ langStore.t.dealersDenKindAuction }}</span>
           </div>
           <div class="absolute bottom-4 right-6 -rotate-6 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-3 py-1.5 hidden md:flex items-center gap-1.5">
             <BIcon name="Paintbrush" class="w-3.5 h-3.5 text-brand-purple" /><span class="text-white text-xs font-bold">YCH</span>
           </div>
           <div class="absolute top-10 right-44 rotate-2 bg-brand-accent/20 backdrop-blur-sm border border-brand-accent/30 rounded-xl px-3 py-1.5 hidden xl:flex items-center gap-1.5">
-            <BIcon name="Gift" class="w-3.5 h-3.5 text-brand-success" /><span class="text-white text-xs font-bold">Розыгрыш</span>
+            <BIcon name="Gift" class="w-3.5 h-3.5 text-brand-success" /><span class="text-white text-xs font-bold">{{ langStore.t.dealersDenKindRaffle }}</span>
           </div>
 
           <div class="relative z-10 px-6 py-7 md:px-8">
@@ -380,15 +380,15 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                       Dealers' Den
                     </h1>
                     <p class="text-white/50 text-xs mt-0.5 font-medium">
-                      {{ store.isLoading ? '…' : `${store.listings.length} объявлений` }} &nbsp;·&nbsp; маркетплейс творцов Bloomly
+                      {{ store.isLoading ? '…' : `${store.listings.length} ${langStore.t.dealersDenListingsCountLabel}` }} &nbsp;·&nbsp; {{ langStore.t.dealersDenMarketplaceTagline }}
                     </p>
                   </div>
                 </div>
                 <p class="text-white/70 text-sm max-w-md leading-relaxed">
-                  Арты, <span class="text-brand-yellow font-semibold">аукционы</span>, 
-                  <span class="text-brand-purple font-semibold">YCH</span>, 
-                  <span class="text-brand-success font-semibold">розыгрыши</span> и Handmade — 
-                  от верифицированных авторов <span class="text-brand-accent font-semibold">Bloomly</span>.
+                  {{ langStore.t.dealersDenHeroArts }}, <span class="text-brand-yellow font-semibold">{{ langStore.t.dealersDenHeroAuctions }}</span>,
+                  <span class="text-brand-purple font-semibold">YCH</span>,
+                  <span class="text-brand-success font-semibold">{{ langStore.t.dealersDenHeroRaffles }}</span> {{ langStore.t.dealersDenHeroConnector }}
+                  <span class="text-brand-accent font-semibold">Bloomly</span>.
                 </p>
               </div>
 
@@ -396,7 +396,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <div class="flex flex-col gap-2 min-w-[220px]">
                 <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl px-4 py-2.5">
                   <BIcon name="Search" class="w-4 h-4 text-white/50 shrink-0" />
-                  <input v-model="searchQuery" placeholder="Арт, фурсьют, значки…"
+                  <input v-model="searchQuery" :placeholder="langStore.t.dealersDenSearchPlaceholderHero"
                     @keyup.enter="applyFilter()"
                     class="bg-transparent text-sm text-white placeholder-white/35 outline-none w-full" />
                 </div>
@@ -404,7 +404,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   class="flex items-center justify-center gap-2 px-4 py-2.5 text-white text-sm font-bold rounded-2xl transition-all"
                   :style="activeTab === 'my' ? 'background: linear-gradient(135deg, #3148FF, #4C67CF)' : 'background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12)'">
                   <BIcon :name="activeTab === 'my' ? 'ShoppingBag' : 'ClipboardList'" class="w-4 h-4" />
-                  {{ activeTab === 'my' ? 'Маркетплейс' : 'Мои объявления' }}
+                  {{ activeTab === 'my' ? langStore.t.dealersDenMarketplaceLabel : langStore.t.dealersDenMyListingsLabel }}
                 </button>
               </div>
             </div>
@@ -412,10 +412,10 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <!-- Stats row -->
             <div class="flex gap-3 mt-5 flex-wrap">
               <div v-for="stat in [
-                { icon: 'ShoppingBag',  label: 'Объявлений', value: store.listings.length },
-                { icon: 'Hammer',       label: 'Аукционов',  value: store.listings.filter(l => l.listing_kind === 'auction' || l.listing_kind === 'ych').length },
-                { icon: 'Gift',         label: 'Розыгрышей', value: store.listings.filter(l => l.listing_kind === 'raffle').length },
-                { icon: 'ListOrdered',  label: 'Комиссий',   value: store.listings.filter(l => l.listing_kind === 'commission_queue').length },
+                { icon: 'ShoppingBag',  label: langStore.t.dealersDenListingsStatLabel, value: store.listings.length },
+                { icon: 'Hammer',       label: langStore.t.dealersDenStatAuctions,  value: store.listings.filter(l => l.listing_kind === 'auction' || l.listing_kind === 'ych').length },
+                { icon: 'Gift',         label: langStore.t.dealersDenStatRaffles, value: store.listings.filter(l => l.listing_kind === 'raffle').length },
+                { icon: 'ListOrdered',  label: langStore.t.dealersDenStatCommissions,   value: store.listings.filter(l => l.listing_kind === 'commission_queue').length },
               ]" :key="stat.label"
                 class="flex items-center gap-2 bg-white/8 backdrop-blur-sm border border-white/10 rounded-2xl px-4 py-2">
                 <BIcon :name="stat.icon" class="w-3.5 h-3.5 text-brand-accent" />
@@ -431,10 +431,10 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
         ════════════════════════════════════════════ -->
         <div v-if="activeTab === 'browse'" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div v-for="tile in [
-            { icon: 'Hammer',      label: 'Аукционы',  sub: 'Ставки в реальном времени', kind: 'auction',          from: '#FFC01F', to: '#E76F51' },
-            { icon: 'Paintbrush',  label: 'YCH',        sub: 'Твой персонаж в арте',     kind: 'ych',              from: '#CD83F5', to: '#7C3AED' },
-            { icon: 'Gift',        label: 'Розыгрыши',  sub: 'Купи билет — выиграй арт', kind: 'raffle',           from: '#66C770', to: '#059669' },
-            { icon: 'ListOrdered', label: 'Комиссии',   sub: 'Займи место в очереди',    kind: 'commission_queue', from: '#a78bfa', to: '#7c3aed' },
+            { icon: 'Hammer',      label: langStore.t.dealersDenLabelAuctions,  sub: langStore.t.dealersDenPromoAuctionsSub, kind: 'auction',          from: '#FFC01F', to: '#E76F51' },
+            { icon: 'Paintbrush',  label: 'YCH',        sub: langStore.t.dealersDenPromoYchSub,     kind: 'ych',              from: '#CD83F5', to: '#7C3AED' },
+            { icon: 'Gift',        label: langStore.t.dealersDenLabelRaffles,  sub: langStore.t.dealersDenPromoRaffleSub, kind: 'raffle',           from: '#66C770', to: '#059669' },
+            { icon: 'ListOrdered', label: langStore.t.dealersDenKindCommissions,   sub: langStore.t.dealersDenPromoCommissionSub,    kind: 'commission_queue', from: '#a78bfa', to: '#7c3aed' },
           ]" :key="tile.kind"
             @click="selectKind(tile.kind)"
             class="relative overflow-hidden rounded-2xl cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
@@ -472,7 +472,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <button v-if="auth.user && canSell" @click="openCreateModal"
                 class="flex items-center gap-1.5 px-4 py-2 text-white text-sm font-bold rounded-full transition-all shadow-md"
                 style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
-                <BIcon name="Plus" class="w-3.5 h-3.5" /> Разместить
+                <BIcon name="Plus" class="w-3.5 h-3.5" /> {{ langStore.t.dealersDenPostBtn }}
               </button>
             </div>
           </div>
@@ -495,7 +495,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <div class="relative flex-1">
               <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25 pointer-events-none" />
               <input v-model="searchQuery" @input="onSearchInput"
-                placeholder="Поиск по объявлениям…"
+                :placeholder="langStore.t.dealersDenSearchPlaceholder"
                 class="w-full bg-brand-card border border-brand-border rounded-full pl-10 pr-4 py-2 text-sm text-white placeholder-white/20 outline-none focus:border-brand-accent/50 transition-all" />
             </div>
             <select v-model="selectedSort"
@@ -503,7 +503,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <option v-for="s in SORTS" :key="s.key" :value="s.key">{{ s.label }}</option>
             </select>
             <div class="flex gap-1 flex-shrink-0">
-              <button v-for="t in [{ v: '', l: 'Globe', title: 'Все' }, { v: 'digital', l: 'Download', title: 'Цифровое' }, { v: 'physical', l: 'Package', title: 'Физическое' }]" :key="t.v"
+              <button v-for="t in [{ v: '', l: 'Globe', title: langStore.t.tabAll }, { v: 'digital', l: 'Download', title: langStore.t.dealersDenTypeDigital }, { v: 'physical', l: 'Package', title: langStore.t.dealersDenTypePhysical }]" :key="t.v"
                 @click="selectedType = t.v as any; applyFilter()"
                 :title="t.title"
                 class="w-8 h-8 rounded-full text-sm transition-all border flex items-center justify-center"
@@ -523,7 +523,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
           <h2 class="text-sm font-bold text-white/60 uppercase tracking-widest flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-brand-error animate-pulse inline-block" />
             <BIcon name="Flame" class="w-4 h-4 text-brand-yellow" />
-            Live · Аукционы
+            Live · {{ langStore.t.dealersDenLabelAuctions }}
           </h2>
           <div class="flex gap-3 overflow-x-auto scrollbar-none pb-1">
             <div v-for="listing in liveAuctions" :key="listing.id"
@@ -562,9 +562,9 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
         <div class="flex items-center justify-between">
           <h2 class="text-sm font-bold text-white/60 uppercase tracking-widest flex items-center gap-2">
             <BIcon name="LayoutGrid" class="w-4 h-4 text-brand-accent" />
-            {{ activeTab === 'my' ? 'Мои объявления' : selectedKind ? (KINDS.find(k => k.key === selectedKind)?.label ?? 'Каталог') : 'Все объявления' }}
+            {{ activeTab === 'my' ? langStore.t.dealersDenMyListingsLabel : selectedKind ? (KINDS.find(k => k.key === selectedKind)?.label ?? langStore.t.dealersDenCatalogFallback) : langStore.t.dealersDenAllListingsLabel }}
           </h2>
-          <span class="text-xs text-white/35 font-medium">{{ displayListings.length }} шт.</span>
+          <span class="text-xs text-white/35 font-medium">{{ displayListings.length }} {{ langStore.t.dealersDenPiecesAbbr }}</span>
         </div>
 
         <!-- ═══════════════════════════════════════════
@@ -589,16 +589,16 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <BIcon name="ShoppingBag" class="w-10 h-10 text-white/20" />
           </div>
           <h3 class="text-lg font-bold text-white mb-2">
-            {{ activeTab === 'my' ? 'Нет объявлений' : 'Ничего не найдено' }}
+            {{ activeTab === 'my' ? langStore.t.dealersDenNoListings : langStore.t.dealersDenNothingFound }}
           </h3>
           <p class="text-white/35 text-sm mb-6">
-            {{ activeTab === 'my' ? 'Разместите первое объявление.' : 'Попробуйте другую категорию или сбросьте фильтры.' }}
+            {{ activeTab === 'my' ? langStore.t.dealersDenPostFirstHint : langStore.t.dealersDenTryOtherFilterHint }}
           </p>
           <button v-if="activeTab === 'my' && canSell"
             @click="openCreateModal"
             class="inline-flex items-center gap-2 px-5 py-2.5 text-white text-sm font-bold rounded-2xl transition-all hover:opacity-90"
             style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
-            <BIcon name="Plus" class="w-4 h-4" /> Создать объявление
+            <BIcon name="Plus" class="w-4 h-4" /> {{ langStore.t.dealersDenCreateListingBtn }}
           </button>
         </div>
 
@@ -620,7 +620,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
               <!-- Sold overlay -->
               <div v-if="isSoldOut(listing)" class="absolute inset-0 bg-black/65 flex items-center justify-center">
-                <span class="bg-brand-error text-white text-xs font-extrabold px-4 py-1.5 rounded-full tracking-wide">Продано</span>
+                <span class="bg-brand-error text-white text-xs font-extrabold px-4 py-1.5 rounded-full tracking-wide">{{ langStore.t.dealersDenSoldBadge }}</span>
               </div>
               <!-- NSFW блюр (если режим не включён) -->
               <div
@@ -629,7 +629,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 style="backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); background: rgba(0,0,0,0.45)"
                 @click.stop="showNsfwConfirm = true">
                 <span class="text-3xl select-none">🔞</span>
-                <span class="text-[10px] font-extrabold text-white bg-rose-600/90 px-3 py-1 rounded-full tracking-wide">18+ Нажми для просмотра</span>
+                <span class="text-[10px] font-extrabold text-white bg-rose-600/90 px-3 py-1 rounded-full tracking-wide">{{ langStore.t.dealersDenNsfwTapToView }}</span>
               </div>
 
               <!-- Kind badge top-left -->
@@ -646,14 +646,14 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 <span v-if="listing.type !== 'physical'"
                   class="text-[9px] font-extrabold px-2 py-0.5 rounded-full backdrop-blur-sm"
                   :class="listing.type === 'digital' ? 'bg-brand-accent/90 text-white' : 'bg-brand-yellow/90 text-black'">
-                  {{ listing.type === 'digital' ? 'Цифровое' : 'Оба' }}
+                  {{ listing.type === 'digital' ? langStore.t.dealersDenTypeDigital : langStore.t.dealersDenTypeBoth }}
                 </span>
               </div>
 
               <!-- Draft chip -->
               <div v-if="listing.status === 'draft'" class="absolute bottom-2 left-2">
                 <span class="inline-flex items-center gap-1 bg-white/15 backdrop-blur-sm text-white/80 text-[9px] font-bold px-2 py-0.5 rounded-full">
-                  <BIcon name="Pencil" class="w-2.5 h-2.5" /> Черновик
+                  <BIcon name="Pencil" class="w-2.5 h-2.5" /> {{ langStore.t.dealersDenDraftBadge }}
                 </span>
               </div>
 
@@ -691,16 +691,16 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                     {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
                   </div>
                   <span class="text-[10px] text-brand-yellow/80 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
-                  <img v-if="listing.seller.is_verified" src="/icons/badges/paw_offical.svg" class="w-2.5 h-2.5 flex-shrink-0" title="Верифицирован" />
+                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                 </div>
               </div>
               <!-- Auction live panel -->
               <div class="mx-2 mb-2 rounded-xl overflow-hidden" style="background: linear-gradient(135deg, rgba(255,192,31,0.08), rgba(231,111,81,0.06)); border: 1px solid rgba(255,192,31,0.2)">
                 <div class="px-2.5 py-2 flex items-center justify-between">
                   <div>
-                    <p class="text-[8px] text-white/35 uppercase tracking-wider leading-none mb-0.5">Текущая ставка</p>
+                    <p class="text-[8px] text-white/35 uppercase tracking-wider leading-none mb-0.5">{{ langStore.t.dealersDenCurrentBid }}</p>
                     <p class="text-sm font-black text-brand-yellow tabular-nums leading-none">{{ formatPrice(listing.current_bid ?? listing.price, listing.currency) }}</p>
-                    <p class="text-[8px] text-white/30 mt-0.5">{{ listing.bid_count ?? 0 }} ставок</p>
+                    <p class="text-[8px] text-white/30 mt-0.5">{{ listing.bid_count ?? 0 }} {{ langStore.t.dealersDenBidsCountSuffix }}</p>
                   </div>
                   <div class="flex flex-col items-end gap-1.5">
                     <span class="text-[9px] font-extrabold tabular-nums leading-none"
@@ -710,9 +710,9 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                     <button v-if="!isSoldOut(listing)" @click.stop="openBidModal(listing, $event)"
                       class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-white shadow-sm transition-all hover:opacity-90 active:scale-95"
                       style="background: linear-gradient(135deg, #FFC01F, #E76F51)">
-                      <BIcon name="Hammer" class="w-3 h-3" /> Ставка
+                      <BIcon name="Hammer" class="w-3 h-3" /> {{ langStore.t.dealersDenBidWord }}
                     </button>
-                    <span v-else class="text-[9px] font-bold text-brand-error/70">Завершён</span>
+                    <span v-else class="text-[9px] font-bold text-brand-error/70">{{ langStore.t.dealersDenAuctionEnded }}</span>
                   </div>
                 </div>
               </div>
@@ -729,7 +729,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                     {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
                   </div>
                   <span class="text-[10px] text-brand-purple/90 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
-                  <img v-if="listing.seller.is_verified" src="/icons/badges/paw_offical.svg" class="w-2.5 h-2.5 flex-shrink-0" title="Верифицирован" />
+                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                 </div>
               </div>
               <!-- YCH slot panel -->
@@ -749,16 +749,16 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   </div>
                   <div class="flex items-center justify-between gap-1">
                     <div>
-                      <p class="text-[8px] text-white/35 uppercase tracking-wider leading-none mb-0.5">Ставка</p>
+                      <p class="text-[8px] text-white/35 uppercase tracking-wider leading-none mb-0.5">{{ langStore.t.dealersDenBidWord }}</p>
                       <p class="text-xs font-black text-brand-purple tabular-nums leading-none">{{ formatPrice(listing.current_bid ?? listing.price, listing.currency) }}</p>
                       <p v-if="listing.auto_buy_price" class="text-[8px] text-brand-yellow/70 mt-0.5 font-bold">AB: {{ formatPrice(listing.auto_buy_price, listing.currency) }}</p>
                     </div>
                     <button v-if="!isSoldOut(listing)" @click.stop="openBidModal(listing, $event)"
                       class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-white shadow-sm transition-all hover:opacity-90 active:scale-95"
                       style="background: linear-gradient(135deg, #CD83F5, #7C3AED)">
-                      <BIcon name="Paintbrush" class="w-3 h-3" /> Слот
+                      <BIcon name="Paintbrush" class="w-3 h-3" /> {{ langStore.t.dealersDenSlotBtn }}
                     </button>
-                    <span v-else class="text-[9px] font-bold text-brand-error/70">Все взяты</span>
+                    <span v-else class="text-[9px] font-bold text-brand-error/70">{{ langStore.t.dealersDenAllTaken }}</span>
                   </div>
                 </div>
               </div>
@@ -775,7 +775,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                     {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
                   </div>
                   <span class="text-[10px] text-brand-success/80 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
-                  <img v-if="listing.seller.is_verified" src="/icons/badges/paw_offical.svg" class="w-2.5 h-2.5 flex-shrink-0" title="Верифицирован" />
+                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                 </div>
               </div>
               <!-- Raffle ticket panel -->
@@ -784,7 +784,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   <!-- Progress bar -->
                   <div class="flex items-center justify-between mb-1">
                     <span class="text-[8px] text-white/35 uppercase tracking-wider">
-                      {{ listing.raffle_tickets_sold ?? 0 }}{{ listing.raffle_max_tickets ? ` / ${listing.raffle_max_tickets}` : '' }} билетов
+                      {{ listing.raffle_tickets_sold ?? 0 }}{{ listing.raffle_max_tickets ? ` / ${listing.raffle_max_tickets}` : '' }} {{ langStore.t.dealersDenTicketsSuffix }}
                     </span>
                     <span v-if="listing.raffle_max_tickets" class="text-[8px] font-bold text-brand-success">
                       {{ Math.round(((listing.raffle_tickets_sold ?? 0) / listing.raffle_max_tickets) * 100) }}%
@@ -804,13 +804,13 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                         : 'background: rgba(255,255,255,0.08)'" />
                   </div>
                   <div class="flex items-center justify-between gap-1">
-                    <p class="text-xs font-black text-brand-success tabular-nums">{{ formatPrice(listing.price, listing.currency) }}<span class="text-[8px] text-white/30 font-normal">/шт.</span></p>
+                    <p class="text-xs font-black text-brand-success tabular-nums">{{ formatPrice(listing.price, listing.currency) }}<span class="text-[8px] text-white/30 font-normal">/{{ langStore.t.dealersDenPiecesAbbr }}</span></p>
                     <button v-if="!isSoldOut(listing)" @click.stop="submitRaffleTicket(listing, $event)"
                       class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-white shadow-sm transition-all hover:opacity-90 active:scale-95"
                       style="background: linear-gradient(135deg, #66C770, #059669)">
-                      <BIcon name="Ticket" class="w-3 h-3" /> Билет
+                      <BIcon name="Ticket" class="w-3 h-3" /> {{ langStore.t.dealersDenTicketBtn }}
                     </button>
-                    <span v-else class="text-[9px] font-bold text-brand-success/60">Разыгран!</span>
+                    <span v-else class="text-[9px] font-bold text-brand-success/60">{{ langStore.t.dealersDenRaffleDrawn }}</span>
                   </div>
                 </div>
               </div>
@@ -828,20 +828,20 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                       {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
                     </div>
                     <span class="text-[10px] text-brand-accent/80 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
-                    <img v-if="listing.seller.is_verified" src="/icons/badges/paw_offical.svg" class="w-2.5 h-2.5 flex-shrink-0" title="Верифицирован" />
+                    <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                   </div>
                 </div>
                 <div class="flex-shrink-0 flex flex-col items-end gap-0.5" @click.stop>
                   <template v-if="isSoldOut(listing)">
                     <span class="text-[10px] font-bold text-white/30 line-through">{{ formatPrice(listing.price, listing.currency) }}</span>
-                    <span class="text-[9px] font-bold text-brand-error/60">Нет в наличии</span>
+                    <span class="text-[9px] font-bold text-brand-error/60">{{ langStore.t.dealersDenOutOfStock }}</span>
                   </template>
                   <template v-else>
                     <span class="text-sm font-black text-brand-yellow tabular-nums">{{ formatPrice(listing.price, listing.currency) }}</span>
                     <span v-if="listing.quantity > 1" class="text-[9px] text-brand-success/80 font-medium tabular-nums">
-                      <BIcon name="Package" class="w-2.5 h-2.5 inline" /> {{ listing.quantity - (listing.quantity_sold ?? 0) }} шт.
+                      <BIcon name="Package" class="w-2.5 h-2.5 inline" /> {{ listing.quantity - (listing.quantity_sold ?? 0) }} {{ langStore.t.dealersDenPiecesAbbr }}
                     </span>
-                    <span v-else-if="listing.price === 0" class="text-[9px] font-bold text-brand-success">Бесплатно</span>
+                    <span v-else-if="listing.price === 0" class="text-[9px] font-bold text-brand-success">{{ langStore.t.subFree }}</span>
                   </template>
                 </div>
               </div>
@@ -859,50 +859,50 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
           <button v-if="canSell" @click="openCreateModal"
             class="w-full flex items-center justify-center gap-2 py-3 text-white text-sm font-bold rounded-2xl transition-all shadow-lg hover:opacity-90"
             style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
-            <BIcon name="Plus" class="w-4 h-4" /> Разместить товар
+            <BIcon name="Plus" class="w-4 h-4" /> {{ langStore.t.dealersDenPostItemBtn }}
           </button>
           <div v-else class="bg-brand-card border border-brand-border rounded-2xl p-3.5 space-y-3">
             <div class="flex items-center gap-2.5">
               <div class="w-7 h-7 rounded-xl bg-brand-bg flex items-center justify-center">
                 <BIcon name="Lock" class="w-3.5 h-3.5 text-white/30" />
               </div>
-              <p class="text-xs font-bold text-white/50">Требования</p>
+              <p class="text-xs font-bold text-white/50">{{ langStore.t.dealersDenRequirementsLabel }}</p>
             </div>
             <div class="space-y-2 text-xs">
               <div class="flex items-center gap-2">
                 <BIcon :name="auth.user.is_verified ? 'CheckCircle2' : 'Circle'" class="w-4 h-4 flex-shrink-0"
                   :class="auth.user.is_verified ? 'text-brand-success' : 'text-brand-border'" />
-                <span :class="auth.user.is_verified ? 'text-white/60' : 'text-white/25'">Верификация</span>
+                <span :class="auth.user.is_verified ? 'text-white/60' : 'text-white/25'">{{ langStore.t.secVerification }}</span>
               </div>
               <div class="flex items-center gap-2">
                 <BIcon :name="(auth.user.verification_type === 'artist' || auth.user.verification_type === 'master') ? 'CheckCircle2' : 'Circle'" class="w-4 h-4 flex-shrink-0"
                   :class="(auth.user.verification_type === 'artist' || auth.user.verification_type === 'master') ? 'text-brand-success' : 'text-brand-border'" />
-                <span :class="(auth.user.verification_type === 'artist' || auth.user.verification_type === 'master') ? 'text-white/60' : 'text-white/25'">Художник / Мастер</span>
+                <span :class="(auth.user.verification_type === 'artist' || auth.user.verification_type === 'master') ? 'text-white/60' : 'text-white/25'">{{ langStore.t.dealersDenArtistMasterLabel }}</span>
               </div>
             </div>
             <button @click="router.push({ name: 'settings' })"
               class="w-full text-center py-2 rounded-xl text-xs font-bold text-brand-accent bg-brand-accent/8 border border-brand-accent/20 hover:bg-brand-accent/15 transition-all">
-              Подать заявку →
+              {{ langStore.t.dealersDenApplyBtn }}
             </button>
           </div>
         </div>
         <div v-else>
           <button @click="router.push({ name: 'login' })"
             class="w-full flex items-center justify-center gap-2 py-3 text-white/60 text-sm font-bold rounded-2xl transition-all border border-brand-border hover:border-brand-accent/40 hover:text-white">
-            <BIcon name="LogIn" class="w-4 h-4" /> Войти для продажи
+            <BIcon name="LogIn" class="w-4 h-4" /> {{ langStore.t.dealersDenLoginToSellBtn }}
           </button>
         </div>
 
         <!-- Quick filter mini-cards (like Stickers) -->
         <div class="space-y-2">
-          <h4 class="text-xs font-bold text-white/35 uppercase tracking-wider px-1">Виды продажи</h4>
+          <h4 class="text-xs font-bold text-white/35 uppercase tracking-wider px-1">{{ langStore.t.dealersDenSaleTypesLabel }}</h4>
           <div v-for="k in [
-            { key: '',        icon: 'LayoutGrid', label: 'Все',        from: '#3148FF', to: '#4C67CF' },
-            { key: 'auction', icon: 'Hammer',     label: 'Аукционы',   from: '#FFC01F', to: '#E76F51' },
+            { key: '',        icon: 'LayoutGrid', label: langStore.t.tabAll,             from: '#3148FF', to: '#4C67CF' },
+            { key: 'auction', icon: 'Hammer',     label: langStore.t.dealersDenLabelAuctions, from: '#FFC01F', to: '#E76F51' },
             { key: 'ych',              icon: 'Paintbrush',  label: 'YCH',        from: '#CD83F5', to: '#7C3AED' },
-            { key: 'raffle',           icon: 'Gift',        label: 'Розыгрыши',  from: '#66C770', to: '#059669' },
-            { key: 'fixed',            icon: 'Tag',         label: 'Фикс. цена', from: '#3148FF', to: '#2D3F9E' },
-            { key: 'commission_queue', icon: 'ListOrdered', label: 'Комиссии',   from: '#a78bfa', to: '#7c3aed' },
+            { key: 'raffle',           icon: 'Gift',        label: langStore.t.dealersDenLabelRaffles, from: '#66C770', to: '#059669' },
+            { key: 'fixed',            icon: 'Tag',         label: langStore.t.dealersDenKindFixed, from: '#3148FF', to: '#2D3F9E' },
+            { key: 'commission_queue', icon: 'ListOrdered', label: langStore.t.dealersDenKindCommissions, from: '#a78bfa', to: '#7c3aed' },
           ]" :key="k.key"
             @click="selectKind(k.key)"
             class="relative overflow-hidden rounded-2xl cursor-pointer hover:scale-[1.02] transition-transform"
@@ -918,17 +918,17 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
         <!-- Stats card -->
         <div class="bg-brand-card border border-brand-border rounded-2xl p-4 space-y-2">
-          <h4 class="text-xs font-bold text-white/35 uppercase tracking-wider mb-3">Статистика</h4>
+          <h4 class="text-xs font-bold text-white/35 uppercase tracking-wider mb-3">{{ langStore.t.dealersDenStatsTitle }}</h4>
           <div class="flex items-center justify-between">
-            <span class="text-xs text-white/45">Объявлений</span>
+            <span class="text-xs text-white/45">{{ langStore.t.dealersDenListingsStatLabel }}</span>
             <span class="text-sm font-bold text-white">{{ store.listings.length }}</span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-xs text-white/45">Аукционов live</span>
+            <span class="text-xs text-white/45">{{ langStore.t.dealersDenLiveAuctionsStatLabel }}</span>
             <span class="text-sm font-bold text-brand-yellow">{{ liveAuctions.length }}</span>
           </div>
           <div v-if="auth.user" class="flex items-center justify-between">
-            <span class="text-xs text-white/45">Моих</span>
+            <span class="text-xs text-white/45">{{ langStore.t.dealersDenMineStatLabel }}</span>
             <span class="text-sm font-bold text-white">{{ store.myListings.length }}</span>
           </div>
         </div>
@@ -957,7 +957,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   <BIcon name="ShoppingBag" class="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 class="text-lg font-black text-white">Новое объявление</h2>
+                  <h2 class="text-lg font-black text-white">{{ langStore.t.dealersDenNewListingTitle }}</h2>
                   <p class="text-xs text-white/35 mt-0.5">Dealers' Den · Bloomly</p>
                 </div>
               </div>
@@ -971,13 +971,13 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
             <!-- Kind -->
             <div>
-              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Тип продажи</label>
+              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenSaleTypeLabel }}</label>
               <div class="grid grid-cols-4 gap-2">
                 <button v-for="k in [
-                    { key: 'fixed',   icon: 'Tag',        label: 'Фикс. цена', from: '#3148FF', to: '#4C67CF' },
-                    { key: 'auction', icon: 'Hammer',     label: 'Аукцион',    from: '#FFC01F', to: '#E76F51' },
+                    { key: 'fixed',   icon: 'Tag',        label: langStore.t.dealersDenKindFixed, from: '#3148FF', to: '#4C67CF' },
+                    { key: 'auction', icon: 'Hammer',     label: langStore.t.dealersDenKindAuction, from: '#FFC01F', to: '#E76F51' },
                     { key: 'ych',     icon: 'Paintbrush', label: 'YCH',        from: '#CD83F5', to: '#7C3AED' },
-                    { key: 'raffle',  icon: 'Gift',       label: 'Розыгрыш',   from: '#66C770', to: '#059669' },
+                    { key: 'raffle',  icon: 'Gift',       label: langStore.t.dealersDenKindRaffle, from: '#66C770', to: '#059669' },
                   ]" :key="k.key"
                   @click="form.listingKind = k.key as ListingKind"
                   class="relative overflow-hidden rounded-2xl py-3.5 flex flex-col items-center gap-1.5 transition-all border"
@@ -992,22 +992,22 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
             <!-- Images -->
             <div>
-              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Фотографии / Превью</label>
+              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenPhotosLabel }}</label>
               <MediaUpload type="posts" :multiple="true" :max-files="20" @uploaded="(urls: string[]) => { form.images = urls }" />
             </div>
 
             <!-- Title -->
             <div>
-              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Название <span class="text-brand-accent normal-case font-normal">*</span></label>
-              <input v-model="form.title" maxlength="200" placeholder="Что продаёшь? Опиши коротко и ясно"
+              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenTitleLabel }} <span class="text-brand-accent normal-case font-normal">*</span></label>
+              <input v-model="form.title" maxlength="200" :placeholder="langStore.t.dealersDenTitlePlaceholderCreate"
                 class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all" />
             </div>
 
             <!-- Description -->
             <div>
-              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Описание</label>
+              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.fursuitDescLabel }}</label>
               <textarea v-model="form.description" rows="3"
-                placeholder="Материал, размер, сроки, условия заказа, особенности…"
+                :placeholder="langStore.t.dealersDenDescPlaceholderCreate"
                 class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all resize-none" />
             </div>
 
@@ -1015,7 +1015,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <div class="grid grid-cols-3 gap-3">
               <div class="col-span-2">
                 <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">
-                  {{ form.listingKind === 'auction' || form.listingKind === 'ych' ? 'Стартовая цена' : form.listingKind === 'raffle' ? 'Цена билета' : 'Цена' }}
+                  {{ form.listingKind === 'auction' || form.listingKind === 'ych' ? langStore.t.dealersDenStartPriceLabel : form.listingKind === 'raffle' ? langStore.t.dealersDenTicketPriceLabel : langStore.t.dealersDenPriceLabel }}
                   <span class="text-brand-accent normal-case font-normal">*</span>
                 </label>
                 <div class="relative">
@@ -1027,7 +1027,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 </div>
               </div>
               <div>
-                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Валюта</label>
+                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenCurrencyLabel }}</label>
                 <select v-model="form.currency" class="w-full rounded-2xl px-3 py-3 text-sm text-white outline-none transition-all appearance-none">
                   <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
                 </select>
@@ -1038,23 +1038,23 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <div v-if="form.listingKind === 'auction' || form.listingKind === 'ych'"
               class="bg-brand-yellow/5 border border-brand-yellow/15 rounded-2xl p-4 space-y-4">
               <p class="flex items-center gap-1.5 text-xs font-bold text-brand-yellow uppercase tracking-wider">
-                <BIcon name="Hammer" class="w-3.5 h-3.5" /> Параметры аукциона
+                <BIcon name="Hammer" class="w-3.5 h-3.5" /> {{ langStore.t.dealersDenAuctionParamsTitle }}
               </p>
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Конец аукциона</label>
+                  <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenAuctionEndLabel }}</label>
                   <input v-model="form.auctionEndsAt" type="datetime-local"
                     class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
                 </div>
                 <div>
-                  <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Мин. шаг ставки</label>
+                  <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenBidStepLabel }}</label>
                   <input v-model.number="form.bidIncrement" type="number" min="0.01" step="0.01"
                     class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
                 </div>
               </div>
               <div>
-                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Автовыкуп (AB) — необязательно</label>
-                <input v-model.number="form.autoBuyPrice" type="number" min="0" step="0.01" placeholder="0 = не использовать"
+                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenAutoBuyOptionalLabel }}</label>
+                <input v-model.number="form.autoBuyPrice" type="number" min="0" step="0.01" :placeholder="langStore.t.dealersDenAutoBuyPlaceholder"
                   class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
               </div>
             </div>
@@ -1063,10 +1063,10 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <div v-if="form.listingKind === 'raffle'"
               class="bg-brand-success/5 border border-brand-success/15 rounded-2xl p-4 space-y-3">
               <p class="flex items-center gap-1.5 text-xs font-bold text-brand-success uppercase tracking-wider">
-                <BIcon name="Gift" class="w-3.5 h-3.5" /> Параметры розыгрыша
+                <BIcon name="Gift" class="w-3.5 h-3.5" /> {{ langStore.t.dealersDenRaffleParamsTitle }}
               </p>
               <div>
-                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Макс. билетов (0 = без лимита)</label>
+                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenMaxTicketsLabel }}</label>
                 <input v-model.number="form.raffleMaxTickets" type="number" min="0"
                   class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
               </div>
@@ -1074,7 +1074,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
             <!-- Category -->
             <div>
-              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Категория</label>
+              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.category }}</label>
               <div class="flex flex-wrap gap-2">
                 <button v-for="cat in CATS.slice(1)" :key="cat.key"
                   @click="form.category = cat.key as any"
@@ -1090,12 +1090,12 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
             <!-- Type -->
             <div>
-              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Тип товара</label>
+              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenProductTypeLabel }}</label>
               <div class="grid grid-cols-3 gap-2">
                 <button v-for="t in [
-                    { v: 'physical', l: 'Физическое', icon: 'Package',  from: '#059669', to: '#0891B2' },
-                    { v: 'digital',  l: 'Цифровое',   icon: 'Download', from: '#3148FF', to: '#4C67CF' },
-                    { v: 'both',     l: 'Оба',         icon: 'Layers',   from: '#D97706', to: '#DC2626' },
+                    { v: 'physical', l: langStore.t.dealersDenTypePhysical, icon: 'Package',  from: '#059669', to: '#0891B2' },
+                    { v: 'digital',  l: langStore.t.dealersDenTypeDigital,   icon: 'Download', from: '#3148FF', to: '#4C67CF' },
+                    { v: 'both',     l: langStore.t.dealersDenTypeBoth,         icon: 'Layers',   from: '#D97706', to: '#DC2626' },
                   ]" :key="t.v"
                   @click="form.type = t.v as any"
                   class="relative overflow-hidden rounded-2xl py-3 flex flex-col items-center gap-1.5 transition-all border"
@@ -1110,14 +1110,14 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <!-- Quantity + Status -->
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Количество</label>
+                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenQuantityLabel }}</label>
                 <input v-model.number="form.quantity" type="number" min="1"
                   class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
               </div>
               <div>
-                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Статус</label>
+                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.statusFieldLabel }}</label>
                 <div class="flex gap-2 h-[46px]">
-                  <button v-for="s in [{ v: 'active', l: 'Активно', icon: 'CircleCheck' }, { v: 'draft', l: 'Черновик', icon: 'Pencil' }]"
+                  <button v-for="s in [{ v: 'active', l: langStore.t.dealersDenStatusActiveLabel, icon: 'CircleCheck' }, { v: 'draft', l: langStore.t.dealersDenDraftBadge, icon: 'Pencil' }]"
                     :key="s.v" @click="form.status = s.v as any"
                     class="flex-1 flex items-center justify-center gap-1.5 rounded-2xl text-xs font-bold transition-all border"
                     :class="form.status === s.v
@@ -1133,17 +1133,17 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <!-- Tags -->
             <div>
               <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">
-                Теги <span class="normal-case font-normal text-white/20">(через запятую)</span>
+                {{ langStore.t.dealersDenTagsLabel }} <span class="normal-case font-normal text-white/20">{{ langStore.t.dealersDenTagsHint }}</span>
               </label>
-              <input v-model="form.tags" placeholder="фурри, арт, цифровое, фурсьют…"
+              <input v-model="form.tags" :placeholder="langStore.t.dealersDenTagsPlaceholder"
                 class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all" />
             </div>
 
             <!-- NSFW -->
             <div class="flex items-center justify-between p-4 rounded-2xl bg-brand-error/5 border border-brand-error/15">
               <div>
-                <p class="text-sm font-bold text-white">Контент 18+</p>
-                <p class="text-xs text-white/30 mt-0.5">Будет скрыт blur для незарегистрированных</p>
+                <p class="text-sm font-bold text-white">{{ langStore.t.dealersDenNsfwContentLabel }}</p>
+                <p class="text-xs text-white/30 mt-0.5">{{ langStore.t.dealersDenNsfwBlurHint }}</p>
               </div>
               <button @click="form.isNsfw = !form.isNsfw"
                 class="w-12 h-6 rounded-full transition-all relative flex-shrink-0"
@@ -1158,14 +1158,14 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <div v-if="createError" class="w-full text-red-400 text-xs font-medium bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">{{ createError }}</div>
               <button @click="tryCloseCreate()"
                 class="px-5 py-3 border border-white/8 text-white/40 text-sm font-bold rounded-2xl transition-all hover:bg-white/5 hover:text-white">
-                Отмена
+                {{ langStore.t.cancel }}
               </button>
               <button @click="submitCreate" :disabled="isCreating || !form.title.trim()"
                 class="flex-1 flex items-center justify-center gap-2 py-3 disabled:opacity-35 disabled:cursor-not-allowed text-white text-sm font-bold rounded-2xl transition-all shadow-lg hover:opacity-90"
                 :style="form.title.trim() ? 'background: linear-gradient(135deg, #3148FF, #4C67CF)' : 'background: rgba(255,255,255,0.06)'">
                 <span v-if="isCreating" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 <BIcon v-else name="Rocket" class="w-4 h-4" />
-                {{ isCreating ? 'Создание…' : 'Опубликовать' }}
+                {{ isCreating ? langStore.t.creatingBtn : langStore.t.dealersDenPublishBtn }}
               </button>
             </div>
 
@@ -1192,7 +1192,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   <BIcon name="Pencil" class="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h2 class="text-base font-black text-white">Редактировать</h2>
+                  <h2 class="text-base font-black text-white">{{ langStore.t.dealersDenEditTitle }}</h2>
                   <p class="text-xs text-white/25 mt-0.5">Dealers' Den · Bloomly</p>
                 </div>
               </div>
@@ -1204,20 +1204,20 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
           <div class="flex-1 overflow-y-auto p-6 space-y-4">
             <div>
-              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Название</label>
+              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenTitleLabel }}</label>
               <input v-model="editForm.title" maxlength="200" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
             </div>
             <div>
-              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Описание</label>
+              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.fursuitDescLabel }}</label>
               <textarea v-model="editForm.description" rows="3" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all resize-none" />
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Цена</label>
+                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenPriceLabel }}</label>
                 <input v-model.number="editForm.price" type="number" min="0" step="0.01" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
               </div>
               <div>
-                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Валюта</label>
+                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenCurrencyLabel }}</label>
                 <select v-model="editForm.currency" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all appearance-none">
                   <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
                 </select>
@@ -1225,28 +1225,28 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Количество</label>
+                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenQuantityLabel }}</label>
                 <input v-model.number="editForm.quantity" type="number" min="1" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
               </div>
               <div>
-                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">Статус</label>
+                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.statusFieldLabel }}</label>
                 <select v-model="editForm.status" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all appearance-none">
-                  <option value="active">Активно</option>
-                  <option value="sold">Продано</option>
-                  <option value="draft">Черновик</option>
-                  <option value="archived">Архив</option>
+                  <option value="active">{{ langStore.t.dealersDenStatusActiveLabel }}</option>
+                  <option value="sold">{{ langStore.t.dealersDenSoldBadge }}</option>
+                  <option value="draft">{{ langStore.t.dealersDenDraftBadge }}</option>
+                  <option value="archived">{{ langStore.t.archiveBtn }}</option>
                 </select>
               </div>
             </div>
             <div class="flex gap-3 pt-1">
               <div v-if="editError" class="w-full text-red-400 text-xs font-medium bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">{{ editError }}</div>
-              <button @click="tryCloseEdit()" class="px-5 py-3 border border-white/8 text-white/40 text-sm font-bold rounded-2xl transition-all hover:bg-white/5 hover:text-white">Отмена</button>
+              <button @click="tryCloseEdit()" class="px-5 py-3 border border-white/8 text-white/40 text-sm font-bold rounded-2xl transition-all hover:bg-white/5 hover:text-white">{{ langStore.t.cancel }}</button>
               <button @click="submitEdit" :disabled="isUpdating"
                 class="flex-1 flex items-center justify-center gap-2 py-3 disabled:opacity-35 text-white text-sm font-bold rounded-2xl transition-all hover:opacity-90"
                 style="background: linear-gradient(135deg, #F59E0B, #EF4444)">
                 <span v-if="isUpdating" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 <BIcon v-else name="Check" class="w-4 h-4" />
-                {{ isUpdating ? 'Сохранение…' : 'Сохранить' }}
+                {{ isUpdating ? langStore.t.savingLabel : langStore.t.dealersDenSaveBtn }}
               </button>
             </div>
           </div>
@@ -1272,7 +1272,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   <BIcon name="Hammer" class="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h2 class="text-base font-black text-white">Сделать ставку</h2>
+                  <h2 class="text-base font-black text-white">{{ langStore.t.dealersDenPlaceBidTitle }}</h2>
                   <p v-if="bidListing" class="text-xs text-white/25 mt-0.5 line-clamp-1">{{ bidListing.title }}</p>
                 </div>
               </div>
@@ -1285,14 +1285,14 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
           <div class="p-6 space-y-4">
             <div v-if="bidListing" class="flex items-center justify-between bg-brand-yellow/8 border border-brand-yellow/15 rounded-2xl p-4">
               <div>
-                <p class="text-[9px] text-white/30 uppercase tracking-wider mb-1">Текущая ставка</p>
+                <p class="text-[9px] text-white/30 uppercase tracking-wider mb-1">{{ langStore.t.dealersDenCurrentBid }}</p>
                 <p class="text-brand-yellow font-extrabold text-2xl tabular-nums leading-none">
                   {{ formatPrice(bidListing.current_bid ?? bidListing.price, bidListing.currency) }}
                 </p>
-                <p class="text-xs text-white/25 mt-1.5">Ставок: {{ bidListing.bid_count ?? 0 }}</p>
+                <p class="text-xs text-white/25 mt-1.5">{{ langStore.t.dealersDenBidsCountLabel }} {{ bidListing.bid_count ?? 0 }}</p>
               </div>
               <div class="text-right">
-                <p class="text-[9px] text-white/30 uppercase tracking-wider mb-1">До конца</p>
+                <p class="text-[9px] text-white/30 uppercase tracking-wider mb-1">{{ langStore.t.dealersDenUntilEndLabel }}</p>
                 <p class="text-xl font-black tabular-nums" :class="isAuctionHot(bidListing.auction_ends_at) ? 'text-brand-error' : 'text-white'">
                   {{ formatCountdown(bidListing.auction_ends_at) || '—' }}
                 </p>
@@ -1301,9 +1301,9 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
             <div>
               <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">
-                Ваша ставка
+                {{ langStore.t.dealersDenYourBidLabel }}
                 <span v-if="bidListing" class="text-white/20 normal-case font-normal">
-                  (мин. {{ formatPrice((parseFloat(String(bidListing.current_bid ?? bidListing.price)) + parseFloat(String(bidListing.bid_increment ?? 1))).toFixed(2), bidListing.currency) }})
+                  ({{ langStore.t.dealersDenMinPrefix }} {{ formatPrice((parseFloat(String(bidListing.current_bid ?? bidListing.price)) + parseFloat(String(bidListing.bid_increment ?? 1))).toFixed(2), bidListing.currency) }})
                 </span>
               </label>
               <div class="relative">
@@ -1315,9 +1315,9 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
             <div>
               <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">
-                Сообщение <span class="text-white/15 normal-case font-normal">(необязательно)</span>
+                {{ langStore.t.helpMessageLabel }} <span class="text-white/15 normal-case font-normal">{{ langStore.t.dealersDenOptionalHint }}</span>
               </label>
-              <textarea v-model="bidMessage" rows="2" placeholder="Привет! Обожаю твои работы…"
+              <textarea v-model="bidMessage" rows="2" :placeholder="langStore.t.dealersDenBidMessagePlaceholder"
                 class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/15 outline-none resize-none transition-all" />
             </div>
 
@@ -1326,13 +1326,13 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             </div>
 
             <div class="flex gap-3">
-              <button @click="showBidModal = false" class="px-5 py-3 border border-white/8 text-white/40 text-sm font-bold rounded-2xl hover:bg-white/5 hover:text-white transition-all">Отмена</button>
+              <button @click="showBidModal = false" class="px-5 py-3 border border-white/8 text-white/40 text-sm font-bold rounded-2xl hover:bg-white/5 hover:text-white transition-all">{{ langStore.t.cancel }}</button>
               <button @click="submitBid" :disabled="isBidding || bidAmount <= 0"
                 class="flex-1 flex items-center justify-center gap-2 py-3 disabled:opacity-35 text-white text-sm font-extrabold rounded-2xl transition-all hover:opacity-90 shadow-lg"
                 style="background: linear-gradient(135deg, #FFC01F, #E76F51)">
                 <span v-if="isBidding" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 <BIcon v-else name="Hammer" class="w-4 h-4" />
-                {{ isBidding ? 'Отправка…' : 'Подтвердить ставку' }}
+                {{ isBidding ? langStore.t.helpSubmitting : langStore.t.dealersDenConfirmBidBtn }}
               </button>
             </div>
           </div>
@@ -1355,31 +1355,31 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 style="background: rgba(225,70,100,0.15); border: 1px solid rgba(225,70,100,0.3)">
                 🔞
               </div>
-              <h2 class="text-lg font-extrabold text-white mb-2">Контент 18+</h2>
+              <h2 class="text-lg font-extrabold text-white mb-2">{{ langStore.t.dealersDenNsfwContentLabel }}</h2>
               <p class="text-sm text-white/55 leading-relaxed">
-                Этот лот предназначен только для взрослых.<br>
-                {{ canUseNsfw ? 'Включи NSFW-режим, чтобы просматривать такие материалы.' : 'Подтверди дату рождения в настройках профиля, чтобы просматривать такие материалы.' }}
+                {{ langStore.t.dealersDenNsfwLotWarning }}<br>
+                {{ canUseNsfw ? langStore.t.dealersDenEnableNsfwHint : langStore.t.dealersDenConfirmBirthDateHint }}
               </p>
             </div>
             <div class="mx-6 mb-5 px-4 py-3 rounded-2xl flex items-start gap-2.5"
               style="background: rgba(225,70,100,0.08); border: 1px solid rgba(225,70,100,0.2)">
               <BIcon name="AlertTriangle" class="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
               <p class="text-xs text-rose-300/80 leading-relaxed">
-                Подтверждая, ты заявляешь что тебе есть 18 лет и ты согласен с
-                <span class="text-rose-400 font-semibold">правилами платформы</span>.
+                {{ langStore.t.dealersDenNsfwAgreeText }}
+                <span class="text-rose-400 font-semibold">{{ langStore.t.dealersDenPlatformRulesLabel }}</span>.
               </p>
             </div>
             <div class="flex gap-3 px-6 pb-6">
               <button
                 @click="showNsfwConfirm = false"
                 class="flex-1 py-2.5 rounded-2xl text-sm font-bold text-white/50 bg-white/5 hover:bg-white/10 border border-brand-border transition-all">
-                Отмена
+                {{ langStore.t.cancel }}
               </button>
               <button
                 @click="handleEnableNsfw(); showNsfwConfirm = false"
                 class="flex-1 py-2.5 rounded-2xl text-sm font-bold text-white transition-all shadow-lg"
                 style="background: linear-gradient(135deg, #c0392b, #e14664); box-shadow: 0 4px 20px rgba(225,70,100,0.3)">
-                {{ canUseNsfw ? 'Мне 18+, включить' : 'Подтвердить возраст' }}
+                {{ canUseNsfw ? langStore.t.dealersDenEnableNsfwBtn : langStore.t.dealersDenConfirmAgeBtn }}
               </button>
             </div>
           </div>

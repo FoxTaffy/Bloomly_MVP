@@ -3,7 +3,7 @@
   <div v-if="isHidden" class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-sm">
     <div class="flex items-center justify-between px-5 py-3.5">
       <span class="text-sm text-white/35">Пост скрыт</span>
-      <button @click="isHidden = false" class="text-xs text-brand-accent/70 hover:text-brand-accent transition-colors">Отменить</button>
+      <button @click="undoNotInterested" class="text-xs text-brand-accent/70 hover:text-brand-accent transition-colors">Отменить</button>
     </div>
   </div>
 
@@ -42,8 +42,8 @@
 
       <!-- ── Header ────────────────────────────────────────────────────── -->
       <div class="flex items-start justify-between gap-3 mb-4">
-        <div class="flex items-center gap-3 min-w-0 cursor-pointer"
-          @click="effectiveGroupContext ? router.push(`/groups/${effectiveGroupContext.slug}`) : (post.author?.username ? router.push(`/profile/${post.author.username}`) : null)">
+        <component :is="identityTo ? 'router-link' : 'div'" :to="identityTo ?? undefined"
+          class="flex items-center gap-3 min-w-0 cursor-pointer">
           <!-- Avatar -->
           <div class="relative flex-shrink-0">
             <img
@@ -90,7 +90,7 @@
                 <span v-if="(post.author as any).deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
                 <VerificationBadge v-if="post.author.is_verified"
                   :type="(post.author as any).verification_type"
-                  img-class="w-4 h-4 flex-shrink-0" />
+                  icon-class="w-4 h-4 flex-shrink-0" />
                 <!-- AD badge -->
                 <span v-if="post.author?.role === 'ad'"
                   class="inline-flex items-center gap-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded-md">
@@ -106,7 +106,7 @@
             <p v-if="effectiveGroupContext" class="text-xs text-white/55 truncate">@{{ effectiveGroupContext.slug }} · {{ fmtDate(post.created_at) }}</p>
             <p v-else class="text-xs text-white/55 truncate">@{{ post.author.username }} · {{ fmtDate(post.created_at) }}</p>
           </div>
-        </div>
+        </component>
 
         <!-- Right: NSFW badge + context menu -->
         <div class="flex items-center gap-2 flex-shrink-0">
@@ -221,8 +221,8 @@
       <!-- ── Reward for banner ───────────────────────────────────────── -->
       <div v-if="post.rewardForUser" class="flex items-center gap-2 mb-3 mt-1">
         <span class="text-xs text-white/40 font-medium">Reward for</span>
-        <button
-          @click.stop="router.push(`/profile/${post.rewardForUser.username}`)"
+        <router-link
+          :to="`/profile/${post.rewardForUser.username}`"
           class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-brand-bg border border-brand-border hover:border-brand-accent/40 transition-colors"
         >
           <img v-if="post.rewardForUser.avatar_url" :src="post.rewardForUser.avatar_url" class="w-4 h-4 rounded-full object-cover" @error="onAvatarError" />
@@ -230,7 +230,7 @@
             {{ (post.rewardForUser.display_name || post.rewardForUser.username || '?')[0].toUpperCase() }}
           </div>
           <span class="text-xs text-white/80 font-semibold">{{ post.rewardForUser.display_name || post.rewardForUser.username }}</span>
-        </button>
+        </router-link>
       </div>
 
       <!-- ── Content ───────────────────────────────────────────────────── -->
@@ -269,11 +269,12 @@
               <template v-for="seg in displayContent" :key="seg.key">
                 <span v-if="seg.type === 'text'">{{ seg.text }}</span>
                 <!-- ── MENTION PILL ── -->
-                <span v-else
+                <router-link v-else
+                  :to="mentionHref(seg.username!)"
                   class="mention-pill inline-flex items-center gap-1 pl-0.5 pr-2 py-0.5 bg-brand-accent/15 border border-brand-accent/30 text-brand-accent text-[13px] font-semibold cursor-pointer hover:bg-brand-accent/25 transition-all align-middle"
                   :class="mentionGroups[seg.username!] ? 'rounded-xl' : 'rounded-full'"
                   style="vertical-align: middle; white-space: nowrap;"
-                  @click.stop="goToMention(seg.username!)"
+                  @click.stop
                   @mouseenter="onMentionEnter(seg.username!, $event)"
                   @mouseleave="onMentionLeave()"
                 >
@@ -295,7 +296,7 @@
                   </span>
                   <!-- Label: group name or @username -->
                   <span class="leading-none">{{ mentionGroups[seg.username!] ? mentionGroups[seg.username!]!.name : seg.username }}</span>
-                </span>
+                </router-link>
               </template>
             </template>
           </p>
@@ -466,13 +467,14 @@
             class="px-3 py-1 bg-brand-accent/20 text-brand-accent text-xs font-bold rounded-full border border-brand-accent/30">
             {{ post.category }}
           </span>
-          <span
+          <router-link
             v-for="tag in post.tags" :key="tag.tag?.id ?? tag.id"
-            @click.stop="goToTag(tag.tag?.name ?? tag.name)"
+            :to="{ path: '/search', query: { q: tag.tag?.name ?? tag.name } }"
+            @click.stop
             class="px-3 py-1 bg-brand-bg text-white/55 text-xs font-medium rounded-full border border-brand-border hover:bg-brand-border hover:text-white cursor-pointer transition-colors"
           >
             #{{ tag.tag?.name ?? tag.name }}
-          </span>
+          </router-link>
         </div>
       </div>
 
@@ -761,10 +763,6 @@ const router = useRouter()
 const authStore = useAuthStore()
 const langStore = useLangStore()
 
-function goToTag(name: string) {
-  router.push({ path: '/search', query: { q: name } })
-}
-
 // ── Auto-translate ────────────────────────────────────────────────────────
 const {
   translatedText: postTranslated,
@@ -972,6 +970,14 @@ const effectiveGroupContext = computed(() =>
   props.groupContext ?? (props.post.groupPosts?.[0]?.group ?? null)
 )
 
+// Real link target for the header identity block, so middle-click / ctrl+click
+// open a new tab like any other browser link.
+const identityTo = computed<string | null>(() => {
+  if (effectiveGroupContext.value) return `/groups/${effectiveGroupContext.value.slug}`
+  if (props.post.author?.username) return `/profile/${props.post.author.username}`
+  return null
+})
+
 // Top-rated comment — included by the backend in post.comments[0] when rating > 0
 const topComment = computed(() => {
   const c = props.post.comments?.[0]
@@ -1129,21 +1135,12 @@ async function toggleFollow() {
   } catch {}
 }
 
-async function goToMention(username: string) {
-  // Check if it's a known group first (from already-loaded data)
-  if (mentionGroups.value[username]) {
-    router.push(`/groups/${mentionGroups.value[username]!.slug}`)
-    return
-  }
-  try {
-    const r = await api.get(`/users/search?q=${encodeURIComponent(username)}`)
-    const users: any[] = r.data.data?.users ?? []
-    const found = users.find((u: any) => u.username.toLowerCase() === username.toLowerCase())
-    if (found) { router.push(`/profile/${found.username}`); return }
-    // Not a user — try group
-    const groupSlug = username.toLowerCase()
-    router.push(`/groups/${groupSlug}`)
-  } catch {}
+// Mentions are resolved eagerly on mount (loadMentionUsers), so by render
+// time we already know whether a mention points at a group or a user.
+function mentionHref(username: string): string {
+  const group = mentionGroups.value[username]
+  if (group) return `/groups/${group.slug}`
+  return `/profile/${username}`
 }
 
 function openLightbox(index: number) {
@@ -1215,6 +1212,12 @@ async function copyPostLink() {
 function markNotInterested() {
   showMenu.value = false
   isHidden.value = true
+  api.post(`/posts/${props.post.id}/not-interested`, { value: true }).catch(() => {})
+}
+
+function undoNotInterested() {
+  isHidden.value = false
+  api.post(`/posts/${props.post.id}/not-interested`, { value: false }).catch(() => {})
 }
 
 async function toggleNotify() {

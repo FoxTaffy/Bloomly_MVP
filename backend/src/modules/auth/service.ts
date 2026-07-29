@@ -243,7 +243,14 @@ export class AuthService {
     const taken = await prisma.user.findFirst({ where: { email: { equals: ne, mode: 'insensitive' }, deleted_at: null } });
     if (taken) throw new Error('Этот email уже используется');
 
-    await prisma.user.update({ where: { id: userId }, data: { email: ne, email_verified: true } });
+    try {
+      await prisma.user.update({ where: { id: userId }, data: { email: ne, email_verified: true } });
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new Error('Этот email уже используется');
+      }
+      throw error;
+    }
     return ne;
   }
 

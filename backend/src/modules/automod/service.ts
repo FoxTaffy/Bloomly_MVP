@@ -83,7 +83,7 @@ export interface AnalysisResult {
 
 /** Any single TOXIC_PATTERNS hit rejects — unlike analyzeContent's shouldAct threshold
  *  (tuned for full posts, needs 2+ hits), this is for validating short user-authored
- *  strings (quick-reply templates, welcome DM text) where one slur is enough to reject. */
+ *  strings (e.g. a group's welcome-message text) where one slur is enough to reject. */
 export function containsToxicLanguage(text: string): boolean {
   return TOXIC_PATTERNS.some((p) => p.test(text));
 }
@@ -242,6 +242,23 @@ export async function checkMessageBurstRate(senderId: string): Promise<{ isSpam:
   if (per10s    >= MESSAGE_BURST_PER_10S)   return { isSpam: true, reason: `Аномальный всплеск сообщений: ${per10s} за 10 секунд` };
   if (perMinute >= MESSAGE_SPAM_PER_MINUTE) return { isSpam: true, reason: `Слишком много сообщений за минуту (${perMinute})` };
   if (perHour   >= MESSAGE_SPAM_PER_HOUR)   return { isSpam: true, reason: `Слишком много сообщений за час (${perHour})` };
+  return { isSpam: false, reason: '' };
+}
+
+// ── Group chat message burst / spam frequency check ───────────────────────────
+// GroupMessage is a separate table from Message (DMs), so it needs its own rate
+// check — checkMessageBurstRate only ever sees direct-message rows.
+export async function checkGroupMessageBurstRate(senderId: string): Promise<{ isSpam: boolean; reason: string }> {
+  const now = Date.now();
+  const [per10s, perMinute, perHour] = await Promise.all([
+    prisma.groupMessage.count({ where: { user_id: senderId, deleted_at: null, created_at: { gte: new Date(now - 10_000) } } }),
+    prisma.groupMessage.count({ where: { user_id: senderId, deleted_at: null, created_at: { gte: new Date(now - 60_000) } } }),
+    prisma.groupMessage.count({ where: { user_id: senderId, deleted_at: null, created_at: { gte: new Date(now - 3_600_000) } } }),
+  ]);
+
+  if (per10s    >= MESSAGE_BURST_PER_10S)   return { isSpam: true, reason: `Аномальный всплеск сообщений в группе: ${per10s} за 10 секунд` };
+  if (perMinute >= MESSAGE_SPAM_PER_MINUTE) return { isSpam: true, reason: `Слишком много сообщений в группе за минуту (${perMinute})` };
+  if (perHour   >= MESSAGE_SPAM_PER_HOUR)   return { isSpam: true, reason: `Слишком много сообщений в группе за час (${perHour})` };
   return { isSpam: false, reason: '' };
 }
 
@@ -485,6 +502,35 @@ export async function moderateMessage(senderId: string): Promise<void> {
   } else {
     await applyAction(senderId, 'warn', 'spam', `Спам в личных сообщениях: ${rateCheck.reason}. Если это повторится, аккаунт будет заморожен.`, 'message_spam');
     console.log(`[AUTOMOD] MESSAGE_SPAM_WARN user=${senderId} reason=${rateCheck.reason}`);
+  }
+}
+
+// ── Main entry: called on group chat message send ─────────────────────────────
+// Same shape as moderateMessage but tracked separately (own rate check + own
+// warn window) since group chat messages live in GroupMessage, not Message.
+export async function moderateGroupMessage(senderId: string): Promise<void> {
+  if (!(await getSetting('automod_enabled'))) return; // admin-disabled — manual moderation only
+
+  const user = await prisma.user.findUnique({ where: { id: senderId }, select: { deleted_at: true, frozen_at: true, role: true } });
+  if (!user || user.deleted_at || user.frozen_at) return;
+  if (isModerator(user.role)) return; // staff exempt
+
+  const rateCheck = await checkGroupMessageBurstRate(senderId);
+  if (!rateCheck.isSpam) return;
+
+  const priorWarn = await prisma.autoModLog.findFirst({
+    where: {
+      user_id: senderId, action: 'warn', category: 'spam', details: 'group_message_spam',
+      created_at: { gte: new Date(Date.now() - MESSAGE_SPAM_WARN_WINDOW_MS) },
+    },
+  });
+
+  if (priorWarn) {
+    await applyAction(senderId, 'freeze', 'spam', `Спам в групповом чате продолжился после предупреждения: ${rateCheck.reason}`, 'group_message_spam');
+    console.log(`[AUTOMOD] GROUP_MESSAGE_SPAM_FREEZE user=${senderId} reason=${rateCheck.reason}`);
+  } else {
+    await applyAction(senderId, 'warn', 'spam', `Спам в групповом чате: ${rateCheck.reason}. Если это повторится, аккаунт будет заморожен.`, 'group_message_spam');
+    console.log(`[AUTOMOD] GROUP_MESSAGE_SPAM_WARN user=${senderId} reason=${rateCheck.reason}`);
   }
 }
 

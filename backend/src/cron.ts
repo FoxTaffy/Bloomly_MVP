@@ -3,6 +3,9 @@ import prisma from './config/prisma.js';
 import { patrolSuspiciousActivity } from './modules/automod/service.js';
 import { activityService } from './modules/activities/service.js';
 import { dealersDenService } from './modules/dealers-den/service.js';
+import { pollSupportInbox } from './modules/support/mailPoller.js';
+import { scheduledPostService } from './modules/posts/scheduledService.js';
+import { deleteFileByUrl } from './modules/media/service.js';
 
 export function initCronJobs() {
   console.log('[CRON] Initializing background tasks...');
@@ -17,6 +20,20 @@ export function initCronJobs() {
     try {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      // Gather every S3 file about to be hard-deleted below, mirroring those WHERE clauses.
+      // In steady state this is nearly empty — deletePost()/deleteComment() already purge S3
+      // immediately on soft-delete — this is the safety net for rows that bypass those paths
+      // (replies of a soft-deleted comment, comments left on a soft-deleted post).
+      const [expiringPosts, expiringComments, replyComments, postComments] = await Promise.all([
+        prisma.post.findMany({ where: { deleted_at: { lte: thirtyDaysAgo } }, select: { media_urls: true, media_original_urls: true } }),
+        prisma.comment.findMany({ where: { deleted_at: { lte: thirtyDaysAgo } }, select: { file_url: true } }),
+        prisma.comment.findMany({ where: { parent: { deleted_at: { lte: thirtyDaysAgo } } }, select: { file_url: true } }),
+        prisma.comment.findMany({ where: { post: { deleted_at: { lte: thirtyDaysAgo } } }, select: { file_url: true } }),
+      ]);
+      const expiringMediaUrls: string[] = [];
+      expiringPosts.forEach((p) => expiringMediaUrls.push(...p.media_urls, ...p.media_original_urls));
+      [...expiringComments, ...replyComments, ...postComments].forEach((c) => { if (c.file_url) expiringMediaUrls.push(c.file_url); });
 
       // Run all deletions in a single transaction for atomicity.
       // Order matters: delete child rows BEFORE parent rows to satisfy FK constraints.
@@ -47,6 +64,11 @@ export function initCronJobs() {
         // 6. Purge expired or revoked refresh tokens
         prisma.$executeRaw`DELETE FROM "RefreshToken" WHERE "expires_at" < NOW() OR "revoked" = true`,
       ]);
+
+      if (expiringMediaUrls.length > 0) {
+        await Promise.all(expiringMediaUrls.map((url) => deleteFileByUrl(url)));
+        console.log(`[CRON] Purged ${expiringMediaUrls.length} S3 file(s) belonging to hard-deleted rows.`);
+      }
 
       console.log('[CRON] DB Cleanup completed successfully.');
     } catch (err: any) {
@@ -82,6 +104,27 @@ export function initCronJobs() {
       await dealersDenService.autoResolveDisputes();
     } catch (err: any) {
       console.error('[CRON] autoResolveDisputes error:', err.message);
+    }
+  });
+
+  // Support inbox: poll bloomly_support@pm.me (via Proton Bridge) for new/replied messages — every minute
+  cron.schedule('*/1 * * * *', async () => {
+    try {
+      await pollSupportInbox();
+    } catch (err: any) {
+      console.error('[CRON] Support inbox poll error:', err.message);
+    }
+  });
+
+  // Scheduled posts: publish due drafts/scheduled posts (and roll recurring ones forward) — every minute
+  cron.schedule('*/1 * * * *', async () => {
+    try {
+      const published = await scheduledPostService.publishDueOnes();
+      if (published > 0) {
+        console.log(`[CRON] Scheduled posts: published ${published} post(s)`);
+      }
+    } catch (err: any) {
+      console.error('[CRON] Scheduled posts publish error:', err.message);
     }
   });
 

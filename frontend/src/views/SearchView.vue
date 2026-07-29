@@ -167,7 +167,7 @@ onMounted(fetchTrendingTags)
                     <button @click="activeTab = 'people'" class="text-xs text-brand-accent hover:text-white font-semibold">Показать всех</button>
                   </div>
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button v-for="user in users.slice(0, 6)" :key="user.id" @click="router.push(`/profile/${user.username}`)"
+                    <router-link v-for="user in users.slice(0, 6)" :key="user.id" :to="`/profile/${user.username}`"
                       class="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors text-left">
                       <img :src="user.avatar_url || '/icons/badges/NN.jpg'"
                         class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0" @error="onAvatarError" />
@@ -175,7 +175,7 @@ onMounted(fetchTrendingTags)
                         <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
                         <p class="text-xs text-white/55 truncate">@{{ user.username }}</p>
                       </div>
-                    </button>
+                    </router-link>
                   </div>
                 </div>
 
@@ -185,7 +185,7 @@ onMounted(fetchTrendingTags)
                     <button @click="activeTab = 'groups'" class="text-xs text-brand-accent hover:text-white font-semibold">Показать все</button>
                   </div>
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button v-for="group in groups.slice(0, 6)" :key="group.id" @click="router.push(`/groups/${group.slug || group.id}`)"
+                    <router-link v-for="group in groups.slice(0, 6)" :key="group.id" :to="`/groups/${group.slug || group.id}`"
                       class="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors text-left">
                       <img v-if="group.avatar_url" :src="group.avatar_url"
                         class="w-10 h-10 rounded-xl object-cover border border-brand-border flex-shrink-0" @error="onAvatarError" />
@@ -196,7 +196,7 @@ onMounted(fetchTrendingTags)
                         <p class="text-sm font-semibold text-white truncate">{{ group.name }}</p>
                         <p class="text-xs text-white/55 truncate">{{ group.members_count ?? 0 }} участников</p>
                       </div>
-                    </button>
+                    </router-link>
                   </div>
                 </div>
 
@@ -243,8 +243,7 @@ onMounted(fetchTrendingTags)
                 <p class="text-white/55 text-sm">Группы не найдены</p>
               </div>
               <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                <GroupCard v-for="group in groups" :key="group.id" :group="group"
-                  @click="router.push(`/groups/${group.slug || group.id}`)" />
+                <GroupCard v-for="group in groups" :key="group.id" :group="group" />
               </div>
             </template>
           </template>

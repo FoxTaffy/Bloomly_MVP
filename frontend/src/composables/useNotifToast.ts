@@ -10,6 +10,9 @@ export interface NotifToast {
   message: string
   postId?: string
   convId?: string
+  /** Set when this is a member's message in their community/DM thread with a group. */
+  isGroupDm?: boolean
+  groupSlug?: string
   meta?: any
   createdAt: Date
 }
@@ -46,12 +49,14 @@ export function useNotifToast() {
   function addToast(notif: any) {
     const id = String(++counter)
     const sender = notif.sender ?? {}
+    // Actions taken "as" a group (group posts, group comments) mask the real sender.
+    const senderGroup = notif.senderGroup ?? null
     const isWarn = notif.type === 'automod_warn'
     const t: NotifToast = {
       id,
       type: notif.type ?? '',
-      senderName: isWarn ? 'Bloomly' : (sender.display_name || sender.username || 'Кто-то'),
-      senderAvatar: sender.avatar_url ?? null,
+      senderName: isWarn ? 'Bloomly' : (senderGroup?.name || sender.display_name || sender.username || 'Кто-то'),
+      senderAvatar: senderGroup?.avatar_url ?? sender.avatar_url ?? null,
       senderUsername: sender.username ?? '',
       message: isWarn
         ? `⚠️ Предупреждение ${notif.meta?.count ?? '?'} из ${notif.meta?.limit ?? 5}`
@@ -68,16 +73,18 @@ export function useNotifToast() {
   }
 
   /** New chat message — shown with the actual message preview instead of a generic label. */
-  function addMessageToast(opts: { senderName: string; senderAvatar: string | null; senderUsername: string; text: string; convId: string }) {
+  function addMessageToast(opts: { senderName: string; senderAvatar: string | null; senderUsername: string; text: string; convId: string; isGroupDm?: boolean; groupSlug?: string }) {
     const id = String(++counter)
     const t: NotifToast = {
       id,
-      type: 'MESSAGE',
+      type: opts.isGroupDm ? 'GROUP_DM' : 'MESSAGE',
       senderName: opts.senderName,
       senderAvatar: opts.senderAvatar,
       senderUsername: opts.senderUsername,
       message: opts.text,
       convId: opts.convId,
+      isGroupDm: opts.isGroupDm,
+      groupSlug: opts.groupSlug,
       createdAt: new Date(),
     }
     toasts.value.unshift(t)

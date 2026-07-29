@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useLangStore } from '@/stores/lang'
+import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
@@ -9,6 +9,7 @@ import BIcon from '../components/BIcon.vue'
 import MediaUpload from '../components/MediaUpload.vue'
 import PostLightbox from '../components/PostLightbox.vue'
 import ResolveReportModal from '../components/ResolveReportModal.vue'
+import StickerPackDetailModal from '../components/StickerPackDetailModal.vue'
 import { useConfirm } from '@/composables/useConfirm'
 
 const router = useRouter()
@@ -21,7 +22,7 @@ const myRole = computed<string>(() => (auth.user as any)?.role ?? 'user')
 const myRoleRank = computed(() => ROLE_RANK[myRole.value] ?? 0)
 const isOwnerRole = computed(() => myRole.value === 'owner')
 const isAdminPlus = computed(() => myRoleRank.value >= ROLE_RANK.admin)
-const roleLabel = (role: string) => ({ owner: 'Владелец', admin: 'Администратор', moderator: 'Модератор', user: 'Пользователь' }[role] ?? role)
+const roleLabel = (role: string) => ({ owner: langStore.t.roleOwner, admin: langStore.t.roleAdmin, moderator: langStore.t.roleModerator, user: langStore.t.roleUser }[role] ?? role)
 
 // Guard: staff only (moderator and above)
 onMounted(async () => {
@@ -36,7 +37,16 @@ onMounted(async () => {
 })
 
 // ── Tabs ──────────────────────────────────────────────────────────────
-const activeTab = ref<'overview' | 'users' | 'frozen' | 'archived' | 'posts' | 'reports' | 'appeals' | 'support' | 'ads' | 'verification' | 'banners' | 'automod' | 'statistics' | 'updates' | 'groups' | 'finance' | 'team' | 'broadcasts' | 'settings' | 'infra'>('overview')
+const activeTab = ref<'overview' | 'users' | 'posts' | 'reports' | 'support' | 'ads' | 'verification' | 'automod' | 'statistics' | 'updates' | 'groups' | 'finance' | 'settings'>('overview')
+
+// Users tab has four views: the user list, team & roles, frozen accounts, banned accounts (all merged in)
+const usersViewMode = ref<'all' | 'team' | 'frozen' | 'archived'>('all')
+// Reports tab has two views: user reports, or ban/freeze appeals (merged in)
+const reportsViewMode = ref<'reports' | 'appeals'>('reports')
+// Ads tab has two views: paid ad slots, or promo banners (merged in)
+const adsViewMode = ref<'ads' | 'banners'>('ads')
+// Updates ("Коммуникация") tab has two views: changelog posts, or push broadcasts (merged in)
+const commsViewMode = ref<'updates' | 'broadcasts'>('updates')
 
 // ── Stats ─────────────────────────────────────────────────────────────
 const stats = ref<any>(null)
@@ -60,16 +70,16 @@ const userQuickStats = ref({ newToday: 0, subscribers: 0, frozen: 0 })
 const isLoadingUsers = ref(false)
 let userSearchDebounce: ReturnType<typeof setTimeout>
 
-const userSortOptions = [
-  { value: 'privilege',    label: 'По привилегии' },
-  { value: 'newest',       label: 'Сначала новые' },
-  { value: 'oldest',       label: 'Сначала старые' },
-  { value: 'posts',        label: 'По постам' },
-  { value: 'followers',    label: 'По подписчикам' },
-  { value: 'subscription', label: 'По подписке' },
-  { value: 'username',     label: 'По имени' },
-]
-const userSortLabel = computed(() => userSortOptions.find(o => o.value === userSort.value)?.label ?? 'Сортировка')
+const userSortOptions = computed(() => [
+  { value: 'privilege',    label: langStore.t.adminSortPrivilege },
+  { value: 'newest',       label: langStore.t.adminSortNewest },
+  { value: 'oldest',       label: langStore.t.adminSortOldest },
+  { value: 'posts',        label: langStore.t.adminSortByPosts },
+  { value: 'followers',    label: langStore.t.adminSortByFollowers },
+  { value: 'subscription', label: langStore.t.adminSortBySubscription },
+  { value: 'username',     label: langStore.t.adminSortByUsername },
+])
+const userSortLabel = computed(() => userSortOptions.value.find(o => o.value === userSort.value)?.label ?? langStore.t.bookmarksSort)
 const userSortOpen = ref(false)
 const userSortRef = ref<HTMLElement | null>(null)
 const onClickOutsideUserSort = (e: MouseEvent) => {
@@ -82,9 +92,9 @@ const tierLabel = (tier?: string) => ({ lite: 'Lite', pro: 'Pro', business: 'Bus
 const tierColor = (tier?: string) => ({ lite: '#4C67CF', pro: '#a78bfa', business: '#f59e0b' }[tier ?? ''] ?? '#64748b')
 
 const userStatus = (user: any): { label: string; color: string } => {
-  if (user.deceased_at) return { label: 'Умер', color: '#94a3b8' }
-  if (user.frozen_at) return { label: 'Заморожен', color: '#38bdf8' }
-  return { label: 'Активен', color: '#66C770' }
+  if (user.deceased_at) return { label: langStore.t.adminStatusDeceased, color: '#94a3b8' }
+  if (user.frozen_at) return { label: langStore.t.adminStatusFrozen, color: '#38bdf8' }
+  return { label: langStore.t.activeLabel, color: '#66C770' }
 }
 
 const fetchUsers = async () => {
@@ -112,20 +122,20 @@ const selectUserSort = (value: typeof userSort.value) => {
 }
 
 // ── Sortable table headers — click a column to sort by it, click again to flip direction
-const userColumns = [
-  { label: 'Пользователь',  values: ['username', 'username_desc'] },
-  { label: 'Email',         values: ['email_asc', 'email_desc'] },
-  { label: 'Статус',        values: ['status_desc', 'status_asc'] },
-  { label: 'Регистрация',   values: ['newest', 'oldest'] },
-  { label: 'Постов',        values: ['posts', 'posts_asc'] },
-  { label: 'Подписчиков',   values: ['followers', 'followers_asc'] },
-  { label: 'Верификация',   values: ['verification_desc', 'verification_asc'] },
-] as const
-const userColumnDirection = (col: typeof userColumns[number]): 'asc' | 'desc' | null => {
+const userColumns = computed(() => [
+  { label: langStore.t.roleUser,             values: ['username', 'username_desc'] },
+  { label: 'Email',                          values: ['email_asc', 'email_desc'] },
+  { label: langStore.t.adminColStatus,       values: ['status_desc', 'status_asc'] },
+  { label: langStore.t.adminColRegistered,   values: ['newest', 'oldest'] },
+  { label: langStore.t.posts,                values: ['posts', 'posts_asc'] },
+  { label: langStore.t.followers,            values: ['followers', 'followers_asc'] },
+  { label: langStore.t.adminColVerification,  values: ['verification_desc', 'verification_asc'] },
+])
+const userColumnDirection = (col: typeof userColumns.value[number]): 'asc' | 'desc' | null => {
   const idx = (col.values as readonly string[]).indexOf(userSort.value)
   return idx === 0 ? 'desc' : idx === 1 ? 'asc' : null
 }
-const toggleUserColumnSort = (col: typeof userColumns[number]) => {
+const toggleUserColumnSort = (col: typeof userColumns.value[number]) => {
   const dir = userColumnDirection(col)
   selectUserSort((dir === 'desc' ? col.values[1] : col.values[0]) as typeof userSort.value)
 }
@@ -147,18 +157,18 @@ const updateUserSubscription = async (userId: string, tier: string) => {
 }
 
 // ── Per-row user tier / role dropdowns ──────────────────────────────────
-const tierMenuOptions = [
-  { value: 'free',     label: 'Без подписки' },
+const tierMenuOptions = computed(() => [
+  { value: 'free',     label: langStore.t.adminNoSubscription },
   { value: 'lite',     label: 'Lite' },
   { value: 'pro',      label: 'Pro' },
   { value: 'business', label: 'Business' },
-]
-const roleMenuOptions = [
-  { value: 'user',      label: 'Пользователь' },
-  { value: 'moderator', label: 'Модератор' },
-  { value: 'admin',     label: 'Администратор' },
-  { value: 'owner',     label: 'Владелец' },
-]
+])
+const roleMenuOptions = computed(() => [
+  { value: 'user',      label: langStore.t.roleUser },
+  { value: 'moderator', label: langStore.t.roleModerator },
+  { value: 'admin',     label: langStore.t.roleAdmin },
+  { value: 'owner',     label: langStore.t.roleOwner },
+])
 const activeUserMenu = ref<string | null>(null)
 const userMenuPos = ref({ top: 0, right: 0 })
 const toggleUserMenu = (key: string, e: MouseEvent) => {
@@ -192,7 +202,7 @@ const selectUserRole = (userId: string, role: string) => {
 }
 
 const deleteUser = async (userId: string) => {
-  if (!(await confirmDialog('Удалить пользователя?', { danger: true }))) return
+  if (!(await confirmDialog(langStore.t.adminConfirmDeleteUser, { danger: true }))) return
   try {
     await api.delete(`/admin/users/${userId}`)
     users.value = users.value.filter(u => u.id !== userId)
@@ -242,7 +252,7 @@ const onArchivedSearch = () => {
 }
 
 const restoreUser = async (userId: string) => {
-  if (!(await confirmDialog('Восстановить пользователя?'))) return
+  if (!(await confirmDialog(langStore.t.adminConfirmRestoreUser))) return
   try {
     await api.post(`/admin/users/${userId}/restore`)
     archivedUsers.value = archivedUsers.value.filter(u => u.id !== userId)
@@ -275,7 +285,7 @@ const onPostSearch = () => {
 }
 
 const deletePost = async (postId: string) => {
-  if (!(await confirmDialog('Удалить пост?', { danger: true }))) return
+  if (!(await confirmDialog(langStore.t.adminConfirmDeletePost, { danger: true }))) return
   try {
     await api.delete(`/admin/posts/${postId}`)
     posts.value = posts.value.filter(p => p.id !== postId)
@@ -335,7 +345,7 @@ const onFolderResolved = () => {
   folder.reports.forEach((r: any) => { if (r.status === 'pending') r.status = 'resolved' })
 }
 
-const REPORT_TARGET_LABEL: Record<string, string> = { post: 'Пост', group: 'Группа', listing: 'Лот', message: 'Сообщение', user: 'Профиль' }
+const REPORT_TARGET_LABEL = computed<Record<string, string>>(() => ({ post: langStore.t.adminReportTargetPost, group: langStore.t.adminReportTargetGroup, listing: langStore.t.adminReportTargetListing, message: langStore.t.messageBtn, user: langStore.t.viewProfile }))
 
 // ── Warning appeals ────────────────────────────────────────────────────
 const appeals = ref<any[]>([])
@@ -364,9 +374,15 @@ const supportFilter = ref<'' | 'open' | 'in_progress' | 'resolved' | 'closed'>('
 const isLoadingSupport = ref(false)
 const supportReplyDrafts = ref<Record<string, string>>({})
 
-const SUPPORT_TYPE_LABEL: Record<string, string> = { bug: 'Баг', feedback: 'Отзыв', question: 'Вопрос', other: 'Другое' }
-const SUPPORT_STATUS_LABEL: Record<string, string> = { open: 'Открыт', in_progress: 'В работе', resolved: 'Решён', closed: 'Закрыт' }
+const SUPPORT_TYPE_LABEL = computed<Record<string, string>>(() => ({ bug: langStore.t.helpTypeShortBug, feedback: langStore.t.helpTypeShortFeedback, question: langStore.t.helpTypeShortQuestion, other: langStore.t.other }))
+const SUPPORT_STATUS_LABEL = computed<Record<string, string>>(() => ({ open: langStore.t.helpStatusOpen, in_progress: langStore.t.helpStatusInProgress, resolved: langStore.t.helpStatusResolved, closed: langStore.t.helpStatusClosed }))
 const SUPPORT_STATUS_COLOR: Record<string, string> = { open: '#f59e0b', in_progress: '#38bdf8', resolved: '#10b981', closed: '#6b7280' }
+
+const supportSenderLabel = (m: any) => {
+  if (m.sender_type === 'admin') return `${langStore.t.adminSenderAdmin}${m.sender?.username ? ` (@${m.sender.username})` : ''}`
+  if (m.sender_type === 'external') return langStore.t.adminSenderExternal
+  return `${langStore.t.adminSenderUser}${m.sender?.username ? ` (@${m.sender.username})` : ''}`
+}
 
 const fetchSupportTickets = async () => {
   isLoadingSupport.value = true
@@ -426,7 +442,7 @@ const submitAd = async () => {
 }
 
 const deleteAd = async (adId: string) => {
-  if (!(await confirmDialog('Удалить объявление?', { danger: true }))) return
+  if (!(await confirmDialog(langStore.t.adminConfirmDeleteAd, { danger: true }))) return
   try {
     await api.delete(`/admin/ads/${adId}`)
     ads.value = ads.value.filter(a => a.id !== adId)
@@ -474,7 +490,7 @@ const reviewVerRequest = async (id: string, action: 'approve' | 'reject', reason
 // it), so a bare `prompt(...)` in `@click` silently resolves to `undefined` and
 // "Отклонить" appeared to do nothing. Calling it from a plain script function works.
 const rejectVerRequest = (id: string) => {
-  const reason = window.prompt('Причина:') || undefined
+  const reason = window.prompt(langStore.t.adminReasonPromptLabel) || undefined
   reviewVerRequest(id, 'reject', reason)
 }
 
@@ -484,17 +500,17 @@ const openEvidenceLightbox = (images: string[], start: number) => { evidenceLigh
 const postMediaLightbox = ref<{ images: string[]; start: number } | null>(null)
 const openPostMediaLightbox = (images: string[], start: number) => { postMediaLightbox.value = { images, start } }
 
-const verTypeLabels: Record<string, string> = {
-  artist: 'Художник',
-  master: 'Мастер',
-  fursuiter: 'Фурсьютер',
-  popular: 'Блогер',
-  writer: 'Писатель',
-  organizer: 'Организатор',
-  event: 'Мероприятие',
-  photographer: 'Фотограф',
-  programmer: 'Программист',
-}
+const verTypeLabels = computed<Record<string, string>>(() => ({
+  artist: langStore.t.verTypeArtist,
+  master: langStore.t.verTypeMaster,
+  fursuiter: langStore.t.verTypeFursuiter,
+  popular: langStore.t.verTypePopular,
+  writer: langStore.t.verTypeWriter,
+  organizer: langStore.t.verTypeOrganizer,
+  event: langStore.t.verTypeEvent,
+  photographer: langStore.t.verTypePhotographer,
+  programmer: langStore.t.verTypeProgrammer,
+}))
 const verTypeColors: Record<string, string> = {
   artist: 'text-purple-400 bg-purple-400/10 border-purple-400/20',
   master: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
@@ -505,6 +521,17 @@ const verTypeColors: Record<string, string> = {
   event: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
   photographer: 'text-teal-400 bg-teal-400/10 border-teal-400/20',
   programmer: 'text-fuchsia-400 bg-fuchsia-400/10 border-fuchsia-400/20',
+}
+const verTypeIcons: Record<string, string> = {
+  artist: 'Palette',
+  master: 'Hammer',
+  fursuiter: 'Shirt',
+  popular: 'TrendingUp',
+  writer: 'PenLine',
+  organizer: 'CalendarCheck',
+  event: 'Ticket',
+  photographer: 'Camera',
+  programmer: 'Code2',
 }
 
 // Tab switch data loading
@@ -543,18 +570,18 @@ const unfreezeUser = async (userId: string) => {
 }
 
 const freezeUser = async (userId: string) => {
-  const reason = prompt('Причина заморозки:') ?? ''
+  const reason = prompt(langStore.t.adminFreezeReasonPrompt) ?? ''
   if (!reason.trim()) return
   try {
     await api.post(`/admin/users/${userId}/freeze`, { reason })
     const u = users.value.find(u => u.id === userId)
     if (u) u.frozen_at = new Date().toISOString()
-    if (activeTab.value === 'frozen') await fetchFrozenUsers()
+    if (activeTab.value === 'users' && usersViewMode.value === 'frozen') await fetchFrozenUsers()
   } catch {}
 }
 
 const markDeceased = async (userId: string) => {
-  const note = prompt('Заметка (необязательно):') ?? undefined
+  const note = prompt(langStore.t.adminOptionalNotePrompt) ?? undefined
   try {
     await api.post(`/admin/users/${userId}/deceased`, { note: note || undefined })
     const u = users.value.find(u => u.id === userId)
@@ -648,13 +675,13 @@ const saveBanner = async () => {
       }
     }
   } catch (e: any) {
-    if (e?.response?.data?.code === 'LIMIT') bannerError.value = 'Достигнут лимит 7 баннеров'
-    else bannerError.value = 'Ошибка сохранения'
+    if (e?.response?.data?.code === 'LIMIT') bannerError.value = langStore.t.adminBannerLimitReached
+    else bannerError.value = langStore.t.adminSaveError
   }
 }
 
 const deleteBanner = async (id: string) => {
-  if (!(await confirmDialog('Удалить баннер?', { danger: true }))) return
+  if (!(await confirmDialog(langStore.t.adminConfirmDeleteBanner, { danger: true }))) return
   try {
     await api.delete(`/admin/sticker-banners/${id}`)
     banners.value = banners.value.filter(b => b.id !== id)
@@ -675,7 +702,7 @@ const toggleBannerActive = async (b: any) => {
 const stickerStats    = ref<any>(null)
 const networkStats    = ref<any>(null)
 const isLoadingStatistics = ref(false)
-const statsSubTab = ref<'stickers' | 'network'>('stickers')
+const statsSubTab = ref<'stickers' | 'network' | 'infra'>('stickers')
 
 const fetchStatistics = async () => {
   if (stickerStats.value && networkStats.value) return
@@ -692,13 +719,20 @@ const fetchStatistics = async () => {
 
 const barMax = (arr: { value: number }[]) => Math.max(...arr.map(x => x.value), 1)
 
+const packThumb = (pack: any) => pack.cover_url || pack.stickers?.[pack.cover_sticker_idx ?? 0] || pack.stickers?.[0] || ''
+
+// ── Sticker pack detail modal ───────────────────────────────────────────
+const openedPackId = ref<string | null>(null)
+const openStickerPackDetail = (packId: string) => { openedPackId.value = packId }
+const closeStickerPackDetail = () => { openedPackId.value = null }
+
 // ── Groups & Events ─────────────────────────────────────────────────────
 const groupsOverview = ref<any>(null)
 const isLoadingGroupsOverview = ref(false)
-const GROUP_TYPE_LABEL: Record<string, string> = {
-  event: 'Афиша', creative: 'Мастерская', artist: 'Художник', static: 'Паблик',
-  news: 'Новости', shop: 'Магазин', community: 'Сообщество', brand: 'Бренд',
-}
+const GROUP_TYPE_LABEL = computed<Record<string, string>>(() => ({
+  event: langStore.t.catEvent, creative: langStore.t.adminGroupTypeCreative, artist: langStore.t.verTypeArtist, static: langStore.t.adminGroupTypeStatic,
+  news: langStore.t.adminGroupTypeNews, shop: langStore.t.shop, community: langStore.t.adminGroupTypeCommunity, brand: langStore.t.adminGroupTypeBrand,
+}))
 const fetchGroupsOverview = async () => {
   if (groupsOverview.value) return
   isLoadingGroupsOverview.value = true
@@ -762,12 +796,12 @@ const inviteToStaff = async () => {
       inviteIdentifier.value = ''
     }
   } catch (e: any) {
-    inviteError.value = e?.response?.data?.error?.message || 'Пользователь не найден'
+    inviteError.value = e?.response?.data?.error?.message || langStore.t.userNotFound
   } finally { isInviting.value = false }
 }
 
 const removeFromStaff = async (member: any) => {
-  if (!(await confirmDialog(`Убрать ${member.display_name || member.username} из команды?`, { danger: true }))) return
+  if (!(await confirmDialog(`${langStore.t.adminConfirmRemoveFromTeamPrefix}${member.display_name || member.username}${langStore.t.adminConfirmRemoveFromTeamSuffix}`, { danger: true }))) return
   try {
     await api.patch(`/admin/users/${member.id}/role`, { role: 'user' })
     staff.value = staff.value.filter(s => s.id !== member.id)
@@ -776,7 +810,7 @@ const removeFromStaff = async (member: any) => {
 
 const suspendStaff = async (member: any) => {
   try {
-    await api.post(`/admin/users/${member.id}/freeze`, { reason: 'Приостановлен модератором из панели управления командой' })
+    await api.post(`/admin/users/${member.id}/freeze`, { reason: langStore.t.adminSuspendedByTeamPanelReason })
     const s = staff.value.find(s => s.id === member.id)
     if (s) s.frozen_at = new Date().toISOString()
   } catch {}
@@ -791,15 +825,15 @@ const reactivateStaff = async (member: any) => {
 }
 
 const relativeLastSeen = (d: string | null) => {
-  if (!d) return 'никогда'
+  if (!d) return langStore.t.adminNeverLabel
   const diffMs = Date.now() - new Date(d).getTime()
   const min = Math.floor(diffMs / 60000)
-  if (min < 1) return 'сейчас'
-  if (min < 60) return `${min} мин назад`
+  if (min < 1) return langStore.t.adminJustNowLabel
+  if (min < 60) return `${min}${langStore.t.adminMinutesAgoSuffix}`
   const hrs = Math.floor(min / 60)
-  if (hrs < 24) return `${hrs} ч назад`
+  if (hrs < 24) return `${hrs}${langStore.t.adminHoursAgoSuffix}`
   const days = Math.floor(hrs / 24)
-  if (days < 7) return `${days} дн назад`
+  if (days < 7) return `${days}${langStore.t.adminDaysAgoSuffix}`
   return formatDate(d)
 }
 
@@ -819,7 +853,7 @@ const fetchBroadcasts = async () => {
   } catch {} finally { isLoadingBroadcasts.value = false }
 }
 
-const AUDIENCE_LABEL: Record<string, string> = { all: 'Все пользователи', premium: 'Premium-подписчики', new: 'Новые пользователи (7 дн.)', staff: 'Модераторы' }
+const AUDIENCE_LABEL = computed<Record<string, string>>(() => ({ all: langStore.t.adminAudienceAll, premium: langStore.t.adminAudiencePremium, new: langStore.t.adminAudienceNew, staff: langStore.t.adminAudienceStaff }))
 
 const sendBroadcast = async () => {
   if (!broadcastTitle.value.trim() || !broadcastBody.value.trim() || isSendingBroadcast.value) return
@@ -840,11 +874,11 @@ const isLoadingSettings = ref(false)
 const auditLogs = ref<any[]>([])
 const isLoadingAuditLogs = ref(false)
 
-const SETTING_META: { key: 'open_registration' | 'automod_enabled' | 'maintenance_mode'; label: string; desc: string }[] = [
-  { key: 'open_registration', label: 'Открытая регистрация', desc: 'Разрешить новым пользователям создавать аккаунты' },
-  { key: 'automod_enabled',   label: 'Автомодерация ИИ',     desc: 'Автоматическая проверка новых постов и историй' },
-  { key: 'maintenance_mode',  label: 'Режим обслуживания',   desc: 'Временно закрыть доступ к платформе (кроме входа и админки)' },
-]
+const SETTING_META = computed<{ key: 'open_registration' | 'automod_enabled' | 'maintenance_mode'; label: string; desc: string }[]>(() => [
+  { key: 'open_registration', label: langStore.t.adminSettingOpenRegistration, desc: langStore.t.adminSettingOpenRegistrationDesc },
+  { key: 'automod_enabled',   label: langStore.t.adminSettingAutoModAI,        desc: langStore.t.adminSettingAutoModAIDesc },
+  { key: 'maintenance_mode',  label: langStore.t.adminSettingMaintenanceMode,  desc: langStore.t.adminSettingMaintenanceModeDesc },
+])
 
 const fetchSettingsAndLogs = async () => {
   isLoadingSettings.value = true
@@ -880,29 +914,29 @@ const AUDIT_ACTION_ICON: Record<string, string> = {
   activate_banner: 'Image', deactivate_banner: 'Image', settings_change: 'Settings',
   verify_profile: 'BadgeCheck', reject_verification: 'BadgeCheck',
 }
-const AUDIT_ACTION_LABEL: Record<string, (l: any) => string> = {
-  ban: (l) => `забанил(а) пользователя @${l.user?.username}`,
-  unban: (l) => `разбанил(а) пользователя @${l.user?.username}`,
-  freeze: (l) => `заморозил(а) @${l.user?.username}`,
-  unfreeze: (l) => `разморозил(а) @${l.user?.username}`,
-  warn: (l) => `выдал(а) предупреждение @${l.user?.username}`,
-  clear_warns: (l) => `сбросил(а) предупреждения @${l.user?.username}`,
-  delete_post: (l) => `удалил(а) пост @${l.user?.username}`,
-  pin_post: (l) => `закрепил(а) пост @${l.user?.username}`,
-  unpin_post: (l) => `открепил(а) пост @${l.user?.username}`,
-  role_change: (l) => `изменил(а) роль @${l.user?.username}`,
-  subscription_change: (l) => `изменил(а) подписку @${l.user?.username}`,
-  resolve_report: () => `решил(а) жалобы`,
-  dismiss_report: () => `отклонил(а) жалобы`,
-  approve_ad: () => `одобрил(а) рекламу`,
-  reject_ad: () => `отклонил(а) рекламу`,
-  activate_banner: () => `включил(а) баннер`,
-  deactivate_banner: () => `скрыл(а) баннер`,
+const AUDIT_ACTION_LABEL = computed<Record<string, (l: any) => string>>(() => ({
+  ban: (l) => `${langStore.t.auditActionBan} @${l.user?.username}`,
+  unban: (l) => `${langStore.t.auditActionUnban} @${l.user?.username}`,
+  freeze: (l) => `${langStore.t.auditActionFreeze} @${l.user?.username}`,
+  unfreeze: (l) => `${langStore.t.auditActionUnfreeze} @${l.user?.username}`,
+  warn: (l) => `${langStore.t.auditActionWarn} @${l.user?.username}`,
+  clear_warns: (l) => `${langStore.t.auditActionClearWarns} @${l.user?.username}`,
+  delete_post: (l) => `${langStore.t.auditActionDeletePost} @${l.user?.username}`,
+  pin_post: (l) => `${langStore.t.auditActionPinPost} @${l.user?.username}`,
+  unpin_post: (l) => `${langStore.t.auditActionUnpinPost} @${l.user?.username}`,
+  role_change: (l) => `${langStore.t.auditActionRoleChange} @${l.user?.username}`,
+  subscription_change: (l) => `${langStore.t.auditActionSubscriptionChange} @${l.user?.username}`,
+  resolve_report: () => langStore.t.auditActionResolveReport,
+  dismiss_report: () => langStore.t.auditActionDismissReport,
+  approve_ad: () => langStore.t.auditActionApproveAd,
+  reject_ad: () => langStore.t.auditActionRejectAd,
+  activate_banner: () => langStore.t.auditActionActivateBanner,
+  deactivate_banner: () => langStore.t.auditActionDeactivateBanner,
   settings_change: (l) => l.reason,
-  verify_profile: (l) => `верифицировал(а) профиль @${l.user?.username}`,
-  reject_verification: (l) => `отклонил(а) верификацию @${l.user?.username}`,
-}
-const auditActionText = (l: any) => (AUDIT_ACTION_LABEL[l.action] ?? (() => l.reason))(l)
+  verify_profile: (l) => `${langStore.t.auditActionVerifyProfile} @${l.user?.username}`,
+  reject_verification: (l) => `${langStore.t.auditActionRejectVerification} @${l.user?.username}`,
+}))
+const auditActionText = (l: any) => (AUDIT_ACTION_LABEL.value[l.action] ?? (() => l.reason))(l)
 const auditActorName = (l: any) => l.actor ? (l.actor.display_name || l.actor.username) : 'AutoMod'
 
 // ── Infrastructure ────────────────────────────────────────────────────────
@@ -917,16 +951,16 @@ const fetchInfraOverview = async () => {
   } catch {} finally { isLoadingInfra.value = false }
 }
 const formatBytes = (bytes: number) => {
-  if (!bytes) return '0 Б'
-  const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ']
+  const units = [langStore.t.adminUnitBytes, langStore.t.adminUnitKB, langStore.t.adminUnitMB, langStore.t.adminUnitGB, langStore.t.adminUnitTB]
+  if (!bytes) return `0 ${units[0]}`
   const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)))
   return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 2)} ${units[i]}`
 }
-const FOLDER_LABEL: Record<string, string> = {
-  posts: 'Изображения постов', avatars: 'Аватары', banners: 'Баннеры', stickers: 'Стикеры',
-  video: 'Видео', stories: 'Истории', other: 'Другое', messages: 'Вложения ЛС',
-  backgrounds: 'Фоны профиля', fursona: 'Фото фурсоны', fursuit: 'Фото фурсьюта', comments: 'Вложения комментариев',
-}
+const FOLDER_LABEL = computed<Record<string, string>>(() => ({
+  posts: langStore.t.adminFolderPostImages, avatars: langStore.t.adminFolderAvatars, banners: langStore.t.adminFolderBanners, stickers: langStore.t.stickers,
+  video: langStore.t.adminFolderVideo, stories: langStore.t.adminFolderStories, other: langStore.t.other, messages: langStore.t.adminFolderDmAttachments,
+  backgrounds: langStore.t.adminFolderProfileBackgrounds, fursona: langStore.t.adminFolderFursonaPhotos, fursuit: langStore.t.fursuitPhotoLabel, comments: langStore.t.adminFolderCommentAttachments,
+}))
 
 // ── Bloomly Updates ───────────────────────────────────────────────────────────
 const updates = ref<any[]>([])
@@ -963,7 +997,7 @@ const createUpdate = async () => {
 }
 
 const deleteUpdate = async (id: string) => {
-  if (!(await confirmDialog('Удалить обновление?', { danger: true }))) return
+  if (!(await confirmDialog(langStore.t.adminConfirmDeleteUpdate, { danger: true }))) return
   try {
     await api.delete(`/updates/${id}`)
     updates.value = updates.value.filter(u => u.id !== id)
@@ -981,53 +1015,63 @@ const toggleUpdate = async (id: string, is_active: boolean) => {
 }
 
 // Tab switch data loading
-const switchTab = (tab: typeof activeTab.value) => {
+const switchTab = (tab: typeof activeTab.value, opts?: { usersView?: typeof usersViewMode.value; reportsView?: typeof reportsViewMode.value }) => {
   activeTab.value = tab
   if (tab === 'users' && !users.value.length) fetchUsers()
-  if (tab === 'frozen' && !frozenUsers.value.length) fetchFrozenUsers()
-  if (tab === 'archived' && !archivedUsers.value.length) fetchArchivedUsers()
   if (tab === 'posts' && !posts.value.length) fetchPosts()
   if (tab === 'reports' && !reports.value.length) fetchReports()
-  if (tab === 'appeals' && !appeals.value.length) fetchAppeals()
   if (tab === 'support' && !supportTickets.value.length) fetchSupportTickets()
   if (tab === 'ads' && !ads.value.length) fetchAds()
   if (tab === 'verification' && !verRequests.value.length) fetchVerRequests()
-  if (tab === 'banners' && !banners.value.length) fetchBanners()
   if (tab === 'automod') fetchAutoModLogs()
   if (tab === 'statistics') fetchStatistics()
   if (tab === 'updates' && !updates.value.length) fetchUpdates()
   if (tab === 'groups') fetchGroupsOverview()
   if (tab === 'finance') fetchPremiumOverview()
-  if (tab === 'team' && !staff.value.length) fetchStaff()
-  if (tab === 'broadcasts') fetchBroadcasts()
   if (tab === 'settings') fetchSettingsAndLogs()
-  if (tab === 'infra') fetchInfraOverview()
+  if (opts?.usersView) switchUsersView(opts.usersView)
+  if (opts?.reportsView) switchReportsView(opts.reportsView)
+}
+
+const switchUsersView = (mode: typeof usersViewMode.value) => {
+  usersViewMode.value = mode
+  if (mode === 'team' && !staff.value.length) fetchStaff()
+  if (mode === 'frozen' && !frozenUsers.value.length) fetchFrozenUsers()
+  if (mode === 'archived' && !archivedUsers.value.length) fetchArchivedUsers()
+}
+
+const switchReportsView = (mode: typeof reportsViewMode.value) => {
+  reportsViewMode.value = mode
+  if (mode === 'appeals' && !appeals.value.length) fetchAppeals()
+}
+
+const switchAdsView = (mode: typeof adsViewMode.value) => {
+  adsViewMode.value = mode
+  if (mode === 'banners' && !banners.value.length) fetchBanners()
+}
+
+const switchCommsView = (mode: typeof commsViewMode.value) => {
+  commsViewMode.value = mode
+  if (mode === 'broadcasts' && !broadcasts.value.length) fetchBroadcasts()
 }
 
 const formatNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
-const formatDate = (d: string) => new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+const formatDate = (d: string) => new Date(d).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: '2-digit', month: '2-digit', year: '2-digit' })
 
 const navItems = computed(() => [
-  { tab: 'overview'     as const, label: 'Обзор',           icon: 'LayoutDashboard', color: '#4C67CF', group: null,          badge: null, minRole: 'moderator' },
-  { tab: 'users'        as const, label: 'Пользователи',   icon: 'Users',           color: '#94a3b8', group: 'МОДЕРАЦИЯ',   badge: userTotal.value > 0 ? formatNum(userTotal.value) : null, minRole: 'moderator' },
-  { tab: 'frozen'       as const, label: 'Заморожены',      icon: 'Snowflake',       color: '#38bdf8', group: 'МОДЕРАЦИЯ',   badge: frozenTotal.value > 0 ? String(frozenTotal.value) : null, minRole: 'moderator' },
-  { tab: 'archived'     as const, label: 'Забанены',        icon: 'Ban',             color: '#f43f5e', group: 'МОДЕРАЦИЯ',   badge: archivedTotal.value > 0 ? String(archivedTotal.value) : null, minRole: 'moderator' },
-  { tab: 'reports'      as const, label: 'Жалобы',          icon: 'Flag',            color: '#f59e0b', group: 'МОДЕРАЦИЯ',   badge: reports.value.filter((r:any) => r.status==='pending').length || null, minRole: 'moderator' },
-  { tab: 'appeals'      as const, label: 'Апелляции',       icon: 'Gavel',           color: '#a78bfa', group: 'МОДЕРАЦИЯ',   badge: appeals.value.length > 0 ? String(appeals.value.length) : null, minRole: 'moderator' },
-  { tab: 'support'      as const, label: 'Поддержка',       icon: 'LifeBuoy',        color: '#4C67CF', group: 'МОДЕРАЦИЯ',   badge: supportTickets.value.filter((t:any) => t.status==='open').length || null, minRole: 'moderator' },
-  { tab: 'automod'      as const, label: 'AutoMod',          icon: 'ShieldAlert',     color: '#ef4444', group: 'МОДЕРАЦИЯ',   badge: autoModTotal.value > 0 ? formatNum(autoModTotal.value) : null, minRole: 'moderator' },
-  { tab: 'posts'        as const, label: 'Посты',           icon: 'FileText',        color: '#94a3b8', group: 'КОНТЕНТ',     badge: null, minRole: 'moderator' },
-  { tab: 'verification' as const, label: 'Верификация',     icon: 'BadgeCheck',      color: '#2dd4bf', group: 'КОНТЕНТ',     badge: verRequests.value.filter((r:any) => r.status==='pending').length || null, minRole: 'moderator' },
-  { tab: 'ads'          as const, label: 'Реклама',         icon: 'Megaphone',       color: '#f97316', group: 'КОНТЕНТ',     badge: ads.value.filter((a:any) => a.status==='pending').length || null, minRole: 'admin' },
-  { tab: 'banners'      as const, label: 'Баннеры',         icon: 'Image',           color: '#a78bfa', group: 'КОНТЕНТ',     badge: null, minRole: 'admin' },
-  { tab: 'updates'      as const, label: 'Обновления',       icon: 'Sparkles',        color: '#4C67CF', group: 'КОНТЕНТ',     badge: updates.value.filter((u:any) => u.is_active).length || null, minRole: 'admin' },
-  { tab: 'groups'       as const, label: 'Группы и события', icon: 'LayoutGrid',      color: '#4C67CF', group: 'ПЛАТФОРМА',   badge: null, minRole: 'moderator' },
-  { tab: 'finance'      as const, label: 'Финансы и Premium', icon: 'Wallet',         color: '#a78bfa', group: 'ПЛАТФОРМА',   badge: null, minRole: 'admin' },
-  { tab: 'broadcasts'   as const, label: 'Уведомления',      icon: 'Send',            color: '#4C67CF', group: 'ПЛАТФОРМА',   badge: null, minRole: 'admin' },
-  { tab: 'infra'        as const, label: 'Инфраструктура',   icon: 'Server',          color: '#10b981', group: 'ПЛАТФОРМА',   badge: null, minRole: 'admin' },
-  { tab: 'team'         as const, label: 'Команда и роли',   icon: 'ShieldCheck',     color: '#f59e0b', group: 'ПЛАТФОРМА',   badge: null, minRole: 'admin' },
-  { tab: 'settings'     as const, label: 'Логи и настройки', icon: 'Settings',        color: '#94a3b8', group: 'ПЛАТФОРМА',   badge: null, minRole: 'admin' },
-  { tab: 'statistics'   as const, label: 'Статистика',       icon: 'BarChart2',       color: '#10b981', group: 'АНАЛИТИКА',   badge: null, minRole: 'admin' },
+  { tab: 'overview'     as const, label: langStore.t.adminNavOverview,        icon: 'LayoutDashboard', color: '#4C67CF', group: null,                      badge: null, minRole: 'moderator' },
+  { tab: 'users'        as const, label: langStore.t.adminNavUsers,          icon: 'Users',           color: '#94a3b8', group: langStore.t.adminGroupModeration, badge: userTotal.value > 0 ? formatNum(userTotal.value) : null, minRole: 'moderator' },
+  { tab: 'reports'      as const, label: langStore.t.adminNavReports,        icon: 'Flag',            color: '#f59e0b', group: langStore.t.adminGroupModeration, badge: reports.value.filter((r:any) => r.status==='pending').length || null, minRole: 'moderator' },
+  { tab: 'support'      as const, label: langStore.t.adminNavSupport,        icon: 'LifeBuoy',        color: '#4C67CF', group: langStore.t.adminGroupModeration, badge: supportTickets.value.filter((t:any) => t.status==='open').length || null, minRole: 'moderator' },
+  { tab: 'automod'      as const, label: 'AutoMod',                          icon: 'ShieldAlert',     color: '#ef4444', group: langStore.t.adminGroupModeration, badge: autoModTotal.value > 0 ? formatNum(autoModTotal.value) : null, minRole: 'moderator' },
+  { tab: 'posts'        as const, label: langStore.t.posts,                 icon: 'FileText',        color: '#94a3b8', group: langStore.t.adminGroupContent,    badge: null, minRole: 'moderator' },
+  { tab: 'verification' as const, label: langStore.t.secVerification,        icon: 'BadgeCheck',      color: '#2dd4bf', group: langStore.t.adminGroupContent,    badge: verRequests.value.filter((r:any) => r.status==='pending').length || null, minRole: 'moderator' },
+  { tab: 'ads'          as const, label: langStore.t.adLabel,                icon: 'Megaphone',       color: '#f97316', group: langStore.t.adminGroupContent,    badge: ads.value.filter((a:any) => a.status==='pending').length || null, minRole: 'admin' },
+  { tab: 'updates'      as const, label: langStore.t.adminNavUpdates,        icon: 'Sparkles',        color: '#4C67CF', group: langStore.t.adminGroupContent,    badge: updates.value.filter((u:any) => u.is_active).length || null, minRole: 'admin' },
+  { tab: 'groups'       as const, label: langStore.t.adminNavGroupsEvents,   icon: 'LayoutGrid',      color: '#4C67CF', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'moderator' },
+  { tab: 'finance'      as const, label: langStore.t.adminNavFinancePremium, icon: 'Wallet',          color: '#a78bfa', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'admin' },
+  { tab: 'settings'     as const, label: langStore.t.adminNavLogsSettings,   icon: 'Settings',        color: '#94a3b8', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'admin' },
+  { tab: 'statistics'   as const, label: langStore.t.statsTab,               icon: 'BarChart2',       color: '#10b981', group: langStore.t.adminGroupAnalytics,  badge: null, minRole: 'admin' },
 ].filter(item => myRoleRank.value >= ROLE_RANK[item.minRole]))
 
 const navGroups = computed(() => {
@@ -1041,16 +1085,16 @@ const navGroups = computed(() => {
 })
 
 const statCards = computed(() => stats.value ? [
-  { label: 'Всего пользователей', icon: 'Users',       color: '#4C67CF', value: formatNum(stats.value.users.total),          sub: `+${stats.value.users.today} сегодня` },
-  { label: 'Новых сегодня',       icon: 'UserPlus',    color: '#10b981', value: formatNum(stats.value.users.today),          sub: `+${stats.value.users.week} за неделю` },
-  { label: 'С подпиской',         icon: 'Sparkles',    color: '#a78bfa', value: formatNum(stats.value.premiumSubscribers),   sub: `из ${formatNum(stats.value.users.total)} пользователей` },
-  { label: 'Постов всего',        icon: 'FileText',    color: '#22d3ee', value: formatNum(stats.value.posts.total),          sub: `+${stats.value.posts.week} за неделю` },
-  { label: 'Постов сегодня',      icon: 'FilePlus2',   color: '#f59e0b', value: formatNum(stats.value.posts.today),          sub: 'публикаций' },
-  { label: 'Жалоб в очереди',     icon: 'Flag',        color: '#f43f5e', value: formatNum(stats.value.moderation.pendingReports), sub: 'ожидают рассмотрения' },
+  { label: langStore.t.adminStatTotalUsers,   icon: 'Users',       color: '#4C67CF', value: formatNum(stats.value.users.total),          sub: `+${stats.value.users.today} ${langStore.t.adminSubToday}` },
+  { label: langStore.t.adminStatNewToday,     icon: 'UserPlus',    color: '#10b981', value: formatNum(stats.value.users.today),          sub: `+${stats.value.users.week} ${langStore.t.adminSubThisWeek}` },
+  { label: langStore.t.adminStatWithSub,      icon: 'Sparkles',    color: '#a78bfa', value: formatNum(stats.value.premiumSubscribers),   sub: `${langStore.t.adminSubOutOf} ${formatNum(stats.value.users.total)} ${langStore.t.adminSubUsersGenitive}` },
+  { label: langStore.t.adminStatTotalPosts,   icon: 'FileText',    color: '#22d3ee', value: formatNum(stats.value.posts.total),          sub: `+${stats.value.posts.week} ${langStore.t.adminSubThisWeek}` },
+  { label: langStore.t.adminStatPostsToday,   icon: 'FilePlus2',   color: '#f59e0b', value: formatNum(stats.value.posts.today),          sub: langStore.t.adminSubPublications },
+  { label: langStore.t.adminStatReportsQueue, icon: 'Flag',        color: '#f43f5e', value: formatNum(stats.value.moderation.pendingReports), sub: langStore.t.adminSubAwaitingReview },
 ] : [])
 
 // ── Growth charts — cumulative totals reconstructed from last-12-months deltas
-const formatMonthShort = (d: string | Date) => new Date(d).toLocaleDateString('ru-RU', { month: 'short' })
+const formatMonthShort = (d: string | Date) => new Date(d).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'short' })
 
 const buildCumulative = (rows: { month: string; count: number }[] | undefined, endTotal: number) => {
   if (!rows?.length) return []
@@ -1091,7 +1135,7 @@ const activeGrowthTooltip = computed(() => {
 
 const hoveredActivityBar = ref<{ row: string; index: number } | null>(null)
 const formatWeekday = (d: string) => {
-  const label = new Date(d).toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' })
+  const label = new Date(d).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { weekday: 'short', day: 'numeric', month: 'short' })
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
@@ -1100,9 +1144,9 @@ const weeklyActivityRows = computed(() => {
   const wa = stats.value?.weeklyActivity
   if (!wa) return []
   const rows = [
-    { label: 'Посты',        color: '#4C67CF', days: wa.posts },
-    { label: 'Лайки',        color: '#f7a9e2', days: wa.likes },
-    { label: 'Комментарии',  color: '#cd83f5', days: wa.comments },
+    { label: langStore.t.postsTab,   color: '#4C67CF', days: wa.posts },
+    { label: langStore.t.adminLikesLabel, color: '#f7a9e2', days: wa.likes },
+    { label: langStore.t.comments,   color: '#cd83f5', days: wa.comments },
   ]
   return rows.map(r => ({
     ...r,
@@ -1112,60 +1156,58 @@ const weeklyActivityRows = computed(() => {
 })
 
 // ── Geography — top countries by user count (from /admin/stats/network)
+// "Не указана" is the unspecified bucket — excluded so the ranking only reflects known countries
 const topCountries = computed(() => {
-  const rows = (networkStats.value?.usersByCountry ?? []).filter((r: any) => r.label && r.label !== 'null')
+  const rows = (networkStats.value?.usersByCountry ?? []).filter((r: any) => r.label && r.label !== 'null' && r.label !== 'Не указана')
   const total = rows.reduce((s: number, r: any) => s + r.value, 0) || 1
   return rows.slice(0, 5).map((r: any) => ({ ...r, pct: Math.round((r.value / total) * 100) }))
 })
+const topKnownCountryLabel = computed(() => {
+  const rows = networkStats.value?.usersByCountry ?? []
+  return rows.find((r: any) => r.label && r.label !== 'Не указана')?.label ?? '—'
+})
 
 // ── Reports by AutoMod category
-const REPORT_CATEGORY_LABEL: Record<string, string> = {
-  spam: 'Спам', toxic: 'Токсичность', duplicate: 'Дубликаты', fraud: 'Мошенничество',
-  suspicious: 'Подозрительное', manual: 'Проверено вручную', other: 'Другое',
-}
+const REPORT_CATEGORY_LABEL = computed<Record<string, string>>(() => ({
+  spam: langStore.t.adminCategorySpam, toxic: langStore.t.adminCategoryToxic, duplicate: langStore.t.adminCategoryDuplicate, fraud: langStore.t.adminCategoryFraud,
+  suspicious: langStore.t.adminCategorySuspicious, manual: langStore.t.adminCategoryManual, other: langStore.t.other,
+}))
 const topReportCategories = computed(() => {
   const rows = stats.value?.reportsByCategory ?? []
   const max = Math.max(...rows.map((r: any) => r.count), 1)
-  return rows.slice(0, 5).map((r: any) => ({ ...r, label: REPORT_CATEGORY_LABEL[r.category] ?? r.category, pct: Math.round((r.count / max) * 100) }))
+  return rows.slice(0, 5).map((r: any) => ({ ...r, label: REPORT_CATEGORY_LABEL.value[r.category] ?? r.category, pct: Math.round((r.count / max) * 100) }))
 })
 
 // Moderation snapshot — the things staff act on first (freezes, bans, reports, automod)
 const modSnapshot = computed(() => stats.value ? [
-  { tab: 'reports'      as const, label: 'Жалобы в очереди', icon: 'Flag',        color: '#f59e0b', value: stats.value.moderation.pendingReports },
-  { tab: 'frozen'       as const, label: 'Заморожены',       icon: 'Snowflake',   color: '#38bdf8', value: stats.value.moderation.frozenUsers },
-  { tab: 'automod'      as const, label: 'AutoMod за 24ч',    icon: 'ShieldAlert', color: '#ef4444', value: stats.value.moderation.autoModFlags24h },
-  { tab: 'verification' as const, label: 'Верификация',      icon: 'BadgeCheck',  color: '#2dd4bf', value: stats.value.moderation.pendingVerification },
+  { tab: 'reports'      as const, usersView: undefined as typeof usersViewMode.value | undefined, label: langStore.t.adminStatReportsQueue, icon: 'Flag',        color: '#f59e0b', value: stats.value.moderation.pendingReports },
+  { tab: 'users'        as const, usersView: 'frozen' as typeof usersViewMode.value | undefined,  label: langStore.t.adminNavFrozen,        icon: 'Snowflake',   color: '#38bdf8', value: stats.value.moderation.frozenUsers },
+  { tab: 'automod'      as const, usersView: undefined as typeof usersViewMode.value | undefined, label: `AutoMod ${langStore.t.adminLast24h}`, icon: 'ShieldAlert', color: '#ef4444', value: stats.value.moderation.autoModFlags24h },
+  { tab: 'verification' as const, usersView: undefined as typeof usersViewMode.value | undefined, label: langStore.t.secVerification,       icon: 'BadgeCheck',  color: '#2dd4bf', value: stats.value.moderation.pendingVerification },
 ] : [])
 
 const roleColor = (role: string) => ({ owner: '#eab308', admin: '#f97316', moderator: '#4C67CF', user: '#64748b' }[role] ?? '#64748b')
 
-const tabTitle: Record<string, string> = {
-  overview: 'Обзор платформы',
-  infra: 'Инфраструктура и контент',
-  settings: 'Логи и настройки системы',
-}
+const tabTitle = computed<Record<string, string>>(() => ({
+  overview: langStore.t.adminTabTitleOverview,
+  settings: langStore.t.adminTabTitleSettings,
+}))
 
-const tabSubtitle: Record<string, string> = {
-  overview: 'Ключевые метрики Bloomly за последние 30 дней',
-  users: 'Все зарегистрированные аккаунты платформы',
-  frozen: 'Аккаунты, временно ограниченные автомодерацией или вручную',
-  archived: 'Забаненные и удалённые аккаунты',
-  posts: 'Последние публикации сообщества',
-  reports: 'Жалобы, NSFW-метки и очередь на рассмотрение',
-  support: 'Обращения пользователей в поддержку',
-  ads: 'Размещения рекламы на платформе',
-  verification: 'Заявки на получение бейджа верификации',
-  banners: 'Промо-баннеры карусели стикеров',
-  automod: 'Журнал действий автоматической модерации',
-  statistics: 'Стикеры и сеть — агрегированная аналитика',
-  updates: 'Публичный список изменений Bloomly',
-  groups: 'Сообщества и мероприятия платформы',
-  finance: 'Подписки Premium — тарифы и подписчики',
-  broadcasts: 'Отправка сообщений всей аудитории или сегментам',
-  infra: 'Стикеры, Dealers\' Den и реальное использование хранилища S3',
-  team: 'Администраторы, модераторы и их роли',
-  settings: 'Переключатели платформы и журнал действий администраторов',
-}
+const tabSubtitle = computed<Record<string, string>>(() => ({
+  overview: langStore.t.adminTabSubOverview,
+  users: langStore.t.adminTabSubUsers,
+  posts: langStore.t.adminTabSubPosts,
+  reports: langStore.t.adminTabSubReports,
+  support: langStore.t.adminTabSubSupport,
+  ads: langStore.t.adminTabSubAds,
+  verification: langStore.t.adminTabSubVerification,
+  automod: langStore.t.adminTabSubAutomod,
+  statistics: langStore.t.adminTabSubStatistics,
+  updates: langStore.t.adminTabSubUpdates,
+  groups: langStore.t.adminTabSubGroups,
+  finance: langStore.t.adminTabSubFinance,
+  settings: langStore.t.adminTabSubSettings,
+}))
 
 // ── Header search — jumps into Users with the query pre-filled ─────────
 const headerSearch = ref('')
@@ -1234,7 +1276,7 @@ const totalPendingBadge = computed(() => {
       <div class="p-3 border-t border-brand-border">
         <button @click="router.push({ name: 'home' })"
           class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold text-white/40 hover:text-white/70 hover:bg-white/5 transition-all group">
-          <BIcon name="ArrowLeft" class="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" /> На главную
+          <BIcon name="ArrowLeft" class="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" /> {{ langStore.t.goHome }}
         </button>
       </div>
     </aside>
@@ -1248,7 +1290,7 @@ const totalPendingBadge = computed(() => {
         <div class="relative flex-1 max-w-xl">
           <BIcon name="Search" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
           <input v-model="headerSearch" @keyup.enter="runHeaderSearch" type="text"
-            placeholder="Поиск пользователей, постов, жалоб…"
+            :placeholder="langStore.t.adminSearchPlaceholderGlobal"
             class="w-full bg-brand-bg border border-brand-border rounded-2xl pl-11 pr-4 py-2.5 text-sm text-white placeholder-white/25
               outline-none focus:border-brand-accent/50 transition-all" />
         </div>
@@ -1263,7 +1305,7 @@ const totalPendingBadge = computed(() => {
         </div>
 
         <!-- Bell -->
-        <button title="Ожидают рассмотрения" class="relative hidden md:flex w-9 h-9 rounded-xl bg-brand-bg border border-brand-border items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0">
+        <button :title="langStore.t.adminBellPendingReview" class="relative hidden md:flex w-9 h-9 rounded-xl bg-brand-bg border border-brand-border items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0">
           <BIcon name="Bell" class="w-4 h-4" />
           <span v-if="totalPendingBadge > 0" class="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-brand-error text-white text-[9px] font-extrabold flex items-center justify-center">
             {{ totalPendingBadge > 99 ? '99+' : totalPendingBadge }}
@@ -1307,10 +1349,10 @@ const totalPendingBadge = computed(() => {
             <!-- Moderation snapshot — the queue staff actually work from -->
             <div class="flex items-center gap-2 mb-3">
               <span class="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span>
-              <h2 class="text-xs font-extrabold text-white/50 tracking-[0.15em] uppercase">Требует внимания</h2>
+              <h2 class="text-xs font-extrabold text-white/50 tracking-[0.15em] uppercase">{{ langStore.t.adminRequiresAttention }}</h2>
             </div>
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-              <button v-for="mc in modSnapshot" :key="mc.label" @click="switchTab(mc.tab)"
+              <button v-for="mc in modSnapshot" :key="mc.label" @click="switchTab(mc.tab, { usersView: mc.usersView })"
                 class="relative text-left rounded-2xl p-4 overflow-hidden border transition-all duration-200 group hover:-translate-y-0.5 hover:shadow-lg"
                 :style="`background:${mc.color}0d;border-color:${mc.color}25`">
                 <div class="flex items-center justify-between mb-2.5">
@@ -1324,7 +1366,7 @@ const totalPendingBadge = computed(() => {
               </button>
             </div>
 
-            <h2 class="text-xs font-extrabold text-white/30 tracking-[0.15em] uppercase mb-3">Общая статистика</h2>
+            <h2 class="text-xs font-extrabold text-white/30 tracking-[0.15em] uppercase mb-3">{{ langStore.t.adminGeneralStats }}</h2>
             <!-- Stat cards -->
             <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
               <div v-for="sc in statCards" :key="sc.label"
@@ -1343,8 +1385,8 @@ const totalPendingBadge = computed(() => {
             <!-- Growth charts -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
               <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-                <h3 class="font-extrabold text-white text-sm">Рост пользователей</h3>
-                <p class="text-xs text-white/40 mt-0.5 mb-4">Всего зарегистрировано, по месяцам</p>
+                <h3 class="font-extrabold text-white text-sm">{{ langStore.t.adminUserGrowthTitle }}</h3>
+                <p class="text-xs text-white/40 mt-0.5 mb-4">{{ langStore.t.adminUserGrowthSub }}</p>
                 <div class="relative">
                   <div v-if="activeGrowthTooltip && hoveredGrowthPoint?.chart === 'users'"
                     class="absolute z-10 -translate-x-1/2 -translate-y-full pointer-events-none flex flex-col items-center"
@@ -1386,8 +1428,8 @@ const totalPendingBadge = computed(() => {
                 </div>
               </div>
               <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-                <h3 class="font-extrabold text-white text-sm">Рост публикаций</h3>
-                <p class="text-xs text-white/40 mt-0.5 mb-4">Всего постов, по месяцам</p>
+                <h3 class="font-extrabold text-white text-sm">{{ langStore.t.adminPostGrowthTitle }}</h3>
+                <p class="text-xs text-white/40 mt-0.5 mb-4">{{ langStore.t.adminPostGrowthSub }}</p>
                 <div class="relative">
                   <div v-if="activeGrowthTooltip && hoveredGrowthPoint?.chart === 'posts'"
                     class="absolute z-10 -translate-x-1/2 -translate-y-full pointer-events-none flex flex-col items-center"
@@ -1433,7 +1475,7 @@ const totalPendingBadge = computed(() => {
             <!-- Weekly activity / geography / reports breakdown -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
               <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-                <h3 class="font-extrabold text-white text-sm mb-4">Активность за неделю</h3>
+                <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminWeeklyActivityTitle }}</h3>
                 <div v-for="row in weeklyActivityRows" :key="row.label" class="mb-5 last:mb-0">
                   <div class="flex items-center justify-between mb-1.5">
                     <span class="text-xs font-semibold text-white/60">{{ row.label }}</span>
@@ -1461,11 +1503,11 @@ const totalPendingBadge = computed(() => {
                     </div>
                   </div>
                 </div>
-                <p v-if="!weeklyActivityRows.length" class="text-xs text-white/25 text-center py-6">Нет данных</p>
+                <p v-if="!weeklyActivityRows.length" class="text-xs text-white/25 text-center py-6">{{ langStore.t.adminNoDataLabel }}</p>
               </div>
 
               <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-                <h3 class="font-extrabold text-white text-sm mb-4">География пользователей</h3>
+                <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminUserGeographyTitle }}</h3>
                 <div v-for="c in topCountries" :key="c.label" class="mb-3 last:mb-0">
                   <div class="flex items-center justify-between mb-1">
                     <span class="text-xs font-semibold text-white/60">{{ c.label }}</span>
@@ -1475,11 +1517,11 @@ const totalPendingBadge = computed(() => {
                     <div class="h-full rounded-full bg-brand-accent" :style="`width:${c.pct}%`" />
                   </div>
                 </div>
-                <p v-if="!topCountries.length" class="text-xs text-white/25 text-center py-6">Нет данных</p>
+                <p v-if="!topCountries.length" class="text-xs text-white/25 text-center py-6">{{ langStore.t.adminNoDataLabel }}</p>
               </div>
 
               <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-                <h3 class="font-extrabold text-white text-sm mb-4">Жалобы по категориям</h3>
+                <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminReportsByCategoryTitle }}</h3>
                 <div v-for="r in topReportCategories" :key="r.category" class="mb-3 last:mb-0">
                   <div class="flex items-center justify-between mb-1">
                     <span class="text-xs font-semibold text-white/60">{{ r.label }}</span>
@@ -1489,14 +1531,14 @@ const totalPendingBadge = computed(() => {
                     <div class="h-full rounded-full bg-brand-warning" :style="`width:${r.pct}%`" />
                   </div>
                 </div>
-                <p v-if="!topReportCategories.length" class="text-xs text-white/25 text-center py-6">Жалоб пока нет</p>
+                <p v-if="!topReportCategories.length" class="text-xs text-white/25 text-center py-6">{{ langStore.t.adminNoReportsYet }}</p>
               </div>
             </div>
 
             <!-- Roles -->
             <div class="rounded-2xl border border-brand-border bg-brand-card p-6">
               <h3 class="font-extrabold text-sm text-white mb-4 flex items-center gap-2">
-                <BIcon name="Users" class="w-4 h-4 text-white/40" /> Распределение ролей
+                <BIcon name="Users" class="w-4 h-4 text-white/40" /> {{ langStore.t.adminRoleDistribution }}
               </h3>
               <div class="flex flex-wrap gap-3">
                 <div v-for="rb in stats.roleBreakdown" :key="rb.role"
@@ -1513,21 +1555,52 @@ const totalPendingBadge = computed(() => {
 
         <!-- ── USERS ───────────────────────────────────────────────────── -->
         <div v-else-if="activeTab === 'users'">
+          <!-- Segmented toggle: user list / team & roles / frozen / banned (all merged from old separate tabs) -->
+          <div class="flex items-center gap-2 mb-5 p-1 rounded-2xl bg-white/[0.04] w-fit flex-wrap">
+            <button type="button" @click="switchUsersView('all')"
+              class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+              :class="usersViewMode === 'all' ? 'bg-[#4C67CF]/20 text-[#4C67CF]' : 'text-white/40 hover:text-white/70'">
+              <BIcon name="Users" class="w-3.5 h-3.5" /> {{ langStore.t.tabAll }}
+            </button>
+            <button type="button" @click="switchUsersView('team')"
+              class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+              :class="usersViewMode === 'team' ? 'bg-amber-500/20 text-amber-400' : 'text-white/40 hover:text-white/70'">
+              <BIcon name="ShieldCheck" class="w-3.5 h-3.5" /> {{ langStore.t.adminNavTeamRoles }}
+              <span v-if="staff.length" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                :class="usersViewMode === 'team' ? 'bg-amber-400/20 text-amber-300' : 'bg-white/10 text-white/40'">{{ staff.length }}</span>
+            </button>
+            <button type="button" @click="switchUsersView('frozen')"
+              class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+              :class="usersViewMode === 'frozen' ? 'bg-sky-500/20 text-sky-400' : 'text-white/40 hover:text-white/70'">
+              <BIcon name="Snowflake" class="w-3.5 h-3.5" /> {{ langStore.t.adminNavFrozen }}
+              <span v-if="frozenTotal" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                :class="usersViewMode === 'frozen' ? 'bg-sky-400/20 text-sky-300' : 'bg-white/10 text-white/40'">{{ frozenTotal }}</span>
+            </button>
+            <button type="button" @click="switchUsersView('archived')"
+              class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+              :class="usersViewMode === 'archived' ? 'bg-rose-500/20 text-rose-400' : 'text-white/40 hover:text-white/70'">
+              <BIcon name="Ban" class="w-3.5 h-3.5" /> {{ langStore.t.adminNavBanned }}
+              <span v-if="archivedTotal" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                :class="usersViewMode === 'archived' ? 'bg-rose-400/20 text-rose-300' : 'bg-white/10 text-white/40'">{{ archivedTotal }}</span>
+            </button>
+          </div>
+
+          <template v-if="usersViewMode === 'all'">
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
             <div class="rounded-2xl px-3.5 py-2.5" style="background:rgba(255,255,255,0.035)">
-              <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide">Всего</p>
+              <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide">{{ langStore.t.adminTotalLabel }}</p>
               <p class="text-lg font-black text-white">{{ formatNum(userTotal) }}</p>
             </div>
             <div class="rounded-2xl px-3.5 py-2.5" style="background:rgba(16,185,129,0.07)">
-              <p class="text-[10px] font-bold text-emerald-400/70 uppercase tracking-wide">Новых сегодня</p>
+              <p class="text-[10px] font-bold text-emerald-400/70 uppercase tracking-wide">{{ langStore.t.adminStatNewToday }}</p>
               <p class="text-lg font-black text-emerald-400">{{ userQuickStats.newToday }}</p>
             </div>
             <div class="rounded-2xl px-3.5 py-2.5" style="background:rgba(167,139,250,0.07)">
-              <p class="text-[10px] font-bold text-violet-300/70 uppercase tracking-wide">С подпиской</p>
+              <p class="text-[10px] font-bold text-violet-300/70 uppercase tracking-wide">{{ langStore.t.adminStatWithSub }}</p>
               <p class="text-lg font-black text-violet-300">{{ userQuickStats.subscribers }}</p>
             </div>
             <div class="rounded-2xl px-3.5 py-2.5" style="background:rgba(56,189,248,0.07)">
-              <p class="text-[10px] font-bold text-sky-400/70 uppercase tracking-wide">Заморожено</p>
+              <p class="text-[10px] font-bold text-sky-400/70 uppercase tracking-wide">{{ langStore.t.adminFrozenCountLabel }}</p>
               <p class="text-lg font-black text-sky-400">{{ userQuickStats.frozen }}</p>
             </div>
           </div>
@@ -1535,7 +1608,7 @@ const totalPendingBadge = computed(() => {
           <div class="flex items-center gap-3 mb-5">
             <div class="relative flex-1 max-w-sm">
               <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-              <input v-model="userSearch" @input="onUserSearch" type="text" placeholder="Поиск пользователей…"
+              <input v-model="userSearch" @input="onUserSearch" type="text" :placeholder="langStore.t.adminSearchPlaceholderUsers"
                 class="w-full bg-white/[0.06] border border-transparent rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
                   outline-none focus:border-[#4C67CF]/40 focus:bg-white/[0.08] transition-all" />
             </div>
@@ -1586,17 +1659,17 @@ const totalPendingBadge = computed(() => {
                 class="relative grid grid-cols-1 lg:grid-cols-[2.4fr_2fr_1.1fr_1.2fr_0.85fr_1.1fr_1.2fr] gap-2 lg:gap-3 items-center px-5 py-3 hover:bg-white/[0.03] transition-all group">
 
                 <!-- Пользователь -->
-                <div class="flex items-center gap-3 min-w-0">
+                <router-link :to="`/profile/${user.username}`" target="_blank" class="flex items-center gap-3 min-w-0 group/user">
                   <div class="flex-shrink-0 relative">
                     <img v-if="user.avatar_url" :src="user.avatar_url"
-                      class="w-9 h-9 rounded-full object-cover border border-white/[0.06]" />
-                    <div v-else class="w-9 h-9 rounded-full border border-white/[0.06] flex items-center justify-center text-sm font-bold"
+                      class="w-9 h-9 rounded-full object-cover border border-white/[0.06] group-hover/user:opacity-80 transition-opacity" />
+                    <div v-else class="w-9 h-9 rounded-full border border-white/[0.06] flex items-center justify-center text-sm font-bold group-hover/user:opacity-80 transition-opacity"
                       :style="`background:${roleColor(user.role)}20;color:${roleColor(user.role)}`">
                       {{ (user.display_name || user.username || '?')[0].toUpperCase() }}
                     </div>
                   </div>
                   <div class="min-w-0">
-                    <p class="font-bold text-sm text-white truncate flex items-center gap-1.5">
+                    <p class="font-bold text-sm text-white truncate flex items-center gap-1.5 group-hover/user:text-[#4C67CF] transition-colors">
                       {{ user.display_name || user.username }}
                       <span v-if="tierLabel(user.subscription_tier)"
                         class="inline-flex items-center gap-0.5 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border flex-shrink-0"
@@ -1606,7 +1679,7 @@ const totalPendingBadge = computed(() => {
                     </p>
                     <p class="text-xs text-white/35 truncate">@{{ user.username }}</p>
                   </div>
-                </div>
+                </router-link>
 
                 <!-- Email -->
                 <p class="text-xs text-white/50 truncate">{{ user.email }}</p>
@@ -1617,7 +1690,7 @@ const totalPendingBadge = computed(() => {
                     :style="`background:${userStatus(user).color}20;color:${userStatus(user).color}`">
                     {{ userStatus(user).label }}
                   </span>
-                  <span v-if="user.warn_count > 0" :title="`${user.warn_count}/5 предупреждений`"
+                  <span v-if="user.warn_count > 0" :title="`${user.warn_count}/5 ${langStore.t.adminWarnCountSuffix}`"
                     class="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
                     :class="user.warn_count >= 4 ? 'bg-rose-500/15 text-rose-400' : 'bg-amber-500/15 text-amber-400'">
                     ⚠ {{ user.warn_count }}/5
@@ -1636,7 +1709,7 @@ const totalPendingBadge = computed(() => {
                 <!-- Верификация -->
                 <p class="text-xs font-semibold flex items-center gap-1" :class="user.badge_type ? 'text-brand-warning' : 'text-white/30'">
                   <BIcon v-if="user.badge_type" name="BadgeCheck" class="w-3.5 h-3.5" />
-                  {{ user.badge_type ? 'Да' : 'Нет' }}
+                  {{ user.badge_type ? langStore.t.adminYesLabel : langStore.t.adminNoLabel }}
                 </p>
 
                 <!-- Действия — inline on mobile, floating overlay on hover at lg+ so it never fights the columns for space -->
@@ -1644,7 +1717,7 @@ const totalPendingBadge = computed(() => {
                   static lg:absolute lg:right-4 lg:top-1/2 lg:-translate-y-1/2 lg:z-10
                   opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:pointer-events-none lg:group-hover:pointer-events-auto
                   transition-opacity lg:bg-[#0B1030]/95 lg:backdrop-blur-md lg:rounded-full lg:pl-3 lg:pr-2 lg:py-2 lg:shadow-xl lg:shadow-black/50 lg:border lg:border-white/10">
-                  <button v-if="isAdminPlus" type="button" data-user-menu title="Выдать / отозвать подписку"
+                  <button v-if="isAdminPlus" type="button" data-user-menu :title="langStore.t.adminGrantRevokeSubTooltip"
                     @click="toggleUserMenu(`tier-${user.id}`, $event)"
                     class="flex items-center gap-1 bg-white/[0.06] border border-transparent rounded-full pl-2.5 pr-2 py-1.5 text-xs font-bold text-white/70
                       outline-none hover:bg-white/[0.08] focus:border-violet-400/50 cursor-pointer transition-all">
@@ -1689,29 +1762,29 @@ const totalPendingBadge = computed(() => {
                     </Transition>
                   </Teleport>
                   <!-- deceased / alive -->
-                  <button v-if="user.deceased_at" @click="unmarkDeceased(user.id)" title="Отменить (жив)"
+                  <button v-if="user.deceased_at" @click="unmarkDeceased(user.id)" :title="langStore.t.adminUndoDeceasedTooltip"
                     class="w-7 h-7 rounded-full bg-white/10 border border-white/15 text-white/60 hover:bg-white/20 flex items-center justify-center transition-all text-xs flex-shrink-0">
                     ↺
                   </button>
-                  <button v-else @click="markDeceased(user.id)" title="Отметить как умершего"
+                  <button v-else @click="markDeceased(user.id)" :title="langStore.t.adminMarkDeceasedTooltip"
                     class="w-7 h-7 rounded-full bg-white/5 border border-white/10 text-white/40 hover:bg-white/15 hover:text-white/60 flex items-center justify-center transition-all text-xs flex-shrink-0">
                     🪦
                   </button>
                   <!-- freeze / unfreeze -->
-                  <button v-if="user.frozen_at" @click="unfreezeUser(user.id)" title="Разморозить"
+                  <button v-if="user.frozen_at" @click="unfreezeUser(user.id)" :title="langStore.t.adminUnfreezeTooltip"
                     class="w-7 h-7 rounded-full bg-sky-500/10 border border-sky-500/15 text-sky-400 hover:bg-sky-500/20 flex items-center justify-center transition-all text-xs flex-shrink-0">
                     🔓
                   </button>
-                  <button v-else @click="freezeUser(user.id)" title="Заморозить"
+                  <button v-else @click="freezeUser(user.id)" :title="langStore.t.adminFreezeTooltip"
                     class="w-7 h-7 rounded-full bg-sky-500/10 border border-sky-500/15 text-sky-400 hover:bg-sky-500/20 flex items-center justify-center transition-all text-xs flex-shrink-0">
                     🧊
                   </button>
                   <!-- clear warns -->
-                  <button v-if="user.warn_count > 0" @click="clearUserWarns(user.id)" title="Сбросить варны"
+                  <button v-if="user.warn_count > 0" @click="clearUserWarns(user.id)" :title="langStore.t.adminClearWarnsTooltip"
                     class="w-7 h-7 rounded-full bg-amber-500/10 border border-amber-500/15 text-amber-400 hover:bg-amber-500/20 flex items-center justify-center transition-all text-xs flex-shrink-0">
                     ✖
                   </button>
-                  <button @click="deleteUser(user.id)" title="Удалить"
+                  <button @click="deleteUser(user.id)" :title="langStore.t.deleteBtn"
                     class="w-7 h-7 rounded-full bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center transition-all flex-shrink-0">
                     <BIcon name="Trash2" class="w-3.5 h-3.5" />
                   </button>
@@ -1731,14 +1804,101 @@ const totalPendingBadge = computed(() => {
               <BIcon name="ChevronRight" class="w-4 h-4" />
             </button>
           </div>
-        </div>
+          </template>
 
-        <!-- ── FROZEN ─────────────────────────────────────────────────── -->
-        <div v-else-if="activeTab === 'frozen'">
+          <!-- ── Team & roles (merged in from the old separate tab) ─────── -->
+          <template v-else-if="usersViewMode === 'team'">
+            <div class="flex items-center justify-between mb-5">
+              <p class="text-sm text-white/40">{{ langStore.t.adminTabSubTeam }}</p>
+              <button v-if="isOwnerRole" @click="showInviteForm = !showInviteForm"
+                class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white shadow-lg transition-all"
+                style="background:linear-gradient(135deg,#4C67CF,#31458F);box-shadow:0 4px 16px rgba(76,103,207,0.3)">
+                <BIcon name="UserPlus" class="w-3.5 h-3.5" /> {{ langStore.t.adminInviteToTeamBtn }}
+              </button>
+            </div>
+
+            <Transition name="filter-expand">
+              <div v-if="showInviteForm" class="rounded-2xl border border-brand-border bg-brand-card p-5 mb-5">
+                <h3 class="font-extrabold text-white text-sm mb-3">{{ langStore.t.adminNewStaffMemberTitle }}</h3>
+                <div class="flex flex-col sm:flex-row gap-2">
+                  <input v-model="inviteIdentifier" :placeholder="langStore.t.adminEmailOrUsernamePlaceholder" class="adm-input flex-1" />
+                  <select v-model="inviteRole" class="adm-input sm:w-44">
+                    <option value="moderator">{{ langStore.t.roleModerator }}</option>
+                    <option value="admin">{{ langStore.t.roleAdmin }}</option>
+                    <option value="owner">{{ langStore.t.roleOwner }}</option>
+                  </select>
+                  <button @click="inviteToStaff" :disabled="isInviting || !inviteIdentifier.trim()"
+                    class="px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all flex-shrink-0"
+                    style="background:linear-gradient(135deg,#4C67CF,#31458F)">
+                    {{ isInviting ? '...' : langStore.t.adminAddBtn }}
+                  </button>
+                </div>
+                <p v-if="inviteError" class="text-xs text-rose-400 mt-2">{{ inviteError }}</p>
+              </div>
+            </Transition>
+
+            <div class="rounded-2xl border border-brand-border bg-brand-card overflow-hidden">
+              <div class="hidden lg:grid gap-3 px-5 py-3 border-b border-brand-border grid-cols-[2fr_1fr_1fr_1.2fr_1fr]">
+                <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">{{ langStore.t.adminColStaffMember }}</span>
+                <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">{{ langStore.t.adminColRole }}</span>
+                <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">{{ langStore.t.statusFieldLabel }}</span>
+                <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">{{ langStore.t.adminColLastActivity }}</span>
+                <span></span>
+              </div>
+              <div v-if="isLoadingStaff" class="p-5 space-y-3">
+                <div v-for="n in 4" :key="n" class="h-10 rounded-xl bg-white/5 animate-pulse" />
+              </div>
+              <div v-else-if="!staff.length" class="flex flex-col items-center gap-3 py-16 text-white/25">
+                <BIcon name="ShieldCheck" class="w-10 h-10 opacity-40" />
+                <p class="text-sm font-semibold">{{ langStore.t.adminOnlyYouInTeam }}</p>
+              </div>
+              <div v-else class="divide-y divide-brand-border">
+                <div v-for="m in staff" :key="m.id"
+                  class="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr_1.2fr_1fr] gap-2 lg:gap-3 items-center px-5 py-3.5">
+                  <router-link :to="`/profile/${m.username}`" target="_blank" class="flex items-center gap-2.5 min-w-0 group/user">
+                    <img v-if="m.avatar_url" :src="m.avatar_url" class="w-9 h-9 rounded-full object-cover border border-white/10 flex-shrink-0 group-hover/user:opacity-80 transition-opacity" />
+                    <div v-else class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 group-hover/user:opacity-80 transition-opacity"
+                      :style="`background:${roleColor(m.role)}20;color:${roleColor(m.role)}`">
+                      {{ (m.display_name || m.username || '?')[0].toUpperCase() }}
+                    </div>
+                    <div class="min-w-0">
+                      <p class="font-bold text-sm text-white truncate group-hover/user:text-[#4C67CF] transition-colors">{{ m.display_name || m.username }}</p>
+                      <p class="text-xs text-white/35 truncate">{{ m.email }}</p>
+                    </div>
+                  </router-link>
+                  <span class="text-xs font-extrabold px-2.5 py-1 rounded-full w-fit"
+                    :style="`background:${roleColor(m.role)}20;color:${roleColor(m.role)}`">
+                    {{ roleLabel(m.role) }}
+                  </span>
+                  <span class="text-xs font-extrabold px-2.5 py-1 rounded-full w-fit"
+                    :class="m.frozen_at ? 'bg-rose-500/15 text-rose-400' : 'bg-emerald-500/15 text-emerald-400'">
+                    {{ m.frozen_at ? langStore.t.adminSuspendedLabel : langStore.t.activeLabel }}
+                  </span>
+                  <span class="text-xs text-white/50">{{ relativeLastSeen(m.last_seen_at) }}</span>
+                  <div class="flex items-center gap-1.5 justify-start lg:justify-end">
+                    <button v-if="m.frozen_at" @click="reactivateStaff(m)" :title="langStore.t.adminReturnToDutyTooltip"
+                      class="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 flex items-center justify-center transition-all">
+                      <BIcon name="ShieldCheck" class="w-3.5 h-3.5" />
+                    </button>
+                    <button v-else @click="suspendStaff(m)" :title="langStore.t.adminSuspendTooltip"
+                      class="w-8 h-8 rounded-full bg-white/5 text-white/40 hover:bg-white/10 hover:text-white flex items-center justify-center transition-all">
+                      <BIcon name="Snowflake" class="w-3.5 h-3.5" />
+                    </button>
+                    <button v-if="isOwnerRole" @click="removeFromStaff(m)" :title="langStore.t.adminRemoveFromTeamTooltip"
+                      class="w-8 h-8 rounded-full bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center transition-all">
+                      <BIcon name="UserMinus" class="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+          <!-- ── Frozen accounts (merged in from the old separate tab) ──── -->
+          <template v-else-if="usersViewMode === 'frozen'">
           <div class="flex items-center gap-3 mb-5">
             <div class="relative flex-1 max-w-sm">
               <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-              <input v-model="frozenSearch" @input="onFrozenSearch" type="text" placeholder="Поиск среди замороженных…"
+              <input v-model="frozenSearch" @input="onFrozenSearch" type="text" :placeholder="langStore.t.adminSearchPlaceholderFrozen"
                 class="w-full bg-white/5 border border-white/[0.08] rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
                   outline-none focus:border-sky-500/40 focus:bg-white/[0.08] transition-all" />
             </div>
@@ -1757,7 +1917,7 @@ const totalPendingBadge = computed(() => {
             <div v-else-if="frozenUsers.length === 0"
               class="flex flex-col items-center gap-3 py-16 text-white/25">
               <BIcon name="Snowflake" class="w-10 h-10 opacity-40" />
-              <p class="text-sm font-semibold">Нет замороженных аккаунтов</p>
+              <p class="text-sm font-semibold">{{ langStore.t.adminNoFrozenAccounts }}</p>
             </div>
             <div v-else class="divide-y divide-brand-border">
               <div v-for="user in frozenUsers" :key="user.id"
@@ -1771,18 +1931,18 @@ const totalPendingBadge = computed(() => {
                   <p class="font-bold text-sm text-white truncate flex items-center gap-1.5">
                     {{ user.display_name || user.username }}
                     <span class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/20">
-                      🧊 с {{ formatDate(user.frozen_at) }}
+                      🧊 {{ langStore.t.adminFrozenSincePrefix }} {{ formatDate(user.frozen_at) }}
                     </span>
                   </p>
-                  <p class="text-xs text-white/35 truncate">@{{ user.username }} · {{ user._count?.posts ?? 0 }} постов</p>
+                  <p class="text-xs text-white/35 truncate">@{{ user.username }} · {{ user._count?.posts ?? 0 }} {{ langStore.t.posts }}</p>
                   <p v-if="user.frozen_reason" class="text-[11px] text-sky-400/70 truncate mt-0.5">{{ user.frozen_reason }}</p>
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
-                  <button @click="unfreezeUser(user.id)" title="Разморозить"
+                  <button @click="unfreezeUser(user.id)" :title="langStore.t.adminUnfreezeTooltip"
                     class="w-8 h-8 rounded-xl bg-sky-500/10 border border-sky-500/15 text-sky-400 hover:bg-sky-500/20 flex items-center justify-center transition-all text-xs">
                     🔓
                   </button>
-                  <button v-if="user.warn_count > 0" @click="clearUserWarns(user.id)" title="Сбросить варны"
+                  <button v-if="user.warn_count > 0" @click="clearUserWarns(user.id)" :title="langStore.t.adminClearWarnsTooltip"
                     class="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/15 text-amber-400 hover:bg-amber-500/20 flex items-center justify-center transition-all text-xs">
                     ✖
                   </button>
@@ -1802,14 +1962,14 @@ const totalPendingBadge = computed(() => {
               <BIcon name="ChevronRight" class="w-4 h-4" />
             </button>
           </div>
-        </div>
+          </template>
 
-        <!-- ── ARCHIVED ────────────────────────────────────────────────── -->
-        <div v-else-if="activeTab === 'archived'">
+          <!-- ── Banned accounts (merged in from the old separate tab) ──── -->
+          <template v-else-if="usersViewMode === 'archived'">
           <div class="flex items-center gap-3 mb-5">
             <div class="relative flex-1 max-w-sm">
               <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-              <input v-model="archivedSearch" @input="onArchivedSearch" type="text" placeholder="Поиск в архиве…"
+              <input v-model="archivedSearch" @input="onArchivedSearch" type="text" :placeholder="langStore.t.adminSearchPlaceholderArchive"
                 class="w-full bg-white/5 border border-white/[0.08] rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
                   outline-none focus:border-rose-500/40 focus:bg-white/[0.08] transition-all" />
             </div>
@@ -1828,7 +1988,7 @@ const totalPendingBadge = computed(() => {
             <div v-else-if="archivedUsers.length === 0"
               class="flex flex-col items-center gap-3 py-16 text-white/25">
               <BIcon name="Archive" class="w-10 h-10 opacity-40" />
-              <p class="text-sm font-semibold">Архив пуст</p>
+              <p class="text-sm font-semibold">{{ langStore.t.adminArchiveEmpty }}</p>
             </div>
             <div v-else class="divide-y divide-brand-border">
               <div v-for="user in archivedUsers" :key="user.id"
@@ -1840,13 +2000,13 @@ const totalPendingBadge = computed(() => {
                 </div>
                 <div class="flex-1 min-w-0">
                   <p class="font-bold text-sm text-white/70 truncate">{{ user.display_name || user.username }}</p>
-                  <p class="text-xs text-white/30">@{{ user.username }} · удалён {{ formatDate(user.deleted_at) }}</p>
+                  <p class="text-xs text-white/30">@{{ user.username }} · {{ langStore.t.adminDeletedOnPrefix }} {{ formatDate(user.deleted_at) }}</p>
                   <p v-if="user.frozen_reason" class="text-[11px] text-rose-400/70 truncate mt-0.5">{{ user.frozen_reason }}</p>
                 </div>
                 <button @click="restoreUser(user.id)"
                   class="px-3 py-1.5 text-xs font-bold rounded-xl border opacity-0 group-hover:opacity-100 transition-all
                   bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20">
-                  Восстановить
+                  {{ langStore.t.adminRestoreUserBtn }}
                 </button>
               </div>
             </div>
@@ -1863,14 +2023,14 @@ const totalPendingBadge = computed(() => {
               <BIcon name="ChevronRight" class="w-4 h-4" />
             </button>
           </div>
+          </template>
         </div>
-
         <!-- ── POSTS ──────────────────────────────────────────────────── -->
         <div v-else-if="activeTab === 'posts'">
           <div class="flex items-center gap-3 mb-4 flex-wrap">
             <div class="relative flex-1 max-w-sm">
               <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-              <input v-model="postSearch" @input="onPostSearch" type="text" placeholder="Поиск по постам…"
+              <input v-model="postSearch" @input="onPostSearch" type="text" :placeholder="langStore.t.adminSearchPlaceholderPosts"
                 class="w-full bg-white/5 border border-white/[0.08] rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
                   outline-none focus:border-[#4C67CF]/40 focus:bg-white/[0.08] transition-all" />
             </div>
@@ -1884,10 +2044,10 @@ const totalPendingBadge = computed(() => {
           <!-- Filter pills -->
           <div class="flex gap-2 mb-5 flex-wrap">
             <button v-for="f in ([
-              { v: '', l: 'Все' },
-              { v: 'media', l: 'С медиа' },
+              { v: '', l: langStore.t.tabAll },
+              { v: 'media', l: langStore.t.adminFilterWithMedia },
               { v: 'nsfw', l: 'NSFW' },
-              { v: 'announcement', l: 'Объявления' },
+              { v: 'announcement', l: langStore.t.adminFilterAnnouncements },
             ] as const)" :key="f.v"
               @click="postFilter = f.v; postPage = 1; fetchPosts()"
               class="px-4 py-2 rounded-2xl text-xs font-bold border transition-all"
@@ -1898,100 +2058,110 @@ const totalPendingBadge = computed(() => {
             </button>
           </div>
 
-          <div class="rounded-2xl border border-brand-border bg-brand-card overflow-hidden">
-            <!-- Table header -->
-            <div class="hidden lg:grid gap-3 px-5 py-3 border-b border-brand-border grid-cols-[1.5fr_3fr_0.6fr_0.9fr_0.6fr_0.8fr]">
-              <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">Автор</span>
-              <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">Содержание</span>
-              <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">Лайки</span>
-              <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">Комментарии</span>
-              <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">Repaw</span>
-              <span></span>
-            </div>
-
-            <div v-if="isLoadingPosts" class="divide-y divide-brand-border">
-              <div v-for="n in 5" :key="n" class="flex items-start gap-3 px-5 py-4 animate-pulse">
-                <div class="w-9 h-9 rounded-full bg-white/[0.08] flex-shrink-0 mt-0.5" />
-                <div class="flex-1 space-y-2">
-                  <div class="h-2 bg-white/5 rounded-full w-24" />
-                  <div class="h-3 bg-white/[0.08] rounded-full w-3/4" />
-                  <div class="h-3 bg-white/5 rounded-full w-1/2" />
-                </div>
+          <div v-if="isLoadingPosts" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div v-for="n in 6" :key="n" class="rounded-2xl border border-brand-border bg-brand-card overflow-hidden animate-pulse">
+              <div class="aspect-[4/3] bg-white/[0.06]" />
+              <div class="p-4 space-y-2">
+                <div class="h-3 bg-white/[0.08] rounded-full w-2/3" />
+                <div class="h-2.5 bg-white/5 rounded-full w-full" />
+                <div class="h-2.5 bg-white/5 rounded-full w-1/2" />
               </div>
             </div>
-            <div v-else-if="!posts.length" class="flex flex-col items-center gap-3 py-20 text-white/25">
-              <BIcon name="FileText" class="w-10 h-10 opacity-40" />
-              <p class="text-sm font-semibold">Постов не найдено</p>
-            </div>
-            <div v-else class="divide-y divide-brand-border">
-              <div v-for="post in posts" :key="post.id"
-                class="grid grid-cols-1 lg:grid-cols-[1.5fr_3fr_0.6fr_0.9fr_0.6fr_0.8fr] gap-2 lg:gap-3 items-center px-5 py-4 hover:bg-white/[0.03] transition-all group">
+          </div>
+          <div v-else-if="!posts.length" class="flex flex-col items-center gap-3 py-20 text-white/25 rounded-2xl border border-brand-border bg-brand-card">
+            <BIcon name="FileText" class="w-10 h-10 opacity-40" />
+            <p class="text-sm font-semibold">{{ langStore.t.adminNoPostsFound }}</p>
+          </div>
 
-                <!-- Автор -->
-                <router-link :to="`/profile/${post.author?.username}`" target="_blank" class="flex items-center gap-2.5 min-w-0">
+          <!-- Tile grid -->
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div v-for="post in posts" :key="post.id"
+              class="relative rounded-2xl border border-brand-border bg-brand-card overflow-hidden flex flex-col transition-all
+                hover:border-[#4C67CF]/35 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/20 group">
+
+              <!-- Media preview / text placeholder -->
+              <button v-if="post.media_urls?.length" type="button"
+                @click="openPostMediaLightbox(post.media_urls, 0)"
+                class="relative aspect-[4/3] w-full overflow-hidden bg-black/20 flex-shrink-0">
+                <img :src="post.media_urls[0]" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
+                <div v-if="post.media_urls.length > 1"
+                  class="absolute top-2.5 right-2.5 flex items-center gap-1 text-[10px] font-extrabold px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white">
+                  <BIcon name="Images" class="w-3 h-3" /> {{ post.media_urls.length }}
+                </div>
+                <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+              <div v-else class="relative aspect-[4/3] w-full flex items-center justify-center flex-shrink-0 p-5 text-center overflow-hidden"
+                style="background:linear-gradient(150deg,rgba(76,103,207,0.16),rgba(139,92,246,0.10) 55%,rgba(76,103,207,0.05))">
+                <BIcon name="Quote" class="absolute top-3 left-3 w-8 h-8 text-white/[0.06] -scale-x-100" />
+                <p class="relative text-sm text-white/65 font-semibold line-clamp-5 leading-relaxed">{{ post.content || post.title }}</p>
+              </div>
+
+              <!-- Badges -->
+              <div class="absolute top-2.5 left-2.5 flex items-center gap-1.5 flex-wrap max-w-[calc(100%-1.25rem)]">
+                <span v-if="post.category"
+                  class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-accent/85 text-white backdrop-blur-sm shadow-sm">
+                  #{{ post.category }}
+                </span>
+                <span v-if="post.is_nsfw"
+                  class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-rose-500/90 text-white backdrop-blur-sm shadow-sm">NSFW</span>
+                <span v-if="post.is_announcement"
+                  class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-amber-500/90 text-white backdrop-blur-sm shadow-sm">{{ langStore.t.adminPinnedLabel }}</span>
+                <span v-if="post.is_paid"
+                  class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-emerald-500/90 text-white backdrop-blur-sm shadow-sm">{{ langStore.t.adminPaidLabel }}</span>
+              </div>
+
+              <!-- Hover actions -->
+              <div class="absolute top-2.5 right-2.5 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <router-link :to="`/post/${post.id}`" target="_blank" @click.stop
+                  class="w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm text-white/70 hover:text-white hover:bg-black/80
+                    flex items-center justify-center transition-all" :title="langStore.t.adminOpenOnSiteTooltip">
+                  <BIcon name="ExternalLink" class="w-3.5 h-3.5" />
+                </router-link>
+                <button @click="togglePostPin(post)" :title="langStore.t.adminTogglePinTooltip"
+                  class="w-8 h-8 rounded-full backdrop-blur-sm flex items-center justify-center transition-all"
+                  :class="post.is_announcement ? 'bg-amber-500/80 text-white' : 'bg-black/60 text-white/70 hover:text-white hover:bg-black/80'">
+                  <BIcon name="Pin" class="w-3.5 h-3.5" />
+                </button>
+                <button @click="deletePost(post.id)"
+                  class="w-8 h-8 rounded-full bg-rose-500/80 text-white hover:bg-rose-500
+                    flex items-center justify-center transition-all" :title="langStore.t.deleteBtn">
+                  <BIcon name="Trash2" class="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <!-- Body -->
+              <div class="p-4 flex flex-col gap-3 flex-1">
+                <router-link :to="`/profile/${post.author?.username}`" target="_blank" class="flex items-center gap-2 min-w-0 group/user">
                   <img v-if="post.author?.avatar_url" :src="post.author.avatar_url"
-                    class="w-8 h-8 rounded-full object-cover border border-white/10 flex-shrink-0 hover:opacity-80 transition-opacity" />
-                  <div v-else class="w-8 h-8 rounded-full border border-white/10 bg-[#4C67CF]/15 flex items-center justify-center text-[#4C67CF] font-bold text-sm flex-shrink-0">
+                    class="w-7 h-7 rounded-full object-cover border border-white/10 flex-shrink-0 group-hover/user:opacity-80 transition-opacity" />
+                  <div v-else class="w-7 h-7 rounded-full border border-white/10 bg-[#4C67CF]/15 flex items-center justify-center text-[#4C67CF] font-bold text-xs flex-shrink-0">
                     {{ (post.author?.display_name || post.author?.username || '?')[0].toUpperCase() }}
                   </div>
-                  <span class="text-sm font-bold text-white truncate hover:text-[#4C67CF] transition-colors">{{ post.author?.display_name || post.author?.username }}</span>
+                  <span class="text-sm font-bold text-white truncate group-hover/user:text-[#4C67CF] transition-colors">{{ post.author?.display_name || post.author?.username }}</span>
+                  <span class="text-[11px] text-white/30 flex-shrink-0 ml-auto">{{ formatDate(post.created_at) }}</span>
                 </router-link>
 
-                <!-- Содержание -->
-                <div class="min-w-0">
-                  <div class="flex items-center gap-1.5 mb-1 flex-wrap">
-                    <span v-if="post.category"
-                      class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-accent/15 text-brand-accent">
-                      #{{ post.category }}
-                    </span>
-                    <span v-if="post.is_nsfw"
-                      class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-400">NSFW</span>
-                    <span v-if="post.is_announcement"
-                      class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400">Закреплено</span>
-                    <span v-if="post.is_paid"
-                      class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">Платно</span>
-                  </div>
+                <div v-if="post.media_urls?.length && (post.title || post.content)" class="min-w-0">
                   <p v-if="post.title" class="text-sm font-bold text-white/90 truncate">{{ post.title }}</p>
-                  <p class="text-sm text-white/70 truncate">{{ post.content }}</p>
-                  <div v-if="post.media_urls?.length" class="flex gap-1.5 mt-1.5">
-                    <button v-for="(url, i) in post.media_urls.slice(0, 4)" :key="i"
-                      @click="openPostMediaLightbox(post.media_urls, i)"
-                      class="relative w-10 h-10 rounded-lg overflow-hidden border border-white/10 hover:border-[#4C67CF]/40 transition-all flex-shrink-0">
-                      <img :src="url" class="w-full h-full object-cover" />
-                      <div v-if="i === 3 && post.media_urls.length > 4"
-                        class="absolute inset-0 bg-black/65 flex items-center justify-center text-white text-[9px] font-bold">
-                        +{{ post.media_urls.length - 4 }}
-                      </div>
-                    </button>
-                  </div>
+                  <p class="text-xs text-white/50 line-clamp-2 mt-0.5">{{ post.content }}</p>
                 </div>
+                <p v-else-if="post.title" class="text-sm font-bold text-white/90 truncate -mt-0.5">{{ post.title }}</p>
 
-                <!-- Лайки -->
-                <p class="text-sm text-white/70 font-semibold">{{ formatNum(post._count?.votes ?? 0) }}</p>
-                <!-- Комментарии -->
-                <p class="text-sm text-white/70 font-semibold">{{ formatNum(post._count?.comments ?? 0) }}</p>
-                <!-- Repaw -->
-                <p class="text-sm text-white/70 font-semibold">{{ formatNum(post._count?.repaws ?? 0) }}</p>
-
-                <!-- Actions -->
-                <div class="flex items-center gap-1.5 flex-shrink-0 justify-start lg:justify-end">
-                  <router-link :to="`/post/${post.id}`" target="_blank"
-                    class="w-8 h-8 rounded-full bg-white/5 border border-white/10 text-white/50 hover:text-white hover:bg-white/10
-                      flex items-center justify-center transition-all" title="Открыть на сайте">
-                    <BIcon name="ExternalLink" class="w-3.5 h-3.5" />
-                  </router-link>
-                  <button @click="togglePostPin(post)" title="Закрепить / открепить"
-                    class="w-8 h-8 rounded-full border flex items-center justify-center transition-all"
-                    :class="post.is_announcement
-                      ? 'bg-amber-500/20 border-amber-500/30 text-amber-400'
-                      : 'bg-white/5 border-white/10 text-white/40 hover:text-white hover:bg-white/10'">
-                    <BIcon name="Pin" class="w-3.5 h-3.5" />
-                  </button>
-                  <button @click="deletePost(post.id)"
-                    class="w-8 h-8 rounded-full bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20
-                      flex items-center justify-center transition-all" title="Удалить">
-                    <BIcon name="Trash2" class="w-3.5 h-3.5" />
-                  </button>
+                <!-- Stats footer -->
+                <div class="flex items-center gap-3 mt-auto pt-2.5 border-t border-white/[0.06]">
+                  <span class="flex items-center gap-1 text-xs font-bold text-emerald-400/80" :title="langStore.t.adminLikesLabel">
+                    <BIcon name="ThumbsUp" class="w-3.5 h-3.5" /> {{ formatNum(post.likes_count ?? 0) }}
+                  </span>
+                  <span class="flex items-center gap-1 text-xs font-bold text-rose-400/80" :title="langStore.t.adminDislikesLabel">
+                    <BIcon name="ThumbsDown" class="w-3.5 h-3.5" /> {{ formatNum(post.dislikes_count ?? 0) }}
+                  </span>
+                  <span class="w-px h-3 bg-white/[0.08]" />
+                  <span class="flex items-center gap-1 text-xs font-semibold text-white/50">
+                    <BIcon name="MessageCircle" class="w-3.5 h-3.5 text-sky-400/70" /> {{ formatNum(post._count?.comments ?? 0) }}
+                  </span>
+                  <span class="flex items-center gap-1 text-xs font-semibold text-white/50 ml-auto">
+                    <BIcon name="Repeat2" class="w-3.5 h-3.5 text-violet-400/70" /> {{ formatNum(post._count?.repaws ?? 0) }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -2017,6 +2187,23 @@ const totalPendingBadge = computed(() => {
 
         <!-- ── REPORTS ─────────────────────────────────────────────────── -->
         <div v-else-if="activeTab === 'reports'">
+          <!-- Segmented toggle: user reports vs ban/freeze appeals (merged from the old separate tab) -->
+          <div class="flex items-center gap-2 mb-5 p-1 rounded-2xl bg-white/[0.04] w-fit">
+            <button type="button" @click="switchReportsView('reports')"
+              class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+              :class="reportsViewMode === 'reports' ? 'bg-amber-500/20 text-amber-400' : 'text-white/40 hover:text-white/70'">
+              <BIcon name="Flag" class="w-3.5 h-3.5" /> {{ langStore.t.adminNavReports }}
+            </button>
+            <button type="button" @click="switchReportsView('appeals')"
+              class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+              :class="reportsViewMode === 'appeals' ? 'bg-violet-500/20 text-violet-400' : 'text-white/40 hover:text-white/70'">
+              <BIcon name="Gavel" class="w-3.5 h-3.5" /> {{ langStore.t.adminNavAppeals }}
+              <span v-if="appeals.length" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                :class="reportsViewMode === 'appeals' ? 'bg-violet-400/20 text-violet-300' : 'bg-white/10 text-white/40'">{{ appeals.length }}</span>
+            </button>
+          </div>
+
+          <template v-if="reportsViewMode === 'reports'">
           <!-- Filter pills -->
           <div class="flex gap-2 mb-5 flex-wrap">
             <button v-for="s in (['', 'pending', 'resolved', 'dismissed'] as const)" :key="s"
@@ -2025,7 +2212,7 @@ const totalPendingBadge = computed(() => {
               :class="reportFilter === s
                 ? 'bg-brand-accent/20 border-brand-accent/30 text-brand-accent'
                 : 'bg-brand-card border-brand-border text-white/40 hover:text-white/70'">
-              {{ { '': 'Все', pending: 'На рассмотрении', resolved: 'Решено', dismissed: 'Отклонено' }[s] }}
+              {{ { '': langStore.t.tabAll, pending: langStore.t.reportStatusPending, resolved: langStore.t.reportStatusResolved, dismissed: langStore.t.reportStatusDismissed }[s] }}
             </button>
           </div>
 
@@ -2035,7 +2222,7 @@ const totalPendingBadge = computed(() => {
           <div v-else-if="reports.length === 0"
             class="rounded-2xl border border-brand-border bg-brand-card flex flex-col items-center gap-3 py-16 text-white/25">
             <BIcon name="Flag" class="w-10 h-10 opacity-40" />
-            <p class="text-sm font-semibold">Жалоб нет</p>
+            <p class="text-sm font-semibold">{{ langStore.t.adminNoReports }}</p>
           </div>
           <div v-else class="space-y-3">
             <div v-for="folder in reports" :key="reportGroupKey(folder)"
@@ -2055,11 +2242,11 @@ const totalPendingBadge = computed(() => {
                         : folder.status === 'resolved'
                           ? 'bg-emerald-500/15 text-emerald-400'
                           : 'bg-white/5 text-white/30'">
-                      {{ { pending: 'На рассмотрении', resolved: 'Решено', dismissed: 'Отклонено' }[folder.status] }}
+                      {{ { pending: langStore.t.reportStatusPending, resolved: langStore.t.reportStatusResolved, dismissed: langStore.t.reportStatusDismissed }[folder.status] }}
                     </span>
                     <span v-if="folder.count > 1"
                       class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400"
-                      :title="`${folder.count} жалоб на один и тот же объект`">
+                      :title="`${folder.count} ${langStore.t.adminSameTargetReportsTooltip}`">
                       ×{{ folder.count }}
                     </span>
                   </div>
@@ -2077,8 +2264,8 @@ const totalPendingBadge = computed(() => {
 
                   <!-- Subtitle: reporter + target -->
                   <p class="text-xs text-white/40 mt-1">
-                    Жалоба от <span class="font-semibold text-white/60">{{ folder.reports[0].reporter?.display_name || folder.reports[0].reporter?.username }}</span>
-                    на {{ (REPORT_TARGET_LABEL[folder.target_type] ?? folder.target_type).toLowerCase() }}
+                    {{ langStore.t.adminReportFromPrefix }} <span class="font-semibold text-white/60">{{ folder.reports[0].reporter?.display_name || folder.reports[0].reporter?.username }}</span>
+                    {{ langStore.t.adminReportOnPrefix }} {{ (REPORT_TARGET_LABEL[folder.target_type] ?? folder.target_type).toLowerCase() }}
                     <router-link v-if="folder.target_type === 'post' && folder.post" :to="`/post/${folder.target_id}`" target="_blank" class="font-semibold text-brand-accent hover:underline">@{{ folder.post.author?.username }}</router-link>
                     <router-link v-else-if="folder.target_type === 'user' && folder.reportedUser" :to="`/profile/${folder.reportedUser.username}`" target="_blank" class="font-semibold text-brand-accent hover:underline">@{{ folder.reportedUser.username }}</router-link>
                     <router-link v-else-if="folder.target_type === 'group' && folder.reportedGroup" :to="`/groups/${folder.reportedGroup.slug}`" target="_blank" class="font-semibold text-brand-accent hover:underline">{{ folder.reportedGroup.name }}</router-link>
@@ -2088,7 +2275,7 @@ const totalPendingBadge = computed(() => {
 
                   <button v-if="folder.count > 1" @click="toggleReportGroup(folder)"
                     class="text-[11px] font-bold text-brand-accent/80 hover:text-brand-accent mt-1.5 transition-colors">
-                    {{ expandedReportGroups.has(reportGroupKey(folder)) ? 'Скрыть' : 'Показать все жалобы' }} ({{ folder.count }})
+                    {{ expandedReportGroups.has(reportGroupKey(folder)) ? langStore.t.adminHideLabel : langStore.t.adminShowAllReports }} ({{ folder.count }})
                   </button>
                   <Transition name="filter-expand">
                     <div v-if="folder.count > 1 && expandedReportGroups.has(reportGroupKey(folder))"
@@ -2105,11 +2292,11 @@ const totalPendingBadge = computed(() => {
                 <div class="flex items-center gap-2 flex-shrink-0">
                   <button @click="openResolveModal(folder)" :disabled="folder.status !== 'pending'"
                     class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                    <BIcon name="TriangleAlert" class="w-3.5 h-3.5" /> Решить проблему
+                    <BIcon name="TriangleAlert" class="w-3.5 h-3.5" /> {{ langStore.t.adminResolveProblemBtn }}
                   </button>
                   <button @click="resolveReportGroup(folder, 'dismissed')" :disabled="folder.status !== 'pending'"
                     class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 text-white/40 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                    <BIcon name="X" class="w-3.5 h-3.5" /> Отклонить
+                    <BIcon name="X" class="w-3.5 h-3.5" /> {{ langStore.t.adminRejectBtn }}
                   </button>
                 </div>
               </div>
@@ -2118,17 +2305,16 @@ const totalPendingBadge = computed(() => {
 
           <ResolveReportModal v-if="resolvingFolder" :folder="resolvingFolder"
             @close="resolvingFolder = null" @resolved="onFolderResolved" />
-        </div>
+          </template>
 
-        <!-- ── APPEALS ─────────────────────────────────────────────────── -->
-        <div v-else-if="activeTab === 'appeals'">
+          <template v-else>
           <div v-if="isLoadingAppeals" class="space-y-3">
             <div v-for="n in 3" :key="n" class="h-28 rounded-2xl border border-brand-border bg-brand-card animate-pulse" />
           </div>
           <div v-else-if="appeals.length === 0"
             class="rounded-2xl border border-brand-border bg-brand-card flex flex-col items-center gap-3 py-16 text-white/25">
             <BIcon name="Gavel" class="w-10 h-10 opacity-40" />
-            <p class="text-sm font-semibold">Апелляций на рассмотрении нет</p>
+            <p class="text-sm font-semibold">{{ langStore.t.adminNoAppealsPending }}</p>
           </div>
           <div v-else class="space-y-3">
             <div v-for="a in appeals" :key="a.id" class="rounded-2xl border border-brand-border bg-brand-card p-4">
@@ -2139,24 +2325,25 @@ const totalPendingBadge = computed(() => {
                 </div>
                 <div class="min-w-0 flex-1">
                   <p class="font-bold text-sm text-white truncate">{{ a.user?.display_name || a.user?.username }} <span class="text-white/30 font-normal">@{{ a.user?.username }}</span></p>
-                  <p class="text-xs text-white/40 mt-1"><span class="font-bold text-amber-400">Причина предупреждения:</span> {{ a.reason }}</p>
+                  <p class="text-xs text-white/40 mt-1"><span class="font-bold text-amber-400">{{ langStore.t.adminWarnReasonLabel }}</span> {{ a.reason }}</p>
                   <img v-if="a.image_url" :src="a.image_url" class="mt-2 max-h-32 rounded-xl border border-white/10 object-cover" />
-                  <p class="text-xs text-white/60 mt-2 bg-white/[0.03] border border-white/[0.08] rounded-xl p-2.5"><span class="font-bold text-violet-400">Апелляция:</span> {{ a.appeal_text }}</p>
+                  <p class="text-xs text-white/60 mt-2 bg-white/[0.03] border border-white/[0.08] rounded-xl p-2.5"><span class="font-bold text-violet-400">{{ langStore.t.adminAppealLabel }}</span> {{ a.appeal_text }}</p>
                   <p class="text-[11px] text-white/25 mt-1.5">{{ formatDate(a.appeal_created_at) }}</p>
                 </div>
                 <div class="flex flex-col gap-2 flex-shrink-0">
                   <button @click="decideAppeal(a.id, 'accepted')" :disabled="decidingAppealId === a.id"
                     class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-30 transition-all">
-                    <BIcon name="Check" class="w-3.5 h-3.5" /> Принять
+                    <BIcon name="Check" class="w-3.5 h-3.5" /> {{ langStore.t.adminAcceptBtn }}
                   </button>
                   <button @click="decideAppeal(a.id, 'rejected')" :disabled="decidingAppealId === a.id"
                     class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 text-white/40 hover:text-white disabled:opacity-30 transition-all">
-                    <BIcon name="X" class="w-3.5 h-3.5" /> Отклонить
+                    <BIcon name="X" class="w-3.5 h-3.5" /> {{ langStore.t.adminRejectBtn }}
                   </button>
                 </div>
               </div>
             </div>
           </div>
+          </template>
         </div>
 
         <!-- ── SUPPORT ────────────────────────────────────────────────── -->
@@ -2169,7 +2356,7 @@ const totalPendingBadge = computed(() => {
               :class="supportFilter === s
                 ? 'bg-[#4C67CF]/15 border-[#4C67CF]/25 text-[#8fa0ec]'
                 : 'bg-white/5 border-white/[0.08] text-white/40 hover:text-white/70'">
-              {{ s === '' ? 'Все' : SUPPORT_STATUS_LABEL[s] }}
+              {{ s === '' ? langStore.t.tabAll : SUPPORT_STATUS_LABEL[s] }}
             </button>
           </div>
 
@@ -2184,7 +2371,7 @@ const totalPendingBadge = computed(() => {
             <div v-else-if="supportTickets.length === 0"
               class="flex flex-col items-center gap-3 py-16 text-white/25">
               <BIcon name="LifeBuoy" class="w-10 h-10 opacity-40" />
-              <p class="text-sm font-semibold">Обращений нет</p>
+              <p class="text-sm font-semibold">{{ langStore.t.adminNoTicketsFound }}</p>
             </div>
             <div v-else class="divide-y divide-brand-border">
               <div v-for="ticket in supportTickets" :key="ticket.id" class="px-5 py-4 hover:bg-white/[0.03] transition-all">
@@ -2200,41 +2387,47 @@ const totalPendingBadge = computed(() => {
                       </span>
                       <span class="text-[10px] text-white/25 uppercase font-bold">{{ SUPPORT_TYPE_LABEL[ticket.type] ?? ticket.type }}</span>
                       <span class="text-[10px] text-white/25">{{ formatDate(ticket.created_at) }}</span>
+                      <span v-if="ticket.source === 'email'" class="text-[10px] text-[#8fa0ec] font-bold">· {{ langStore.t.adminTicketSourceEmail }}</span>
                     </div>
                     <p class="text-sm text-white/80 font-bold">{{ ticket.subject }}</p>
-                    <p class="text-xs text-white/50 mt-1 whitespace-pre-wrap">{{ ticket.message }}</p>
                     <p class="text-xs text-white/30 mt-1.5">
-                      от @{{ ticket.user?.username }}
-                      <span v-if="ticket.contact_email"> · {{ ticket.contact_email }}</span>
+                      <template v-if="ticket.user?.username">{{ langStore.t.adminFromPrefix }} @{{ ticket.user.username }}</template>
+                      <template v-else-if="ticket.external_email">{{ langStore.t.adminFromPrefix }} {{ ticket.external_email }}</template>
+                      <span v-if="ticket.contact_email && ticket.contact_email !== ticket.external_email"> · {{ ticket.contact_email }}</span>
                     </p>
 
-                    <div v-if="ticket.attachment_urls?.length" class="flex gap-2 mt-2 flex-wrap">
-                      <a v-for="(url, ai) in ticket.attachment_urls" :key="ai" :href="url" target="_blank" rel="noopener"
-                        class="w-16 h-16 rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
-                        <img :src="url" class="w-full h-full object-cover" />
-                      </a>
-                    </div>
-
-                    <div v-if="ticket.admin_reply" class="mt-3 px-3 py-2 rounded-xl bg-white/5 border border-white/[0.06]">
-                      <p class="text-[10px] font-bold text-white/30 mb-0.5">Ответ {{ ticket.replier?.username ? `(@${ticket.replier.username})` : '' }}</p>
-                      <p class="text-xs text-white/70 whitespace-pre-wrap">{{ ticket.admin_reply }}</p>
+                    <div class="mt-3 space-y-2">
+                      <div v-for="m in ticket.messages" :key="m.id"
+                        class="px-3 py-2 rounded-xl border"
+                        :class="m.sender_type === 'admin' ? 'bg-[#4C67CF]/[0.08] border-[#4C67CF]/20' : 'bg-white/5 border-white/[0.06]'">
+                        <p class="text-[10px] font-bold mb-0.5" :class="m.sender_type === 'admin' ? 'text-[#8fa0ec]' : 'text-white/30'">
+                          {{ supportSenderLabel(m) }}
+                        </p>
+                        <p class="text-xs text-white/70 whitespace-pre-wrap">{{ m.body }}</p>
+                        <div v-if="m.attachment_urls?.length" class="flex gap-2 mt-2 flex-wrap">
+                          <a v-for="(url, ai) in m.attachment_urls" :key="ai" :href="url" target="_blank" rel="noopener"
+                            class="w-16 h-16 rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
+                            <img :src="url" class="w-full h-full object-cover" />
+                          </a>
+                        </div>
+                      </div>
                     </div>
 
                     <div class="mt-3 flex flex-col sm:flex-row gap-2">
-                      <input v-model="supportReplyDrafts[ticket.id]" type="text" placeholder="Ответ пользователю..."
+                      <input v-model="supportReplyDrafts[ticket.id]" type="text" :placeholder="langStore.t.adminReplyToUserPlaceholder"
                         class="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/[0.08] text-xs text-white placeholder-white/25 focus:outline-none focus:border-[#4C67CF]/40" />
                       <div class="flex gap-2 flex-shrink-0">
                         <button @click="replySupportTicket(ticket.id, 'in_progress')"
                           class="px-3 py-1.5 rounded-xl text-xs font-bold bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/20 transition-all">
-                          В работу
+                          {{ langStore.t.adminMarkInProgressBtn }}
                         </button>
                         <button @click="replySupportTicket(ticket.id, 'resolved')"
                           class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
-                          ✓ Решено
+                          ✓ {{ langStore.t.adminMarkResolvedBtn }}
                         </button>
                         <button @click="replySupportTicket(ticket.id, 'closed')"
                           class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 border border-white/[0.08] text-white/40 hover:text-white transition-all">
-                          Закрыть
+                          {{ langStore.t.adminCloseBtn }}
                         </button>
                       </div>
                     </div>
@@ -2247,18 +2440,35 @@ const totalPendingBadge = computed(() => {
 
         <!-- ── ADS ────────────────────────────────────────────────────── -->
         <div v-else-if="activeTab === 'ads'">
+          <!-- Segmented toggle: ad slots vs promo banners (merged from the old separate tab) -->
+          <div class="flex items-center gap-2 mb-5 p-1 rounded-2xl bg-white/[0.04] w-fit">
+            <button type="button" @click="switchAdsView('ads')"
+              class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+              :class="adsViewMode === 'ads' ? 'bg-orange-500/20 text-orange-400' : 'text-white/40 hover:text-white/70'">
+              <BIcon name="Megaphone" class="w-3.5 h-3.5" /> {{ langStore.t.adLabel }}
+            </button>
+            <button type="button" @click="switchAdsView('banners')"
+              class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+              :class="adsViewMode === 'banners' ? 'bg-violet-500/20 text-violet-400' : 'text-white/40 hover:text-white/70'">
+              <BIcon name="Image" class="w-3.5 h-3.5" /> {{ langStore.t.adminNavBanners }}
+              <span v-if="banners.length" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                :class="adsViewMode === 'banners' ? 'bg-violet-400/20 text-violet-300' : 'bg-white/10 text-white/40'">{{ banners.length }}/7</span>
+            </button>
+          </div>
+
+          <template v-if="adsViewMode === 'ads'">
           <div class="flex items-center justify-between mb-5">
-            <p class="text-xs text-white/35 font-semibold">{{ ads.length }} объявлений</p>
+            <p class="text-xs text-white/35 font-semibold">{{ ads.length }} {{ langStore.t.adminAdsCountSuffix }}</p>
             <button @click="showAdForm = !showAdForm"
               class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-lg text-white"
               style="background:linear-gradient(135deg,#4C67CF,#31458F);box-shadow:0 4px 16px rgba(76,103,207,0.3)">
-              <BIcon name="Plus" class="w-3.5 h-3.5" /> Создать
+              <BIcon name="Plus" class="w-3.5 h-3.5" /> {{ langStore.t.adminCreateBtn }}
             </button>
           </div>
 
           <!-- Где показывается: мини-визуал мест размещения -->
           <div class="rounded-3xl border border-brand-border p-5 mb-5" style="background:#1F223C">
-            <p class="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">Где показывается на сайте</p>
+            <p class="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">{{ langStore.t.adminAdShowsWhereTitle }}</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <!-- Лента (hero) -->
               <div class="rounded-2xl border border-white/[0.08] p-3" style="background:#1F223C">
@@ -2269,9 +2479,9 @@ const totalPendingBadge = computed(() => {
                     <div class="h-1.5 w-16 rounded-full bg-white/25" />
                   </div>
                 </div>
-                <p class="text-[11px] font-bold text-white/70">Верх ленты</p>
-                <p class="text-[10px] text-white/30">Крупный блок над постами на главной</p>
-                <p class="text-[10px] font-bold text-[#4C67CF] mt-1">от 1500 ₽ / нед.</p>
+                <p class="text-[11px] font-bold text-white/70">{{ langStore.t.adminAdSlotFeedTop }}</p>
+                <p class="text-[10px] text-white/30">{{ langStore.t.adminAdSlotFeedTopDesc }}</p>
+                <p class="text-[10px] font-bold text-[#4C67CF] mt-1">{{ langStore.t.adminAdSlotFeedTopPrice }}</p>
               </div>
               <!-- Левый сайдбар -->
               <div class="rounded-2xl border border-white/[0.08] p-3" style="background:#1F223C">
@@ -2280,9 +2490,9 @@ const totalPendingBadge = computed(() => {
                   <div class="h-2 w-8 rounded bg-white/10" />
                   <div class="h-2 w-9 rounded bg-[#4C67CF]/40" />
                 </div>
-                <p class="text-[11px] font-bold text-white/70">Левое меню</p>
-                <p class="text-[10px] text-white/30">Карточка под навигацией слева</p>
-                <p class="text-[10px] font-bold text-[#4C67CF] mt-1">от 800 ₽ / нед.</p>
+                <p class="text-[11px] font-bold text-white/70">{{ langStore.t.adminAdSlotSidebarLeft }}</p>
+                <p class="text-[10px] text-white/30">{{ langStore.t.adminAdSlotSidebarLeftDesc }}</p>
+                <p class="text-[10px] font-bold text-[#4C67CF] mt-1">{{ langStore.t.adminAdSlotSidebarLeftPrice }}</p>
               </div>
               <!-- Правый сайдбар -->
               <div class="rounded-2xl border border-white/[0.08] p-3" style="background:#1F223C">
@@ -2291,9 +2501,9 @@ const totalPendingBadge = computed(() => {
                   <div class="h-2 w-full rounded bg-white/10" />
                   <div class="h-2 w-7 rounded bg-white/10" />
                 </div>
-                <p class="text-[11px] font-bold text-white/70">Правая колонка</p>
-                <p class="text-[10px] text-white/30">Над трендовыми тегами (только xl-экраны)</p>
-                <p class="text-[10px] font-bold text-[#4C67CF] mt-1">от 600 ₽ / нед.</p>
+                <p class="text-[11px] font-bold text-white/70">{{ langStore.t.adminAdSlotSidebarRight }}</p>
+                <p class="text-[10px] text-white/30">{{ langStore.t.adminAdSlotSidebarRightDesc }}</p>
+                <p class="text-[10px] font-bold text-[#4C67CF] mt-1">{{ langStore.t.adminAdSlotSidebarRightPrice }}</p>
               </div>
               <!-- Страница групп -->
               <div class="rounded-2xl border border-white/[0.08] p-3" style="background:#1F223C">
@@ -2304,12 +2514,12 @@ const totalPendingBadge = computed(() => {
                     <div class="h-1.5 w-16 rounded-full bg-white/25" />
                   </div>
                 </div>
-                <p class="text-[11px] font-bold text-white/70">Страница «Группы»</p>
-                <p class="text-[10px] text-white/30">Крупный блок над поиском групп</p>
-                <p class="text-[10px] font-bold text-[#4C67CF] mt-1">от 1200 ₽ / нед.</p>
+                <p class="text-[11px] font-bold text-white/70">{{ langStore.t.adminAdSlotGroupsPage }}</p>
+                <p class="text-[10px] text-white/30">{{ langStore.t.adminAdSlotGroupsPageDesc }}</p>
+                <p class="text-[10px] font-bold text-[#4C67CF] mt-1">{{ langStore.t.adminAdSlotGroupsPagePrice }}</p>
               </div>
             </div>
-            <p class="text-[11px] text-white/25 mt-3">Если активных объявлений нет — на этих местах показывается карточка «Здесь может быть ваша реклама» со ссылкой на заявку. Цены ориентировочные — окончательная сумма обсуждается с заявителем вручную.</p>
+            <p class="text-[11px] text-white/25 mt-3">{{ langStore.t.adminAdSlotsDisclaimer }}</p>
           </div>
 
           <!-- Create form -->
@@ -2317,21 +2527,21 @@ const totalPendingBadge = computed(() => {
             <div v-if="showAdForm"
               class="rounded-3xl border border-[#4C67CF]/20 p-6 mb-5 shadow-xl"
               style="background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.04))">
-              <h4 class="font-extrabold text-sm text-white mb-4">Новое объявление</h4>
+              <h4 class="font-extrabold text-sm text-white mb-4">{{ langStore.t.adminNewAdTitle }}</h4>
               <div class="space-y-3">
-                <input v-model="newAd.title" placeholder="Заголовок *"
+                <input v-model="newAd.title" :placeholder="langStore.t.adminTitlePlaceholderRequired"
                   class="adm-input" />
-                <textarea v-model="newAd.description" placeholder="Описание"
+                <textarea v-model="newAd.description" :placeholder="langStore.t.adminDescriptionPlaceholder"
                   class="adm-input resize-none h-20" />
-                <input v-model="newAd.linkUrl" type="url" placeholder="Ссылка *"
+                <input v-model="newAd.linkUrl" type="url" :placeholder="langStore.t.adminLinkPlaceholderRequired"
                   class="adm-input" />
-                <input v-model="newAd.priceLabel" placeholder="Ценник (напр. «1500 ₽ / неделя»)"
+                <input v-model="newAd.priceLabel" :placeholder="langStore.t.adminPriceLabelPlaceholderExample"
                   class="adm-input" />
                 <div>
-                  <p class="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">Изображение (опционально)</p>
+                  <p class="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">{{ langStore.t.adminImageOptionalLabel }}</p>
                   <div v-if="newAd.imageUrl" class="flex items-center gap-3 p-3 bg-white/5 border border-white/[0.08] rounded-2xl">
                     <img :src="newAd.imageUrl" class="w-16 h-12 object-cover rounded-xl flex-shrink-0" />
-                    <span class="flex-1 text-xs text-white/45 truncate">Загружено</span>
+                    <span class="flex-1 text-xs text-white/45 truncate">{{ langStore.t.adminUploadedLabel }}</span>
                     <button @click="newAd.imageUrl = ''" class="w-7 h-7 rounded-full bg-white/[0.08] hover:bg-rose-500/20 flex items-center justify-center transition-all">
                       <BIcon name="X" class="w-3.5 h-3.5 text-white/60" />
                     </button>
@@ -2342,11 +2552,11 @@ const totalPendingBadge = computed(() => {
 
               <!-- Live preview: exactly how the card renders on-site -->
               <div v-if="newAd.title" class="mt-4">
-                <p class="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-1.5">Превью карточки</p>
+                <p class="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-1.5">{{ langStore.t.adminCardPreviewLabel }}</p>
                 <div class="max-w-xs bg-brand-card border border-brand-accent/25 rounded-3xl overflow-hidden shadow-xl">
                   <img v-if="newAd.imageUrl" :src="newAd.imageUrl" class="w-full object-cover max-h-28" />
                   <div class="px-4 py-3">
-                    <span class="text-[9px] font-bold uppercase tracking-wider text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Реклама</span>
+                    <span class="text-[9px] font-bold uppercase tracking-wider text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">{{ langStore.t.adLabel }}</span>
                     <p class="text-xs font-bold text-white leading-snug mt-1.5">{{ newAd.title }}</p>
                     <p v-if="newAd.description" class="text-[11px] text-white/55 mt-0.5 line-clamp-2">{{ newAd.description }}</p>
                     <p v-if="newAd.priceLabel" class="text-[11px] font-bold text-[#4C67CF] mt-1">{{ newAd.priceLabel }}</p>
@@ -2356,11 +2566,11 @@ const totalPendingBadge = computed(() => {
 
               <div class="flex gap-2 justify-end mt-4">
                 <button @click="showAdForm = false"
-                  class="px-4 py-2 rounded-xl text-sm text-white/40 hover:text-white hover:bg-white/5 border border-white/[0.08] transition-all">Отмена</button>
+                  class="px-4 py-2 rounded-xl text-sm text-white/40 hover:text-white hover:bg-white/5 border border-white/[0.08] transition-all">{{ langStore.t.cancel }}</button>
                 <button @click="submitAd" :disabled="isSubmittingAd || !newAd.title || !newAd.linkUrl"
                   class="px-5 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all shadow-lg"
                   style="background:linear-gradient(135deg,#4C67CF,#31458F);box-shadow:0 4px 12px rgba(76,103,207,0.3)">
-                  {{ isSubmittingAd ? '...' : 'Создать' }}
+                  {{ isSubmittingAd ? '...' : langStore.t.adminCreateBtn }}
                 </button>
               </div>
             </div>
@@ -2372,7 +2582,7 @@ const totalPendingBadge = computed(() => {
           <div v-else-if="ads.length === 0"
             class="flex flex-col items-center gap-3 py-20 text-white/25">
             <BIcon name="Megaphone" class="w-10 h-10 opacity-40" />
-            <p class="text-sm font-semibold">Объявлений нет</p>
+            <p class="text-sm font-semibold">{{ langStore.t.adminNoAdsFound }}</p>
           </div>
           <div v-else class="space-y-3">
             <div v-for="ad in ads" :key="ad.id"
@@ -2392,7 +2602,7 @@ const totalPendingBadge = computed(() => {
                         : 'text-white/30 bg-white/5 border-white/10'">
                     {{ ad.status }}
                   </span>
-                  <span class="text-[10px] text-white/30">{{ ad.impressions ?? 0 }} показов · {{ ad.clicks ?? 0 }} кликов</span>
+                  <span class="text-[10px] text-white/30">{{ ad.impressions ?? 0 }} {{ langStore.t.adminImpressionsSuffix }} · {{ ad.clicks ?? 0 }} {{ langStore.t.adminClicksSuffix }}</span>
                   <span v-if="ad.price_label" class="text-[10px] font-bold text-[#4C67CF] bg-[#4C67CF]/10 px-2 py-0.5 rounded-full border border-[#4C67CF]/20">{{ ad.price_label }}</span>
                 </div>
                 <p class="font-bold text-sm text-white">{{ ad.title }}</p>
@@ -2401,169 +2611,40 @@ const totalPendingBadge = computed(() => {
                 <div class="flex items-center gap-2 mt-1.5 flex-wrap">
                   <router-link v-if="ad.requester" :to="`/profile/${ad.requester.username}`" target="_blank"
                     class="text-[11px] text-white/35 hover:text-white/60 transition-colors">
-                    от @{{ ad.requester.username }}
+                    {{ langStore.t.adminFromPrefix }} @{{ ad.requester.username }}
                   </router-link>
-                  <span v-if="ad.contact_info" class="text-[11px] text-white/25">· контакт: {{ ad.contact_info }}</span>
+                  <span v-if="ad.contact_info" class="text-[11px] text-white/25">· {{ langStore.t.adminContactLabel }} {{ ad.contact_info }}</span>
                 </div>
               </div>
               <div class="flex flex-col gap-2 flex-shrink-0">
                 <template v-if="ad.status === 'pending'">
                   <button @click="reviewAd(ad.id, 'active')"
                     class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
-                    Одобрить
+                    {{ langStore.t.adminApproveBtn }}
                   </button>
                   <button @click="reviewAd(ad.id, 'rejected')"
                     class="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 transition-all">
-                    Отклонить
+                    {{ langStore.t.adminRejectBtn }}
                   </button>
                 </template>
-                <button @click="deleteAd(ad.id)" title="Удалить"
+                <button @click="deleteAd(ad.id)" :title="langStore.t.deleteBtn"
                   class="w-7 h-7 rounded-xl bg-white/5 border border-white/[0.08] text-white/40 hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-500/20 flex items-center justify-center transition-all self-end">
                   <BIcon name="Trash2" class="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
           </div>
-        </div>
+          </template>
 
-        <!-- ── VERIFICATION ────────────────────────────────────────────── -->
-        <div v-else-if="activeTab === 'verification'">
-          <div class="flex gap-2 mb-5 flex-wrap">
-            <button v-for="s in (['', 'pending', 'approved', 'rejected'] as const)" :key="s"
-              @click="verFilter = s; fetchVerRequests()"
-              class="px-4 py-2 rounded-2xl text-xs font-bold border transition-all"
-              :class="verFilter === s
-                ? 'bg-blue-500/15 border-blue-500/25 text-blue-400'
-                : 'bg-white/5 border-white/[0.08] text-white/40 hover:text-white/70'">
-              {{ { '': 'Все', pending: 'Ожидают', approved: 'Одобрены', rejected: 'Отклонены' }[s] }}
-            </button>
-          </div>
-
-          <div class="space-y-3">
-            <div v-if="isLoadingVer">
-              <div v-for="n in 3" :key="n" class="h-28 rounded-3xl bg-white/5 animate-pulse" />
-            </div>
-            <div v-else-if="verRequests.length === 0"
-              class="flex flex-col items-center gap-3 py-20 text-white/25">
-              <BIcon name="BadgeCheck" class="w-10 h-10 opacity-40" />
-              <p class="text-sm font-semibold">Заявок нет</p>
-            </div>
-            <div v-else class="space-y-3">
-              <div v-for="req in verRequests" :key="req.id"
-                class="rounded-3xl border border-brand-border overflow-hidden hover:border-blue-500/15 transition-all"
-                style="background:#1F223C">
-                <div class="px-5 py-4 flex items-start gap-4">
-
-                  <!-- Left: identity + status + criteria -->
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap mb-2.5">
-                      <span class="text-xs font-extrabold px-2 py-0.5 rounded-full border"
-                        :class="req.status==='pending'
-                          ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
-                          : req.status==='approved'
-                            ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                            : 'text-rose-400 bg-rose-500/10 border-rose-500/20'">
-                        {{ {pending:'Ожидает',approved:'Одобрено',rejected:'Отклонено'}[req.status] }}
-                      </span>
-                      <span v-if="req.verification_type"
-                        class="text-xs font-bold px-2 py-0.5 rounded-full border flex items-center gap-1"
-                        :class="verTypeColors[req.verification_type] || 'text-blue-400 bg-blue-400/10 border-blue-400/20'">
-                        <img v-if="verTypeLabels[req.verification_type]"
-                          :src="`/icons/badges/${req.verification_type}.svg`" class="w-3 h-3" />
-                        {{ verTypeLabels[req.verification_type] || req.verification_type }}
-                      </span>
-                      <span class="text-[10px] text-white/25 ml-auto">{{ formatDate(req.created_at) }}</span>
-                    </div>
-
-                    <!-- Identity — click through to the profile -->
-                    <router-link :to="`/profile/${req.user?.username}`" target="_blank"
-                      class="flex items-center gap-3 group/user w-fit">
-                      <img v-if="req.user?.avatar_url" :src="req.user.avatar_url"
-                        class="w-10 h-10 rounded-2xl object-cover border border-white/10 flex-shrink-0" />
-                      <div v-else class="w-10 h-10 rounded-2xl bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold flex-shrink-0">
-                        {{ (req.user?.display_name || req.user?.username || '?')[0].toUpperCase() }}
-                      </div>
-                      <div class="min-w-0">
-                        <p class="font-extrabold text-sm text-white group-hover/user:text-blue-400 transition-colors flex items-center gap-1">
-                          {{ req.user?.display_name || req.user?.username }}
-                          <BIcon name="ExternalLink" class="w-3 h-3 opacity-0 group-hover/user:opacity-60 transition-opacity" />
-                        </p>
-                        <p class="text-xs text-white/35">@{{ req.user?.username }}</p>
-                      </div>
-                    </router-link>
-
-                    <!-- Criteria — compact two-column checklist instead of a wall of pills -->
-                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 mt-3 max-w-xs">
-                      <span v-for="chip in [
-                        {label: req.account_age_days+' дн.', ok: req.account_age_days>=14},
-                        {label: req.post_count+' постов', ok: req.post_count>=3},
-                        {label: 'Аватар', ok: req.has_avatar},
-                        {label: 'Био', ok: req.has_bio},
-                        {label: 'Email', ok: req.has_email},
-                        {label: req.follower_count+' подписч.', ok: req.follower_count>=5},
-                      ]" :key="chip.label"
-                        class="text-[11px] font-semibold flex items-center gap-1"
-                        :class="chip.ok ? 'text-emerald-400/80' : 'text-rose-400/80'">
-                        <span class="text-[10px]">{{ chip.ok ? '✓' : '✗' }}</span> {{ chip.label }}
-                      </span>
-                    </div>
-                  </div>
-
-                  <!-- Right: evidence, expanded, + review actions -->
-                  <div class="flex-shrink-0 w-40 sm:w-48 flex flex-col gap-3">
-                    <div v-if="req.evidence_urls?.length">
-                      <p class="text-[10px] font-bold text-white/30 uppercase tracking-wide mb-1.5">Доказательства ({{ req.evidence_urls.length }})</p>
-                      <div class="grid grid-cols-3 gap-1.5">
-                        <button v-for="(url,i) in req.evidence_urls.slice(0,6)" :key="i"
-                          @click="openEvidenceLightbox(req.evidence_urls, i)"
-                          class="relative aspect-square rounded-xl overflow-hidden border border-white/[0.08] hover:border-blue-500/40 transition-all group/ev">
-                          <img :src="url" class="w-full h-full object-cover" />
-                          <div v-if="i===5 && req.evidence_urls.length>6"
-                            class="absolute inset-0 bg-black/65 flex items-center justify-center text-white text-xs font-bold">
-                            +{{ req.evidence_urls.length - 6 }}
-                          </div>
-                          <div class="absolute inset-0 bg-black/0 group-hover/ev:bg-black/20 transition-colors" />
-                        </button>
-                      </div>
-                    </div>
-                    <div v-if="req.evidence_text" class="bg-white/[0.03] border border-white/[0.08] rounded-xl px-2.5 py-2">
-                      <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wide mb-1">Текстовое доказательство</p>
-                      <p class="text-[11px] text-white/70 whitespace-pre-line line-clamp-4">{{ req.evidence_text }}</p>
-                    </div>
-                    <p v-if="!req.evidence_urls?.length && !req.evidence_text" class="text-[11px] text-white/25">Без доказательств</p>
-
-                    <div v-if="req.status === 'pending'" class="flex flex-col gap-1.5 mt-auto">
-                      <button @click="reviewVerRequest(req.id,'approve')"
-                        class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
-                        ✓ Одобрить
-                      </button>
-                      <button @click="rejectVerRequest(req.id)"
-                        class="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 transition-all">
-                        Отклонить
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <PostLightbox v-if="evidenceLightbox"
-            :images="evidenceLightbox.images"
-            :start-index="evidenceLightbox.start"
-            @close="evidenceLightbox = null" />
-        </div>
-
-        <!-- ── BANNERS ─────────────────────────────────────────────────── -->
-        <div v-else-if="activeTab === 'banners'">
+          <template v-else>
           <div class="flex items-center justify-between mb-5">
             <div>
-              <p class="text-xs text-white/35 font-semibold">{{ banners.length }}/7 баннеров · карусель стикеров</p>
+              <p class="text-xs text-white/35 font-semibold">{{ banners.length }}/7 {{ langStore.t.adminBannersCountSuffix }}</p>
             </div>
             <button @click="openBannerCreate" :disabled="banners.length >= 7"
               class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all text-white disabled:opacity-30 disabled:cursor-not-allowed shadow-lg"
               style="background:linear-gradient(135deg,#4C67CF,#31458F);box-shadow:0 4px 16px rgba(76,103,207,0.3)">
-              <BIcon name="Plus" class="w-3.5 h-3.5" /> Новый баннер
+              <BIcon name="Plus" class="w-3.5 h-3.5" /> {{ langStore.t.adminNewBannerBtn }}
             </button>
           </div>
 
@@ -2572,31 +2653,31 @@ const totalPendingBadge = computed(() => {
             class="rounded-3xl border border-[#a78bfa]/20 p-6 mb-5 shadow-xl"
             style="background:linear-gradient(135deg,rgba(139,92,246,0.08),rgba(99,102,241,0.04))">
             <h3 class="font-extrabold text-sm text-white mb-5">
-              {{ editingBannerId ? '✏️ Редактировать баннер' : '✨ Создать баннер' }}
+              {{ editingBannerId ? langStore.t.adminEditBannerTitle : langStore.t.adminCreateBannerTitle }}
             </h3>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">Заголовок *</label>
-                <input v-model="bannerForm.title" placeholder="Например: Весенняя коллекция 🌸" class="adm-input" />
+                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">{{ langStore.t.adminTitlePlaceholderRequired }}</label>
+                <input v-model="bannerForm.title" :placeholder="langStore.t.adminBannerTitlePlaceholderExample" class="adm-input" />
               </div>
               <div>
-                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">Подзаголовок</label>
-                <input v-model="bannerForm.subtitle" placeholder="Краткое описание" class="adm-input" />
+                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">{{ langStore.t.adminSubtitleLabel }}</label>
+                <input v-model="bannerForm.subtitle" :placeholder="langStore.t.adminShortDescPlaceholder" class="adm-input" />
               </div>
               <div>
-                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">Тег (пилюля)</label>
-                <input v-model="bannerForm.tag_label" placeholder="Новинка" class="adm-input" />
+                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">{{ langStore.t.adminTagPillLabel }}</label>
+                <input v-model="bannerForm.tag_label" :placeholder="langStore.t.adminTagPlaceholderExample" class="adm-input" />
               </div>
               <div>
-                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">Цена / подпись</label>
-                <input v-model="bannerForm.price_label" placeholder="От 99 ₽" class="adm-input" />
+                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">{{ langStore.t.adminPriceOrCaptionLabel }}</label>
+                <input v-model="bannerForm.price_label" :placeholder="langStore.t.adminPricePlaceholderExample" class="adm-input" />
               </div>
               <div class="sm:col-span-2">
-                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">Изображение баннера</label>
+                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">{{ langStore.t.adminBannerImageLabel }}</label>
                 <div v-if="bannerForm.image_url" class="flex items-center gap-3 p-3 bg-white/5 border border-white/[0.08] rounded-2xl">
                   <img :src="bannerForm.image_url" class="w-20 h-12 object-cover rounded-xl flex-shrink-0 border border-white/10" />
                   <div class="flex-1 min-w-0">
-                    <p class="text-xs text-white/60">Изображение загружено</p>
+                    <p class="text-xs text-white/60">{{ langStore.t.adminImageUploadedLabel }}</p>
                     <p class="text-[10px] text-white/30 truncate mt-0.5">{{ bannerForm.image_url }}</p>
                   </div>
                   <button type="button" @click="bannerForm.image_url = ''"
@@ -2607,15 +2688,15 @@ const totalPendingBadge = computed(() => {
                 <MediaUpload v-else type="banners" @uploaded="(urls) => bannerForm.image_url = urls[0] ?? ''" />
               </div>
               <div>
-                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">Ссылка</label>
+                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">{{ langStore.t.copyLinkBtn }}</label>
                 <input v-model="bannerForm.link_url" placeholder="/stickers?tag=spring" class="adm-input" />
               </div>
               <div>
-                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">Градиент (CSS)</label>
+                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">{{ langStore.t.adminGradientCssLabel }}</label>
                 <input v-model="bannerForm.gradient" placeholder="linear-gradient(135deg,#FF6B9D,#C62A88)" class="adm-input" />
               </div>
               <div>
-                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">Порядок</label>
+                <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">{{ langStore.t.adminSortOrderLabel }}</label>
                 <input v-model.number="bannerForm.sort_order" type="number" min="0" class="adm-input" />
               </div>
               <div class="flex items-end pb-0.5">
@@ -2625,7 +2706,7 @@ const totalPendingBadge = computed(() => {
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                     : 'bg-white/5 text-white/40 border-white/[0.08]'">
                   <BIcon :name="bannerForm.is_active ? 'Eye' : 'EyeOff'" class="w-4 h-4" />
-                  {{ bannerForm.is_active ? 'Активен' : 'Скрыт' }}
+                  {{ bannerForm.is_active ? langStore.t.activeLabel : langStore.t.adminHiddenLabel }}
                 </button>
               </div>
             </div>
@@ -2640,7 +2721,7 @@ const totalPendingBadge = computed(() => {
                   class="self-start mb-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white backdrop-blur-sm">
                   {{ bannerForm.tag_label }}
                 </span>
-                <p class="text-white font-extrabold text-base leading-tight drop-shadow">{{ bannerForm.title || 'Заголовок' }}</p>
+                <p class="text-white font-extrabold text-base leading-tight drop-shadow">{{ bannerForm.title || langStore.t.adminTitleFallbackLabel }}</p>
                 <p v-if="bannerForm.subtitle" class="text-white/75 text-xs mt-0.5 drop-shadow">{{ bannerForm.subtitle }}</p>
               </div>
               <div class="absolute top-2 right-2 text-[9px] font-bold px-2 py-0.5 rounded-full bg-black/50 text-white/60">
@@ -2654,11 +2735,11 @@ const totalPendingBadge = computed(() => {
               <button @click="saveBanner"
                 class="px-5 py-2.5 rounded-2xl text-sm font-bold text-white shadow-lg transition-all"
                 style="background:linear-gradient(135deg,#4C67CF,#31458F);box-shadow:0 4px 14px rgba(76,103,207,0.35)">
-                Сохранить
+                {{ langStore.t.adminSaveBtn }}
               </button>
               <button @click="showBannerForm = false"
                 class="px-5 py-2.5 rounded-2xl text-sm font-bold bg-white/5 border border-white/[0.08] text-white/50 hover:text-white transition-all">
-                Отмена
+                {{ langStore.t.cancel }}
               </button>
             </div>
           </div>
@@ -2674,8 +2755,8 @@ const totalPendingBadge = computed(() => {
             <div class="w-16 h-16 rounded-3xl bg-white/5 flex items-center justify-center">
               <BIcon name="Image" class="w-8 h-8 opacity-50" />
             </div>
-            <p class="text-sm font-semibold">Нет баннеров</p>
-            <p class="text-xs text-center max-w-xs">Нажмите «Новый баннер» чтобы добавить первый баннер для карусели</p>
+            <p class="text-sm font-semibold">{{ langStore.t.adminNoBanners }}</p>
+            <p class="text-xs text-center max-w-xs">{{ langStore.t.adminNoBannersHint }}</p>
           </div>
 
           <!-- List -->
@@ -2704,11 +2785,11 @@ const totalPendingBadge = computed(() => {
                     </span>
                     <span :class="b.is_active ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-white/25 bg-white/5 border-white/10'"
                       class="text-[10px] font-bold px-1.5 py-0.5 rounded-full border">
-                      {{ b.is_active ? '● Активен' : '○ Скрыт' }}
+                      {{ b.is_active ? `● ${langStore.t.activeLabel}` : `○ ${langStore.t.adminHiddenLabel}` }}
                     </span>
                   </div>
                   <p v-if="b.subtitle" class="text-xs text-white/35 truncate">{{ b.subtitle }}</p>
-                  <p class="text-[10px] text-white/20 mt-0.5">Порядок {{ b.sort_order }}{{ b.price_label ? ` · ${b.price_label}` : '' }}</p>
+                  <p class="text-[10px] text-white/20 mt-0.5">{{ langStore.t.adminSortOrderLabel }} {{ b.sort_order }}{{ b.price_label ? ` · ${b.price_label}` : '' }}</p>
                 </div>
                 <!-- Actions -->
                 <div class="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -2734,8 +2815,146 @@ const totalPendingBadge = computed(() => {
             class="mt-4 flex items-center gap-3 px-4 py-3 rounded-2xl border"
             style="background:rgba(245,158,11,0.08);border-color:rgba(245,158,11,0.2)">
             <BIcon name="AlertTriangle" class="w-4 h-4 text-amber-400 flex-shrink-0" />
-            <p class="text-xs font-semibold text-amber-400">Достигнут лимит 7 баннеров. Удалите один чтобы добавить новый.</p>
+            <p class="text-xs font-semibold text-amber-400">{{ langStore.t.adminBannerLimitReachedFull }}</p>
           </div>
+          </template>
+        </div>
+
+
+        <!-- ── VERIFICATION ────────────────────────────────────────────── -->
+        <div v-else-if="activeTab === 'verification'">
+          <div class="flex gap-2 mb-5 flex-wrap">
+            <button v-for="s in (['', 'pending', 'approved', 'rejected'] as const)" :key="s"
+              @click="verFilter = s; fetchVerRequests()"
+              class="px-4 py-2 rounded-2xl text-xs font-bold border transition-all"
+              :class="verFilter === s
+                ? 'bg-blue-500/15 border-blue-500/25 text-blue-400'
+                : 'bg-white/5 border-white/[0.08] text-white/40 hover:text-white/70'">
+              {{ { '': langStore.t.tabAll, pending: langStore.t.adminVerFilterPending, approved: langStore.t.adminVerFilterApproved, rejected: langStore.t.adminVerFilterRejected }[s] }}
+            </button>
+          </div>
+
+          <div class="space-y-3">
+            <div v-if="isLoadingVer">
+              <div v-for="n in 3" :key="n" class="h-28 rounded-3xl bg-white/5 animate-pulse" />
+            </div>
+            <div v-else-if="verRequests.length === 0"
+              class="flex flex-col items-center gap-3 py-20 text-white/25">
+              <BIcon name="BadgeCheck" class="w-10 h-10 opacity-40" />
+              <p class="text-sm font-semibold">{{ langStore.t.adminNoRequestsFound }}</p>
+            </div>
+            <div v-else class="space-y-3">
+              <div v-for="req in verRequests" :key="req.id"
+                class="relative rounded-3xl border border-brand-border bg-brand-card overflow-hidden hover:border-blue-500/25 transition-all">
+                <!-- Status accent bar -->
+                <div class="absolute inset-y-0 left-0 w-1"
+                  :class="req.status==='pending' ? 'bg-amber-400/70' : req.status==='approved' ? 'bg-emerald-400/70' : 'bg-rose-400/70'" />
+
+                <div class="pl-6 pr-5 py-4">
+                  <!-- Header: identity left, status/date right -->
+                  <div class="flex items-start justify-between gap-3 flex-wrap">
+                    <router-link :to="`/profile/${req.user?.username}`" target="_blank"
+                      class="flex items-center gap-3 group/user min-w-0">
+                      <img v-if="req.user?.avatar_url" :src="req.user.avatar_url"
+                        class="w-11 h-11 rounded-2xl object-cover border border-white/10 flex-shrink-0" />
+                      <div v-else class="w-11 h-11 rounded-2xl bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold flex-shrink-0">
+                        {{ (req.user?.display_name || req.user?.username || '?')[0].toUpperCase() }}
+                      </div>
+                      <div class="min-w-0">
+                        <p class="font-extrabold text-sm text-white group-hover/user:text-blue-400 transition-colors flex items-center gap-1 truncate">
+                          {{ req.user?.display_name || req.user?.username }}
+                          <BIcon name="ExternalLink" class="w-3 h-3 opacity-0 group-hover/user:opacity-60 transition-opacity flex-shrink-0" />
+                        </p>
+                        <p class="text-xs text-white/35 truncate">@{{ req.user?.username }}</p>
+                      </div>
+                    </router-link>
+
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                      <span class="text-xs font-extrabold px-2.5 py-1 rounded-full border"
+                        :class="req.status==='pending'
+                          ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                          : req.status==='approved'
+                            ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                            : 'text-rose-400 bg-rose-500/10 border-rose-500/20'">
+                        {{ {pending: langStore.t.adminVerStatusPending, approved: langStore.t.adminVerStatusApproved, rejected: langStore.t.adminVerStatusRejected}[req.status] }}
+                      </span>
+                      <span class="text-[10px] text-white/25 whitespace-nowrap">{{ formatDate(req.created_at) }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="req.verification_type" class="mt-2.5">
+                    <span class="text-xs font-bold pl-1.5 pr-2.5 py-1 rounded-full border inline-flex items-center gap-1.5"
+                      :class="verTypeColors[req.verification_type] || 'text-blue-400 bg-blue-400/10 border-blue-400/20'">
+                      <BIcon :name="verTypeIcons[req.verification_type] || 'BadgeCheck'" class="w-3.5 h-3.5" />
+                      {{ verTypeLabels[req.verification_type] || req.verification_type }}
+                    </span>
+                  </div>
+
+                  <div class="h-px bg-white/[0.06] my-4" />
+
+                  <!-- Body: criteria + evidence side by side on wide screens -->
+                  <div class="flex flex-col sm:flex-row gap-5">
+                    <!-- Criteria -->
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 flex-1 content-start">
+                      <span v-for="chip in [
+                        {label: req.account_age_days+' '+langStore.t.adminDaysSuffixShort, ok: req.account_age_days>=14},
+                        {label: req.post_count+' '+langStore.t.posts, ok: req.post_count>=3},
+                        {label: langStore.t.avatarBtnLabel, ok: req.has_avatar},
+                        {label: langStore.t.complBioLabel, ok: req.has_bio},
+                        {label: 'Email', ok: req.has_email},
+                        {label: req.follower_count+' '+langStore.t.adminFollowersSuffixShort, ok: req.follower_count>=5},
+                      ]" :key="chip.label"
+                        class="text-[11px] font-semibold flex items-center gap-1.5 px-2 py-1 rounded-lg"
+                        :class="chip.ok ? 'text-emerald-400/90 bg-emerald-500/[0.06]' : 'text-rose-400/80 bg-rose-500/[0.05]'">
+                        <BIcon :name="chip.ok ? 'Check' : 'X'" class="w-3 h-3 flex-shrink-0" /> {{ chip.label }}
+                      </span>
+                    </div>
+
+                    <!-- Evidence -->
+                    <div v-if="req.evidence_urls?.length || req.evidence_text" class="sm:w-56 flex-shrink-0 flex flex-col gap-3">
+                      <div v-if="req.evidence_urls?.length">
+                        <p class="text-[10px] font-bold text-white/30 uppercase tracking-wide mb-1.5">{{ langStore.t.adminEvidenceLabel }} ({{ req.evidence_urls.length }})</p>
+                        <div class="grid grid-cols-3 gap-1.5">
+                          <button v-for="(url,i) in req.evidence_urls.slice(0,6)" :key="i"
+                            @click="openEvidenceLightbox(req.evidence_urls, i)"
+                            class="relative aspect-square rounded-xl overflow-hidden border border-white/[0.08] hover:border-blue-500/40 transition-all group/ev">
+                            <img :src="url" class="w-full h-full object-cover" />
+                            <div v-if="i===5 && req.evidence_urls.length>6"
+                              class="absolute inset-0 bg-black/65 flex items-center justify-center text-white text-xs font-bold">
+                              +{{ req.evidence_urls.length - 6 }}
+                            </div>
+                            <div class="absolute inset-0 bg-black/0 group-hover/ev:bg-black/20 transition-colors" />
+                          </button>
+                        </div>
+                      </div>
+                      <div v-if="req.evidence_text" class="bg-white/[0.03] border border-white/[0.08] rounded-xl px-2.5 py-2">
+                        <p class="text-[10px] font-bold text-blue-400 uppercase tracking-wide mb-1">{{ langStore.t.adminTextEvidenceLabel }}</p>
+                        <p class="text-[11px] text-white/70 whitespace-pre-line line-clamp-4">{{ req.evidence_text }}</p>
+                      </div>
+                    </div>
+                    <p v-else class="text-[11px] text-white/25 sm:w-56 flex-shrink-0">{{ langStore.t.adminNoEvidenceLabel }}</p>
+                  </div>
+                </div>
+
+                <!-- Footer actions -->
+                <div v-if="req.status === 'pending'" class="border-t border-white/[0.06] bg-white/[0.015] pl-6 pr-5 py-3 flex gap-2">
+                  <button @click="reviewVerRequest(req.id,'approve')"
+                    class="flex-1 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all flex items-center justify-center gap-1.5">
+                    <BIcon name="Check" class="w-3.5 h-3.5" /> {{ langStore.t.adminApproveBtn }}
+                  </button>
+                  <button @click="rejectVerRequest(req.id)"
+                    class="flex-1 px-3 py-2 rounded-xl text-xs font-bold bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 transition-all flex items-center justify-center gap-1.5">
+                    <BIcon name="X" class="w-3.5 h-3.5" /> {{ langStore.t.adminRejectBtn }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <PostLightbox v-if="evidenceLightbox"
+            :images="evidenceLightbox.images"
+            :start-index="evidenceLightbox.start"
+            @close="evidenceLightbox = null" />
         </div>
 
         <!-- ── AUTOMOD ────────────────────────────────────────────────── -->
@@ -2744,7 +2963,7 @@ const totalPendingBadge = computed(() => {
           <div class="flex items-center gap-2 mb-5 flex-wrap">
             <select v-model="autoModActionFilter" @change="autoModPage=1; fetchAutoModLogs()"
               class="bg-[#1F223C] border border-white/10 rounded-xl px-3 py-2 text-xs text-white/70 outline-none focus:border-rose-500/40 cursor-pointer">
-              <option value="">Все действия</option>
+              <option value="">{{ langStore.t.adminAllActionsOption }}</option>
               <option value="warn">⚠️ warn</option>
               <option value="freeze">🧊 freeze</option>
               <option value="unfreeze">🔓 unfreeze</option>
@@ -2754,7 +2973,7 @@ const totalPendingBadge = computed(() => {
             </select>
             <select v-model="autoModCategoryFilter" @change="autoModPage=1; fetchAutoModLogs()"
               class="bg-[#1F223C] border border-white/10 rounded-xl px-3 py-2 text-xs text-white/70 outline-none focus:border-rose-500/40 cursor-pointer">
-              <option value="">Все категории</option>
+              <option value="">{{ langStore.t.adminAllCategoriesOption }}</option>
               <option value="spam">🔁 spam</option>
               <option value="toxic">🤬 toxic</option>
               <option value="duplicate">📋 duplicate</option>
@@ -2766,7 +2985,7 @@ const totalPendingBadge = computed(() => {
               class="px-3 py-2 rounded-xl bg-white/5 border border-white/[0.08] text-xs text-white/50 hover:text-white transition-all">
               <BIcon name="RefreshCw" class="w-3.5 h-3.5" />
             </button>
-            <span class="ml-auto text-xs font-bold text-white/30 bg-white/5 px-3 py-2 rounded-xl border border-white/[0.08]">{{ autoModTotal }} событий</span>
+            <span class="ml-auto text-xs font-bold text-white/30 bg-white/5 px-3 py-2 rounded-xl border border-white/[0.08]">{{ autoModTotal }} {{ langStore.t.adminEventsSuffix }}</span>
           </div>
 
           <!-- Logs -->
@@ -2783,8 +3002,8 @@ const totalPendingBadge = computed(() => {
             </div>
             <div v-else-if="!autoModLogs.length" class="flex flex-col items-center gap-4 py-20 text-white/25">
               <div class="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center text-2xl">🛡️</div>
-              <p class="text-sm font-semibold">Журнал пуст</p>
-              <p class="text-xs">AutoMod пока не зафиксировал нарушений</p>
+              <p class="text-sm font-semibold">{{ langStore.t.adminLogEmpty }}</p>
+              <p class="text-xs">{{ langStore.t.adminAutoModNoViolations }}</p>
             </div>
             <div v-else class="divide-y divide-brand-border">
               <div v-for="log in autoModLogs" :key="log.id"
@@ -2838,7 +3057,7 @@ const totalPendingBadge = computed(() => {
                 ? 'text-white border border-emerald-500/30'
                 : 'text-white/40 hover:text-white/70 bg-white/[0.03] border border-brand-border'"
               :style="statsSubTab==='stickers' ? 'background:rgba(16,185,129,0.12)' : ''">
-              <BIcon name="Sticker" class="w-4 h-4" /> Стикеры
+              <BIcon name="Sticker" class="w-4 h-4" /> {{ langStore.t.stickers }}
             </button>
             <button @click="statsSubTab='network'"
               class="flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-bold transition-all"
@@ -2846,16 +3065,24 @@ const totalPendingBadge = computed(() => {
                 ? 'text-white border border-emerald-500/30'
                 : 'text-white/40 hover:text-white/70 bg-white/[0.03] border border-brand-border'"
               :style="statsSubTab==='network' ? 'background:rgba(16,185,129,0.12)' : ''">
-              <BIcon name="Globe" class="w-4 h-4" /> Сеть
+              <BIcon name="Globe" class="w-4 h-4" /> {{ langStore.t.adminNetworkLabel }}
             </button>
-            <button @click="stickerStats=null; networkStats=null; fetchStatistics()"
+            <button @click="statsSubTab='infra'; if (!infraOverview) fetchInfraOverview()"
+              class="flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-bold transition-all"
+              :class="statsSubTab==='infra'
+                ? 'text-white border border-emerald-500/30'
+                : 'text-white/40 hover:text-white/70 bg-white/[0.03] border border-brand-border'"
+              :style="statsSubTab==='infra' ? 'background:rgba(16,185,129,0.12)' : ''">
+              <BIcon name="Server" class="w-4 h-4" /> {{ langStore.t.adminNavInfra }}
+            </button>
+            <button @click="statsSubTab==='infra' ? (infraOverview=null, fetchInfraOverview()) : (stickerStats=null, networkStats=null, fetchStatistics())"
               class="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs text-white/40 hover:text-white bg-white/[0.03] border border-brand-border transition-all">
-              <BIcon name="RefreshCw" class="w-3.5 h-3.5" /> Обновить
+              <BIcon name="RefreshCw" class="w-3.5 h-3.5" /> {{ langStore.t.adminRefreshBtn }}
             </button>
           </div>
 
           <!-- Loading skeleton -->
-          <template v-if="isLoadingStatistics">
+          <template v-if="statsSubTab !== 'infra' && isLoadingStatistics">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div v-for="n in 4" :key="n" class="rounded-3xl border border-brand-border p-6 animate-pulse" style="background:#1F223C">
                 <div class="h-4 bg-white/[0.08] rounded-full w-32 mb-4" />
@@ -2866,26 +3093,44 @@ const totalPendingBadge = computed(() => {
             </div>
           </template>
 
+          <!-- ─── INFRASTRUCTURE sub-tab loading ──────────────────────── -->
+          <template v-else-if="statsSubTab === 'infra' && isLoadingInfra">
+            <div class="space-y-5">
+              <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                <div v-for="n in 3" :key="n" class="h-24 rounded-2xl bg-white/5 animate-pulse" />
+              </div>
+              <div class="h-56 rounded-2xl bg-white/5 animate-pulse" />
+            </div>
+          </template>
+
           <!-- ─── STICKERS sub-tab ─────────────────────────────────── -->
           <template v-else-if="statsSubTab === 'stickers' && stickerStats">
 
             <!-- Top row summary -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
               <div class="rounded-2xl border border-brand-border px-4 py-3" style="background:rgba(255,255,255,0.03)">
-                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Паков всего</p>
-                <p class="text-2xl font-black text-white">{{ stickerStats.topPacks.length }}+</p>
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">{{ langStore.t.adminPacksTotalLabel }}</p>
+                <p class="text-2xl font-black text-white">{{ formatNum(stickerStats.totals.totalPacks) }}</p>
               </div>
               <div class="rounded-2xl border border-brand-border px-4 py-3" style="background:rgba(255,255,255,0.03)">
-                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Топ-1 использований</p>
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">{{ langStore.t.adminTop1UsageLabel }}</p>
                 <p class="text-2xl font-black text-emerald-400">{{ formatNum(stickerStats.topPacks[0]?.use_count ?? 0) }}</p>
               </div>
               <div class="rounded-2xl border border-brand-border px-4 py-3" style="background:rgba(255,255,255,0.03)">
-                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Топ-1 скачиваний</p>
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">{{ langStore.t.adminTop1DownloadsLabel }}</p>
                 <p class="text-2xl font-black text-indigo-400">{{ formatNum(stickerStats.topPacks[0]?.downloads_count ?? 0) }}</p>
               </div>
               <div class="rounded-2xl border border-brand-border px-4 py-3" style="background:rgba(255,255,255,0.03)">
-                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Уникальных стикеров</p>
-                <p class="text-2xl font-black text-white">{{ formatNum(stickerStats.topStickers.length) }}</p>
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">{{ langStore.t.adminUniqueStickersLabel }}</p>
+                <p class="text-2xl font-black text-white">{{ formatNum(stickerStats.totals.uniqueStickers) }}</p>
+              </div>
+              <div class="rounded-2xl border border-brand-border px-4 py-3" style="background:rgba(255,255,255,0.03)">
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">{{ langStore.t.adminTotalDownloadsLabel }}</p>
+                <p class="text-2xl font-black text-sky-400">{{ formatNum(stickerStats.totals.totalDownloads) }}</p>
+              </div>
+              <div class="rounded-2xl border border-brand-border px-4 py-3" style="background:rgba(255,255,255,0.03)">
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">{{ langStore.t.adminTotalFavoritesLabel }}</p>
+                <p class="text-2xl font-black text-rose-400">{{ formatNum(stickerStats.totals.totalFavorites) }}</p>
               </div>
             </div>
 
@@ -2895,19 +3140,20 @@ const totalPendingBadge = computed(() => {
               <div class="rounded-3xl border border-brand-border overflow-hidden" style="background:#1F223C">
                 <div class="px-5 py-4 border-b border-brand-border flex items-center gap-2">
                   <BIcon name="TrendingUp" class="w-4 h-4 text-emerald-400" />
-                  <h3 class="font-extrabold text-sm text-white">Топ стикер-паков</h3>
-                  <span class="ml-auto text-[10px] font-bold text-white/30 bg-white/5 px-2 py-0.5 rounded-full">по использованию</span>
+                  <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminTopStickerPacksTitle }}</h3>
+                  <span class="ml-auto text-[10px] font-bold text-white/30 bg-white/5 px-2 py-0.5 rounded-full">{{ langStore.t.adminByUsageLabel }}</span>
                 </div>
                 <div class="divide-y divide-brand-border">
                   <div v-for="(pack, idx) in stickerStats.topPacks.slice(0,10)" :key="pack.id"
-                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-all">
+                    @click="openStickerPackDetail(pack.id)"
+                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.05] transition-all cursor-pointer">
                     <span class="w-5 text-center text-xs font-black"
                       :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">
                       {{ idx+1 }}
                     </span>
                     <div class="w-9 h-9 rounded-xl flex-shrink-0 overflow-hidden border border-white/10"
                       :style="pack.cover_bg_color ? `background:${pack.cover_bg_color}` : 'background:rgba(255,255,255,0.05)'">
-                      <img v-if="pack.cover_url" :src="pack.cover_url" class="w-full h-full object-cover" />
+                      <img v-if="packThumb(pack)" :src="packThumb(pack)" class="w-full h-full object-cover" />
                       <div v-else class="w-full h-full flex items-center justify-center text-lg">🎭</div>
                     </div>
                     <div class="flex-1 min-w-0">
@@ -2919,8 +3165,9 @@ const totalPendingBadge = computed(() => {
                     </div>
                     <div class="text-right flex-shrink-0">
                       <p class="text-sm font-black text-emerald-400">{{ formatNum(pack.use_count) }}</p>
-                      <p class="text-[10px] text-white/25">{{ formatNum(pack.downloads_count) }} ск.</p>
+                      <p class="text-[10px] text-white/25">{{ formatNum(pack.downloads_count) }} {{ langStore.t.adminDownloadsShortSuffix }}</p>
                     </div>
+                    <BIcon name="ChevronRight" class="w-4 h-4 text-white/20 flex-shrink-0" />
                   </div>
                 </div>
               </div>
@@ -2929,8 +3176,8 @@ const totalPendingBadge = computed(() => {
               <div class="rounded-3xl border border-brand-border p-5" style="background:#1F223C">
                 <div class="flex items-center gap-2 mb-4">
                   <BIcon name="Activity" class="w-4 h-4 text-emerald-400" />
-                  <h3 class="font-extrabold text-sm text-white">Использование стикеров</h3>
-                  <span class="ml-auto text-[10px] text-white/30">30 дней</span>
+                  <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminStickerUsageTitle }}</h3>
+                  <span class="ml-auto text-[10px] text-white/30">{{ langStore.t.adminLast30DaysLabel }}</span>
                 </div>
                 <div v-if="stickerStats.dailyUsage.length" class="flex items-end gap-0.5 h-32">
                   <div v-for="(point, idx) in stickerStats.dailyUsage" :key="idx"
@@ -2944,7 +3191,7 @@ const totalPendingBadge = computed(() => {
                         background:linear-gradient(to top,#10b981,#34d399)`" />
                   </div>
                 </div>
-                <p v-else class="text-center text-sm text-white/25 py-12">Нет данных</p>
+                <p v-else class="text-center text-sm text-white/25 py-12">{{ langStore.t.adminNoDataLabel }}</p>
               </div>
             </div>
 
@@ -2955,7 +3202,7 @@ const totalPendingBadge = computed(() => {
               <div class="rounded-3xl border border-brand-border p-5" style="background:#1F223C">
                 <div class="flex items-center gap-2 mb-4">
                   <BIcon name="CalendarDays" class="w-4 h-4 text-indigo-400" />
-                  <h3 class="font-extrabold text-sm text-white">По возрасту</h3>
+                  <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminByAgeTitle }}</h3>
                 </div>
                 <div v-if="stickerStats.byAge.length" class="space-y-2">
                   <div v-for="item in stickerStats.byAge" :key="item.label" class="group">
@@ -2969,14 +3216,14 @@ const totalPendingBadge = computed(() => {
                     </div>
                   </div>
                 </div>
-                <p v-else class="text-center text-sm text-white/25 py-8">Нет данных</p>
+                <p v-else class="text-center text-sm text-white/25 py-8">{{ langStore.t.adminNoDataLabel }}</p>
               </div>
 
               <!-- By Species -->
               <div class="rounded-3xl border border-brand-border p-5" style="background:#1F223C">
                 <div class="flex items-center gap-2 mb-4">
                   <BIcon name="PawPrint" class="w-4 h-4 text-amber-400" />
-                  <h3 class="font-extrabold text-sm text-white">По виду</h3>
+                  <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminBySpeciesTitle }}</h3>
                 </div>
                 <div v-if="stickerStats.bySpecies.length" class="space-y-2">
                   <div v-for="item in stickerStats.bySpecies.slice(0,8)" :key="item.label" class="group">
@@ -2990,14 +3237,14 @@ const totalPendingBadge = computed(() => {
                     </div>
                   </div>
                 </div>
-                <p v-else class="text-center text-sm text-white/25 py-8">Нет данных</p>
+                <p v-else class="text-center text-sm text-white/25 py-8">{{ langStore.t.adminNoDataLabel }}</p>
               </div>
 
               <!-- By Country -->
               <div class="rounded-3xl border border-brand-border p-5" style="background:#1F223C">
                 <div class="flex items-center gap-2 mb-4">
                   <BIcon name="MapPin" class="w-4 h-4 text-rose-400" />
-                  <h3 class="font-extrabold text-sm text-white">По стране</h3>
+                  <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminByCountryTitle }}</h3>
                 </div>
                 <div v-if="stickerStats.byCountry.length" class="space-y-2">
                   <div v-for="item in stickerStats.byCountry.slice(0,8)" :key="item.label" class="group">
@@ -3011,8 +3258,30 @@ const totalPendingBadge = computed(() => {
                     </div>
                   </div>
                 </div>
-                <p v-else class="text-center text-sm text-white/25 py-8">Нет данных</p>
+                <p v-else class="text-center text-sm text-white/25 py-8">{{ langStore.t.adminNoDataLabel }}</p>
               </div>
+            </div>
+
+            <!-- Top individual stickers -->
+            <div class="rounded-3xl border border-brand-border p-5 mt-4" style="background:#1F223C">
+              <div class="flex items-center gap-2 mb-4">
+                <BIcon name="Sparkles" class="w-4 h-4 text-fuchsia-400" />
+                <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminTopStickersTitle }}</h3>
+                <span class="ml-auto text-[10px] font-bold text-white/30 bg-white/5 px-2 py-0.5 rounded-full">{{ langStore.t.adminByUsageLabel }}</span>
+              </div>
+              <div v-if="stickerStats.topStickers.length" class="grid grid-cols-3 sm:grid-cols-6 md:grid-cols-9 lg:grid-cols-12 gap-3">
+                <div v-for="s in stickerStats.topStickers" :key="s.url"
+                  @click="s.packId && openStickerPackDetail(s.packId)"
+                  class="group relative rounded-xl overflow-hidden border border-white/10 aspect-square bg-white/[0.03]"
+                  :class="s.packId ? 'cursor-pointer hover:border-fuchsia-400/40' : ''"
+                  :title="s.packName ?? ''">
+                  <img :src="s.url" class="w-full h-full object-contain p-1" loading="lazy" />
+                  <span class="absolute bottom-0 right-0 text-[9px] font-black text-white bg-black/70 px-1.5 py-0.5 rounded-tl-lg">
+                    {{ formatNum(s.total) }}
+                  </span>
+                </div>
+              </div>
+              <p v-else class="text-center text-sm text-white/25 py-8">{{ langStore.t.adminNoDataLabel }}</p>
             </div>
 
           </template>
@@ -3023,19 +3292,19 @@ const totalPendingBadge = computed(() => {
             <!-- Summary cards -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
               <div class="rounded-2xl border border-brand-border px-4 py-3" style="background:rgba(255,255,255,0.03)">
-                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Стикер-паков</p>
-                <p class="text-2xl font-black text-white">{{ formatNum(networkStats.stickers.packCount) }}</p>
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">{{ langStore.t.adminStatTotalUsers }}</p>
+                <p class="text-2xl font-black text-white">{{ formatNum(networkStats.totalUsers) }}</p>
               </div>
               <div class="rounded-2xl border border-brand-border px-4 py-3" style="background:rgba(255,255,255,0.03)">
-                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Всего отправок</p>
-                <p class="text-2xl font-black text-emerald-400">{{ formatNum(Number(networkStats.stickers.totalUses)) }}</p>
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">{{ langStore.t.adminTotalGroupsLabel }}</p>
+                <p class="text-2xl font-black text-purple-400">{{ formatNum(networkStats.totalGroups) }}</p>
               </div>
               <div class="rounded-2xl border border-brand-border px-4 py-3" style="background:rgba(255,255,255,0.03)">
-                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Топ страна</p>
-                <p class="text-lg font-black text-white truncate">{{ networkStats.usersByCountry[0]?.label ?? '—' }}</p>
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">{{ langStore.t.adminTopCountryLabel }}</p>
+                <p class="text-lg font-black text-white truncate">{{ topKnownCountryLabel }}</p>
               </div>
               <div class="rounded-2xl border border-brand-border px-4 py-3" style="background:rgba(255,255,255,0.03)">
-                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">Топ вид</p>
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wide mb-1">{{ langStore.t.adminTopSpeciesLabel }}</p>
                 <p class="text-lg font-black text-white truncate capitalize">{{ networkStats.usersBySpecies[0]?.label ?? '—' }}</p>
               </div>
             </div>
@@ -3047,8 +3316,8 @@ const totalPendingBadge = computed(() => {
               <div class="rounded-3xl border border-brand-border p-5" style="background:#1F223C">
                 <div class="flex items-center gap-2 mb-4">
                   <BIcon name="UserPlus" class="w-4 h-4 text-indigo-400" />
-                  <h3 class="font-extrabold text-sm text-white">Регистрации</h3>
-                  <span class="ml-auto text-[10px] text-white/30">30 дней</span>
+                  <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminRegistrationsTitle }}</h3>
+                  <span class="ml-auto text-[10px] text-white/30">{{ langStore.t.adminLast30DaysLabel }}</span>
                 </div>
                 <div v-if="networkStats.registrationsHistory.length" class="flex items-end gap-0.5 h-32">
                   <div v-for="(point, idx) in networkStats.registrationsHistory" :key="idx"
@@ -3062,15 +3331,15 @@ const totalPendingBadge = computed(() => {
                         background:linear-gradient(to top,#6366f1,#8b5cf6)`" />
                   </div>
                 </div>
-                <p v-else class="text-center text-sm text-white/25 py-12">Нет данных</p>
+                <p v-else class="text-center text-sm text-white/25 py-12">{{ langStore.t.adminNoDataLabel }}</p>
               </div>
 
               <!-- Posts history -->
               <div class="rounded-3xl border border-brand-border p-5" style="background:#1F223C">
                 <div class="flex items-center gap-2 mb-4">
                   <BIcon name="FileText" class="w-4 h-4 text-sky-400" />
-                  <h3 class="font-extrabold text-sm text-white">Посты</h3>
-                  <span class="ml-auto text-[10px] text-white/30">30 дней</span>
+                  <h3 class="font-extrabold text-sm text-white">{{ langStore.t.postsTab }}</h3>
+                  <span class="ml-auto text-[10px] text-white/30">{{ langStore.t.adminLast30DaysLabel }}</span>
                 </div>
                 <div v-if="networkStats.postsHistory.length" class="flex items-end gap-0.5 h-32">
                   <div v-for="(point, idx) in networkStats.postsHistory" :key="idx"
@@ -3084,7 +3353,7 @@ const totalPendingBadge = computed(() => {
                         background:linear-gradient(to top,#0ea5e9,#38bdf8)`" />
                   </div>
                 </div>
-                <p v-else class="text-center text-sm text-white/25 py-12">Нет данных</p>
+                <p v-else class="text-center text-sm text-white/25 py-12">{{ langStore.t.adminNoDataLabel }}</p>
               </div>
             </div>
 
@@ -3095,7 +3364,7 @@ const totalPendingBadge = computed(() => {
               <div class="rounded-3xl border border-brand-border p-5" style="background:#1F223C">
                 <div class="flex items-center gap-2 mb-4">
                   <BIcon name="PawPrint" class="w-4 h-4 text-amber-400" />
-                  <h3 class="font-extrabold text-sm text-white">Пользователи по виду</h3>
+                  <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminUsersBySpeciesTitle }}</h3>
                 </div>
                 <div v-if="networkStats.usersBySpecies.length" class="space-y-2.5">
                   <div v-for="item in networkStats.usersBySpecies.slice(0,10)" :key="item.label">
@@ -3109,14 +3378,14 @@ const totalPendingBadge = computed(() => {
                     </div>
                   </div>
                 </div>
-                <p v-else class="text-center text-sm text-white/25 py-8">Нет данных</p>
+                <p v-else class="text-center text-sm text-white/25 py-8">{{ langStore.t.adminNoDataLabel }}</p>
               </div>
 
               <!-- By Country -->
               <div class="rounded-3xl border border-brand-border p-5" style="background:#1F223C">
                 <div class="flex items-center gap-2 mb-4">
                   <BIcon name="Globe" class="w-4 h-4 text-emerald-400" />
-                  <h3 class="font-extrabold text-sm text-white">Пользователи по стране</h3>
+                  <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminUsersByCountryTitle }}</h3>
                 </div>
                 <div v-if="networkStats.usersByCountry.length" class="space-y-2.5">
                   <div v-for="item in networkStats.usersByCountry.slice(0,10)" :key="item.label">
@@ -3130,7 +3399,7 @@ const totalPendingBadge = computed(() => {
                     </div>
                   </div>
                 </div>
-                <p v-else class="text-center text-sm text-white/25 py-8">Нет данных</p>
+                <p v-else class="text-center text-sm text-white/25 py-8">{{ langStore.t.adminNoDataLabel }}</p>
               </div>
             </div>
 
@@ -3140,7 +3409,7 @@ const totalPendingBadge = computed(() => {
               <div class="rounded-3xl border border-brand-border p-5" style="background:#1F223C">
                 <div class="flex items-center gap-2 mb-4">
                   <BIcon name="CalendarDays" class="w-4 h-4 text-indigo-400" />
-                  <h3 class="font-extrabold text-sm text-white">Пользователи по возрасту</h3>
+                  <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminUsersByAgeTitle }}</h3>
                 </div>
                 <div v-if="networkStats.usersByAge.length" class="space-y-2.5">
                   <div v-for="item in networkStats.usersByAge" :key="item.label">
@@ -3154,14 +3423,14 @@ const totalPendingBadge = computed(() => {
                     </div>
                   </div>
                 </div>
-                <p v-else class="text-center text-sm text-white/25 py-8">Нет данных</p>
+                <p v-else class="text-center text-sm text-white/25 py-8">{{ langStore.t.adminNoDataLabel }}</p>
               </div>
 
               <!-- By Pronouns -->
               <div class="rounded-3xl border border-brand-border p-5" style="background:#1F223C">
                 <div class="flex items-center gap-2 mb-4">
                   <BIcon name="Heart" class="w-4 h-4 text-pink-400" />
-                  <h3 class="font-extrabold text-sm text-white">Пользователи по местоимениям</h3>
+                  <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminUsersByPronounTitle }}</h3>
                 </div>
                 <div v-if="networkStats.usersByPronoun.length" class="space-y-2.5">
                   <div v-for="item in networkStats.usersByPronoun" :key="item.label">
@@ -3175,7 +3444,7 @@ const totalPendingBadge = computed(() => {
                     </div>
                   </div>
                 </div>
-                <p v-else class="text-center text-sm text-white/25 py-8">Нет данных</p>
+                <p v-else class="text-center text-sm text-white/25 py-8">{{ langStore.t.adminNoDataLabel }}</p>
               </div>
             </div>
 
@@ -3186,11 +3455,12 @@ const totalPendingBadge = computed(() => {
               <div class="rounded-3xl border border-brand-border overflow-hidden" style="background:#1F223C">
                 <div class="px-5 py-4 border-b border-brand-border flex items-center gap-2">
                   <BIcon name="Pencil" class="w-4 h-4 text-sky-400" />
-                  <h3 class="font-extrabold text-sm text-white">Самые активные авторы</h3>
+                  <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminTopPostersTitle }}</h3>
                 </div>
                 <div class="divide-y divide-brand-border">
                   <div v-for="(u, idx) in networkStats.topPosters" :key="u.userId"
-                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-all">
+                    @click="u.username && router.push({ name: 'profile', params: { username: u.username } })"
+                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.05] transition-all cursor-pointer">
                     <span class="w-5 text-center text-xs font-black"
                       :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">{{ idx+1 }}</span>
                     <img v-if="u.avatarUrl" :src="u.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-white/10 flex-shrink-0" />
@@ -3210,12 +3480,13 @@ const totalPendingBadge = computed(() => {
               <div class="rounded-3xl border border-brand-border overflow-hidden" style="background:#1F223C">
                 <div class="px-5 py-4 border-b border-brand-border flex items-center gap-2">
                   <BIcon name="Star" class="w-4 h-4 text-yellow-400" />
-                  <h3 class="font-extrabold text-sm text-white">Самые популярные</h3>
-                  <span class="ml-auto text-[10px] text-white/30">по подписчикам</span>
+                  <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminMostFollowedTitle }}</h3>
+                  <span class="ml-auto text-[10px] text-white/30">{{ langStore.t.adminByFollowersLabel }}</span>
                 </div>
                 <div class="divide-y divide-brand-border">
                   <div v-for="(u, idx) in networkStats.mostFollowed" :key="u.userId"
-                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-all">
+                    @click="u.username && router.push({ name: 'profile', params: { username: u.username } })"
+                    class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.05] transition-all cursor-pointer">
                     <span class="w-5 text-center text-xs font-black"
                       :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">{{ idx+1 }}</span>
                     <img v-if="u.avatarUrl" :src="u.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-white/10 flex-shrink-0" />
@@ -3236,12 +3507,13 @@ const totalPendingBadge = computed(() => {
             <div class="rounded-3xl border border-brand-border overflow-hidden" style="background:#1F223C">
               <div class="px-5 py-4 border-b border-brand-border flex items-center gap-2">
                 <BIcon name="Users" class="w-4 h-4 text-purple-400" />
-                <h3 class="font-extrabold text-sm text-white">Топ групп</h3>
-                <span class="ml-auto text-[10px] text-white/30">по участникам</span>
+                <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminTopGroupsTitle }}</h3>
+                <span class="ml-auto text-[10px] text-white/30">{{ langStore.t.adminByMembersLabel }}</span>
               </div>
               <div class="divide-y divide-brand-border">
                 <div v-for="(g, idx) in networkStats.topGroups" :key="g.id"
-                  class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-all">
+                  @click="router.push({ name: 'group-detail', params: { slugOrId: g.id } })"
+                  class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.05] transition-all cursor-pointer">
                   <span class="w-5 text-center text-xs font-black"
                     :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">{{ idx+1 }}</span>
                   <img v-if="g.avatarUrl" :src="g.avatarUrl" class="w-8 h-8 rounded-xl object-cover border border-white/10 flex-shrink-0" />
@@ -3256,10 +3528,48 @@ const totalPendingBadge = computed(() => {
 
           </template>
 
+          <!-- ─── INFRASTRUCTURE sub-tab ─────────────────────────────── -->
+          <template v-else-if="statsSubTab === 'infra' && infraOverview">
+            <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              <div class="rounded-2xl p-4 border border-brand-border bg-brand-card">
+                <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.adminS3UsedLabel }}</p>
+                <p class="text-2xl font-black text-white">{{ formatBytes(infraOverview.storage.totalBytes) }}</p>
+                <p class="text-xs font-semibold text-brand-accent mt-1">{{ formatNum(infraOverview.storage.totalObjects) }} {{ langStore.t.adminFilesSuffix }}</p>
+              </div>
+              <div class="rounded-2xl p-4 border border-brand-border bg-brand-card">
+                <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.adminStickersInSystemLabel }}</p>
+                <p class="text-2xl font-black text-white">{{ formatNum(infraOverview.stickers.fileCount) }}</p>
+                <p class="text-xs font-semibold text-emerald-400 mt-1">{{ langStore.t.adminInPrefix }} {{ infraOverview.stickers.packCount }} {{ langStore.t.adminPacksUsageSuffix }}</p>
+              </div>
+              <div class="rounded-2xl p-4 border border-brand-border bg-brand-card">
+                <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.adminDealersDenLotsLabel }}</p>
+                <p class="text-2xl font-black text-white">{{ infraOverview.dealersDen.activeListings }}</p>
+                <p class="text-xs font-semibold text-amber-400 mt-1">{{ infraOverview.dealersDen.soldThisMonthCount }} {{ langStore.t.adminSalesThisMonthSuffix }}</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-5">
+              <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
+                <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminS3StorageTitle }}</h3>
+                <p class="text-xs text-white/40 mb-3">{{ formatBytes(infraOverview.storage.totalBytes) }} {{ langStore.t.adminInPrefix }} {{ infraOverview.storage.totalObjects }} {{ langStore.t.adminFilesLocativeSuffix }}</p>
+                <div v-for="f in infraOverview.storage.byFolder" :key="f.folder" class="mb-3 last:mb-0">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-semibold text-white/60">{{ FOLDER_LABEL[f.folder] ?? f.folder }}</span>
+                    <span class="text-xs font-bold text-white">{{ formatBytes(f.bytes) }}</span>
+                  </div>
+                  <div class="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                    <div class="h-full rounded-full bg-brand-accent" :style="`width:${Math.round((f.bytes / infraOverview.storage.totalBytes) * 100)}%`" />
+                  </div>
+                </div>
+                <p v-if="!infraOverview.storage.byFolder.length" class="text-xs text-white/25 text-center py-6">{{ langStore.t.adminStorageEmpty }}</p>
+              </div>
+            </div>
+          </template>
+
           <!-- Empty state when no data yet -->
-          <div v-else-if="!isLoadingStatistics" class="flex flex-col items-center gap-4 py-24 text-white/25">
+          <div v-else-if="(statsSubTab === 'infra' && !isLoadingInfra) || (statsSubTab !== 'infra' && !isLoadingStatistics)" class="flex flex-col items-center gap-4 py-24 text-white/25">
             <BIcon name="BarChart2" class="w-12 h-12 opacity-30" />
-            <p class="text-sm font-semibold">Нет данных</p>
+            <p class="text-sm font-semibold">{{ langStore.t.adminNoDataLabel }}</p>
           </div>
 
         </div>
@@ -3267,33 +3577,53 @@ const totalPendingBadge = computed(() => {
         <!-- ── Bloomly Updates Tab ─────────────────────────────────────── -->
         <div v-else-if="activeTab === 'updates'" class="space-y-6">
 
+          <!-- Segmented toggle: changelog updates vs push broadcasts (merged from the old separate tab) -->
+          <div class="flex items-center gap-2 p-1 rounded-2xl bg-white/[0.04] w-fit">
+            <button type="button" @click="switchCommsView('updates')"
+              class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+              :class="commsViewMode === 'updates' ? 'bg-[#4C67CF]/20 text-[#4C67CF]' : 'text-white/40 hover:text-white/70'">
+              <BIcon name="Sparkles" class="w-3.5 h-3.5" /> {{ langStore.t.adminNavUpdates }}
+            </button>
+            <button type="button" @click="switchCommsView('broadcasts')"
+              class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+              :class="commsViewMode === 'broadcasts' ? 'bg-violet-500/20 text-violet-400' : 'text-white/40 hover:text-white/70'">
+              <BIcon name="Send" class="w-3.5 h-3.5" /> {{ langStore.t.adminNavBroadcasts }}
+            </button>
+          </div>
+
+          <template v-if="commsViewMode === 'updates'">
+
           <!-- Create form -->
-          <div class="rounded-3xl border border-brand-border p-6 space-y-4" style="background:#1F223C">
-            <div class="flex items-center gap-3 mb-2">
-              <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center flex-shrink-0">
+          <div class="relative rounded-3xl border border-brand-border p-6 space-y-4 overflow-hidden" style="background:#1F223C">
+            <div class="absolute -top-24 -right-24 w-64 h-64 rounded-full opacity-20 pointer-events-none"
+              style="background:radial-gradient(circle,#7c3aed,transparent 70%)" />
+            <div class="flex items-center gap-3 mb-2 relative">
+              <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center flex-shrink-0 shadow-lg shadow-[#4C67CF]/20">
                 <span class="text-white font-black text-sm select-none">B</span>
               </div>
-              <h3 class="font-extrabold text-white">Новое обновление</h3>
-              <span class="text-xs text-white/30 ml-auto">Отображается в историях первым</span>
+              <h3 class="font-extrabold text-white">{{ langStore.t.adminNewUpdateTitle }}</h3>
+              <span class="text-xs text-white/30 ml-auto flex items-center gap-1">
+                <BIcon name="Sparkles" class="w-3.5 h-3.5" /> {{ langStore.t.adminUpdateShownFirstHint }}
+              </span>
             </div>
 
             <input
               v-model="newUpdateTitle"
-              class="adm-input"
-              placeholder="Заголовок (напр. «Версия 1.5 — новые стикеры»)"
+              class="adm-input relative"
+              :placeholder="langStore.t.adminUpdateTitlePlaceholderExample"
               maxlength="120"
             />
             <textarea
               v-model="newUpdateBody"
-              class="adm-input resize-none"
+              class="adm-input resize-none relative"
               rows="3"
-              placeholder="Описание изменений (необязательно)…"
+              :placeholder="langStore.t.adminUpdateBodyPlaceholder"
               maxlength="800"
             />
-            <div v-if="newUpdateImageUrl" class="flex items-center gap-3 p-3 bg-white/5 border border-white/[0.08] rounded-2xl">
+            <div v-if="newUpdateImageUrl" class="relative flex items-center gap-3 p-3 bg-white/5 border border-white/[0.08] rounded-2xl">
               <img :src="newUpdateImageUrl" class="w-20 h-12 object-cover rounded-xl flex-shrink-0 border border-white/10" />
               <div class="min-w-0 flex-1">
-                <p class="text-xs font-bold text-white/70">Обложка загружена</p>
+                <p class="text-xs font-bold text-white/70">{{ langStore.t.adminCoverUploadedLabel }}</p>
                 <p class="text-[10px] text-white/30 truncate mt-0.5">{{ newUpdateImageUrl }}</p>
               </div>
               <button type="button" @click="newUpdateImageUrl = ''"
@@ -3305,11 +3635,13 @@ const totalPendingBadge = computed(() => {
             <button
               @click="createUpdate"
               :disabled="!newUpdateTitle.trim() || isSavingUpdate"
-              class="px-6 py-2.5 rounded-2xl font-bold text-sm text-white transition-all disabled:opacity-40"
+              class="relative flex items-center gap-2 px-6 py-2.5 rounded-2xl font-bold text-sm text-white transition-all disabled:opacity-40 shadow-lg shadow-[#4C67CF]/20"
               style="background:linear-gradient(135deg,#4C67CF,#7c3aed)"
             >
-              <span v-if="isSavingUpdate">Публикация…</span>
-              <span v-else>Опубликовать обновление</span>
+              <BIcon v-if="isSavingUpdate" name="Loader2" class="w-4 h-4 animate-spin" />
+              <BIcon v-else name="Send" class="w-4 h-4" />
+              <span v-if="isSavingUpdate">{{ langStore.t.adminPublishingLabel }}</span>
+              <span v-else>{{ langStore.t.adminPublishUpdateBtn }}</span>
             </button>
           </div>
 
@@ -3317,53 +3649,106 @@ const totalPendingBadge = computed(() => {
           <div v-if="isLoadingUpdates" class="flex items-center justify-center py-16">
             <BIcon name="Loader2" class="w-8 h-8 text-white/30 animate-spin" />
           </div>
-          <div v-else-if="updates.length === 0" class="flex flex-col items-center gap-4 py-20 text-white/25">
+          <div v-else-if="updates.length === 0" class="flex flex-col items-center gap-4 py-20 text-white/25 rounded-3xl border border-brand-border" style="background:#1F223C">
             <BIcon name="Megaphone" class="w-12 h-12 opacity-30" />
-            <p class="text-sm font-semibold">Обновлений ещё нет</p>
+            <p class="text-sm font-semibold">{{ langStore.t.adminNoUpdatesYet }}</p>
           </div>
-          <div v-else class="space-y-3">
+          <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div
               v-for="u in updates"
               :key="u.id"
-              class="rounded-2xl border p-4 flex gap-4 items-start transition-all"
-              :class="u.is_active ? 'border-[#4C67CF]/20 bg-[#4C67CF]/5' : 'border-brand-border opacity-50'"
+              class="relative rounded-3xl border overflow-hidden transition-all group"
+              :class="u.is_active ? 'border-[#4C67CF]/25 hover:border-[#4C67CF]/45' : 'border-brand-border opacity-55 hover:opacity-80'"
               style="background:#1F223C"
             >
-              <!-- Cover image or logo -->
-              <div class="flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden border border-white/10">
-                <img v-if="u.image_url" :src="u.image_url" class="w-full h-full object-cover" />
-                <div v-else class="w-full h-full bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center">
-                  <span class="text-white font-black text-xl select-none">B</span>
+              <!-- Cover banner -->
+              <div class="relative h-28 w-full overflow-hidden flex-shrink-0">
+                <img v-if="u.image_url" :src="u.image_url"
+                  class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
+                <div v-else class="w-full h-full flex items-center justify-center relative overflow-hidden"
+                  style="background:linear-gradient(135deg,#4C67CF,#7c3aed)">
+                  <span class="text-white/25 font-black text-7xl select-none absolute -right-2 -bottom-4">B</span>
+                  <BIcon name="Sparkles" class="w-8 h-8 text-white/70 relative" />
                 </div>
+                <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
+                <span class="absolute top-3 right-3 flex items-center gap-1 text-[10px] font-extrabold px-2 py-1 rounded-full backdrop-blur-sm"
+                  :class="u.is_active ? 'bg-emerald-500/85 text-white' : 'bg-white/15 text-white/70'">
+                  <span class="w-1.5 h-1.5 rounded-full" :class="u.is_active ? 'bg-white' : 'bg-white/50'" />
+                  {{ u.is_active ? langStore.t.adminActiveShort : langStore.t.adminHiddenShort }}
+                </span>
+                <p class="absolute bottom-2.5 left-4 right-4 font-extrabold text-white text-sm truncate drop-shadow">{{ u.title }}</p>
               </div>
+
               <!-- Content -->
-              <div class="flex-1 min-w-0">
-                <p class="font-bold text-white text-sm">{{ u.title }}</p>
-                <p v-if="u.body" class="text-xs text-white/50 mt-0.5 line-clamp-2">{{ u.body }}</p>
-                <p class="text-[11px] text-white/25 mt-1">{{ formatDate(u.created_at) }}</p>
-              </div>
-              <!-- Actions -->
-              <div class="flex flex-col gap-2 flex-shrink-0">
-                <button
-                  @click="toggleUpdate(u.id, !u.is_active)"
-                  class="px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all"
-                  :class="u.is_active
-                    ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
-                    : 'bg-white/[0.06] text-white/40 hover:bg-white/10'"
-                >
-                  {{ u.is_active ? 'Активно' : 'Скрыто' }}
-                </button>
-                <button
-                  @click="deleteUpdate(u.id)"
-                  class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-all"
-                >
-                  Удалить
-                </button>
+              <div class="p-4 flex flex-col gap-3">
+                <p v-if="u.body" class="text-xs text-white/50 line-clamp-2">{{ u.body }}</p>
+                <div class="flex items-center justify-between gap-2 pt-1">
+                  <span class="text-[11px] text-white/25 flex items-center gap-1">
+                    <BIcon name="Clock" class="w-3 h-3" /> {{ formatDate(u.created_at) }}
+                  </span>
+                  <div class="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      @click="toggleUpdate(u.id, !u.is_active)"
+                      class="px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all"
+                      :class="u.is_active
+                        ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
+                        : 'bg-white/[0.06] text-white/40 hover:bg-white/10'"
+                    >
+                      {{ u.is_active ? langStore.t.adminActiveShort : langStore.t.adminHiddenShort }}
+                    </button>
+                    <button
+                      @click="deleteUpdate(u.id)"
+                      class="w-7 h-7 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-all flex items-center justify-center"
+                      :title="langStore.t.deleteBtn"
+                    >
+                      <BIcon name="Trash2" class="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
+          </template>
+
+          <template v-else>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
+              <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminNewBroadcastTitle }}</h3>
+              <div class="space-y-3">
+                <input v-model="broadcastTitle" :placeholder="langStore.t.adminNotificationTitlePlaceholder" class="adm-input" />
+                <textarea v-model="broadcastBody" :placeholder="langStore.t.adminMessageTextPlaceholder" class="adm-input resize-none h-28" />
+                <select v-model="broadcastAudience" class="adm-input">
+                  <option value="all">{{ langStore.t.adminAudienceAll }}</option>
+                  <option value="premium">{{ langStore.t.adminAudiencePremium }}</option>
+                  <option value="new">{{ langStore.t.adminAudienceNew }}</option>
+                  <option value="staff">{{ langStore.t.adminAudienceStaff }}</option>
+                </select>
+                <button @click="sendBroadcast" :disabled="isSendingBroadcast || !broadcastTitle.trim() || !broadcastBody.trim()"
+                  class="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold text-white disabled:opacity-40 transition-all shadow-lg"
+                  style="background:linear-gradient(135deg,#4C67CF,#8b5cf6)">
+                  <BIcon name="Send" class="w-4 h-4" /> {{ isSendingBroadcast ? langStore.t.adminSendingLabel : langStore.t.adminSendBroadcastBtn }}
+                </button>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
+              <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminBroadcastHistoryTitle }}</h3>
+              <div v-if="isLoadingBroadcasts" class="space-y-3">
+                <div v-for="n in 3" :key="n" class="h-12 rounded-xl bg-white/5 animate-pulse" />
+              </div>
+              <div v-else-if="!broadcasts.length" class="text-xs text-white/25 text-center py-10">{{ langStore.t.adminNoBroadcastsYet }}</div>
+              <div v-else class="divide-y divide-brand-border -mx-1">
+                <div v-for="b in broadcasts" :key="b.id" class="py-3 px-1">
+                  <p class="font-bold text-sm text-white">{{ b.title }}</p>
+                  <p class="text-xs text-white/40 mt-0.5">{{ AUDIENCE_LABEL[b.audience] ?? b.audience }} · {{ formatDate(b.created_at) }} · {{ b.recipient_count }} {{ langStore.t.adminRecipientsSuffix }} · {{ b.opens }} {{ langStore.t.adminOpensSuffix }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          </template>
         </div>
+
 
         <!-- ── GROUPS & EVENTS ────────────────────────────────────────── -->
         <div v-else-if="activeTab === 'groups'">
@@ -3374,7 +3759,7 @@ const totalPendingBadge = computed(() => {
             <div class="h-56 rounded-2xl bg-white/5 animate-pulse" />
           </div>
           <template v-else-if="groupsOverview">
-            <h2 class="text-xs font-extrabold text-white/30 tracking-[0.15em] uppercase mb-3">Группы</h2>
+            <h2 class="text-xs font-extrabold text-white/30 tracking-[0.15em] uppercase mb-3">{{ langStore.t.groups }}</h2>
             <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-8">
               <router-link v-for="g in groupsOverview.groups" :key="g.id" :to="`/groups/${g.slug}`" target="_blank"
                 class="rounded-2xl border border-brand-border bg-brand-card p-4 hover:border-brand-accent/30 transition-all overflow-hidden relative">
@@ -3382,24 +3767,24 @@ const totalPendingBadge = computed(() => {
                 <p class="font-bold text-white text-sm truncate mt-1">{{ g.name }}</p>
                 <p class="text-xs text-white/35 mt-0.5">{{ GROUP_TYPE_LABEL[g.type] ?? g.type }}</p>
                 <p class="text-xs text-white/50 mt-2 flex items-center gap-1.5">
-                  <BIcon name="Users" class="w-3.5 h-3.5" /> {{ formatNum(g.memberCount) }} участников
+                  <BIcon name="Users" class="w-3.5 h-3.5" /> {{ formatNum(g.memberCount) }} {{ langStore.t.adminParticipantsSuffix }}
                 </p>
               </router-link>
-              <p v-if="!groupsOverview.groups.length" class="col-span-full text-center text-sm text-white/25 py-10">Групп пока нет</p>
+              <p v-if="!groupsOverview.groups.length" class="col-span-full text-center text-sm text-white/25 py-10">{{ langStore.t.adminNoGroupsYet }}</p>
             </div>
 
-            <h2 class="text-xs font-extrabold text-white/30 tracking-[0.15em] uppercase mb-3">Ближайшие события</h2>
+            <h2 class="text-xs font-extrabold text-white/30 tracking-[0.15em] uppercase mb-3">{{ langStore.t.adminUpcomingEventsTitle }}</h2>
             <div class="rounded-2xl border border-brand-border bg-brand-card overflow-hidden">
               <div class="hidden lg:grid gap-3 px-5 py-3 border-b border-brand-border grid-cols-[2fr_1.5fr_1fr_1fr_0.8fr]">
-                <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">Событие</span>
-                <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">Группа</span>
-                <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">Дата</span>
-                <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">Участники</span>
-                <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">Статус</span>
+                <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">{{ langStore.t.adminColEvent }}</span>
+                <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">{{ langStore.t.adminColGroup }}</span>
+                <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">{{ langStore.t.adminColDate }}</span>
+                <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">{{ langStore.t.adminColParticipants }}</span>
+                <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">{{ langStore.t.statusFieldLabel }}</span>
               </div>
               <div v-if="!groupsOverview.events.length" class="flex flex-col items-center gap-3 py-16 text-white/25">
                 <BIcon name="CalendarDays" class="w-10 h-10 opacity-40" />
-                <p class="text-sm font-semibold">Событий нет</p>
+                <p class="text-sm font-semibold">{{ langStore.t.adminNoEventsFound }}</p>
               </div>
               <div v-else class="divide-y divide-brand-border">
                 <router-link v-for="e in groupsOverview.events" :key="e.id" :to="`/groups/${e.groupSlug}`" target="_blank"
@@ -3410,7 +3795,7 @@ const totalPendingBadge = computed(() => {
                   <p class="text-xs text-white/70 font-semibold">{{ formatNum(e.attendeeCount) }}</p>
                   <span class="text-[10px] font-extrabold px-2 py-1 rounded-full w-fit"
                     :class="e.isUpcoming ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/5 text-white/30'">
-                    {{ e.isUpcoming ? 'Скоро' : 'Прошло' }}
+                    {{ e.isUpcoming ? langStore.t.adminUpcomingLabel : langStore.t.adminPastLabel }}
                   </span>
                 </router-link>
               </div>
@@ -3429,45 +3814,45 @@ const totalPendingBadge = computed(() => {
           <template v-else-if="premiumOverview">
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <div class="rounded-2xl p-4 border border-brand-border bg-brand-card">
-                <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider mb-2">С подпиской</p>
+                <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.adminStatWithSub }}</p>
                 <p class="text-2xl font-black text-white">{{ formatNum(premiumOverview.total - freeUserCount) }}</p>
-                <p class="text-xs font-semibold text-brand-accent mt-1">из {{ formatNum(premiumOverview.total) }} пользователей</p>
+                <p class="text-xs font-semibold text-brand-accent mt-1">{{ langStore.t.adminSubOutOf }} {{ formatNum(premiumOverview.total) }} {{ langStore.t.adminSubUsersGenitive }}</p>
               </div>
               <div class="rounded-2xl p-4 border border-brand-border bg-brand-card">
-                <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider mb-2">Доля Premium</p>
+                <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.adminPremiumShareLabel }}</p>
                 <p class="text-2xl font-black text-white">{{ premiumShare }}%</p>
-                <p class="text-xs font-semibold text-emerald-400 mt-1">от всех пользователей</p>
+                <p class="text-xs font-semibold text-emerald-400 mt-1">{{ langStore.t.adminOfAllUsersLabel }}</p>
               </div>
               <div class="rounded-2xl p-4 border border-brand-border bg-brand-card">
-                <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider mb-2">Топ уровень</p>
+                <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.adminTopTierLabel }}</p>
                 <p class="text-2xl font-black text-white">{{ tierLabel(paidTierBreakdown[0]?.tier) ?? '—' }}</p>
-                <p class="text-xs font-semibold text-amber-400 mt-1">{{ formatNum(paidTierBreakdown[0]?.count ?? 0) }} подписчиков</p>
+                <p class="text-xs font-semibold text-amber-400 mt-1">{{ formatNum(paidTierBreakdown[0]?.count ?? 0) }} {{ langStore.t.adminSubscribersSuffix }}</p>
               </div>
               <div class="rounded-2xl p-4 border border-brand-border bg-brand-card">
-                <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider mb-2">Без подписки</p>
+                <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.adminNoSubscription }}</p>
                 <p class="text-2xl font-black text-white">{{ formatNum(freeUserCount) }}</p>
-                <p class="text-xs font-semibold text-white/40 mt-1">Free-тариф</p>
+                <p class="text-xs font-semibold text-white/40 mt-1">{{ langStore.t.adminFreeTierLabel }}</p>
               </div>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
               <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-                <h3 class="font-extrabold text-white text-sm mb-4">Разбивка по уровням Premium</h3>
+                <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminTierBreakdownTitle }}</h3>
                 <div v-for="t in paidTierBreakdown" :key="t.tier" class="mb-3 last:mb-0">
                   <div class="flex items-center justify-between mb-1">
                     <span class="text-xs font-semibold" :style="`color:${tierColor(t.tier)}`">{{ tierLabel(t.tier) }}</span>
-                    <span class="text-xs font-bold text-white">{{ formatNum(t.count) }} подписчиков</span>
+                    <span class="text-xs font-bold text-white">{{ formatNum(t.count) }} {{ langStore.t.adminSubscribersSuffix }}</span>
                   </div>
                   <div class="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                     <div class="h-full rounded-full" :style="`width:${Math.round((t.count / barMax(paidTierBreakdown.map((x:any)=>({value:x.count})))) * 100)}%;background:${tierColor(t.tier)}`" />
                   </div>
                 </div>
-                <p v-if="!paidTierBreakdown.length" class="text-xs text-white/25 text-center py-6">Пока нет платных подписчиков</p>
+                <p v-if="!paidTierBreakdown.length" class="text-xs text-white/25 text-center py-6">{{ langStore.t.adminNoPaidSubscribersYet }}</p>
               </div>
 
               <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-                <h3 class="font-extrabold text-white text-sm mb-4">Подписчики Premium</h3>
-                <div v-if="!premiumOverview.topSubscribers.length" class="text-xs text-white/25 text-center py-6">Пока никто не оформил подписку</div>
+                <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminPremiumSubscribersTitle }}</h3>
+                <div v-if="!premiumOverview.topSubscribers.length" class="text-xs text-white/25 text-center py-6">{{ langStore.t.adminNoOneSubscribedYet }}</div>
                 <router-link v-for="u in premiumOverview.topSubscribers" :key="u.id" :to="`/profile/${u.username}`" target="_blank"
                   class="flex items-center gap-2.5 py-2 hover:bg-white/[0.03] rounded-xl transition-all -mx-2 px-2">
                   <img v-if="u.avatar_url" :src="u.avatar_url" class="w-8 h-8 rounded-full object-cover border border-white/10 flex-shrink-0" />
@@ -3490,11 +3875,11 @@ const totalPendingBadge = computed(() => {
             <div class="rounded-2xl border border-brand-border bg-brand-card p-5 mt-5">
               <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
                 <div>
-                  <h3 class="font-extrabold text-white text-sm">Оборот Dealers' Den</h3>
-                  <p class="text-xs text-white/40 mt-0.5">Сумма проданных лотов по месяцам — маркетплейс не берёт комиссию, это не доход платформы</p>
+                  <h3 class="font-extrabold text-white text-sm">{{ langStore.t.adminDealersDenTurnoverTitle }}</h3>
+                  <p class="text-xs text-white/40 mt-0.5">{{ langStore.t.adminDealersDenTurnoverDesc }}</p>
                 </div>
                 <span class="text-xs font-bold px-3 py-1.5 rounded-full bg-brand-accent/15 text-brand-accent flex-shrink-0">
-                  ${{ formatNum(premiumOverview.dealersDen.totalGmv) }} всего · {{ premiumOverview.dealersDen.soldCount }} продаж
+                  ${{ formatNum(premiumOverview.dealersDen.totalGmv) }} {{ langStore.t.adminTotalLowercase }} · {{ premiumOverview.dealersDen.soldCount }} {{ langStore.t.adminSalesSuffix }}
                 </span>
               </div>
               <div v-if="gmvMonths.length" class="flex items-end gap-1.5 h-28 mt-4">
@@ -3502,7 +3887,7 @@ const totalPendingBadge = computed(() => {
                   class="flex-1 flex flex-col items-center gap-1 group/bar cursor-default relative">
                   <div class="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover/bar:opacity-100
                     text-[9px] font-bold text-white bg-black/70 px-1.5 py-0.5 rounded-lg whitespace-nowrap transition-opacity pointer-events-none">
-                    ${{ m.total }} · {{ m.count }} шт.
+                    ${{ m.total }} · {{ m.count }} {{ langStore.t.adminUnitsShortSuffix }}
                   </div>
                   <div class="w-full rounded-t-lg transition-all hover:opacity-100 opacity-80 bg-brand-accent"
                     :style="`height:${Math.max(4, (m.total / gmvMax) * 100)}px`" />
@@ -3512,141 +3897,18 @@ const totalPendingBadge = computed(() => {
                 <span class="text-[10px] text-white/30">{{ formatMonthShort(gmvMonths[0].month) }}</span>
                 <span class="text-[10px] text-white/30">{{ formatMonthShort(gmvMonths[gmvMonths.length-1].month) }}</span>
               </div>
-              <p v-else class="text-xs text-white/25 text-center py-8">Продаж пока не было</p>
+              <p v-else class="text-xs text-white/25 text-center py-8">{{ langStore.t.adminNoSalesYet }}</p>
             </div>
           </template>
         </div>
 
-        <!-- ── TEAM & ROLES ───────────────────────────────────────────── -->
-        <div v-else-if="activeTab === 'team'">
-          <div class="flex items-center justify-end mb-4">
-            <button v-if="isOwnerRole" @click="showInviteForm = !showInviteForm"
-              class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white shadow-lg transition-all"
-              style="background:linear-gradient(135deg,#4C67CF,#31458F);box-shadow:0 4px 16px rgba(76,103,207,0.3)">
-              <BIcon name="UserPlus" class="w-3.5 h-3.5" /> Пригласить в команду
-            </button>
-          </div>
-
-          <Transition name="filter-expand">
-            <div v-if="showInviteForm" class="rounded-2xl border border-brand-border bg-brand-card p-5 mb-5">
-              <h3 class="font-extrabold text-white text-sm mb-3">Новый сотрудник</h3>
-              <div class="flex flex-col sm:flex-row gap-2">
-                <input v-model="inviteIdentifier" placeholder="Email или @username" class="adm-input flex-1" />
-                <select v-model="inviteRole" class="adm-input sm:w-44">
-                  <option value="moderator">Модератор</option>
-                  <option value="admin">Администратор</option>
-                  <option value="owner">Владелец</option>
-                </select>
-                <button @click="inviteToStaff" :disabled="isInviting || !inviteIdentifier.trim()"
-                  class="px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all flex-shrink-0"
-                  style="background:linear-gradient(135deg,#4C67CF,#31458F)">
-                  {{ isInviting ? '...' : 'Добавить' }}
-                </button>
-              </div>
-              <p v-if="inviteError" class="text-xs text-rose-400 mt-2">{{ inviteError }}</p>
-            </div>
-          </Transition>
-
-          <div class="rounded-2xl border border-brand-border bg-brand-card overflow-hidden">
-            <div class="hidden lg:grid gap-3 px-5 py-3 border-b border-brand-border grid-cols-[2fr_1fr_1fr_1.2fr_1fr]">
-              <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">Сотрудник</span>
-              <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">Роль</span>
-              <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">Статус</span>
-              <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">Последняя активность</span>
-              <span></span>
-            </div>
-            <div v-if="isLoadingStaff" class="p-5 space-y-3">
-              <div v-for="n in 4" :key="n" class="h-10 rounded-xl bg-white/5 animate-pulse" />
-            </div>
-            <div v-else-if="!staff.length" class="flex flex-col items-center gap-3 py-16 text-white/25">
-              <BIcon name="ShieldCheck" class="w-10 h-10 opacity-40" />
-              <p class="text-sm font-semibold">В команде пока только вы</p>
-            </div>
-            <div v-else class="divide-y divide-brand-border">
-              <div v-for="m in staff" :key="m.id"
-                class="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr_1.2fr_1fr] gap-2 lg:gap-3 items-center px-5 py-3.5">
-                <div class="flex items-center gap-2.5 min-w-0">
-                  <img v-if="m.avatar_url" :src="m.avatar_url" class="w-9 h-9 rounded-full object-cover border border-white/10 flex-shrink-0" />
-                  <div v-else class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
-                    :style="`background:${roleColor(m.role)}20;color:${roleColor(m.role)}`">
-                    {{ (m.display_name || m.username || '?')[0].toUpperCase() }}
-                  </div>
-                  <div class="min-w-0">
-                    <p class="font-bold text-sm text-white truncate">{{ m.display_name || m.username }}</p>
-                    <p class="text-xs text-white/35 truncate">{{ m.email }}</p>
-                  </div>
-                </div>
-                <span class="text-xs font-extrabold px-2.5 py-1 rounded-full w-fit"
-                  :style="`background:${roleColor(m.role)}20;color:${roleColor(m.role)}`">
-                  {{ roleLabel(m.role) }}
-                </span>
-                <span class="text-xs font-extrabold px-2.5 py-1 rounded-full w-fit"
-                  :class="m.frozen_at ? 'bg-rose-500/15 text-rose-400' : 'bg-emerald-500/15 text-emerald-400'">
-                  {{ m.frozen_at ? 'Отстранён' : 'Активен' }}
-                </span>
-                <span class="text-xs text-white/50">{{ relativeLastSeen(m.last_seen_at) }}</span>
-                <div class="flex items-center gap-1.5 justify-start lg:justify-end">
-                  <button v-if="m.frozen_at" @click="reactivateStaff(m)" title="Вернуть в строй"
-                    class="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 flex items-center justify-center transition-all">
-                    <BIcon name="ShieldCheck" class="w-3.5 h-3.5" />
-                  </button>
-                  <button v-else @click="suspendStaff(m)" title="Приостановить"
-                    class="w-8 h-8 rounded-full bg-white/5 text-white/40 hover:bg-white/10 hover:text-white flex items-center justify-center transition-all">
-                    <BIcon name="Snowflake" class="w-3.5 h-3.5" />
-                  </button>
-                  <button v-if="isOwnerRole" @click="removeFromStaff(m)" title="Убрать из команды"
-                    class="w-8 h-8 rounded-full bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center transition-all">
-                    <BIcon name="UserMinus" class="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- ── NOTIFICATIONS / BROADCASTS ─────────────────────────────── -->
-        <div v-else-if="activeTab === 'broadcasts'">
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-              <h3 class="font-extrabold text-white text-sm mb-4">Новая рассылка</h3>
-              <div class="space-y-3">
-                <input v-model="broadcastTitle" placeholder="Заголовок уведомления" class="adm-input" />
-                <textarea v-model="broadcastBody" placeholder="Текст сообщения..." class="adm-input resize-none h-28" />
-                <select v-model="broadcastAudience" class="adm-input">
-                  <option value="all">Все пользователи</option>
-                  <option value="premium">Premium-подписчики</option>
-                  <option value="new">Новые пользователи (7 дн.)</option>
-                  <option value="staff">Модераторы</option>
-                </select>
-                <button @click="sendBroadcast" :disabled="isSendingBroadcast || !broadcastTitle.trim() || !broadcastBody.trim()"
-                  class="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-2xl text-sm font-bold text-white disabled:opacity-40 transition-all shadow-lg"
-                  style="background:linear-gradient(135deg,#4C67CF,#8b5cf6)">
-                  <BIcon name="Send" class="w-4 h-4" /> {{ isSendingBroadcast ? 'Отправка...' : 'Отправить рассылку' }}
-                </button>
-              </div>
-            </div>
-
-            <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-              <h3 class="font-extrabold text-white text-sm mb-4">История рассылок</h3>
-              <div v-if="isLoadingBroadcasts" class="space-y-3">
-                <div v-for="n in 3" :key="n" class="h-12 rounded-xl bg-white/5 animate-pulse" />
-              </div>
-              <div v-else-if="!broadcasts.length" class="text-xs text-white/25 text-center py-10">Рассылок ещё не было</div>
-              <div v-else class="divide-y divide-brand-border -mx-1">
-                <div v-for="b in broadcasts" :key="b.id" class="py-3 px-1">
-                  <p class="font-bold text-sm text-white">{{ b.title }}</p>
-                  <p class="text-xs text-white/40 mt-0.5">{{ AUDIENCE_LABEL[b.audience] ?? b.audience }} · {{ formatDate(b.created_at) }} · {{ b.recipient_count }} получателей · {{ b.opens }} открытий</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <!-- ── LOGS & SETTINGS ────────────────────────────────────────── -->
         <div v-else-if="activeTab === 'settings'">
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <div class="rounded-2xl border border-brand-border bg-brand-card p-5 h-fit">
-              <h3 class="font-extrabold text-white text-sm mb-4">Настройки платформы</h3>
+              <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminPlatformSettingsTitle }}</h3>
               <div v-if="isLoadingSettings" class="space-y-3">
                 <div v-for="n in 3" :key="n" class="h-10 rounded-xl bg-white/5 animate-pulse" />
               </div>
@@ -3665,11 +3927,11 @@ const totalPendingBadge = computed(() => {
             </div>
 
             <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-              <h3 class="font-extrabold text-white text-sm mb-4">Журнал действий</h3>
+              <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminAuditLogTitle }}</h3>
               <div v-if="isLoadingAuditLogs" class="space-y-3">
                 <div v-for="n in 5" :key="n" class="h-10 rounded-xl bg-white/5 animate-pulse" />
               </div>
-              <div v-else-if="!auditLogs.length" class="text-xs text-white/25 text-center py-10">Действий пока не было</div>
+              <div v-else-if="!auditLogs.length" class="text-xs text-white/25 text-center py-10">{{ langStore.t.adminNoActionsYet }}</div>
               <div v-else class="space-y-3 max-h-[480px] overflow-y-auto pr-1">
                 <div v-for="l in auditLogs" :key="l.id" class="flex items-start gap-3">
                   <div class="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -3685,71 +3947,13 @@ const totalPendingBadge = computed(() => {
           </div>
         </div>
 
-        <!-- ── INFRASTRUCTURE ─────────────────────────────────────────── -->
-        <div v-else-if="activeTab === 'infra'">
-          <div v-if="isLoadingInfra" class="space-y-5">
-            <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              <div v-for="n in 3" :key="n" class="h-24 rounded-2xl bg-white/5 animate-pulse" />
-            </div>
-            <div class="h-56 rounded-2xl bg-white/5 animate-pulse" />
-          </div>
-          <template v-else-if="infraOverview">
-            <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-              <div class="rounded-2xl p-4 border border-brand-border bg-brand-card">
-                <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider mb-2">S3 занято</p>
-                <p class="text-2xl font-black text-white">{{ formatBytes(infraOverview.storage.totalBytes) }}</p>
-                <p class="text-xs font-semibold text-brand-accent mt-1">{{ formatNum(infraOverview.storage.totalObjects) }} файлов</p>
-              </div>
-              <div class="rounded-2xl p-4 border border-brand-border bg-brand-card">
-                <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider mb-2">Стикеров в системе</p>
-                <p class="text-2xl font-black text-white">{{ formatNum(infraOverview.stickers.totalUses) }}</p>
-                <p class="text-xs font-semibold text-emerald-400 mt-1">в {{ infraOverview.stickers.packCount }} паках использований</p>
-              </div>
-              <div class="rounded-2xl p-4 border border-brand-border bg-brand-card">
-                <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider mb-2">Лоты Dealers' Den</p>
-                <p class="text-2xl font-black text-white">{{ infraOverview.dealersDen.activeListings }}</p>
-                <p class="text-xs font-semibold text-amber-400 mt-1">{{ infraOverview.dealersDen.soldThisMonthCount }} продаж за месяц</p>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-                <h3 class="font-extrabold text-white text-sm mb-4">Хранилище S3</h3>
-                <p class="text-xs text-white/40 mb-3">{{ formatBytes(infraOverview.storage.totalBytes) }} в {{ infraOverview.storage.totalObjects }} файлах</p>
-                <div v-for="f in infraOverview.storage.byFolder" :key="f.folder" class="mb-3 last:mb-0">
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="text-xs font-semibold text-white/60">{{ FOLDER_LABEL[f.folder] ?? f.folder }}</span>
-                    <span class="text-xs font-bold text-white">{{ formatBytes(f.bytes) }}</span>
-                  </div>
-                  <div class="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-                    <div class="h-full rounded-full bg-brand-accent" :style="`width:${Math.round((f.bytes / infraOverview.storage.totalBytes) * 100)}%`" />
-                  </div>
-                </div>
-                <p v-if="!infraOverview.storage.byFolder.length" class="text-xs text-white/25 text-center py-6">Хранилище пусто</p>
-              </div>
-
-              <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
-                <h3 class="font-extrabold text-white text-sm mb-4">Топ стикерпаков</h3>
-                <div v-for="p in infraOverview.stickers.topPacks" :key="p.name" class="mb-3 last:mb-0">
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="text-xs font-semibold text-white/60 truncate">{{ p.name }}</span>
-                    <span class="text-xs font-bold text-white flex-shrink-0">{{ formatNum(p.uses) }} исп.</span>
-                  </div>
-                  <div class="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-                    <div class="h-full rounded-full bg-brand-purple" :style="`width:${Math.round((p.uses / (infraOverview.stickers.topPacks[0]?.uses || 1)) * 100)}%`" />
-                  </div>
-                </div>
-                <p v-if="!infraOverview.stickers.topPacks.length" class="text-xs text-white/25 text-center py-6">Стикерпаков пока нет</p>
-              </div>
-            </div>
-          </template>
-        </div>
-
       </div>
       </Transition>
       </main>
     </div>
   </div>
+
+  <StickerPackDetailModal v-if="openedPackId" :pack-id="openedPackId" @close="closeStickerPackDetail" />
 </template>
 
 <style scoped>

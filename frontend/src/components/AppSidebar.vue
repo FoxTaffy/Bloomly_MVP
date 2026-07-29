@@ -42,10 +42,15 @@ function navigate(fn: () => void) {
 onMounted(() => {
   friendsStore.loadRequests().catch(() => {})
   messagesStore.fetchUnreadCount().catch(() => {})
+  if (auth.user) messagesStore.fetchMyGroupInboxCounts()
   if (auth.user && !groupsStore.myGroups.length) {
     groupsStore.loadMyGroups().catch(() => {})
   }
 })
+
+// Sum of pending "Обращения" across every group the user owns/admins/moderates.
+const groupInboxTotal = computed(() =>
+  Object.values(messagesStore.groupInboxCounts).reduce((sum, n) => sum + n, 0))
 watch(() => route.name, () => { mobileSidebar.close() })
 
 // Active detection: prefer route name, fall back to activeNav prop
@@ -61,6 +66,7 @@ const isActive = (key: string): boolean => {
     'dealers-den':'dealers-den',
     'shop':         'shop',
     explore:      'explore',
+    'scheduled-posts': 'scheduled-posts',
   }
   if (routeMap[key]) return route.name === routeMap[key]
   return props.activeNav === key
@@ -72,21 +78,22 @@ const navItems = computed(() => [
     icon: 'Home',
     label: langStore.t.home,
     disabled: false,
-    action: () => { emit('update:activeNav', 'home'); router.push({ name: 'home' }) },
+    to: { name: 'home' },
+    onClick: () => emit('update:activeNav', 'home'),
   },
   {
     key: 'explore',
     icon: 'Compass',
     label: langStore.t.explore,
     disabled: false,
-    action: () => router.push({ name: 'explore' }),
+    to: { name: 'explore' },
   },
   {
     key: 'messages',
     icon: 'MessageCircle',
     label: langStore.t.messages,
     disabled: false,
-    action: () => router.push({ name: 'messages' }),
+    to: { name: 'messages' },
     badge: messagesStore.unreadCount > 0 ? String(messagesStore.unreadCount) : undefined,
   },
   {
@@ -94,7 +101,7 @@ const navItems = computed(() => [
     icon: 'Users',
     label: langStore.t.friends,
     disabled: false,
-    action: () => router.push({ name: 'friends' }),
+    to: { name: 'friends' },
     badge: friendsStore.requestsCount > 0 ? String(friendsStore.requestsCount) : undefined,
   },
   {
@@ -102,21 +109,24 @@ const navItems = computed(() => [
     icon: 'Grid',
     label: langStore.t.groups,
     disabled: false,
-    action: () => router.push({ name: 'groups' }),
+    to: { name: 'groups' },
+    // "Обращения" pending across every group the user administers — not the unrelated
+    // real multi-participant group-chat unread count (that lives under "Сообщения").
+    badge: groupInboxTotal.value > 0 ? String(groupInboxTotal.value) : undefined,
   },
   {
     key: 'bookmarks',
     icon: 'Bookmark',
     label: langStore.t.bookmarks,
     disabled: false,
-    action: () => router.push({ name: 'bookmarks' }),
+    to: { name: 'bookmarks' },
   },
   {
     key: 'subscriptions',
     icon: 'Sparkles',
     label: langStore.t.premium,
     disabled: false,
-    action: () => router.push({ name: 'subscriptions' }),
+    to: { name: 'subscriptions' },
     badge: (() => {
       const tier = (auth.user as any)?.subscription_tier ?? 'free'
       return tier !== 'free' ? tier.charAt(0).toUpperCase() + tier.slice(1) : undefined
@@ -125,11 +135,12 @@ const navItems = computed(() => [
 ])
 
 const categoryItems = computed(() => [
-  { key: 'shop',        icon: 'ShoppingBag', label: langStore.t.shop ?? 'Магазин', disabled: false, action: () => router.push({ name: 'shop' }) },
-  { key: 'dealers-den', icon: 'Tag',         label: langStore.t.dealersDen,  disabled: false, action: () => router.push({ name: 'dealers-den' }) },
-  { key: 'automation',  icon: 'Zap',         label: 'Автоматизация',         disabled: false, action: () => router.push({ name: 'settings-profile', query: { section: 'sec-automation' } }) },
-  { key: 'gifts',       icon: 'Gift',        label: langStore.t.gifts,       disabled: true,  action: () => {} },
-  { key: 'help',        icon: 'CircleHelp',  label: langStore.t.help,        disabled: false, action: () => router.push({ name: 'help' }) },
+  { key: 'shop',        icon: 'ShoppingBag', label: langStore.t.shop ?? 'Магазин', disabled: false, to: { name: 'shop' } },
+  { key: 'dealers-den', icon: 'Tag',         label: langStore.t.dealersDen,  disabled: false, to: { name: 'dealers-den' } },
+  { key: 'automation',  icon: 'Zap',         label: 'Автоматизация',         disabled: false, to: { name: 'settings-profile', query: { section: 'sec-automation' } } },
+  { key: 'scheduled-posts', icon: 'CalendarClock', label: 'Черновики и отложенные', disabled: false, to: { name: 'scheduled-posts' } },
+  { key: 'gifts',       icon: 'Gift',        label: langStore.t.gifts,       disabled: true,  to: null as any },
+  { key: 'help',        icon: 'CircleHelp',  label: langStore.t.help,        disabled: false, to: { name: 'help' } },
 ])
 </script>
 
@@ -150,10 +161,10 @@ const categoryItems = computed(() => [
       >
         <!-- Drawer header -->
         <div class="flex items-center justify-between px-4 py-4 border-b border-brand-border flex-shrink-0">
-          <div class="flex items-center gap-2.5 cursor-pointer" @click="navigate(() => router.push({ name: 'home' }))">
+          <router-link :to="{ name: 'home' }" class="flex items-center gap-2.5 cursor-pointer" @click="mobileSidebar.close()">
             <img src="/bloomly.png?v=2" alt="Bloomly" class="w-7 h-7 object-contain" />
             <span class="text-lg font-extrabold text-white">Bloomly</span>
-          </div>
+          </router-link>
           <button @click="mobileSidebar.close()" class="p-1.5 rounded-xl text-white/55 hover:text-white hover:bg-white/5 transition-all">
             <BIcon name="X" class="w-5 h-5" />
           </button>
@@ -162,9 +173,10 @@ const categoryItems = computed(() => [
         <!-- Drawer content -->
         <div class="flex-1 px-3 py-4 space-y-6 overflow-y-auto">
           <!-- User profile -->
-          <div v-if="auth.user"
+          <router-link v-if="auth.user"
+            :to="`/profile/${auth.user?.username}`"
             class="flex items-center gap-3 cursor-pointer group px-1"
-            @click="navigate(() => router.push(`/profile/${auth.user?.username}`))">
+            @click="mobileSidebar.close()">
             <img v-if="auth.avatarUrl" :src="auth.avatarUrl"
               class="w-10 h-10 rounded-full object-cover border-2 border-brand-border group-hover:border-brand-accent transition-colors"
               @error="onAvatarError" />
@@ -176,7 +188,7 @@ const categoryItems = computed(() => [
               <h3 class="font-bold text-white text-sm group-hover:text-brand-accent transition-colors">{{ auth.displayName }}</h3>
               <p class="text-xs text-white/50">{{ langStore.t.goToProfile }}</p>
             </div>
-          </div>
+          </router-link>
           <!-- Auth still (re)loading — skeleton instead of a flash of "User" -->
           <div v-else class="flex items-center gap-3 px-1 animate-pulse">
             <div class="w-10 h-10 rounded-full bg-white/10"></div>
@@ -188,8 +200,9 @@ const categoryItems = computed(() => [
 
           <!-- Main nav -->
           <nav class="space-y-0.5">
-            <button v-for="item in navItems" :key="item.key"
-              @click="!item.disabled && navigate(item.action)"
+            <router-link v-for="item in navItems" :key="item.key"
+              :to="item.to"
+              @click="item.onClick?.(); mobileSidebar.close()"
               class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
               :class="item.disabled ? 'opacity-40 cursor-not-allowed text-white/35'
                 : isActive(item.key) ? 'bg-brand-card text-white'
@@ -201,21 +214,22 @@ const categoryItems = computed(() => [
                 :class="item.key === 'subscriptions' ? 'bg-brand-accent/20 text-brand-accent border border-brand-accent/30' : 'bg-brand-bg text-white'">
                 {{ item.badge }}
               </span>
-            </button>
-            <button @click="navigate(() => router.push({ name: 'settings-profile' }))"
+            </router-link>
+            <router-link :to="{ name: 'settings-profile' }" @click="mobileSidebar.close()"
               class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
               :class="isActive('settings') ? 'bg-brand-card text-white' : 'text-white/65 hover:bg-brand-card/50 hover:text-white'">
               <BIcon name="Settings" class="w-5 h-5" />
               <span>{{ langStore.t.settings }}</span>
-            </button>
+            </router-link>
           </nav>
 
           <!-- Categories -->
           <div>
             <h4 class="px-4 text-xs font-bold text-white/40 mb-2 uppercase tracking-wider">{{ langStore.t.categories }}</h4>
             <nav class="space-y-0.5">
-              <button v-for="cat in categoryItems" :key="cat.key"
-                @click="!cat.disabled && navigate(cat.action)"
+              <component :is="cat.disabled ? 'button' : 'router-link'" v-for="cat in categoryItems" :key="cat.key"
+                :to="cat.disabled ? undefined : cat.to"
+                @click="!cat.disabled && mobileSidebar.close()"
                 class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
                 :class="cat.disabled ? 'opacity-40 cursor-not-allowed text-white/35'
                   : isActive(cat.key) ? 'bg-brand-card text-white'
@@ -223,7 +237,7 @@ const categoryItems = computed(() => [
                 <BIcon :name="cat.icon" class="w-5 h-5" />
                 <span class="flex-1 text-left">{{ cat.label }}</span>
                 <BIcon v-if="cat.disabled" name="Lock" class="w-3.5 h-3.5 opacity-60" />
-              </button>
+              </component>
             </nav>
           </div>
 
@@ -266,10 +280,10 @@ const categoryItems = computed(() => [
   <aside class="w-64 hidden lg:block sticky top-24 self-start space-y-6 flex-shrink-0">
 
     <!-- User profile block -->
-    <div
+    <router-link
       v-if="auth.user"
-      class="flex items-center gap-3 cursor-pointer group"
-      @click="router.push(`/profile/${auth.user?.username}`)">
+      :to="`/profile/${auth.user?.username}`"
+      class="flex items-center gap-3 cursor-pointer group">
       <img
         v-if="auth.avatarUrl"
         :src="auth.avatarUrl"
@@ -284,7 +298,7 @@ const categoryItems = computed(() => [
         <h3 class="font-bold text-white text-sm group-hover:text-brand-accent transition-colors">{{ auth.displayName }}</h3>
         <p class="text-xs text-white/50">{{ langStore.t.goToProfile }}</p>
       </div>
-    </div>
+    </router-link>
     <!-- Auth still (re)loading — skeleton instead of a flash of "User" -->
     <div v-else class="flex items-center gap-3 animate-pulse">
       <div class="w-12 h-12 rounded-full bg-white/10"></div>
@@ -296,10 +310,11 @@ const categoryItems = computed(() => [
 
     <!-- Main navigation -->
     <nav class="space-y-1">
-      <button
+      <router-link
         v-for="item in navItems"
         :key="item.key"
-        @click="!item.disabled && item.action()"
+        :to="item.to"
+        @click="item.onClick?.()"
         class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
         :class="item.disabled
           ? 'opacity-40 cursor-not-allowed text-white/35'
@@ -317,18 +332,18 @@ const categoryItems = computed(() => [
             : 'bg-brand-bg text-white'">
           {{ item.badge }}
         </span>
-      </button>
+      </router-link>
 
       <!-- Settings link -->
-      <button
-        @click="router.push({ name: 'settings-profile' })"
+      <router-link
+        :to="{ name: 'settings-profile' }"
         class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
         :class="isActive('settings')
           ? 'bg-brand-card text-white'
           : 'text-white/65 hover:bg-brand-card/50 hover:text-white'">
         <BIcon name="Settings" class="w-5 h-5" />
         <span>{{ langStore.t.settings }}</span>
-      </button>
+      </router-link>
     </nav>
 
     <!-- Extra slot (e.g. "О профиле" section on profile page) -->
@@ -367,10 +382,11 @@ const categoryItems = computed(() => [
     <div>
       <h4 class="px-4 text-xs font-bold text-white/40 mb-2 uppercase tracking-wider">{{ langStore.t.categories }}</h4>
       <nav class="space-y-1">
-        <button
+        <component
+          :is="cat.disabled ? 'button' : 'router-link'"
           v-for="cat in categoryItems"
           :key="cat.key"
-          @click="!cat.disabled && cat.action()"
+          :to="cat.disabled ? undefined : cat.to"
           class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all"
           :class="cat.disabled
             ? 'opacity-40 cursor-not-allowed text-white/35'
@@ -380,7 +396,7 @@ const categoryItems = computed(() => [
           <BIcon :name="cat.icon" class="w-5 h-5" />
           <span class="flex-1 text-left">{{ cat.label }}</span>
           <BIcon v-if="cat.disabled" name="Lock" class="w-3.5 h-3.5 opacity-60" />
-        </button>
+        </component>
       </nav>
     </div>
 

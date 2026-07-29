@@ -12,7 +12,7 @@
         <div class="seller-meta">
           <div class="seller-name-row">
             <h1 class="seller-name">{{ data.user.displayName || data.user.username }}</h1>
-            <span v-if="data.user.isVerified" class="verified-badge">✓ Верифицирован</span>
+            <span v-if="data.user.isVerified" class="verified-badge">✓ {{ langStore.t.verBadgeGenericLabel }}</span>
           </div>
           <p class="seller-username">@{{ data.user.username }}</p>
           <DenTrustBadge :trust="data.user.denTrustScore" />
@@ -67,11 +67,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useDealersDenStore } from '../stores/dealersDen'
+import { useLangStore } from '../stores/lang'
 import DenTrustBadge from '../components/DenTrustBadge.vue'
 import DenReviewCard from '../components/DenReviewCard.vue'
 
 const route  = useRoute()
 const store  = useDealersDenStore()
+const langStore = useLangStore()
 const data   = ref<any>(null)
 const loading = ref(false)
 const error   = ref('')

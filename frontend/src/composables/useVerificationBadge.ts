@@ -1,33 +1,44 @@
-const KNOWN_TYPES = new Set([
-  'artist', 'master', 'fursuiter', 'popular', 'writer', 'organizer', 'event',
-  'photographer', 'programmer',
-])
+import type { translations } from '@/locales/translations'
 
-// Per-type badge icons (see backend verification module for the type list).
-// PNG files live in frontend/public/icons/badges/<type>.png; falls back to the
-// generic "official paw" badge for legacy/unrecognized types.
-export function verificationBadgeIcon(verificationType?: string | null): string {
-  if (verificationType && KNOWN_TYPES.has(verificationType)) {
-    return `/icons/badges/${verificationType}.png`
-  }
-  return '/icons/badges/paw_offical.png'
+type T = (typeof translations)['RU']
+
+// Single source of truth for verification badge icon + color per type.
+// Matches the icon choices made in the verification type selector
+// (SettingsProfileView.vue's VER_TYPES) — keep both in sync.
+const VERIFICATION_TYPE_META: Record<string, { icon: string; colorClass: string }> = {
+  artist:       { icon: 'Palette',       colorClass: 'text-purple-400' },
+  master:       { icon: 'Hammer',        colorClass: 'text-amber-400' },
+  fursuiter:    { icon: 'Shirt',         colorClass: 'text-cyan-400' },
+  popular:      { icon: 'TrendingUp',    colorClass: 'text-blue-400' },
+  writer:       { icon: 'PenLine',       colorClass: 'text-rose-400' },
+  organizer:    { icon: 'CalendarCheck', colorClass: 'text-indigo-400' },
+  event:        { icon: 'Ticket',        colorClass: 'text-emerald-400' },
+  photographer: { icon: 'Camera',        colorClass: 'text-teal-400' },
+  programmer:   { icon: 'Code2',         colorClass: 'text-fuchsia-400' },
 }
 
-export const VERIFICATION_TYPE_INFO: Record<string, { label: string; desc: string }> = {
-  artist: { label: 'Художник', desc: 'Профессионально рисует и продаёт авторские работы.' },
-  master: { label: 'Мастер', desc: 'Изготавливает костюмы, атрибутику и другие изделия на заказ.' },
-  fursuiter: { label: 'Фурсьютер', desc: 'Выступает и снимается в собственном фурсьют-костюме.' },
-  popular: { label: 'Медийная личность', desc: 'Имеет большую и активную аудиторию в соцсетях.' },
-  writer: { label: 'Автор / Писатель', desc: 'Публикует авторские произведения — рассказы, комиксы, статьи.' },
-  organizer: { label: 'Организатор', desc: 'Организует мероприятия и ивенты для сообщества.' },
-  event: { label: 'Мероприятие', desc: 'Официальный аккаунт мероприятия.' },
-  photographer: { label: 'Фотограф', desc: 'Профессионально снимает участников сообщества.' },
-  programmer: { label: 'Программист', desc: 'Разрабатывает проекты и инструменты для сообщества.' },
+/** Lucide icon name (for use with <BIcon>) for a verification type; falls back to the generic checkmark. */
+export function verificationBadgeIconName(verificationType?: string | null): string {
+  return (verificationType && VERIFICATION_TYPE_META[verificationType]?.icon) || 'BadgeCheck'
 }
 
-export function verificationTypeInfo(verificationType?: string | null) {
-  if (verificationType && VERIFICATION_TYPE_INFO[verificationType]) {
-    return VERIFICATION_TYPE_INFO[verificationType]
+/** Text color class matching a verification type's icon; falls back to the brand accent color. */
+export function verificationBadgeColorClass(verificationType?: string | null): string {
+  return (verificationType && VERIFICATION_TYPE_META[verificationType]?.colorClass) || 'text-brand-accent'
+}
+
+/** Builds { label, desc } for a verification type from the active-language dictionary `t` (langStore.t). */
+export function verificationTypeInfo(t: T, verificationType?: string | null) {
+  switch (verificationType) {
+    case 'artist':       return { label: t.verTypeArtist,       desc: t.verBadgeDescArtist }
+    case 'master':       return { label: t.verTypeMaster,       desc: t.verBadgeDescMaster }
+    case 'fursuiter':    return { label: t.verTypeFursuiter,    desc: t.verBadgeDescFursuiter }
+    case 'popular':      return { label: t.verTypePopular,      desc: t.verBadgeDescPopular }
+    case 'writer':       return { label: t.verTypeWriter,       desc: t.verBadgeDescWriter }
+    case 'organizer':    return { label: t.verTypeOrganizer,    desc: t.verBadgeDescOrganizer }
+    case 'event':        return { label: t.verTypeEvent,        desc: t.verBadgeDescEvent }
+    case 'photographer': return { label: t.verTypePhotographer, desc: t.verBadgeDescPhotographer }
+    case 'programmer':   return { label: t.verTypeProgrammer,   desc: t.verBadgeDescProgrammer }
+    default:             return { label: t.verBadgeGenericLabel, desc: t.verBadgeGenericDesc }
   }
-  return { label: 'Верифицирован', desc: 'Аккаунт подтверждён модератором Bloomly.' }
 }

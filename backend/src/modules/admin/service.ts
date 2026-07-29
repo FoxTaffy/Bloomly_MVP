@@ -345,12 +345,33 @@ export const adminService = {
         where, skip, take: limit, orderBy: { created_at: 'desc' },
         include: {
           author: { select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true } },
-          _count: { select: { votes: true, comments: true, repaws: true } },
+          _count: { select: { comments: true, repaws: true } },
         },
       }),
       prisma.post.count({ where }),
     ]);
-    return { posts, total, page, pages: Math.ceil(total / limit) };
+
+    // Votes are Reddit-style (+1/-1) in one table — split into likes/dislikes per post
+    const postIds = posts.map(p => p.id);
+    type VoteRow = { post_id: string; likes: bigint; dislikes: bigint };
+    const voteRows = postIds.length
+      ? await prisma.$queryRaw<VoteRow[]>`
+          SELECT post_id,
+            COUNT(*) FILTER (WHERE value > 0)::bigint AS likes,
+            COUNT(*) FILTER (WHERE value < 0)::bigint AS dislikes
+          FROM "Vote"
+          WHERE deleted_at IS NULL AND post_id = ANY(${postIds}::uuid[])
+          GROUP BY post_id
+        `
+      : [];
+    const voteMap = new Map(voteRows.map(r => [r.post_id, { likes: Number(r.likes), dislikes: Number(r.dislikes) }]));
+    const postsWithVotes = posts.map(p => ({
+      ...p,
+      likes_count: voteMap.get(p.id)?.likes ?? 0,
+      dislikes_count: voteMap.get(p.id)?.dislikes ?? 0,
+    }));
+
+    return { posts: postsWithVotes, total, page, pages: Math.ceil(total / limit) };
   },
 
   async deletePost(postId: string) {
@@ -655,24 +676,22 @@ export const adminService = {
     const now = new Date();
     const monthAgo = new Date(now.getTime() - 30 * 86_400_000);
 
-    const [packCount, totalUses, activeListings, soldThisMonthAgg, topPacks, storage] = await Promise.all([
+    const [packCount, fileCountAgg, activeListings, soldThisMonthAgg, storage] = await Promise.all([
       prisma.stickerPack.count({ where: { deleted_at: null, status: 'published' } }),
-      prisma.stickerUsage.aggregate({ _sum: { use_count: true } }),
+      prisma.$queryRaw<{ total: bigint }[]>`
+        SELECT COALESCE(SUM(cardinality(stickers)), 0)::bigint AS total
+        FROM "StickerPack" WHERE deleted_at IS NULL AND status = 'published'
+      `,
       prisma.dealerListing.count({ where: { status: 'active', deleted_at: null } }),
       prisma.dealerListing.aggregate({
         where: { status: 'sold', deleted_at: null, updated_at: { gte: monthAgo } },
         _sum: { price: true }, _count: true,
       }),
-      prisma.stickerPack.findMany({
-        where: { deleted_at: null, status: 'published' },
-        orderBy: { use_count: 'desc' }, take: 5,
-        select: { name: true, use_count: true },
-      }),
       getStorageStats(),
     ]);
 
     return {
-      stickers: { packCount, totalUses: totalUses._sum.use_count ?? 0, topPacks: topPacks.map(p => ({ name: p.name, uses: p.use_count })) },
+      stickers: { packCount, fileCount: Number(fileCountAgg[0]?.total ?? 0) },
       dealersDen: { activeListings, soldThisMonthCount: soldThisMonthAgg._count, soldThisMonthValue: Number(soldThisMonthAgg._sum.price ?? 0) },
       storage,
     };
@@ -777,12 +796,20 @@ export const adminService = {
       orderBy: { use_count: 'desc' },
       take: 20,
       select: {
-        id: true, name: true, cover_url: true, cover_bg_color: true,
+        id: true, name: true, cover_url: true, cover_bg_color: true, cover_sticker_idx: true, stickers: true,
         use_count: true, downloads_count: true, tags: true, is_nsfw: true,
         author: { select: { username: true, display_name: true, avatar_url: true } },
-        _count: { select: { userCollections: true } },
+        _count: { select: { userCollections: true, stickerFavorites: true } },
       },
     });
+
+    // Real totals across all published packs (topPacks is capped at 20)
+    const totals = await prisma.stickerPack.aggregate({
+      where: { deleted_at: null, status: 'published' },
+      _count: { _all: true },
+      _sum: { use_count: true, downloads_count: true },
+    });
+    const totalFavorites = await prisma.stickerFavorite.count();
 
     // Usage by age group — join StickerUsage with User birth_date
     type AgeRow = { age_group: string; total: bigint };
@@ -808,7 +835,7 @@ export const adminService = {
     type CountryRow = { country: string; total: bigint };
     const byCountry = await prisma.$queryRaw<CountryRow[]>`
       SELECT
-        COALESCE(u.country, 'Не указана') AS country,
+        COALESCE(NULLIF(u.country, ''), 'Не указана') AS country,
         SUM(su.use_count)::bigint AS total
       FROM "StickerUsage" su
       JOIN "User" u ON u.id = su.user_id
@@ -839,11 +866,12 @@ export const adminService = {
     `;
 
     // Top individual stickers by global use_count
-    type StickerRow = { sticker_url: string; pack_id: string | null; total: bigint };
+    type StickerRow = { sticker_url: string; pack_id: string | null; pack_name: string | null; total: bigint };
     const topStickers = await prisma.$queryRaw<StickerRow[]>`
-      SELECT sticker_url, pack_id, SUM(use_count)::bigint AS total
-      FROM "StickerUsage"
-      GROUP BY sticker_url, pack_id
+      SELECT su.sticker_url, su.pack_id, sp.name AS pack_name, SUM(su.use_count)::bigint AS total
+      FROM "StickerUsage" su
+      LEFT JOIN "StickerPack" sp ON sp.id = su.pack_id
+      GROUP BY su.sticker_url, su.pack_id, sp.name
       ORDER BY total DESC
       LIMIT 30
     `;
@@ -858,13 +886,99 @@ export const adminService = {
       ORDER BY 1
     `;
 
+    const uniqueStickersAgg = await prisma.$queryRaw<{ cnt: bigint }[]>`
+      SELECT COUNT(DISTINCT sticker_url)::bigint AS cnt FROM "StickerUsage"
+    `;
+
     return {
       topPacks,
-      topStickers: topStickers.map(r => ({ url: r.sticker_url, packId: r.pack_id, total: Number(r.total) })),
+      totals: {
+        totalPacks: totals._count._all,
+        totalUses: totals._sum.use_count ?? 0,
+        totalDownloads: totals._sum.downloads_count ?? 0,
+        totalFavorites,
+        uniqueStickers: Number(uniqueStickersAgg[0]?.cnt ?? 0),
+      },
+      topStickers: topStickers.map(r => ({ url: r.sticker_url, packId: r.pack_id, packName: r.pack_name, total: Number(r.total) })),
       byAge:     byAge.map(r => ({ label: r.age_group, value: Number(r.total) })),
       byCountry: byCountry.map(r => ({ label: r.country, value: Number(r.total) })),
       bySpecies: bySpecies.map(r => ({ label: r.species, value: Number(r.total) })),
       dailyUsage: dailyUsage.map(r => ({ day: r.day, value: Number(r.total) })),
+    };
+  },
+
+  async getStickerPackDetail(packId: string) {
+    const pack = await prisma.stickerPack.findFirst({
+      where: { id: packId, deleted_at: null },
+      select: {
+        id: true, name: true, description: true, cover_url: true, cover_bg_color: true, cover_sticker_idx: true,
+        stickers: true, price: true, currency: true, tags: true, is_nsfw: true, status: true,
+        use_count: true, downloads_count: true, created_at: true,
+        author: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        _count: { select: { userCollections: true, stickerFavorites: true } },
+      },
+    });
+    if (!pack) return null;
+
+    type StickerRow = { sticker_url: string; total: bigint };
+    const topStickersInPack = await prisma.$queryRaw<StickerRow[]>`
+      SELECT sticker_url, SUM(use_count)::bigint AS total
+      FROM "StickerUsage"
+      WHERE pack_id = ${packId}::uuid
+      GROUP BY sticker_url
+      ORDER BY total DESC
+      LIMIT 30
+    `;
+
+    type DayRow = { day: Date; total: bigint };
+    const dailyUsage = await prisma.$queryRaw<DayRow[]>`
+      SELECT DATE_TRUNC('day', last_used_at) AS day, SUM(use_count)::bigint AS total
+      FROM "StickerUsage"
+      WHERE pack_id = ${packId}::uuid AND last_used_at >= NOW() - INTERVAL '30 days'
+      GROUP BY 1
+      ORDER BY 1
+    `;
+
+    type AgeRow = { age_group: string; total: bigint };
+    const byAge = await prisma.$queryRaw<AgeRow[]>`
+      SELECT
+        CASE
+          WHEN EXTRACT(YEAR FROM AGE(u.birth_date)) BETWEEN 13 AND 17 THEN '13–17'
+          WHEN EXTRACT(YEAR FROM AGE(u.birth_date)) BETWEEN 18 AND 24 THEN '18–24'
+          WHEN EXTRACT(YEAR FROM AGE(u.birth_date)) BETWEEN 25 AND 34 THEN '25–34'
+          WHEN EXTRACT(YEAR FROM AGE(u.birth_date)) BETWEEN 35 AND 44 THEN '35–44'
+          WHEN EXTRACT(YEAR FROM AGE(u.birth_date)) >= 45 THEN '45+'
+          ELSE 'Не указан'
+        END AS age_group,
+        SUM(su.use_count)::bigint AS total
+      FROM "StickerUsage" su
+      JOIN "User" u ON u.id = su.user_id
+      WHERE su.pack_id = ${packId}::uuid AND u.deleted_at IS NULL
+      GROUP BY 1
+      ORDER BY 2 DESC
+    `;
+
+    type CountryRow = { country: string; total: bigint };
+    const byCountry = await prisma.$queryRaw<CountryRow[]>`
+      SELECT
+        COALESCE(NULLIF(u.country, ''), 'Не указана') AS country,
+        SUM(su.use_count)::bigint AS total
+      FROM "StickerUsage" su
+      JOIN "User" u ON u.id = su.user_id
+      WHERE su.pack_id = ${packId}::uuid AND u.deleted_at IS NULL
+      GROUP BY 1
+      ORDER BY 2 DESC
+      LIMIT 10
+    `;
+
+    return {
+      pack,
+      collectors: pack._count.userCollections,
+      favorites: pack._count.stickerFavorites,
+      topStickersInPack: topStickersInPack.map(r => ({ url: r.sticker_url, total: Number(r.total) })),
+      dailyUsage: dailyUsage.map(r => ({ day: r.day, value: Number(r.total) })),
+      byAge: byAge.map(r => ({ label: r.age_group, value: Number(r.total) })),
+      byCountry: byCountry.map(r => ({ label: r.country, value: Number(r.total) })),
     };
   },
 
@@ -884,7 +998,7 @@ export const adminService = {
     // Users by country
     type CountryRow = { country: string; cnt: bigint };
     const usersByCountry = await prisma.$queryRaw<CountryRow[]>`
-      SELECT COALESCE(country, 'Не указана') AS country, COUNT(*)::bigint AS cnt
+      SELECT COALESCE(NULLIF(country, ''), 'Не указана') AS country, COUNT(*)::bigint AS cnt
       FROM "User"
       WHERE deleted_at IS NULL
       GROUP BY 1
@@ -977,13 +1091,14 @@ export const adminService = {
       LIMIT 10
     `;
 
-    // Sticker pack count + total usage
-    const [packCount, totalStickerUses] = await Promise.all([
-      prisma.stickerPack.count({ where: { deleted_at: null, status: 'published' } }),
-      prisma.stickerUsage.aggregate({ _sum: { use_count: true } }),
+    const [totalUsers, totalGroups] = await Promise.all([
+      prisma.user.count({ where: { deleted_at: null } }),
+      prisma.group.count({ where: { deleted_at: null } }),
     ]);
 
     return {
+      totalUsers,
+      totalGroups,
       usersBySpecies: usersBySpecies.map(r => ({ label: r.species, value: Number(r.cnt) })),
       usersByCountry: usersByCountry.map(r => ({ label: r.country, value: Number(r.cnt) })),
       usersByAge:     usersByAge.map(r => ({ label: r.age_group, value: Number(r.cnt) })),
@@ -993,7 +1108,6 @@ export const adminService = {
       topPosters: topPosters.map(r => ({ userId: r.user_id, username: r.username, displayName: r.display_name, avatarUrl: r.avatar_url, count: Number(r.cnt) })),
       mostFollowed: mostFollowed.map(r => ({ userId: r.user_id, username: r.username, displayName: r.display_name, avatarUrl: r.avatar_url, count: Number(r.cnt) })),
       topGroups: topGroups.map(r => ({ id: r.id, name: r.name, avatarUrl: r.avatar_url, memberCount: Number(r.member_count) })),
-      stickers: { packCount, totalUses: totalStickerUses._sum.use_count ?? 0 },
     };
   },
 };

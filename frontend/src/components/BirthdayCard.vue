@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
 import type { FriendBirthday } from '@/stores/friends'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 
@@ -8,7 +7,6 @@ const props = defineProps<{
   birthday: FriendBirthday
 }>()
 
-const router = useRouter()
 const langStore = useLangStore()
 
 function avatarInitial(name: string | null | undefined) {
@@ -34,9 +32,9 @@ const dateStr = computed(() => {
 </script>
 
 <template>
-  <div
+  <router-link
+    :to="`/profile/${birthday.username}`"
     class="flex items-center gap-3 py-2.5 cursor-pointer hover:opacity-80 transition-opacity"
-    @click="router.push(`/profile/${birthday.username}`)"
   >
     <!-- Avatar -->
     <div class="relative flex-shrink-0">
@@ -64,5 +62,5 @@ const dateStr = computed(() => {
 
     <!-- Days badge -->
     <span :class="['text-xs flex-shrink-0', labelClass]">{{ label }}</span>
-  </div>
+  </router-link>
 </template>

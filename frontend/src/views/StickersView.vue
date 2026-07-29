@@ -715,7 +715,7 @@ async function toggleCollection(pack: StickerPack) {
                     <span class="text-[6px] text-purple-400 font-bold">{{ (pack.author.display_name ?? pack.author.username)[0].toUpperCase() }}</span>
                   </div>
                   <span class="text-[10px] text-white/35 truncate">{{ pack.author.display_name ?? pack.author.username }}</span>
-                  <img v-if="pack.author.is_verified" src="/icons/badges/paw_offical.svg" class="w-3 h-3 flex-shrink-0" title="Верифицирован" />
+                  <BIcon v-if="pack.author.is_verified" name="BadgeCheck" class="w-3 h-3 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                 </div>
               </div>
 

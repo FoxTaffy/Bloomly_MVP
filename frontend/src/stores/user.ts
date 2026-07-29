@@ -94,6 +94,14 @@ export interface UpsertFursuitInput {
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+export interface ProfileStatus {
+  emoji?: string
+  text?: string
+  color?: string
+  expiresAt?: number
+  music?: { title: string; artist: string; artworkUrl: string; previewUrl: string } | null
+}
+
 export interface UserProfile {
   id: string
   username: string
@@ -103,6 +111,7 @@ export interface UserProfile {
   avatar_video_url: string | null
   banner_url: string | null
   status: string | null
+  profile_status: ProfileStatus | null
   persona: string | null
   likes: string[]
   dislikes: string[]
@@ -166,6 +175,7 @@ export interface UpdateProfileInput {
   avatar_url?: string
   banner_url?: string
   status?: string
+  profile_status?: ProfileStatus | null
   persona?: string
   fursona_name?: string
   fursona_gender?: string

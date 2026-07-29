@@ -47,6 +47,11 @@ const mounted     = ref(false)
 const mouseX      = ref(50)
 const mouseY      = ref(50)
 
+// Мягкая подсказка про восстановление пароля после нескольких неудачных попыток
+// (никакой блокировки — просто дружелюбный намёк вместо тишины)
+const failedLoginAttempts = ref(0)
+const FAILED_ATTEMPTS_HINT_THRESHOLD = 3
+
 // Очистка кода от пробелов/переносов при вставке (в письме код визуально разбит по цифрам)
 function sanitizeCodeInput(e: Event) {
   const target = e.target as HTMLInputElement
@@ -122,10 +127,10 @@ onMounted(() => {
   // OAuth-ошибка из redirect
   if (route.query.error) {
     const errMap: Record<string, string> = {
-      oauth_denied: 'Вход через соцсеть отменён.',
-      oauth_failed: 'Не удалось войти через соцсеть. Попробуй ещё раз.',
+      oauth_denied: langStore.t.loginOauthDenied,
+      oauth_failed: langStore.t.loginOauthFailed,
     }
-    auth.error = errMap[route.query.error as string] ?? 'Ошибка OAuth'
+    auth.error = errMap[route.query.error as string] ?? langStore.t.loginOauthError
   }
   const card = document.getElementById('auth-card')
   if (card) {
@@ -147,6 +152,7 @@ function switchMode(next: Mode) {
   newPassword.value = ''; resetCode.value = ''; otpCode.value = ''
   showPass.value = false; showNewPass.value = false
   mfaToken.value = ''; twoFactorMethod.value = null; twoFactorCode.value = ''
+  failedLoginAttempts.value = 0
 }
 
 // ── OAuth ─────────────────────────────────────────────────────────────────────
@@ -169,6 +175,7 @@ async function onSubmit() {
   try {
     if (mode.value === 'login') {
       await auth.login(email.value, password.value, remember.value)
+      failedLoginAttempts.value = 0
       router.push({ name: 'home' })
     } else if (mode.value === 'register') {
       await auth.register(email.value, username.value, password.value)
@@ -201,17 +208,22 @@ async function onSubmit() {
     } else if (mode.value === 'login' && code === 'ACCOUNT_FROZEN') {
       blockedReason.value = e?.response?.data?.error?.message || ''
       auth.error = null
+      failedLoginAttempts.value = 0
       showFrozenModal.value = true
     } else if (mode.value === 'login' && code === 'ACCOUNT_BANNED') {
       blockedReason.value = e?.response?.data?.error?.message || ''
       auth.error = null
+      failedLoginAttempts.value = 0
       showBannedModal.value = true
     } else if (mode.value === 'login' && code === 'TWO_FACTOR_REQUIRED') {
       mfaToken.value = e?.response?.data?.data?.mfaToken || ''
       twoFactorMethod.value = e?.response?.data?.data?.method || null
       mode.value = 'twofactor'
       auth.error = null
+      failedLoginAttempts.value = 0
       if (twoFactorMethod.value === 'email') startResendTimer()
+    } else if (mode.value === 'login' && code === 'AUTH_FAILED') {
+      failedLoginAttempts.value++
     }
     /* auth.error уже записан в остальных случаях */
   }
@@ -236,8 +248,8 @@ const pwStrength = computed(() => {
 })
 const pwLabel = computed(() => {
   if (!activePassword.value) return ''
-  if (activePassword.value.length < 8) return 'Минимум 8 символов'
-  return ['', 'Слабый', 'Средний', 'Хороший', 'Отличный'][pwStrength.value]
+  if (activePassword.value.length < 8) return langStore.t.loginPasswordMinLength
+  return ['', langStore.t.loginPwWeak, langStore.t.loginPwMedium, langStore.t.loginPwGood, langStore.t.loginPwExcellent][pwStrength.value]
 })
 const pwColor = computed(() => {
   if (activePassword.value && activePassword.value.length < 8) return '#E14664'
@@ -254,11 +266,11 @@ const particles = Array.from({ length: 80 }, (_, i) => ({
   delay: Math.random() * 8,
 }))
 
-const features = [
-  { icon: '⚡', title: 'Молниеносная лента', desc: 'Алгоритм под тебя' },
-  { icon: '🏆', title: 'Лучшая соцсеть', desc: 'Никакой политики' },
-  { icon: '🎨', title: 'Медиа-альбомы', desc: 'Фото, видео, истории' },
-]
+const features = computed(() => [
+  { icon: '⚡', title: langStore.t.loginFeatureFeedTitle, desc: langStore.t.loginFeatureFeedDesc },
+  { icon: '🏆', title: langStore.t.loginFeatureBestTitle, desc: langStore.t.loginFeatureBestDesc },
+  { icon: '🎨', title: langStore.t.loginFeatureMediaTitle, desc: langStore.t.loginFeatureMediaDesc },
+])
 </script>
 
 <template>
@@ -317,7 +329,7 @@ const features = [
           </h1>
 
           <p class="text-lg text-white/45 leading-relaxed mb-12 max-w-sm font-medium">
-            Социальная сеть нового поколения. Персонализированная лента, закрытые сообщества и настоящие связи.
+            {{ langStore.t.loginHeroSubtitle }}
           </p>
 
           <!-- Статистика (реальная) -->
@@ -391,18 +403,18 @@ const features = [
                     <h2 class="text-2xl font-black text-white mb-1">
                       {{ mode === 'login'      ? langStore.t.loginHeading
                        : mode === 'register'   ? langStore.t.registerHeading
-                       : mode === 'verify'     ? 'Подтверди email 📧'
-                       : mode === 'forgot'     ? 'Сброс пароля 🔑'
-                       : mode === 'twofactor'  ? 'Подтверди вход 🔐'
-                       :                      'Новый пароль 🛡️' }}
+                       : mode === 'verify'     ? langStore.t.loginVerifyHeading
+                       : mode === 'forgot'     ? langStore.t.loginForgotHeading
+                       : mode === 'twofactor'  ? langStore.t.loginTwoFactorHeading
+                       :                      langStore.t.loginResetHeading }}
                     </h2>
                     <p class="text-sm text-white/35 font-medium">
-                      {{ mode === 'login'      ? 'Войди, чтобы продолжить — твоя лента ждёт.'
-                       : mode === 'register'   ? 'Минута регистрации — и ты уже часть сообщества.'
-                       : mode === 'verify'     ? `Мы отправили 6-значный код на ${email || 'твою почту'}.`
-                       : mode === 'forgot'     ? 'Введи email — мы отправим код для восстановления.'
-                       : mode === 'twofactor'  ? (twoFactorMethod === 'totp' ? 'Введи код из приложения-аутентификатора.' : 'Мы отправили код подтверждения на твою почту.')
-                       :                      'Введи код из письма и придумай новый пароль.' }}
+                      {{ mode === 'login'      ? langStore.t.loginSubheading
+                       : mode === 'register'   ? langStore.t.loginRegisterSubheading
+                       : mode === 'verify'     ? `${langStore.t.loginOtpSentPrefix} ${email || langStore.t.loginYourEmailFallback}.`
+                       : mode === 'forgot'     ? langStore.t.loginForgotSubheading
+                       : mode === 'twofactor'  ? (twoFactorMethod === 'totp' ? langStore.t.loginTwoFactorTotpHint : langStore.t.loginTwoFactorEmailHint)
+                       :                      langStore.t.loginResetSubheading }}
                     </p>
                   </div>
                 </Transition>
@@ -433,7 +445,7 @@ const features = [
                 class="flex items-center gap-1.5 text-xs text-white/35 hover:text-white/60 transition-colors mb-5 -mt-1"
               >
                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-                {{ mode === 'verify' ? 'Ввести другой email' : 'Вернуться к входу' }}
+                {{ mode === 'verify' ? langStore.t.loginChangeEmailBtn : langStore.t.loginBackToLoginBtn }}
               </button>
 
               <!-- ФОРМА -->
@@ -469,9 +481,9 @@ const features = [
                     </div>
                     <p class="text-[11px] pl-1 transition-colors"
                       :class="username && username.length < 3 ? 'text-red-400/70' : 'text-white/30'">
-                      <template v-if="!username">только a–z, 0–9, _ · минимум 3 символа</template>
-                      <template v-else-if="username.length < 3">нужно ещё {{ 3 - username.length }} симв.</template>
-                      <template v-else>будет: <span class="text-brand-accent/70 font-mono">{{ username }}</span></template>
+                      <template v-if="!username">{{ langStore.t.loginUsernameHint }}</template>
+                      <template v-else-if="username.length < 3">{{ langStore.t.loginUsernameNeedMore }} {{ 3 - username.length }} {{ langStore.t.loginUsernameCharsAbbrev }}</template>
+                      <template v-else>{{ langStore.t.loginUsernameWillBe }} <span class="text-brand-accent/70 font-mono">{{ username }}</span></template>
                     </p>
                   </div>
                 </Transition>
@@ -510,14 +522,14 @@ const features = [
                   </div>
                   <span class="text-xs font-semibold text-white/35 group-hover:text-white/55 transition-colors flex items-center gap-1.5">
                     <ComputerDesktopIcon class="w-3.5 h-3.5" />
-                    Запомнить это устройство
+                    {{ langStore.t.loginRememberDevice }}
                   </span>
                 </label>
 
                 <!-- Код сброса (режим reset) -->
                 <div v-if="mode === 'reset'" class="input-group">
                   <KeyIcon class="input-icon" />
-                  <input :value="resetCode" @input="onResetCodeInput" type="text" inputmode="numeric" placeholder="6-значный код" required maxlength="20" pattern="[0-9]{6}" class="fld tracking-[0.3em] text-center" />
+                  <input :value="resetCode" @input="onResetCodeInput" type="text" inputmode="numeric" :placeholder="langStore.t.loginSixDigitCodePlaceholder" required maxlength="20" pattern="[0-9]{6}" class="fld tracking-[0.3em] text-center" />
                 </div>
 
                 <!-- OTP для подтверждения email (режим verify) -->
@@ -525,7 +537,7 @@ const features = [
                   <!-- Информация куда отправлено -->
                   <div class="flex items-center gap-2.5 p-3.5 rounded-2xl bg-[#7c3aed]/10 border border-[#7c3aed]/25">
                     <ShieldCheckIcon class="w-4 h-4 shrink-0 text-[#a78bfa]" />
-                    <p class="text-xs text-[#a78bfa] font-semibold">Код отправлен на <span class="text-white">{{ email }}</span></p>
+                    <p class="text-xs text-[#a78bfa] font-semibold">{{ langStore.t.loginCodeSentToLabel }} <span class="text-white">{{ email }}</span></p>
                   </div>
                   <div class="input-group">
                     <KeyIcon class="input-icon" />
@@ -549,7 +561,7 @@ const features = [
                       class="text-xs font-semibold transition-colors"
                       :class="resendCountdown > 0 ? 'text-white/20 cursor-default' : 'text-[#a78bfa] hover:text-white'"
                     >
-                      {{ resendCountdown > 0 ? `Отправить повторно через ${resendCountdown}с` : 'Отправить код повторно' }}
+                      {{ resendCountdown > 0 ? `${langStore.t.loginResendIn} ${resendCountdown}${langStore.t.loginSecondsAbbrev}` : langStore.t.loginResendCode }}
                     </button>
                   </div>
                 </div>
@@ -559,7 +571,7 @@ const features = [
                   <div class="flex items-center gap-2.5 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25">
                     <ShieldCheckIcon class="w-4 h-4 shrink-0 text-emerald-400" />
                     <p class="text-xs text-emerald-400 font-semibold">
-                      {{ twoFactorMethod === 'totp' ? 'Код из приложения-аутентификатора' : `Код отправлен на ${email || 'твою почту'}` }}
+                      {{ twoFactorMethod === 'totp' ? langStore.t.loginTwoFactorTotpCodeLabel : `${langStore.t.loginCodeSentToLabel} ${email || langStore.t.loginYourEmailFallback}` }}
                     </p>
                   </div>
                   <div class="input-group">
@@ -584,7 +596,7 @@ const features = [
                       class="text-xs font-semibold transition-colors"
                       :class="resendCountdown > 0 ? 'text-white/20 cursor-default' : 'text-emerald-400 hover:text-white'"
                     >
-                      {{ resendCountdown > 0 ? `Отправить повторно через ${resendCountdown}с` : 'Отправить код повторно' }}
+                      {{ resendCountdown > 0 ? `${langStore.t.loginResendIn} ${resendCountdown}${langStore.t.loginSecondsAbbrev}` : langStore.t.loginResendCode }}
                     </button>
                   </div>
                 </div>
@@ -595,7 +607,7 @@ const features = [
                   <input
                     v-model="newPassword"
                     :type="showNewPass ? 'text' : 'password'"
-                    placeholder="Новый пароль"
+                    :placeholder="langStore.t.newPasswordLabel"
                     required minlength="8" maxlength="128"
                     autocomplete="new-password"
                     class="fld pr-12"
@@ -626,7 +638,7 @@ const features = [
                 <!-- Успех forgot → показываем подсказку -->
                 <div v-if="mode === 'reset'" class="flex items-start gap-2.5 p-3.5 rounded-2xl bg-green-500/8 border border-green-500/20">
                   <CheckCircleIcon class="w-4 h-4 shrink-0 mt-0.5 text-green-400" />
-                  <p class="text-xs text-green-400 font-semibold">Код отправлен на {{ email || 'ваш email' }}. Проверьте почту.</p>
+                  <p class="text-xs text-green-400 font-semibold">{{ langStore.t.loginCodeSentToLabel }} {{ email || langStore.t.loginYourEmailFormalFallback }}. {{ langStore.t.loginCheckYourEmail }}</p>
                 </div>
 
                 <!-- Ошибка -->
@@ -645,6 +657,27 @@ const features = [
                   </div>
                 </Transition>
 
+                <!-- Мягкая подсказка после нескольких неудачных попыток входа -->
+                <Transition
+                  enter-active-class="transition-all duration-300"
+                  enter-from-class="opacity-0 -translate-y-1 scale-[0.98]"
+                  enter-to-class="opacity-100 translate-y-0 scale-100"
+                  leave-active-class="transition-all duration-200"
+                  leave-to-class="opacity-0 scale-[0.98]"
+                >
+                  <div v-if="mode === 'login' && failedLoginAttempts >= FAILED_ATTEMPTS_HINT_THRESHOLD"
+                    class="flex items-start gap-2.5 p-3.5 rounded-2xl bg-amber-500/8 border border-amber-500/20">
+                    <KeyIcon class="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                    <div class="flex-1">
+                      <p class="text-xs text-amber-300/90 font-semibold">{{ langStore.t.loginTroubleHint }}</p>
+                      <button type="button" @click="switchMode('forgot')"
+                        class="text-xs font-bold text-amber-300 hover:text-amber-200 underline underline-offset-2 mt-1">
+                        {{ langStore.t.loginRestorePasswordBtn }}
+                      </button>
+                    </div>
+                  </div>
+                </Transition>
+
                 <!-- КНОПКА -->
                 <button type="submit" :disabled="auth.isLoading" class="cta-btn">
                   <span class="cta-shimmer"></span>
@@ -658,10 +691,10 @@ const features = [
                   <span v-else class="flex items-center justify-center gap-2.5 relative z-10">
                     {{ mode === 'login'      ? langStore.t.submitLogin
                      : mode === 'register'   ? langStore.t.submitRegister
-                     : mode === 'verify'     ? 'Подтвердить email'
-                     : mode === 'forgot'     ? 'Отправить код'
-                     : mode === 'twofactor'  ? 'Подтвердить вход'
-                     :                      'Сменить пароль' }}
+                     : mode === 'verify'     ? langStore.t.loginConfirmEmailBtn
+                     : mode === 'forgot'     ? langStore.t.sendCodeBtn
+                     : mode === 'twofactor'  ? langStore.t.loginConfirmLoginBtn
+                     :                      langStore.t.changePasswordBtn }}
                     <ArrowRightIcon class="w-5 h-5" />
                   </span>
                 </button>
@@ -671,7 +704,7 @@ const features = [
               <div v-if="mode === 'login' || mode === 'register'" class="mt-5">
                 <div class="flex items-center gap-3 mb-4">
                   <div class="flex-1 h-px bg-white/8"></div>
-                  <span class="text-[11px] text-white/25 font-semibold uppercase tracking-widest shrink-0">или войти через</span>
+                  <span class="text-[11px] text-white/25 font-semibold uppercase tracking-widest shrink-0">{{ langStore.t.loginOrContinueWith }}</span>
                   <div class="flex-1 h-px bg-white/8"></div>
                 </div>
 
@@ -683,7 +716,7 @@ const features = [
                   style="background:#fc3f1d"
                 >
                   <span class="w-5 h-5" v-html="oauthProviders[0].logo"></span>
-                  Войти через Яндекс
+                  {{ langStore.t.loginContinueWithPrefix }} Яндекс
                 </button>
 
                 <!-- Остальные провайдеры — сетка -->
@@ -698,7 +731,7 @@ const features = [
                       color: p.textColor ?? 'white',
                       border: p.border ? `1px solid ${p.border}` : undefined,
                     }"
-                    :title="`Войти через ${p.label}`"
+                    :title="`${langStore.t.loginContinueWithPrefix} ${p.label}`"
                   >
                     <span class="w-4 h-4 shrink-0" v-html="p.logo"></span>
                     <span>{{ p.label }}</span>
@@ -708,9 +741,9 @@ const features = [
 
               <!-- Footer links -->
               <p class="mt-6 text-center text-xs text-white/20 leading-relaxed">
-                Нажимая кнопку, ты принимаешь
+                {{ langStore.t.loginTermsAgreePrefix }}
                 <RouterLink to="/terms" class="text-white/40 hover:text-brand-accent-minus underline-offset-2 hover:underline transition-colors">{{ langStore.t.termsTitle }}</RouterLink>
-                и
+                {{ langStore.t.loginTermsAnd }}
                 <RouterLink to="/privacy" class="text-white/40 hover:text-brand-accent-minus underline-offset-2 hover:underline transition-colors">{{ langStore.t.privacyTitle }}</RouterLink>
               </p>
             </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
@@ -34,6 +34,11 @@ async function load() {
   }
 }
 
+const formattedDate = computed(() => {
+  if (!stats.value) return ''
+  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(stats.value.createdAt))
+})
+
 function goToSubscriptions() {
   emit('close')
   router.push('/subscriptions')
@@ -48,7 +53,7 @@ onMounted(load)
       <div class="w-full max-w-sm bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden">
         <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border">
           <h3 class="font-bold text-white flex items-center gap-2">
-            <BIcon name="BarChart2" class="w-4.5 h-4.5 text-brand-accent" /> Статистика поста
+            <BIcon name="BarChart2" class="w-4.5 h-4.5 text-brand-accent" /> Статистика записи
           </h3>
           <button @click="emit('close')" class="p-1.5 rounded-full text-white/55 hover:text-white hover:bg-white/5">
             <BIcon name="X" class="w-4 h-4" />
@@ -74,49 +79,43 @@ onMounted(load)
             </button>
           </div>
 
-          <!-- Stats grid -->
-          <div v-else-if="stats" class="grid grid-cols-2 gap-3">
-            <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
-              <div class="flex items-center gap-1.5 text-white/40 text-[11px] font-semibold uppercase tracking-wide mb-1">
-                <BIcon name="Eye" class="w-3.5 h-3.5" /> Просмотры
+          <!-- Stats -->
+          <div v-else-if="stats">
+            <div class="grid grid-cols-2 gap-4 pb-4 border-b border-brand-border">
+              <div>
+                <div class="flex items-center gap-1.5 text-white/40 text-[11px] font-semibold uppercase tracking-wide mb-1.5">
+                  <BIcon name="Eye" class="w-3.5 h-3.5" /> Просмотры записи
+                </div>
+                <p class="text-2xl font-extrabold text-white tabular-nums">{{ stats.viewsCount }}</p>
               </div>
-              <p class="text-xl font-extrabold text-white tabular-nums">{{ stats.viewsCount }}</p>
+              <div>
+                <div class="text-white/40 text-[11px] font-semibold uppercase tracking-wide mb-1.5">
+                  Обратная связь
+                </div>
+                <div class="flex items-center gap-4">
+                  <span class="flex items-center gap-1 text-base font-extrabold text-white tabular-nums">
+                    <BIcon name="ArrowBigUp" class="w-4 h-4 text-emerald-400" />{{ stats.upvotes }}
+                  </span>
+                  <span class="flex items-center gap-1 text-base font-extrabold text-white tabular-nums">
+                    <BIcon name="Repeat2" class="w-4 h-4 text-brand-accent" />{{ stats.repaws }}
+                  </span>
+                  <span class="flex items-center gap-1 text-base font-extrabold text-white tabular-nums">
+                    <BIcon name="MessageSquare" class="w-4 h-4 text-white/50" />{{ stats.comments }}
+                  </span>
+                </div>
+                <p class="text-[11px] text-white/40 mt-1">Реакции, репавы и комментарии.</p>
+              </div>
             </div>
-            <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
-              <div class="flex items-center gap-1.5 text-white/40 text-[11px] font-semibold uppercase tracking-wide mb-1">
-                <BIcon name="ArrowBigUp" class="w-3.5 h-3.5" /> Рейтинг
+
+            <div class="grid grid-cols-2 gap-4 pt-4">
+              <div class="space-y-1.5">
+                <p class="text-sm"><span class="font-bold text-white tabular-nums">{{ stats.rating }}</span> <span class="text-white/50">рейтинга записи</span></p>
+                <p class="text-sm"><span class="font-bold text-white tabular-nums">{{ stats.downvotes }}</span> <span class="text-white/50">дизлайков</span></p>
               </div>
-              <p class="text-xl font-extrabold text-white tabular-nums">{{ stats.rating }}</p>
-            </div>
-            <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
-              <div class="flex items-center gap-1.5 text-emerald-400/70 text-[11px] font-semibold uppercase tracking-wide mb-1">
-                <BIcon name="ArrowBigUp" class="w-3.5 h-3.5" /> Лайки
+              <div class="space-y-1.5">
+                <p class="text-sm"><span class="font-bold text-white tabular-nums">{{ stats.favourites }}</span> <span class="text-white/50">в закладках</span></p>
+                <p class="text-sm text-white/40">{{ formattedDate }}</p>
               </div>
-              <p class="text-xl font-extrabold text-white tabular-nums">{{ stats.upvotes }}</p>
-            </div>
-            <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
-              <div class="flex items-center gap-1.5 text-rose-400/70 text-[11px] font-semibold uppercase tracking-wide mb-1">
-                <BIcon name="ArrowBigDown" class="w-3.5 h-3.5" /> Дизлайки
-              </div>
-              <p class="text-xl font-extrabold text-white tabular-nums">{{ stats.downvotes }}</p>
-            </div>
-            <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
-              <div class="flex items-center gap-1.5 text-white/40 text-[11px] font-semibold uppercase tracking-wide mb-1">
-                <BIcon name="MessageSquare" class="w-3.5 h-3.5" /> Комментарии
-              </div>
-              <p class="text-xl font-extrabold text-white tabular-nums">{{ stats.comments }}</p>
-            </div>
-            <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
-              <div class="flex items-center gap-1.5 text-white/40 text-[11px] font-semibold uppercase tracking-wide mb-1">
-                <BIcon name="Repeat2" class="w-3.5 h-3.5" /> Репавы
-              </div>
-              <p class="text-xl font-extrabold text-white tabular-nums">{{ stats.repaws }}</p>
-            </div>
-            <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 col-span-2">
-              <div class="flex items-center gap-1.5 text-yellow-400/70 text-[11px] font-semibold uppercase tracking-wide mb-1">
-                <BIcon name="Bookmark" class="w-3.5 h-3.5" /> В закладках
-              </div>
-              <p class="text-xl font-extrabold text-white tabular-nums">{{ stats.favourites }}</p>
             </div>
           </div>
         </div>

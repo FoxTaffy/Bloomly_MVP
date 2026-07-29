@@ -3,9 +3,8 @@ import { ref } from 'vue'
 import BIcon from '@/components/BIcon.vue'
 import type { Group } from '@/stores/groups'
 
-const props = defineProps<{ group: Group; isPinned?: boolean; isMember?: boolean }>()
+const props = defineProps<{ group: Group; isPinned?: boolean; isMember?: boolean; pendingReplies?: number }>()
 const emit = defineEmits<{
-  (e: 'click'): void
   (e: 'bookmark'): void
   (e: 'notify'): void
   (e: 'unsubscribe'): void
@@ -43,12 +42,12 @@ function bannerGradient(color: string | null | undefined) {
 </script>
 
 <template>
-  <div
+  <router-link
+    :to="`/groups/${group.slug}`"
     class="bg-brand-card rounded-2xl hover:border-brand-accent/40 transition-all group/card flex flex-col cursor-pointer relative overflow-visible"
     :class="isPinned
       ? 'border-2 border-amber-400/55 shadow-lg shadow-amber-500/10 hover:border-amber-400/80'
       : 'border border-brand-border'"
-    @click="emit('click')"
   >
     <!-- Banner -->
     <div
@@ -66,11 +65,18 @@ function bannerGradient(color: string | null | undefined) {
         <span class="text-[9px] font-bold text-amber-900 uppercase tracking-wider">Закреп</span>
       </div>
 
-      <!-- 18+ badge -->
-      <span v-if="group.is_nsfw"
-        class="absolute top-2 right-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md bg-brand-error/80 text-white border border-brand-error/30 backdrop-blur-sm">
-        18+
-      </span>
+      <!-- Top-right stack: 18+ / pending "Обращения" -->
+      <div class="absolute top-2 right-2 flex items-center gap-1">
+        <span v-if="pendingReplies" title="Ждут ответа"
+          class="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-brand-accent text-white shadow-sm backdrop-blur-sm">
+          <BIcon name="Inbox" class="w-2.5 h-2.5" />
+          {{ pendingReplies > 99 ? '99+' : pendingReplies }}
+        </span>
+        <span v-if="group.is_nsfw"
+          class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md bg-brand-error/80 text-white border border-brand-error/30 backdrop-blur-sm">
+          18+
+        </span>
+      </div>
     </div>
 
     <!-- Body -->
@@ -144,7 +150,7 @@ function bannerGradient(color: string | null | undefined) {
 
     <!-- Close menu on outside click -->
     <div v-if="showMenu" class="fixed inset-0 z-40" @click.stop="showMenu = false" />
-  </div>
+  </router-link>
 </template>
 
 <style scoped>

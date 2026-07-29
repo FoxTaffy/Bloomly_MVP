@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
-import { createPostHandler, votePostHandler, getPostsHandler, searchPostsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, suggestTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler, getPostByIdHandler, getMyBookmarksHandler, recordPostViewHandler, toggleArchivePostHandler, toggleCommentsDisabledHandler, getUserArchivedPostsHandler, getPostStatsHandler, getTagInsightsHandler } from './controller.js';
+import { createPostHandler, votePostHandler, getPostsHandler, searchPostsHandler, getPersonalizedPostsHandler, repawPostHandler, favouritePostHandler, getUserPostStatusHandler, createCommentHandler, getCommentsHandler, voteCommentHandler, deletePostHandler, editPostHandler, deleteCommentHandler, getTrendingTagsHandler, suggestTagsHandler, getUserPostsHandler, getUserMediaPostsHandler, getUserRepawsHandler, getUserFavouritesHandler, getPostByIdHandler, getMyBookmarksHandler, recordPostViewHandler, toggleArchivePostHandler, toggleCommentsDisabledHandler, getUserArchivedPostsHandler, getPostStatsHandler, getTagInsightsHandler, setNotInterestedHandler } from './controller.js';
+import { createScheduledPostHandler, listScheduledPostsHandler, updateScheduledPostHandler, cancelScheduledPostHandler, publishNowScheduledPostHandler } from './scheduledController.js';
 
 // The authenticate decorator is declared in auth/routes.ts; this re-declaration
 // merges into the same global FastifyInstance augmentation via TypeScript.
@@ -44,6 +45,23 @@ const voteSchema = {
   },
 };
 
+const notInterestedSchema = {
+  params: {
+    type: 'object',
+    required: ['id'],
+    properties: {
+      id: { type: 'string' },
+    },
+  },
+  body: {
+    type: 'object',
+    required: ['value'],
+    properties: {
+      value: { type: 'boolean' },
+    },
+  },
+};
+
 const getPostsSchema = {
   querystring: {
     type: 'object',
@@ -69,6 +87,13 @@ export async function postsRoutes(fastify: FastifyInstance) {
   fastify.get('/me/bookmarks', auth, getMyBookmarksHandler as any);
   fastify.get('/me/tag-insights', auth, getTagInsightsHandler as any);
 
+  // ── Scheduled posts / drafts ────────────────────────────────────────────
+  fastify.post('/scheduled', auth, createScheduledPostHandler as any);
+  fastify.get('/scheduled', auth, listScheduledPostsHandler as any);
+  fastify.patch('/scheduled/:id', auth, updateScheduledPostHandler as any);
+  fastify.delete('/scheduled/:id', auth, cancelScheduledPostHandler as any);
+  fastify.post('/scheduled/:id/publish-now', auth, publishNowScheduledPostHandler as any);
+
   // ── User-specific ───────────────────────────────────────────────────────
   fastify.get('/user/:userId',          tryAuth, getUserPostsHandler as any);
   fastify.get('/user/:userId/media',    tryAuth, getUserMediaPostsHandler as any);
@@ -93,5 +118,6 @@ export async function postsRoutes(fastify: FastifyInstance) {
   fastify.post('/:id/view',      tryAuth, recordPostViewHandler as any);
   fastify.post('/:id/archive',   auth, toggleArchivePostHandler as any);
   fastify.post('/:id/comments-toggle', auth, toggleCommentsDisabledHandler as any);
+  fastify.post('/:id/not-interested', { schema: notInterestedSchema, onRequest: [fastify.authenticate] }, setNotInterestedHandler as any);
   fastify.get('/:id/stats',      auth, getPostStatsHandler as any);
 }

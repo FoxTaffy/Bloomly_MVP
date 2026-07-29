@@ -17,6 +17,7 @@ import PostLightbox from './PostLightbox.vue'
 import PostComments from './PostComments.vue'
 import PostCard from './PostCard.vue'
 import MentionTextarea from './MentionTextarea.vue'
+import PostScheduleMenu from './PostScheduleMenu.vue'
 import StoriesBar from './StoriesBar.vue'
 import StoryViewer from './StoryViewer.vue'
 import StoryMobileOnlyModal from './StoryMobileOnlyModal.vue'
@@ -69,6 +70,8 @@ const mediaUrls = ref<string[]>([])
 const mediaOriginalUrls = ref<string[]>([])
 const mediaHasVideo = ref(false)
 const handleMediaUploaded = (urls: string[], originalUrls: string[], hasVideo: boolean) => { mediaUrls.value = urls; mediaOriginalUrls.value = originalUrls; mediaHasVideo.value = hasVideo }
+const showScheduleMenu = ref(false)
+const isScheduling = ref(false)
 
 // ── "Post as" entity selector ────────────────────────────────────────────────
 type PostEntity = { type: 'user' } | { type: 'group'; id: string; slug: string; name: string; avatar_url: string | null }
@@ -88,6 +91,7 @@ const closeCreateModal = () => {
   showAdvanced.value = false
   showEntityPicker.value = false
   showVisibilityMenu.value = false
+  showScheduleMenu.value = false
   newPost.value = { content: '', tags: [], isNsfw: false, isAiGenerated: false, visibility: 'public', price: '', videoTitle: '', videoDescription: '' }
   mediaUrls.value = []
   mediaOriginalUrls.value = []
@@ -326,8 +330,9 @@ const fetchPosts = async (loadMore = false) => {
       if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
     }
     
-    // Отфильтровываем посты с удалёнными/null авторами
-    loadedPosts = loadedPosts.filter((p: any) => p && p.author)
+    // Отфильтровываем посты с удалёнными/null авторами — но не групповые (у них author
+    // намеренно скрыт бэкендом через maskGroupAuthor, это не значит "автор удалён")
+    loadedPosts = loadedPosts.filter((p: any) => p && (p.author || (p.groupPosts && p.groupPosts.length > 0)))
 
     if (loadedPosts.length === 0) {
       hasMorePosts.value = false;
@@ -572,6 +577,60 @@ const createPost = async () => {
     await fetchTrendingTags()
   } catch (e) { console.error('Failed to create post', e) }
   finally { isPosting.value = false }
+}
+
+// ── Scheduled posts / drafts ─────────────────────────────────────────────────
+const saveScheduledPost = async (payload: { scheduledAt?: string; timezone?: string }) => {
+  const content = newPost.value.content.trim()
+  if (!content && mediaUrls.value.length === 0) return
+  for (const tag of extractHashtags(content)) {
+    if (!newPost.value.tags.includes(tag)) newPost.value.tags.push(tag)
+  }
+  isScheduling.value = true
+  try {
+    const res = await api.post('/posts/scheduled', {
+      content,
+      groupId: postAsEntity.value.type === 'group' ? postAsEntity.value.id : undefined,
+      tags: newPost.value.tags,
+      isNsfw: newPost.value.isNsfw,
+      isAiGenerated: newPost.value.isAiGenerated,
+      mediaUrls: mediaUrls.value,
+      mediaOriginalUrls: mediaOriginalUrls.value,
+      ...payload,
+    })
+    if (res.data.success) {
+      closeCreateModal()
+      shareToast.value = payload.scheduledAt ? 'Публикация запланирована' : 'Сохранено в черновики'
+      setTimeout(() => { shareToast.value = '' }, 1800)
+    }
+  } catch (e) { console.error('Failed to schedule post', e) }
+  finally { isScheduling.value = false }
+}
+
+// Closing the composer with unsent text/media shouldn't just throw it away — auto-save it as
+// a draft (same as an explicit "Сохранить в черновики"), the way most social apps preserve an
+// unsent post. Only fires on genuinely unsaved content, never after a successful publish/schedule
+// (those paths already clear newPost themselves before reaching this).
+const abandonCompose = async () => {
+  const content = newPost.value.content.trim()
+  if (!content && mediaUrls.value.length === 0) {
+    closeCreateModal()
+    return
+  }
+  try {
+    await api.post('/posts/scheduled', {
+      content,
+      groupId: postAsEntity.value.type === 'group' ? postAsEntity.value.id : undefined,
+      tags: newPost.value.tags,
+      isNsfw: newPost.value.isNsfw,
+      isAiGenerated: newPost.value.isAiGenerated,
+      mediaUrls: mediaUrls.value,
+      mediaOriginalUrls: mediaOriginalUrls.value,
+    })
+    shareToast.value = 'Незаконченный пост сохранён в черновики'
+    setTimeout(() => { shareToast.value = '' }, 1800)
+  } catch (e) { console.error('Failed to auto-save draft', e) }
+  finally { closeCreateModal() }
 }
 
 const votePost = async (postId: string, value: 1 | -1) => {
@@ -980,6 +1039,25 @@ onDeactivated(() => {
                   minHeight="90px"
                 />
               </div>
+              <!-- Schedule button -->
+              <div class="relative flex-shrink-0 mt-0.5">
+                <button
+                  @click.stop="showScheduleMenu = !showScheduleMenu"
+                  :disabled="(!newPost.content.trim() && mediaUrls.length === 0) || isScheduling"
+                  class="w-10 h-10 rounded-full flex items-center justify-center border border-brand-border text-white/60 hover:bg-brand-bg hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  title="Отложить публикацию"
+                >
+                  <BIcon v-if="isScheduling" name="Loader2" class="w-4.5 h-4.5 animate-spin" />
+                  <BIcon v-else name="CalendarClock" class="w-4.5 h-4.5" />
+                </button>
+                <PostScheduleMenu
+                  v-if="showScheduleMenu"
+                  @close="showScheduleMenu = false"
+                  @draft="saveScheduledPost({})"
+                  @schedule="(p) => saveScheduledPost(p)"
+                />
+              </div>
+
               <!-- Send button (top-right) -->
               <button
                 @click="createPost"
@@ -1136,9 +1214,9 @@ onDeactivated(() => {
                 </Transition>
               </div>
 
-              <!-- Cancel -->
+              <!-- Cancel — auto-saves unsent text/media as a draft instead of discarding it -->
               <button
-                @click="closeCreateModal"
+                @click="abandonCompose"
                 class="text-xs font-semibold text-white/55 hover:text-white transition-all"
               >
                 Отмена
@@ -1328,15 +1406,15 @@ onDeactivated(() => {
             <p class="text-xs text-white/55">{{ langStore.t.noHashtagsYet }}</p>
           </div>
           <div v-else class="space-y-3">
-            <div v-for="tag in trendingTags.slice(0, 10)" :key="tag.name"
-              class="flex items-center justify-between cursor-pointer group"
-              @click="router.push({ path: '/search', query: { q: tag.name } })">
+            <router-link v-for="tag in trendingTags.slice(0, 10)" :key="tag.name"
+              :to="{ path: '/search', query: { q: tag.name } }"
+              class="flex items-center justify-between cursor-pointer group">
               <span class="text-sm text-white/55 group-hover:text-white transition-colors">{{ tag.name }}</span>
               <div class="flex items-center gap-1.5 text-xs font-bold" :class="tag.trend === 'up' ? 'text-brand-success' : tag.trend === 'down' ? 'text-brand-error' : 'text-white/55'">
                 <BIcon :name="tag.trend === 'up' ? 'TrendingUp' : tag.trend === 'down' ? 'TrendingDown' : 'Minus'" class="w-3 h-3" />
                 {{ formatCount(tag.totalCount) }}
               </div>
-            </div>
+            </router-link>
           </div>
         </div>
 
@@ -1360,11 +1438,11 @@ onDeactivated(() => {
 
           <!-- User list -->
           <div v-else class="space-y-1">
-            <div
+            <router-link
               v-for="user in visibleRecommendedUsers.slice(0, 5)"
               :key="user.id"
+              :to="`/profile/${user.username}`"
               class="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-brand-card/60 transition-colors group cursor-pointer"
-              @click="router.push(`/profile/${user.username}`)"
             >
               <!-- Avatar -->
               <div class="relative flex-shrink-0">
@@ -1400,7 +1478,7 @@ onDeactivated(() => {
               >
                 {{ followStatus[user.id] ? 'Читаю' : 'Читать' }}
               </button>
-            </div>
+            </router-link>
           </div>
         </div>
 

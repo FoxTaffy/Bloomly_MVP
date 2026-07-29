@@ -41,15 +41,17 @@ export const notificationService = {
   },
 
   async create(input: {
-    receiverId: string;
-    senderId?:  string;
+    receiverId:    string;
+    senderId?:     string;
+    /** Set when the action was taken "as" a group — masks the real sender in favor of the group's identity. */
+    senderGroupId?: string;
     type:       string;
     postId?:    string;
     commentId?: string;
     refId?:     string;
     meta?:      object;
   }) {
-    const { receiverId, senderId, type, postId, commentId, refId, meta } = input;
+    const { receiverId, senderId, senderGroupId, type, postId, commentId, refId, meta } = input;
     if (receiverId === senderId) return null; // don't notify yourself
 
     const prefField = PREF_BY_TYPE[type];
@@ -68,9 +70,10 @@ export const notificationService = {
     }
 
     const notif = await prisma.notification.create({
-      data:    { receiver_id: receiverId, sender_id: senderId, type, post_id: postId, comment_id: commentId, ref_id: refId, meta },
+      data:    { receiver_id: receiverId, sender_id: senderId, sender_group_id: senderGroupId, type, post_id: postId, comment_id: commentId, ref_id: refId, meta },
       include: {
-        sender: { select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true, pronouns: true } },
+        sender:      { select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true, pronouns: true } },
+        senderGroup: { select: { id: true, slug: true, name: true, avatar_url: true } },
       },
     });
 
@@ -108,7 +111,8 @@ export const notificationService = {
       orderBy: { created_at: 'desc' },
       take:    limit,
       include: {
-        sender: { select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true, pronouns: true } },
+        sender:      { select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true, pronouns: true } },
+        senderGroup: { select: { id: true, slug: true, name: true, avatar_url: true } },
       },
     });
   },

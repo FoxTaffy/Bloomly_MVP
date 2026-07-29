@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import api from '@/api'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
@@ -8,7 +7,6 @@ import BIcon from '@/components/BIcon.vue'
 import { useWarningModalStore } from '@/stores/warningModal'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 
-const router = useRouter()
 const warningModal = useWarningModalStore()
 
 const notifications = ref<any[]>([])
@@ -58,17 +56,34 @@ const notifTypeLabel = (type: string) => {
 
 const formatDate = (d: string) => new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 
+// ── Display identity for a notification — real user, or the group it was sent "as" ──
+const identityIsGroup = (n: any): boolean => !!n.senderGroup
+const identityAvatar = (n: any): string | null => n.senderGroup?.avatar_url ?? n.sender?.avatar_url ?? null
+const identityName = (n: any): string => n.senderGroup?.name || n.sender?.display_name || n.sender?.username || ''
+const identityHref = (n: any): string | null => {
+  if (n.senderGroup?.slug) return `/groups/${n.senderGroup.slug}`
+  if (n.sender?.username) return `/profile/${n.sender.username}`
+  return null
+}
+
+// Real link target — null for automod_warn (opens a modal instead of navigating).
+const notifHref = (n: any): string | null => {
+  if (n.type === 'automod_warn') return null
+  if (identityIsGroup(n)) return identityHref(n)
+  if (n.sender?.username && ['FOLLOW', 'RELATIONSHIP_ACCEPTED', 'follow', 'relationship_accepted'].includes(n.type)) {
+    return `/profile/${n.sender.username}`
+  }
+  if (n.post_id) return `/post/${n.post_id}`
+  if (n.sender?.username) return `/profile/${n.sender.username}`
+  return null
+}
+
 const onClick = async (n: any) => {
   if (!n.is_read) {
     n.is_read = true
     try { await api.post('/notifications/read', { ids: [n.id] }) } catch {}
   }
-  if (n.type === 'automod_warn') { warningModal.open(n); return }
-  if (n.sender?.username && ['FOLLOW', 'RELATIONSHIP_ACCEPTED', 'follow', 'relationship_accepted'].includes(n.type)) {
-    router.push(`/profile/${n.sender.username}`); return
-  }
-  if (n.post_id) { router.push(`/post/${n.post_id}`); return }
-  if (n.sender?.username) router.push(`/profile/${n.sender.username}`)
+  if (n.type === 'automod_warn') warningModal.open(n)
 }
 
 onMounted(fetchAll)
@@ -105,7 +120,8 @@ onMounted(fetchAll)
           <p class="text-sm font-semibold">Уведомлений нет</p>
         </div>
         <div v-else class="space-y-1.5">
-          <div v-for="n in notifications" :key="n.id"
+          <component :is="notifHref(n) ? 'router-link' : 'div'" v-for="n in notifications" :key="n.id"
+            :to="notifHref(n) ?? undefined"
             class="flex items-start gap-3 px-4 py-3 rounded-2xl cursor-pointer transition-colors"
             :class="[
               n.type === 'automod_warn' ? 'bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/30' :
@@ -115,18 +131,18 @@ onMounted(fetchAll)
             <div v-if="isAutomodNotif(n)" class="w-10 h-10 rounded-full bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center flex-shrink-0">
               <span class="text-white font-black text-sm select-none" style="letter-spacing:-1px">B</span>
             </div>
-            <img v-else :src="n.sender?.avatar_url || '/icons/badges/NN.jpg'"
+            <img v-else :src="identityAvatar(n) || '/icons/badges/NN.jpg'"
               class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0" @error="onAvatarError" />
             <div class="min-w-0 flex-1">
               <p v-if="isAutomodNotif(n)" class="text-sm text-white leading-snug font-semibold">{{ automodMessage(n) }}</p>
               <p v-else class="text-sm text-white leading-snug">
-                <span class="font-semibold">{{ n.sender?.display_name || n.sender?.username }}</span>
+                <span class="font-semibold">{{ identityName(n) }}</span>
                 {{ ' ' }}{{ notifTypeLabel(n.type) }}
               </p>
               <p class="text-xs text-white/40 mt-0.5">{{ formatDate(n.created_at) }}</p>
             </div>
             <div v-if="!n.is_read" class="w-2 h-2 bg-brand-accent rounded-full flex-shrink-0 mt-2"></div>
-          </div>
+          </component>
         </div>
       </main>
     </div>

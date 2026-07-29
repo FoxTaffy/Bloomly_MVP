@@ -45,8 +45,18 @@ export async function getOrCreateConversationHandler(req: FastifyRequest, reply:
 export async function getUnreadCountHandler(req: FastifyRequest, reply: FastifyReply) {
   try {
     const { id: userId } = req.user as JwtUser;
-    const count = await messageService.getUnreadCount(userId);
-    return reply.send({ success: true, data: { count }, error: null });
+    const { total, personal, group } = await messageService.getUnreadCount(userId);
+    return reply.send({ success: true, data: { count: total, personal, group }, error: null });
+  } catch (e: any) {
+    return reply.code(500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  }
+}
+
+export async function getMyGroupInboxCountsHandler(req: FastifyRequest, reply: FastifyReply) {
+  try {
+    const { id: userId } = req.user as JwtUser;
+    const counts = await messageService.getMyGroupInboxCounts(userId);
+    return reply.send({ success: true, data: { counts }, error: null });
   } catch (e: any) {
     return reply.code(500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
   }

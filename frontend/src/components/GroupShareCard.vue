@@ -77,7 +77,7 @@ function open() {
         </div>
         <p class="text-sm font-bold text-white truncate mt-1.5 flex items-center gap-1">
           {{ group.name }}
-          <img v-if="group.is_verified" src="/icons/badges/paw_offical.svg" class="w-3.5 h-3.5 flex-shrink-0" />
+          <BIcon v-if="group.is_verified" name="BadgeCheck" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
         </p>
         <p class="text-[11px] text-white/50 mt-0.5">{{ membersCount }} участников</p>
         <div class="mt-2.5 flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-brand-accent/15 text-brand-accent text-xs font-bold">

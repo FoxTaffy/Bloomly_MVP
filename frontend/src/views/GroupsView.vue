@@ -11,6 +11,7 @@ import CreateGroupModal from '@/components/groups/CreateGroupModal.vue'
 import AdSlot from '@/components/ads/AdSlot.vue'
 import { useGroupsStore, type GroupType } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
+import { useMessagesStore } from '@/stores/messages'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useLangStore } from '@/stores/lang'
 import api from '@/api'
@@ -25,6 +26,7 @@ const showCategoryDropdown = ref(false)
 
 const groupsStore = useGroupsStore()
 const authStore = useAuthStore()
+const messagesStore = useMessagesStore()
 
 // Pinned groups tracking
 const pinnedGroupIds = computed(() => {
@@ -37,6 +39,13 @@ const pinnedGroupIds = computed(() => {
 const memberGroupIds = computed(() => {
   const ids = new Set<string>()
   groupsStore.myGroups.forEach(m => ids.add(m.group_id))
+  return ids
+})
+
+// Groups the user owns/admins/moderates — eligible for the "Обращения pending" card badge
+const managedGroupIds = computed(() => {
+  const ids = new Set<string>()
+  groupsStore.myGroups.forEach(m => { if (['owner', 'admin', 'moderator'].includes(m.role)) ids.add(m.group_id) })
   return ids
 })
 
@@ -122,6 +131,7 @@ async function loadStaticData() {
     groupsStore.loadEvents({ upcoming: true, limit: 6 }),
     authStore.user ? groupsStore.loadMyGroups() : Promise.resolve(),
     authStore.user ? groupsStore.loadMySoonBadges(authStore.user.id) : Promise.resolve(),
+    authStore.user ? messagesStore.fetchMyGroupInboxCounts() : Promise.resolve(),
   ])
 }
 
@@ -361,7 +371,7 @@ function fmtMembers(n: number): string {
               :group="group"
               :is-pinned="pinnedGroupIds.has(group.id)"
               :is-member="memberGroupIds.has(group.id)"
-              @click="router.push({ name: 'group-detail', params: { slugOrId: group.slug } })"
+              :pending-replies="managedGroupIds.has(group.id) ? (messagesStore.groupInboxCounts[group.id] ?? 0) : 0"
               @bookmark="handleBookmark(group.id)"
               @notify="handleNotify(group.id)"
               @unsubscribe="handleUnsubscribe(group.id)"

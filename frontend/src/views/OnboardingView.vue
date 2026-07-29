@@ -91,21 +91,21 @@
               <div class="step-header">
                 <div class="step-icon">👋</div>
                 <div>
-                  <h2 class="step-title">Расскажи о себе</h2>
-                  <p class="step-desc">Как тебя называть на Bloomly?</p>
+                  <h2 class="step-title">{{ langStore.t.onboardingStep1Title }}</h2>
+                  <p class="step-desc">{{ langStore.t.onboardingStep1Desc }}</p>
                 </div>
               </div>
 
               <div class="space-y-4">
                 <!-- Отображаемое имя -->
                 <div>
-                  <label class="field-label">Отображаемое имя <span class="text-brand-accent">*</span></label>
+                  <label class="field-label">{{ langStore.t.displayNameLabel }} <span class="text-brand-accent">*</span></label>
                   <div class="input-group">
                     <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                     <input
                       v-model="form.display_name"
                       maxlength="50"
-                      placeholder="Имя или псевдоним"
+                      :placeholder="langStore.t.onboardingNamePlaceholder"
                       class="fld"
                       autofocus
                     />
@@ -115,7 +115,7 @@
 
                 <!-- Местоимения -->
                 <div>
-                  <label class="field-label">Местоимения</label>
+                  <label class="field-label">{{ langStore.t.pronounsLabel }}</label>
                   <div class="flex flex-wrap gap-2 mb-2.5">
                     <button
                       v-for="p in PRONOUNS_OPTIONS"
@@ -131,7 +131,7 @@
                     <input
                       v-model="form.pronouns"
                       maxlength="30"
-                      placeholder="или введи свои..."
+                      :placeholder="langStore.t.onboardingPronounsPlaceholder"
                       class="fld"
                     />
                   </div>
@@ -139,17 +139,33 @@
 
                 <!-- О себе -->
                 <div>
-                  <label class="field-label">О себе</label>
+                  <label class="field-label">{{ langStore.t.aboutLabel }}</label>
                   <div class="textarea-group">
                     <textarea
                       v-model="form.bio"
                       maxlength="300"
                       rows="3"
-                      placeholder="Пару слов о себе..."
+                      :placeholder="langStore.t.onboardingBioPlaceholder"
                       class="fld-textarea"
                     />
                   </div>
                   <p class="field-hint text-right">{{ form.bio.length }}/300</p>
+                </div>
+
+                <!-- Дата рождения -->
+                <div>
+                  <label class="field-label">{{ langStore.t.birthdayLabel }}</label>
+                  <DateInput ref="birthDateInputRef" v-model="form.birth_date"
+                    :max="new Date().toISOString().substring(0,10)"
+                    @invalid="birthDateInvalid = $event" />
+                  <p class="field-hint"
+                    :class="birthAge !== null && birthAge < 18 ? '!text-brand-error/80' : ''">
+                    <template v-if="birthAge !== null">
+                      {{ ageLabel(birthAge) }}
+                      <span v-if="birthAge < 18"> · {{ langStore.t.nsfwUnder18Hint }}</span>
+                    </template>
+                    <template v-else>{{ langStore.t.nsfwBirthdayHint }}</template>
+                  </p>
                 </div>
               </div>
             </div>
@@ -161,21 +177,21 @@
               <div class="step-header">
                 <div class="step-icon">🦊</div>
                 <div>
-                  <h2 class="step-title">Твой фурсона</h2>
-                  <p class="step-desc">Необязательно — можно пропустить</p>
+                  <h2 class="step-title">{{ langStore.t.onboardingStep2Title }}</h2>
+                  <p class="step-desc">{{ langStore.t.onboardingStep2Desc }}</p>
                 </div>
               </div>
 
               <div class="space-y-4">
                 <!-- Имя фурсоны -->
                 <div>
-                  <label class="field-label">Имя персонажа</label>
+                  <label class="field-label">{{ langStore.t.fursonaName }}</label>
                   <div class="input-group">
                     <svg class="input-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
                     <input
                       v-model="form.fursona_name"
                       maxlength="80"
-                      placeholder="Как зовут твоего персонажа?"
+                      :placeholder="langStore.t.onboardingFursonaNamePlaceholder"
                       class="fld"
                     />
                   </div>
@@ -183,7 +199,7 @@
 
                 <!-- Вид -->
                 <div>
-                  <label class="field-label">Вид</label>
+                  <label class="field-label">{{ langStore.t.onboardingSpeciesLabel }}</label>
                   <div class="species-grid">
                     <button
                       v-for="s in SPECIES_OPTIONS"
@@ -198,7 +214,7 @@
 
                 <!-- Основной цвет -->
                 <div>
-                  <label class="field-label">Основной цвет персонажа</label>
+                  <label class="field-label">{{ langStore.t.onboardingColorLabel }}</label>
                   <div class="color-picker-row">
                     <div class="color-swatch-wrap" @click="($refs.colorPicker as HTMLInputElement).click()">
                       <div class="color-swatch" :style="{ background: form.fursona_color }"></div>
@@ -231,13 +247,13 @@
 
                 <!-- Описание -->
                 <div>
-                  <label class="field-label">Описание персонажа</label>
+                  <label class="field-label">{{ langStore.t.onboardingFursonaDescLabel }}</label>
                   <div class="textarea-group">
                     <textarea
                       v-model="form.fursona_description"
                       rows="3"
                       maxlength="500"
-                      placeholder="Расскажи о персонаже..."
+                      :placeholder="langStore.t.onboardingFursonaDescPlaceholder"
                       class="fld-textarea"
                     />
                   </div>
@@ -253,8 +269,8 @@
               <div class="step-header">
                 <div class="step-icon">✨</div>
                 <div>
-                  <h2 class="step-title">Любимое</h2>
-                  <p class="step-desc">Расскажи, что тебе близко (необязательно)</p>
+                  <h2 class="step-title">{{ langStore.t.onboardingStep3Title }}</h2>
+                  <p class="step-desc">{{ langStore.t.onboardingStep3Desc }}</p>
                 </div>
               </div>
 
@@ -281,11 +297,11 @@
                 <div class="absolute inset-3 rounded-full bg-brand-accent/10 border border-brand-accent/20"></div>
                 <span class="relative text-5xl">🌸</span>
               </div>
-              <h2 class="text-3xl font-black text-white mb-2">Всё готово!</h2>
+              <h2 class="text-3xl font-black text-white mb-2">{{ langStore.t.onboardingAllDoneTitle }}</h2>
               <p class="text-white/50 text-sm mb-1">
-                Добро пожаловать, <span class="hero-gradient font-black">{{ form.display_name || auth.user?.username }}</span>!
+                {{ langStore.t.onboardingWelcomePrefix }} <span class="hero-gradient font-black">{{ form.display_name || auth.user?.username }}</span>!
               </p>
-              <p class="text-white/25 text-xs">Сохраняем твой профиль...</p>
+              <p class="text-white/25 text-xs">{{ langStore.t.onboardingSavingProfile }}</p>
               <div v-if="saveError" class="mt-5 flex items-start gap-2.5 p-3.5 rounded-2xl bg-red-500/8 border border-red-500/20">
                 <svg class="w-4 h-4 shrink-0 mt-0.5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
                 <p class="text-sm text-red-400 font-semibold">{{ saveError }}</p>
@@ -314,7 +330,7 @@
               class="flex items-center gap-1.5 text-sm text-white/35 hover:text-white/70 transition-colors font-semibold"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-              Назад
+              {{ langStore.t.backBtn }}
             </button>
             <div v-else />
 
@@ -324,7 +340,7 @@
                 @click="nextStep(true)"
                 class="text-sm text-white/30 hover:text-white/55 transition-colors font-semibold px-3 py-2"
               >
-                Пропустить
+                {{ langStore.t.onboardingSkipBtn }}
               </button>
               <button
                 @click="nextStep(false)"
@@ -334,10 +350,10 @@
                 <span class="cta-shimmer"></span>
                 <span v-if="isLoading" class="flex items-center gap-2 relative z-10">
                   <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
-                  Сохранение...
+                  {{ langStore.t.savingProfile }}
                 </span>
                 <span v-else class="flex items-center gap-2 relative z-10">
-                  {{ step < TOTAL_STEPS - 1 ? 'Далее' : 'Завершить' }}
+                  {{ step < TOTAL_STEPS - 1 ? langStore.t.nextBtn : langStore.t.onboardingFinishBtn }}
                   <svg v-if="step < TOTAL_STEPS - 1" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                   <span v-else>🌸</span>
                 </span>
@@ -349,7 +365,7 @@
           <div v-if="step === 4 && saveError" class="flex justify-center mt-4">
             <button @click="saveProfile" class="cta-btn">
               <span class="cta-shimmer"></span>
-              <span class="relative z-10">Попробовать снова</span>
+              <span class="relative z-10">{{ langStore.t.onboardingRetryBtn }}</span>
             </button>
           </div>
         </div>
@@ -361,7 +377,7 @@
         @click="skipAll"
         class="mt-5 text-xs text-white/18 hover:text-white/40 transition-colors font-semibold"
       >
-        Пропустить настройку профиля
+        {{ langStore.t.onboardingSkipAllBtn }}
       </button>
 
       <!-- Декоративная линия снизу -->
@@ -373,11 +389,12 @@
 <script setup lang="ts">
 import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
 import { FAVORITE_CATEGORIES } from '@/lib/interests'
+import DateInput from '@/components/DateInput.vue'
 
 const router = useRouter()
 const auth   = useAuthStore()
@@ -390,8 +407,10 @@ const step     = ref(1)
 const isLoading   = ref(false)
 const saveError   = ref<string | null>(null)
 const validationError = ref<string | null>(null)
+const birthDateInputRef = ref<InstanceType<typeof DateInput> | null>(null)
+const birthDateInvalid  = ref(false)
 
-const stepLabels = ['О себе', 'Фурсона', 'Любимое']
+const stepLabels = computed(() => [langStore.t.aboutLabel, langStore.t.fursonaTab, langStore.t.onboardingStep3Title])
 
 const form = ref({
   display_name:        auth.user?.display_name ?? '',
@@ -401,6 +420,7 @@ const form = ref({
   fursona_gender:      '',
   fursona_color:       '#a855f7',
   fursona_description: '',
+  birth_date: null as string | null,
   favorites: {
     fav_food:   '',
     fav_animal: '',
@@ -448,11 +468,37 @@ onMounted(() => {
   }
 })
 
+const birthAge = computed<number | null>(() => {
+  if (!form.value.birth_date) return null
+  const [y, mo, d] = form.value.birth_date.split('-').map(Number)
+  const now = new Date()
+  let age = now.getFullYear() - y
+  const m = now.getMonth() + 1 - mo
+  if (m < 0 || (m === 0 && now.getDate() < d)) age--
+  return age
+})
+
+function ageLabel(n: number): string {
+  if (langStore.currentLang === 'RU') {
+    const word = n % 10 === 1 && n % 100 !== 11 ? 'год'
+      : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'года'
+      : 'лет'
+    return `${n} ${word}`
+  }
+  if (langStore.currentLang === 'JP' || langStore.currentLang === 'CN') return `${n}${langStore.t.yearsOldSuffix}`
+  return `${n} ${langStore.t.yearsOldSuffix}`
+}
+
 function validate(): boolean {
   validationError.value = null
   if (step.value === 1) {
     if (!form.value.display_name.trim()) {
-      validationError.value = 'Укажи отображаемое имя'
+      validationError.value = langStore.t.onboardingNameRequiredError
+      return false
+    }
+    if (birthDateInvalid.value) {
+      birthDateInputRef.value?.shake()
+      validationError.value = langStore.t.onboardingBirthDateError
       return false
     }
   }
@@ -483,13 +529,14 @@ async function saveProfile() {
     if (form.value.fursona_gender) payload.fursona_gender = form.value.fursona_gender
     if (form.value.fursona_color) payload.fursona_color = form.value.fursona_color
     if (form.value.fursona_description.trim()) payload.fursona_description = form.value.fursona_description.trim()
+    if (form.value.birth_date) payload.birth_date = form.value.birth_date
     for (const cat of FAVORITE_CATEGORIES) {
       const value = form.value.favorites[cat.key].trim()
       if (value) payload[cat.key] = value
     }
 
     const { data } = await api.patch('/users/me', payload)
-    if (!data.success) throw new Error('Не удалось сохранить профиль')
+    if (!data.success) throw new Error(langStore.t.onboardingSaveFailedError)
 
     auth.user = { ...auth.user!, ...data.data.user, onboarding_done: true }
     const stored = localStorage.getItem('auth_user') ? localStorage : sessionStorage
@@ -498,7 +545,7 @@ async function saveProfile() {
     await new Promise((r) => setTimeout(r, 1200))
     router.push({ name: 'home' })
   } catch (e: any) {
-    saveError.value = e.response?.data?.error?.message || e.message || 'Ошибка сохранения'
+    saveError.value = e.response?.data?.error?.message || e.message || langStore.t.onboardingSaveErrorGeneric
   } finally {
     isLoading.value = false
   }

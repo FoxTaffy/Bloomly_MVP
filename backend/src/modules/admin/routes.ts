@@ -10,7 +10,7 @@ import {
   getBannersHandler, getActiveBannersHandler, createBannerHandler, updateBannerHandler, deleteBannerHandler,
   getAutoModLogsHandler, unfreezeUserHandler, freezeUserHandler, clearWarnsHandler, warnUserHandler,
   markDeceasedHandler, unmarkDeceasedHandler,
-  getStickerStatsHandler, getNetworkStatsHandler, togglePostPinHandler,
+  getStickerStatsHandler, getNetworkStatsHandler, getStickerPackDetailHandler, togglePostPinHandler,
   getGroupsOverviewHandler, getPremiumOverviewHandler, getInfraOverviewHandler,
   getStaffHandler, promoteToStaffHandler,
   sendBroadcastHandler, getBroadcastsHandler,
@@ -94,6 +94,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Statistics
   fastify.get('/stats/stickers', auth, getStickerStatsHandler as any);
+  fastify.get('/stats/stickers/:packId', auth, getStickerPackDetailHandler as any);
   fastify.get('/stats/network',  auth, getNetworkStatsHandler as any);
 
   // Groups & events / premium / infra overview

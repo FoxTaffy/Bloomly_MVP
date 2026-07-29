@@ -62,6 +62,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/scheduled-posts',
+    name: 'scheduled-posts',
+    component: () => import('@/views/ScheduledPostsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/explore',
     name: 'explore',
     component: () => import('@/views/ExploreView.vue'),

@@ -165,7 +165,6 @@ export const uiDict: Dict = {
   'Арт:': { EN:'Art:', JP:'アート:', CN:'艺术:', DE:'Kunst:', FR:'Art :', ES:'Arte:', PT:'Arte:' },
   'Скрыто': { EN:'Hidden', JP:'非表示', CN:'已隐藏', DE:'Verborgen', FR:'Masqué', ES:'Oculto', PT:'Oculto' },
   'Скрыто владельцем': { EN:'Hidden by owner', JP:'オーナーが非表示', CN:'所有者已隐藏', DE:'Vom Inhaber verborgen', FR:'Masqué par le propriétaire', ES:'Oculto por el propietario', PT:'Oculto pelo proprietário' },
-  'Открыть': { EN:'Open', JP:'開く', CN:'打开', DE:'Öffnen', FR:'Ouvrir', ES:'Abrir', PT:'Abrir' },
   'Референс не добавлен': { EN:'No ref sheet added', JP:'リファレンス未設定', CN:'未添加参考图', DE:'Kein Referenzblatt', FR:'Pas de feuille de référence', ES:'Sin hoja de referencia', PT:'Sem folha de referência' },
   'Цветовая палитра': { EN:'Color palette', JP:'カラーパレット', CN:'色彩搭配', DE:'Farbpalette', FR:'Palette de couleurs', ES:'Paleta de colores', PT:'Paleta de cores' },
   'Цвета не указаны': { EN:'No colors specified', JP:'色未設定', CN:'未设置颜色', DE:'Keine Farben', FR:'Aucune couleur', ES:'Sin colores', PT:'Sem cores' },

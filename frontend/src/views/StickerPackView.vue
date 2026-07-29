@@ -495,7 +495,7 @@ const chartData = computed(() => {
                     <span class="font-bold text-white hover:text-brand-accent transition-colors">
                       {{ pack.author.display_name ?? pack.author.username }}
                     </span>
-                    <img v-if="pack.author.is_verified" src="/icons/badges/paw_offical.svg" class="w-3.5 h-3.5 flex-shrink-0" title="Верифицирован" />
+                    <BIcon v-if="pack.author.is_verified" name="BadgeCheck" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                   </div>
                   <p class="text-xs text-white/40">Автор · Опубликован {{ formatDate(pack.created_at) }}</p>
                 </div>

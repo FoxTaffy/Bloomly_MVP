@@ -49,7 +49,18 @@ services:
       OAUTH_REDIRECT_BASE: ${OAUTH_REDIRECT_BASE:-https://bloomly.fun/api}
       BREVO_API_KEY: ${BREVO_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-Bloomly <noreply@bloomly.fun>}
+      SUPPORT_EMAIL_ADDRESS: ${SUPPORT_EMAIL_ADDRESS:-}
+      SUPPORT_IMAP_HOST: ${SUPPORT_IMAP_HOST:-}
+      SUPPORT_IMAP_PORT: ${SUPPORT_IMAP_PORT:-1143}
+      SUPPORT_IMAP_USER: ${SUPPORT_IMAP_USER:-}
+      SUPPORT_IMAP_PASS: ${SUPPORT_IMAP_PASS:-}
+      SUPPORT_SMTP_HOST: ${SUPPORT_SMTP_HOST:-}
+      SUPPORT_SMTP_PORT: ${SUPPORT_SMTP_PORT:-1025}
+      SUPPORT_SMTP_USER: ${SUPPORT_SMTP_USER:-}
+      SUPPORT_SMTP_PASS: ${SUPPORT_SMTP_PASS:-}
     command: sh -c "npx prisma migrate deploy && npm run start"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       db:
         condition: service_healthy

@@ -22,6 +22,7 @@ const badgeIcon: Record<string, string> = {
   GROUP_EVENT: 'Calendar',
   GROUP_JOIN:  'Users',
   MESSAGE:     'MessageCircle',
+  GROUP_DM:    'Inbox',
   automod_warn: 'ShieldAlert',
 }
 
@@ -38,12 +39,17 @@ const badgeColor: Record<string, string> = {
   GROUP_EVENT: 'bg-amber-500',
   GROUP_JOIN:  'bg-emerald-500',
   MESSAGE:     'bg-sky-500',
+  GROUP_DM:    'bg-brand-accent',
   automod_warn: 'bg-amber-500',
 }
 
 function onClick(t: typeof toasts.value[0]) {
   if (t.type === 'automod_warn') {
     warningModal.open({ type: t.type, meta: t.meta })
+  } else if (t.isGroupDm && t.groupSlug) {
+    // A member wrote to the group — staff go straight to the shared "Обращения" inbox,
+    // never to /messages (they aren't a participant of the member's personal thread).
+    router.push({ name: 'group-admin-tools', params: { slugOrId: t.groupSlug }, query: { tab: 'inbox' } })
   } else if (t.convId) {
     router.push({ name: 'messages', query: { c: t.convId } })
   } else if (t.postId) {

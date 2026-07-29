@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useShopStore, type ShopItem } from '@/stores/shop'
 import { useStickersStore } from '@/stores/stickers'
 import { useNsfwMode } from '@/composables/useNsfwMode'
+import { useLangStore } from '@/stores/lang'
 import AppHeader  from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon      from '@/components/BIcon.vue'
@@ -13,6 +14,7 @@ const router       = useRouter()
 const auth         = useAuthStore()
 const shopStore    = useShopStore()
 const stickerStore = useStickersStore()
+const langStore    = useLangStore()
 const { nsfwEnabled } = useNsfwMode()
 
 // ── Category ───────────────────────────────────────────────────────────────
@@ -564,7 +566,7 @@ function openPack(pack: any) {
                       <span class="text-[10px] text-brand-pink/70 truncate font-medium">
                         {{ pack.author.display_name ?? pack.author.username }}
                       </span>
-                      <img v-if="pack.author.is_verified" src="/icons/badges/paw_offical.svg" class="w-2.5 h-2.5 flex-shrink-0" title="Верифицирован" />
+                      <BIcon v-if="pack.author.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                     </div>
                   </div>
                   <!-- Collections count -->

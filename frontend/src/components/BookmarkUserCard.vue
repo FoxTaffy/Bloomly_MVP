@@ -79,7 +79,7 @@ async function removeBookmark() {
           <p class="font-bold text-sm text-white truncate leading-tight">
             {{ user.display_name || user.username }}
           </p>
-          <img v-if="user.is_verified" src="/icons/badges/paw_offical.svg" class="w-3.5 h-3.5 flex-shrink-0" />
+          <BIcon v-if="user.is_verified" name="BadgeCheck" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
         </div>
         <p class="text-xs text-white/45 truncate">@{{ user.username }}</p>
       </div>

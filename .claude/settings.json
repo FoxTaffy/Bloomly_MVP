@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(docker exec bloomly-api-1 node -e ' *)"
+      "Bash(docker exec bloomly-api-1 node -e ' *)",
+      "Bash(npx vue-tsc *)"
     ]
   }
 }

@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { groupService } from './service.js';
 import { messageService } from '../messages/service.js';
+import { moderatePost, moderateGroupMessage } from '../automod/service.js';
 import type { JwtUser, GetGroupsQuery, CreateGroupInput, UpdateGroupInput, CreateEventInput, UpdateEventInput, CreateTicketTierInput, UpdateCommissionInput, RateGroupInput, CreateGroupPostInput, RsvpEventInput, SubEventInput, UpdateSubEventInput, CreateOrderInput } from './types.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -94,9 +95,15 @@ export const deleteGroupHandler = async (
     if (!membership || membership.role !== 'owner') {
       return fail(reply, 403, 'FORBIDDEN', 'Only the group owner can delete the group');
     }
-    await groupService.delete(request.params.id);
-    return ok(reply, { deleted: true });
+    const result = await groupService.delete(request.params.id);
+    return ok(reply, result);
   } catch (e: any) {
+    if (e.message === 'GROUP_HAS_FINANCIAL_HISTORY') {
+      return fail(reply, 409, 'GROUP_HAS_FINANCIAL_HISTORY', 'Нельзя удалить группу с историей платежей или заказов — обратитесь в поддержку');
+    }
+    if (e.message === 'Group not found') {
+      return fail(reply, 404, 'GROUP_NOT_FOUND', 'Group not found');
+    }
     return fail(reply, 500, 'DELETE_GROUP_ERROR', e.message);
   }
 };
@@ -561,6 +568,10 @@ export const createGroupPostHandler = async (
   try {
     const { id: userId } = request.user as JwtUser;
     const post = await groupService.createGroupPost(request.params.id, userId, request.body);
+    // fire-and-forget automod check (does not block the response) — same pipeline as personal posts
+    if (post) {
+      moderatePost(post.id, userId, request.body.content ?? '').catch((err) => console.error('[AUTOMOD] analyzeGroupPost error:', err));
+    }
     return ok(reply, { post }, 201);
   } catch (e: any) {
     return fail(reply, 400, 'CREATE_GROUP_POST_ERROR', e.message);
@@ -753,6 +764,8 @@ export const sendGroupMessageHandler = async (
     const { text } = request.body;
     if (!text?.trim()) return fail(reply, 400, 'EMPTY_MESSAGE', 'Message text is required');
     const msg = await groupService.sendGroupMessage(request.params.id, userId, text.trim());
+    // fire-and-forget automod check (does not block the response)
+    moderateGroupMessage(userId).catch((err) => console.error('[AUTOMOD] moderateGroupMessage error:', err));
     return ok(reply, { message: msg }, 201);
   } catch (e: any) {
     return fail(reply, 400, 'SEND_MESSAGE_ERROR', e.message);

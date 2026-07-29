@@ -11,14 +11,17 @@ import OrdersPanel from '@/components/groups/panels/OrdersPanel.vue'
 import OverviewPanel from '@/components/groups/panels/OverviewPanel.vue'
 import BalancePanel from '@/components/groups/panels/BalancePanel.vue'
 import InboxPanel from '@/components/groups/panels/InboxPanel.vue'
+import ScheduledPanel from '@/components/groups/panels/ScheduledPanel.vue'
 import { useGroupsStore } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
+import { useMessagesStore } from '@/stores/messages'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 
 const route = useRoute()
 const router = useRouter()
 const groupsStore = useGroupsStore()
 const authStore = useAuthStore()
+const messagesStore = useMessagesStore()
 const nsfwMode = useNsfwMode().nsfwEnabled
 
 const loading = ref(true)
@@ -34,7 +37,7 @@ interface ToolTab {
   key: string
   label: string
   icon: string
-  kind: 'overview' | 'applications' | 'tickets' | 'todolist' | 'orders' | 'balance' | 'inbox' | 'settings'
+  kind: 'overview' | 'applications' | 'tickets' | 'todolist' | 'orders' | 'balance' | 'inbox' | 'scheduled' | 'settings'
   settingsSection?: string
   settingsDesc?: string
 }
@@ -42,6 +45,7 @@ interface ToolTab {
 const OVERVIEW_TAB: ToolTab = { key: 'overview', label: 'Обзор', icon: 'BarChart3', kind: 'overview' }
 const BALANCE_TAB: ToolTab = { key: 'balance', label: 'Баланс', icon: 'Wallet', kind: 'balance' }
 const INBOX_TAB: ToolTab = { key: 'inbox', label: 'Обращения', icon: 'Inbox', kind: 'inbox' }
+const SCHEDULED_TAB: ToolTab = { key: 'scheduled', label: 'Отложенные', icon: 'CalendarClock', kind: 'scheduled' }
 
 const toolTabs = computed<ToolTab[]>(() => {
   const t = group.value?.type
@@ -53,6 +57,7 @@ const toolTabs = computed<ToolTab[]>(() => {
     { key: 'status',       label: 'Статус события',     icon: 'CalendarCheck', kind: 'settings', settingsSection: 'sec-event', settingsDesc: 'Дата, статус и детали мероприятия' },
     { key: 'schedule',     label: 'Программа',          icon: 'Clock',         kind: 'settings', settingsSection: 'sec-event', settingsDesc: 'Расписание мероприятия' },
     INBOX_TAB,
+    SCHEDULED_TAB,
     BALANCE_TAB,
   ]
 
@@ -63,6 +68,7 @@ const toolTabs = computed<ToolTab[]>(() => {
     { key: 'todo',     label: 'Todolist',  icon: 'CheckSquare', kind: 'todolist' },
     { key: 'price',    label: 'Прайс',     icon: 'Tag',         kind: 'settings', settingsDesc: 'Цены и услуги — настраиваются в общих настройках' },
     INBOX_TAB,
+    SCHEDULED_TAB,
     BALANCE_TAB,
   ]
 
@@ -73,6 +79,7 @@ const toolTabs = computed<ToolTab[]>(() => {
     { key: 'todo',    label: 'Todolist',  icon: 'CheckSquare', kind: 'todolist' },
     { key: 'price',   label: 'Прайс',     icon: 'Tag',         kind: 'settings', settingsSection: 'sec-prices', settingsDesc: 'Цены и услуги' },
     INBOX_TAB,
+    SCHEDULED_TAB,
     BALANCE_TAB,
   ]
 
@@ -80,6 +87,7 @@ const toolTabs = computed<ToolTab[]>(() => {
     OVERVIEW_TAB,
     { key: 'team', label: 'Редакция', icon: 'Users', kind: 'settings', settingsSection: 'sec-members', settingsDesc: 'Состав редакции и роли' },
     INBOX_TAB,
+    SCHEDULED_TAB,
     BALANCE_TAB,
   ]
 
@@ -89,6 +97,7 @@ const toolTabs = computed<ToolTab[]>(() => {
     { key: 'members',  label: 'Покупатели',  icon: 'Users',       kind: 'applications' },
     { key: 'goods',    label: 'Каталог',     icon: 'ShoppingBag', kind: 'settings', settingsSection: 'sec-prices', settingsDesc: 'Товары магазина' },
     INBOX_TAB,
+    SCHEDULED_TAB,
     BALANCE_TAB,
   ]
 
@@ -97,6 +106,7 @@ const toolTabs = computed<ToolTab[]>(() => {
     OVERVIEW_TAB,
     { key: 'members', label: 'Участники', icon: 'Users', kind: 'applications' },
     INBOX_TAB,
+    SCHEDULED_TAB,
     BALANCE_TAB,
   ]
 })
@@ -116,6 +126,7 @@ const activeTab = computed<string>({
 })
 
 const activeToolTab = computed(() => toolTabs.value.find(t => t.key === activeTab.value) ?? null)
+const inboxCount = computed(() => (group.value ? messagesStore.groupInboxCounts[group.value.id] ?? 0 : 0))
 
 function openSettingsSection(tab: ToolTab) {
   router.push({
@@ -130,6 +141,9 @@ async function load() {
   try {
     await groupsStore.loadGroup(route.params.slugOrId as string)
     if (authStore.user && !groupsStore.myGroups.length) await groupsStore.loadMyGroups()
+    if (isAdmin.value && group.value && toolTabs.value.some(t => t.kind === 'inbox')) {
+      messagesStore.fetchGroupInboxCount(group.value.id)
+    }
   } finally {
     loading.value = false
   }
@@ -173,12 +187,16 @@ watch(() => route.params.slugOrId, load)
             <button v-for="tab in toolTabs" :key="tab.key"
               @click="activeTab = tab.key"
               :class="[
-                'flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border',
+                'relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border',
                 activeTab === tab.key
                   ? 'bg-brand-accent/20 border-brand-accent/40 text-brand-accent'
                   : 'bg-brand-card border-brand-border text-white/55 hover:text-white hover:border-white/20'
               ]">
               <BIcon :name="tab.icon" class="w-3.5 h-3.5" /> {{ tab.label }}
+              <span v-if="tab.kind === 'inbox' && inboxCount > 0"
+                class="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-error text-white text-[10px] font-extrabold leading-none">
+                {{ inboxCount > 99 ? '99+' : inboxCount }}
+              </span>
             </button>
           </div>
 
@@ -204,6 +222,9 @@ watch(() => route.params.slugOrId, load)
                 :group-id="group.id" :group-slug="(group as any).slug ?? group.id" :donations-enabled="!!(group as any).donations_enabled" />
 
               <InboxPanel v-else-if="activeToolTab.kind === 'inbox'"
+                :group-id="group.id" />
+
+              <ScheduledPanel v-else-if="activeToolTab.kind === 'scheduled'"
                 :group-id="group.id" />
 
               <div v-else-if="activeToolTab.kind === 'settings'"

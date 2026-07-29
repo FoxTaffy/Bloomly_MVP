@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import BIcon from './BIcon.vue'
+import VerificationBadge from './VerificationBadge.vue'
 import PostComments from './PostComments.vue'
 import CustomPlayer from './CustomPlayer.vue'
+import { onAvatarError } from '@/composables/useAvatarFallback'
 
 const props = defineProps<{
   images: string[]
@@ -10,9 +13,37 @@ const props = defineProps<{
   types?: string[]
   startIndex?: number
   postId?: string
+  author?: {
+    username: string
+    display_name?: string | null
+    avatar_url?: string | null
+    is_verified?: boolean
+    verification_type?: string | null
+    deceased_at?: string | null
+  } | null
+  createdAt?: string | null
+  content?: string | null
 }>()
 
 const emit = defineEmits<{ (e: 'close'): void }>()
+const router = useRouter()
+
+const MONTHS_RU = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+function formatPostDate(d?: string | null): string {
+  if (!d) return ''
+  const date = new Date(d)
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mm = String(date.getMinutes()).padStart(2, '0')
+  const sameYear = date.getFullYear() === new Date().getFullYear()
+  const day = `${date.getDate()} ${MONTHS_RU[date.getMonth()]}${sameYear ? '' : ' ' + date.getFullYear()}`
+  return `${day} в ${hh}:${mm}`
+}
+
+function goToAuthor() {
+  if (!props.author?.username) return
+  emit('close')
+  router.push(`/profile/${props.author.username}`)
+}
 
 const showComments = ref(!!props.postId)
 const isVideo = (url: string) => /\.(mp4|webm|mov|mkv|ogv)$/i.test(url.split('?')[0])
@@ -187,22 +218,44 @@ onUnmounted(() => {
           v-if="showComments && postId"
           class="relative z-10 md:w-[40%] w-full bg-brand-card border-l border-brand-border flex flex-col overflow-hidden flex-shrink-0"
         >
-          <!-- Header -->
-          <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0 bg-brand-card">
-            <div class="flex items-center gap-2 font-bold text-white">
-              <BIcon name="MessageSquare" class="w-5 h-5 text-brand-accent" />
-              Комментарии
+          <!-- Scrollable body: post header + text, then comments -->
+          <div class="flex-1 overflow-y-auto">
+            <!-- Post author + date + text (VK-style) -->
+            <div v-if="author" class="px-5 pt-4 pb-3 border-b border-brand-border flex-shrink-0">
+              <div class="flex items-center gap-2.5 cursor-pointer" @click="goToAuthor">
+                <img :src="author.avatar_url || '/default-avatar.png'" @error="onAvatarError"
+                  class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0" />
+                <div class="min-w-0">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="font-bold text-white text-sm truncate hover:text-brand-accent transition-colors">
+                      {{ author.display_name || author.username }}
+                    </span>
+                    <span v-if="author.deceased_at" title="Светлая память">🪦</span>
+                    <VerificationBadge v-if="author.is_verified" :type="author.verification_type" icon-class="w-3.5 h-3.5 flex-shrink-0" />
+                  </div>
+                  <span class="text-xs text-white/55">{{ formatPostDate(createdAt) }}</span>
+                </div>
+              </div>
+              <p v-if="content" class="text-sm text-white/85 leading-relaxed mt-3 whitespace-pre-wrap break-words">{{ content }}</p>
             </div>
-            <button
-              @click="showComments = false"
-              class="w-8 h-8 rounded-full bg-brand-bg hover:bg-brand-border flex items-center justify-center text-white/55 hover:text-white transition-colors"
-            >
-              <BIcon name="X" class="w-4 h-4" />
-            </button>
-          </div>
-          <!-- Scrollable body -->
-          <div class="flex-1 overflow-y-auto px-4 pb-6">
-            <PostComments :post-id="postId" />
+
+            <!-- Comments header -->
+            <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0 bg-brand-card sticky top-0 z-10">
+              <div class="flex items-center gap-2 font-bold text-white">
+                <BIcon name="MessageSquare" class="w-5 h-5 text-brand-accent" />
+                Комментарии
+              </div>
+              <button
+                @click="showComments = false"
+                class="w-8 h-8 rounded-full bg-brand-bg hover:bg-brand-border flex items-center justify-center text-white/55 hover:text-white transition-colors"
+              >
+                <BIcon name="X" class="w-4 h-4" />
+              </button>
+            </div>
+
+            <div class="px-4 pb-6">
+              <PostComments :post-id="postId" />
+            </div>
           </div>
         </div>
       </Transition>

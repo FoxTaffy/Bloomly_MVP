@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js';
 import { isTrustedMediaUrl } from '../media/service.js';
+import { sendSupportEmail } from './mail.service.js';
 
 const MAX_ATTACHMENT_FILES = 5;
 
@@ -13,22 +14,48 @@ const ticketAuthorSelect = {
   id: true, username: true, display_name: true, avatar_url: true,
 } as const;
 
+const messagesOrder = {
+  messages: {
+    orderBy: { created_at: 'asc' as const },
+    include: { sender: { select: { id: true, username: true } } },
+  },
+};
+
+function replyToAddress(ticket: { external_email: string | null; contact_email: string | null }): string | null {
+  return ticket.external_email || ticket.contact_email;
+}
+
 export async function createTicket(userId: string, input: {
   type: string; subject: string; message: string; contactEmail?: string;
   attachmentUrls?: string[];
 }) {
-  return prisma.supportTicket.create({
+  const ticket = await prisma.supportTicket.create({
     data: {
       user_id: userId,
       type: SUPPORT_TICKET_TYPES.includes(input.type as SupportTicketType) ? input.type : 'question',
       subject: input.subject.trim().slice(0, 150),
-      message: input.message.trim().slice(0, 3000),
       contact_email: input.contactEmail?.trim().slice(0, 255) || null,
-      // Only accept URLs produced by our own upload endpoint, and only up to the cap —
-      // a raw client can otherwise post an arbitrarily large/external array of "attachments".
-      attachment_urls: (input.attachmentUrls ?? []).filter(isTrustedMediaUrl).slice(0, MAX_ATTACHMENT_FILES),
+      messages: {
+        create: {
+          sender_type: 'user',
+          sender_user_id: userId,
+          body: input.message.trim().slice(0, 3000),
+          // Only accept URLs produced by our own upload endpoint, and only up to the cap —
+          // a raw client can otherwise post an arbitrarily large/external array of "attachments".
+          attachment_urls: (input.attachmentUrls ?? []).filter(isTrustedMediaUrl).slice(0, MAX_ATTACHMENT_FILES),
+        },
+      },
     },
+    include: messagesOrder,
   });
+
+  const to = replyToAddress(ticket);
+  if (to) {
+    sendSupportEmail(to, `Обращение принято: ${ticket.subject}`, input.message.trim().slice(0, 3000))
+      .catch((err) => console.error('[SUPPORT_MAIL] Failed to send ack email:', err));
+  }
+
+  return ticket;
 }
 
 export async function getMyTickets(userId: string) {
@@ -36,11 +63,28 @@ export async function getMyTickets(userId: string) {
     where: { user_id: userId },
     orderBy: { created_at: 'desc' },
     take: 50,
+    include: messagesOrder,
   });
 }
 
 export async function getTicketForUser(userId: string, ticketId: string) {
-  return prisma.supportTicket.findFirst({ where: { id: ticketId, user_id: userId } });
+  return prisma.supportTicket.findFirst({ where: { id: ticketId, user_id: userId }, include: messagesOrder });
+}
+
+export async function addUserMessage(userId: string, ticketId: string, body: string) {
+  const ticket = await prisma.supportTicket.findFirst({ where: { id: ticketId, user_id: userId } });
+  if (!ticket) return null;
+
+  const [message] = await prisma.$transaction([
+    prisma.supportTicketMessage.create({
+      data: { ticket_id: ticket.id, sender_type: 'user', sender_user_id: userId, body: body.trim().slice(0, 3000) },
+    }),
+    prisma.supportTicket.update({
+      where: { id: ticket.id },
+      data: (ticket.status === 'resolved' || ticket.status === 'closed') ? { status: 'open' } : {},
+    }),
+  ]);
+  return message;
 }
 
 export async function adminGetTickets(status?: string, type?: string, page = 1, limit = 30) {
@@ -53,7 +97,7 @@ export async function adminGetTickets(status?: string, type?: string, page = 1, 
       where, skip, take: limit, orderBy: { created_at: 'desc' },
       include: {
         user: { select: ticketAuthorSelect },
-        replier: { select: { id: true, username: true } },
+        ...messagesOrder,
       },
     }),
     prisma.supportTicket.count({ where }),
@@ -64,14 +108,42 @@ export async function adminGetTickets(status?: string, type?: string, page = 1, 
 export async function adminReplyTicket(ticketId: string, adminId: string, input: {
   status?: string; adminReply?: string;
 }) {
-  const data: any = { updated_at: new Date() };
+  const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
+  if (!ticket) return null;
+
+  const statusUpdate: any = { updated_at: new Date() };
   if (input.status && SUPPORT_TICKET_STATUSES.includes(input.status as SupportTicketStatus)) {
-    data.status = input.status;
+    statusUpdate.status = input.status;
   }
-  if (input.adminReply !== undefined) {
-    data.admin_reply = input.adminReply.trim().slice(0, 3000);
-    data.replied_by = adminId;
-    data.replied_at = new Date();
+
+  const replyBody = input.adminReply?.trim().slice(0, 3000);
+  if (replyBody) {
+    let emailMessageId: string | null = null;
+    const to = replyToAddress(ticket);
+    if (to) {
+      try {
+        emailMessageId = await sendSupportEmail(to, `Re: ${ticket.subject}`, replyBody, {
+          inReplyTo: ticket.email_message_id ?? undefined,
+          references: ticket.email_message_id ? [ticket.email_message_id] : undefined,
+        });
+      } catch (err) {
+        console.error('[SUPPORT_MAIL] Failed to send reply email:', err);
+      }
+    }
+    if (emailMessageId) statusUpdate.email_message_id = emailMessageId;
+
+    await prisma.$transaction([
+      prisma.supportTicketMessage.create({
+        data: {
+          ticket_id: ticket.id, sender_type: 'admin', sender_user_id: adminId,
+          body: replyBody, email_message_id: emailMessageId,
+        },
+      }),
+      prisma.supportTicket.update({ where: { id: ticket.id }, data: statusUpdate }),
+    ]);
+  } else if (Object.keys(statusUpdate).length > 1) {
+    await prisma.supportTicket.update({ where: { id: ticket.id }, data: statusUpdate });
   }
-  return prisma.supportTicket.update({ where: { id: ticketId }, data });
+
+  return prisma.supportTicket.findUnique({ where: { id: ticket.id }, include: messagesOrder });
 }

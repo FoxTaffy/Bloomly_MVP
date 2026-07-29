@@ -22,7 +22,7 @@ const sortKey = ref<SortKey>('hot')
 const selectedTag = ref('')
 
 const sortTabs = computed(() => [
-  { key: 'hot' as SortKey, label: langStore.t.trending,    icon: 'Flame' },
+  { key: 'hot' as SortKey, label: langStore.t.trending,    icon: 'TrendingUp' },
   { key: 'new' as SortKey, label: langStore.t.feedGeneral, icon: 'Clock' },
 ])
 
@@ -213,10 +213,10 @@ onMounted(() => {
               class="mb-4 break-inside-avoid group relative rounded-2xl overflow-hidden bg-brand-card border border-brand-border cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all">
               <img :src="tile.url" loading="lazy" class="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.03]" />
 
-              <!-- Hot score badge -->
+              <!-- Rating badge -->
               <div v-if="sortKey === 'hot' && tile.post.rating > 0"
                 class="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white text-[11px] font-bold">
-                <BIcon name="Flame" class="w-3 h-3 text-orange-400" />
+                <BIcon name="Star" class="w-3 h-3 text-amber-400" />
                 {{ formatCount(tile.post.rating) }}
               </div>
 
@@ -252,6 +252,9 @@ onMounted(() => {
       :original-images="lightboxTile.originalImages"
       :start-index="lightboxTile.startIndex"
       :post-id="lightboxTile.post.id"
+      :author="lightboxTile.post.author"
+      :created-at="lightboxTile.post.created_at"
+      :content="lightboxTile.post.content"
       @close="lightboxTile = null"
     />
   </div>

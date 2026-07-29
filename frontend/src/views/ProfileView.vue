@@ -26,7 +26,7 @@
           <div class="flex items-center justify-between px-6 py-4 border-b border-brand-border sticky top-0 bg-brand-card z-10">
             <div class="flex items-center gap-2.5">
               <BIcon name="Award" class="w-5 h-5 text-yellow-400" />
-              <h3 class="font-bold text-white text-lg">Значки</h3>
+              <h3 class="font-bold text-white text-lg">{{ langStore.t.profileBadgesTitle }}</h3>
               <span class="text-xs font-bold bg-brand-accent/15 text-brand-accent px-2 py-0.5 rounded-full">{{ achievementBadges.length }}</span>
             </div>
             <button @click="showBadgesModal = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
@@ -36,9 +36,8 @@
           <div class="p-4 grid grid-cols-1 gap-3">
             <div v-for="badge in achievementBadges" :key="badge.key"
               class="flex items-center gap-4 p-4 rounded-2xl bg-brand-bg border border-brand-border hover:border-brand-accent/30 transition-all group">
-              <div class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 overflow-hidden transition-transform group-hover:scale-105" :class="!badge.iconImg && badge.iconBg">
-                <img v-if="badge.iconImg" :src="badge.iconImg" class="w-full h-full object-cover" />
-                <component v-else :is="badge.iconComp" class="w-7 h-7" :class="badge.iconColor" />
+              <div class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 overflow-hidden transition-transform group-hover:scale-105" :class="badge.iconBg">
+                <component :is="badge.iconComp" class="w-7 h-7" :class="badge.iconColor" />
               </div>
               <div class="min-w-0">
                 <p class="text-sm font-extrabold text-white leading-tight">{{ badge.label }}</p>
@@ -79,14 +78,14 @@
 
             <!-- Top-up preset picker -->
             <div v-if="showTopupPicker" class="bg-brand-bg border border-brand-border rounded-2xl p-4 space-y-3">
-              <p class="text-xs font-bold text-white/55">Пополнить на:</p>
+              <p class="text-xs font-bold text-white/55">{{ langStore.t.profileTopupPresetLabel }}</p>
               <div class="grid grid-cols-3 gap-2">
                 <button v-for="amt in TOPUP_PRESETS" :key="amt" :disabled="toppingUp" @click="topupWallet(amt)"
                   class="py-2 rounded-xl border border-brand-border bg-brand-card text-sm font-bold text-white hover:border-brand-accent/50 hover:text-brand-accent transition-all disabled:opacity-40">
                   +{{ amt }}
                 </button>
               </div>
-              <button @click="showTopupPicker = false" class="w-full py-1.5 text-xs font-semibold text-white/40 hover:text-white transition-colors">Отмена</button>
+              <button @click="showTopupPicker = false" class="w-full py-1.5 text-xs font-semibold text-white/40 hover:text-white transition-colors">{{ langStore.t.cancel }}</button>
             </div>
 
             <!-- Action buttons -->
@@ -100,7 +99,7 @@
                 <span class="text-xs font-bold text-white/55">{{ langStore.t.withdrawBtn }}</span>
               </button>
             </div>
-            <p class="text-center text-[11px] text-white/35">Пополнение — тестовое, без реальной оплаты</p>
+            <p class="text-center text-[11px] text-white/35">{{ langStore.t.profileTopupDisclaimer }}</p>
           </div>
         </div>
       </div>
@@ -153,8 +152,19 @@
           <p class="text-white font-bold text-lg mb-2">{{ langStore.t.userNotFound }}</p>
           <p class="text-white/55 text-sm mb-6">{{ langStore.t.userNotFoundDesc }}</p>
           <button @click="router.push({ name: 'home' })" class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-card border border-brand-border hover:border-brand-accent text-sm font-bold rounded-xl transition-all">
-            <BIcon name="ArrowLeft" class="w-4 h-4" /> На главную
+            <BIcon name="ArrowLeft" class="w-4 h-4" /> {{ langStore.t.goHome }}
           </button>
+        </div>
+
+        <!-- Blocked profile stub (the profile owner has blocked the viewer) -->
+        <div v-else-if="(viewedProfile as any).is_blocked_by_user" class="mt-8 bg-brand-card border border-brand-border rounded-3xl p-12 text-center shadow-xl">
+          <img :src="viewedProfile.avatar_url || '/icons/badges/NN.jpg'" class="w-20 h-20 rounded-full object-cover mx-auto mb-4 border-2 border-brand-border" @error="onAvatarError" />
+          <p class="text-white font-bold text-lg mb-1">{{ viewedProfile.display_name || viewedProfile.username }}</p>
+          <p class="text-white/45 text-sm mb-6">@{{ viewedProfile.username }}</p>
+          <div class="w-16 h-16 rounded-2xl bg-brand-bg border border-brand-border flex items-center justify-center mx-auto mb-4">
+            <BIcon name="Ban" class="w-8 h-8 text-white/55" />
+          </div>
+          <p class="text-white/55 text-sm">{{ langStore.t.profileBlockedByUser }}</p>
         </div>
 
         <!-- Private profile stub (viewer isn't allowed to see this profile) -->
@@ -165,7 +175,7 @@
           <div class="w-16 h-16 rounded-2xl bg-brand-bg border border-brand-border flex items-center justify-center mx-auto mb-4">
             <BIcon name="Lock" class="w-8 h-8 text-white/55" />
           </div>
-          <p class="text-white/55 text-sm">Этот профиль скрыт настройками приватности</p>
+          <p class="text-white/55 text-sm">{{ langStore.t.profileHiddenByPrivacy }}</p>
         </div>
 
         <template v-else>
@@ -264,50 +274,56 @@
                     <!-- Online dot (z-30 чтобы всегда поверх карт) -->
                     <span v-if="isProfileOnline"
                       class="absolute bottom-1 right-1 md:bottom-1.5 md:right-1.5 w-4 h-4 md:w-5 md:h-5 rounded-full bg-brand-success border-[3px] border-brand-card shadow-sm z-30 transition-all duration-500"
-                      title="Онлайн" />
+                      :title="langStore.t.onlineStatus" />
 
                     <!-- Status note bubble — IG Notes style above avatar -->
-                    <div v-if="isOwnProfile || profileStatus.text"
-                      class="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full z-30"
-                      style="width:120px">
-                      <button
-                        @click="isOwnProfile ? openStatusEdit() : null"
-                        :class="isOwnProfile ? 'cursor-pointer' : 'cursor-default'"
-                        class="relative block w-full hover:opacity-90 active:scale-95 transition-all">
-                        <!-- Bubble -->
-                        <div class="w-full px-2.5 py-2 rounded-[16px] text-white shadow-2xl overflow-hidden"
-                          :style="{ backgroundColor: statusBubbleColor }">
-                          <!-- Text/emoji -->
-                          <div v-if="profileStatus.text || profileStatus.emoji"
-                            class="flex gap-1 items-start"
-                            :class="profileStatus.music ? 'mb-1' : ''">
-                            <span v-if="profileStatus.emoji" class="text-sm flex-shrink-0 leading-tight">{{ profileStatus.emoji }}</span>
-                            <span v-if="profileStatus.text"
-                              class="text-[11px] font-semibold leading-snug"
-                              style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;word-break:break-all">{{ profileStatus.text }}</span>
-                          </div>
-                          <!-- Music -->
-                          <div v-if="profileStatus.music" class="flex items-center gap-1.5">
-                            <div class="flex items-end gap-[2px] h-3 flex-shrink-0">
-                              <span v-for="(h, i) in [50,100,65,85]" :key="i"
-                                class="w-[3px] rounded-full bg-white note-bar-profile"
-                                :style="`height:${h}%; animation-delay:${i*0.08}s`" />
+                    <Transition name="status-pop">
+                      <div v-if="isOwnProfile || hasActiveStatus"
+                        :key="profileStatus.text + profileStatus.emoji + (profileStatus.music?.title || '')"
+                        class="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full z-30"
+                        style="width:120px">
+                        <button
+                          @click="isOwnProfile ? openStatusEdit() : null"
+                          :class="isOwnProfile ? 'cursor-pointer' : 'cursor-default'"
+                          class="relative block w-full hover:opacity-90 active:scale-95 transition-all">
+                          <!-- Bubble -->
+                          <div class="w-full px-2.5 py-2 rounded-[16px] text-white overflow-hidden"
+                            :class="hasActiveStatus ? 'status-bubble-glow' : ''"
+                            :style="{ background: statusBubbleGradient, boxShadow: hasActiveStatus ? `0 4px 18px -2px ${statusBubbleColor}80, 0 2px 6px rgba(0,0,0,0.35)` : '0 8px 20px rgba(0,0,0,0.35)' }">
+                            <!-- Text/emoji -->
+                            <div v-if="profileStatus.text || profileStatus.emoji"
+                              class="flex gap-1 items-start"
+                              :class="profileStatus.music ? 'mb-1' : ''">
+                              <span v-if="profileStatus.emoji" class="text-sm flex-shrink-0 leading-tight">{{ profileStatus.emoji }}</span>
+                              <span v-if="profileStatus.text"
+                                class="text-[11px] font-semibold leading-snug"
+                                style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;word-break:break-all">{{ profileStatus.text }}</span>
                             </div>
-                            <div class="min-w-0 overflow-hidden">
-                              <p class="text-[10px] font-bold leading-tight truncate">{{ profileStatus.music.artist }}</p>
-                              <p class="text-[9px] opacity-70 leading-tight truncate">{{ profileStatus.music.title }}</p>
+                            <!-- Music -->
+                            <div v-if="profileStatus.music" class="flex items-center gap-1.5">
+                              <div class="flex items-end gap-[2px] h-3 flex-shrink-0">
+                                <span v-for="(h, i) in [50,100,65,85]" :key="i"
+                                  class="w-[3px] rounded-full bg-white note-bar-profile"
+                                  :style="`height:${h}%; animation-delay:${i*0.08}s`" />
+                              </div>
+                              <div class="min-w-0 overflow-hidden">
+                                <p class="text-[10px] font-bold leading-tight truncate">{{ profileStatus.music.artist }}</p>
+                                <p class="text-[9px] opacity-70 leading-tight truncate">{{ profileStatus.music.title }}</p>
+                              </div>
                             </div>
+                            <!-- Empty own profile -->
+                            <span v-if="!hasActiveStatus && isOwnProfile"
+                              class="flex items-center gap-1 text-[11px] text-white/85">
+                              <BIcon name="Plus" class="w-3 h-3" />{{ langStore.t.addStatusLabel }}</span>
+                            <span v-if="statusTimeRemaining" class="flex items-center gap-0.5 mt-0.5 text-[9px] opacity-45">
+                              <BIcon name="Clock" class="w-2.5 h-2.5" />{{ statusTimeRemaining }}</span>
                           </div>
-                          <!-- Empty own profile -->
-                          <span v-if="!profileStatus.text && !profileStatus.emoji && !profileStatus.music && isOwnProfile"
-                            class="text-[11px] text-white/80">{{ langStore.t.addStatusLabel }}</span>
-                          <span v-if="statusTimeRemaining" class="block mt-0.5 text-[9px] opacity-40">{{ statusTimeRemaining }}</span>
-                        </div>
-                        <!-- Arrow tail -->
-                        <div class="absolute -bottom-[7px] left-4 w-0 h-0 pointer-events-none"
-                          :style="{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: `8px solid ${statusBubbleColor}` }" />
-                      </button>
-                    </div>
+                          <!-- Arrow tail -->
+                          <div class="absolute -bottom-[7px] left-4 w-0 h-0 pointer-events-none"
+                            :style="{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: `8px solid ${shadeColor(statusBubbleColor, -20)}` }" />
+                        </button>
+                      </div>
+                    </Transition>
                   </div>
 
                   <!-- Action buttons (positioned to side of avatar) -->
@@ -324,7 +340,7 @@
                       <button
                         @click="toggleNotify"
                         :disabled="!relation.aFollowsB || notifyLoading"
-                        :title="!relation.aFollowsB ? 'Сначала подпишитесь' : notifyPosts ? 'Уведомления включены' : 'Уведомления выключены'"
+                        :title="!relation.aFollowsB ? langStore.t.profileFollowFirstHint : notifyPosts ? langStore.t.profileNotificationsOnHint : langStore.t.profileNotificationsOffHint"
                         class="w-9 h-9 flex items-center justify-center border rounded-xl transition-all disabled:opacity-40"
                         :class="notifyPosts && relation.aFollowsB ? 'border-brand-accent bg-brand-accent/15 text-brand-accent' : 'border-brand-border bg-brand-bg hover:border-brand-accent/60 text-white/55 hover:text-brand-accent'">
                         <span v-if="notifyLoading" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
@@ -339,7 +355,7 @@
                         <span v-if="isTogglingFollow" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         <component v-else :is="followBtnIcon" class="w-4 h-4" />
                         {{ followBtnLabel }}
-                        <span v-if="isMutual && !isTogglingFollow" class="text-[10px] font-bold ml-0.5 opacity-60">· Взаимно</span>
+                        <span v-if="isMutual && !isTogglingFollow" class="text-[10px] font-bold ml-0.5 opacity-60">· {{ langStore.t.profileMutualLabel }}</span>
                       </button>
                       <!-- Donate button -->
                       <a v-if="(viewedProfile as any).donate_url"
@@ -347,7 +363,7 @@
                         target="_blank" rel="noopener noreferrer"
                         class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/60">
                         <BIcon name="HeartHandshake" class="w-4 h-4" />
-                        Донат
+                        {{ langStore.t.profileDonateLabel }}
                       </a>
                       <!-- Bookmark user button -->
                       <button
@@ -370,16 +386,16 @@
                             :style="{ top: profileMenuPos.top, right: profileMenuPos.right }">
                             <button @click="copyProfileLink" class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/70 hover:bg-white/5 hover:text-white">
                               <BIcon :name="profileLinkCopied ? 'CheckCheck' : 'Link'" class="w-4 h-4" />
-                              {{ profileLinkCopied ? 'Скопировано!' : 'Копировать ссылку' }}
+                              {{ profileLinkCopied ? langStore.t.copiedBtn : langStore.t.profileCopyLinkLabel }}
                             </button>
                             <div class="my-1 border-t border-brand-border/50" />
                             <button @click="showProfileReportModal = true; showProfileMenu = false"
                               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-amber-400 hover:bg-amber-500/10">
-                              <BIcon name="Flag" class="w-4 h-4" /> Пожаловаться
+                              <BIcon name="Flag" class="w-4 h-4" /> {{ langStore.t.report }}
                             </button>
                             <button @click="blockProfileUser" :disabled="isBlockingProfileUser"
                               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 disabled:opacity-50">
-                              <BIcon name="UserX" class="w-4 h-4" /> {{ isBlockingProfileUser ? 'Блокировка...' : 'Отправить в ЧС' }}
+                              <BIcon name="UserX" class="w-4 h-4" /> {{ isBlockingProfileUser ? langStore.t.profileBlockingLabel : langStore.t.profileSendToBlacklistLabel }}
                             </button>
                           </div>
                         </Teleport>
@@ -396,19 +412,19 @@
                     <!-- Deceased badge -->
                     <span v-if="(viewedProfile as any)?.deceased_at"
                       class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 text-white/60 flex-shrink-0"
-                      :title="(viewedProfile as any)?.deceased_note || 'Светлая память'">
+                      :title="(viewedProfile as any)?.deceased_note || langStore.t.profileDeceasedMemoryLabel">
                       🪦
                     </span>
                     <!-- Frozen badge -->
                     <span v-if="(viewedProfile as any)?.frozen_at"
                       class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-sky-500/15 text-sky-300 flex-shrink-0"
-                      title="Аккаунт заморожен">
+                      :title="langStore.t.profileFrozenAccountBadgeTitle">
                       🧊
                     </span>
                     <!-- Verification badge -->
                     <VerificationBadge v-if="(viewedProfile as any)?.is_verified"
                       :type="(viewedProfile as any)?.verification_type"
-                      img-class="w-6 h-6 flex-shrink-0" />
+                      icon-class="w-6 h-6 flex-shrink-0" />
                     <span v-if="badgePillLabel" class="inline-flex items-center justify-center w-7 h-7 rounded-lg" :class="badgePillClass" :title="badgePillLabel">
                       <component :is="badgePillIcon" class="w-4 h-4" />
                     </span>
@@ -430,6 +446,12 @@
                       :level="(viewedProfile as any).badge_level"
                       size="sm"
                     />
+                    <!-- Registration date badge -->
+                    <span v-if="viewedProfile.created_at"
+                      class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/5 text-white/40 flex-shrink-0"
+                      :title="`${langStore.t.memberSince} ${joinDate}`">
+                      <BIcon name="Calendar" class="w-3.5 h-3.5" />
+                    </span>
                     <!-- SOON Badges -->
                     <SoonBadge
                       v-for="badge in profileSoonBadges"
@@ -457,9 +479,6 @@
                     </span>
                     <span v-if="viewedProfile.location || (viewedProfile as any).country" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/65">
                       <BIcon name="MapPin" class="w-3 h-3 text-white/40" />{{ placeStr }}
-                    </span>
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/50">
-                      <BIcon name="Calendar" class="w-3 h-3 text-white/35" />{{ joinDate }}
                     </span>
                     <a v-if="viewedProfile.website" :href="websiteHref(viewedProfile.website)" target="_blank" rel="noopener noreferrer"
                       class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-accent/30 rounded-lg text-xs font-medium text-brand-accent hover:bg-brand-accent/10 transition-colors">
@@ -633,7 +652,7 @@
 
                   <!-- Хэштеги / интересы -->
                   <div v-if="userHashtags.length" class="space-y-2">
-                    <p class="text-[10px] font-bold uppercase tracking-widest text-white/40">Частые теги</p>
+                    <p class="text-[10px] font-bold uppercase tracking-widest text-white/40">{{ langStore.t.profileFrequentTagsLabel }}</p>
                     <div class="flex flex-wrap gap-1.5">
                       <span v-for="tag in userHashtags.slice(0, 10)" :key="tag.name"
                         @click="router.push({ path: '/search', query: { q: tag.name } })"
@@ -656,7 +675,7 @@
 
                   <!-- Любимое: фиксированные категории (Еда/Животное/Музыка/Художник/Фильм) -->
                   <div v-if="hasFavorites || isOwnProfile" class="space-y-2">
-                    <p class="text-[10px] font-bold uppercase tracking-widest text-white/40">Любимое</p>
+                    <p class="text-[10px] font-bold uppercase tracking-widest text-white/40">{{ langStore.t.profileFavoritesLabel }}</p>
                     <div class="space-y-1.5">
                       <div v-for="cat in FAVORITE_CATEGORIES" :key="cat.key">
                         <template v-if="isOwnProfile">
@@ -666,7 +685,7 @@
                               type="text" maxlength="80" :placeholder="cat.placeholder"
                               class="flex-1 min-w-0 bg-brand-bg border border-brand-border rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-brand-accent/50 transition-colors" />
                             <button type="button" @click="saveFavorite(cat.key)"
-                              class="flex-shrink-0 px-3 py-1.5 rounded-xl bg-brand-accent/15 text-brand-accent text-xs font-bold hover:bg-brand-accent/25 transition-all">Ок</button>
+                              class="flex-shrink-0 px-3 py-1.5 rounded-xl bg-brand-accent/15 text-brand-accent text-xs font-bold hover:bg-brand-accent/25 transition-all">{{ langStore.t.profileOkBtn }}</button>
                             <button type="button" @click="editingFavorite = null"
                               class="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-brand-bg transition-all">
                               <BIcon name="X" class="w-3.5 h-3.5" />
@@ -725,7 +744,7 @@
                       <p class="text-sm font-semibold text-white/55">{{ langStore.t.noFursonaAdded }}</p>
                       <button v-if="isOwnProfile" @click="openEditModal('fursona')"
                         class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/30 text-brand-accent rounded-xl text-sm font-bold transition-all">
-                        <BIcon name="Plus" class="w-4 h-4" /> Создать фурсону
+                        <BIcon name="Plus" class="w-4 h-4" /> {{ langStore.t.profileCreateFursonaBtn }}
                       </button>
                     </div>
 
@@ -763,7 +782,7 @@
                             : 'background:linear-gradient(135deg,#7c3aed18 0%,transparent 100%)'">
                           <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0 flex-1">
-                              <p class="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1">Фурсона</p>
+                              <p class="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-1">{{ langStore.t.fursonaSettingsTitle }}</p>
                               <h2 class="text-2xl md:text-3xl font-extrabold text-white truncate leading-tight">
                                 {{ profileFursona.name || viewedProfile?.display_name || '—' }}
                               </h2>
@@ -810,12 +829,12 @@
                               <img :src="userStore.referenceImages[0].image_url"
                                 class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                 :class="userStore.referenceImages[0].is_nsfw && !nsfwMode ? 'blur-xl' : ''"
-                                alt="Референс фурсоны" />
+                                :alt="langStore.t.profileRefAlt" />
                               <div class="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent group-hover:from-black/60 transition-all"></div>
                               <div v-if="userStore.referenceImages[0].is_nsfw && !nsfwMode"
                                 class="absolute inset-0 flex flex-col items-center justify-center gap-2">
                                 <span class="px-3 py-1.5 rounded-xl bg-black/70 border border-rose-500/50 text-rose-400 text-xs font-bold">18+ NSFW</span>
-                                <span class="text-white/60 text-xs">Скрыто</span>
+                                <span class="text-white/60 text-xs">{{ langStore.t.hiddenLabel }}</span>
                               </div>
                               <div v-else class="absolute top-3 left-3 right-3 flex flex-wrap items-center gap-1.5">
                                 <span class="px-2.5 py-1 rounded-lg bg-black/50 border border-white/15 text-[10px] font-bold text-white/85 uppercase tracking-wider backdrop-blur-sm">Reference</span>
@@ -823,17 +842,17 @@
                                 <span v-if="userStore.referenceImages[0].artist_name"
                                   :title="userStore.referenceImages[0].artist_name"
                                   class="px-2 py-1 rounded-lg bg-black/50 border border-white/15 text-[10px] font-semibold text-white/70 backdrop-blur-sm truncate max-w-[140px]">
-                                  Арт: {{ userStore.referenceImages[0].artist_name }}
+                                  {{ langStore.t.profileArtByLabel }} {{ userStore.referenceImages[0].artist_name }}
                                 </span>
                               </div>
                               <div class="absolute bottom-3 left-4 right-4 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity">
                                 <span class="text-white text-sm font-bold">{{ profileFursona.name }}</span>
-                                <span class="px-2 py-1 rounded-lg bg-black/50 border border-white/20 text-[11px] font-bold text-white backdrop-blur-sm">Открыть</span>
+                                <span class="px-2 py-1 rounded-lg bg-black/50 border border-white/20 text-[11px] font-bold text-white backdrop-blur-sm">{{ langStore.t.openBtn }}</span>
                               </div>
                             </button>
                             <div v-else class="rounded-2xl border-2 border-dashed border-brand-border/40 flex flex-col items-center justify-center text-center opacity-60 bg-brand-bg/30" style="height:200px">
                               <BIcon name="Image" class="w-8 h-8 text-white/40 mb-2" />
-                              <p class="text-xs font-semibold text-white/40">Референс не добавлен</p>
+                              <p class="text-xs font-semibold text-white/40">{{ langStore.t.profileRefNotAdded }}</p>
                             </div>
 
                             <!-- Цвета - большие свотчи -->
@@ -878,7 +897,7 @@
                                       </svg>
                                     </div>
                                     <div>
-                                      <p class="text-sm font-semibold text-white/40">Предпочтения не указаны</p>
+                                      <p class="text-sm font-semibold text-white/40">{{ langStore.t.prefsNotSet }}</p>
                                     </div>
                                   </div>
                                   <!-- Есть хотя бы что-то → два блока -->
@@ -886,7 +905,7 @@
                                     <div class="p-3 rounded-xl border" style="background:rgba(34,197,94,0.06);border-color:rgba(34,197,94,0.2)">
                                       <p class="text-xs font-extrabold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style="color:#4ade80">
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                                        Любит
+                                        {{ langStore.t.fursonaLikesLabel }}
                                       </p>
                                       <div v-if="profileFursona.likes?.length" class="flex flex-wrap gap-1.5">
                                         <span v-for="item in profileFursona.likes" :key="`like-${item}`"
@@ -894,12 +913,12 @@
                                           {{ item }}
                                         </span>
                                       </div>
-                                      <p v-else class="text-white/35 text-xs">Не заполнено</p>
+                                      <p v-else class="text-white/35 text-xs">{{ langStore.t.fieldNotFilled }}</p>
                                     </div>
                                     <div class="p-3 rounded-xl border" style="background:rgba(239,68,68,0.06);border-color:rgba(239,68,68,0.2)">
                                       <p class="text-xs font-extrabold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style="color:#f87171">
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
-                                        Не любит
+                                        {{ langStore.t.fursonaDislikesLabel }}
                                       </p>
                                       <div v-if="profileFursona.dislikes?.length" class="flex flex-wrap gap-1.5">
                                         <span v-for="item in profileFursona.dislikes" :key="`dislike-${item}`"
@@ -907,13 +926,13 @@
                                           {{ item }}
                                         </span>
                                       </div>
-                                      <p v-else class="text-white/35 text-xs">Не заполнено</p>
+                                      <p v-else class="text-white/35 text-xs">{{ langStore.t.fieldNotFilled }}</p>
                                     </div>
                                   </div>
                                 </template>
                                 <div v-else class="flex flex-col items-center justify-center py-10 gap-2 text-center">
                                   <BIcon name="EyeOff" class="w-8 h-8 text-white/25" />
-                                  <p class="text-sm font-semibold text-white/40">Скрыто владельцем</p>
+                                  <p class="text-sm font-semibold text-white/40">{{ langStore.t.hiddenByOwner }}</p>
                                 </div>
                               </template>
 
@@ -921,12 +940,12 @@
                               <template v-else-if="fursonaSubTab === 'info'">
                                 <div class="space-y-2 text-sm">
                                   <div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-brand-card border border-brand-border">
-                                    <span class="text-white/45 text-xs font-semibold uppercase tracking-wider">Имя</span>
+                                    <span class="text-white/45 text-xs font-semibold uppercase tracking-wider">{{ langStore.t.profileNameShortLabel }}</span>
                                     <span class="font-bold text-white truncate">{{ profileFursona.name || '—' }}</span>
                                   </div>
                                   <div v-if="profileFursona.species?.length"
                                     class="flex items-start justify-between gap-3 p-3 rounded-xl bg-brand-card border border-brand-border">
-                                    <span class="text-white/45 text-xs font-semibold uppercase tracking-wider flex-shrink-0">Вид</span>
+                                    <span class="text-white/45 text-xs font-semibold uppercase tracking-wider flex-shrink-0">{{ langStore.t.profileSpeciesShortLabel }}</span>
                                     <div class="flex flex-wrap gap-1 justify-end">
                                       <span v-for="sp in profileFursona.species" :key="sp"
                                         class="px-2 py-0.5 rounded-md text-xs font-bold"
@@ -935,7 +954,7 @@
                                   </div>
                                   <div v-if="profileFursona.colors?.length"
                                     class="flex items-start justify-between gap-3 p-3 rounded-xl bg-brand-card border border-brand-border">
-                                    <span class="text-white/45 text-xs font-semibold uppercase tracking-wider flex-shrink-0 pt-0.5">Цвета</span>
+                                    <span class="text-white/45 text-xs font-semibold uppercase tracking-wider flex-shrink-0 pt-0.5">{{ langStore.t.profileColorsShortLabel }}</span>
                                     <div class="flex flex-wrap gap-1.5 justify-end">
                                       <div v-for="c in profileFursona.colors" :key="c"
                                         class="w-5 h-5 rounded-md border border-black/20 flex-shrink-0"
@@ -948,7 +967,7 @@
                               <!-- Особенности (цвета крупно) -->
                               <template v-else-if="fursonaSubTab === 'features'">
                                 <div class="space-y-3">
-                                  <p class="text-[10px] font-bold uppercase tracking-wider text-white/40">Цветовая палитра</p>
+                                  <p class="text-[10px] font-bold uppercase tracking-wider text-white/40">{{ langStore.t.colorPaletteLabel }}</p>
                                   <div v-if="profileFursona.colors?.length" class="grid grid-cols-2 gap-2">
                                     <div v-for="c in profileFursona.colors" :key="c"
                                       class="rounded-xl border border-black/15 flex items-center gap-2.5 px-3"
@@ -958,7 +977,7 @@
                                       <span class="text-xs font-bold text-white/80 font-mono">{{ c }}</span>
                                     </div>
                                   </div>
-                                  <p v-else class="text-white/35 text-xs">Цвета не указаны</p>
+                                  <p v-else class="text-white/35 text-xs">{{ langStore.t.noColorsSet }}</p>
                                 </div>
                               </template>
                             </div>
@@ -982,7 +1001,7 @@
                       <p class="text-sm font-semibold text-white/55">{{ langStore.t.fursuitNotAdded }}</p>
                       <button v-if="isOwnProfile" @click="openEditModal('fursuit')"
                         class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/30 text-brand-accent rounded-xl text-sm font-bold transition-all">
-                        <BIcon name="Plus" class="w-4 h-4" /> Добавить фурсьют
+                        <BIcon name="Plus" class="w-4 h-4" /> {{ langStore.t.profileAddFursuitBtn }}
                       </button>
                     </div>
 
@@ -990,11 +1009,11 @@
                     <template v-else>
                       <div class="flex items-center justify-between mb-1 px-1">
                         <p class="text-[10px] font-bold uppercase tracking-widest text-white/40">
-                          Фурсьюты · {{ profileFursuits.length }}
+                          {{ langStore.t.profileFursuitsCountLabel }} · {{ profileFursuits.length }}
                         </p>
                         <button v-if="isOwnProfile" @click="openEditModal('fursuit')"
                           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-accent/10 hover:bg-brand-accent/20 border border-brand-accent/30 text-brand-accent text-xs font-bold transition-all">
-                          <BIcon name="Settings" class="w-3.5 h-3.5" /> Управление
+                          <BIcon name="Settings" class="w-3.5 h-3.5" /> {{ langStore.t.profileManageFursuitsBtn }}
                         </button>
                       </div>
 
@@ -1008,7 +1027,7 @@
                             <img :src="profileFursuits[0].image_url"
                               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                               :class="profileFursuits[0].is_nsfw && !nsfwMode ? 'blur-xl scale-110' : ''"
-                              alt="Фурсьют" />
+                              :alt="langStore.t.fursuitTab" />
                             <!-- NSFW overlay -->
                             <div v-if="profileFursuits[0].is_nsfw && !nsfwMode"
                               class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40">
@@ -1037,7 +1056,7 @@
                           <div v-if="profileFursuits[0].maker_id && makerGroupCache[profileFursuits[0].maker_id]"
                             class="flex items-center gap-2 flex-wrap">
                             <span class="text-[10px] font-bold uppercase tracking-wider text-white/40 flex items-center gap-1">
-                              <BIcon name="Scissors" class="w-3 h-3" /> Мастер
+                              <BIcon name="Scissors" class="w-3 h-3" /> {{ langStore.t.verTypeMaster }}
                             </span>
                             <RouterLink
                               :to="`/groups/${makerGroupCache[profileFursuits[0].maker_id].slug}`"
@@ -1056,7 +1075,7 @@
                           <div v-if="profileFursuits[0].external_maker_links?.length" class="flex flex-wrap gap-1.5">
                             <span v-if="!profileFursuits[0].maker_id || !makerGroupCache[profileFursuits[0].maker_id]"
                               class="text-[10px] font-bold uppercase tracking-wider text-white/40 flex items-center gap-1 w-full">
-                              <BIcon name="Scissors" class="w-3 h-3" /> Мастер
+                              <BIcon name="Scissors" class="w-3 h-3" /> {{ langStore.t.verTypeMaster }}
                             </span>
                             <a v-for="link in profileFursuits[0].external_maker_links" :key="link"
                               :href="link" target="_blank" rel="noopener noreferrer"
@@ -1069,7 +1088,7 @@
 
                           <!-- Пустой placeholder -->
                           <div v-if="!profileFursuits[0].description && !profileFursuits[0].external_maker_links?.length && !(profileFursuits[0].maker_id && makerGroupCache[profileFursuits[0].maker_id])">
-                            <p class="text-xs text-white/30 italic">Описание не добавлено</p>
+                            <p class="text-xs text-white/30 italic">{{ langStore.t.profileFursuitDescNotAdded }}</p>
                           </div>
                         </div>
                       </div>
@@ -1084,7 +1103,7 @@
                               <img :src="suit.image_url"
                                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                                 :class="suit.is_nsfw && !nsfwMode ? 'blur-xl scale-110' : ''"
-                                alt="Фото фурсьюта" />
+                                :alt="langStore.t.profileFursuitPhotoAlt" />
                               <div v-if="suit.is_nsfw && !nsfwMode"
                                 class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/30">
                                 <span class="px-3 py-1.5 rounded-xl bg-black/70 border border-rose-500/50 text-rose-400 text-xs font-bold">18+ NSFW</span>
@@ -1109,7 +1128,7 @@
                             <!-- Мастер — Bloomly группа -->
                             <div v-if="suit.maker_id && makerGroupCache[suit.maker_id]" class="flex items-center gap-2 flex-wrap">
                               <span class="text-[10px] font-bold uppercase tracking-wider text-white/40 flex items-center gap-1">
-                                <BIcon name="Scissors" class="w-3 h-3" /> Мастер
+                                <BIcon name="Scissors" class="w-3 h-3" /> {{ langStore.t.verTypeMaster }}
                               </span>
                               <RouterLink
                                 :to="`/groups/${makerGroupCache[suit.maker_id].slug}`"
@@ -1128,7 +1147,7 @@
                             <div v-if="suit.external_maker_links?.length" class="space-y-1">
                               <p v-if="!suit.maker_id || !makerGroupCache[suit.maker_id]"
                                 class="text-[10px] font-bold uppercase tracking-wider text-white/40 flex items-center gap-1.5">
-                                <BIcon name="Scissors" class="w-3 h-3" /> Мастер
+                                <BIcon name="Scissors" class="w-3 h-3" /> {{ langStore.t.verTypeMaster }}
                               </p>
                               <div class="flex flex-wrap gap-1.5">
                                 <a v-for="link in suit.external_maker_links" :key="link"
@@ -1142,7 +1161,7 @@
                             </div>
 
                             <div v-if="!suit.external_maker_links?.length && !suit.description && !(suit.maker_id && makerGroupCache[suit.maker_id])" class="py-2">
-                              <p class="text-xs text-white/30 italic">Описание не добавлено</p>
+                              <p class="text-xs text-white/30 italic">{{ langStore.t.profileFursuitDescNotAdded }}</p>
                             </div>
                           </div>
                         </div>
@@ -1189,7 +1208,24 @@
                       <img :src="ownAvatarSrc || '/icons/badges/NN.jpg'" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover" @error="onAvatarError" />
                     </div>
                     <div class="flex-1 min-w-0">
-                      <MentionTextarea v-model="newPostContent" placeholder="Что у вас нового? Используйте @ для упоминаний" minHeight="90px" />
+                      <MentionTextarea v-model="newPostContent" :placeholder="langStore.t.profileWhatsNewPlaceholder" minHeight="90px" />
+                    </div>
+                    <div class="relative flex-shrink-0 mt-0.5">
+                      <button
+                        @click.stop="showProfileScheduleMenu = !showProfileScheduleMenu"
+                        :disabled="(!newPostContent.trim() && newPostMediaUrls.length === 0) || isSchedulingProfilePost"
+                        class="w-10 h-10 rounded-full flex items-center justify-center border border-brand-border text-white/60 hover:bg-brand-bg hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                        title="Отложить публикацию"
+                      >
+                        <BIcon v-if="isSchedulingProfilePost" name="Loader2" class="w-4.5 h-4.5 animate-spin" />
+                        <BIcon v-else name="CalendarClock" class="w-4.5 h-4.5" />
+                      </button>
+                      <PostScheduleMenu
+                        v-if="showProfileScheduleMenu"
+                        @close="showProfileScheduleMenu = false"
+                        @draft="saveProfileScheduledPost({})"
+                        @schedule="(p) => saveProfileScheduledPost(p)"
+                      />
                     </div>
                     <button @click="createPost" :disabled="(!newPostContent.trim() && newPostMediaUrls.length === 0) || isCreatingPost"
                       class="w-10 h-10 rounded-full flex items-center justify-center bg-brand-accent text-white hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-accent/25 flex-shrink-0 mt-0.5">
@@ -1213,7 +1249,7 @@
                   <div class="flex items-center gap-2 flex-wrap">
                     <button @click="profileMediaUploadRef?.openPicker()"
                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white/55 hover:text-white hover:bg-brand-bg border border-transparent hover:border-brand-border transition-all">
-                      <BIcon name="ImagePlus" class="w-4 h-4" /> Медиа
+                      <BIcon name="ImagePlus" class="w-4 h-4" /> {{ langStore.t.mediaTab }}
                     </button>
                     <!-- Tag input -->
                     <div class="relative inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-transparent hover:border-brand-border hover:bg-brand-bg transition-all">
@@ -1222,7 +1258,7 @@
                         @input="fetchTagSuggestions(newPostTagInput)"
                         @keydown.enter.prevent="addProfileTag"
                         @keydown.escape="clearTagSuggestions"
-                        placeholder="тег + Enter"
+                        :placeholder="langStore.t.profileTagPlusEnterPlaceholder"
                         class="bg-transparent text-xs text-white placeholder-brand-muted outline-none w-24" />
 
                       <!-- Tag suggestions, ranked by usage -->
@@ -1238,7 +1274,7 @@
                     </div>
                     <button @click="newPostIsNsfw = !newPostIsNsfw"
                       :disabled="!isNsfwAllowed"
-                      :title="!isNsfwAllowed ? 'Недоступно до 18 лет' : ''"
+                      :title="!isNsfwAllowed ? langStore.t.profileNsfwLockedTooltip : ''"
                       class="px-3 py-2 rounded-xl text-xs font-bold border transition-all"
                       :class="!isNsfwAllowed ? 'opacity-30 cursor-not-allowed border-transparent text-white/55' : newPostIsNsfw ? 'border-brand-error/60 text-brand-error bg-brand-error/10' : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'">
                       NSFW
@@ -1259,7 +1295,7 @@
                         class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all"
                         :class="newPostVisibility !== 'public' ? 'border-brand-accent/50 text-brand-accent bg-brand-accent/10' : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'">
                         <BIcon :name="newPostVisibility === 'subscriber_only' ? 'Users' : newPostVisibility === 'paid' ? 'DollarSign' : 'Globe2'" class="w-3.5 h-3.5" />
-                        {{ newPostVisibility === 'subscriber_only' ? 'Только Подписчикам' : newPostVisibility === 'paid' ? 'Платный пост' : 'Видно всем' }}
+                        {{ newPostVisibility === 'subscriber_only' ? langStore.t.profileVisibilitySubscriberOnly : newPostVisibility === 'paid' ? langStore.t.profileVisibilityPaid : langStore.t.profileVisibilityPublic }}
                         <BIcon name="ChevronDown" class="w-3 h-3 opacity-60" />
                       </button>
                       <Transition name="slide">
@@ -1268,24 +1304,24 @@
                           <button @click="newPostVisibility = 'public'; showProfileVisibilityMenu = false"
                             class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
                             :class="newPostVisibility === 'public' ? 'text-brand-accent' : 'text-white'">
-                            <BIcon name="Globe2" class="w-4 h-4 flex-shrink-0" /> Видно всем
+                            <BIcon name="Globe2" class="w-4 h-4 flex-shrink-0" /> {{ langStore.t.profileVisibilityPublic }}
                             <BIcon v-if="newPostVisibility === 'public'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
                           </button>
                           <button @click="newPostVisibility = 'subscriber_only'; showProfileVisibilityMenu = false"
                             class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
                             :class="newPostVisibility === 'subscriber_only' ? 'text-brand-accent' : 'text-white'">
-                            <BIcon name="Users" class="w-4 h-4 flex-shrink-0" /> Только Подписчикам
+                            <BIcon name="Users" class="w-4 h-4 flex-shrink-0" /> {{ langStore.t.profileVisibilitySubscriberOnly }}
                             <BIcon v-if="newPostVisibility === 'subscriber_only'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
                           </button>
-                          <button disabled title="Скоро будет доступно"
+                          <button disabled :title="langStore.t.payModalAltComingSoon"
                             class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white/30 cursor-not-allowed">
-                            <BIcon name="DollarSign" class="w-4 h-4 flex-shrink-0" /> Платный пост
-                            <span class="ml-auto text-[10px] uppercase tracking-wide">скоро</span>
+                            <BIcon name="DollarSign" class="w-4 h-4 flex-shrink-0" /> {{ langStore.t.profileVisibilityPaid }}
+                            <span class="ml-auto text-[10px] uppercase tracking-wide">{{ langStore.t.profileComingSoonBadge }}</span>
                           </button>
                         </div>
                       </Transition>
                     </div>
-                    <button @click="showPostForm = false; newPostContent = ''; newPostMediaUrls = []; newPostTags = []; newPostTagInput = ''; newPostVisibility = 'public'; newPostIsAiGenerated = false; profileMediaUploadRef?.clearAll()"
+                    <button @click="showPostForm = false; showProfileScheduleMenu = false; newPostContent = ''; newPostMediaUrls = []; newPostTags = []; newPostTagInput = ''; newPostVisibility = 'public'; newPostIsAiGenerated = false; profileMediaUploadRef?.clearAll()"
                       class="text-xs font-semibold text-white/55 hover:text-white transition-all">{{ langStore.t.cancel }}</button>
                   </div>
                 </div>
@@ -1321,7 +1357,7 @@
                     <template v-else-if="activeContentTab === 'posts' && tabPosts.filter((p: any) => p.id !== viewedProfile.pinned_post_id).length === 0 && !pinnedPost">
                       <template v-if="repawsFallback.length">
                         <div class="flex items-center gap-2 text-xs text-white/55 font-semibold mb-1 px-1">
-                          <BIcon name="Repeat2" class="w-3.5 h-3.5 text-brand-accent" /> Постов нет — показываем RePaws
+                          <BIcon name="Repeat2" class="w-3.5 h-3.5 text-brand-accent" /> {{ langStore.t.profileNoPostsShowingRepaws }}
                         </div>
                         <PostCard v-for="post in repawsFallback" :key="post.id"
                           :post="post" :is-own-profile="isOwnProfile"
@@ -1339,7 +1375,7 @@
                         <p class="font-semibold text-sm mb-4">{{ langStore.t.noPostsLabel }}</p>
                         <button v-if="isOwnProfile" @click="showPostForm = true; $nextTick(() => window.scrollTo({top: 0, behavior: 'smooth'}))"
                           class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-accent hover:bg-brand-accent-plus text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-brand-accent/20">
-                          <BIcon name="Plus" class="w-4 h-4" /> Создать первый пост
+                          <BIcon name="Plus" class="w-4 h-4" /> {{ langStore.t.profileCreateFirstPostBtn }}
                         </button>
                       </div>
                     </template>
@@ -1347,7 +1383,7 @@
                     <!-- Archive empty -->
                     <div v-else-if="activeContentTab === 'archive' && tabPosts.length === 0" class="py-14 text-center text-white/55">
                       <BIcon name="Archive" class="w-10 h-10 mx-auto mb-3 opacity-30" />
-                      <p class="font-semibold text-sm">Архив пуст</p>
+                      <p class="font-semibold text-sm">{{ langStore.t.profileArchiveEmptyLabel }}</p>
                     </div>
 
                     <!-- Posts / repaws / archive list -->
@@ -1372,14 +1408,14 @@
                       <button v-for="f in (['all','photo','video'] as const)" :key="f" @click="mediaFilter = f"
                         class="px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all"
                         :class="mediaFilter === f ? 'bg-brand-accent border-brand-accent text-white' : 'border-brand-border text-white/55 hover:text-white'">
-                        {{ f === 'all' ? `Все · ${filteredMediaPosts.length}` : f === 'photo' ? `Фото · ${tabPosts.filter((p: any) => isImage(p.media_urls?.[0] ?? '')).length}` : `Видео · ${tabPosts.filter((p: any) => !isImage(p.media_urls?.[0] ?? '')).length}` }}
+                        {{ f === 'all' ? `${langStore.t.tabAll} · ${filteredMediaPosts.length}` : f === 'photo' ? `${langStore.t.feedPhoto} · ${tabPosts.filter((p: any) => isImage(p.media_urls?.[0] ?? '')).length}` : `${langStore.t.profileMediaFilterVideoLabel} · ${tabPosts.filter((p: any) => !isImage(p.media_urls?.[0] ?? '')).length}` }}
                       </button>
                       <div class="flex-1" />
                       <button @click.stop="mediaAlbumView = !mediaAlbumView"
                         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all"
                         :class="mediaAlbumView ? 'bg-brand-accent/15 border-brand-accent/60 text-brand-accent' : 'border-brand-border text-white/55 hover:text-white'">
                         <BIcon name="FolderOpen" class="w-3.5 h-3.5" />
-                        Альбомы
+                        {{ langStore.t.profileAlbumsLabel }}
                       </button>
                     </div>
 
@@ -1402,7 +1438,7 @@
                         <div class="grid grid-cols-2 gap-3">
                           <!-- Специальные альбомы (Фурсона / Фурсьют) -->
                           <div v-for="sp in specialAlbums" :key="sp.id"
-                            @click.stop="openAlbum = sp"
+                            @click.stop="openAlbumOrLightbox(sp)"
                             class="relative rounded-2xl overflow-hidden cursor-pointer group aspect-[4/3] border border-brand-border hover:border-brand-accent/60 transition-all shadow-md">
                             <img v-if="sp.urls[0] && isImage(sp.urls[0].url)" :src="sp.urls[0].url"
                               class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
@@ -1415,7 +1451,7 @@
                                 <span class="text-sm leading-none">{{ sp.emoji }}</span>
                                 <p class="text-xs font-bold text-white">{{ sp.label }}</p>
                               </div>
-                              <p class="text-[10px] text-white/55 font-semibold">{{ sp.urls.length }} фото</p>
+                              <p class="text-[10px] text-white/55 font-semibold">{{ sp.urls.length }} {{ langStore.t.profilePhotosCountUnit }}</p>
                             </div>
                             <!-- Hover icon -->
                             <div class="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
@@ -1424,7 +1460,7 @@
                           </div>
                           <!-- Альбомы по месяцам -->
                           <div v-for="album in mediaAlbums" :key="album.label"
-                            @click.stop="openAlbum = { ...album, emoji: undefined }"
+                            @click.stop="openAlbumOrLightbox({ ...album, emoji: undefined })"
                             class="relative rounded-2xl overflow-hidden cursor-pointer group aspect-[4/3] border border-brand-border hover:border-brand-accent/60 transition-all shadow-md">
                             <!-- Мозаика из первых 4 фото -->
                             <div v-if="album.urls.length >= 4" class="grid grid-cols-2 gap-0.5 w-full h-full">
@@ -1445,7 +1481,7 @@
                                 <BIcon name="CalendarDays" class="w-3 h-3 text-brand-accent/80" />
                                 <p class="text-xs font-bold text-white">{{ album.label }}</p>
                               </div>
-                              <p class="text-[10px] text-white/55 font-semibold">{{ album.urls.length }} фото</p>
+                              <p class="text-[10px] text-white/55 font-semibold">{{ album.urls.length }} {{ langStore.t.profilePhotosCountUnit }}</p>
                             </div>
                             <!-- Hover icon -->
                             <div class="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
@@ -1485,16 +1521,16 @@
                             <button @click.stop="setMediaLabel(post.id, 'fursona')"
                               class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-bold text-white/80 hover:bg-brand-accent/15 hover:text-brand-accent transition-all"
                               :class="mediaPostLabels[post.id] === 'fursona' ? 'bg-brand-accent/15 text-brand-accent' : ''">
-                              🐾 Фурсона
+                              🐾 {{ langStore.t.fursonaTab }}
                             </button>
                             <button @click.stop="setMediaLabel(post.id, 'fursuit')"
                               class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-bold text-white/80 hover:bg-brand-accent/15 hover:text-brand-accent transition-all"
                               :class="mediaPostLabels[post.id] === 'fursuit' ? 'bg-brand-accent/15 text-brand-accent' : ''">
-                              🦊 Фурсьют
+                              🦊 {{ langStore.t.fursuitTab }}
                             </button>
                             <button v-if="mediaPostLabels[post.id]" @click.stop="setMediaLabel(post.id, null)"
                               class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-bold text-white/40 hover:text-rose-400 hover:bg-rose-500/10 transition-all">
-                              <BIcon name="X" class="w-3 h-3" /> Убрать
+                              <BIcon name="X" class="w-3 h-3" /> {{ langStore.t.removeLabelOrder }}
                             </button>
                           </div>
                           <div class="absolute inset-0 bg-black/0 group-hover:bg-black/45 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
@@ -1512,12 +1548,12 @@
                     </div>
                     <div v-else-if="friendsListRestricted" class="py-14 text-center text-white/55">
                       <BIcon name="Lock" class="w-10 h-10 mx-auto mb-3 opacity-30" />
-                      <p class="font-semibold text-sm mb-1">Список скрыт настройками приватности</p>
+                      <p class="font-semibold text-sm mb-1">{{ langStore.t.profileListHiddenByPrivacy }}</p>
                     </div>
                     <div v-else-if="!followers.length" class="py-14 text-center text-white/55">
                       <BIcon name="Users" class="w-10 h-10 mx-auto mb-3 opacity-30" />
                       <p class="font-semibold text-sm mb-1">{{ langStore.t.noFollowersLabel }}</p>
-                      <p class="text-xs opacity-70">Здесь появятся те, кто подписался</p>
+                      <p class="text-xs opacity-70">{{ langStore.t.profileNoFollowersHint }}</p>
                     </div>
                     <div v-else class="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       <router-link v-for="follower in followers" :key="follower.id" :to="'/profile/' + follower.username"
@@ -1538,12 +1574,12 @@
                     </div>
                     <div v-else-if="friendsListRestricted" class="py-14 text-center text-white/55">
                       <BIcon name="Lock" class="w-10 h-10 mx-auto mb-3 opacity-30" />
-                      <p class="font-semibold text-sm mb-1">Список скрыт настройками приватности</p>
+                      <p class="font-semibold text-sm mb-1">{{ langStore.t.profileListHiddenByPrivacy }}</p>
                     </div>
                     <div v-else-if="!following.length" class="py-14 text-center text-white/55">
                       <BIcon name="UserPlus" class="w-10 h-10 mx-auto mb-3 opacity-30" />
-                      <p class="font-semibold text-sm mb-1">Нет подписок</p>
-                      <p class="text-xs opacity-70">Пользователь пока ни на кого не подписан</p>
+                      <p class="font-semibold text-sm mb-1">{{ langStore.t.emptyFollowing }}</p>
+                      <p class="text-xs opacity-70">{{ langStore.t.profileNoFollowingHint }}</p>
                     </div>
                     <div v-else class="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       <router-link v-for="user in following" :key="user.id" :to="'/profile/' + user.username"
@@ -1564,8 +1600,8 @@
                     </div>
                     <div v-else-if="!mutualGroups.length" class="py-14 text-center text-white/55">
                       <BIcon name="Users" class="w-10 h-10 mx-auto mb-3 opacity-30" />
-                      <p class="font-semibold text-sm mb-1">Нет общих групп</p>
-                      <p class="text-xs opacity-70">Вы не состоите ни в одной общей группе</p>
+                      <p class="font-semibold text-sm mb-1">{{ langStore.t.profileNoMutualGroupsLabel }}</p>
+                      <p class="text-xs opacity-70">{{ langStore.t.profileNoMutualGroupsHint }}</p>
                     </div>
                     <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <router-link v-for="group in mutualGroups" :key="group.id" :to="'/groups/' + group.slug"
@@ -1576,7 +1612,7 @@
                         </div>
                         <div class="min-w-0">
                           <p class="text-xs font-bold text-white truncate group-hover:text-brand-accent transition-colors">{{ group.name }}</p>
-                          <p class="text-[10px] text-white/55">{{ group.members_count }} участников</p>
+                          <p class="text-[10px] text-white/55">{{ group.members_count }} {{ langStore.t.membersUnit }}</p>
                         </div>
                       </router-link>
                     </div>
@@ -1618,7 +1654,7 @@
                       </div>
                       <div v-else class="py-14 text-center text-white/55">
                         <BIcon name="BarChart3" class="w-10 h-10 mx-auto mb-3 opacity-30" />
-                        <p class="font-semibold text-sm mb-1">Пока нет публикаций</p>
+                        <p class="font-semibold text-sm mb-1">{{ langStore.t.profileNoPublicationsYet }}</p>
                       </div>
                     </div>
                   </div>
@@ -1689,27 +1725,30 @@
               </div>
 
               <!-- Status block -->
-              <div v-if="isOwnProfile || profileStatus.text" class="space-y-2">
+              <div v-if="isOwnProfile || hasActiveStatus" class="space-y-2">
 
                 <!-- Status -->
-                <div v-if="isOwnProfile || profileStatus.text"
-                  class="border rounded-2xl transition-all overflow-hidden"
-                  :class="isOwnProfile ? 'cursor-pointer group' : ''"
-                  :style="{ backgroundColor: `${statusBubbleColor}18`, borderColor: `${statusBubbleColor}50` }"
+                <div class="relative border rounded-2xl transition-all overflow-hidden"
+                  :class="isOwnProfile ? 'cursor-pointer group hover:shadow-lg' : ''"
+                  :style="{ backgroundColor: `${statusBubbleColor}14`, borderColor: `${statusBubbleColor}45`, boxShadow: hasActiveStatus ? `0 0 0 1px ${statusBubbleColor}20` : 'none' }"
                   @click="isOwnProfile ? openStatusEdit() : null">
                   <div class="flex items-center gap-3 px-4 py-3">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
-                      :style="{ backgroundColor: `${statusBubbleColor}25`, border: `1px solid ${statusBubbleColor}50` }">
+                    <div class="relative w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-base overflow-hidden"
+                      :style="{ background: hasActiveStatus ? statusBubbleGradient : `${statusBubbleColor}20`, border: `1px solid ${statusBubbleColor}50` }">
                       <span v-if="profileStatus.emoji">{{ profileStatus.emoji }}</span>
+                      <BIcon v-else-if="hasActiveStatus" name="Music" class="w-4 h-4 text-white/90" />
                       <BIcon v-else name="Smile" class="w-4 h-4 text-white/30" />
+                      <span v-if="hasActiveStatus" class="absolute inset-0 rounded-xl status-icon-glow" />
                     </div>
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-1.5">
-                        <p class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Статус</p>
-                        <span v-if="statusTimeRemaining" class="text-[9px] px-1.5 py-0.5 rounded-full bg-brand-bg text-white/35 border border-brand-border">{{ statusTimeRemaining }}</span>
+                        <p class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.profileStatusLabel }}</p>
+                        <span v-if="statusTimeRemaining" class="flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-brand-bg text-white/35 border border-brand-border">
+                          <BIcon name="Clock" class="w-2.5 h-2.5" />{{ statusTimeRemaining }}</span>
                       </div>
                       <p v-if="profileStatus.text" class="text-sm font-semibold text-white truncate">{{ profileStatus.text }}</p>
-                      <p v-else-if="isOwnProfile" class="text-sm text-white/30">Добавить статус…</p>
+                      <p v-else-if="profileStatus.music" class="text-sm font-semibold text-white truncate">{{ profileStatus.music.artist }} — {{ profileStatus.music.title }}</p>
+                      <p v-else-if="isOwnProfile" class="text-sm text-white/30">{{ langStore.t.profileAddStatusPlaceholderLabel }}</p>
                     </div>
                     <button v-if="isOwnProfile"
                       class="w-7 h-7 flex items-center justify-center rounded-lg text-white/25 group-hover:text-brand-accent transition-colors flex-shrink-0">
@@ -1717,13 +1756,17 @@
                     </button>
                   </div>
                   <!-- Music attached to status -->
-                  <div v-if="profileStatus.music" class="flex items-center gap-2.5 px-4 py-2.5 border-t border-brand-border/50 bg-brand-bg/30">
+                  <div v-if="profileStatus.music && profileStatus.text" class="flex items-center gap-2.5 px-4 py-2.5 border-t border-brand-border/50 bg-brand-bg/30">
                     <img :src="profileStatus.music.artworkUrl" class="w-8 h-8 rounded-lg object-cover flex-shrink-0 shadow" />
                     <div class="min-w-0 flex-1">
                       <p class="text-[10px] font-bold text-white/60 truncate">{{ profileStatus.music.title }}</p>
                       <p class="text-[9px] text-white/35 truncate">{{ profileStatus.music.artist }}</p>
                     </div>
-                    <BIcon name="Music" class="w-3.5 h-3.5 text-brand-accent/60 flex-shrink-0" />
+                    <div class="flex items-end gap-[2px] h-3 flex-shrink-0">
+                      <span v-for="(h, i) in [50,100,65,85]" :key="i"
+                        class="w-[3px] rounded-full note-bar-profile"
+                        :style="`height:${h}%; animation-delay:${i*0.08}s; background:${statusBubbleColor}`" />
+                    </div>
                   </div>
                 </div>
 
@@ -1786,7 +1829,7 @@
                     class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all group">
                     <BIcon name="Link" class="w-4 h-4 text-brand-accent/60 flex-shrink-0" />
                     <div class="min-w-0">
-                      <p class="text-[10px] text-white/55 uppercase tracking-wide">Сайт</p>
+                      <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.profileWebsiteShortLabel }}</p>
                       <p class="text-xs text-brand-accent font-medium truncate group-hover:underline">{{ viewedProfile.website.replace(/^https?:\/\//, '') }}</p>
                     </div>
                   </a>
@@ -1825,7 +1868,7 @@
                   <p class="text-xs text-white/35">{{ langStore.t.noSocialsAdded }}</p>
                   <button @click="openEditModal('socials')"
                     class="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-brand-accent/10 hover:bg-brand-accent/20 text-brand-accent border border-brand-accent/30 rounded-xl transition-all">
-                    <BIcon name="Plus" class="w-3 h-3" /> Добавить
+                    <BIcon name="Plus" class="w-3 h-3" /> {{ langStore.t.addButton }}
                   </button>
                 </div>
               </div>
@@ -1835,7 +1878,7 @@
                 <button @click="showBadgesModal = true" class="w-full px-4 pt-3.5 pb-2 flex items-center justify-between hover:bg-brand-bg/30 transition-colors">
                   <div class="flex items-center gap-2">
                     <BIcon name="Award" class="w-3.5 h-3.5 text-yellow-400" />
-                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Значки</p>
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.profileBadgesTitle }}</p>
                   </div>
                   <div class="flex items-center gap-1.5">
                     <span class="text-[11px] font-bold bg-brand-accent/15 text-brand-accent px-2 py-0.5 rounded-full">{{ achievementBadges.length }}</span>
@@ -1845,9 +1888,8 @@
                 <div class="px-2 pb-2 space-y-0.5">
                   <div v-for="badge in achievementBadges" :key="badge.key"
                     class="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-brand-bg/60 transition-all group cursor-default">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden transition-transform group-hover:scale-110" :class="!badge.iconImg && badge.iconBg">
-                      <img v-if="badge.iconImg" :src="badge.iconImg" class="w-full h-full object-cover" />
-                      <component v-else :is="badge.iconComp" class="w-3.5 h-3.5" :class="badge.iconColor" />
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden transition-transform group-hover:scale-110" :class="badge.iconBg">
+                      <component :is="badge.iconComp" class="w-3.5 h-3.5" :class="badge.iconColor" />
                     </div>
                     <div class="min-w-0">
                       <p class="text-xs font-bold text-white leading-tight truncate">{{ badge.label }}</p>
@@ -1903,7 +1945,7 @@
               @click="restoreGalleryAvatar"
               class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-accent/20 border border-brand-accent/40 text-brand-accent text-sm font-semibold hover:bg-brand-accent/30 transition-all">
               <BIcon name="RotateCcw" class="w-4 h-4" />
-              Сделать текущей
+              {{ langStore.t.profileMakeCurrentBtn }}
             </button>
             <span v-if="avatarGalleryRestoring" class="w-5 h-5 border-2 border-white/20 border-t-white/70 rounded-full animate-spin" />
             <!-- Delete button (owner only, not on current avatar) -->
@@ -1912,7 +1954,7 @@
               @click="deleteGalleryAvatar"
               class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-sm font-semibold hover:bg-red-500/25 transition-all">
               <BIcon name="Trash2" class="w-4 h-4" />
-              Удалить
+              {{ langStore.t.deleteBtn }}
             </button>
             <button @click="showAvatarViewer = false"
               class="w-9 h-9 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all">
@@ -1935,7 +1977,7 @@
           <div class="w-full h-full flex items-center justify-center">
             <div v-if="avatarGalleryLoading" class="flex flex-col items-center gap-3">
               <span class="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
-              <span class="text-white/40 text-sm">Загрузка...</span>
+              <span class="text-white/40 text-sm">{{ langStore.t.loadingBtn }}</span>
             </div>
             <video
               v-else-if="avatarGallery[avatarGalleryIndex]?.video_url"
@@ -1981,7 +2023,7 @@
           </div>
           <!-- Date label -->
           <p v-if="avatarGallery[avatarGalleryIndex]" class="text-center text-white/35 text-xs mt-2">
-            <span v-if="avatarGalleryIndex === 0">Текущая аватарка</span>
+            <span v-if="avatarGalleryIndex === 0">{{ langStore.t.profileCurrentAvatarLabel }}</span>
             <span v-else>{{ new Date(avatarGallery[avatarGalleryIndex].created_at).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'long', year: 'numeric' }) }}</span>
           </p>
         </div>
@@ -2034,7 +2076,7 @@
       <div v-if="showFursonaRefViewer" class="fixed inset-0 z-[610] bg-black/92 flex items-center justify-center p-4" @click.self="showFursonaRefViewer = false">
         <div class="w-full max-w-6xl bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden">
           <div class="flex items-center justify-between px-5 py-3 border-b border-brand-border bg-gradient-to-r from-brand-bg to-brand-card">
-            <h3 class="text-white font-bold text-lg truncate">Референс {{ profileFursona?.name || viewedProfile?.display_name }}</h3>
+            <h3 class="text-white font-bold text-lg truncate">{{ langStore.t.profileReferenceOfLabel }} {{ profileFursona?.name || viewedProfile?.display_name }}</h3>
             <button @click="showFursonaRefViewer = false"
               class="w-9 h-9 flex items-center justify-center rounded-xl bg-brand-bg hover:bg-brand-border text-white/70 hover:text-white transition-all">
               <BIcon name="X" class="w-4 h-4" />
@@ -2042,7 +2084,7 @@
           </div>
           <div class="p-4 space-y-4">
             <div class="rounded-2xl overflow-hidden border border-brand-border bg-brand-bg">
-              <img :src="activeFursonaRef" class="w-full max-h-[70vh] object-contain" alt="Референс фурсоны" />
+              <img :src="activeFursonaRef" class="w-full max-h-[70vh] object-contain" :alt="langStore.t.profileRefAlt" />
             </div>
             <div class="flex flex-wrap gap-2">
               <span v-if="primarySpeciesLabel" class="px-3 py-1.5 rounded-lg bg-brand-bg border border-brand-border text-xs font-semibold text-white/80">{{ primarySpeciesLabel }}</span>
@@ -2059,7 +2101,7 @@
               <button v-for="img in fursonaRefImages" :key="`modal-thumb-${img}`" @click="selectFursonaRef(img)"
                 class="w-16 h-16 rounded-xl overflow-hidden border flex-shrink-0 transition-all"
                 :class="activeFursonaRef === img ? 'border-brand-accent' : 'border-brand-border hover:border-white/30'">
-                <img :src="img" class="w-full h-full object-cover" alt="Миниатюра референса" />
+                <img :src="img" class="w-full h-full object-cover" :alt="langStore.t.profileRefThumbnailAlt" />
               </button>
             </div>
           </div>
@@ -2093,8 +2135,8 @@
             </button>
           </div>
           <div class="overflow-y-auto flex-1 p-3 space-y-1.5">
-            <div v-if="friendsListRestricted" class="py-12 text-center text-white/35 text-sm">Список скрыт настройками приватности</div>
-            <div v-else-if="!followers.length" class="py-12 text-center text-white/35 text-sm">Нет подписчиков</div>
+            <div v-if="friendsListRestricted" class="py-12 text-center text-white/35 text-sm">{{ langStore.t.profileListHiddenByPrivacy }}</div>
+            <div v-else-if="!followers.length" class="py-12 text-center text-white/35 text-sm">{{ langStore.t.noFollowersLabel }}</div>
             <router-link v-for="u in followers" :key="u.id" :to="'/profile/' + u.username"
               @click="showFollowersModal = false"
               class="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-brand-bg border border-transparent hover:border-brand-border transition-all group">
@@ -2127,8 +2169,8 @@
             <div v-if="followingLoading" class="py-12 flex justify-center">
               <span class="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
             </div>
-            <div v-else-if="friendsListRestricted" class="py-12 text-center text-white/35 text-sm">Список скрыт настройками приватности</div>
-            <div v-else-if="!following.length" class="py-12 text-center text-white/35 text-sm">Нет подписок</div>
+            <div v-else-if="friendsListRestricted" class="py-12 text-center text-white/35 text-sm">{{ langStore.t.profileListHiddenByPrivacy }}</div>
+            <div v-else-if="!following.length" class="py-12 text-center text-white/35 text-sm">{{ langStore.t.emptyFollowing }}</div>
             <router-link v-for="u in following" :key="u.id" :to="'/profile/' + u.username"
               @click="showFollowingModal = false"
               class="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-brand-bg border border-transparent hover:border-brand-border transition-all group">
@@ -2159,12 +2201,12 @@
           </div>
           <div class="overflow-y-auto flex-1 p-3 space-y-1.5">
             <div v-if="!userGroupsList.length" class="py-12 text-center text-white/35 text-sm">
-              {{ userGroupsPinnedOnly ? 'Нет закреплённых групп' : 'Нет групп' }}
+              {{ userGroupsPinnedOnly ? langStore.t.profileNoPinnedGroupsLabel : langStore.t.profileNoGroupsLabel }}
             </div>
             <template v-else>
               <!-- pinned section header for non-friend viewers -->
               <p v-if="userGroupsPinnedOnly && userGroupsList.length" class="text-[10px] font-bold text-amber-400/70 uppercase tracking-wider px-2 pb-1 flex items-center gap-1">
-                <BIcon name="Pin" class="w-3 h-3" /> Закреплённые
+                <BIcon name="Pin" class="w-3 h-3" /> {{ langStore.t.profilePinnedSectionLabel }}
               </p>
               <div v-for="group in userGroupsList" :key="group.id"
                 class="flex items-center gap-3 px-3 py-2.5 rounded-2xl border transition-all group/item"
@@ -2184,14 +2226,14 @@
                   </div>
                   <div class="min-w-0">
                     <p class="text-sm font-bold truncate group-hover/item:text-brand-accent transition-colors" :class="group.is_pinned ? 'text-amber-100' : 'text-white'">{{ group.name }}</p>
-                    <p class="text-[10px] text-white/45">{{ group.members_count }} участников</p>
+                    <p class="text-[10px] text-white/45">{{ group.members_count }} {{ langStore.t.membersUnit }}</p>
                   </div>
                 </router-link>
                 <!-- pin toggle (own profile only) -->
                 <div v-if="isOwnProfile" class="relative flex-shrink-0">
                   <button
                     @click.stop="togglePinGroup(group.id)"
-                    :title="group.is_pinned ? 'Открепить' : 'Закрепить'"
+                    :title="group.is_pinned ? langStore.t.profileUnpinBtn : langStore.t.profilePinBtn"
                     class="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
                     :class="group.is_pinned ? 'text-amber-400 hover:text-amber-300' : 'text-white/25 hover:text-amber-400'">
                     <BIcon :name="group.is_pinned ? 'PinOff' : 'Pin'" class="w-3.5 h-3.5" />
@@ -2211,7 +2253,7 @@
 
           <!-- Header -->
           <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0">
-            <h3 class="font-bold text-white text-base">Статус</h3>
+            <h3 class="font-bold text-white text-base">{{ langStore.t.profileStatusLabel }}</h3>
             <button @click="showStatusEdit = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
               <BIcon name="X" class="w-4 h-4" />
             </button>
@@ -2223,8 +2265,8 @@
               <!-- Preview badge — IG Notes style -->
               <div class="flex justify-center pt-2">
                 <div class="relative">
-                  <div class="px-3 py-2 rounded-[18px] text-white leading-snug shadow-2xl max-w-[130px]"
-                    :style="{ backgroundColor: statusEditBubbleColor }">
+                  <div class="px-3 py-2 rounded-[18px] text-white leading-snug max-w-[130px]"
+                    :style="{ background: statusEditBubbleGradient, boxShadow: `0 4px 18px -2px ${statusEditBubbleColor}80, 0 2px 6px rgba(0,0,0,0.35)` }">
                     <!-- music preview -->
                     <template v-if="statusEditMusic">
                       <div class="flex items-center gap-1.5 mb-0.5">
@@ -2242,7 +2284,7 @@
                     <template v-else>
                       <div class="flex gap-1 items-start">
                         <span v-if="statusEditEmoji" class="text-sm flex-shrink-0 leading-tight">{{ statusEditEmoji }}</span>
-                        <span class="text-[11px] font-semibold line-clamp-3 break-words leading-snug">{{ statusEditText || 'Предпросмотр…' }}</span>
+                        <span class="text-[11px] font-semibold line-clamp-3 break-words leading-snug">{{ statusEditText || langStore.t.profilePreviewEllipsisLabel }}</span>
                       </div>
                     </template>
                     <div v-if="statusEditDuration > 0" class="mt-0.5 text-[9px] opacity-40">
@@ -2251,7 +2293,7 @@
                   </div>
                   <!-- Arrow -->
                   <div class="absolute -bottom-[7px] left-4 w-0 h-0"
-                    :style="{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: `8px solid ${statusEditBubbleColor}` }" />
+                    :style="{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: `8px solid ${shadeColor(statusEditBubbleColor, -20)}` }" />
                 </div>
               </div>
 
@@ -2278,12 +2320,12 @@
               </div>
 
               <!-- Text input -->
-              <input v-model="statusEditText" type="text" maxlength="60" placeholder="Что сейчас делаешь?…"
+              <input v-model="statusEditText" type="text" maxlength="60" :placeholder="langStore.t.profileStatusInputPlaceholder"
                 class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-brand-accent transition-all" />
 
               <!-- Duration -->
               <div class="space-y-1.5">
-                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Истекает через</p>
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.profileExpiresInLabel }}</p>
                 <div class="flex gap-1.5 flex-wrap">
                   <button v-for="d in statusDurations" :key="d.value"
                     @click="statusEditDuration = d.value"
@@ -2298,7 +2340,7 @@
 
               <!-- Color accent -->
               <div class="space-y-1.5">
-                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Цвет акцента</p>
+                <p class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.profileAccentColorLabel }}</p>
                 <div class="flex gap-2 items-center">
                   <button v-for="c in statusColors" :key="c.value"
                     @click="pickStatusColor(c.value)"
@@ -2314,7 +2356,7 @@
                   class="flex items-center gap-2 w-full px-3 py-2.5 rounded-2xl border transition-all"
                   :class="statusShowMusicSearch ? 'border-brand-accent/50 bg-brand-accent/10 text-brand-accent' : 'border-brand-border bg-brand-bg text-white/55 hover:text-white hover:border-brand-accent/30'">
                   <BIcon name="Music" class="w-4 h-4 flex-shrink-0" />
-                  <span class="text-sm font-semibold flex-1 text-left">{{ statusEditMusic ? statusEditMusic.title : 'Прикрепить музыку' }}</span>
+                  <span class="text-sm font-semibold flex-1 text-left">{{ statusEditMusic ? statusEditMusic.title : langStore.t.profileAttachMusicLabel }}</span>
                   <BIcon v-if="statusEditMusic" name="X" class="w-3.5 h-3.5 text-white/40 hover:text-white/80"
                     @click.stop="statusEditMusic = null; statusMusicQuery = ''; statusMusicResults = []" />
                   <BIcon v-else :name="statusShowMusicSearch ? 'ChevronUp' : 'ChevronDown'" class="w-3.5 h-3.5" />
@@ -2326,12 +2368,12 @@
                     <div class="relative">
                       <BIcon name="Search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 pointer-events-none" />
                       <input v-model="statusMusicQuery" @input="onStatusMusicSearch" type="text"
-                        placeholder="Найти трек…"
+                        :placeholder="langStore.t.profileFindTrackPlaceholder"
                         class="w-full bg-brand-bg border border-brand-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-accent transition-all" />
                     </div>
                     <div v-if="statusMusicLoading" class="flex items-center justify-center py-3 text-white/40">
                       <BIcon name="Loader" class="w-4 h-4 animate-spin mr-2" />
-                      <span class="text-xs">Ищем…</span>
+                      <span class="text-xs">{{ langStore.t.profileSearchingEllipsisLabel }}</span>
                     </div>
                     <div v-else-if="statusMusicResults.length" class="space-y-1 max-h-48 overflow-y-auto">
                       <button v-for="track in statusMusicResults" :key="track.trackId"
@@ -2364,13 +2406,14 @@
 
           <!-- Footer buttons -->
           <div class="flex gap-2 px-5 py-4 border-t border-brand-border flex-shrink-0">
-            <button @click="saveLocalStatus"
-              class="flex-1 px-4 py-2.5 bg-brand-accent hover:bg-brand-accent-plus text-white text-sm font-bold rounded-xl transition-all">
-              Сохранить
+            <button @click="saveProfileStatus" :disabled="statusSaving"
+              class="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 bg-brand-accent hover:bg-brand-accent-plus disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-all">
+              <BIcon v-if="statusSaving" name="Loader" class="w-3.5 h-3.5 animate-spin" />
+              {{ langStore.t.profileSaveBtn }}
             </button>
-            <button v-if="profileStatus.text" @click="clearLocalStatus()"
-              class="px-4 py-2.5 bg-brand-bg border border-brand-border hover:border-brand-error text-white/55 hover:text-brand-error text-sm font-bold rounded-xl transition-all">
-              Убрать
+            <button v-if="profileStatus.text || profileStatus.emoji || profileStatus.music" @click="clearProfileStatus()" :disabled="statusSaving"
+              class="px-4 py-2.5 bg-brand-bg border border-brand-border hover:border-brand-error disabled:opacity-60 text-white/55 hover:text-brand-error text-sm font-bold rounded-xl transition-all">
+              {{ langStore.t.removeLabelOrder }}
             </button>
           </div>
 
@@ -2393,6 +2436,7 @@ import PostComments from '@/components/PostComments.vue'
 import PostCard from '@/components/PostCard.vue'
 import MentionTextarea from '@/components/MentionTextarea.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
+import PostScheduleMenu from '@/components/PostScheduleMenu.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
 import BIcon from '@/components/BIcon.vue'
 import SoonBadge from '@/components/groups/SoonBadge.vue'
@@ -2408,7 +2452,6 @@ import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
 import { extractHashtags, extractCommittedHashtags } from '@/lib/hashtags'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useTagSuggestions } from '@/composables/useTagSuggestions'
-import { verificationBadgeIcon } from '@/composables/useVerificationBadge'
 import VerificationBadge from '@/components/VerificationBadge.vue'
 import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
 import {
@@ -2422,7 +2465,7 @@ import {
   Footprints, Smile, SmilePlus, AlertCircle,
   LogOut, Camera, Eye, EyeOff, Info, Globe,
   Rabbit, PawPrint, Plus, Check, Twitter, Instagram, Youtube, Twitch, Github, Quote,
-  Wallet, ChevronRight, AtSign, ArrowUpRight, Archive, BarChart3, Code2
+  Wallet, ChevronRight, AtSign, ArrowUpRight, Archive, BarChart3, Code2, Ticket
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -2461,8 +2504,8 @@ async function openChat() {
     router.push({ name: 'messages' })
   } catch (e: any) {
     messageErrorNotice.value = e?.response?.data?.error?.message === 'MESSAGES_DISABLED'
-      ? 'Этот пользователь ограничил приём сообщений'
-      : 'Не удалось начать переписку'
+      ? langStore.t.profileMessagesRestrictedError
+      : langStore.t.profileChatStartFailedError
     setTimeout(() => { messageErrorNotice.value = null }, 4000)
   }
 }
@@ -2592,9 +2635,10 @@ const showFollowingModal = ref(false)
 const showGroupsModal    = ref(false)
 const followingLoading = ref(false)
 
-// ── Profile status (temporary, localStorage) ──────────────────────────────────
+// ── Profile status (server-backed IG Notes-style bubble) ──────────────────────
 const profileStatus = reactive({ emoji: '', text: '', expiresAt: 0, color: '', music: null as null | { title: string; artist: string; artworkUrl: string; previewUrl: string } })
 const showStatusEdit = ref(false)
+const statusSaving = ref(false)
 const statusEditEmoji = ref('')
 const statusEditText = ref('')
 const statusEditDuration = ref(86400)
@@ -2622,14 +2666,28 @@ const statusEditBubbleColor = computed(() =>
   statusEditColor.value || (statusEditMusic.value ? '#c0392b' : '#4C67CF')
 )
 
-const statusDurations = [
-  { label: '30м', value: 1800 },
-  { label: '1ч', value: 3600 },
-  { label: '4ч', value: 14400 },
-  { label: '24ч', value: 86400 },
-  { label: '7д', value: 604800 },
+/** Lighten (positive) or darken (negative) a #rrggbb hex color by a percent, for gradients/glows. */
+function shadeColor(hex: string, percent: number): string {
+  const clean = (hex || '#4C67CF').replace('#', '')
+  const num = parseInt(clean.length === 6 ? clean : '4C67CF', 16)
+  const amt = Math.round(2.55 * percent)
+  const r = Math.min(255, Math.max(0, (num >> 16) + amt))
+  const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amt))
+  const b = Math.min(255, Math.max(0, (num & 0x0000ff) + amt))
+  return '#' + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1)
+}
+const statusBubbleGradient = computed(() => `linear-gradient(135deg, ${shadeColor(statusBubbleColor.value, 16)}, ${shadeColor(statusBubbleColor.value, -20)})`)
+const statusEditBubbleGradient = computed(() => `linear-gradient(135deg, ${shadeColor(statusEditBubbleColor.value, 16)}, ${shadeColor(statusEditBubbleColor.value, -20)})`)
+const hasActiveStatus = computed(() => !!(profileStatus.text || profileStatus.emoji || profileStatus.music))
+
+const statusDurations = computed(() => [
+  { label: `30${langStore.t.profileDurationMinuteShort}`, value: 1800 },
+  { label: `1${langStore.t.profileDurationHourShort}`, value: 3600 },
+  { label: `4${langStore.t.profileDurationHourShort}`, value: 14400 },
+  { label: `24${langStore.t.profileDurationHourShort}`, value: 86400 },
+  { label: `7${langStore.t.profileDurationDayShort}`, value: 604800 },
   { label: '∞', value: 0 },
-]
+])
 
 const statusColors = [
   { value: '#4C67CF', dot: 'bg-brand-accent' },
@@ -2647,43 +2705,44 @@ const statusTimeRemaining = computed(() => {
   if (diff <= 0) return ''
   const h = Math.floor(diff / 3600000)
   const m = Math.floor((diff % 3600000) / 60000)
-  if (h >= 24) return `${Math.floor(h / 24)}д`
-  if (h >= 1) return `${h}ч`
-  return `${m}м`
+  if (h >= 24) return `${Math.floor(h / 24)}${langStore.t.profileDurationDayShort}`
+  if (h >= 1) return `${h}${langStore.t.profileDurationHourShort}`
+  return `${m}${langStore.t.profileDurationMinuteShort}`
 })
 
-function loadLocalStatus() {
-  try {
-    const raw = localStorage.getItem('profile_status')
-    if (raw) {
-      const d = JSON.parse(raw)
-      if (d.expiresAt && d.expiresAt < Date.now()) {
-        localStorage.removeItem('profile_status')
-        return
-      }
-      profileStatus.emoji = d.emoji ?? ''
-      profileStatus.text = d.text ?? ''
-      profileStatus.expiresAt = d.expiresAt ?? 0
-      profileStatus.color = d.color ?? ''
-      profileStatus.music = d.music ?? null
-    }
-  } catch {}
+/** Populate the reactive display state from whatever the API returned for this profile (own or someone else's). */
+function applyProfileStatus(status: any) {
+  profileStatus.emoji = ''; profileStatus.text = ''; profileStatus.expiresAt = 0; profileStatus.color = ''; profileStatus.music = null
+  if (!status) return
+  if (status.expiresAt && status.expiresAt < Date.now()) return
+  profileStatus.emoji = status.emoji ?? ''
+  profileStatus.text = status.text ?? ''
+  profileStatus.expiresAt = status.expiresAt ?? 0
+  profileStatus.color = status.color ?? ''
+  profileStatus.music = status.music ?? null
 }
-function saveLocalStatus() {
+async function saveProfileStatus() {
+  if (statusSaving.value) return
+  statusSaving.value = true
   const expiresAt = statusEditDuration.value > 0 ? Date.now() + statusEditDuration.value * 1000 : 0
-  profileStatus.emoji = statusEditEmoji.value
-  profileStatus.text = statusEditText.value
-  profileStatus.expiresAt = expiresAt
-  profileStatus.color = statusEditColor.value
-  profileStatus.music = statusEditMusic.value
-  localStorage.setItem('profile_status', JSON.stringify({
+  const payload = {
     emoji: statusEditEmoji.value,
     text: statusEditText.value,
     expiresAt,
     color: statusEditColor.value,
     music: statusEditMusic.value,
-  }))
-  showStatusEdit.value = false
+  }
+  try {
+    await userStore.updateProfile({ profile_status: payload })
+    profileStatus.emoji = payload.emoji
+    profileStatus.text = payload.text
+    profileStatus.expiresAt = payload.expiresAt
+    profileStatus.color = payload.color
+    profileStatus.music = payload.music
+    showStatusEdit.value = false
+  } finally {
+    statusSaving.value = false
+  }
 }
 function openStatusEdit() {
   statusEditEmoji.value = profileStatus.emoji
@@ -2696,11 +2755,17 @@ function openStatusEdit() {
   statusMusicResults.value = []
   showStatusEdit.value = true
 }
-function clearLocalStatus() {
-  profileStatus.emoji = ''; profileStatus.text = ''; profileStatus.expiresAt = 0; profileStatus.color = ''; profileStatus.music = null
-  statusEditEmoji.value = ''; statusEditText.value = ''
-  localStorage.removeItem('profile_status')
-  showStatusEdit.value = false
+async function clearProfileStatus() {
+  if (statusSaving.value) return
+  statusSaving.value = true
+  try {
+    await userStore.updateProfile({ profile_status: null })
+    profileStatus.emoji = ''; profileStatus.text = ''; profileStatus.expiresAt = 0; profileStatus.color = ''; profileStatus.music = null
+    statusEditEmoji.value = ''; statusEditText.value = ''
+    showStatusEdit.value = false
+  } finally {
+    statusSaving.value = false
+  }
 }
 function pickStatusColor(hex: string) {
   statusEditColor.value = hex
@@ -2752,10 +2817,19 @@ const mediaTagTarget = ref<string | null>(null) // postId с открытым п
 const openAlbum = ref<{ label: string; emoji?: string; urls: { url: string; postId?: string; is_nsfw?: boolean }[] } | null>(null)
 
 function openReferencesAlbum() {
-  openAlbum.value = {
-    label: 'Референсы',
+  openAlbumOrLightbox({
+    label: langStore.t.profileReferencesAlbumLabel,
     emoji: '🖼️',
     urls: userStore.referenceImages.map((r) => ({ url: r.image_url, is_nsfw: r.is_nsfw })),
+  })
+}
+
+// Альбом с единственным фото открывать сразу в лайтбоксе, без промежуточной сетки
+function openAlbumOrLightbox(album: { label: string; emoji?: string; urls: { url: string; postId?: string; is_nsfw?: boolean }[] }) {
+  if (album.urls.length === 1) {
+    openMediaLightbox(album.urls[0].url, [album.urls[0].url], 0)
+  } else {
+    openAlbum.value = album
   }
 }
 
@@ -2875,6 +2949,8 @@ const newPostVisibility = ref('public')
 const showProfileVisibilityMenu = ref(false)
 const isCreatingPost = ref(false)
 const profileMediaUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
+const showProfileScheduleMenu = ref(false)
+const isSchedulingProfilePost = ref(false)
 
 function addProfileTag() {
   const t = newPostTagInput.value.trim().replace(/^#/, '')
@@ -2926,7 +3002,7 @@ async function topupWallet(amount: number) {
     await walletStore.topup(amount)
     showTopupPicker.value = false
   } catch (e: any) {
-    alert(e.response?.data?.error?.message || 'Не удалось пополнить кошелёк')
+    alert(e.response?.data?.error?.message || langStore.t.profileWalletTopupFailedError)
   } finally {
     toppingUp.value = false
   }
@@ -3029,7 +3105,7 @@ const activeFursonaRef = computed(() => selectedFursonaRef.value || fursonaRefIm
 const fursonaOtherCount = computed(() => Math.max(0, fursonaRefImages.value.length - 1))
 
 const fursonaViewTabs = computed(() => [
-  { key: 'personality' as const, label: 'Личность', count: ((profileFursona.value?.likes?.length ?? 0) + (profileFursona.value?.dislikes?.length ?? 0)) },
+  { key: 'personality' as const, label: langStore.t.profilePersonalityLabel, count: ((profileFursona.value?.likes?.length ?? 0) + (profileFursona.value?.dislikes?.length ?? 0)) },
   { key: 'info' as const,        label: langStore.t.informationLabel },
   { key: 'features' as const,    label: langStore.t.colorPaletteLabel, count: profileFursona.value?.colors?.length ?? 0 },
 ])
@@ -3279,25 +3355,25 @@ const accentStyleSubtle = computed(() => {
 })
 
 // Badge pill in banner
-const badgePillMap: Record<string, { label: string; cls: string; icon: any }> = {
-  admin:      { label: 'Администратор', cls: 'bg-amber-500/25 border border-amber-500/40 text-amber-300', icon: Crown },
-  moderator:  { label: 'Модератор',     cls: 'bg-purple-500/25 border border-purple-500/40 text-purple-300', icon: Shield },
-}
+const badgePillMap = computed<Record<string, { label: string; cls: string; icon: any }>>(() => ({
+  admin:      { label: langStore.t.roleAdmin,             cls: 'bg-amber-500/25 border border-amber-500/40 text-amber-300', icon: Crown },
+  moderator:  { label: langStore.t.profileRoleModerator,  cls: 'bg-purple-500/25 border border-purple-500/40 text-purple-300', icon: Shield },
+}))
 
 const badgePillClass = computed(() => {
   const p = viewedProfile.value
   const bt = p?.badge_type ?? p?.role
-  return badgePillMap[bt ?? '']?.cls ?? ''
+  return badgePillMap.value[bt ?? '']?.cls ?? ''
 })
 const badgePillLabel = computed(() => {
   const p = viewedProfile.value
   const bt = p?.badge_type ?? p?.role
-  return badgePillMap[bt ?? '']?.label ?? ''
+  return badgePillMap.value[bt ?? '']?.label ?? ''
 })
 const badgePillIcon = computed(() => {
   const p = viewedProfile.value
   const bt = p?.badge_type ?? p?.role
-  return badgePillMap[bt ?? '']?.icon ?? User
+  return badgePillMap.value[bt ?? '']?.icon ?? User
 })
 
 // Follow button
@@ -3345,7 +3421,7 @@ const contentTabs = computed(() => {
     { key: 'media',     label: langStore.t.mediaTab,     icon: Image },
   ]
   if (isOwnProfile.value) {
-    tabs.push({ key: 'archive', label: 'Архив', icon: Archive })
+    tabs.push({ key: 'archive', label: langStore.t.profileArchiveTab, icon: Archive })
     tabs.push({ key: 'stats', label: langStore.t.statsTab, icon: BarChart3 })
   }
   if (!isOwnProfile.value && authStore.isAuthenticated) {
@@ -3373,27 +3449,27 @@ const profileStats = computed(() => {
 })
 
 const achievementBadges = computed(() => {
-  const badges: { key: string; label: string; desc: string; iconComp: any; iconImg?: string; iconBg: string; iconColor: string }[] = []
+  const badges: { key: string; label: string; desc: string; iconComp: any; iconBg: string; iconColor: string }[] = []
   const p = viewedProfile.value
   if (!p) return badges
-  if (p.role === 'admin')            badges.push({ key: 'admin',      label: 'Администратор',      desc: 'Управляет платформой',     iconComp: Crown,      iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
-  if (p.role === 'moderator')        badges.push({ key: 'mod',        label: 'Модератор',           desc: 'Поддерживает порядок',     iconComp: Shield,     iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
+  if (p.role === 'admin')            badges.push({ key: 'admin',      label: langStore.t.roleAdmin,      desc: langStore.t.profileRoleAdminDesc,     iconComp: Crown,      iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
+  if (p.role === 'moderator')        badges.push({ key: 'mod',        label: langStore.t.profileRoleModerator,           desc: langStore.t.profileRoleModeratorDesc,     iconComp: Shield,     iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
   // Verification type specific badges
   const vt = (p as any).verification_type
-  if (vt === 'artist')         badges.push({ key: 'ver-artist',    label: 'Верифицированный художник',  desc: 'Подтверждено модератором', iconComp: Palette,       iconImg: verificationBadgeIcon(vt), iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
-  else if (vt === 'master')    badges.push({ key: 'ver-master',    label: 'Верифицированный мастер',     desc: 'Подтверждено модератором', iconComp: Hammer,        iconImg: verificationBadgeIcon(vt), iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
-  else if (vt === 'fursuiter') badges.push({ key: 'ver-fursuiter', label: 'Верифицированный фурсьютер',  desc: 'Подтверждено модератором', iconComp: Shirt,         iconImg: verificationBadgeIcon(vt), iconBg: 'bg-cyan-500/20',    iconColor: 'text-cyan-400' })
-  else if (vt === 'popular')   badges.push({ key: 'ver-popular',   label: 'Верифицированный блогер',     desc: 'Подтверждено модератором', iconComp: TrendingUp,    iconImg: verificationBadgeIcon(vt), iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
-  else if (vt === 'writer')    badges.push({ key: 'ver-writer',    label: 'Верифицированный писатель',   desc: 'Подтверждено модератором', iconComp: PenLine,       iconImg: verificationBadgeIcon(vt), iconBg: 'bg-rose-500/20',    iconColor: 'text-rose-400' })
-  else if (vt === 'organizer') badges.push({ key: 'ver-organizer', label: 'Верифицированный организатор',desc: 'Подтверждено модератором', iconComp: CalendarCheck, iconImg: verificationBadgeIcon(vt), iconBg: 'bg-indigo-500/20',  iconColor: 'text-indigo-400' })
-  else if (vt === 'event')     badges.push({ key: 'ver-event',     label: 'Мероприятие',                 desc: 'Подтверждено модератором', iconComp: BadgeCheck,    iconImg: verificationBadgeIcon(vt), iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' })
-  else if (vt === 'photographer') badges.push({ key: 'ver-photographer', label: 'Верифицированный фотограф',    desc: 'Подтверждено модератором', iconComp: Camera, iconImg: verificationBadgeIcon(vt), iconBg: 'bg-teal-500/20',    iconColor: 'text-teal-400' })
-  else if (vt === 'programmer')   badges.push({ key: 'ver-programmer',   label: 'Верифицированный программист', desc: 'Подтверждено модератором', iconComp: Code2,  iconImg: verificationBadgeIcon(vt), iconBg: 'bg-fuchsia-500/20', iconColor: 'text-fuchsia-400' })
-  else if (p.badge_type === 'verified' || (p as any).is_verified)   badges.push({ key: 'verified',   label: 'Подтверждённая страница', desc: 'Верифицированный аккаунт', iconComp: BadgeCheck, iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
-  if ((p._count?.posts ?? 0) >= 10)  badges.push({ key: 'active',     label: 'Активный автор',      desc: '10+ публикаций',           iconComp: Flame,      iconBg: 'bg-red-500/20',     iconColor: 'text-red-400' })
-  if ((p._count?.followers ?? 0) >= 50) badges.push({ key: 'popular', label: 'Популярный',          desc: '50+ читателей',            iconComp: Sparkles,   iconBg: 'bg-yellow-500/20',  iconColor: 'text-yellow-400' })
+  if (vt === 'artist')         badges.push({ key: 'ver-artist',    label: langStore.t.verBadgeLabelArtist,       desc: langStore.t.verBadgeModDesc, iconComp: Palette,       iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
+  else if (vt === 'master')    badges.push({ key: 'ver-master',    label: langStore.t.verBadgeLabelMaster,       desc: langStore.t.verBadgeModDesc, iconComp: Hammer,        iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
+  else if (vt === 'fursuiter') badges.push({ key: 'ver-fursuiter', label: langStore.t.verBadgeLabelFursuiter,    desc: langStore.t.verBadgeModDesc, iconComp: Shirt,         iconBg: 'bg-cyan-500/20',    iconColor: 'text-cyan-400' })
+  else if (vt === 'popular')   badges.push({ key: 'ver-popular',   label: langStore.t.verBadgeLabelPopular,      desc: langStore.t.verBadgeModDesc, iconComp: TrendingUp,    iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
+  else if (vt === 'writer')    badges.push({ key: 'ver-writer',    label: langStore.t.verBadgeLabelWriter,       desc: langStore.t.verBadgeModDesc, iconComp: PenLine,       iconBg: 'bg-rose-500/20',    iconColor: 'text-rose-400' })
+  else if (vt === 'organizer') badges.push({ key: 'ver-organizer', label: langStore.t.verBadgeLabelOrganizer,    desc: langStore.t.verBadgeModDesc, iconComp: CalendarCheck, iconBg: 'bg-indigo-500/20',  iconColor: 'text-indigo-400' })
+  else if (vt === 'event')     badges.push({ key: 'ver-event',     label: langStore.t.verTypeEvent,              desc: langStore.t.verBadgeModDesc, iconComp: Ticket,        iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' })
+  else if (vt === 'photographer') badges.push({ key: 'ver-photographer', label: langStore.t.verBadgeLabelPhotographer, desc: langStore.t.verBadgeModDesc, iconComp: Camera, iconBg: 'bg-teal-500/20',    iconColor: 'text-teal-400' })
+  else if (vt === 'programmer')   badges.push({ key: 'ver-programmer',   label: langStore.t.verBadgeLabelProgrammer,  desc: langStore.t.verBadgeModDesc, iconComp: Code2,  iconBg: 'bg-fuchsia-500/20', iconColor: 'text-fuchsia-400' })
+  else if (p.badge_type === 'verified' || (p as any).is_verified)   badges.push({ key: 'verified',   label: langStore.t.verBadgeLabelVerifiedPage, desc: langStore.t.verBadgeVerifiedAccountDesc, iconComp: BadgeCheck, iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
+  if ((p._count?.posts ?? 0) >= 10)  badges.push({ key: 'active',     label: langStore.t.profileActiveAuthorBadgeLabel,      desc: langStore.t.profileActiveAuthorBadgeDesc,           iconComp: Flame,      iconBg: 'bg-red-500/20',     iconColor: 'text-red-400' })
+  if ((p._count?.followers ?? 0) >= 50) badges.push({ key: 'popular', label: langStore.t.profilePopularBadgeLabel,          desc: langStore.t.profilePopularBadgeDesc,            iconComp: Sparkles,   iconBg: 'bg-yellow-500/20',  iconColor: 'text-yellow-400' })
   // Default badge for all
-  if (!badges.length) badges.push({ key: 'furlite', label: 'FurLite',             desc: 'Подписчик с ' + joinDate.value,  iconComp: Award,    iconBg: 'bg-brand-accent/20', iconColor: 'text-brand-accent' })
+  if (!badges.length) badges.push({ key: 'furlite', label: 'FurLite',             desc: langStore.t.profileSubscriberSincePrefix + ' ' + joinDate.value,  iconComp: Award,    iconBg: 'bg-brand-accent/20', iconColor: 'text-brand-accent' })
   return badges
 })
 
@@ -3406,7 +3482,7 @@ function tagFontSize(count: number) {
 }
 
 // ── Social networks ───────────────────────────────────────────────────────────
-const socialNetworks = [
+const socialNetworks = computed(() => [
   { key: 'telegram',    label: 'Telegram',    iconName: 'Send',          color: '#2AABEE' },
   { key: 'twitter',     label: 'X / Twitter', iconName: 'Twitter',       color: '#1DA1F2' },
   { key: 'instagram',   label: 'Instagram',   iconName: 'Instagram',     color: '#E4405F' },
@@ -3416,11 +3492,11 @@ const socialNetworks = [
   { key: 'vk',          label: 'ВКонтакте',   iconName: 'Users',         color: '#4C75A3' },
   { key: 'discord',     label: 'Discord',     iconName: 'MessageCircle', color: '#7289DA' },
   { key: 'github',      label: 'GitHub',      iconName: 'Github',        color: '#6e8196' },
-  { key: 'other',       label: 'Другое / Сайт', iconName: 'Globe',       color: '#6366f1' },
-]
+  { key: 'other',       label: langStore.t.profileSocialOtherLabel, iconName: 'Globe',       color: '#6366f1' },
+])
 const activeSocialLinks = computed(() => {
   const sl = (viewedProfile.value as any)?.social_links ?? {}
-  return socialNetworks.filter(n => sl[n.key])
+  return socialNetworks.value.filter(n => sl[n.key])
 })
 function socialUrl(key: string, val: string) {
   if (key === 'other') return val.startsWith('http') ? val : 'https://' + val
@@ -3465,9 +3541,9 @@ const togetherSince = computed((): string | null => {
   if (days < 0) { months--; days += new Date(now.getFullYear(), now.getMonth(), 0).getDate() }
   if (months < 0) { years--; months += 12 }
   const parts: string[] = []
-  if (years  > 0) parts.push(`${years} ${years  === 1 ? 'год' : years  < 5 ? 'года' : 'лет'}`)
-  if (months > 0) parts.push(`${months} ${months === 1 ? 'месяц' : months < 5 ? 'месяца' : 'месяцев'}`)
-  if (parts.length === 0) parts.push(`${Math.max(days, 1)} ${days === 1 ? 'день' : days < 5 ? 'дня' : 'дней'}`)
+  if (years  > 0) parts.push(`${years} ${years  === 1 ? langStore.t.profileYearWord1 : years  < 5 ? langStore.t.profileYearWord2to4 : langStore.t.profileYearWord5plus}`)
+  if (months > 0) parts.push(`${months} ${months === 1 ? langStore.t.profileMonthWord1 : months < 5 ? langStore.t.profileMonthWord2to4 : langStore.t.profileMonthWord5plus}`)
+  if (parts.length === 0) parts.push(`${Math.max(days, 1)} ${days === 1 ? langStore.t.profileDayWord1 : days < 5 ? langStore.t.profileDayWord2to4 : langStore.t.profileDayWord5plus}`)
   return parts.join(' ')
 })
 
@@ -3500,7 +3576,7 @@ const specialAlbums = computed(() => {
   if (userStore.referenceImages.length) {
     albums.push({
       id: 'references',
-      label: 'Референсы',
+      label: langStore.t.profileReferencesAlbumLabel,
       emoji: '🖼️',
       urls: userStore.referenceImages.map((r) => ({ url: r.image_url, is_nsfw: r.is_nsfw })),
     })
@@ -3514,7 +3590,7 @@ const specialAlbums = computed(() => {
       for (const url of (post.media_urls ?? [])) fursonaUrls.push({ url, postId: post.id })
     }
   }
-  if (fursonaUrls.length) albums.push({ id: 'fursona', label: 'Фурсона', emoji: '🐾', urls: fursonaUrls })
+  if (fursonaUrls.length) albums.push({ id: 'fursona', label: langStore.t.fursonaTab, emoji: '🐾', urls: fursonaUrls })
 
   // Альбом Фурсьют
   const fursuitUrls: { url: string }[] = []
@@ -3526,7 +3602,7 @@ const specialAlbums = computed(() => {
       for (const url of (post.media_urls ?? [])) fursuitUrls.push({ url, postId: post.id })
     }
   }
-  if (fursuitUrls.length) albums.push({ id: 'fursuit', label: 'Фурсьют', emoji: '🦊', urls: fursuitUrls })
+  if (fursuitUrls.length) albums.push({ id: 'fursuit', label: langStore.t.fursuitTab, emoji: '🦊', urls: fursuitUrls })
 
   return albums
 })
@@ -3575,9 +3651,9 @@ const formattedBirthDate = computed(() => {
 function formatDate(d: string) {
   const date = new Date(d)
   const diff = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (diff < 60) return `${diff}с назад`
-  if (diff < 3600) return `${Math.floor(diff / 60)}м назад`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}ч назад`
+  if (diff < 60) return `${diff}${langStore.t.profileSecAgoSuffix}`
+  if (diff < 3600) return `${Math.floor(diff / 60)}${langStore.t.profileMinAgoSuffix}`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}${langStore.t.profileHourAgoSuffix}`
   return date.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'short' })
 }
 
@@ -3627,12 +3703,11 @@ async function loadProfile() {
         loadProfileFursuits(userId),
       ])
       if (result.pinnedPost) pinnedPost.value = result.pinnedPost
-      profileStatus.emoji = ''; profileStatus.text = ''; profileStatus.expiresAt = 0; profileStatus.color = ''; profileStatus.music = null
-      if (isOwnProfile.value) { loadLocalStatus() }
+      applyProfileStatus((result as any).profile_status)
       await loadTabData('posts')
     }
   } catch {
-    error.value = 'Не удалось загрузить профиль'
+    error.value = langStore.t.profileLoadFailedError
   } finally {
     isLoading.value = false
   }
@@ -3910,6 +3985,38 @@ async function createPost() {
   finally { isCreatingPost.value = false }
 }
 
+async function saveProfileScheduledPost(payload: { scheduledAt?: string; timezone?: string }) {
+  const content = newPostContent.value.trim()
+  if (!content && newPostMediaUrls.value.length === 0) return
+  for (const tag of extractHashtags(content)) {
+    if (!newPostTags.value.includes(tag)) newPostTags.value.push(tag)
+  }
+  isSchedulingProfilePost.value = true
+  try {
+    const res = await api.post('/posts/scheduled', {
+      content,
+      tags: newPostTags.value,
+      isNsfw: newPostIsNsfw.value,
+      isAiGenerated: newPostIsAiGenerated.value,
+      mediaUrls: newPostMediaUrls.value,
+      ...payload,
+    })
+    if (res.data.success) {
+      showPostForm.value = false
+      showProfileScheduleMenu.value = false
+      newPostContent.value = ''
+      newPostMediaUrls.value = []
+      newPostIsNsfw.value = false
+      newPostIsAiGenerated.value = false
+      newPostTags.value = []
+      newPostTagInput.value = ''
+      newPostVisibility.value = 'public'
+      profileMediaUploadRef.value?.clearAll()
+    }
+  } catch (e) { console.error('Failed to schedule post', e) }
+  finally { isSchedulingProfilePost.value = false }
+}
+
 function onPostDeleted(postId: string) {
   tabPosts.value = tabPosts.value.filter((p) => p.id !== postId)
   if (pinnedPost.value?.id === postId) pinnedPost.value = null
@@ -3991,4 +4098,27 @@ watch(() => route.params.username, () => { aboutTab.value = 'about'; activeConte
 .slide-down-enter-active, .slide-down-leave-active { transition: all 0.25s ease; overflow: hidden; }
 .slide-down-enter-from, .slide-down-leave-to { opacity: 0; max-height: 0; }
 .slide-down-enter-to, .slide-down-leave-from { opacity: 1; max-height: 300px; }
+
+/* Status note bubble: pop-in/out when it appears, changes, or expires */
+.status-pop-enter-active { transition: opacity 0.28s ease, transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.status-pop-leave-active { transition: opacity 0.18s ease, transform 0.18s ease; position: absolute; }
+.status-pop-enter-from { opacity: 0; transform: translateX(-50%) translateY(calc(-100% + 6px)) scale(0.85); }
+.status-pop-leave-to { opacity: 0; transform: translateX(-50%) translateY(-100%) scale(0.9); }
+
+/* Slow ambient glow pulse on an active status bubble/icon */
+.status-bubble-glow { animation: statusBubbleGlow 3.2s ease-in-out infinite; }
+@keyframes statusBubbleGlow {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.08); }
+}
+.status-icon-glow {
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: statusIconShimmer 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes statusIconShimmer {
+  0%   { background-position: 150% 0; }
+  100% { background-position: -50% 0; }
+}
 </style>

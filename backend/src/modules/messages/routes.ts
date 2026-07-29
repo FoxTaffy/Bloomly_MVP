@@ -4,6 +4,7 @@ import {
   getConversationByIdHandler,
   getOrCreateConversationHandler,
   getUnreadCountHandler,
+  getMyGroupInboxCountsHandler,
   getMessagesHandler,
   sendMessageHandler,
   markReadHandler,
@@ -56,6 +57,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
   fastify.post('/conversations', auth, getOrCreateConversationHandler as any);
   fastify.get('/conversations/:id', auth, getConversationByIdHandler as any);
   fastify.get('/conversations/unread', auth, getUnreadCountHandler as any);
+  fastify.get('/groups/inbox-counts', auth, getMyGroupInboxCountsHandler as any);
 
   // Messages within a conversation
   fastify.get('/conversations/:id/messages', { schema: getMessagesSchema, onRequest: [fastify.authenticate] }, getMessagesHandler as any);

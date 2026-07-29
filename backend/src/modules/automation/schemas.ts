@@ -3,8 +3,6 @@ export const updateAutomationSchema = {
     type: 'object',
     properties: {
       auto_follow_back:    { type: 'boolean' },
-      welcome_msg_enabled: { type: 'boolean' },
-      welcome_msg_text:    { type: 'string', maxLength: 300 },
       mute_keywords:       { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30 },
       quiet_hours_enabled: { type: 'boolean' },
       quiet_hours_from:    { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' },
@@ -12,7 +10,6 @@ export const updateAutomationSchema = {
       notify_new_fan:      { type: 'boolean' },
       notify_comment:      { type: 'boolean' },
       notify_repaw:        { type: 'boolean' },
-      quick_replies:       { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30 },
       filter_spam:         { type: 'boolean' },
     },
     additionalProperties: false,

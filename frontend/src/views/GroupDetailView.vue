@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useLangStore } from '@/stores/lang'
+import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, computed, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -184,14 +184,21 @@ const groupMediaUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
 // Archetype-aware composer config
 const archetypeComposer = computed(() => {
   const t = group.value?.type
-  if (t === 'news') return { postType: 'article', showTitle: true, placeholder: 'Текст статьи…', label: 'Новая статья', icon: 'Newspaper' }
-  if (t === 'artist') return { postType: 'artwork', showTitle: false, placeholder: 'Расскажи о новой работе…', label: 'Новая работа', icon: 'Palette' }
-  if (t === 'creative') return { postType: 'commission_update', showTitle: false, placeholder: 'Обновление по заказу или WIP…', label: 'Обновление', icon: 'Scissors' }
-  if (t === 'event') return { postType: 'announcement', showTitle: false, placeholder: 'Объявление для участников…', label: 'Объявление', icon: 'Megaphone' }
-  return { postType: 'general', showTitle: false, placeholder: 'Что нового в группе…', label: 'Пост', icon: 'PenLine' }
+  if (t === 'news') return { postType: 'article', showTitle: true, placeholder: langStore.t.groupDetailArticlePlaceholder, label: langStore.t.groupDetailNewArticleLabel, icon: 'Newspaper' }
+  if (t === 'artist') return { postType: 'artwork', showTitle: false, placeholder: langStore.t.groupDetailArtworkPlaceholder, label: langStore.t.groupDetailNewArtworkLabel, icon: 'Palette' }
+  if (t === 'creative') return { postType: 'commission_update', showTitle: false, placeholder: langStore.t.groupDetailCommissionUpdatePlaceholder, label: langStore.t.groupDetailUpdateLabel, icon: 'Scissors' }
+  if (t === 'event') return { postType: 'announcement', showTitle: false, placeholder: langStore.t.groupDetailAnnouncementPlaceholder, label: langStore.t.groupDetailAnnouncementLabel, icon: 'Megaphone' }
+  return { postType: 'general', showTitle: false, placeholder: langStore.t.groupDetailGeneralPostPlaceholder, label: langStore.t.groupDetailPostLabel, icon: 'PenLine' }
 })
 
-const creativePostStatuses = ['Скетч', 'Линии', 'Цвет', 'Готово']
+// Stage `value` stays fixed (matches GroupKanban.vue's Russian-keyed columns regardless of
+// UI language); only the displayed `label` is translated.
+const creativePostStatuses = computed(() => [
+  { value: 'Скетч', label: langStore.t.groupDetailStageSketch },
+  { value: 'Линии', label: langStore.t.groupDetailStageLines },
+  { value: 'Цвет', label: langStore.t.groupDetailStageColor },
+  { value: 'Готово', label: langStore.t.groupDetailStageDone },
+])
 const selectedCreativeStatus = ref('')
 
 function addGroupTag() {
@@ -313,7 +320,7 @@ const groupMediaAlbums = computed(() => {
   const map = new Map<string, { url: string; postId?: string }[]>()
   for (const post of filteredGroupMediaPosts.value as any[]) {
     const dt = new Date(post.created_at)
-    const label = dt.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+    const label = dt.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'long', year: 'numeric' })
     if (!map.has(label)) map.set(label, [])
     for (const url of (post.media_urls ?? [])) {
       map.get(label)!.push({ url, postId: post.id })
@@ -365,33 +372,33 @@ const aboutNavs = computed(() => {
   const t = group.value?.type
 
   if (t === 'event') {
-    navs.push({ key: 'about', label: 'О мероприятии', icon: 'Info' })
+    navs.push({ key: 'about', label: langStore.t.groupDetailAboutEvent, icon: 'Info' })
     const sched = (activeEvent.value?.schedule || (group.value as any)?.schedule) as any[]
-    if (sched?.length) navs.push({ key: 'schedule', label: 'Программа', icon: 'Clock' })
-    navs.push({ key: 'sponsors', label: 'Спонсоры', icon: 'Star' })
-    navs.push({ key: 'contacts', label: 'Контакты', icon: 'MapPin' })
-    if (group.value?.events?.length > 1) navs.push({ key: 'nearest', label: 'Ближайшее', icon: 'CalendarCheck' })
+    if (sched?.length) navs.push({ key: 'schedule', label: langStore.t.groupDetailScheduleNav, icon: 'Clock' })
+    navs.push({ key: 'sponsors', label: langStore.t.groupDetailSponsorsNav, icon: 'Star' })
+    navs.push({ key: 'contacts', label: langStore.t.groupDetailContactsNav, icon: 'MapPin' })
+    if (group.value?.events?.length > 1) navs.push({ key: 'nearest', label: langStore.t.groupDetailNearestNav, icon: 'CalendarCheck' })
   } else if (t === 'artist') {
-    navs.push({ key: 'about', label: 'О художнике', icon: 'Info' })
-    navs.push({ key: 'prices', label: 'Прайс', icon: 'Tag' })
-    navs.push({ key: 'queue', label: 'Очередь', icon: 'ClipboardList' })
-    navs.push({ key: 'reviews', label: 'Отзывы', icon: 'Star' })
+    navs.push({ key: 'about', label: langStore.t.groupDetailAboutArtist, icon: 'Info' })
+    navs.push({ key: 'prices', label: langStore.t.groupDetailPricesNavShort, icon: 'Tag' })
+    navs.push({ key: 'queue', label: langStore.t.groupDetailQueueNav, icon: 'ClipboardList' })
+    navs.push({ key: 'reviews', label: langStore.t.groupDetailReviewsNav, icon: 'Star' })
   } else if (t === 'news') {
-    navs.push({ key: 'about', label: 'О редакции', icon: 'Info' })
-    navs.push({ key: 'digest', label: 'Дайджест', icon: 'Newspaper' })
-    navs.push({ key: 'categories', label: 'Рубрики', icon: 'FolderOpen' })
-    navs.push({ key: 'team', label: 'Команда', icon: 'Users' })
+    navs.push({ key: 'about', label: langStore.t.groupDetailAboutNews, icon: 'Info' })
+    navs.push({ key: 'digest', label: langStore.t.groupDetailDigestNav, icon: 'Newspaper' })
+    navs.push({ key: 'categories', label: langStore.t.groupDetailCategoriesNav, icon: 'FolderOpen' })
+    navs.push({ key: 'team', label: langStore.t.groupDetailTeamNav, icon: 'Users' })
   } else if (t === 'creative') {
-    navs.push({ key: 'about', label: 'О студии', icon: 'Info' })
+    navs.push({ key: 'about', label: langStore.t.groupDetailAboutCreative, icon: 'Info' })
     if ((group.value as any)?.commissionInfo)
-      navs.push({ key: 'orders', label: 'Заказы', icon: 'ClipboardList' })
-    navs.push({ key: 'prices', label: 'Цены', icon: 'Tag' })
-    navs.push({ key: 'market', label: 'Маркет', icon: 'ShoppingBag' })
+      navs.push({ key: 'orders', label: langStore.t.groupDetailOrdersNav, icon: 'ClipboardList' })
+    navs.push({ key: 'prices', label: langStore.t.groupDetailPricesNav, icon: 'Tag' })
+    navs.push({ key: 'market', label: langStore.t.groupDetailMarketNav, icon: 'ShoppingBag' })
   } else {
-    navs.push({ key: 'about', label: 'О группе', icon: 'Info' })
+    navs.push({ key: 'about', label: langStore.t.groupDetailAboutGeneric, icon: 'Info' })
   }
 
-  if (group.value?.rules_text) navs.push({ key: 'rules', label: 'Правила', icon: 'Shield' })
+  if (group.value?.rules_text) navs.push({ key: 'rules', label: langStore.t.groupDetailRulesNav, icon: 'Shield' })
   if ((group.value?.faq as any[])?.length) navs.push({ key: 'faq', label: 'FAQ', icon: 'HelpCircle' })
   return navs
 })
@@ -407,16 +414,16 @@ watch(activeContentTab, (val) => {
 
 const contentTabs = computed(() => {
   const tabs: { key: string; label: string; icon: string }[] = [
-    { key: 'posts',  label: 'Посты',      icon: 'Newspaper' },
-    { key: 'media',  label: 'Медиа',      icon: 'Image' },
+    { key: 'posts',  label: langStore.t.tabPosts,      icon: 'Newspaper' },
+    { key: 'media',  label: langStore.t.tabMedia,      icon: 'Image' },
   ]
   if (group.value?.type !== 'event') {
-    tabs.push({ key: 'events', label: 'События', icon: 'CalendarDays' })
+    tabs.push({ key: 'events', label: langStore.t.events, icon: 'CalendarDays' })
   }
   if (group.value?.type === 'event' && pastEvents.value.length) {
-    tabs.push({ key: 'archive', label: `Архив (${pastEvents.value.length})`, icon: 'Archive' })
+    tabs.push({ key: 'archive', label: `${langStore.t.archiveBtn} (${pastEvents.value.length})`, icon: 'Archive' })
   }
-  tabs.push({ key: 'members', label: 'Участники', icon: 'Users' })
+  tabs.push({ key: 'members', label: langStore.t.createStep2Title, icon: 'Users' })
   return tabs
 })
 
@@ -463,10 +470,10 @@ const socialIconMap: Record<string, string> = {
   telegram: 'Send', discord: 'MessageCircle', twitter: 'Twitter', vk: 'Globe', website: 'Globe',
 }
 
-const typeLabels: Record<string, string> = {
-  event: 'Афиша', creative: 'Мастерская', artist: 'Художник', static: 'Паблик',
-  news: 'Новости', shop: 'Магазин', community: 'Сообщество', brand: 'Бренд',
-}
+const typeLabels = computed<Record<string, string>>(() => ({
+  event: langStore.t.catEvent, creative: langStore.t.groupDetailTypeCreative, artist: langStore.t.verTypeArtist, static: langStore.t.groupDetailTypeStatic,
+  news: langStore.t.groupDetailTypeNews, shop: langStore.t.shop, community: langStore.t.groupDetailTypeCommunity, brand: langStore.t.groupDetailTypeBrand,
+}))
 const typeColors: Record<string, string> = {
   event: 'bg-brand-success/15 text-brand-success border-brand-success/25',
   creative: 'bg-brand-purple/15 text-brand-purple border-brand-purple/25',
@@ -483,18 +490,27 @@ const ratingStars = computed(() => {
   return Array.from({ length: 5 }, (_, i) => i + 1 <= Math.round(group.value?.rating || 0) ? 'full' : 'empty')
 })
 
-const ticketStatusLabel = computed(() => {
+// Internal status code drives both the displayed label and its color — kept separate from
+// the (translated) display text so language switching can't break the comparison logic.
+const ticketStatusCode = computed<'sold_out' | 'limited' | 'on_sale' | ''>(() => {
   if (!activeEvent.value?.tickets?.length) return ''
   const total = activeEvent.value.tickets.reduce((s: number, t: any) => s + t.total_count, 0)
   const sold = activeEvent.value.tickets.reduce((s: number, t: any) => s + t.sold_count, 0)
-  if (sold >= total && total > 0) return 'sold out'
-  if (total > 0 && sold / total > 0.8) return 'билеты ограничены'
-  return total > 0 ? 'билеты в продаже' : ''
+  if (sold >= total && total > 0) return 'sold_out'
+  if (total > 0 && sold / total > 0.8) return 'limited'
+  return total > 0 ? 'on_sale' : ''
+})
+const ticketStatusLabel = computed(() => {
+  const c = ticketStatusCode.value
+  if (c === 'sold_out') return 'sold out'
+  if (c === 'limited') return langStore.t.groupDetailTicketsLimited
+  if (c === 'on_sale') return langStore.t.groupDetailTicketsOnSale
+  return ''
 })
 const ticketStatusColor = computed(() => {
-  const l = ticketStatusLabel.value
-  if (l === 'sold out') return 'bg-brand-error/15 text-brand-error'
-  if (l.includes('ограничены')) return 'bg-brand-yellow/15 text-brand-yellow'
+  const c = ticketStatusCode.value
+  if (c === 'sold_out') return 'bg-brand-error/15 text-brand-error'
+  if (c === 'limited') return 'bg-brand-yellow/15 text-brand-yellow'
   return 'bg-brand-success/15 text-brand-success'
 })
 
@@ -532,7 +548,9 @@ async function load() {
   if (group.value?.type === 'event' && activeEvent.value) {
     loadMyRsvp()
   }
+  if (isAdmin.value && group.value) messagesStore.fetchGroupInboxCount(group.value.id)
 }
+const inboxCount = computed(() => (group.value ? messagesStore.groupInboxCounts[group.value.id] ?? 0 : 0))
 const showScrollTop = ref(false)
 function handleScroll() { showScrollTop.value = window.scrollY > 500 }
 
@@ -632,9 +650,9 @@ async function openGroupChatOrInbox() {
   }
 }
 
-function fmt(iso: string) { return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) }
-function fmtTime(iso: string) { return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) }
-function fmtShort(iso: string) { return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) }
+function fmt(iso: string) { return new Date(iso).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'long', year: 'numeric' }) }
+function fmtTime(iso: string) { return new Date(iso).toLocaleTimeString(LANG_TO_LOCALE[langStore.currentLang], { hour: '2-digit', minute: '2-digit' }) }
+function fmtShort(iso: string) { return new Date(iso).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'short' }) }
 function fmtNum(n: number) { return n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n) }
 
 // Banner viewer
@@ -727,7 +745,7 @@ const vClickOutside = {
         <!-- Loading -->
         <div v-if="groupsStore.isLoading && !group" class="flex flex-col items-center justify-center gap-4 py-32">
           <div class="w-12 h-12 border-[3px] border-brand-accent border-t-transparent rounded-full animate-spin"></div>
-          <p class="text-sm text-white/55 font-semibold">Загрузка группы…</p>
+          <p class="text-sm text-white/55 font-semibold">{{ langStore.t.groupDetailLoadingGroup }}</p>
         </div>
 
         <!-- Not found -->
@@ -735,10 +753,10 @@ const vClickOutside = {
           <div class="w-16 h-16 rounded-2xl bg-brand-bg border border-brand-border flex items-center justify-center mx-auto mb-4">
             <BIcon name="AlertCircle" class="w-8 h-8 text-brand-error" />
           </div>
-          <p class="text-white font-bold text-lg mb-2">Группа не найдена</p>
-          <p class="text-white/55 text-sm mb-6">Возможно, группа была удалена или ссылка неверна</p>
+          <p class="text-white font-bold text-lg mb-2">{{ langStore.t.groupDetailNotFoundTitle }}</p>
+          <p class="text-white/55 text-sm mb-6">{{ langStore.t.groupDetailNotFoundDesc }}</p>
           <button @click="router.push({ name: 'groups' })" class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-card border border-brand-border hover:border-brand-accent text-sm font-bold rounded-xl transition-all">
-            <BIcon name="ArrowLeft" class="w-4 h-4" /> К списку групп
+            <BIcon name="ArrowLeft" class="w-4 h-4" /> {{ langStore.t.groupDetailBackToGroupsList }}
           </button>
         </div>
 
@@ -762,7 +780,7 @@ const vClickOutside = {
             <div v-if="isOwner" class="absolute top-3 right-3 z-10">
               <button @click.stop="router.push({ name: 'group-settings', params: { slugOrId: group!.slug } })"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/50 hover:bg-black/70 border border-white/15 rounded-full text-xs font-semibold text-white/90 backdrop-blur-sm transition-all">
-                <BIcon name="Image" class="w-3 h-3" /> Баннер
+                <BIcon name="Image" class="w-3 h-3" /> {{ langStore.t.bannerBtnLabel }}
               </button>
             </div>
 
@@ -771,7 +789,7 @@ const vClickOutside = {
               <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm border"
                 :class="typeColors[group.type] || 'bg-brand-accent/15 text-brand-accent border-brand-accent/25'">
                 <BIcon :name="{ event: 'CalendarDays', creative: 'Scissors', artist: 'Palette', static: 'Rss', news: 'Newspaper', shop: 'ShoppingBag', community: 'Users', brand: 'Building2' }[group.type] || 'Image'" class="w-3 h-3" />
-                {{ typeLabels[group.type] || 'Группа' }}
+                {{ typeLabels[group.type] || langStore.t.groupDetailGenericTypeFallback }}
               </span>
             </div>
 
@@ -816,13 +834,13 @@ const vClickOutside = {
                       @click="showDonateModal = true"
                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold transition-all border"
                       :style="`background: ${group.accent_color || '#4C67CF'}15; color: ${group.accent_color || '#4C67CF'}; border-color: ${group.accent_color || '#4C67CF'}30; box-shadow: 0 2px 12px ${group.accent_color || '#4C67CF'}15`"
-                      title="Поддержать">
-                      <BIcon name="Heart" class="w-4 h-4" /> Поддержать
+                      :title="langStore.t.groupDetailSupportBtn">
+                      <BIcon name="Heart" class="w-4 h-4" /> {{ langStore.t.groupDetailSupportBtn }}
                     </button>
                     <button v-else-if="isOwner"
                       @click="router.push({ name: 'group-settings', params: { slugOrId: group!.slug } })"
                       class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg rounded-xl text-white/25 hover:text-white/55 transition-all"
-                      title="Донаты отключены — включить в настройках">
+                      :title="langStore.t.groupDetailDonationsDisabledTitle">
                       <BIcon name="DollarSign" class="w-4 h-4" />
                     </button>
                     <button v-if="isMember"
@@ -838,49 +856,56 @@ const vClickOutside = {
                     <button v-if="group.type === 'news' && isMember"
                       @click="router.push({ name: 'messages', query: { userId: group.owner.id } })"
                       class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border border-sky-500/30 text-sky-400 bg-sky-500/10 hover:bg-sky-500/20">
-                      <BIcon name="Send" class="w-4 h-4" /> Предложить новость
+                      <BIcon name="Send" class="w-4 h-4" /> {{ langStore.t.groupDetailSuggestNewsBtn }}
                     </button>
                     <button v-if="group.type === 'event' && !isMember && !isOwner && !isEventExpired"
                       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-bold transition-all shadow-lg"
                       :style="`background: ${group.accent_color || '#22c55e'}; box-shadow: 0 4px 14px ${group.accent_color || '#22c55e'}40`"
                       @click="handleJoin">
-                      <BIcon name="CalendarCheck" class="w-4 h-4" /> Я пойду!
+                      <BIcon name="CalendarCheck" class="w-4 h-4" /> {{ langStore.t.groupDetailImGoingBtn }}
                     </button>
                     <button v-else-if="group.type === 'event' && !isMember && !isOwner && isEventExpired"
                       @click="toggleGroupSubscribe" :disabled="isTogglingSubscribe"
-                      :title="isSubscribed ? 'Отписаться от уведомлений' : 'Следить за обновлениями — участие откроется, когда организатор назначит новую дату'"
+                      :title="isSubscribed ? langStore.t.groupDetailUnsubNotifyTitle : langStore.t.groupDetailFollowUpdatesTitle"
                       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
                       :class="isSubscribed
                         ? 'border border-brand-yellow/50 bg-brand-yellow/10 text-brand-yellow'
                         : 'bg-brand-accent text-white hover:bg-brand-accent-plus shadow-lg shadow-brand-accent/25'">
                       <BIcon :name="isSubscribed ? 'BellRing' : 'Bell'" class="w-4 h-4" />
-                      {{ isSubscribed ? 'Вы подписаны' : 'Следить за обновлениями' }}
+                      {{ isSubscribed ? langStore.t.groupDetailSubscribedLabel : langStore.t.groupDetailFollowUpdatesBtn }}
                     </button>
                     <button v-else-if="group.type !== 'event' && !isMember && !isOwner" @click="handleJoin"
                       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-all shadow-lg shadow-brand-accent/25">
-                      <BIcon name="UserPlus" class="w-4 h-4" /> Подписаться
+                      <BIcon name="UserPlus" class="w-4 h-4" /> {{ langStore.t.subscribe }}
                     </button>
                     <button v-else-if="isMember && !isOwner" @click="handleLeave"
                       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-border bg-brand-bg text-white/55 text-sm font-bold hover:bg-brand-border/50 transition-all">
-                      <BIcon name="UserMinus" class="w-4 h-4" /> Отписаться
+                      <BIcon name="UserMinus" class="w-4 h-4" /> {{ langStore.t.unsubscribe }}
                     </button>
                     <!-- Group chat: admins/owner → shared inbox; everyone else → their own thread with the group -->
                     <button v-if="isAdmin"
                       @click="openGroupChatOrInbox()"
-                      class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-border bg-brand-bg text-white/55 text-sm font-bold hover:border-brand-accent/60 hover:text-brand-accent transition-all">
-                      <BIcon name="Inbox" class="w-4 h-4" /> Обращения
+                      :class="['relative inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold transition-all',
+                        inboxCount > 0
+                          ? 'border-brand-accent/50 bg-brand-accent/10 text-brand-accent hover:bg-brand-accent/15'
+                          : 'border-brand-border bg-brand-bg text-white/55 hover:border-brand-accent/60 hover:text-brand-accent']">
+                      <BIcon name="Inbox" class="w-4 h-4" /> {{ langStore.t.groupDetailInboxBtn }}
+                      <span v-if="inboxCount > 0"
+                        class="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-brand-error text-white text-[11px] font-extrabold leading-none">
+                        {{ inboxCount > 99 ? '99+' : inboxCount }}
+                      </span>
                     </button>
                     <button v-else
                       @click="openGroupChatOrInbox()"
                       :disabled="dmLoading"
                       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-border bg-brand-bg text-white/55 text-sm font-bold hover:border-brand-accent/60 hover:text-brand-accent transition-all disabled:opacity-50">
                       <BIcon name="MessageCircle" class="w-4 h-4" />
-                      {{ dmLoading ? 'Открываю…' : 'Написать в группу' }}
+                      {{ dmLoading ? langStore.t.groupDetailOpeningEllipsis : langStore.t.groupDetailMessageGroupBtn }}
                     </button>
                     <button v-if="isOwner"
                       @click="router.push({ name: 'group-settings', params: { slugOrId: group!.slug } })"
                       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-border bg-brand-bg text-white/55 text-sm font-bold hover:border-brand-accent/60 hover:text-brand-accent transition-all">
-                      <BIcon name="Settings" class="w-4 h-4" /> Настройки
+                      <BIcon name="Settings" class="w-4 h-4" /> {{ langStore.t.settings }}
                     </button>
                     <!-- Bookmark group button (non-owners only) -->
                     <button
@@ -915,7 +940,7 @@ const vClickOutside = {
                             class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/65 hover:text-white hover:bg-white/5 transition-all"
                           >
                             <BIcon name="Link2" class="w-4 h-4 text-white/40" />
-                            Скопировать ссылку
+                            {{ langStore.t.exportCopyLink }}
                           </button>
 
                           <!-- Share -->
@@ -924,7 +949,7 @@ const vClickOutside = {
                             class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white/65 hover:text-white hover:bg-white/5 transition-all"
                           >
                             <BIcon name="Share2" class="w-4 h-4 text-white/40" />
-                            Поделиться
+                            {{ langStore.t.share }}
                           </button>
 
                           <!-- Divider -->
@@ -937,7 +962,7 @@ const vClickOutside = {
                             class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400/80 hover:text-red-400 hover:bg-red-500/8 transition-all"
                           >
                             <BIcon name="Flag" class="w-4 h-4" />
-                            Пожаловаться
+                            {{ langStore.t.report }}
                           </button>
                         </div>
                       </Transition>
@@ -958,7 +983,7 @@ const vClickOutside = {
                     <span v-if="group.type === 'creative' && group.commissionInfo"
                       class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase border"
                       :class="group.commissionInfo.status === 'open' ? 'bg-brand-success/15 text-brand-success border-brand-success/25' : group.commissionInfo.status === 'waitlist' ? 'bg-brand-yellow/15 text-brand-yellow border-brand-yellow/25' : 'bg-brand-error/15 text-brand-error border-brand-error/25'">
-                      {{ group.commissionInfo.status === 'open' ? 'Заказы открыты' : group.commissionInfo.status === 'waitlist' ? 'Лист ожидания' : 'Закрыты' }}
+                      {{ group.commissionInfo.status === 'open' ? langStore.t.groupDetailOrdersOpenBadge : group.commissionInfo.status === 'waitlist' ? langStore.t.groupDetailWaitlistBadge : langStore.t.groupDetailClosedBadge }}
                     </span>
                     <span v-if="group.is_nsfw" class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase bg-brand-error/15 text-brand-error border border-brand-error/25">18+</span>
                     <!-- Group tier badge -->
@@ -971,7 +996,7 @@ const vClickOutside = {
                     <!-- Verified badge -->
                     <span v-if="(group as any).is_verified"
                       class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase bg-sky-500/15 text-sky-400 border border-sky-500/25">
-                      <BIcon name="BadgeCheck" class="w-3 h-3" /> Верифицировано
+                      <BIcon name="BadgeCheck" class="w-3 h-3" /> {{ langStore.t.verBadgeGenericLabel }}
                     </span>
                   </div>
 
@@ -1035,14 +1060,14 @@ const vClickOutside = {
                     <BIcon name="CalendarX" class="w-5 h-5 text-brand-error" />
                   </div>
                   <div class="flex-1 min-w-0">
-                    <p class="text-white font-bold text-sm">Мероприятие завершилось</p>
+                    <p class="text-white font-bold text-sm">{{ langStore.t.groupDetailEventEndedTitle }}</p>
                     <p class="text-white/55 text-xs mt-0.5">
-                      Участие сброшено, SOON-бейджи убраны. {{ isAdmin ? 'Назначьте новую дату в настройках, чтобы возобновить.' : 'Дождитесь новой даты от организатора — пока доступна только подписка на уведомления.' }}
+                      {{ langStore.t.groupDetailEventEndedResetNotice }} {{ isAdmin ? langStore.t.groupDetailEventEndedAdminHint : langStore.t.groupDetailEventEndedMemberHint }}
                     </p>
                   </div>
                   <button v-if="isAdmin" @click="router.push({ name: 'group-settings', params: { slugOrId: group!.slug } })"
                     class="px-4 py-2 rounded-xl bg-brand-error/15 border border-brand-error/30 text-brand-error text-sm font-bold hover:bg-brand-error/25 transition-all flex-shrink-0">
-                    Назначить дату
+                    {{ langStore.t.groupDetailSetDateBtn }}
                   </button>
                 </div>
               </div>
@@ -1055,13 +1080,13 @@ const vClickOutside = {
                     <BIcon name="Star" class="w-5 h-5 text-brand-yellow" />
                   </div>
                   <div class="flex-1 min-w-0">
-                    <p class="text-white font-bold text-sm">Мероприятие завершилось!</p>
-                    <p class="text-white/55 text-xs mt-0.5">Поделитесь впечатлениями — ваш отзыв поможет другим</p>
+                    <p class="text-white font-bold text-sm">{{ langStore.t.groupDetailEventEndedExclaim }}</p>
+                    <p class="text-white/55 text-xs mt-0.5">{{ langStore.t.groupDetailShareImpressionsHint }}</p>
                   </div>
                   <div class="flex items-center gap-2 flex-shrink-0">
                     <button @click="showReviewModal = true"
                       class="px-4 py-2 rounded-xl bg-brand-yellow text-black text-sm font-bold hover:bg-brand-yellow/90 transition-all shadow-sm">
-                      Написать отзыв
+                      {{ langStore.t.groupDetailWriteReviewBtn }}
                     </button>
                     <button @click="reviewDismissed = true"
                       class="w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all">
@@ -1090,7 +1115,7 @@ const vClickOutside = {
                     <div v-if="group.about_text" class="bg-brand-bg/60 border border-brand-border/60 rounded-2xl px-5 pt-5 pb-4">
                       <div class="text-sm text-white/90 leading-relaxed" v-html="parseAboutText(group.about_text)" />
                     </div>
-                    <div v-else-if="!group.description" class="py-6 text-center text-white/35 text-sm">Описание пока не добавлено</div>
+                    <div v-else-if="!group.description" class="py-6 text-center text-white/35 text-sm">{{ langStore.t.groupDetailNoDescriptionYet }}</div>
 
                     <!-- Event-specific info -->
                     <template v-if="group.type === 'event' && activeEvent">
@@ -1099,7 +1124,7 @@ const vClickOutside = {
                           <BIcon name="Calendar" class="w-4 h-4 text-brand-accent" />
                         </div>
                         <div class="flex-1 min-w-0">
-                          <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold mb-0.5">Дата</p>
+                          <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold mb-0.5">{{ langStore.t.groupDetailDateLabel }}</p>
                           <p class="text-sm text-white font-bold">{{ fmt(activeEvent.starts_at) }} · {{ fmtTime(activeEvent.starts_at) }}–{{ fmtTime(activeEvent.ends_at) }}</p>
                         </div>
                       </div>
@@ -1108,7 +1133,7 @@ const vClickOutside = {
                           <BIcon name="MapPin" class="w-4 h-4 text-brand-success" />
                         </div>
                         <div class="flex-1 min-w-0">
-                          <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold mb-0.5">Место</p>
+                          <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold mb-0.5">{{ langStore.t.placeLabel }}</p>
                           <p class="text-sm text-white font-bold">{{ activeEvent.location_name }}</p>
                         </div>
                       </div>
@@ -1117,7 +1142,7 @@ const vClickOutside = {
                     <!-- What to bring -->
                     <div v-if="((activeEvent?.what_to_bring || group.what_to_bring) as any[])?.length" class="space-y-2">
                       <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5 px-1">
-                        <BIcon name="Backpack" class="w-3.5 h-3.5 text-brand-success" /> Что взять
+                        <BIcon name="Backpack" class="w-3.5 h-3.5 text-brand-success" /> {{ langStore.t.groupDetailWhatToBring }}
                       </p>
                       <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 space-y-1.5">
                         <div v-for="(item, idx) in ((activeEvent?.what_to_bring || group.what_to_bring) as string[])" :key="idx"
@@ -1134,15 +1159,15 @@ const vClickOutside = {
                         <div class="w-7 h-7 rounded-xl bg-emerald-500/15 flex items-center justify-center">
                           <BIcon name="Heart" class="w-3.5 h-3.5 text-emerald-400" />
                         </div>
-                        <p class="text-sm font-bold text-emerald-400">Набираем волонтёров</p>
+                        <p class="text-sm font-bold text-emerald-400">{{ langStore.t.groupDetailLookingForVolunteers }}</p>
                       </div>
                       <div class="px-4 py-3">
                         <p v-if="group.volunteers_info" class="text-sm text-white/60 leading-relaxed mb-3">{{ group.volunteers_info }}</p>
-                        <p v-else class="text-sm text-white/40 leading-relaxed mb-3">Мы ищем людей, которые хотят помочь с организацией мероприятия.</p>
+                        <p v-else class="text-sm text-white/40 leading-relaxed mb-3">{{ langStore.t.groupDetailVolunteersDefaultText }}</p>
                         <a :href="`mailto:${group.contact_email || ''}`"
                           class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 text-sm font-bold border border-emerald-500/20 transition-all">
                           <BIcon name="Send" class="w-3.5 h-3.5" />
-                          Стать волонтёром
+                          {{ langStore.t.groupDetailBecomeVolunteerBtn }}
                         </a>
                       </div>
                     </div>
@@ -1154,7 +1179,7 @@ const vClickOutside = {
                         <div v-else class="w-full h-full flex items-center justify-center"><BIcon name="User" class="w-5 h-5 text-brand-accent" /></div>
                       </div>
                       <div class="flex-1 min-w-0">
-                        <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold mb-0.5">{{ group.type === 'event' ? 'Организатор' : 'Создатель' }}</p>
+                        <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold mb-0.5">{{ group.type === 'event' ? langStore.t.verTypeOrganizer : langStore.t.groupDetailCreatorLabel }}</p>
                         <p class="text-sm text-white font-bold truncate group-hover:text-brand-accent transition-colors">{{ group.owner.display_name || group.owner.username }}</p>
                       </div>
                       <BIcon name="ChevronRight" class="w-4 h-4 text-white/25 group-hover:text-brand-accent transition-colors flex-shrink-0" />
@@ -1186,22 +1211,22 @@ const vClickOutside = {
                     <div v-if="group.commissionInfo" class="space-y-3">
                       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div class="bg-brand-bg border border-brand-border rounded-2xl p-4 flex items-center justify-between">
-                          <span class="text-white/60 text-sm">Комишены</span>
+                          <span class="text-white/60 text-sm">{{ langStore.t.groupDetailCommissionsLabel }}</span>
                           <span class="font-bold text-sm" :class="group.commissionInfo.status === 'open' ? 'text-brand-success' : group.commissionInfo.status === 'waitlist' ? 'text-brand-yellow' : 'text-brand-error'">
-                            {{ group.commissionInfo.status === 'open' ? 'Открыты' : group.commissionInfo.status === 'waitlist' ? 'Ожидание' : 'Закрыты' }}
+                            {{ group.commissionInfo.status === 'open' ? langStore.t.groupDetailStatusOpen : group.commissionInfo.status === 'waitlist' ? langStore.t.groupDetailStatusWaitlist : langStore.t.groupDetailStatusClosed }}
                           </span>
                         </div>
                         <div class="bg-brand-bg border border-brand-border rounded-2xl p-4 flex items-center justify-between">
-                          <span class="text-white/60 text-sm">Быстрые</span>
-                          <span class="font-bold text-sm" :class="(group.commissionInfo as any).rush_slots > 0 ? 'text-brand-success' : 'text-brand-error'">{{ (group.commissionInfo as any).rush_slots || 0 }} мест</span>
+                          <span class="text-white/60 text-sm">{{ langStore.t.groupDetailRushLabel }}</span>
+                          <span class="font-bold text-sm" :class="(group.commissionInfo as any).rush_slots > 0 ? 'text-brand-success' : 'text-brand-error'">{{ (group.commissionInfo as any).rush_slots || 0 }} {{ langStore.t.groupDetailSlotsUnit }}</span>
                         </div>
                         <div class="bg-brand-bg border border-brand-border rounded-2xl p-4 flex items-center justify-between">
-                          <span class="text-white/60 text-sm">Срок</span>
+                          <span class="text-white/60 text-sm">{{ langStore.t.groupDetailTurnaroundLabel }}</span>
                           <span class="text-white font-bold text-sm">{{ (group.commissionInfo as any).turnaround_days || '—' }}</span>
                         </div>
                       </div>
                       <div>
-                        <div class="flex justify-between text-xs text-white/50 mb-1"><span>Очередь</span><span>{{ group.commissionInfo.queue_count }} / {{ group.commissionInfo.max_queue }}</span></div>
+                        <div class="flex justify-between text-xs text-white/50 mb-1"><span>{{ langStore.t.groupDetailQueueLabel }}</span><span>{{ group.commissionInfo.queue_count }} / {{ group.commissionInfo.max_queue }}</span></div>
                         <div class="h-2 bg-brand-border rounded-full overflow-hidden">
                           <div class="h-full rounded-full transition-all duration-500"
                             :class="group.commissionInfo.queue_count >= group.commissionInfo.max_queue ? 'bg-brand-error' : 'bg-brand-accent'"
@@ -1213,13 +1238,13 @@ const vClickOutside = {
                     <!-- Прайс-лист -->
                     <div v-if="group.commissionInfo && Object.keys(group.commissionInfo.base_prices || {}).length" class="space-y-2">
                       <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5 px-1">
-                        <BIcon name="Wallet" class="w-3.5 h-3.5 text-brand-accent" /> Прайс-лист
+                        <BIcon name="Wallet" class="w-3.5 h-3.5 text-brand-accent" /> {{ langStore.t.groupDetailPriceListLabel }}
                       </p>
                       <div class="space-y-2">
                         <div v-for="(price, key) in (group.commissionInfo.base_prices as Record<string,number>)" :key="key"
                           class="flex items-center justify-between bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
                           <span class="text-white text-sm font-semibold capitalize">{{ String(key).replace(/_/g, ' ') }}</span>
-                          <span class="text-brand-accent font-extrabold">от {{ price }} {{ group.commissionInfo!.currency }}</span>
+                          <span class="text-brand-accent font-extrabold">{{ langStore.t.groupDetailFromPricePrefix }} {{ price }} {{ group.commissionInfo!.currency }}</span>
                         </div>
                       </div>
                     </div>
@@ -1227,7 +1252,7 @@ const vClickOutside = {
                     <!-- Детали -->
                     <div v-if="group.delivery_info || group.production_time || group.guarantee_text || group.completed_works" class="space-y-2">
                       <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5 px-1">
-                        <BIcon name="Package" class="w-3.5 h-3.5 text-brand-accent" /> Детали
+                        <BIcon name="Package" class="w-3.5 h-3.5 text-brand-accent" /> {{ langStore.t.groupDetailDetailsLabel }}
                       </p>
                       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div v-if="group.delivery_info" class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
@@ -1240,18 +1265,18 @@ const vClickOutside = {
                         </div>
                         <div v-if="group.production_time" class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
                           <BIcon name="Clock" class="w-4 h-4 text-brand-accent shrink-0" />
-                          <span class="text-sm text-white/60">Срок: {{ group.production_time }}</span>
+                          <span class="text-sm text-white/60">{{ langStore.t.groupDetailTurnaroundLabel }}: {{ group.production_time }}</span>
                         </div>
                         <div v-if="group.completed_works" class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
                           <BIcon name="Check" class="w-4 h-4 text-brand-success shrink-0" />
-                          <span class="text-sm text-white/60">{{ group.completed_works }} работ</span>
+                          <span class="text-sm text-white/60">{{ group.completed_works }} {{ langStore.t.groupDetailWorksCountSuffix }}</span>
                         </div>
                       </div>
                     </div>
 
                     <!-- Последние работы -->
                     <div v-if="(group.recent_works as any[])?.length" class="space-y-2">
-                      <p class="text-xs font-bold text-white/55 uppercase tracking-wider px-1">Последние работы</p>
+                      <p class="text-xs font-bold text-white/55 uppercase tracking-wider px-1">{{ langStore.t.groupDetailRecentWorksLabel }}</p>
                       <div class="flex gap-3 overflow-x-auto no-scrollbar pb-2">
                         <div v-for="(w, idx) in (group.recent_works as any[])" :key="idx"
                           class="w-32 h-32 rounded-2xl overflow-hidden shrink-0 relative group/work cursor-pointer border border-brand-border/60 hover:border-brand-accent/60 transition-all">
@@ -1259,7 +1284,7 @@ const vClickOutside = {
                           <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover/work:opacity-100 transition-opacity flex items-end p-2">
                             <div>
                               <p v-if="w.title" class="text-white text-xs font-bold leading-tight">{{ w.title }}</p>
-                              <p v-if="w.count" class="text-white/60 text-[10px]">{{ w.count }} фото</p>
+                              <p v-if="w.count" class="text-white/60 text-[10px]">{{ w.count }} {{ langStore.t.groupDetailPhotosUnit }}</p>
                             </div>
                           </div>
                         </div>
@@ -1276,7 +1301,7 @@ const vClickOutside = {
                         @click="router.push({ name: 'group-detail', params: { slugOrId: group.slug } })">
                         <!-- Date box -->
                         <div class="w-12 h-12 rounded-xl bg-brand-accent/10 border border-brand-accent/20 flex flex-col items-center justify-center flex-shrink-0">
-                          <span class="text-[10px] font-bold text-brand-accent/70 uppercase leading-none">{{ new Date(ev.starts_at).toLocaleDateString('ru-RU', { month: 'short' }) }}</span>
+                          <span class="text-[10px] font-bold text-brand-accent/70 uppercase leading-none">{{ new Date(ev.starts_at).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'short' }) }}</span>
                           <span class="text-lg font-extrabold text-white leading-none">{{ new Date(ev.starts_at).getDate() }}</span>
                         </div>
                         <div class="flex-1 min-w-0">
@@ -1296,7 +1321,7 @@ const vClickOutside = {
                         <BIcon name="ChevronRight" class="w-4 h-4 text-white/20 flex-shrink-0 self-center group-hover/ev:text-brand-accent transition-colors" />
                       </div>
                       <p v-if="!group.events?.filter((e: any) => new Date(e.starts_at) > new Date()).length"
-                        class="text-center text-white/35 text-sm py-6">Ближайших мероприятий не запланировано</p>
+                        class="text-center text-white/35 text-sm py-6">{{ langStore.t.groupDetailNoUpcomingEvents }}</p>
                     </template>
                   </div>
 
@@ -1310,20 +1335,25 @@ const vClickOutside = {
                           <p v-if="item.description" class="text-xs text-white/40 mt-0.5">{{ item.description }}</p>
                         </div>
                         <div class="text-right flex-shrink-0">
-                          <p class="text-sm font-extrabold" :style="`color: ${group.accent_color || '#4C67CF'}`">от {{ item.price_from }}₽</p>
+                          <p class="text-sm font-extrabold" :style="`color: ${group.accent_color || '#4C67CF'}`">{{ langStore.t.groupDetailFromPricePrefix }} {{ item.price_from }}₽</p>
                           <p v-if="item.days" class="text-[10px] text-white/35">{{ item.days }}</p>
                         </div>
                       </div>
                     </template>
                     <template v-else-if="group.type === 'creative'">
-                      <div v-for="item in [['Голова','Голова + глаза + зубы','25 000','1–2 мес.'],['Парциал','Голова + лапы + хвост','45 000','2–3 мес.'],['Мини-фулл','Голова + верх + лапы','60 000','3–4 мес.'],['Фуллсьют','Полный костюм','90 000','4–6 мес.']]" :key="item[0]"
+                      <div v-for="item in [
+                        [langStore.t.groupDetailFursuitHeadName, langStore.t.groupDetailFursuitHeadDesc, '25 000', langStore.t.groupDetailDuration1to2mo],
+                        [langStore.t.groupDetailFursuitPartialName, langStore.t.groupDetailFursuitPartialDesc, '45 000', langStore.t.groupDetailDuration2to3mo],
+                        [langStore.t.groupDetailFursuitMiniFullName, langStore.t.groupDetailFursuitMiniFullDesc, '60 000', langStore.t.groupDetailDuration3to4mo],
+                        [langStore.t.groupDetailFursuitFullsuitName, langStore.t.groupDetailFursuitFullsuitDesc, '90 000', langStore.t.groupDetailDuration4to6mo],
+                      ]" :key="item[0]"
                         class="flex items-center gap-4 px-4 py-3.5 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-purple/30 transition-all">
                         <div class="flex-1 min-w-0">
                           <p class="text-sm font-bold text-white">{{ item[0] }}</p>
                           <p class="text-xs text-white/40 mt-0.5">{{ item[1] }}</p>
                         </div>
                         <div class="text-right flex-shrink-0">
-                          <p class="text-sm font-extrabold text-brand-purple">от {{ item[2] }}₽</p>
+                          <p class="text-sm font-extrabold text-brand-purple">{{ langStore.t.groupDetailFromPricePrefix }} {{ item[2] }}₽</p>
                           <p class="text-[10px] text-white/35">~{{ item[3] }}</p>
                         </div>
                       </div>
@@ -1331,29 +1361,29 @@ const vClickOutside = {
                     <template v-else-if="group.type === 'artist'">
                       <div class="space-y-3">
                         <div class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl px-4 py-3">
-                          <p class="text-[10px] text-white/30 uppercase tracking-wide mb-2 font-bold">Базовые</p>
+                          <p class="text-[10px] text-white/30 uppercase tracking-wide mb-2 font-bold">{{ langStore.t.groupDetailBasicPricesHeader }}</p>
                           <div class="grid grid-cols-2 gap-2">
-                            <div v-for="item in [['Скетч','500₽'],['Лайн','1 200₽'],['Флэт','2 000₽'],['Флэт + тени','3 000₽']]" :key="item[0]"
+                            <div v-for="item in [[langStore.t.groupDetailStageSketch,'500₽'],[langStore.t.groupDetailArtistLine,'1 200₽'],[langStore.t.groupDetailArtistFlat,'2 000₽'],[langStore.t.groupDetailArtistFlatShaded,'3 000₽']]" :key="item[0]"
                               class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5">
                               <p class="text-xs text-white/45">{{ item[0] }}</p>
-                              <p class="text-sm font-extrabold text-white mt-0.5">от {{ item[1] }}</p>
+                              <p class="text-sm font-extrabold text-white mt-0.5">{{ langStore.t.groupDetailFromPricePrefix }} {{ item[1] }}</p>
                             </div>
                           </div>
                         </div>
                         <div class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl px-4 py-3">
-                          <p class="text-[10px] text-white/30 uppercase tracking-wide mb-2 font-bold">Рендер</p>
+                          <p class="text-[10px] text-white/30 uppercase tracking-wide mb-2 font-bold">{{ langStore.t.groupDetailArtistRender }}</p>
                           <div class="grid grid-cols-2 gap-2">
-                            <div v-for="item in [['Рендер','5 000₽'],['Полный рендер','8 000₽'],['Гиф-анимация','12 000₽'],['Анимация','от 20 000₽']]" :key="item[0]"
+                            <div v-for="item in [[langStore.t.groupDetailArtistRender,'5 000₽'],[langStore.t.groupDetailArtistFullRender,'8 000₽'],[langStore.t.groupDetailArtistGifAnim,'12 000₽'],[langStore.t.groupDetailArtistAnimation, langStore.t.groupDetailAnimationFromPrice]]" :key="item[0]"
                               class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5">
                               <p class="text-xs text-white/45">{{ item[0] }}</p>
-                              <p class="text-sm font-extrabold text-white mt-0.5">от {{ item[1] }}</p>
+                              <p class="text-sm font-extrabold text-white mt-0.5">{{ item[1].startsWith(langStore.t.groupDetailFromPricePrefix) ? item[1] : `${langStore.t.groupDetailFromPricePrefix} ${item[1]}` }}</p>
                             </div>
                           </div>
                         </div>
                         <div class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl px-4 py-3">
-                          <p class="text-[10px] text-white/30 uppercase tracking-wide mb-2 font-bold">Наценки</p>
+                          <p class="text-[10px] text-white/30 uppercase tracking-wide mb-2 font-bold">{{ langStore.t.groupDetailSurchargesHeader }}</p>
                           <div class="space-y-1">
-                            <div v-for="item in [['Сложный дизайн','+30%'],['Срочный заказ (до 7 дн.)','+50%'],['Дополнительный персонаж','+70%'],['Сцена/фон','+800₽']]" :key="item[0]"
+                            <div v-for="item in [[langStore.t.groupDetailSurchargeComplexDesign,'+30%'],[langStore.t.groupDetailSurchargeRushOrder,'+50%'],[langStore.t.groupDetailSurchargeExtraChar,'+70%'],[langStore.t.groupDetailSurchargeSceneBg,'+800₽']]" :key="item[0]"
                               class="flex items-center justify-between px-2 py-1.5">
                               <p class="text-xs text-white/55">{{ item[0] }}</p>
                               <p class="text-xs font-bold text-brand-yellow">{{ item[1] }}</p>
@@ -1361,7 +1391,7 @@ const vClickOutside = {
                           </div>
                         </div>
                       </div>
-                      <p class="text-[10px] text-white/25 text-center">* Финальная цена обсуждается индивидуально</p>
+                      <p class="text-[10px] text-white/25 text-center">* {{ langStore.t.groupDetailFinalPriceNote }}</p>
                     </template>
                   </div>
 
@@ -1395,8 +1425,8 @@ const vClickOutside = {
                     </template>
                     <div v-else class="py-8 text-center">
                       <BIcon name="Star" class="w-8 h-8 mx-auto mb-2 text-white/20" />
-                      <p class="text-white/40 text-sm">Отзывов пока нет</p>
-                      <p class="text-white/25 text-xs mt-1">Отзывы оставляют клиенты после выполненного заказа</p>
+                      <p class="text-white/40 text-sm">{{ langStore.t.dealerListingNoReviewsYet }}</p>
+                      <p class="text-white/25 text-xs mt-1">{{ langStore.t.groupDetailReviewsEmptyHint }}</p>
                     </div>
                   </div>
 
@@ -1418,8 +1448,8 @@ const vClickOutside = {
                     </template>
                     <div v-else class="py-8 text-center">
                       <BIcon name="Newspaper" class="w-8 h-8 mx-auto mb-2 text-white/20" />
-                      <p class="text-white/40 text-sm font-semibold">Дайджест ещё не опубликован</p>
-                      <p class="text-white/25 text-xs mt-1">Свежий выпуск появится здесь</p>
+                      <p class="text-white/40 text-sm font-semibold">{{ langStore.t.groupDetailDigestEmptyTitle }}</p>
+                      <p class="text-white/25 text-xs mt-1">{{ langStore.t.groupDetailDigestEmptyHint }}</p>
                     </div>
                   </div>
 
@@ -1437,7 +1467,13 @@ const vClickOutside = {
                       </button>
                     </template>
                     <template v-else>
-                      <div v-for="cat in [['🎪','Конвенты','Анонсы и отчёты'],['😂','Мемы','Лучшее из фандома'],['🎤','Интервью','С авторами и мастерами'],['🎨','Арт-подборки','Лучшие работы недели'],['📢','Официальное','Важные новости']]" :key="cat[0]"
+                      <div v-for="cat in [
+                        ['🎪', langStore.t.groupDetailCatConventions, langStore.t.groupDetailCatConventionsDesc],
+                        ['😂', langStore.t.groupDetailCatMemes, langStore.t.groupDetailCatMemesDesc],
+                        ['🎤', langStore.t.groupDetailCatInterviews, langStore.t.groupDetailCatInterviewsDesc],
+                        ['🎨', langStore.t.groupDetailCatArtSelections, langStore.t.groupDetailCatArtSelectionsDesc],
+                        ['📢', langStore.t.groupDetailCatOfficial, langStore.t.groupDetailCatOfficialDesc],
+                      ]" :key="cat[0]"
                         class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-sky-500/30 transition-all cursor-pointer">
                         <span class="text-xl flex-shrink-0">{{ cat[0] }}</span>
                         <div class="flex-1 min-w-0">
@@ -1460,7 +1496,7 @@ const vClickOutside = {
                         </div>
                         <div class="flex-1 min-w-0">
                           <p class="text-sm font-bold text-white truncate">{{ member.user?.display_name || member.user?.username }}</p>
-                          <p class="text-xs text-white/40">{{ member.role || 'Редактор' }}</p>
+                          <p class="text-xs text-white/40">{{ member.role || langStore.t.groupDetailEditorRoleFallback }}</p>
                         </div>
                         <BIcon name="ChevronRight" class="w-4 h-4 text-white/20 flex-shrink-0" />
                       </router-link>
@@ -1474,7 +1510,7 @@ const vClickOutside = {
                         </div>
                         <div class="flex-1 min-w-0">
                           <p class="text-sm font-bold text-white truncate">{{ group.owner.display_name || group.owner.username }}</p>
-                          <p class="text-xs text-sky-400">Главный редактор</p>
+                          <p class="text-xs text-sky-400">{{ langStore.t.groupDetailChiefEditor }}</p>
                         </div>
                         <BIcon name="ChevronRight" class="w-4 h-4 text-white/20 flex-shrink-0" />
                       </router-link>
@@ -1498,15 +1534,15 @@ const vClickOutside = {
                         <div class="pr-3 flex-shrink-0">
                           <button class="px-4 py-2 rounded-xl text-xs font-bold text-white"
                             :style="`background: ${group.accent_color || '#8B5CF6'}`">
-                            Купить
+                            {{ langStore.t.groupDetailBuyBtn }}
                           </button>
                         </div>
                       </div>
                     </template>
                     <div v-else class="py-10 text-center">
                       <BIcon name="ShoppingBag" class="w-10 h-10 mx-auto mb-3 text-white/20" />
-                      <p class="text-white/40 text-sm font-semibold">В маркете пока пусто</p>
-                      <p class="text-white/25 text-xs mt-1">Здесь будут готовые работы для продажи</p>
+                      <p class="text-white/40 text-sm font-semibold">{{ langStore.t.groupDetailMarketEmptyTitle }}</p>
+                      <p class="text-white/25 text-xs mt-1">{{ langStore.t.groupDetailMarketEmptyHint }}</p>
                     </div>
                   </div>
 
@@ -1531,21 +1567,21 @@ const vClickOutside = {
                         </div>
                         <a v-if="sp.url" :href="sp.url" target="_blank"
                           class="text-brand-success text-xs font-bold hover:underline flex-shrink-0 flex items-center gap-1">
-                          Сайт <BIcon name="ExternalLink" class="w-3 h-3" />
+                          {{ langStore.t.groupDetailWebsiteLinkLabel }} <BIcon name="ExternalLink" class="w-3 h-3" />
                         </a>
                       </div>
                     </template>
                     <div v-else class="py-8 text-center">
                       <BIcon name="Star" class="w-8 h-8 mx-auto mb-2 text-white/20" />
-                      <p class="text-white/40 text-sm font-semibold">Спонсоры не объявлены</p>
-                      <p class="text-white/25 text-xs mt-1">Информация о партнёрах появится здесь</p>
+                      <p class="text-white/40 text-sm font-semibold">{{ langStore.t.groupDetailSponsorsEmptyTitle }}</p>
+                      <p class="text-white/25 text-xs mt-1">{{ langStore.t.groupDetailSponsorsEmptyHint }}</p>
                     </div>
                   </div>
 
                   <!-- Event: Контакты + карта проезда -->
                   <div v-else-if="aboutTab === 'contacts'" class="space-y-4">
                     <div v-if="group.contact_email || group.contact_phone" class="space-y-2">
-                      <p class="text-[11px] font-bold text-white/40 uppercase tracking-wider px-1">Контакты организатора</p>
+                      <p class="text-[11px] font-bold text-white/40 uppercase tracking-wider px-1">{{ langStore.t.groupDetailOrganizerContactsLabel }}</p>
                       <a v-if="group.contact_phone" :href="`tel:${group.contact_phone}`"
                         class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-success/30 transition-all group/link">
                         <div class="w-9 h-9 rounded-xl bg-brand-success/10 border border-brand-success/20 flex items-center justify-center flex-shrink-0">
@@ -1562,7 +1598,7 @@ const vClickOutside = {
                       </a>
                     </div>
                     <div v-if="activeEvent?.location_name" class="space-y-2">
-                      <p class="text-[11px] font-bold text-white/40 uppercase tracking-wider px-1">Место проведения</p>
+                      <p class="text-[11px] font-bold text-white/40 uppercase tracking-wider px-1">{{ langStore.t.groupDetailVenueLabel }}</p>
                       <div class="px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
                         <div class="flex items-start gap-3">
                           <BIcon name="MapPin" class="w-4 h-4 text-brand-success mt-0.5 flex-shrink-0" />
@@ -1577,7 +1613,7 @@ const vClickOutside = {
                       </div>
                     </div>
                     <div v-if="group.social_links && Object.keys(group.social_links).length" class="space-y-2">
-                      <p class="text-[11px] font-bold text-white/40 uppercase tracking-wider px-1">Ссылки и соцсети</p>
+                      <p class="text-[11px] font-bold text-white/40 uppercase tracking-wider px-1">{{ langStore.t.groupDetailSocialLinksLabel }}</p>
                       <div class="grid grid-cols-2 gap-2">
                         <a v-for="(url, platform) in group.social_links" :key="platform"
                           :href="url" target="_blank"
@@ -1589,14 +1625,14 @@ const vClickOutside = {
                     </div>
                     <div v-if="!group.contact_email && !group.contact_phone && !activeEvent?.location_name" class="py-8 text-center">
                       <BIcon name="MapPin" class="w-8 h-8 mx-auto mb-2 text-white/20" />
-                      <p class="text-white/40 text-sm">Контактная информация не указана</p>
+                      <p class="text-white/40 text-sm">{{ langStore.t.groupDetailNoContactInfo }}</p>
                     </div>
                   </div>
 
                   <!-- Schedule tab -->
                   <div v-else-if="aboutTab === 'schedule'" class="space-y-1">
                     <div v-if="!((activeEvent?.schedule || group.schedule) as any[])?.length" class="py-10 text-center text-white/30 text-sm">
-                      Расписание ещё не добавлено
+                      {{ langStore.t.groupDetailScheduleEmptyText }}
                     </div>
                     <template v-else>
                       <!-- Day header if present -->
@@ -1604,7 +1640,7 @@ const vClickOutside = {
                         <BIcon name="CalendarDays" class="w-4 h-4 shrink-0" :style="`color: ${group.accent_color || '#4C67CF'}`" />
                         <p class="text-sm font-extrabold text-white">{{ activeEvent?.title || group.name }}</p>
                         <div class="flex-1 h-px bg-brand-border/40 rounded ml-2" />
-                        <span class="text-[11px] text-white/30 tabular-nums">{{ ((activeEvent?.schedule || group.schedule) as any[]).length }} событий</span>
+                        <span class="text-[11px] text-white/30 tabular-nums">{{ ((activeEvent?.schedule || group.schedule) as any[]).length }} {{ langStore.t.groupDetailEventsCountSuffix }}</span>
                       </div>
                       <!-- Timeline -->
                       <div class="relative pl-5">
@@ -1683,7 +1719,7 @@ const vClickOutside = {
 
                   <!-- Title field (news articles only) -->
                   <div v-if="archetypeComposer.showTitle" class="px-0.5">
-                    <input v-model="newPostTitle" type="text" placeholder="Заголовок статьи…"
+                    <input v-model="newPostTitle" type="text" :placeholder="langStore.t.groupDetailArticleTitlePlaceholder"
                       class="w-full bg-transparent border-b border-brand-border focus:border-brand-accent/50 outline-none text-white text-lg font-bold placeholder-white/25 pb-2 mb-1 transition-colors" />
                   </div>
 
@@ -1693,7 +1729,7 @@ const vClickOutside = {
                       <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold">{{ (group.name || '?')[0].toUpperCase() }}</div>
                     </div>
                     <div class="flex-1 min-w-0">
-                      <MentionTextarea v-model="newPostContent" :placeholder="archetypeComposer.placeholder + ' Используйте @ для упоминаний'" minHeight="90px" />
+                      <MentionTextarea v-model="newPostContent" :placeholder="archetypeComposer.placeholder + ' ' + langStore.t.groupDetailMentionHint" minHeight="90px" />
                     </div>
                     <button @click="createGroupPost" :disabled="(!newPostContent.trim() && newPostMediaUrls.length === 0) || isCreatingPost"
                       class="w-10 h-10 rounded-full flex items-center justify-center bg-brand-accent text-white hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-accent/25 flex-shrink-0 mt-0.5">
@@ -1704,14 +1740,14 @@ const vClickOutside = {
 
                   <!-- Creative status chips -->
                   <div v-if="group.type === 'creative'" class="flex gap-2 flex-wrap px-1">
-                    <p class="text-[10px] text-white/30 w-full font-bold uppercase tracking-wide">Стадия работы:</p>
-                    <button v-for="s in creativePostStatuses" :key="s"
-                      @click="selectedCreativeStatus = selectedCreativeStatus === s ? '' : s"
+                    <p class="text-[10px] text-white/30 w-full font-bold uppercase tracking-wide">{{ langStore.t.groupDetailStageOfWork }}</p>
+                    <button v-for="s in creativePostStatuses" :key="s.value"
+                      @click="selectedCreativeStatus = selectedCreativeStatus === s.value ? '' : s.value"
                       class="px-3 py-1 rounded-full text-xs font-bold border transition-all"
-                      :style="selectedCreativeStatus === s
+                      :style="selectedCreativeStatus === s.value
                         ? `background: ${group.accent_color || '#4C67CF'}20; border-color: ${group.accent_color || '#4C67CF'}60; color: ${group.accent_color || '#4C67CF'}`
                         : 'border-color: rgba(255,255,255,0.1); color: rgba(255,255,255,0.4)'">
-                      {{ s }}
+                      {{ s.label }}
                     </button>
                   </div>
 
@@ -1730,7 +1766,7 @@ const vClickOutside = {
                   <div class="flex items-center gap-2 flex-wrap">
                     <button @click="groupMediaUploadRef?.openPicker()"
                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white/55 hover:text-white hover:bg-brand-bg border border-transparent hover:border-brand-border transition-all">
-                      <BIcon name="ImagePlus" class="w-4 h-4" /> Медиа
+                      <BIcon name="ImagePlus" class="w-4 h-4" /> {{ langStore.t.tabMedia }}
                     </button>
                     <!-- Tag input -->
                     <div class="relative inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-transparent hover:border-brand-border hover:bg-brand-bg transition-all">
@@ -1739,7 +1775,7 @@ const vClickOutside = {
                         @input="fetchTagSuggestions(newPostTagInput)"
                         @keydown.enter.prevent="addGroupTag"
                         @keydown.escape="clearTagSuggestions"
-                        placeholder="тег + Enter"
+                        :placeholder="langStore.t.profileTagPlusEnterPlaceholder"
                         class="bg-transparent text-xs text-white placeholder-brand-muted outline-none w-24" />
 
                       <!-- Tag suggestions, ranked by usage -->
@@ -1762,7 +1798,7 @@ const vClickOutside = {
                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all"
                       :class="newPostIsAnnouncement ? 'border-brand-yellow/60 text-brand-yellow bg-brand-yellow/10' : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'">
                       <BIcon name="Megaphone" class="w-3.5 h-3.5" />
-                      Анонс
+                      {{ langStore.t.groupDetailAnnounceToggleLabel }}
                     </button>
                     <!-- AI-generated toggle -->
                     <button @click="newPostIsAiGenerated = !newPostIsAiGenerated"
@@ -1780,7 +1816,7 @@ const vClickOutside = {
                         class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all"
                         :class="newPostVisibility !== 'public' ? 'border-brand-accent/50 text-brand-accent bg-brand-accent/10' : 'border-transparent text-white/55 hover:border-brand-border hover:bg-brand-bg hover:text-white'">
                         <BIcon :name="newPostVisibility === 'subscriber_only' ? 'Users' : newPostVisibility === 'paid' ? 'DollarSign' : 'Globe2'" class="w-3.5 h-3.5" />
-                        {{ newPostVisibility === 'subscriber_only' ? 'Только Подписчикам' : newPostVisibility === 'paid' ? 'Платный пост' : 'Видно всем' }}
+                        {{ newPostVisibility === 'subscriber_only' ? langStore.t.profileVisibilitySubscriberOnly : newPostVisibility === 'paid' ? langStore.t.profileVisibilityPaid : langStore.t.profileVisibilityPublic }}
                         <BIcon name="ChevronDown" class="w-3 h-3 opacity-60" />
                       </button>
                       <Transition name="slide">
@@ -1789,25 +1825,25 @@ const vClickOutside = {
                           <button @click="newPostVisibility = 'public'; showGroupVisibilityMenu = false"
                             class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
                             :class="newPostVisibility === 'public' ? 'text-brand-accent' : 'text-white'">
-                            <BIcon name="Globe2" class="w-4 h-4 flex-shrink-0" /> Видно всем
+                            <BIcon name="Globe2" class="w-4 h-4 flex-shrink-0" /> {{ langStore.t.profileVisibilityPublic }}
                             <BIcon v-if="newPostVisibility === 'public'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
                           </button>
                           <button @click="newPostVisibility = 'subscriber_only'; showGroupVisibilityMenu = false"
                             class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
                             :class="newPostVisibility === 'subscriber_only' ? 'text-brand-accent' : 'text-white'">
-                            <BIcon name="Users" class="w-4 h-4 flex-shrink-0" /> Только Подписчикам
+                            <BIcon name="Users" class="w-4 h-4 flex-shrink-0" /> {{ langStore.t.profileVisibilitySubscriberOnly }}
                             <BIcon v-if="newPostVisibility === 'subscriber_only'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
                           </button>
-                          <button disabled title="Скоро будет доступно"
+                          <button disabled :title="langStore.t.payModalAltComingSoon"
                             class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white/30 cursor-not-allowed">
-                            <BIcon name="DollarSign" class="w-4 h-4 flex-shrink-0" /> Платный пост
-                            <span class="ml-auto text-[10px] uppercase tracking-wide">скоро</span>
+                            <BIcon name="DollarSign" class="w-4 h-4 flex-shrink-0" /> {{ langStore.t.profileVisibilityPaid }}
+                            <span class="ml-auto text-[10px] uppercase tracking-wide">{{ langStore.t.groupDetailComingSoonBadge }}</span>
                           </button>
                         </div>
                       </Transition>
                     </div>
                     <button @click="showPostForm = false; newPostContent = ''; newPostMediaUrls = []; newPostMediaOriginalUrls = []; newPostTags = []; newPostTagInput = ''; newPostVisibility = 'public'; newPostIsAnnouncement = false; newPostIsAiGenerated = false; groupMediaUploadRef?.clearAll()"
-                      class="text-xs font-semibold text-white/55 hover:text-white transition-all">Отмена</button>
+                      class="text-xs font-semibold text-white/55 hover:text-white transition-all">{{ langStore.t.cancel }}</button>
                   </div>
                 </div>
               </div>
@@ -1840,7 +1876,7 @@ const vClickOutside = {
                     <!-- Empty -->
                     <div v-else class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl p-8 text-center">
                       <BIcon name="Newspaper" class="w-10 h-10 mx-auto mb-3 text-white/20" />
-                      <p class="text-white/40 text-sm font-semibold">{{ (isAdmin || myRoleWeight >= 1) ? 'Напишите первый пост!' : 'Публикаций пока нет' }}</p>
+                      <p class="text-white/40 text-sm font-semibold">{{ (isAdmin || myRoleWeight >= 1) ? langStore.t.groupDetailWriteFirstPostHint : langStore.t.groupDetailNoPublicationsYet }}</p>
                     </div>
                   </template>
 
@@ -1851,14 +1887,14 @@ const vClickOutside = {
                       <button v-for="f in (['all','photo','video'] as const)" :key="f" @click="groupMediaFilter = f"
                         class="px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all"
                         :class="groupMediaFilter === f ? 'bg-brand-accent border-brand-accent text-white' : 'border-brand-border text-white/55 hover:text-white'">
-                        {{ f === 'all' ? `Всё · ${groupMediaPostsList.length}` : f === 'photo' ? `Фото · ${groupMediaPostsList.filter((p: any) => isGroupImage(p.media_urls[0])).length}` : `Видео · ${groupMediaPostsList.filter((p: any) => !isGroupImage(p.media_urls[0])).length}` }}
+                        {{ f === 'all' ? `${langStore.t.groupDetailAllFilterLabel} · ${groupMediaPostsList.length}` : f === 'photo' ? `${langStore.t.feedPhoto} · ${groupMediaPostsList.filter((p: any) => isGroupImage(p.media_urls[0])).length}` : `${langStore.t.profileMediaFilterVideoLabel} · ${groupMediaPostsList.filter((p: any) => !isGroupImage(p.media_urls[0])).length}` }}
                       </button>
                       <div class="flex-1" />
                       <button @click.stop="groupMediaAlbumView = !groupMediaAlbumView"
                         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all"
                         :class="groupMediaAlbumView ? 'bg-brand-accent/15 border-brand-accent/60 text-brand-accent' : 'border-brand-border text-white/55 hover:text-white'">
                         <BIcon name="FolderOpen" class="w-3.5 h-3.5" />
-                        Альбомы
+                        {{ langStore.t.profileAlbumsLabel }}
                       </button>
                     </div>
 
@@ -1867,7 +1903,7 @@ const vClickOutside = {
                     </div>
                     <div v-else-if="!filteredGroupMediaPosts.length" class="py-14 text-center">
                       <BIcon name="Image" class="w-10 h-10 mx-auto mb-3 text-white/20" />
-                      <p class="text-white/40 text-sm font-semibold">Медиа пока нет</p>
+                      <p class="text-white/40 text-sm font-semibold">{{ langStore.t.noMediaYet }}</p>
                     </div>
                     <template v-else>
                       <!-- Album view -->
@@ -1892,7 +1928,7 @@ const vClickOutside = {
                                 <BIcon name="CalendarDays" class="w-3 h-3 text-brand-accent/80" />
                                 <p class="text-xs font-bold text-white">{{ album.label }}</p>
                               </div>
-                              <p class="text-[10px] text-white/55 font-semibold">{{ album.urls.length }} фото</p>
+                              <p class="text-[10px] text-white/55 font-semibold">{{ album.urls.length }} {{ langStore.t.profilePhotosCountUnit }}</p>
                             </div>
                             <div class="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
                               <BIcon name="FolderOpen" class="w-3.5 h-3.5 text-white" />
@@ -1929,7 +1965,7 @@ const vClickOutside = {
                     <Transition name="slide-up">
                       <div v-if="expandedGroupMediaPost" class="mt-3 bg-brand-bg border border-brand-border rounded-2xl p-4">
                         <div class="flex items-center justify-between mb-3">
-                          <span class="text-sm font-bold text-white/70">{{ new Date(expandedGroupMediaPost.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) }}</span>
+                          <span class="text-sm font-bold text-white/70">{{ new Date(expandedGroupMediaPost.created_at).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'long', year: 'numeric' }) }}</span>
                           <button @click="expandedGroupMediaPost = null" class="w-7 h-7 flex items-center justify-center rounded-lg text-white/55 hover:text-white hover:bg-brand-border/50 transition">
                             <BIcon name="X" class="w-4 h-4" />
                           </button>
@@ -1944,7 +1980,7 @@ const vClickOutside = {
                               <div v-if="!nsfwMode && expandedGroupMediaPost.is_nsfw && isGroupImage(url)"
                                 class="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none">
                                 <span class="bg-brand-error/90 text-white text-xs font-extrabold uppercase px-3 py-1.5 rounded-xl shadow-lg">18+</span>
-                                <span class="text-white/70 text-[11px]">Включите NSFW-режим для просмотра</span>
+                                <span class="text-white/70 text-[11px]">{{ langStore.t.groupDetailEnableNsfwToView }}</span>
                               </div>
                             </div>
                           </template>
@@ -1959,9 +1995,9 @@ const vClickOutside = {
                   <template v-else-if="activeContentTab === 'archive'">
                     <div class="flex items-center gap-4 border-b border-brand-border pb-3 mb-4">
                       <BIcon name="Archive" class="w-4 h-4 text-white/30" />
-                      <span class="text-sm font-bold text-white/55">Прошедшие конвенты</span>
+                      <span class="text-sm font-bold text-white/55">{{ langStore.t.groupDetailPastConventionsLabel }}</span>
                       <div class="flex-1" />
-                      <span class="text-white/30 text-xs">{{ pastEvents.length }} записей</span>
+                      <span class="text-white/30 text-xs">{{ pastEvents.length }} {{ langStore.t.groupDetailRecordsCountSuffix }}</span>
                     </div>
                     <div v-if="pastEvents.length" class="space-y-3">
                       <div v-for="ev in pastEvents" :key="ev.id"
@@ -1982,7 +2018,7 @@ const vClickOutside = {
                               <BIcon name="MapPin" class="w-2.5 h-2.5" />{{ ev.location_name.split(',')[0] }}
                             </span>
                             <span v-if="ev.attendee_count" class="flex items-center gap-1 text-white/30 text-[10px]">
-                              <BIcon name="Users" class="w-2.5 h-2.5" />{{ fmtNum(ev.attendee_count) }} чел.
+                              <BIcon name="Users" class="w-2.5 h-2.5" />{{ fmtNum(ev.attendee_count) }} {{ langStore.t.groupDetailPeopleAbbr }}
                             </span>
                           </div>
                         </div>
@@ -1991,7 +2027,7 @@ const vClickOutside = {
                     </div>
                     <div v-else class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl p-8 text-center">
                       <BIcon name="Archive" class="w-10 h-10 mx-auto mb-3 text-white/20" />
-                      <p class="text-white/40 text-sm font-semibold">Прошедших событий нет</p>
+                      <p class="text-white/40 text-sm font-semibold">{{ langStore.t.groupDetailNoPastEvents }}</p>
                     </div>
                   </template>
 
@@ -1999,16 +2035,16 @@ const vClickOutside = {
                   <template v-else-if="activeContentTab === 'members'">
                     <div class="flex items-center gap-3 border-b border-brand-border pb-3 mb-4">
                       <BIcon name="Users" class="w-4 h-4 text-white/30" />
-                      <span class="text-sm font-bold text-white/55">Участники</span>
+                      <span class="text-sm font-bold text-white/55">{{ langStore.t.createStep2Title }}</span>
                       <span class="text-xs text-white/30 ml-auto">{{ fmtNum(group._count.members) }}</span>
                     </div>
                     <div v-if="membersLoading && !allMembers.length" class="grid grid-cols-2 gap-2">
                       <div v-for="i in 6" :key="i" class="h-16 bg-brand-bg/60 rounded-xl animate-pulse" />
                     </div>
                     <div v-else-if="allMembers.length" class="space-y-2">
-                      <div v-for="m in allMembers" :key="m.user_id ?? m.user?.id"
-                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-brand-bg/40 border border-brand-border/60 hover:border-brand-accent/30 transition-all cursor-pointer"
-                        @click="router.push({ name: 'profile', params: { username: m.user?.username } })">
+                      <router-link v-for="m in allMembers" :key="m.user_id ?? m.user?.id"
+                        :to="{ name: 'profile', params: { username: m.user?.username } }"
+                        class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-brand-bg/40 border border-brand-border/60 hover:border-brand-accent/30 transition-all cursor-pointer">
                         <div class="w-9 h-9 rounded-xl overflow-hidden border border-brand-border flex-shrink-0">
                           <img v-if="m.user?.avatar_url" :src="m.user.avatar_url" class="w-full h-full object-cover" />
                           <div v-else class="w-full h-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold">
@@ -2025,22 +2061,22 @@ const vClickOutside = {
                             'bg-brand-accent/15 text-brand-accent border-brand-accent/30': m.role === 'admin',
                             'bg-sky-500/15 text-sky-400 border-sky-500/30': m.role === 'moderator',
                           }">
-                          {{ m.role === 'owner' ? 'Владелец' : m.role === 'admin' ? 'Адмін' : 'Мод' }}
+                          {{ m.role === 'owner' ? langStore.t.roleOwner : m.role === 'admin' ? langStore.t.groupDetailRoleAdminAbbr : langStore.t.groupDetailRoleModAbbr }}
                         </span>
-                      </div>
+                      </router-link>
                       <button v-if="membersHasMore" @click="loadMoreMembers" :disabled="membersLoading"
                         class="w-full py-2.5 mt-2 rounded-xl border border-brand-border text-white/55 text-sm font-semibold hover:text-white hover:border-brand-accent/40 transition-all disabled:opacity-40">
-                        {{ membersLoading ? '…' : 'Загрузить ещё' }}
+                        {{ membersLoading ? '…' : langStore.t.bookmarksLoadMore }}
                       </button>
                     </div>
-                    <div v-else class="text-center py-10 text-white/30 text-sm">Участников пока нет</div>
+                    <div v-else class="text-center py-10 text-white/30 text-sm">{{ langStore.t.groupDetailNoMembersYet }}</div>
                   </template>
 
                   <!-- ── EVENTS TAB ─────────────────────────────────────── -->
                   <template v-else-if="activeContentTab === 'events'">
                     <div class="flex items-center gap-3 border-b border-brand-border pb-3 mb-4">
                       <BIcon name="CalendarDays" class="w-4 h-4 text-white/30" />
-                      <span class="text-sm font-bold text-white/55">События группы</span>
+                      <span class="text-sm font-bold text-white/55">{{ langStore.t.groupDetailGroupEventsLabel }}</span>
                     </div>
                     <div v-if="isGroupEventsLoading" class="space-y-3">
                       <div v-for="i in 3" :key="i" class="h-20 bg-brand-bg/60 rounded-xl animate-pulse" />
@@ -2065,7 +2101,7 @@ const vClickOutside = {
                         <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-lg bg-white/5 text-white/30 border border-white/10 self-start">#{{ ev.short_code }}</span>
                       </div>
                     </div>
-                    <div v-else class="text-center py-10 text-white/30 text-sm">Событий пока нет</div>
+                    <div v-else class="text-center py-10 text-white/30 text-sm">{{ langStore.t.groupDetailNoEventsYet }}</div>
                   </template>
 
                 </div>
@@ -2082,15 +2118,15 @@ const vClickOutside = {
                 <div class="grid grid-cols-3 divide-x divide-brand-border/60">
                   <div class="flex flex-col items-center gap-1 py-4 px-2">
                     <span class="text-lg font-extrabold leading-none" :style="`color: ${group.accent_color || '#4C67CF'}`">{{ fmtNum(group._count.members) }}</span>
-                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Участ.</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">{{ langStore.t.groupDetailMembersStatAbbr }}</span>
                   </div>
                   <div class="flex flex-col items-center gap-1 py-4 px-2">
                     <span class="text-lg font-extrabold text-white leading-none">{{ fmtNum(group._count.posts) }}</span>
-                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Постов</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">{{ langStore.t.posts }}</span>
                   </div>
                   <div class="flex flex-col items-center gap-1 py-4 px-2">
                     <span class="text-lg font-extrabold text-white leading-none">{{ fmtNum(group._count.events) }}</span>
-                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Событ.</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">{{ langStore.t.groupDetailEventsStatAbbr }}</span>
                   </div>
                 </div>
               </div>
@@ -2100,9 +2136,9 @@ const vClickOutside = {
                 <div class="px-4 pt-3.5 pb-2 flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <BIcon name="TrendingUp" class="w-3.5 h-3.5" :style="`color: ${group.accent_color || '#4C67CF'}`" />
-                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Рейтинг</p>
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.groupDetailRatingLabel }}</p>
                   </div>
-                  <p class="text-[10px] text-white/35">{{ group.rating_count }} голосов</p>
+                  <p class="text-[10px] text-white/35">{{ group.rating_count }} {{ langStore.t.groupDetailVotesCountSuffix }}</p>
                 </div>
                 <div class="px-4 pb-4">
                   <div class="flex items-center gap-3 mb-3">
@@ -2124,10 +2160,10 @@ const vClickOutside = {
                       :class="myVote === 1 ? 'text-white' : 'border-brand-border text-white/55 hover:text-white'"
                       :style="myVote === 1
                         ? `background: ${group.accent_color || '#4C67CF'}25; color: ${group.accent_color || '#4C67CF'}; border-color: ${group.accent_color || '#4C67CF'}50`
-                        : ''">▲ За</button>
+                        : ''">▲ {{ langStore.t.groupDetailVoteForBtn }}</button>
                     <button @click="submitVote(-1)" :disabled="ratingSubmitting"
                       class="flex-1 py-2 rounded-xl text-sm font-bold border transition-all"
-                      :class="myVote === -1 ? 'border-brand-error/60 text-brand-error bg-brand-error/15' : 'border-brand-border text-white/55 hover:border-brand-error/50 hover:text-brand-error hover:bg-brand-error/10'">▼ Против</button>
+                      :class="myVote === -1 ? 'border-brand-error/60 text-brand-error bg-brand-error/15' : 'border-brand-border text-white/55 hover:border-brand-error/50 hover:text-brand-error hover:bg-brand-error/10'">▼ {{ langStore.t.groupDetailVoteAgainstBtn }}</button>
                   </div>
                 </div>
               </div>
@@ -2142,10 +2178,10 @@ const vClickOutside = {
                       :style="`background: ${group.accent_color || '#4C67CF'}20`">
                       <BIcon name="CalendarCheck" class="w-4 h-4" :style="`color: ${group.accent_color || '#4C67CF'}`" />
                     </div>
-                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/65">Участие</p>
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/65">{{ langStore.t.groupDetailParticipationLabel }}</p>
                     <span v-if="activeEvent.attendee_count" class="ml-auto text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-full"
                       :style="`background: ${group.accent_color || '#4C67CF'}20; color: ${group.accent_color || '#4C67CF'}`">
-                      {{ fmtNum(activeEvent.attendee_count) }} чел.
+                      {{ fmtNum(activeEvent.attendee_count) }} {{ langStore.t.groupDetailPeopleAbbr }}
                     </span>
                   </div>
 
@@ -2157,7 +2193,7 @@ const vClickOutside = {
                         ? `background: transparent; color: ${group.accent_color || '#4C67CF'}; border: 2px solid ${group.accent_color || '#4C67CF'}60; box-shadow: inset 0 0 24px ${group.accent_color || '#4C67CF'}15`
                         : `background: ${group.accent_color || '#4C67CF'}; color: white; border: 2px solid transparent; box-shadow: 0 4px 18px ${group.accent_color || '#4C67CF'}40`">
                       <BIcon :name="myRsvpStatus === 'going' ? 'CheckCircle2' : 'CalendarCheck'" class="w-4 h-4" />
-                      {{ myRsvpStatus === 'going' ? 'Вы идёте!' : 'Пойду' }}
+                      {{ myRsvpStatus === 'going' ? langStore.t.groupDetailGoingConfirmedLabel : langStore.t.groupDetailGoBtn }}
                     </button>
 
                     <!-- Secondary row -->
@@ -2167,22 +2203,22 @@ const vClickOutside = {
                         :class="myRsvpStatus === 'maybe'
                           ? 'bg-brand-yellow/20 text-brand-yellow border-brand-yellow/40'
                           : 'bg-brand-bg border-brand-border text-white/55 hover:border-brand-yellow/40 hover:text-brand-yellow hover:bg-brand-yellow/5'">
-                        <BIcon name="HelpCircle" class="w-3.5 h-3.5" /> Возможно
+                        <BIcon name="HelpCircle" class="w-3.5 h-3.5" /> {{ langStore.t.groupDetailMaybeBtn }}
                       </button>
                       <button @click="setRsvp('not_going')" :disabled="rsvpLoading"
                         class="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all border"
                         :class="myRsvpStatus === 'not_going'
                           ? 'bg-brand-error/20 text-brand-error border-brand-error/40'
                           : 'bg-brand-bg border-brand-border text-white/55 hover:border-brand-error/40 hover:text-brand-error hover:bg-brand-error/5'">
-                        <BIcon name="X" class="w-3.5 h-3.5" /> Не пойду
+                        <BIcon name="X" class="w-3.5 h-3.5" /> {{ langStore.t.groupDetailNotGoingBtn }}
                       </button>
                     </div>
 
                     <!-- Status hint -->
                     <p v-if="myRsvpStatus" class="text-center text-[10px] text-white/30">
-                      <span v-if="myRsvpStatus === 'going'">🎉 Отлично! Вы добавлены в список участников</span>
-                      <span v-else-if="myRsvpStatus === 'maybe'">🤔 Ваш ответ «Возможно» записан</span>
-                      <span v-else>😔 Жаль! Отмена записана</span>
+                      <span v-if="myRsvpStatus === 'going'">{{ langStore.t.groupDetailRsvpGoingHint }}</span>
+                      <span v-else-if="myRsvpStatus === 'maybe'">{{ langStore.t.groupDetailRsvpMaybeHint }}</span>
+                      <span v-else>{{ langStore.t.groupDetailRsvpNotGoingHint }}</span>
                     </p>
                   </div>
                 </div>
@@ -2193,7 +2229,7 @@ const vClickOutside = {
                 <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                   <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
                     <BIcon name="Ticket" class="w-3.5 h-3.5 text-brand-accent" />
-                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Билеты</p>
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.groupSettingsSecTickets }}</p>
                   </div>
                   <div class="px-3 pb-3 space-y-2">
                     <TicketCard v-for="tier in activeEvent.tickets" :key="tier.id" :tier="tier" />
@@ -2206,23 +2242,23 @@ const vClickOutside = {
                 <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                   <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
                     <BIcon name="Clock" class="w-3.5 h-3.5 text-brand-accent" />
-                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Заказы</p>
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.groupDetailOrdersNav }}</p>
                   </div>
                   <div class="px-2 pb-2 space-y-0.5">
                     <div class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
                       <BIcon name="Clock" class="w-4 h-4 flex-shrink-0" :class="group.commissionInfo.status === 'open' ? 'text-brand-success' : 'text-brand-error'" />
                       <div class="min-w-0">
-                        <p class="text-[10px] text-white/55 uppercase tracking-wide">Комишены</p>
+                        <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.groupDetailCommissionsLabel }}</p>
                         <p class="text-xs font-bold" :class="group.commissionInfo.status === 'open' ? 'text-brand-success' : 'text-brand-error'">
-                          {{ group.commissionInfo.status === 'open' ? 'Открыты' : 'Закрыты' }}
+                          {{ group.commissionInfo.status === 'open' ? langStore.t.groupDetailStatusOpen : langStore.t.groupDetailStatusClosed }}
                         </p>
                       </div>
                     </div>
                     <div class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
                       <BIcon name="Zap" class="w-4 h-4 text-brand-yellow flex-shrink-0" />
                       <div class="min-w-0">
-                        <p class="text-[10px] text-white/55 uppercase tracking-wide">Быстрые</p>
-                        <p class="text-xs font-bold text-white">{{ (group.commissionInfo as any).rush_slots || 0 }} мест</p>
+                        <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.groupDetailRushLabel }}</p>
+                        <p class="text-xs font-bold text-white">{{ (group.commissionInfo as any).rush_slots || 0 }} {{ langStore.t.groupDetailSlotsUnit }}</p>
                       </div>
                     </div>
                   </div>
@@ -2235,7 +2271,7 @@ const vClickOutside = {
                   <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
                     <BIcon name="Crown" class="w-3.5 h-3.5 text-brand-yellow" />
                     <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">
-                      {{ group.type === 'artist' ? 'Подписки' : 'Поддержать студию' }}
+                      {{ group.type === 'artist' ? langStore.t.groupDetailSubscriptionsLabel : langStore.t.groupDetailSupportStudioLabel }}
                     </p>
                   </div>
                   <div class="px-3 pb-3 space-y-2">
@@ -2248,7 +2284,7 @@ const vClickOutside = {
                       </div>
                       <button class="px-2.5 py-1 rounded-xl text-[10px] font-bold flex-shrink-0"
                         :style="`background: ${group.accent_color || '#4C67CF'}15; color: ${group.accent_color || '#4C67CF'}; border: 1px solid ${group.accent_color || '#4C67CF'}30`">
-                        Поддержать
+                        {{ langStore.t.groupDetailSupportBtn }}
                       </button>
                     </div>
                   </div>
@@ -2260,10 +2296,16 @@ const vClickOutside = {
                 <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                   <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
                     <BIcon name="ShieldCheck" class="w-3.5 h-3.5 text-brand-success" />
-                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Гарантии</p>
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.groupDetailGuaranteesLabel }}</p>
                   </div>
                   <div class="px-3 pb-3 space-y-0.5">
-                    <div v-for="item in ['Поэтапная оплата с эскроу', 'Фото прогресса на каждом этапе', 'Договор до начала работы', 'Возврат аванса при отмене до старта', 'Примерочное видео перед отправкой']" :key="item"
+                    <div v-for="item in [
+                      langStore.t.groupDetailGuaranteeEscrow,
+                      langStore.t.groupDetailGuaranteeProgressPhotos,
+                      langStore.t.groupDetailGuaranteeContract,
+                      langStore.t.groupDetailGuaranteeRefund,
+                      langStore.t.groupDetailGuaranteeFittingVideo,
+                    ]" :key="item"
                       class="flex items-center gap-2 px-2 py-1.5 rounded-xl text-xs text-white/60">
                       <BIcon name="Check" class="w-3 h-3 text-brand-success flex-shrink-0" /> {{ item }}
                     </div>
@@ -2276,7 +2318,7 @@ const vClickOutside = {
                 <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                   <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
                     <BIcon name="Send" class="w-3.5 h-3.5 text-sky-400" />
-                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Каналы</p>
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.catNews }}</p>
                   </div>
                   <div class="px-2 pb-2 space-y-0.5">
                     <a v-for="(url, platform) in group.social_links" :key="platform" :href="url" target="_blank"
@@ -2294,7 +2336,7 @@ const vClickOutside = {
                 <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                   <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
                     <BIcon name="TrendingUp" class="w-3.5 h-3.5 text-sky-400" />
-                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">В тренде</p>
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.groupDetailTrendingLabel }}</p>
                   </div>
                   <div class="px-3 pb-3 flex flex-wrap gap-1.5">
                     <span v-for="tag in (group as any).trending_tags" :key="tag"
@@ -2310,20 +2352,20 @@ const vClickOutside = {
               <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                 <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
                   <BIcon name="Info" class="w-3.5 h-3.5 text-brand-accent" />
-                  <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Информация</p>
+                  <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.informationLabel }}</p>
                 </div>
                 <div class="px-2 pb-2 space-y-0.5">
                   <div class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
                     <BIcon name="Calendar" class="w-4 h-4 text-white/55 flex-shrink-0" />
                     <div class="min-w-0">
-                      <p class="text-[10px] text-white/55 uppercase tracking-wide">Создано</p>
+                      <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.groupDetailCreatedLabel }}</p>
                       <p class="text-xs text-white/80">{{ fmt(group.created_at) }}</p>
                     </div>
                   </div>
                   <div v-if="(group as any).type === 'event' && activeEvent" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
                     <BIcon name="Users" class="w-4 h-4 text-brand-success flex-shrink-0" />
                     <div class="min-w-0">
-                      <p class="text-[10px] text-white/55 uppercase tracking-wide">Пойдут</p>
+                      <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.groupDetailGoingCountLabel }}</p>
                       <p class="text-xs text-white font-bold">{{ fmtNum(activeEvent.attendee_count || 0) }}</p>
                     </div>
                   </div>
@@ -2334,7 +2376,7 @@ const vClickOutside = {
               <div v-if="!group.hide_admins && !JSON.parse(group.hidden_member_ids || '[]').includes(group.owner.id)" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                 <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
                   <BIcon name="Users" class="w-3.5 h-3.5 text-brand-purple" />
-                  <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Организаторы</p>
+                  <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.groupSettingsSecOrganizers }}</p>
                 </div>
                 <!-- Organizer card -->
                 <div class="px-3 pb-2">
@@ -2346,7 +2388,7 @@ const vClickOutside = {
                     </div>
                     <div class="min-w-0 flex-1">
                       <p class="text-xs font-bold text-white leading-tight truncate group-hover:text-brand-accent transition-colors">{{ group.owner.display_name || group.owner.username }}</p>
-                      <p class="text-[10px] text-white/40 leading-tight mt-0.5">{{ group.type === 'event' ? 'Организатор' : 'Владелец' }}</p>
+                      <p class="text-[10px] text-white/40 leading-tight mt-0.5">{{ group.type === 'event' ? langStore.t.verTypeOrganizer : langStore.t.roleOwner }}</p>
                     </div>
                   </router-link>
                 </div>
@@ -2370,7 +2412,7 @@ const vClickOutside = {
                 class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                 <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
                   <BIcon name="Star" class="w-3.5 h-3.5 text-brand-yellow" />
-                  <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">Спонсоры</p>
+                  <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.groupDetailSponsorsNav }}</p>
                 </div>
                 <div class="px-3 pb-3 grid grid-cols-2 gap-2">
                   <a v-for="sp in (group.sponsors as any[])" :key="sp.name"
@@ -2394,7 +2436,7 @@ const vClickOutside = {
                 <div class="px-4 pt-3.5 pb-2 flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <BIcon name="Users" class="w-3.5 h-3.5" :style="`color: ${group.accent_color || '#4C67CF'}`" />
-                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ group.type === 'event' ? 'Пойдут' : 'Участники' }}</p>
+                    <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ group.type === 'event' ? langStore.t.groupDetailGoingCountLabel : langStore.t.createStep2Title }}</p>
                   </div>
                   <span class="text-[11px] font-bold px-2 py-0.5 rounded-full"
                     :style="`background: ${group.accent_color || '#4C67CF'}20; color: ${group.accent_color || '#4C67CF'}`">{{ group._count.members }}</span>
@@ -2410,7 +2452,7 @@ const vClickOutside = {
                       </div>
                     </div>
                   </div>
-                  <p v-if="group._count.members > 8" class="text-[10px] text-brand-accent mt-2 text-center font-semibold hover:underline">Показать всех {{ group._count.members }}</p>
+                  <p v-if="group._count.members > 8" class="text-[10px] text-brand-accent mt-2 text-center font-semibold hover:underline">{{ langStore.t.groupDetailShowAllPrefix }} {{ group._count.members }}</p>
                 </div>
               </div>
 
@@ -2434,7 +2476,7 @@ const vClickOutside = {
             <div v-else class="w-full h-full" :style="`background:linear-gradient(135deg,${group?.accent_color||'#4C67CF'}55,#16192F)`" />
             <div class="absolute inset-0 bg-gradient-to-t from-brand-card/95 to-black/20 flex items-end px-6 pb-4">
               <div>
-                <h3 class="font-extrabold text-white text-lg leading-tight">Как прошло? ✨</h3>
+                <h3 class="font-extrabold text-white text-lg leading-tight">{{ langStore.t.groupDetailReviewModalTitle }}</h3>
                 <p class="text-white/50 text-xs mt-0.5">{{ group?.name }}</p>
               </div>
             </div>
@@ -2444,7 +2486,7 @@ const vClickOutside = {
           </div>
           <!-- Stars -->
           <div class="px-6 pt-5 pb-2">
-            <p class="text-xs font-bold uppercase tracking-widest text-white/40 mb-3">Ваша оценка</p>
+            <p class="text-xs font-bold uppercase tracking-widest text-white/40 mb-3">{{ langStore.t.groupDetailYourRatingLabel }}</p>
             <div class="flex items-center gap-2">
               <button v-for="i in 5" :key="i"
                 @mouseenter="reviewHover = i" @mouseleave="reviewHover = 0" @click="reviewRating = i"
@@ -2454,30 +2496,30 @@ const vClickOutside = {
                     ? 'text-brand-yellow fill-brand-yellow' : 'text-white/15'" />
               </button>
               <span v-if="reviewHover || reviewRating" class="ml-2 text-sm font-semibold text-white/55">
-                {{ ['', 'Плохо', 'Ниже среднего', 'Нормально', 'Хорошо', 'Отлично!'][reviewHover || reviewRating] }}
+                {{ ['', langStore.t.groupDetailRatingBad, langStore.t.groupDetailRatingBelowAverage, langStore.t.groupDetailRatingNormal, langStore.t.groupDetailRatingGood, langStore.t.groupDetailRatingExcellent][reviewHover || reviewRating] }}
               </span>
             </div>
           </div>
           <!-- Text area -->
           <div class="px-6 pt-3 pb-5">
-            <p class="text-xs font-bold uppercase tracking-widest text-white/40 mb-2">Отзыв</p>
+            <p class="text-xs font-bold uppercase tracking-widest text-white/40 mb-2">{{ langStore.t.groupDetailReviewLabel }}</p>
             <textarea v-model="reviewText"
               class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-white/30 resize-none outline-none focus:border-brand-accent/50 transition-colors"
               rows="4"
-              placeholder="Поделитесь впечатлениями от мероприятия…" />
+              :placeholder="langStore.t.groupDetailReviewPlaceholder" />
           </div>
           <!-- Actions -->
           <div class="px-6 py-4 border-t border-brand-border flex items-center justify-between gap-3">
             <button @click="showReviewModal = false; reviewDismissed = true"
               class="text-sm text-white/40 hover:text-white/60 transition-colors">
-              Пропустить
+              {{ langStore.t.onboardingSkipBtn }}
             </button>
             <button @click="submitReview"
               :disabled="!reviewText.trim() || reviewRating < 1 || reviewSubmitting"
               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all">
               <BIcon v-if="reviewSubmitting" name="Loader2" class="w-4 h-4 animate-spin" />
               <BIcon v-else name="Send" class="w-4 h-4" />
-              {{ reviewSubmitting ? 'Отправляем…' : 'Отправить отзыв' }}
+              {{ reviewSubmitting ? langStore.t.sendingBtn : langStore.t.groupDetailSubmitReviewBtn }}
             </button>
           </div>
         </div>
@@ -2512,7 +2554,7 @@ const vClickOutside = {
           <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0">
             <div class="flex items-center gap-3">
               <BIcon name="Users" class="w-5 h-5 text-brand-accent" />
-              <h3 class="text-lg font-bold text-white">Участники</h3>
+              <h3 class="text-lg font-bold text-white">{{ langStore.t.createStep2Title }}</h3>
               <span class="text-sm font-bold bg-brand-accent/15 text-brand-accent px-2.5 py-0.5 rounded-full">{{ group?._count?.members ?? 0 }}</span>
             </div>
             <button @click="showMembersModal = false" class="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white/55 hover:text-white transition-colors">
@@ -2522,9 +2564,9 @@ const vClickOutside = {
           <!-- Member cards grid -->
           <div class="flex-1 overflow-y-auto p-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div v-for="m in allMembers.filter(m => m.role !== 'owner')" :key="m.user.id"
-                class="bg-brand-bg border border-brand-border rounded-2xl overflow-hidden hover:border-brand-accent/40 transition-all group/card cursor-pointer"
-                @click="router.push('/profile/' + m.user.username)">
+              <router-link v-for="m in allMembers.filter(m => m.role !== 'owner')" :key="m.user.id"
+                :to="'/profile/' + m.user.username"
+                class="bg-brand-bg border border-brand-border rounded-2xl overflow-hidden hover:border-brand-accent/40 transition-all group/card cursor-pointer">
                 <!-- Mini banner -->
                 <div class="h-16 relative bg-cover bg-center"
                   :class="!m.user.banner_url ? 'bg-gradient-to-br from-brand-accent/20 to-brand-purple/20' : ''"
@@ -2532,7 +2574,7 @@ const vClickOutside = {
                   <span v-if="m.role === 'owner' || m.role === 'admin'"
                     class="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
                     :class="m.role === 'owner' ? 'bg-brand-yellow/20 text-brand-yellow border border-brand-yellow/30' : 'bg-brand-accent/20 text-brand-accent border border-brand-accent/30'">
-                    {{ m.role === 'owner' ? 'Владелец' : 'Админ' }}
+                    {{ m.role === 'owner' ? langStore.t.roleOwner : langStore.t.groupDetailRoleAdminLabel }}
                   </span>
                 </div>
                 <!-- Body -->
@@ -2550,7 +2592,7 @@ const vClickOutside = {
                   <div class="flex gap-2 mt-2">
                     <button @click.stop="router.push({ name: 'messages', query: { userId: m.user.id } })"
                       class="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-brand-accent/15 hover:bg-brand-accent/30 text-brand-accent text-xs font-semibold transition-colors">
-                      <BIcon name="MessageCircle" class="w-3.5 h-3.5" /> Написать
+                      <BIcon name="MessageCircle" class="w-3.5 h-3.5" /> {{ langStore.t.msgBtnTitle }}
                     </button>
                     <button @click.stop="router.push('/profile/' + m.user.username)"
                       class="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/55 hover:text-white text-xs font-semibold transition-colors">
@@ -2558,13 +2600,13 @@ const vClickOutside = {
                     </button>
                     <button v-if="canKickRole(m.role)" @click.stop="kickMember(m.user.id)"
                       :disabled="kickingMember[m.user.id]"
-                      title="Удалить из группы"
+                      :title="langStore.t.groupDetailKickFromGroupTitle"
                       class="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold transition-colors disabled:opacity-40">
                       <BIcon name="UserX" class="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
-              </div>
+              </router-link>
             </div>
             <!-- Load more -->
             <div v-if="membersLoading" class="flex items-center justify-center py-6">
@@ -2572,10 +2614,10 @@ const vClickOutside = {
             </div>
             <div v-else-if="membersHasMore" class="flex justify-center py-4">
               <button @click="loadMoreMembers" class="px-5 py-2 rounded-xl bg-brand-accent/15 hover:bg-brand-accent/25 text-brand-accent text-sm font-semibold transition-colors">
-                Загрузить ещё
+                {{ langStore.t.bookmarksLoadMore }}
               </button>
             </div>
-            <p v-else-if="allMembers.length === 0" class="text-center text-white/40 text-sm py-8">Нет участников</p>
+            <p v-else-if="allMembers.length === 0" class="text-center text-white/40 text-sm py-8">{{ langStore.t.groupDetailNoMembersLabel }}</p>
           </div>
         </div>
       </div>

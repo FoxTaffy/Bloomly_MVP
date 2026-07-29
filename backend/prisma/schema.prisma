@@ -24,6 +24,7 @@ model User {
   avatar_video_url               String?
   banner_url                     String?
   status                         String?                   @db.VarChar(100)
+  profile_status                 Json?
   persona                        String?
   likes                          String[]
   dislikes                       String[]
@@ -80,10 +81,12 @@ model User {
   sentNotifications              Notification[]            @relation("NotificationSender")
   posts                          Post[]                    @relation("PostAuthor")
   rewardPosts                    Post[]                    @relation("PostRewardFor")
+  scheduledPosts                 ScheduledPost[]
   sentRelationshipRequests       RelationshipRequest[]     @relation("SentRelationshipRequests")
   receivedRelationshipRequests   RelationshipRequest[]     @relation("ReceivedRelationshipRequests")
   repaws                         Repaw[]
   postViews                      PostView[]
+  postNotInterested              PostNotInterested[]
   tagAffinities                  UserTagAffinity[]
   reports                        Report[]                  @relation("ReportReporter")
   resolvedReports                Report[]                  @relation("ReportResolver")
@@ -169,13 +172,11 @@ model User {
   payment_region                 String?                   @db.VarChar(10)
   paymentMethods                 PaymentMethod[]
   supportTickets                 SupportTicket[]           @relation("SupportTicketUser")
-  repliedSupportTickets          SupportTicket[]           @relation("SupportTicketReplier")
+  supportTicketMessages          SupportTicketMessage[]    @relation("SupportTicketMessageSender")
   two_factor_method              String?                   @db.VarChar(10)
   totp_secret                    String?
-  // Automation settings (auto-follow-back, welcome DM, mute keywords, quiet hours, notify toggles, quick replies)
+  // Automation settings (auto-follow-back, mute keywords, quiet hours, notify toggles)
   auto_follow_back               Boolean                   @default(false)
-  welcome_msg_enabled             Boolean                  @default(false)
-  welcome_msg_text                String                   @default("Привет! Спасибо что подписался 🐾") @db.VarChar(300)
   mute_keywords                   String[]                 @default([])
   quiet_hours_enabled             Boolean                  @default(false)
   quiet_hours_from                String                   @default("23:00") @db.VarChar(5)
@@ -183,7 +184,6 @@ model User {
   notify_new_fan                  Boolean                  @default(true)
   notify_comment                  Boolean                  @default(true)
   notify_repaw                    Boolean                  @default(false)
-  quick_replies                   String[]                 @default([])
   filter_spam                     Boolean                  @default(true)
 }
 
@@ -261,7 +261,62 @@ model Post {
   activities          UserActivity[]
   votes               Vote[]
   views               PostView[]
+  notInterested       PostNotInterested[]
 
+  @@index([author_id])
+}
+
+/// Explicit "не интересно" feedback — unlike a soft skip/scroll-past, this permanently excludes
+/// the post from that user's personalized feed and applies a stronger negative affinity signal
+/// than a passive view (see markNotInterested / toggleVote's downvote path for the analogous flow).
+model PostNotInterested {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String   @db.Uuid
+  post_id     String   @db.Uuid
+  /// Snapshot of the {term: delta} affinity deltas this applied — lets undo precisely reverse it.
+  term_deltas Json?
+  created_at  DateTime @default(now())
+  post        Post     @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [user_id], references: [id])
+
+  @@unique([user_id, post_id])
+}
+
+/// A post that hasn't gone live yet — either a draft (no scheduled_at) or queued for
+/// automatic publication (scheduled_at set). Deliberately NOT a Post row: keeping
+/// unpublished content out of the Post table means every existing feed/search/profile
+/// query stays correct without modification. Turned into a real Post (via
+/// postService.createPost / groupService.createGroupPost) only at publish time —
+/// see scheduledService.publishDueOnes.
+model ScheduledPost {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  author_id            String    @db.Uuid
+  group_id             String?   @db.Uuid
+  content              String
+  media_urls           String[]  @default([])
+  media_original_urls  String[]  @default([])
+  is_nsfw              Boolean   @default(false)
+  is_ai_generated      Boolean   @default(false)
+  category             String?
+  tags                 String[]  @default([])
+  /// draft | scheduled | published | failed
+  status               String    @default("scheduled") @db.VarChar(20)
+  scheduled_at         DateTime?
+  /// IANA zone, display-only — scheduled_at is already stored as UTC
+  timezone             String?   @db.VarChar(64)
+  /// null | daily | weekly | monthly
+  repeat_interval      String?   @db.VarChar(20)
+  repeat_until         DateTime?
+  occurrences_count    Int       @default(0)
+  last_error           String?
+  published_post_id    String?   @db.Uuid
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  author User  @relation(fields: [author_id], references: [id], onDelete: Cascade)
+  group  Group? @relation(fields: [group_id], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduled_at])
   @@index([author_id])
 }
 
@@ -272,7 +327,7 @@ model PostView {
   user_id    String   @db.Uuid
   post_id    String   @db.Uuid
   created_at DateTime @default(now())
-  post       Post     @relation(fields: [post_id], references: [id])
+  post       Post     @relation(fields: [post_id], references: [id], onDelete: Cascade)
   user       User     @relation(fields: [user_id], references: [id])
 
   @@unique([user_id, post_id])
@@ -286,7 +341,7 @@ model Repaw {
   /// lets toggleRepaw precisely undo it if the repost is retracted.
   term_deltas Json?
   created_at  DateTime @default(now())
-  post        Post     @relation(fields: [post_id], references: [id])
+  post        Post     @relation(fields: [post_id], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [user_id], references: [id])
 
   @@unique([user_id, post_id])
@@ -298,7 +353,7 @@ model Favourite {
   post_id    String             @db.Uuid
   label_id   String?            @db.Uuid
   created_at DateTime           @default(now())
-  post       Post               @relation(fields: [post_id], references: [id])
+  post       Post               @relation(fields: [post_id], references: [id], onDelete: Cascade)
   user       User               @relation(fields: [user_id], references: [id])
   label      PostBookmarkLabel? @relation(fields: [label_id], references: [id], onDelete: SetNull)
 
@@ -330,7 +385,7 @@ model Tag {
 model PostTag {
   post_id String @db.Uuid
   tag_id  String @db.Uuid
-  post    Post   @relation(fields: [post_id], references: [id])
+  post    Post   @relation(fields: [post_id], references: [id], onDelete: Cascade)
   tag     Tag    @relation(fields: [tag_id], references: [id])
 
   @@id([post_id, tag_id])
@@ -390,7 +445,7 @@ model Vote {
   created_at  DateTime  @default(now())
   updated_at  DateTime  @updatedAt
   deleted_at  DateTime?
-  post        Post      @relation(fields: [post_id], references: [id])
+  post        Post      @relation(fields: [post_id], references: [id], onDelete: Cascade)
   user        User      @relation(fields: [user_id], references: [id])
 
   @@unique([user_id, post_id])
@@ -433,7 +488,7 @@ model UserActivity {
   type       String
   duration   Int?
   created_at DateTime @default(now()) @db.Timestamptz(6)
-  post       Post     @relation(fields: [post_id], references: [id])
+  post       Post     @relation(fields: [post_id], references: [id], onDelete: Cascade)
   user       User     @relation(fields: [user_id], references: [id])
 
   @@index([user_id, created_at(sort: Desc)])
@@ -458,7 +513,7 @@ model Comment {
   group      Group?        @relation(fields: [group_id], references: [id])
   parent     Comment?      @relation("CommentReplies", fields: [parent_id], references: [id])
   replies    Comment[]     @relation("CommentReplies")
-  post       Post          @relation(fields: [post_id], references: [id])
+  post       Post          @relation(fields: [post_id], references: [id], onDelete: Cascade)
   votes      CommentVote[]
 
   @@index([post_id])
@@ -473,7 +528,7 @@ model CommentVote {
   value      Int
   created_at DateTime  @default(now())
   deleted_at DateTime?
-  comment    Comment   @relation(fields: [comment_id], references: [id])
+  comment    Comment   @relation(fields: [comment_id], references: [id], onDelete: Cascade)
   user       User      @relation(fields: [user_id], references: [id])
 
   @@unique([user_id, comment_id])
@@ -495,9 +550,12 @@ model Follow {
 }
 
 model Notification {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  receiver_id String    @db.Uuid
-  sender_id   String?   @db.Uuid
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receiver_id    String    @db.Uuid
+  sender_id      String?   @db.Uuid
+  /// Set when the action was taken "as" a group (mirrors Comment.group_id) — the sender's
+  /// personal identity should be masked in favor of the group's name/avatar for display.
+  sender_group_id String?  @db.Uuid
   type        String
   post_id     String?   @db.Uuid
   comment_id  String?   @db.Uuid
@@ -509,6 +567,7 @@ model Notification {
   meta        Json?
   receiver    User      @relation("NotificationReceiver", fields: [receiver_id], references: [id], onDelete: Cascade)
   sender      User?     @relation("NotificationSender", fields: [sender_id], references: [id])
+  senderGroup Group?    @relation("NotificationSenderGroup", fields: [sender_group_id], references: [id])
 
   @@index([receiver_id])
   @@index([receiver_id, read], map: "Notification_receiver_read_idx")
@@ -813,6 +872,11 @@ model Group {
   // Business tab (orders/kanban) — owner-toggleable, independent of `type`
   business_enabled Boolean @default(false)
 
+  // Auto-reply sent (as the owner) the first time a member writes into the group's
+  // personal community-DM thread with them — see messages/service.ts _maybeSendGroupWelcome
+  welcome_msg_enabled Boolean @default(false)
+  welcome_msg_text    String? @db.VarChar(300)
+
   // Custom Todolist kanban columns — [{key,label,color,icon}]; empty/null = use default 5-stage set
   todo_columns Json? @default("[]")
 
@@ -835,6 +899,8 @@ model Group {
   subscribers    GroupSubscriber[]
   orders         Order[]
   transactions   GroupTransaction[]
+  sentNotifications Notification[]  @relation("NotificationSenderGroup")
+  scheduledPosts    ScheduledPost[]
 
   @@index([owner_id])
   @@index([type])
@@ -1722,23 +1788,41 @@ model GroupBookmark {
 // ── Help Center: support tickets (bug reports / feedback / questions) ────────
 
 model SupportTicket {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id         String    @db.Uuid
-  type            String    @default("question") @db.VarChar(20) // bug, feedback, question, other
-  subject         String    @db.VarChar(150)
-  message         String    @db.VarChar(3000)
-  contact_email   String?   @db.VarChar(255)
-  attachment_urls String[]  @default([])
-  status          String    @default("open") @db.VarChar(20) // open, in_progress, resolved, closed
-  admin_reply     String?   @db.VarChar(3000)
-  replied_by      String?   @db.Uuid
-  replied_at      DateTime?
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @default(now()) @updatedAt
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id           String?   @db.Uuid
+  type              String    @default("question") @db.VarChar(20) // bug, feedback, question, other
+  subject           String    @db.VarChar(150)
+  contact_email     String?   @db.VarChar(255)
+  status            String    @default("open") @db.VarChar(20) // open, in_progress, resolved, closed
+  // 'app' = created from the in-app Help form; 'email' = created from an inbound message to the support mailbox.
+  source            String    @default("app") @db.VarChar(10)
+  // Raw sender address for email-origin tickets (used as the reply-to target); distinct from contact_email.
+  external_email    String?   @db.VarChar(255)
+  // Message-ID of the most recent inbound email in this thread, for In-Reply-To/References on outgoing replies.
+  email_message_id  String?   @db.VarChar(255)
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @default(now()) @updatedAt
 
-  user    User  @relation("SupportTicketUser", fields: [user_id], references: [id], onDelete: Cascade)
-  replier User? @relation("SupportTicketReplier", fields: [replied_by], references: [id])
+  user     User?                 @relation("SupportTicketUser", fields: [user_id], references: [id], onDelete: Cascade)
+  messages SupportTicketMessage[]
 
   @@index([user_id])
   @@index([status])
+}
+
+model SupportTicketMessage {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticket_id        String   @db.Uuid
+  sender_type      String   @db.VarChar(10) // 'user' | 'admin' | 'external'
+  sender_user_id   String?  @db.Uuid
+  body             String   @db.Text
+  // Message-ID of this specific message when it came from (or was sent as) an email, for threading.
+  email_message_id String?  @db.VarChar(255)
+  attachment_urls  String[] @default([])
+  created_at       DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  sender User?         @relation("SupportTicketMessageSender", fields: [sender_user_id], references: [id])
+
+  @@index([ticket_id])
 }

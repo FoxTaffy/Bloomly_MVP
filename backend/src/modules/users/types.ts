@@ -68,6 +68,13 @@ export interface UpdateUserInput {
   avatar_video_url?: string | null;
   banner_url?: string;
   status?: string;
+  profile_status?: {
+    emoji?: string;
+    text?: string;
+    color?: string;
+    expiresAt?: number;
+    music?: { title?: string; artist?: string; artworkUrl?: string; previewUrl?: string } | null;
+  } | null;
   persona?: string;
   fursona_name?: string;
   fursona_gender?: string;

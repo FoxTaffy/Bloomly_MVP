@@ -99,7 +99,10 @@ export const useMessagesStore = defineStore('messages', () => {
   const conversations    = ref<Conversation[]>([])
   const activeId         = ref<string | null>(null)
   const messages         = ref<Record<string, Message[]>>({})
+  // "ЛС" — personal DMs + a member's own community/group-DM thread (Conversation.is_group === false).
   const unreadCount      = ref(0)
+  // "Групповой чат" — real multi-participant group conversations (Conversation.is_group === true).
+  const groupUnreadCount = ref(0)
   const loading          = ref(false)
   const messagesLoading  = ref(false)
   const hasMoreMessages  = ref<Record<string, boolean>>({})
@@ -161,6 +164,12 @@ export const useMessagesStore = defineStore('messages', () => {
       const convId = msg.conversation_id
       const auth = useAuthStore()
       const isOwn = msg.sender_id === auth.user?.id
+      // Set only on messages inside a group's community/DM thread; customerId tells us whether
+      // *we* are that member (our own thread) or group staff watching it via the shared inbox.
+      const groupDm = (frame as any).groupDm as
+        | { groupId: string; groupSlug: string; groupName: string | null; groupAvatarUrl: string | null; customerId: string }
+        | null
+      const isStaffSide = !!groupDm && groupDm.customerId !== auth.user?.id
 
       // Replace matching optimistic temp message, or just append
       if (messages.value[convId]) {
@@ -186,13 +195,29 @@ export const useMessagesStore = defineStore('messages', () => {
         conversations.value.sort(
           (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
         )
-      } else {
+      } else if (!isStaffSide) {
+        // Staff watching a member's group thread aren't a participant of it, so refetching
+        // the regular conversation list would never surface it anyway — skip the wasted call.
         fetchConversations()
       }
 
       // Own messages (e.g. sent from another device/tab) must never bump the badge —
-      // only count real incoming messages from someone else.
-      if (!isOwn && activeId.value !== convId) unreadCount.value++
+      // only count real incoming messages from someone else. Staff-side "Обращения" traffic
+      // has its own groupInboxCounts badge (see below) and must not also pollute the
+      // ЛС/групповой-чат sidebar counters, which are for the staff member's own conversations.
+      if (!isOwn && !isStaffSide && activeId.value !== convId) {
+        if (conv) {
+          if (conv.is_group) groupUnreadCount.value++
+          else unreadCount.value++
+        } else {
+          // Brand-new conversation we don't have locally yet — resync the real split from
+          // the server instead of guessing which bucket it belongs to.
+          fetchUnreadCount()
+        }
+      }
+      // Group staff: a member just wrote (or the thread got a new reply) — refresh the
+      // "Обращения" badge count for that group so tabs/buttons stay in sync live.
+      if (!isOwn && isStaffSide && groupDm) fetchGroupInboxCount(groupDm.groupId)
       if (!isOwn) {
         if (!isConvSoundMuted(conv)) playNotificationSound()
         // Only pop a toast for conversations the user isn't currently looking at, and
@@ -207,11 +232,13 @@ export const useMessagesStore = defineStore('messages', () => {
             : msg.file_url ? '📎 Медиафайл'
             : '...'
           useNotifToast().addMessageToast({
-            senderName: msg.sender.display_name || msg.sender.username,
-            senderAvatar: msg.sender.avatar_url,
+            senderName: isStaffSide ? (groupDm!.groupName || msg.sender.display_name || msg.sender.username) : (msg.sender.display_name || msg.sender.username),
+            senderAvatar: isStaffSide ? (groupDm!.groupAvatarUrl ?? msg.sender.avatar_url) : msg.sender.avatar_url,
             senderUsername: msg.sender.username,
             text: preview,
             convId,
+            isGroupDm: isStaffSide,
+            groupSlug: isStaffSide ? groupDm!.groupSlug : undefined,
           })
         }
       }
@@ -317,7 +344,8 @@ export const useMessagesStore = defineStore('messages', () => {
   async function fetchUnreadCount() {
     try {
       const res = await api.get('/messages/conversations/unread')
-      unreadCount.value = res.data.data.count ?? 0
+      unreadCount.value = res.data.data.personal ?? 0
+      groupUnreadCount.value = res.data.data.group ?? 0
     } catch { /* silent */ }
   }
 
@@ -636,6 +664,30 @@ export const useMessagesStore = defineStore('messages', () => {
     return (res.data.data?.threads ?? []) as GroupInboxThread[]
   }
 
+  // groupId → number of "Обращения" threads currently waiting on a staff reply. Powers the
+  // badges on GroupDetailView's "Обращения" button, the inbox tab in GroupAdminToolsView,
+  // the aggregate badge on the sidebar's "Группы" item, and per-card badges on the groups grid.
+  const groupInboxCounts = ref<Record<string, number>>({})
+  async function fetchGroupInboxCount(groupId: string): Promise<number> {
+    try {
+      const threads = await getGroupInbox(groupId)
+      const n = threads.filter(t => t.needs_reply).length
+      groupInboxCounts.value[groupId] = n
+      return n
+    } catch {
+      return groupInboxCounts.value[groupId] ?? 0
+    }
+  }
+
+  /** Bulk variant of fetchGroupInboxCount — one request for every group the caller owns/admins/moderates. */
+  async function fetchMyGroupInboxCounts(): Promise<void> {
+    try {
+      const res = await api.get('/messages/groups/inbox-counts')
+      const counts = (res.data.data?.counts ?? []) as { groupId: string; count: number }[]
+      for (const { groupId, count } of counts) groupInboxCounts.value[groupId] = count
+    } catch { /* silent */ }
+  }
+
   // Open a conversation the caller isn't necessarily a participant of (e.g. group staff
   // opening a member's thread from the inbox) — fetches it standalone and activates it.
   async function openConversationById(convId: string): Promise<void> {
@@ -721,6 +773,7 @@ export const useMessagesStore = defineStore('messages', () => {
     activeId,
     messages,
     unreadCount,
+    groupUnreadCount,
     loading,
     messagesLoading,
     hasMoreMessages,
@@ -763,6 +816,9 @@ export const useMessagesStore = defineStore('messages', () => {
     setGroupMemberRole,
     startGroupDm,
     getGroupInbox,
+    groupInboxCounts,
+    fetchGroupInboxCount,
+    fetchMyGroupInboxCounts,
     openConversationById,
     pinMessage,
     unpinMessage,

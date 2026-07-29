@@ -1,6 +1,5 @@
 import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
-import { messageService } from '../messages/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 
 /** Throws a 403 unless the viewer is allowed to see userId's friends/followers list. */
@@ -39,10 +38,10 @@ export const followsService = {
         type:       'FOLLOW',
       });
 
-      // Auto-follow-back / welcome DM — best-effort, never let these break the follow itself.
+      // Auto-follow-back — best-effort, never let this break the follow itself.
       const followedPrefs = await prisma.user.findUnique({
         where:  { id: followingId },
-        select: { auto_follow_back: true, welcome_msg_enabled: true, welcome_msg_text: true },
+        select: { auto_follow_back: true },
       });
 
       if (followedPrefs?.auto_follow_back) {
@@ -50,13 +49,6 @@ export const followsService = {
           where: { follower_id_following_id: { follower_id: followingId, following_id: followerId } },
         });
         if (!alreadyBack) await this.toggle(followingId, followerId).catch(() => {});
-      }
-
-      if (followedPrefs?.welcome_msg_enabled && followedPrefs.welcome_msg_text) {
-        try {
-          const conv = await messageService.getOrCreateConversation(followingId, followerId);
-          await messageService.sendMessage({ conversationId: conv.id, senderId: followingId, content: followedPrefs.welcome_msg_text });
-        } catch { /* e.g. MESSAGES_DISABLED privacy block on the new follower's side */ }
       }
 
       return { following: true };

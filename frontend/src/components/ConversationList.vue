@@ -199,12 +199,12 @@
             </template>
 
             <!-- DM-specific -->
-            <button v-if="conv.type !== 'community' && !conv.is_group && getOther(conv)?.username"
-              @click.stop="router.push('/profile/' + getOther(conv)!.username); menuConvId = null"
+            <router-link v-if="conv.type !== 'community' && !conv.is_group && getOther(conv)?.username"
+              :to="'/profile/' + getOther(conv)!.username" @click.stop="menuConvId = null"
               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
               <BIcon name="User" class="w-4 h-4 text-white/55 flex-shrink-0" />
               {{ langStore.t.contextProfile }}
-            </button>
+            </router-link>
 
             <button
               @click.stop="setLabel(conv, conv.my_participant?.label === 'customer' ? 'default' : 'customer')"

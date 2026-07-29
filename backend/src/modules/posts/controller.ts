@@ -101,7 +101,8 @@ export const searchPostsHandler = async (
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
     const effectiveSafeMode = !requestIsAdult(request.user) || safeMode === 'true';
-    const posts = await postService.searchPosts(q, effectiveSafeMode, pageNum, limitNum);
+    const viewerId = (request.user as JwtUser | undefined)?.id;
+    const posts = await postService.searchPosts(q, effectiveSafeMode, pageNum, limitNum, viewerId);
     return reply.send({ success: true, data: { posts }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to search posts';
@@ -128,7 +129,8 @@ export const getPostsHandler = async (
     if (typeof (query as any).hasMedia === 'string') {
       (query as any).hasMedia = (query as any).hasMedia === 'true';
     }
-    const posts = await postService.getPosts(query);
+    const viewerId = (request.user as JwtUser | undefined)?.id;
+    const posts = await postService.getPosts(query, viewerId);
     return reply.send({ success: true, data: { posts }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch posts';
@@ -392,6 +394,20 @@ export const toggleArchivePostHandler = async (
     const message = error instanceof Error ? error.message : 'Failed to archive post';
     const code = message === 'Not authorized' ? 403 : 400;
     return reply.code(code).send({ success: false, data: null, error: { code: 'ARCHIVE_ERROR', message } });
+  }
+};
+
+export const setNotInterestedHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Body: { value: boolean } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const result = await postService.setNotInterested(userId, request.params.id, request.body.value);
+    return reply.send({ success: true, data: result, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to update';
+    return reply.code(400).send({ success: false, data: null, error: { code: 'NOT_INTERESTED_ERROR', message } });
   }
 };
 

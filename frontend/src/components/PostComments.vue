@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import api from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
@@ -13,7 +12,6 @@ import { onAvatarError } from '@/composables/useAvatarFallback'
 
 const props = defineProps<{ postId: string; commentsDisabled?: boolean }>()
 
-const router = useRouter()
 const auth = useAuthStore()
 const langStore = useLangStore()
 const groupsStore = useGroupsStore()
@@ -49,9 +47,10 @@ function identityHandle(c: any): string {
 function identityIsGroup(c: any): boolean {
   return !!(c.group_id && c.group)
 }
-function openIdentity(c: any) {
-  if (c.group_id && c.group) router.push(`/groups/${c.group.slug}`)
-  else if (c.author) router.push(`/profile/${c.author.username}`)
+function identityHref(c: any): string {
+  if (c.group_id && c.group) return `/groups/${c.group.slug}`
+  if (c.author) return `/profile/${c.author.username}`
+  return '#'
 }
 
 const showTranslationFor = ref<Set<string>>(new Set())
@@ -113,10 +112,7 @@ const commentFileType     = ref<CommentMediaType>('image')
 const commentFileUrl      = ref('')
 const commentFileUploading = ref(false)
 
-async function onCommentFilePicked(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (commentFileRef.value) commentFileRef.value.value = ''
-  if (!file) return
+async function uploadCommentFile(file: File) {
   commentFileType.value = detectMediaType(file)
   commentFilePreview.value = URL.createObjectURL(file)
   commentFileUploading.value = true
@@ -133,6 +129,21 @@ async function onCommentFilePicked(e: Event) {
   }
 }
 
+async function onCommentFilePicked(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (commentFileRef.value) commentFileRef.value.value = ''
+  if (!file) return
+  uploadCommentFile(file)
+}
+
+function onCommentPaste(e: ClipboardEvent) {
+  const file = Array.from(e.clipboardData?.items ?? []).find(i => i.kind === 'file')?.getAsFile()
+  if (file) {
+    e.preventDefault()
+    uploadCommentFile(file)
+  }
+}
+
 function removeCommentFile() {
   if (commentFilePreview.value) URL.revokeObjectURL(commentFilePreview.value)
   commentFilePreview.value = ''
@@ -145,10 +156,7 @@ const replyFileType     = ref<CommentMediaType>('image')
 const replyFileUrl      = ref('')
 const replyFileUploading = ref(false)
 
-async function onReplyFilePicked(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (replyFileRef.value) replyFileRef.value.value = ''
-  if (!file) return
+async function uploadReplyFile(file: File) {
   replyFileType.value = detectMediaType(file)
   replyFilePreview.value = URL.createObjectURL(file)
   replyFileUploading.value = true
@@ -162,6 +170,21 @@ async function onReplyFilePicked(e: Event) {
     removeReplyFile()
   } finally {
     replyFileUploading.value = false
+  }
+}
+
+async function onReplyFilePicked(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (replyFileRef.value) replyFileRef.value.value = ''
+  if (!file) return
+  uploadReplyFile(file)
+}
+
+function onReplyPaste(e: ClipboardEvent) {
+  const file = Array.from(e.clipboardData?.items ?? []).find(i => i.kind === 'file')?.getAsFile()
+  if (file) {
+    e.preventDefault()
+    uploadReplyFile(file)
   }
 }
 
@@ -465,12 +488,14 @@ const vClickOutside = {
         </div>
 
         <input ref="commentFileRef" type="file" accept="image/*,video/*" class="hidden" @change="onCommentFilePicked" />
+        <input ref="replyFileRef" type="file" accept="image/*,video/*" class="hidden" @change="onReplyFilePicked" />
 
         <div class="flex gap-2">
           <input
             v-model="commentText"
             @keydown.enter.prevent="submitComment"
             @focus="showReplyStickerPanel = false"
+            @paste="onCommentPaste"
             :placeholder="langStore.t.writeComment"
             class="flex-1 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
           />
@@ -519,21 +544,22 @@ const vClickOutside = {
       <div v-for="comment in comments" :key="comment.id" class="space-y-2">
         <!-- Top-level comment -->
         <div class="flex gap-3">
-          <img v-if="identityAvatar(comment)"
-            :src="identityAvatar(comment)!"
-            class="w-8 h-8 object-cover border border-brand-border flex-shrink-0 mt-0.5 cursor-pointer"
-            :class="identityIsGroup(comment) ? 'rounded-xl' : 'rounded-full'"
-            @click="openIdentity(comment)"
-            @error="onAvatarError"
-          />
-          <div v-else @click="openIdentity(comment)" class="w-8 h-8 border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs cursor-pointer"
-            :class="identityIsGroup(comment) ? 'rounded-xl' : 'rounded-full'">{{ identityName(comment)[0].toUpperCase() }}</div>
+          <router-link :to="identityHref(comment)" class="flex-shrink-0 mt-0.5">
+            <img v-if="identityAvatar(comment)"
+              :src="identityAvatar(comment)!"
+              class="w-8 h-8 object-cover border border-brand-border cursor-pointer"
+              :class="identityIsGroup(comment) ? 'rounded-xl' : 'rounded-full'"
+              @error="onAvatarError"
+            />
+            <div v-else class="w-8 h-8 border border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs cursor-pointer"
+              :class="identityIsGroup(comment) ? 'rounded-xl' : 'rounded-full'">{{ identityName(comment)[0].toUpperCase() }}</div>
+          </router-link>
 
           <div class="flex-1 min-w-0">
             <!-- Sticker comment — no bubble -->
             <template v-if="comment.type === 'sticker' && comment.file_url">
               <div class="flex items-center gap-2 mb-1 px-1">
-                <span class="font-bold text-white text-sm cursor-pointer hover:underline" @click="openIdentity(comment)">{{ identityName(comment) }}</span>
+                <router-link :to="identityHref(comment)" class="font-bold text-white text-sm cursor-pointer hover:underline">{{ identityName(comment) }}</router-link>
                 <span class="text-white/55 text-xs">{{ identityHandle(comment) }}</span>
                 <span class="text-white/55 text-xs ml-auto">{{ formatDate(comment.created_at) }}</span>
               </div>
@@ -545,7 +571,7 @@ const vClickOutside = {
             <!-- Media comment (photo / video / GIF) — media + optional caption -->
             <template v-else-if="['image', 'video', 'gif'].includes(comment.type) && comment.file_url">
               <div class="flex items-center gap-2 mb-1 px-1">
-                <span class="font-bold text-white text-sm cursor-pointer hover:underline" @click="openIdentity(comment)">{{ identityName(comment) }}</span>
+                <router-link :to="identityHref(comment)" class="font-bold text-white text-sm cursor-pointer hover:underline">{{ identityName(comment) }}</router-link>
                 <span class="text-white/55 text-xs">{{ identityHandle(comment) }}</span>
                 <span class="text-white/55 text-xs ml-auto">{{ formatDate(comment.created_at) }}</span>
               </div>
@@ -559,7 +585,7 @@ const vClickOutside = {
             <!-- Text comment — with bubble -->
             <div v-else class="bg-brand-bg/50 rounded-2xl px-4 py-3 border border-brand-border/50">
               <div class="flex items-center gap-2 mb-1.5">
-                <span class="font-bold text-white text-sm cursor-pointer hover:underline" @click="openIdentity(comment)">{{ identityName(comment) }}</span>
+                <router-link :to="identityHref(comment)" class="font-bold text-white text-sm cursor-pointer hover:underline">{{ identityName(comment) }}</router-link>
                 <span class="text-white/55 text-xs">{{ identityHandle(comment) }}</span>
                 <span class="text-white/55 text-xs ml-auto">{{ formatDate(comment.created_at) }}</span>
               </div>
@@ -633,14 +659,13 @@ const vClickOutside = {
                 </button>
               </div>
 
-              <input ref="replyFileRef" type="file" accept="image/*,video/*" class="hidden" @change="onReplyFilePicked" />
-
               <div class="flex gap-2 items-center">
                 <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover border border-brand-border flex-shrink-0" />
                 <div v-else class="w-7 h-7 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px]">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
                 <input
                   v-model="replyText"
                   @keydown.enter.prevent="submitReply"
+                  @paste="onReplyPaste"
                   :placeholder="`@${replyingTo.username}...`"
                   autofocus
                   class="flex-1 bg-brand-bg border border-brand-border rounded-2xl px-3 py-1.5 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
@@ -676,20 +701,21 @@ const vClickOutside = {
             <!-- Nested replies -->
             <div v-if="expandedReplies.has(comment.id) && comment.replies?.length" class="mt-2 space-y-2 pl-4 border-l-2 border-brand-border">
               <div v-for="reply in comment.replies" :key="reply.id" class="flex gap-3">
-                <img v-if="identityAvatar(reply)"
-                  :src="identityAvatar(reply)!"
-                  class="w-7 h-7 object-cover border border-brand-border flex-shrink-0 mt-0.5 cursor-pointer"
-                  :class="identityIsGroup(reply) ? 'rounded-xl' : 'rounded-full'"
-                  @click="openIdentity(reply)"
-                  @error="onAvatarError"
-                />
-                <div v-else @click="openIdentity(reply)" class="w-7 h-7 border border-brand-border flex-shrink-0 mt-0.5 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px] cursor-pointer"
-                  :class="identityIsGroup(reply) ? 'rounded-xl' : 'rounded-full'">{{ identityName(reply)[0].toUpperCase() }}</div>
+                <router-link :to="identityHref(reply)" class="flex-shrink-0 mt-0.5">
+                  <img v-if="identityAvatar(reply)"
+                    :src="identityAvatar(reply)!"
+                    class="w-7 h-7 object-cover border border-brand-border cursor-pointer"
+                    :class="identityIsGroup(reply) ? 'rounded-xl' : 'rounded-full'"
+                    @error="onAvatarError"
+                  />
+                  <div v-else class="w-7 h-7 border border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px] cursor-pointer"
+                    :class="identityIsGroup(reply) ? 'rounded-xl' : 'rounded-full'">{{ identityName(reply)[0].toUpperCase() }}</div>
+                </router-link>
                 <div class="flex-1 min-w-0">
                   <!-- Sticker reply -->
                   <template v-if="reply.type === 'sticker' && reply.file_url">
                     <div class="flex items-center gap-2 mb-1 px-1">
-                      <span class="font-bold text-white text-xs cursor-pointer hover:underline" @click="openIdentity(reply)">{{ identityName(reply) }}</span>
+                      <router-link :to="identityHref(reply)" class="font-bold text-white text-xs cursor-pointer hover:underline">{{ identityName(reply) }}</router-link>
                       <span class="text-white/55 text-[11px] ml-auto">{{ formatDate(reply.created_at) }}</span>
                     </div>
                     <div class="cursor-pointer hover:scale-105 transition-transform active:scale-95 inline-block">
@@ -700,7 +726,7 @@ const vClickOutside = {
                   <!-- Media reply (photo / video / GIF) -->
                   <template v-else-if="['image', 'video', 'gif'].includes(reply.type) && reply.file_url">
                     <div class="flex items-center gap-2 mb-1 px-1">
-                      <span class="font-bold text-white text-xs cursor-pointer hover:underline" @click="openIdentity(reply)">{{ identityName(reply) }}</span>
+                      <router-link :to="identityHref(reply)" class="font-bold text-white text-xs cursor-pointer hover:underline">{{ identityName(reply) }}</router-link>
                       <span class="text-white/55 text-[11px] ml-auto">{{ formatDate(reply.created_at) }}</span>
                     </div>
                     <div class="rounded-2xl overflow-hidden border border-brand-border/50 max-w-[240px] bg-black/20">
@@ -713,7 +739,7 @@ const vClickOutside = {
                   <!-- Text reply -->
                   <div v-else class="bg-brand-bg/50 rounded-2xl px-4 py-2.5 border border-brand-border/50">
                     <div class="flex items-center gap-2 mb-1">
-                      <span class="font-bold text-white text-xs cursor-pointer hover:underline" @click="openIdentity(reply)">{{ identityName(reply) }}</span>
+                      <router-link :to="identityHref(reply)" class="font-bold text-white text-xs cursor-pointer hover:underline">{{ identityName(reply) }}</router-link>
                       <span class="text-white/55 text-[11px] ml-auto">{{ formatDate(reply.created_at) }}</span>
                     </div>
                     <p class="text-white/85 text-sm leading-relaxed">{{ getCommentText(reply.id, reply.content) }}</p>

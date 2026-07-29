@@ -33,23 +33,23 @@
           :class="unsavedWarning ? 'text-brand-error' : 'text-white/55'">
           <div class="w-2 h-2 rounded-full animate-pulse"
             :class="unsavedWarning ? 'bg-brand-error' : 'bg-amber-400'"></div>
-          <span class="text-xs font-bold">{{ unsavedWarning ? 'Не сохранено!' : 'Есть изменения' }}</span>
+          <span class="text-xs font-bold">{{ unsavedWarning ? langStore.t.settingsProfileUnsavedBadge : langStore.t.settingsProfileHasChanges }}</span>
         </div>
         <!-- Reset -->
         <button type="button" @click="resetForm"
           class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all text-white/55 hover:text-white hover:bg-white/10 border border-transparent hover:border-brand-border">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          Сбросить
+          {{ langStore.t.settingsProfileResetBtn }}
         </button>
         <!-- Save -->
-        <button type="button" @click="handleSubmit" :disabled="userStore.isLoading"
+        <button type="button" @click="handleSubmit" :disabled="userStore.isLoading || birthDateInvalid"
           class="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all disabled:opacity-50 shadow-lg"
           :style="unsavedWarning
             ? 'background:#ef4444;box-shadow:0 4px 20px rgba(239,68,68,0.4)'
             : `background:${form.accent_color};box-shadow:0 4px 20px ${form.accent_color}44`">
           <span v-if="userStore.isLoading" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
           <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-          {{ userStore.isLoading ? 'Сохранение…' : 'Сохранить' }}
+          {{ userStore.isLoading ? langStore.t.savingProfile : langStore.t.saveProfile }}
         </button>
       </div>
     </Transition>
@@ -61,7 +61,7 @@
       :type="cropModal.type"
       :accent-color="form.accent_color"
       :uploading="cropUploading"
-      :hint="cropModal.type === 'avatar' && cropModal.isGif ? 'Квадрат 1:1 · Анимация сохранится' : undefined"
+      :hint="cropModal.type === 'avatar' && cropModal.isGif ? langStore.t.settingsProfileGifHint : undefined"
       @cancel="cancelCrop"
       @confirm="confirmCrop"
     />
@@ -210,7 +210,7 @@
                           </svg>
                         </div>
                         <span class="text-white text-xs font-bold">
-                          {{ bannerDragOver ? 'Отпустите файл' : (form.banner_url ? 'Изменить баннер' : 'Добавить баннер') }}
+                          {{ bannerDragOver ? langStore.t.settingsProfileDropFile : (form.banner_url ? langStore.t.changeBanner : langStore.t.addBanner) }}
                         </span>
                         <span v-if="!bannerDragOver" class="text-white/50 text-[10px]">{{ langStore.t.bannerDragHint }}</span>
                       </div>
@@ -221,7 +221,7 @@
                             @click.stop="reopenCrop('banner')"
                             class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-black/55 border border-white/20 backdrop-blur text-white/75 hover:text-white hover:bg-black/80 transition-all text-[10px] font-bold">
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
-                            Кадр
+                            {{ langStore.t.settingsProfileCropBtn }}
                           </button>
                         </Transition>
                         <Transition name="fade">
@@ -330,7 +330,7 @@
                             :class="form.avatar_url === item.url
                               ? 'border-brand-accent shadow-lg shadow-brand-accent/30'
                               : 'border-transparent hover:border-white/30'"
-                            :title="new Date(item.created_at).toLocaleDateString('ru-RU')">
+                            :title="new Date(item.created_at).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang])">
                             <img :src="item.url" class="w-full h-full object-cover cursor-pointer" loading="lazy" @click="applyHistoryAvatar(item)"/>
                             <span v-if="item.video_url" class="absolute bottom-0.5 left-0.5 w-3.5 h-3.5 bg-black/70 rounded-full flex items-center justify-center pointer-events-none">
                               <svg viewBox="0 0 24 24" class="w-2 h-2 text-white" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -355,7 +355,7 @@
                               type="button"
                               @click.stop="deleteHistoryAvatar(item.id)"
                               class="absolute top-1 left-1 w-5 h-5 rounded-full bg-red-500/80 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                              title="Удалить из истории">
+                              :title="langStore.t.settingsProfileRemoveFromHistory">
                               <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/>
                               </svg>
@@ -384,7 +384,7 @@
                         @input="onUsernameInput"
                         type="text"
                         maxlength="30"
-                        placeholder="твой_юзернейм"
+                        :placeholder="langStore.t.settingsProfileUsernamePlaceholder"
                         class="field-input !pl-8"
                         :class="usernameError ? '!border-brand-error/60 !ring-brand-error/20' : ''"
                         autocomplete="username"
@@ -481,8 +481,9 @@
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.birthdayLabel }}</label>
-                      <DateInput v-model="form.birth_date"
-                        :max="new Date().toISOString().substring(0,10)" />
+                      <DateInput ref="birthDateInputRef" v-model="form.birth_date"
+                        :max="new Date().toISOString().substring(0,10)"
+                        @invalid="birthDateInvalid = $event" />
                       <p v-if="savedForm.birth_date" class="text-[11px] text-white/35 mt-1.5 truncate">
                         {{ langStore.t.currentlyPrefix }} <span class="text-white/35 font-semibold">{{ formatBirthDate(savedForm.birth_date) }}</span>
                       </p>
@@ -551,9 +552,9 @@
                           </button>
                         </div>
                       </Transition>
-                      <p v-if="soonDropOpen && soonSearch && !filteredSoonEvents.length" class="text-xs text-white/55 px-1 pt-2">Ничего не найдено</p>
+                      <p v-if="soonDropOpen && soonSearch && !filteredSoonEvents.length" class="text-xs text-white/55 px-1 pt-2">{{ langStore.t.convNothingFound }}</p>
                     </div>
-                    <p v-if="!soonEventsLoading && !soonEventsList.length" class="text-xs text-white/35">Пока нет доступных мероприятий.</p>
+                    <p v-if="!soonEventsLoading && !soonEventsList.length" class="text-xs text-white/35">{{ langStore.t.settingsProfileNoEventsAvailable }}</p>
                   </div>
 
                 </div><!-- /p-6 form fields -->
@@ -593,7 +594,7 @@
                         <input
                           v-model="countrySearch"
                           type="text"
-                          placeholder="Выбрать страну…"
+                          :placeholder="langStore.t.settingsProfileSelectCountryPlaceholder"
                           class="field-input !pl-10 pr-8"
                           @focus="countryDropOpen = true"
                           @blur="onCountryBlur"
@@ -627,7 +628,7 @@
                         <input
                           v-model="citySearch"
                           type="text"
-                          placeholder="Введите или выберите…"
+                          :placeholder="langStore.t.settingsProfileTypeOrSelectPlaceholder"
                           class="field-input !pl-10"
                           @focus="cityDropOpen = filteredCities.length > 0"
                           @blur="onCityBlur"
@@ -673,7 +674,7 @@
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#ec4899">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
                         </svg>
-                        Партнёр (из друзей)
+                        {{ langStore.t.settingsProfilePartnerFromFriends }}
                       </p>
 
                       <!-- Current partner chip -->
@@ -697,7 +698,7 @@
                         <input
                           v-model="partnerSearch"
                           type="text"
-                          placeholder="Найти по имени или @логину…"
+                          :placeholder="langStore.t.settingsProfileFindByNamePlaceholder"
                           class="field-input"
                           @focus="partnerDropOpen = true"
                           @blur="onPartnerBlur"
@@ -750,14 +751,14 @@
 
                   <!-- ── Донат ────────────────────────────── -->
                   <div class="pt-2">
-                    <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">Ссылка для доната</label>
+                    <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.settingsProfileDonateLinkLabel }}</label>
                     <div class="relative">
                       <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400/70 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                       </svg>
-                      <input v-model="form.donate_url" type="url" placeholder="https://boosty.to/... или DonationAlerts, Ko-fi" class="field-input !pl-10"/>
+                      <input v-model="form.donate_url" type="url" :placeholder="langStore.t.settingsProfileDonatePlaceholder" class="field-input !pl-10"/>
                     </div>
-                    <p class="text-[11px] text-white/35 mt-1.5">Ссылка появится кнопкой «Донат» на вашем профиле</p>
+                    <p class="text-[11px] text-white/35 mt-1.5">{{ langStore.t.settingsProfileDonateHint }}</p>
                   </div>
 
                 </div>
@@ -802,7 +803,7 @@
                     :class="(authStore.user as any)?.subscription_tier === 'pro' || (authStore.user as any)?.subscription_tier === 'business'
                       ? 'text-brand-accent border-brand-accent/30 bg-brand-accent/5'
                       : 'text-amber-400 border-amber-400/30 bg-amber-400/5'">
-                    {{ (authStore.user as any)?.subscription_tier === 'free' ? 'Lite+ для тем' : (authStore.user as any)?.subscription_tier?.toUpperCase() }}
+                    {{ (authStore.user as any)?.subscription_tier === 'free' ? langStore.t.settingsProfileLiteForThemes : (authStore.user as any)?.subscription_tier?.toUpperCase() }}
                   </router-link>
                 </div>
 
@@ -889,7 +890,7 @@
                           :class="form.profile_bg_url ? 'bg-black/55 opacity-0 group-hover:opacity-100 transition-all' : 'bg-white/5'">
                           <span v-if="uploadingBg" class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                           <svg v-else class="w-5 h-5 text-white/55" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                          <span class="text-white/55 text-sm font-bold">{{ form.profile_bg_url ? 'Изменить фон' : 'Загрузить фон' }}</span>
+                          <span class="text-white/55 text-sm font-bold">{{ form.profile_bg_url ? langStore.t.settingsProfileChangeBg : langStore.t.settingsProfileUploadBg }}</span>
                         </div>
                         <div v-if="form.profile_bg_url" class="absolute inset-0 bg-black/40 flex items-end p-3 pointer-events-none opacity-0 group-hover:opacity-0">
                         </div>
@@ -937,7 +938,7 @@
                       <div v-if="verificationStatus.verificationType && verTypeMeta[verificationStatus.verificationType]"
                         class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-xs font-bold"
                         :class="verTypeMeta[verificationStatus.verificationType].badgeCls">
-                        <img :src="verificationBadgeIcon(verificationStatus.verificationType)" class="w-6 h-6 rounded-md object-cover flex-shrink-0" />
+                        <BIcon :name="verTypeMeta[verificationStatus.verificationType].icon" class="w-4 h-4 flex-shrink-0" />
                         {{ verTypeMeta[verificationStatus.verificationType].label }}
                       </div>
                       <div class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
@@ -957,7 +958,7 @@
                       <div v-if="verificationStatus.latestRequest.verification_type && verTypeMeta[verificationStatus.latestRequest.verification_type]"
                         class="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold"
                         :class="verTypeMeta[verificationStatus.latestRequest.verification_type].badgeCls">
-                        <img :src="verificationBadgeIcon(verificationStatus.latestRequest.verification_type)" class="w-5 h-5 rounded-md object-cover flex-shrink-0" />
+                        <BIcon :name="verTypeMeta[verificationStatus.latestRequest.verification_type].icon" class="w-4 h-4 flex-shrink-0" />
                         {{ verTypeMeta[verificationStatus.latestRequest.verification_type].label }}
                       </div>
                     </div>
@@ -1042,7 +1043,9 @@
                               ? `${vt.borderSel} ${vt.bgSel} shadow-lg`
                               : `border-brand-border bg-brand-bg ${vt.borderHov}`">
                             <div class="flex items-center gap-3 mb-2">
-                              <img :src="verificationBadgeIcon(vt.id)" class="w-11 h-11 rounded-xl object-cover flex-shrink-0" />
+                              <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" :class="vt.badgeCls">
+                                <BIcon :name="vt.icon" class="w-5 h-5" />
+                              </div>
                               <span class="font-bold text-xs leading-tight"
                                 :class="selectedVerType === vt.id ? vt.textSel : 'text-white'">
                                 {{ (langStore.t as any)[vt.titleKey] }}
@@ -1275,7 +1278,7 @@
                   <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(234,179,8,0.18)">
                     <BIcon name="Zap" class="w-4 h-4 text-brand-yellow" />
                   </div>
-                  <h2 class="font-bold text-white text-sm">Автоматизация</h2>
+                  <h2 class="font-bold text-white text-sm">{{ langStore.t.secAutomation }}</h2>
                 </div>
                 <div class="p-6">
                   <AutomationSettings />
@@ -1841,7 +1844,7 @@
                   class="px-6 py-3 bg-brand-card border border-brand-border hover:border-brand-muted/40 text-white/55 hover:text-white rounded-2xl text-sm font-bold transition-all">
                   {{ langStore.t.cancel }}
                 </router-link>
-                <button type="submit" :disabled="userStore.isLoading"
+                <button type="submit" :disabled="userStore.isLoading || birthDateInvalid"
                   class="flex-1 max-w-xs py-3 text-sm font-bold text-white transition-all shadow-lg flex items-center justify-center gap-2 rounded-2xl disabled:opacity-50"
                   :style="`background:${form.accent_color};box-shadow:0 4px 24px ${form.accent_color}44`">
                   <span v-if="userStore.isLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
@@ -1931,7 +1934,6 @@ import type { PaymentMethod } from '@/types/paymentMethod'
 import AddCardModal from '@/components/AddCardModal.vue'
 import ImageCropModal from '@/components/shared/ImageCropModal.vue'
 import { useConfirm } from '@/composables/useConfirm'
-import { verificationBadgeIcon } from '@/composables/useVerificationBadge'
 
 const userStore   = useUserStore()
 const authStore   = useAuthStore()
@@ -1940,6 +1942,9 @@ const groupsStore = useGroupsStore()
 const route       = useRoute()
 const router      = useRouter()
 const { confirmDialog } = useConfirm()
+
+const birthDateInputRef = ref<InstanceType<typeof DateInput> | null>(null)
+const birthDateInvalid = ref(false)
 
 const langOptions = [
   { code: 'RU' as const, fi: 'ru', name: 'Русский' },
@@ -2079,7 +2084,7 @@ async function handleDeleteAccount() {
     await authStore.logout()
     router.replace({ name: 'login' })
   } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message ?? 'Ошибка удаления')
+    showToast('error', e.response?.data?.error?.message ?? langStore.t.settingsProfileDeleteError)
   } finally {
     isDeletingAccount.value = false
     showDeleteModal.value = false
@@ -2301,9 +2306,9 @@ const linkedAccountsLoading = ref(false)
 const linkingProvider       = ref<string | null>(null)
 const unlinkingProvider     = ref<string | null>(null)
 
-const oauthProviders = [
+const oauthProviders = computed(() => [
   {
-    key: 'yandex', label: 'Яндекс', color: '#fc3f1d', iconFill: true,
+    key: 'yandex', label: langStore.t.settingsProfileYandex, color: '#fc3f1d', iconFill: true,
     iconPath: 'M14.155 4H12.25c-2.77 0-4.455 1.514-4.455 4.006 0 2.148 1.022 3.395 3.074 4.7L13 13.945 8.5 20H11l4.795-6.64-1.396-.894c-1.713-1.1-2.487-1.934-2.487-3.558C11.912 7.48 12.804 6.5 14.155 6.5V4zM14.5 4v16h2.5V4h-2.5z',
   },
   {
@@ -2318,7 +2323,7 @@ const oauthProviders = [
     key: 'twitch', label: 'Twitch', color: '#9146ff', iconFill: true,
     iconPath: 'M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z',
   },
-]
+])
 
 async function loadLinkedAccounts() {
   linkedAccountsLoading.value = true
@@ -2336,7 +2341,7 @@ async function linkProvider(provider: string) {
     const { data } = await api.get(`/auth/link-init/${provider}`)
     window.location.href = data.data.url
   } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message ?? 'Ошибка привязки')
+    showToast('error', e.response?.data?.error?.message ?? langStore.t.settingsProfileLinkError)
     linkingProvider.value = null
   }
 }
@@ -2346,9 +2351,9 @@ async function unlinkProvider(provider: string) {
   try {
     await api.delete(`/auth/linked-accounts/${provider}`)
     linkedAccounts.value = linkedAccounts.value.filter(p => p !== provider)
-    showToast('success', 'Аккаунт отвязан')
+    showToast('success', langStore.t.settingsProfileUnlinkedSuccess)
   } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message ?? 'Ошибка отвязки')
+    showToast('error', e.response?.data?.error?.message ?? langStore.t.settingsProfileUnlinkError)
   } finally {
     unlinkingProvider.value = null
   }
@@ -2386,7 +2391,7 @@ async function revokeSession(id: string) {
     sessions.value = sessions.value.filter(s => s.id !== id)
     showToast('success', langStore.t.revokeBtn)
   } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message ?? 'Ошибка')
+    showToast('error', e.response?.data?.error?.message ?? langStore.t.settingsProfileGenericError)
   } finally {
     revokingSessionId.value = null
   }
@@ -2400,7 +2405,7 @@ async function revokeOtherSessions() {
     sessions.value = sessions.value.filter(s => s.current)
     showToast('success', langStore.t.revokeAllOthersBtn)
   } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message ?? 'Ошибка')
+    showToast('error', e.response?.data?.error?.message ?? langStore.t.settingsProfileGenericError)
   } finally {
     revokingOthers.value = false
   }
@@ -2410,8 +2415,8 @@ async function revokeOtherSessions() {
 const usernameError = computed(() => {
   const u = form.username
   if (!u) return null
-  if (u.length < 3) return 'Минимум 3 символа'
-  if (u.length > 30) return 'Максимум 30 символов'
+  if (u.length < 3) return langStore.t.settingsProfileUsernameMinLength
+  if (u.length > 30) return langStore.t.settingsProfileUsernameMaxLength
   return null
 })
 
@@ -2456,7 +2461,7 @@ async function applyHistoryAvatar(item: MediaHistoryItem) {
     showAvatarHistory.value = false
     await loadAvatarHistory()
   } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message ?? 'Не удалось восстановить аватар')
+    showToast('error', e.response?.data?.error?.message ?? langStore.t.settingsProfileAvatarRestoreError)
   }
 }
 
@@ -2809,12 +2814,12 @@ onMounted(async () => {
   const linkedParam = route.query.linked as string | undefined
   const errorParam  = route.query.error  as string | undefined
   if (linkedParam) {
-    const providerLabel = oauthProviders.find(p => p.key === linkedParam)?.label ?? linkedParam
-    showToast('success', `${providerLabel} успешно привязан!`)
+    const providerLabel = oauthProviders.value.find(p => p.key === linkedParam)?.label ?? linkedParam
+    showToast('success', `${providerLabel} ${langStore.t.settingsProfileLinkedSuccessSuffix}`)
     // убираем парам из URL
     router.replace({ query: { ...route.query, linked: undefined, error: undefined } })
   } else if (errorParam === 'already_taken') {
-    showToast('error', 'Этот аккаунт уже привязан к другому пользователю')
+    showToast('error', langStore.t.settingsProfileAccountAlreadyLinked)
     router.replace({ query: { ...route.query, linked: undefined, error: undefined } })
   }
 })
@@ -2844,8 +2849,8 @@ async function onBgChange(e: Event) {
     fd.append('file', file, file.name)
     const res = await api.post('/media/upload?folder=backgrounds', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     form.profile_bg_url = res.data.data.url
-    showToast('success', 'Фон профиля загружен!')
-  } catch { showToast('error', 'Ошибка загрузки фона') }
+    showToast('success', langStore.t.settingsProfileBgUploaded)
+  } catch { showToast('error', langStore.t.settingsProfileBgUploadError) }
   finally { uploadingBg.value = false; if (bgFileRef.value) bgFileRef.value.value = '' }
 }
 
@@ -2885,10 +2890,10 @@ async function onFursonaPhotoChange(e: Event) {
       { headers: { 'Content-Type': 'multipart/form-data' } })
     if (res.data.success && res.data.data?.url) {
       form.fursona_photo_url = res.data.data.url
-      showToast('success', 'Фото фурсоны загружено!')
+      showToast('success', langStore.t.settingsProfileFursonaPhotoUploaded)
     }
   } catch {
-    showToast('error', 'Ошибка загрузки фото')
+    showToast('error', langStore.t.settingsProfilePhotoUploadError)
   } finally {
     uploadingFursonaPhoto.value = false
   }
@@ -2910,10 +2915,10 @@ async function onFursuiPhotoChange(e: Event) {
       { headers: { 'Content-Type': 'multipart/form-data' } })
     if (res.data.success && res.data.data?.url) {
       form.fursuit_photo_url = res.data.data.url
-      showToast('success', '🐾 Фото фурсьюта загружено!')
+      showToast('success', langStore.t.settingsProfileFursuitPhotoUploaded)
     }
   } catch {
-    showToast('error', 'Ошибка загрузки фото')
+    showToast('error', langStore.t.settingsProfilePhotoUploadError)
   } finally {
     uploadingFursuiPhoto.value = false
   }
@@ -2994,7 +2999,7 @@ async function confirmCrop({ blob, rel }: { blob: Blob; rel: { x: number; y: num
       form.avatar_url = result.data.data.url
       form.avatar_video_url = result.data.data.videoUrl ?? ''
       cropModal.show = false
-      showToast('success', '🎥 GIF-аватар загружен!')
+      showToast('success', langStore.t.settingsProfileGifAvatarUploaded)
       return
     }
 
@@ -3014,10 +3019,10 @@ async function confirmCrop({ blob, rel }: { blob: Blob; rel: { x: number; y: num
       form.banner_url = result.data.data.url
     }
     cropModal.show = false
-    showToast('success', type === 'avatar' ? 'Аватар загружен!' : 'Баннер загружен!')
+    showToast('success', type === 'avatar' ? langStore.t.settingsProfileAvatarUploaded : langStore.t.settingsProfileBannerUploaded)
   } catch (err) {
     console.error(err)
-    showToast('error', 'Ошибка загрузки изображения')
+    showToast('error', langStore.t.settingsProfileImageUploadError)
   } finally {
     cropUploading.value = false
   }
@@ -3042,6 +3047,15 @@ function removeTag(field: 'likes' | 'dislikes', idx: number) {
 
 // ── Submit ─────────────────────────────────────────────────────────────────
 async function handleSubmit() {
+  // ── Block the whole save while the birth date field holds an unconfirmed value —
+  // otherwise the last valid date silently gets re-saved and looks like the edit was
+  // accepted when it was actually discarded.
+  if (birthDateInvalid.value) {
+    birthDateInputRef.value?.shake()
+    showToast('error', langStore.t.settingsProfileFixBirthDate)
+    return
+  }
+
   // ── Handle relationship partner changes separately ─────────────────────
   const newPartner  = form.relationship_with  || null
   const savedPartner = savedForm.relationship_with || null
@@ -3051,18 +3065,18 @@ async function handleSubmit() {
       // User cleared their partner → break up (unlinks both sides)
       try {
         await api.delete('/relationships/partner')
-        showToast('success', 'Отношения завершены')
+        showToast('success', langStore.t.settingsProfileRelationshipEnded)
       } catch {
-        showToast('error', 'Ошибка при сбросе партнёра')
+        showToast('error', langStore.t.settingsProfilePartnerResetError)
         return
       }
     } else if (newPartner) {
       // New partner selected → send a relationship request
       try {
         await api.post('/relationships/request', { toId: newPartner })
-        showToast('success', 'Запрос отправлен партнёру 💕')
+        showToast('success', langStore.t.settingsProfilePartnerRequestSent)
       } catch (e: any) {
-        const msg = e?.response?.data?.error?.message ?? 'Ошибка отправки запроса'
+        const msg = e?.response?.data?.error?.message ?? langStore.t.settingsProfileRequestSendError
         showToast('error', msg)
         return
       }
@@ -3071,7 +3085,7 @@ async function handleSubmit() {
 
   // ── Username change (separate endpoint, uniqueness checked server-side) ──
   if (form.username !== savedForm.username && (!form.username || usernameError.value)) {
-    showToast('error', usernameError.value ?? 'Юзернейм не может быть пустым')
+    showToast('error', usernameError.value ?? langStore.t.settingsProfileUsernameEmpty)
     return
   }
   if (form.username !== savedForm.username) {
@@ -3084,7 +3098,7 @@ async function handleSubmit() {
         form.username = res.data.data.user.username
       }
     } catch (e: any) {
-      const msg = e?.response?.data?.error?.message ?? 'Юзернейм уже занят'
+      const msg = e?.response?.data?.error?.message ?? langStore.t.settingsProfileUsernameTaken
       showToast('error', msg)
       return
     }
@@ -3141,9 +3155,9 @@ async function handleSubmit() {
     if (fursonaIsDirty.value && fursonaRef.value) {
       await fursonaRef.value.save()
     }
-    if (newPartner === savedPartner) showToast('success', 'Профиль успешно сохранён!')
+    if (newPartner === savedPartner) showToast('success', langStore.t.settingsProfileSavedSuccess)
   } catch {
-    showToast('error', userStore.error ?? 'Ошибка сохранения')
+    showToast('error', userStore.error ?? langStore.t.settingsProfileSaveError)
   }
 }
 
@@ -3156,7 +3170,7 @@ const sections = computed(() => [
   { id: 'sec-verification',  label: langStore.t.secVerification,  color: '#3b82f6', iconPath: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
   { id: 'sec-privacy',       label: langStore.t.secPrivacy,       color: '#ec4899', iconPath: 'M12 11c0-1.104.896-2 2-2s2 .896 2 2-.896 2-2 2-2-.896-2-2zm-6 0a6 6 0 1112 0 6 6 0 01-12 0zM3 21c0-3.314 4.03-6 9-6s9 2.686 9 6' },
   { id: 'sec-interests',     label: langStore.t.secInterests,     color: '#34d399', iconPath: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
-  { id: 'sec-automation',    label: 'Автоматизация',              color: '#eab308', iconPath: 'M13 10V3L4 14h7v7l9-11h-7z' },
+  { id: 'sec-automation',    label: langStore.t.secAutomation,    color: '#eab308', iconPath: 'M13 10V3L4 14h7v7l9-11h-7z' },
   { id: 'sec-lang',          label: langStore.t.secLang,          color: '#f59e0b', iconPath: 'M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' },
   { id: 'sec-security',      label: langStore.t.secSecurity,      color: '#10b981', iconPath: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
   { id: 'sec-billing',       label: langStore.t.secBilling,       color: '#4C67CF', iconPath: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
@@ -3284,7 +3298,7 @@ async function requestVerification() {
     }
     const res = await api.post('/verification/request', payload)
     if (res.data.success) {
-      showToast('success', 'Заявка отправлена на проверку модераторам')
+      showToast('success', langStore.t.settingsProfileVerificationSubmitted)
       selectedVerType.value = ''
       evidenceUrls.value = []
       evidenceUploadRef.value?.clearAll()
@@ -3293,7 +3307,7 @@ async function requestVerification() {
       await fetchVerificationData()
     }
   } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message ?? e.response?.data?.error ?? 'Ошибка отправки заявки')
+    showToast('error', e.response?.data?.error?.message ?? e.response?.data?.error ?? langStore.t.settingsProfileVerificationSubmitError)
   } finally { isRequestingVerification.value = false }
 }
 
@@ -3360,29 +3374,29 @@ function ageLabel(n: number): string {
   return `${n} ${langStore.t.yearsOldSuffix}`
 }
 
-const fursonaColorSwatches = [
-  { label: 'Белый',          color: '#f5f5f5' },
-  { label: 'Светло-серый',   color: '#d1d5db' },
-  { label: 'Серый',          color: '#6b7280' },
-  { label: 'Чёрный',         color: '#1c1c1e' },
-  { label: 'Коричневый',     color: '#92400e' },
-  { label: 'Рыжий',          color: '#c2410c' },
-  { label: 'Рыжий-лис',     color: '#ea580c' },
-  { label: 'Золотой',        color: '#d97706' },
-  { label: 'Жёлтый',        color: '#ca8a04' },
-  { label: 'Кремовый',       color: '#fef3c7' },
-  { label: 'Тёмно-золот.',   color: '#b45309' },
-  { label: 'Красный',        color: '#dc2626' },
-  { label: 'Розовый',        color: '#ec4899' },
-  { label: 'Фиолетовый',     color: '#7c3aed' },
-  { label: 'Синий',          color: '#2563eb' },
-  { label: 'Голубой',        color: '#0ea5e9' },
-  { label: 'Бирюзовый',      color: '#0d9488' },
-  { label: 'Зелёный',        color: '#16a34a' },
-  { label: 'Серебристый',    color: '#94a3b8' },
-]
+const fursonaColorSwatches = computed(() => [
+  { label: langStore.t.settingsProfileColorWhite,       color: '#f5f5f5' },
+  { label: langStore.t.settingsProfileColorLightGray,   color: '#d1d5db' },
+  { label: langStore.t.settingsProfileColorGray,        color: '#6b7280' },
+  { label: langStore.t.settingsProfileColorBlack,       color: '#1c1c1e' },
+  { label: langStore.t.settingsProfileColorBrown,       color: '#92400e' },
+  { label: langStore.t.settingsProfileColorGinger,      color: '#c2410c' },
+  { label: langStore.t.settingsProfileColorFoxRed,      color: '#ea580c' },
+  { label: langStore.t.settingsProfileColorGolden,      color: '#d97706' },
+  { label: langStore.t.settingsProfileColorYellow,      color: '#ca8a04' },
+  { label: langStore.t.settingsProfileColorCream,       color: '#fef3c7' },
+  { label: langStore.t.settingsProfileColorDarkGold,    color: '#b45309' },
+  { label: langStore.t.settingsProfileColorRed,         color: '#dc2626' },
+  { label: langStore.t.settingsProfileColorPink,        color: '#ec4899' },
+  { label: langStore.t.settingsProfileColorViolet,      color: '#7c3aed' },
+  { label: langStore.t.settingsProfileColorBlue,        color: '#2563eb' },
+  { label: langStore.t.settingsProfileColorLightBlue,   color: '#0ea5e9' },
+  { label: langStore.t.settingsProfileColorTurquoise,   color: '#0d9488' },
+  { label: langStore.t.settingsProfileColorGreen,       color: '#16a34a' },
+  { label: langStore.t.settingsProfileColorSilver,      color: '#94a3b8' },
+])
 
-const socialNetworks = [
+const socialNetworks = computed(() => [
   { key: 'telegram',    label: 'Telegram',      color: '#2AABEE', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>` },
   { key: 'twitter',     label: 'X / Twitter',   color: '#fff',    svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.258 5.63 5.907-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>` },
   { key: 'instagram',   label: 'Instagram',     color: '#E4405F', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>` },
@@ -3392,17 +3406,17 @@ const socialNetworks = [
   { key: 'vk',          label: 'ВКонтакте',     color: '#4C75A3', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.684 0H8.316C1.592 0 0 1.592 0 8.316v7.368C0 22.408 1.592 24 8.316 24h7.368C22.408 24 24 22.408 24 15.684V8.316C24 1.592 22.391 0 15.684 0zm3.692 17.123h-1.744c-.66 0-.862-.523-2.049-1.714-1.033-1.01-1.49-1.135-1.744-1.135-.356 0-.458.102-.458.593v1.566c0 .424-.135.678-1.252.678-1.846 0-3.896-1.118-5.335-3.202C4.624 10.857 4.03 8.57 4.03 8.096c0-.254.102-.491.593-.491h1.744c.44 0 .61.203.78.677.863 2.49 2.303 4.675 2.896 4.675.22 0 .322-.102.322-.66V9.721c-.068-1.186-.695-1.287-.695-1.71 0-.204.17-.407.44-.407h2.743c.372 0 .508.203.508.643v3.473c0 .372.17.508.271.508.22 0 .407-.136.813-.542 1.252-1.406 2.151-3.574 2.151-3.574.119-.254.322-.491.763-.491h1.744c.525 0 .644.27.525.643-.22 1.017-2.354 4.031-2.354 4.031-.186.305-.254.44 0 .78.186.254.796.779 1.202 1.253.745.847 1.32 1.558 1.473 2.049.17.474-.085.716-.576.716z"/></svg>` },
   { key: 'discord',     label: 'Discord',       color: '#7289DA', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>` },
   { key: 'github',      label: 'GitHub',        color: '#fff',    svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.605-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>` },
-  { key: 'other',       label: 'Другое / Сайт', color: '#6366f1', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>` },
-]
+  { key: 'other',       label: langStore.t.settingsProfileOtherSite, color: '#6366f1', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>` },
+])
 
-const relationshipOptions = [
-  { value: 'single',          label: 'Свободен' },
-  { value: 'in_relationship', label: 'В отношениях' },
-  { value: 'married',      label: 'Женат/Замужем' },
-  { value: 'open',         label: 'Открытые' },
-  { value: 'complicated',  label: 'Сложно' },
-  { value: 'secret',       label: 'Секрет' },
-]
+const relationshipOptions = computed(() => [
+  { value: 'single',          label: langStore.t.relStatusSingle },
+  { value: 'in_relationship', label: langStore.t.relStatusInRel },
+  { value: 'married',      label: langStore.t.relStatusMarried },
+  { value: 'open',         label: langStore.t.relStatusOpen },
+  { value: 'complicated',  label: langStore.t.relStatusComplicated },
+  { value: 'secret',       label: langStore.t.relStatusSecret },
+])
 
 const colorSwatches = [
   { name: 'Sky',    color: '#4C97CF' },
@@ -3618,7 +3632,7 @@ const filteredSoonEvents = computed(() => {
 })
 
 function formatSoonDate(date: string): string {
-  return new Date(date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+  return new Date(date).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'short' })
 }
 
 function onSoonBlur() {
@@ -3633,7 +3647,7 @@ function isSoonEventExpired(ev: EventItem): boolean {
 async function selectSoonEvent(ev: EventItem) {
   if (soonSaving.value) return
   if (isSoonEventExpired(ev)) {
-    showToast('error', 'Мероприятие завершилось. SOON откроется, когда организатор назначит новую дату.')
+    showToast('error', langStore.t.settingsProfileSoonEventEnded)
     return
   }
   soonSaving.value = true
@@ -3645,9 +3659,9 @@ async function selectSoonEvent(ev: EventItem) {
     soonSearch.value   = ''
     soonDropOpen.value = false
     await loadMySoonSelection()
-    showToast('success', 'Отмечено: скоро на «' + ev.title + '»')
+    showToast('success', `${langStore.t.settingsProfileSoonMarkedPrefix} «${ev.title}»`)
   } catch (e: any) {
-    showToast('error', e?.response?.data?.error?.message ?? 'Не удалось сохранить')
+    showToast('error', e?.response?.data?.error?.message ?? langStore.t.settingsProfileSoonSaveError)
   } finally {
     soonSaving.value = false
   }
@@ -3659,9 +3673,9 @@ async function clearSoonSelection() {
   try {
     await groupsStore.toggleSoonBadge(mySoonEventId.value)
     mySoonEventId.value = null
-    showToast('success', 'Метка Soon снята')
+    showToast('success', langStore.t.settingsProfileSoonLabelRemoved)
   } catch (e: any) {
-    showToast('error', e?.response?.data?.error?.message ?? 'Не удалось сохранить')
+    showToast('error', e?.response?.data?.error?.message ?? langStore.t.settingsProfileSoonSaveError)
   } finally {
     soonSaving.value = false
   }

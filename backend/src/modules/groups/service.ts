@@ -1,7 +1,8 @@
 import prisma from '../../config/prisma.js';
+import { containsToxicLanguage } from '../automod/service.js';
 import { getGroupBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
-import { isTrustedMediaUrl } from '../media/service.js';
+import { isTrustedMediaUrl, deleteFileByUrl } from '../media/service.js';
 import { notificationService } from '../notifications/service.js';
 import type {
   CreateGroupInput,
@@ -23,6 +24,19 @@ import type {
 const ROLE_WEIGHT: Record<string, number> = { owner: 3, admin: 2, moderator: 1 };
 function roleWeight(role?: string | null): number {
   return role ? (ROLE_WEIGHT[role] ?? 0) : 0;
+}
+
+/**
+ * Soft-deletes a group and its group-DM Conversation(s) together. Without this, a group going
+ * away (auto-deleted once empty, or staff hard-delete) left its Conversation row(s) fully intact
+ * — still listed, still readable/writable — since Conversation.group_id only gets SET NULL by
+ * the DB's FK cascade, and nothing else ever re-checks the group's status.
+ */
+async function softDeleteGroupAndConversations(groupId: string) {
+  await prisma.$transaction([
+    prisma.group.update({ where: { id: groupId }, data: { deleted_at: new Date() } }),
+    prisma.conversation.updateMany({ where: { group_id: groupId, deleted_at: null }, data: { deleted_at: new Date() } }),
+  ]);
 }
 
 // Default Todolist kanban columns — used whenever a group hasn't customized its own.
@@ -78,6 +92,8 @@ const GROUP_SELECT = {
   bank_card_masked: true,
   support_tiers: true,
   business_enabled: true,
+  welcome_msg_enabled: true,
+  welcome_msg_text: true,
   _count: { select: { members: true, events: true, posts: { where: { post: { deleted_at: null } } } } },
   owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
 };
@@ -311,6 +327,10 @@ export const groupService = {
 
   // ── update ────────────────────────────────────────────────────────────────
   async update(groupId: string, input: UpdateGroupInput) {
+    const prevMedia = (input.avatarUrl !== undefined || input.bannerUrl !== undefined || input.groupBgUrl !== undefined)
+      ? await prisma.group.findUnique({ where: { id: groupId }, select: { avatar_url: true, banner_url: true, group_bg_url: true } })
+      : null;
+
     const data: any = {};
     if (input.name !== undefined) data.name = input.name;
     if (input.description !== undefined) data.description = input.description;
@@ -367,13 +387,83 @@ export const groupService = {
     if (input.bankCardMasked !== undefined) data.bank_card_masked = input.bankCardMasked || null;
     if (input.supportTiers !== undefined) data.support_tiers = input.supportTiers;
     if (input.businessEnabled !== undefined) data.business_enabled = input.businessEnabled;
+    if (input.welcomeMsgEnabled !== undefined) data.welcome_msg_enabled = input.welcomeMsgEnabled;
+    if (input.welcomeMsgText !== undefined) {
+      if (containsToxicLanguage(input.welcomeMsgText)) {
+        throw Object.assign(new Error('Текст приветствия содержит недопустимый контент'), { statusCode: 400 });
+      }
+      data.welcome_msg_text = input.welcomeMsgText;
+    }
 
-    return prisma.group.update({ where: { id: groupId }, data, select: GROUP_SELECT });
+    const updated = await prisma.group.update({ where: { id: groupId }, data, select: GROUP_SELECT });
+
+    if (prevMedia) {
+      const replaced = [
+        input.avatarUrl !== undefined && prevMedia.avatar_url && prevMedia.avatar_url !== input.avatarUrl ? prevMedia.avatar_url : null,
+        input.bannerUrl !== undefined && prevMedia.banner_url && prevMedia.banner_url !== input.bannerUrl ? prevMedia.banner_url : null,
+        input.groupBgUrl !== undefined && prevMedia.group_bg_url && prevMedia.group_bg_url !== input.groupBgUrl ? prevMedia.group_bg_url : null,
+      ].filter((url): url is string => !!url);
+      Promise.all(replaced.map((url) => deleteFileByUrl(url)))
+        .catch((err) => console.error('[group.update] media cleanup failed:', err));
+    }
+
+    return updated;
   },
 
-  // ── soft delete ──────────────────────────────────────────────────────────
+  // ── hard delete ───────────────────────────────────────────────────────────
+  /**
+   * Permanently erases the group and everything in it — members, posts, messages, ratings,
+   * todos, custom roles, subscribers, bookmarks — irreversible, no soft-delete/undo.
+   *
+   * Blocked entirely if the group has any donation/transaction history, orders, or a nonzero
+   * balance: deleting a group must never be a way to erase money records (e.g. a scammer
+   * collecting donations then wiping the evidence). Those groups can only be handled by support.
+   */
   async delete(groupId: string) {
-    return prisma.group.update({ where: { id: groupId }, data: { deleted_at: new Date() } });
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      select: {
+        avatar_url: true,
+        banner_url: true,
+        group_bg_url: true,
+        sponsors: true,
+        balance: true,
+        _count: { select: { transactions: true, orders: true } },
+      },
+    });
+    if (!group) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
+
+    if (group._count.transactions > 0 || group._count.orders > 0 || group.balance.toNumber() !== 0) {
+      throw Object.assign(new Error('GROUP_HAS_FINANCIAL_HISTORY'), { statusCode: 409 });
+    }
+
+    const groupPosts = await prisma.groupPost.findMany({ where: { group_id: groupId }, select: { post_id: true } });
+    const postIds = groupPosts.map((gp) => gp.post_id);
+    const posts = postIds.length > 0
+      ? await prisma.post.findMany({ where: { id: { in: postIds } }, select: { media_urls: true, media_original_urls: true } })
+      : [];
+
+    // Best-effort: wipe the actual files from storage before removing the DB rows, so deleting
+    // a group never leaves the media behind as orphaned MinIO objects.
+    const sponsors = Array.isArray(group.sponsors) ? (group.sponsors as any[]) : [];
+    const mediaUrls = [
+      ...posts.flatMap((p) => [...p.media_urls, ...p.media_original_urls]),
+      group.avatar_url,
+      group.banner_url,
+      group.group_bg_url,
+      ...sponsors.map((s) => s?.logo_url),
+    ].filter((url): url is string => !!url);
+    await Promise.all(mediaUrls.map((url) => deleteFileByUrl(url).catch(() => {})));
+
+    await prisma.$transaction([
+      prisma.post.deleteMany({ where: { id: { in: postIds } } }),
+      // Conversation.group_id is only SET NULL by the FK cascade below — soft-delete it here
+      // first so it stops being listed/readable instead of surviving as an orphaned thread.
+      prisma.conversation.updateMany({ where: { group_id: groupId, deleted_at: null }, data: { deleted_at: new Date() } }),
+      prisma.group.delete({ where: { id: groupId } }),
+    ]);
+
+    return { deleted: true, postsDeleted: postIds.length };
   },
 
   // ── membership ────────────────────────────────────────────────────────────
@@ -431,7 +521,7 @@ export const groupService = {
       });
       // Auto-delete (soft) group if no members remain
       if (updated.members_count <= 0) {
-        await prisma.group.update({ where: { id: groupId }, data: { deleted_at: new Date() } });
+        await softDeleteGroupAndConversations(groupId);
       }
     }
     return result;
@@ -505,7 +595,7 @@ export const groupService = {
     });
     // Auto-delete (soft) group if no members remain
     if (updated.members_count <= 0) {
-      await prisma.group.update({ where: { id: groupId }, data: { deleted_at: new Date() } });
+      await softDeleteGroupAndConversations(groupId);
     }
     return result;
   },
@@ -782,6 +872,7 @@ export const groupService = {
     return prisma.groupPost.findMany({
       where: {
         group_id: groupId,
+        group: { deleted_at: null },
         post: { deleted_at: null, ...(hasMedia ? { media_urls: { isEmpty: false } } : {}) },
       },
       include: {
@@ -1062,11 +1153,12 @@ export const groupService = {
       await Promise.all(
         subscribers.map((s) =>
           notificationService.create({
-            receiverId: s.user_id,
-            senderId:   userId,
-            type:       'GROUP_POST',
-            postId:     created!.id,
-            refId:      groupId,
+            receiverId:    s.user_id,
+            senderId:      userId,
+            senderGroupId: groupId,
+            type:          'GROUP_POST',
+            postId:        created!.id,
+            refId:         groupId,
           }).catch(() => {})
         ),
       );

@@ -3,14 +3,14 @@
 
     <!-- ── Selection bar (replaces header while messages are selected) ──────── -->
     <div v-if="selectionMode" class="flex items-center gap-3 px-4 py-3 border-b border-brand-border bg-brand-card flex-shrink-0">
-      <button @click="clearSelection" class="p-1.5 rounded-xl hover:bg-brand-bg text-white/55 hover:text-white transition-colors" title="Отменить">
+      <button @click="clearSelection" class="p-1.5 rounded-xl hover:bg-brand-bg text-white/55 hover:text-white transition-colors" :title="langStore.t.chatCancelSelectionTitle">
         <BIcon name="X" class="w-4 h-4" />
       </button>
-      <p class="flex-1 text-sm font-bold text-white">Выбрано: {{ selectedMsgIds.size }}</p>
-      <button @click="startBulkForward" class="p-1.5 rounded-xl hover:bg-brand-bg text-white/55 hover:text-brand-accent transition-colors" title="Переслать">
+      <p class="flex-1 text-sm font-bold text-white">{{ langStore.t.chatSelectedCountLabel }}: {{ selectedMsgIds.size }}</p>
+      <button @click="startBulkForward" class="p-1.5 rounded-xl hover:bg-brand-bg text-white/55 hover:text-brand-accent transition-colors" :title="langStore.t.chatForwardAction">
         <BIcon name="Forward" class="w-4 h-4" />
       </button>
-      <button v-if="canDeleteSelected" @click="deleteSelected" class="p-1.5 rounded-xl hover:bg-brand-error/10 text-white/55 hover:text-brand-error transition-colors" title="Удалить">
+      <button v-if="canDeleteSelected" @click="deleteSelected" class="p-1.5 rounded-xl hover:bg-brand-error/10 text-white/55 hover:text-brand-error transition-colors" :title="langStore.t.deleteBtn">
         <BIcon name="Trash2" class="w-4 h-4" />
       </button>
     </div>
@@ -25,7 +25,7 @@
       <div class="relative cursor-pointer flex-shrink-0" @click="isGroupDm && amGroupDmCustomer ? goToGroup() : (conv?.is_group ? (showMembersPanel = true) : (other ? showDmPanel = true : undefined))">
         <!-- Group -->
         <template v-if="conv?.is_group">
-          <img v-if="conv.avatar_url" :src="conv.avatar_url" :alt="conv.name ?? 'Группа'"
+          <img v-if="conv.avatar_url" :src="conv.avatar_url" :alt="conv.name ?? langStore.t.chatGroupFallbackName"
             class="w-10 h-10 rounded-xl object-cover ring-2 ring-brand-border hover:ring-brand-accent/50 transition-all" @error="onAvatarError" />
           <div v-else class="grid grid-cols-2 gap-px w-10 h-10 rounded-xl overflow-hidden ring-2 ring-brand-border hover:ring-brand-accent/50 transition-all bg-brand-bg">
             <template v-for="(p, idx) in conv.other_participants.slice(0, 4)" :key="p.user_id">
@@ -66,19 +66,19 @@
         <p class="font-bold text-white text-sm leading-tight truncate flex items-center gap-1.5">
           <template v-if="conv?.is_group">
             <BIcon name="Users" class="w-3.5 h-3.5 text-white/55 flex-shrink-0" />
-            {{ conv.name || 'Группа' }}
+            {{ conv.name || langStore.t.chatGroupFallbackName }}
           </template>
           <template v-else>
             <!-- Notes -->
             <template v-if="!other">
               <span class="font-bold text-white text-sm flex items-center gap-1.5">
                 <BIcon name="StickyNote" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
-                Мои заметки
+                {{ langStore.t.notesBtn }}
               </span>
             </template>
             <template v-else>
-              {{ other?.display_name || other?.username || 'Собеседник' }}
-              <span v-if="(other as any)?.deceased_at" title="Светлая память">🪦</span>
+              {{ other?.display_name || other?.username || langStore.t.chatInterlocutorFallback }}
+              <span v-if="(other as any)?.deceased_at" :title="langStore.t.chatRipTitle">🪦</span>
             </template>
           </template>
         </p>
@@ -88,17 +88,17 @@
             <span class="w-1 h-1 rounded-full bg-brand-accent animate-bounce [animation-delay:-0.15s]" />
             <span class="w-1 h-1 rounded-full bg-brand-accent animate-bounce" />
           </span>
-          Печатает...
+          {{ langStore.t.chatTypingIndicator }}
         </p>
         <p v-else-if="conv?.is_group" class="text-xs text-white/55">
-          {{ conv.participants_count ?? ((conv.other_participants?.length ?? 0) + 1) }} участников · нажмите для просмотра
+          {{ conv.participants_count ?? ((conv.other_participants?.length ?? 0) + 1) }} {{ langStore.t.membersUnit }} · {{ langStore.t.chatClickToView }}
         </p>
-        <p v-else-if="isGroupDm && amGroupDmCustomer" class="text-xs text-white/55">Переписка с группой · нажмите для перехода</p>
-        <p v-else-if="!other" class="text-xs text-white/55">Только для вас</p>
+        <p v-else-if="isGroupDm && amGroupDmCustomer" class="text-xs text-white/55">{{ langStore.t.chatGroupDmSubtitle }}</p>
+        <p v-else-if="!other" class="text-xs text-white/55">{{ langStore.t.chatOnlyForYou }}</p>
         <p v-else class="text-xs flex items-center gap-1.5">
           <span class="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
             :class="isPartnerOnline ? 'bg-brand-success shadow-[0_0_4px_theme(colors.green.400)]' : 'bg-brand-muted'" />
-          <span :class="isPartnerOnline ? 'text-brand-success' : 'text-white/55'">{{ isPartnerOnline ? 'в сети' : partnerLastSeenLabel }}</span>
+          <span :class="isPartnerOnline ? 'text-brand-success' : 'text-white/55'">{{ isPartnerOnline ? langStore.t.chatOnlineNow : partnerLastSeenLabel }}</span>
           <BIcon v-if="isPartnerOnline && partnerDeviceIcon" :name="partnerDeviceIcon!" class="w-3 h-3 text-brand-success/70" :title="partnerDevice ?? undefined" />
         </p>
       </div>
@@ -108,19 +108,19 @@
         <button @click="toggleSearch"
           class="p-1.5 rounded-xl transition-colors"
           :class="showSearch ? 'text-brand-accent bg-brand-accent/10' : 'text-white/55 hover:text-white hover:bg-brand-bg'"
-          title="Поиск в чате">
+          :title="langStore.t.chatSearchTitle">
           <BIcon name="Search" class="w-4 h-4" />
         </button>
         <button @click="toggleTranslate"
           class="p-1.5 rounded-xl transition-colors"
           :class="translateMode ? 'text-brand-accent bg-brand-accent/10' : 'text-white/55 hover:text-white hover:bg-brand-bg'"
-          title="Переводчик">
+          :title="langStore.t.chatTranslatorTitle">
           <BIcon name="Languages" class="w-4 h-4" />
         </button>
         <div class="relative" ref="menuRef">
           <button @click="showMenu = !showMenu"
             class="p-1.5 rounded-xl hover:bg-brand-bg text-white/55 hover:text-white transition-colors"
-            title="Действия">
+            :title="langStore.t.chatActionsTitle">
             <BIcon name="MoreVertical" class="w-4 h-4" />
           </button>
           <Transition name="menu-drop">
@@ -129,7 +129,7 @@
               <div v-if="translateMode" class="px-4 pb-2 pt-1">
                 <select v-model="translateLang"
                   class="w-full text-xs bg-brand-bg border border-brand-border rounded-xl px-3 py-1.5 text-brand-offwhite outline-none focus:border-brand-accent/50 transition-colors">
-                  <option value="ru">Русский</option>
+                  <option value="ru">{{ langStore.t.languageRU }}</option>
                   <option value="en">English</option>
                   <option value="de">Deutsch</option>
                   <option value="fr">Français</option>
@@ -137,7 +137,7 @@
                   <option value="ja">日本語</option>
                   <option value="es">Español</option>
                   <option value="pt">Português</option>
-                  <option value="uk">Українська</option>
+                  <option value="uk">{{ langStore.t.languageUK }}</option>
                 </select>
               </div>
               <div v-if="translateMode" class="border-t border-brand-border mb-1" />
@@ -147,44 +147,44 @@
                 <button @click="showMembersPanel = true; showMenu = false"
                   class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
                   <BIcon name="Users" class="w-4 h-4 text-white/55 flex-shrink-0" />
-                  Участники
+                  {{ langStore.t.createStep2Title }}
                 </button>
                 <button v-if="conv?.group_id" @click="router.push('/groups/' + conv.group_id); showMenu = false"
                   class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
                   <BIcon name="Users2" class="w-4 h-4 text-white/55 flex-shrink-0" />
-                  К группе
+                  {{ langStore.t.contextGoToGroup }}
                 </button>
                 <button v-if="myRole === 'admin'" @click="showEditGroup = true; showMenu = false"
                   class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
                   <BIcon name="Settings" class="w-4 h-4 text-white/55 flex-shrink-0" />
-                  Настройки группы
+                  {{ langStore.t.chatGroupSettingsMenuItem }}
                 </button>
                 <div class="border-t border-brand-border my-1" />
               </template>
 
               <!-- DM-specific -->
-              <button v-if="!conv?.is_group && !isGroupDm" @click="goToProfile(other?.username); showMenu = false"
+              <router-link v-if="!conv?.is_group && !isGroupDm" :to="`/profile/${other?.username}`" @click="showMenu = false"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
                 <BIcon name="User" class="w-4 h-4 text-white/55 flex-shrink-0" />
-                Профиль
-              </button>
+                {{ langStore.t.profile }}
+              </router-link>
 
               <!-- Group DM: customer sees "К группе"; staff sees the customer's profile -->
               <button v-if="isGroupDm && amGroupDmCustomer" @click="goToGroup(); showMenu = false"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
                 <BIcon name="Users2" class="w-4 h-4 text-white/55 flex-shrink-0" />
-                К группе
+                {{ langStore.t.contextGoToGroup }}
               </button>
-              <button v-else-if="isGroupDm" @click="goToProfile(other?.username); showMenu = false"
+              <router-link v-else-if="isGroupDm" :to="`/profile/${other?.username}`" @click="showMenu = false"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
                 <BIcon name="User" class="w-4 h-4 text-white/55 flex-shrink-0" />
-                Профиль
-              </button>
+                {{ langStore.t.profile }}
+              </router-link>
 
               <button v-if="!(isGroupDm && !amGroupDmCustomer)" @click="archive(); showMenu = false"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
                 <BIcon :name="conv?.my_participant?.archived ? 'ArchiveX' : 'Archive'" class="w-4 h-4 text-white/55 flex-shrink-0" />
-                {{ conv?.my_participant?.archived ? 'Разархивировать' : 'Архивировать' }}
+                {{ conv?.my_participant?.archived ? langStore.t.contextUnarchive : langStore.t.contextArchive }}
               </button>
               <div class="border-t border-brand-border my-1" />
 
@@ -193,13 +193,13 @@
                 :class="isBlocked ? 'text-brand-accent hover:bg-brand-accent/8' : 'text-brand-offwhite hover:bg-brand-bg'">
                 <BIcon :name="isBlocked ? 'ShieldOff' : 'ShieldAlert'" class="w-4 h-4 flex-shrink-0"
                   :class="isBlocked ? 'text-brand-accent' : 'text-white/55'" />
-                {{ isBlocked ? 'Разблокировать' : 'Заблокировать' }}
+                {{ isBlocked ? langStore.t.chatUnblockLabel : langStore.t.blockUserBtn }}
               </button>
 
               <button v-if="!(isGroupDm && !amGroupDmCustomer)" @click="showDeleteModal = true; showMenu = false"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-error hover:bg-brand-error/8 transition-colors text-left">
                 <BIcon name="Trash2" class="w-4 h-4 flex-shrink-0" />
-                {{ conv?.is_group ? 'Покинуть группу' : 'Удалить диалог' }}
+                {{ conv?.is_group ? langStore.t.contextLeaveGroup : langStore.t.contextDeleteConv }}
               </button>
             </div>
           </Transition>
@@ -253,8 +253,8 @@
                     {{ (conv?.name ?? 'G')[0].toUpperCase() }}
                   </div>
                 </div>
-                <h3 class="relative text-base font-bold text-white truncate mt-2.5 drop-shadow">{{ conv?.name || 'Группа' }}</h3>
-                <p class="relative text-xs text-white/70 mt-0.5 drop-shadow">{{ groupMembers.length }} участников</p>
+                <h3 class="relative text-base font-bold text-white truncate mt-2.5 drop-shadow">{{ conv?.name || langStore.t.chatGroupFallbackName }}</h3>
+                <p class="relative text-xs text-white/70 mt-0.5 drop-shadow">{{ groupMembers.length }} {{ langStore.t.membersUnit }}</p>
               </div>
 
               <!-- Action row (plain card background) -->
@@ -262,23 +262,23 @@
                 <button v-if="conv?.group_id" @click="showInvitePicker = true"
                   class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg text-white/60 hover:text-brand-accent hover:bg-brand-accent/10 transition-all text-xs font-semibold">
                   <BIcon name="Send" class="w-4 h-4" />
-                  Пригласить
+                  {{ langStore.t.chatInviteAction }}
                 </button>
                 <button v-if="myRole === 'admin'" @click="showAddMember = !showAddMember; addMemberSearch = ''; addMemberResults = []"
                   :class="['flex flex-col items-center gap-1 px-4 py-2 rounded-2xl transition-all text-xs font-semibold',
                     showAddMember ? 'bg-brand-accent/20 text-brand-accent' : 'bg-brand-bg text-white/60 hover:text-brand-accent hover:bg-brand-accent/10']">
                   <BIcon name="UserPlus" class="w-4 h-4" />
-                  Добавить
+                  {{ langStore.t.addButton }}
                 </button>
                 <button @click="goToGroup(); showMembersPanel = false"
                   class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg text-white/60 hover:text-brand-accent hover:bg-brand-accent/10 transition-all text-xs font-semibold">
                   <BIcon name="Users2" class="w-4 h-4" />
-                  К группе
+                  {{ langStore.t.contextGoToGroup }}
                 </button>
                 <button @click="showMembersPanel = false; archive()"
                   class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg text-white/60 hover:text-white/90 hover:bg-brand-bg/80 transition-all text-xs font-semibold">
                   <BIcon :name="conv?.my_participant?.archived ? 'ArchiveX' : 'Archive'" class="w-4 h-4" />
-                  {{ conv?.my_participant?.archived ? 'Разарх.' : 'Архив' }}
+                  {{ conv?.my_participant?.archived ? langStore.t.chatUnarchiveShort : langStore.t.archiveBtn }}
                 </button>
               </div>
             </div>
@@ -289,7 +289,7 @@
               <span class="flex-1 min-w-0 text-xs text-brand-accent truncate cursor-pointer hover:underline" @click="goToGroup(); showMembersPanel = false">
                 {{ groupPageUrl }}
               </span>
-              <button @click="copyGroupLink" class="flex-shrink-0 text-white/40 hover:text-white transition-colors" title="Скопировать ссылку">
+              <button @click="copyGroupLink" class="flex-shrink-0 text-white/40 hover:text-white transition-colors" :title="langStore.t.exportCopyLink">
                 <BIcon :name="groupLinkCopied ? 'Check' : 'Copy'" class="w-3.5 h-3.5" />
               </button>
             </div>
@@ -299,7 +299,7 @@
 
               <!-- Media stats list -->
               <div v-if="mediaStatsLoading" class="flex items-center justify-center py-6 text-white/55 text-sm gap-2">
-                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> Загрузка...
+                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> {{ langStore.t.loadingBtn }}
               </div>
               <button v-for="stat in mediaStatsList.filter((s) => s.count > 0)" :key="stat.key"
                 @click="openMediaBrowser(stat.key)"
@@ -313,7 +313,7 @@
               <div class="flex items-center gap-2 px-4 py-3 mt-1 border-t border-brand-border">
                 <BIcon name="Users" class="w-3.5 h-3.5 text-white/40 flex-shrink-0" />
                 <span class="text-xs font-bold text-white/50 uppercase tracking-wide">
-                  {{ groupMembers.length }} участников{{ groupOnlineCount ? `, ${groupOnlineCount} в сети` : '' }}
+                  {{ groupMembers.length }} {{ langStore.t.membersUnit }}{{ groupOnlineCount ? `, ${groupOnlineCount} ${langStore.t.chatOnlineNow}` : '' }}
                 </span>
               </div>
 
@@ -324,7 +324,7 @@
                   <input
                     v-model="memberSearchQuery"
                     type="text"
-                    placeholder="Поиск участников…"
+                    :placeholder="langStore.t.chatSearchMembersPlaceholder"
                     class="flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-none" />
                   <button v-if="memberSearchQuery" @click="memberSearchQuery = ''" class="text-white/30 hover:text-white">
                     <BIcon name="X" class="w-3.5 h-3.5" />
@@ -336,7 +336,7 @@
               <button v-if="myRole === 'admin' && !showAddMember" @click="showAddMember = true; addMemberSearch = ''; addMemberResults = []"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-brand-accent hover:bg-brand-bg/40 transition-colors text-left text-sm font-semibold">
                 <BIcon name="UserPlus" class="w-4 h-4 flex-shrink-0" />
-                Добавить участников
+                {{ langStore.t.chatAddMembersAction }}
               </button>
 
               <!-- Add member search panel (admin only) -->
@@ -348,7 +348,7 @@
                       v-model="addMemberSearch"
                       @input="debouncedAddMemberSearch"
                       type="text"
-                      placeholder="Поиск пользователей…"
+                      :placeholder="langStore.t.chatSearchUsersPlaceholder"
                       class="flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-none"
                       autofocus />
                     <button @click="showAddMember = false; addMemberSearch = ''; addMemberResults = []" class="text-white/30 hover:text-white">
@@ -379,7 +379,7 @@
                         :class="['w-3.5 h-3.5 flex-shrink-0', groupMembers.some(m => m.user_id === u.id) ? 'text-brand-accent' : 'text-white/40']" />
                     </button>
                   </div>
-                  <p v-else-if="addMemberSearch.length >= 2 && !addMemberLoading" class="text-center text-xs text-white/30 py-3">Никто не найден</p>
+                  <p v-else-if="addMemberSearch.length >= 2 && !addMemberLoading" class="text-center text-xs text-white/30 py-3">{{ langStore.t.chatNoOneFound }}</p>
                   <p v-if="addMemberLoading" class="flex justify-center py-2">
                     <BIcon name="Loader2" class="w-4 h-4 animate-spin text-white/40" />
                   </p>
@@ -388,10 +388,10 @@
 
               <!-- Member list -->
               <p v-if="membersLoading" class="flex items-center justify-center py-8 text-white/55 text-sm gap-2">
-                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> Загрузка...
+                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> {{ langStore.t.loadingBtn }}
               </p>
-              <p v-else-if="!filteredGroupMembers.length" class="text-center text-xs text-white/30 py-6">Никто не найден</p>
-              <div v-for="m in filteredGroupMembers" :key="m.user_id" class="flex items-center gap-3 px-4 py-2.5 hover:bg-brand-bg/40 transition-colors cursor-pointer" @click="goToProfile(m.user?.username)">
+              <p v-else-if="!filteredGroupMembers.length" class="text-center text-xs text-white/30 py-6">{{ langStore.t.chatNoOneFound }}</p>
+              <router-link v-for="m in filteredGroupMembers" :key="m.user_id" :to="`/profile/${m.user?.username}`" class="flex items-center gap-3 px-4 py-2.5 hover:bg-brand-bg/40 transition-colors cursor-pointer">
                 <div class="relative flex-shrink-0">
                   <img v-if="m.user?.avatar_url" :src="m.user.avatar_url" class="w-8 h-8 rounded-full object-cover" @error="onAvatarError" />
                   <div v-else class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold">
@@ -401,21 +401,21 @@
                 <div class="flex-1 min-w-0">
                   <p class="text-sm text-white font-medium truncate leading-tight">{{ m.user?.display_name || m.user?.username }}</p>
                   <p class="text-xs truncate" :class="groupOnlineStatus[m.user_id] ? 'text-green-400' : 'text-white/45'">
-                    {{ groupOnlineStatus[m.user_id] ? 'в сети' : `@${m.user?.username}` }}
+                    {{ groupOnlineStatus[m.user_id] ? langStore.t.chatOnlineNow : `@${m.user?.username}` }}
                   </p>
                 </div>
                 <div class="flex items-center gap-1.5 flex-shrink-0">
-                  <span v-if="m.role === 'admin'" class="text-[9px] bg-brand-accent/15 text-brand-accent px-1.5 py-0.5 rounded-full border border-brand-accent/25 font-bold">АДМИН</span>
+                  <span v-if="m.role === 'admin'" class="text-[9px] bg-brand-accent/15 text-brand-accent px-1.5 py-0.5 rounded-full border border-brand-accent/25 font-bold">{{ langStore.t.chatAdminBadge }}</span>
                   <template v-if="myRole === 'admin' && m.user_id !== auth.user?.id">
-                    <button @click.stop="kickMember(m.user_id)" class="p-1 rounded-lg text-white/40 hover:text-brand-error transition-colors" title="Исключить">
+                    <button @click.stop="kickMember(m.user_id)" class="p-1 rounded-lg text-white/40 hover:text-brand-error transition-colors" :title="langStore.t.chatKickMemberTitle">
                       <BIcon name="UserX" class="w-3.5 h-3.5" />
                     </button>
-                    <button @click.stop="toggleMemberRole(m)" class="p-1 rounded-lg text-white/40 hover:text-brand-accent transition-colors" :title="m.role === 'admin' ? 'Разжаловать' : 'Назначить админом'">
+                    <button @click.stop="toggleMemberRole(m)" class="p-1 rounded-lg text-white/40 hover:text-brand-accent transition-colors" :title="m.role === 'admin' ? langStore.t.chatDemoteAdminTitle : langStore.t.chatPromoteAdminTitle">
                       <BIcon :name="m.role === 'admin' ? 'ShieldOff' : 'ShieldCheck'" class="w-3.5 h-3.5" />
                     </button>
                   </template>
                 </div>
-              </div>
+              </router-link>
             </div>
           </div>
         </div>
@@ -454,38 +454,38 @@
                 </div>
                 <h3 class="relative text-base font-bold text-white truncate mt-2.5 flex items-center justify-center gap-1.5 drop-shadow">
                   {{ other?.display_name || other?.username }}
-                  <span v-if="(other as any)?.deceased_at" title="Светлая память">🪦</span>
+                  <span v-if="(other as any)?.deceased_at" :title="langStore.t.chatRipTitle">🪦</span>
                 </h3>
                 <p class="relative text-xs mt-0.5 flex items-center justify-center gap-1 drop-shadow" :class="isPartnerOnline ? 'text-green-400' : 'text-white/70'">
-                  {{ isPartnerOnline ? '● В сети' : `● ${partnerLastSeenLabel}` }}
+                  {{ isPartnerOnline ? langStore.t.chatOnlineBulleted : `● ${partnerLastSeenLabel}` }}
                   <BIcon v-if="isPartnerOnline && partnerDeviceIcon" :name="partnerDeviceIcon!" class="w-3 h-3" :title="partnerDevice ?? undefined" />
                 </p>
               </div>
 
               <!-- Quick actions (plain card background) -->
               <div class="flex justify-center gap-2 px-5 py-3">
-                <button @click="goToProfile(other?.username); showDmPanel = false"
+                <router-link :to="`/profile/${other?.username}`" @click="showDmPanel = false"
                   class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg hover:bg-brand-accent/10 text-white/60 hover:text-brand-accent transition-all text-xs font-semibold">
                   <BIcon name="User" class="w-4 h-4" />
-                  Профиль
-                </button>
+                  {{ langStore.t.profile }}
+                </router-link>
                 <button v-if="!isGroupDm" @click="showDmPanel = false; archive()"
                   class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg hover:bg-brand-bg/80 text-white/60 hover:text-white/90 transition-all text-xs font-semibold">
                   <BIcon :name="conv?.my_participant?.archived ? 'ArchiveX' : 'Archive'" class="w-4 h-4" />
-                  {{ conv?.my_participant?.archived ? 'Разарх.' : 'Архив' }}
+                  {{ conv?.my_participant?.archived ? langStore.t.chatUnarchiveShort : langStore.t.archiveBtn }}
                 </button>
                 <button v-if="!isGroupDm" @click="showDmPanel = false; showBlockModal = true"
                   :class="['flex flex-col items-center gap-1 px-4 py-2 rounded-2xl transition-all text-xs font-semibold',
                     isBlocked ? 'bg-brand-accent/15 text-brand-accent hover:bg-brand-accent/25' : 'bg-brand-bg text-white/60 hover:text-brand-error hover:bg-brand-error/10']">
                   <BIcon :name="isBlocked ? 'ShieldOff' : 'ShieldAlert'" class="w-4 h-4" />
-                  {{ isBlocked ? 'Разблок.' : 'Блок' }}
+                  {{ isBlocked ? langStore.t.chatUnblockShort : langStore.t.chatBlockShort }}
                 </button>
               </div>
             </div>
 
             <!-- Username row (clicking anywhere in the row copies it, not just the icon) -->
             <div class="flex items-center gap-2 px-5 py-2.5 border-t border-b border-brand-border flex-shrink-0 cursor-pointer hover:bg-brand-bg/40 transition-colors"
-              @click="copyUsername" title="Скопировать">
+              @click="copyUsername" :title="langStore.t.chatCopyTitle">
               <span class="text-brand-accent font-bold text-xs flex-shrink-0">@</span>
               <span class="flex-1 min-w-0 text-sm text-white/80 truncate">{{ other?.username }}</span>
               <button class="flex-shrink-0 text-white/40 hover:text-white transition-colors">
@@ -496,9 +496,9 @@
             <!-- Media stats list -->
             <div class="flex-1 overflow-y-auto min-h-0 py-1">
               <div v-if="mediaStatsLoading" class="flex items-center justify-center py-6 text-white/55 text-sm gap-2">
-                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> Загрузка...
+                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> {{ langStore.t.loadingBtn }}
               </div>
-              <p v-else-if="!mediaStatsList.some((s) => s.count > 0)" class="text-center text-xs text-white/30 py-6">Медиа отсутствует</p>
+              <p v-else-if="!mediaStatsList.some((s) => s.count > 0)" class="text-center text-xs text-white/30 py-6">{{ langStore.t.chatNoMediaLabel }}</p>
               <button v-for="stat in mediaStatsList.filter((s) => s.count > 0)" :key="stat.key"
                 @click="openMediaBrowser(stat.key)"
                 class="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-brand-bg/40 transition-colors text-left">
@@ -513,7 +513,7 @@
               <button @click="showDmPanel = false; showDeleteModal = true"
                 class="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm text-brand-error hover:bg-brand-error/10 transition-colors font-medium">
                 <BIcon name="Trash2" class="w-4 h-4" />
-                Удалить диалог
+                {{ langStore.t.contextDeleteConv }}
               </button>
             </div>
           </div>
@@ -539,7 +539,7 @@
 
             <!-- Body -->
             <div class="flex-1 overflow-y-auto min-h-0" @scroll="onMediaBrowserScroll">
-              <p v-if="!mediaBrowserLoading && !mediaBrowserItems.length" class="text-center text-sm text-white/30 py-10">Ничего нет</p>
+              <p v-if="!mediaBrowserLoading && !mediaBrowserItems.length" class="text-center text-sm text-white/30 py-10">{{ langStore.t.chatNothingHere }}</p>
 
               <template v-for="group in mediaBrowserGroups" :key="group.label">
                 <p class="px-4 pt-3 pb-1.5 text-xs font-bold text-white/40 uppercase tracking-wide">{{ group.label }}</p>
@@ -582,7 +582,7 @@
               </template>
 
               <div v-if="mediaBrowserLoading" class="flex items-center justify-center py-4 text-white/55 text-sm gap-2">
-                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> Загрузка...
+                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> {{ langStore.t.loadingBtn }}
               </div>
             </div>
           </div>
@@ -599,33 +599,33 @@
               <div class="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center">
                 <BIcon name="Pin" class="w-4 h-4 text-amber-400" />
               </div>
-              <h3 class="text-base font-bold text-white">Закрепить сообщение</h3>
+              <h3 class="text-base font-bold text-white">{{ langStore.t.chatPinMessageTitle }}</h3>
             </div>
             <!-- Preview -->
             <div v-if="pinTarget" class="mb-4 px-3 py-2 bg-brand-bg rounded-xl border-l-2 border-brand-accent">
               <p class="text-[10px] text-brand-accent font-semibold truncate">{{ pinTarget.sender?.display_name || pinTarget.sender?.username }}</p>
-              <p class="text-xs text-white/65 truncate mt-0.5">{{ pinTarget.text || '📎 Медиафайл' }}</p>
+              <p class="text-xs text-white/65 truncate mt-0.5">{{ pinTarget.text || langStore.t.mediaFilePreview }}</p>
             </div>
             <div class="flex flex-col gap-2">
               <button @click="doPinMessage('all')"
                 class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl bg-brand-bg border border-brand-border hover:border-brand-accent/50 transition-all text-left">
                 <BIcon name="Users" class="w-4 h-4 text-brand-accent flex-shrink-0" />
                 <div>
-                  <p class="text-sm font-semibold text-white">Для всех</p>
-                  <p class="text-xs text-white/45">Все участники увидят закреп</p>
+                  <p class="text-sm font-semibold text-white">{{ langStore.t.deleteForAllTitle }}</p>
+                  <p class="text-xs text-white/45">{{ langStore.t.chatPinAllHint }}</p>
                 </div>
               </button>
               <button @click="doPinMessage('me')"
                 class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl bg-brand-bg border border-brand-border hover:border-brand-accent/50 transition-all text-left">
                 <BIcon name="User" class="w-4 h-4 text-white/55 flex-shrink-0" />
                 <div>
-                  <p class="text-sm font-semibold text-white">Только для себя</p>
-                  <p class="text-xs text-white/45">Только вы видите этот закреп</p>
+                  <p class="text-sm font-semibold text-white">{{ langStore.t.chatPinMeOnlyTitle }}</p>
+                  <p class="text-xs text-white/45">{{ langStore.t.chatPinMeHint }}</p>
                 </div>
               </button>
               <button @click="showPinScopeModal = false; pinTarget = null"
                 class="w-full py-2 rounded-xl text-sm text-white/45 hover:text-white transition-colors">
-                Отмена
+                {{ langStore.t.cancel }}
               </button>
             </div>
           </div>
@@ -642,35 +642,35 @@
               <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-accent/30 to-brand-accent/10 ring-1 ring-brand-accent/30 flex items-center justify-center">
                 <BIcon name="CreditCard" class="w-4 h-4 text-brand-accent" />
               </div>
-              <h3 class="text-base font-bold text-white">Запрос оплаты</h3>
+              <h3 class="text-base font-bold text-white">{{ langStore.t.chatPaymentRequestTitle }}</h3>
             </div>
             <div class="flex flex-col gap-3">
               <div>
-                <label class="text-[11px] text-white/45 font-semibold">Сумма, ₽</label>
+                <label class="text-[11px] text-white/45 font-semibold">{{ langStore.t.chatAmountLabel }}</label>
                 <input v-model="paymentForm.amount" type="number" min="1" placeholder="3500"
                   class="w-full mt-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/50" />
               </div>
               <div>
-                <label class="text-[11px] text-white/45 font-semibold">Описание</label>
-                <input v-model="paymentForm.description" type="text" maxlength="300" placeholder="Полноцветный арт · 1 персонаж"
+                <label class="text-[11px] text-white/45 font-semibold">{{ langStore.t.fursuitDescLabel }}</label>
+                <input v-model="paymentForm.description" type="text" maxlength="300" :placeholder="langStore.t.chatDescPlaceholderExample"
                   class="w-full mt-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/50" />
               </div>
               <div>
-                <label class="text-[11px] text-white/45 font-semibold">Предоплата, % (необязательно)</label>
+                <label class="text-[11px] text-white/45 font-semibold">{{ langStore.t.chatPrepaymentLabel }}</label>
                 <input v-model="paymentForm.prepaymentPercent" type="number" min="1" max="100" placeholder="50"
                   class="w-full mt-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/50" />
               </div>
               <div>
-                <label class="text-[11px] text-white/45 font-semibold">Срок (необязательно)</label>
+                <label class="text-[11px] text-white/45 font-semibold">{{ langStore.t.chatDeadlineLabel }}</label>
                 <input v-model="paymentForm.deadline" type="date"
                   class="w-full mt-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/50" />
               </div>
               <button type="button" @click="submitPaymentRequest" :disabled="!paymentForm.amount || sendingPayment"
                 class="w-full py-2.5 rounded-xl bg-brand-accent hover:bg-brand-accent-plus text-white text-sm font-semibold transition-all disabled:opacity-40 mt-1">
-                {{ sendingPayment ? 'Отправка...' : 'Отправить запрос' }}
+                {{ sendingPayment ? langStore.t.chatSendingPaymentLabel : langStore.t.chatSendPaymentRequestBtn }}
               </button>
               <button type="button" @click="closePaymentModal" class="w-full py-1 text-sm text-white/45 hover:text-white transition-colors">
-                Отмена
+                {{ langStore.t.cancel }}
               </button>
             </div>
           </div>
@@ -694,7 +694,7 @@
               <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
                 <div class="flex items-center gap-1.5 bg-black/60 px-3 py-1.5 rounded-xl text-xs text-white">
                   <BIcon name="Image" class="w-3.5 h-3.5" />
-                  {{ editGroupBanner ? 'Изменить баннер' : 'Добавить баннер' }}
+                  {{ editGroupBanner ? langStore.t.changeBanner : langStore.t.addBanner }}
                 </div>
               </div>
               <span v-if="uploadingGroupBanner" class="absolute inset-0 flex items-center justify-center bg-black/40">
@@ -724,9 +724,9 @@
               </div>
               <div class="flex gap-2 mt-2">
                 <button v-if="editGroupAvatar" @click="editGroupAvatar = ''"
-                  class="text-[10px] text-brand-error hover:underline">Убрать фото</button>
+                  class="text-[10px] text-brand-error hover:underline">{{ langStore.t.removePhoto }}</button>
                 <button v-if="editGroupBanner" @click="editGroupBanner = ''"
-                  class="text-[10px] text-white/40 hover:text-white/60 hover:underline">Убрать баннер</button>
+                  class="text-[10px] text-white/40 hover:text-white/60 hover:underline">{{ langStore.t.removeBanner }}</button>
               </div>
             </div>
 
@@ -734,15 +734,15 @@
             <div class="flex-1 overflow-y-auto min-h-0 px-5 pb-2 space-y-4">
               <!-- Name card -->
               <div class="bg-brand-bg rounded-2xl p-4 border border-brand-border/60">
-                <label class="block text-[11px] text-white/45 font-semibold uppercase tracking-wide mb-2">Название беседы</label>
+                <label class="block text-[11px] text-white/45 font-semibold uppercase tracking-wide mb-2">{{ langStore.t.groupNameLabel }}</label>
                 <input v-model="editGroupName" type="text" maxlength="100"
-                  placeholder="Введите название..."
+                  :placeholder="langStore.t.groupNamePlaceholder"
                   class="w-full bg-transparent text-sm text-white outline-none placeholder-white/30 border-b border-brand-border focus:border-brand-accent/60 pb-1 transition-colors" />
               </div>
 
               <!-- Members card -->
               <div v-if="groupMembers.length" class="bg-brand-bg rounded-2xl p-4 border border-brand-border/60">
-                <p class="text-[11px] text-white/45 font-semibold uppercase tracking-wide mb-3">Участники · {{ groupMembers.length }}</p>
+                <p class="text-[11px] text-white/45 font-semibold uppercase tracking-wide mb-3">{{ langStore.t.createStep2Title }} · {{ groupMembers.length }}</p>
                 <div class="space-y-0.5 max-h-52 overflow-y-auto -mx-1">
                   <div v-for="m in groupMembers" :key="m.user_id"
                     class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-card/60 transition-colors">
@@ -759,10 +759,10 @@
                         class="text-[9px] bg-brand-accent/15 text-brand-accent px-1.5 py-0.5 rounded-full border border-brand-accent/25 font-bold">ADMIN</span>
                       <template v-if="m.user_id !== auth.user?.id">
                         <button @click="toggleMemberRole(m)" class="p-1 rounded-lg text-white/35 hover:text-brand-accent hover:bg-brand-accent/10 transition-colors"
-                          :title="m.role === 'admin' ? 'Разжаловать' : 'Назначить админом'">
+                          :title="m.role === 'admin' ? langStore.t.chatDemoteAdminTitle : langStore.t.chatPromoteAdminTitle">
                           <BIcon :name="m.role === 'admin' ? 'ShieldOff' : 'ShieldCheck'" class="w-3.5 h-3.5" />
                         </button>
-                        <button @click="kickMember(m.user_id)" class="p-1 rounded-lg text-white/35 hover:text-brand-error hover:bg-brand-error/10 transition-colors" title="Исключить">
+                        <button @click="kickMember(m.user_id)" class="p-1 rounded-lg text-white/35 hover:text-brand-error hover:bg-brand-error/10 transition-colors" :title="langStore.t.chatKickMemberTitle">
                           <BIcon name="UserX" class="w-3.5 h-3.5" />
                         </button>
                       </template>
@@ -776,12 +776,12 @@
             <div class="flex items-center gap-2 px-5 py-4 border-t border-brand-border flex-shrink-0">
               <button @click="showEditGroup = false"
                 class="flex-1 py-2.5 rounded-2xl border border-brand-border text-sm text-white/55 hover:text-white hover:bg-brand-bg/60 transition-all">
-                Отмена
+                {{ langStore.t.cancel }}
               </button>
               <button @click="saveGroupEdit" :disabled="savingGroup"
                 class="flex-1 py-2.5 rounded-2xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus disabled:opacity-40 transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-accent/20">
                 <BIcon v-if="savingGroup" name="Loader2" class="w-3.5 h-3.5 animate-spin" />
-                {{ savingGroup ? 'Сохранение...' : 'Сохранить' }}
+                {{ savingGroup ? langStore.t.chatSavingGroupLabel : langStore.t.groupSettingsSave }}
               </button>
             </div>
           </div>
@@ -794,10 +794,10 @@
       <div v-if="showSearch" class="px-4 py-2 border-b border-brand-border bg-brand-card/60 flex-shrink-0">
         <div class="flex items-center gap-2 bg-brand-bg border border-brand-border rounded-2xl px-3 py-2 focus-within:border-brand-accent/50 transition-colors">
           <BIcon name="Search" class="w-3.5 h-3.5 text-white/55 flex-shrink-0" />
-          <input v-model="searchQuery" type="text" placeholder="Поиск сообщений..."
+          <input v-model="searchQuery" type="text" :placeholder="langStore.t.chatSearchMessagesPlaceholder"
             class="bg-transparent text-sm text-white placeholder-brand-muted outline-none flex-1" autofocus />
           <span v-if="searchQuery" class="text-[11px] text-white/55 flex-shrink-0">
-            {{ filteredMsgList.length }} из {{ msgList.length }}
+            {{ filteredMsgList.length }} {{ langStore.t.chatOfLabel }} {{ msgList.length }}
           </span>
           <button v-if="searchQuery" @click="searchQuery = ''" class="text-white/55 hover:text-white transition-colors flex-shrink-0">
             <BIcon name="X" class="w-3.5 h-3.5" />
@@ -814,9 +814,9 @@
         <div class="flex-shrink-0 w-0.5 h-7 rounded-full bg-brand-accent" />
         <BIcon name="Pin" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
         <div class="flex-1 min-w-0 cursor-pointer">
-          <p class="text-[10px] text-brand-accent font-bold leading-tight">Закреплённое сообщение</p>
+          <p class="text-[10px] text-brand-accent font-bold leading-tight">{{ langStore.t.chatPinnedMessageLabel }}</p>
           <p class="text-[11px] text-white/70 truncate leading-tight">
-            {{ currentPin!.text || '📎 Медиафайл' }}
+            {{ currentPin!.text || langStore.t.mediaFilePreview }}
           </p>
         </div>
         <div class="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -824,14 +824,14 @@
             v-if="conv?.my_participant?.personal_pinned_message_id"
             @click.stop="doUnpin('me')"
             class="p-1 rounded-lg text-white/40 hover:text-amber-400 transition-colors"
-            title="Снять мой закреп">
+            :title="langStore.t.chatUnpinMineTitle">
             <BIcon name="PinOff" class="w-3.5 h-3.5" />
           </button>
           <button
             v-else-if="myRole === 'admin' || !conv?.is_group"
             @click.stop="doUnpin('all')"
             class="p-1 rounded-lg text-white/40 hover:text-brand-error transition-colors"
-            title="Снять закреп">
+            :title="langStore.t.chatUnpinTitle">
             <BIcon name="PinOff" class="w-3.5 h-3.5" />
           </button>
         </div>
@@ -847,8 +847,8 @@
           <BIcon name="StickyNote" class="w-8 h-8 text-brand-accent" />
         </div>
         <div class="text-center">
-          <p class="font-bold text-white text-sm mb-1">Мои заметки</p>
-          <p class="text-xs text-white/45 max-w-[220px]">Сохраняйте заметки, пересылайте себе сообщения и ссылки — всё только для вас</p>
+          <p class="font-bold text-white text-sm mb-1">{{ langStore.t.notesBtn }}</p>
+          <p class="text-xs text-white/45 max-w-[220px]">{{ langStore.t.chatNotesBannerHint }}</p>
         </div>
       </div>
 
@@ -856,7 +856,7 @@
       <div class="flex justify-center mb-2" v-if="store.hasMoreMessages[convId] && !searchQuery">
         <button @click="loadMore" :disabled="store.messagesLoading"
           class="text-xs text-brand-accent hover:underline disabled:opacity-50 px-4 py-1.5 rounded-xl hover:bg-brand-accent/8 transition-colors">
-          {{ store.messagesLoading ? 'Загрузка...' : 'Загрузить ранние сообщения' }}
+          {{ store.messagesLoading ? langStore.t.loadingBtn : langStore.t.chatLoadEarlierBtn }}
         </button>
       </div>
 
@@ -873,7 +873,7 @@
         <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-accent/20 to-brand-accent/5 border border-brand-accent/20 flex items-center justify-center mb-1">
           <BIcon :name="!conv?.is_group && !other ? 'PenLine' : 'MessageCircle'" class="w-6 h-6 text-brand-accent/60" />
         </div>
-        <span>{{ !conv?.is_group && !other ? 'Отправьте себе первое сообщение' : 'Начните переписку' }}</span>
+        <span>{{ !conv?.is_group && !other ? langStore.t.chatSendFirstNoteMsg : langStore.t.chatStartConversation }}</span>
       </div>
 
       <!-- Search no results -->
@@ -881,7 +881,7 @@
         <div class="w-14 h-14 rounded-2xl bg-brand-bg border border-brand-border flex items-center justify-center mb-1">
           <BIcon name="SearchX" class="w-6 h-6 text-white/40" />
         </div>
-        <span>Сообщения не найдены</span>
+        <span>{{ langStore.t.chatNoMessagesFound }}</span>
       </div>
 
       <!-- Messages -->
@@ -961,7 +961,7 @@
                 </p>
                 <p class="text-[11px] truncate"
                   :class="isMine(msg) ? 'text-white/50' : 'text-white/55'">
-                  {{ msg.reply_to.file_url && !msg.reply_to.text ? '📎 Медиафайл' : previewMsgText(msg.reply_to.text, 50) }}
+                  {{ msg.reply_to.file_url && !msg.reply_to.text ? langStore.t.mediaFilePreview : previewMsgText(msg.reply_to.text, 50) }}
                 </p>
               </div>
             </div>
@@ -983,7 +983,7 @@
               <span class="text-[10px] font-semibold text-brand-accent truncate"
                 :class="msg.forwarded_from_sender ? 'cursor-pointer hover:underline' : ''"
                 @click.stop="msg.forwarded_from_sender && goToProfile(msg.forwarded_from_sender.username)">
-                Переслано от {{ getForwardedAuthor(msg) }}
+                {{ langStore.t.chatForwardedFromLabel }} {{ getForwardedAuthor(msg) }}
               </span>
             </div>
 
@@ -1043,7 +1043,7 @@
                   <span class="w-5 h-5 rounded-lg bg-brand-accent/25 flex items-center justify-center">
                     <BIcon name="CreditCard" class="w-3 h-3 text-brand-accent" />
                   </span>
-                  <span class="text-brand-accent text-[10px] font-bold tracking-wide uppercase">Запрос оплаты</span>
+                  <span class="text-brand-accent text-[10px] font-bold tracking-wide uppercase">{{ langStore.t.chatPaymentRequestTitle }}</span>
                 </div>
                 <p class="text-2xl font-extrabold text-white mt-1.5 tracking-tight">{{ formatMoney(msg.metadata?.amount) }}</p>
                 <p v-if="msg.metadata?.description" class="text-xs text-white/70 mt-0.5 leading-snug">{{ msg.metadata.description }}</p>
@@ -1051,11 +1051,11 @@
               <div v-if="msg.metadata?.prepaymentPercent || msg.metadata?.deadline"
                 class="relative px-3.5 py-2 border-t border-white/10 bg-black/15 flex items-center justify-between gap-2 text-[11px]">
                 <template v-if="msg.metadata?.prepaymentPercent">
-                  <span class="text-white/55">Предоплата {{ msg.metadata.prepaymentPercent }}%</span>
+                  <span class="text-white/55">{{ langStore.t.chatPrepaymentDisplayLabel }} {{ msg.metadata.prepaymentPercent }}%</span>
                   <span class="font-semibold text-white/85">{{ formatMoney(msg.metadata.amount * msg.metadata.prepaymentPercent / 100) }}</span>
                 </template>
                 <template v-else-if="msg.metadata?.deadline">
-                  <span class="text-white/55">Срок</span>
+                  <span class="text-white/55">{{ langStore.t.chatDeadlineDisplayLabel }}</span>
                   <span class="font-semibold" :class="isOverdue(msg.metadata.deadline) ? 'text-brand-error' : 'text-white/85'">
                     {{ formatDeadline(msg.metadata.deadline) }}
                   </span>
@@ -1064,13 +1064,13 @@
               <div class="relative px-3.5 py-2.5 border-t border-white/10">
                 <div v-if="msg.metadata?.status === 'paid'" class="flex items-center gap-1.5 text-brand-success text-xs font-bold">
                   <BIcon name="CheckCircle2" class="w-3.5 h-3.5" />
-                  Оплачено
+                  {{ langStore.t.chatPaidLabel }}
                 </div>
                 <button v-else-if="!isMine(msg)" type="button" @click="payOrder(msg)" :disabled="payingId === msg.id"
                   class="w-full py-1.5 rounded-xl bg-brand-accent hover:bg-brand-accent-plus text-white text-xs font-bold transition-all active:scale-95 disabled:opacity-50 shadow-sm">
-                  {{ payingId === msg.id ? 'Оплата...' : 'Оплатить' }}
+                  {{ payingId === msg.id ? langStore.t.chatPayingLabel : langStore.t.chatPayBtn }}
                 </button>
-                <span v-else class="text-[11px] text-white/45">Ожидает оплаты</span>
+                <span v-else class="text-[11px] text-white/45">{{ langStore.t.chatAwaitingPaymentLabel }}</span>
               </div>
             </div>
 
@@ -1082,7 +1082,7 @@
                 <BIcon name="Check" class="w-4 h-4 text-brand-success" />
               </div>
               <div class="min-w-0">
-                <p class="text-sm font-bold text-brand-success">Оплачено · {{ formatMoney(msg.metadata?.amount) }}</p>
+                <p class="text-sm font-bold text-brand-success">{{ langStore.t.chatPaidLabel }} · {{ formatMoney(msg.metadata?.amount) }}</p>
                 <p v-if="msg.metadata?.description" class="text-[11px] text-white/55 truncate">{{ msg.metadata.description }}</p>
               </div>
             </div>
@@ -1094,9 +1094,9 @@
               <div class="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-brand-pink/20 blur-2xl pointer-events-none" />
               <div class="relative w-9 h-9 rounded-full bg-gradient-to-br from-brand-pink/25 to-brand-purple/20 ring-1 ring-brand-pink/30 flex items-center justify-center flex-shrink-0 text-base">🎉</div>
               <div class="relative min-w-0">
-                <p class="text-sm font-bold text-brand-pink">Чаевые +{{ formatMoney(msg.metadata?.amount) }}</p>
+                <p class="text-sm font-bold text-brand-pink">{{ langStore.t.chatTipLabel }} +{{ formatMoney(msg.metadata?.amount) }}</p>
                 <p class="text-[11px] text-white/55 truncate">
-                  {{ msg.metadata?.note || `${msg.sender?.display_name || msg.sender?.username} поблагодарил(а) за работу` }}
+                  {{ msg.metadata?.note || `${msg.sender?.display_name || msg.sender?.username} ${langStore.t.chatThankedForWorkFallback}` }}
                 </p>
               </div>
             </div>
@@ -1136,7 +1136,7 @@
                     class="w-full h-full flex flex-col items-center justify-center gap-2 text-white/40"
                   >
                     <BIcon name="Clock" class="w-8 h-8" />
-                    <span class="text-xs font-semibold">История истекла</span>
+                    <span class="text-xs font-semibold">{{ langStore.t.chatStoryExpiredLabel }}</span>
                   </div>
 
                   <!-- Gradient overlays -->
@@ -1163,7 +1163,7 @@
                   <div v-if="!parseStoryReply(msg)!.expired" class="absolute bottom-2 inset-x-2 flex items-center justify-between">
                     <div class="flex items-center gap-1">
                       <BIcon name="Sparkles" class="w-3 h-3 text-white/70" />
-                      <span class="text-[10px] text-white/70 font-medium">История</span>
+                      <span class="text-[10px] text-white/70 font-medium">{{ langStore.t.story }}</span>
                     </div>
                     <div class="w-7 h-7 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center group-hover:bg-white/30 transition-colors">
                       <BIcon name="Play" class="w-3 h-3 text-white ml-0.5" />
@@ -1190,7 +1190,7 @@
               >
                 <div class="relative w-full bg-gradient-to-br from-brand-accent/20 to-purple-900/40 flex flex-col items-center justify-center gap-2 text-white/40 py-8">
                   <BIcon name="Clock" class="w-8 h-8" />
-                  <span class="text-xs font-semibold">История истекла</span>
+                  <span class="text-xs font-semibold">{{ langStore.t.chatStoryExpiredLabel }}</span>
                 </div>
               </div>
             </template>
@@ -1231,7 +1231,7 @@
                 <span class="text-[10px] font-semibold truncate"
                   :class="[isMine(msg) ? 'text-white/60' : 'text-brand-accent', msg.forwarded_from_sender ? 'cursor-pointer hover:underline' : '']"
                   @click.stop="msg.forwarded_from_sender && goToProfile(msg.forwarded_from_sender.username)">
-                  Переслано от {{ getForwardedAuthor(msg) }}
+                  {{ langStore.t.chatForwardedFromLabel }} {{ getForwardedAuthor(msg) }}
                 </span>
               </div>
               <!-- ── Translate mode: incoming messages ── -->
@@ -1270,7 +1270,7 @@
                   reactionHasMe(users)
                     ? 'bg-brand-accent/20 border-brand-accent/50 text-white'
                     : 'bg-brand-bg/80 border-brand-border/50 text-white/70 hover:border-brand-accent/30']"
-                :title="reactionHasMe(users) ? 'Убрать реакцию' : 'Добавить реакцию'">
+                :title="reactionHasMe(users) ? langStore.t.chatRemoveReactionTitle : langStore.t.chatAddReactionTitle">
                 <span class="text-[13px]">{{ emoji }}</span>
                 <span class="text-[10px] font-bold">{{ users.length }}</span>
               </button>
@@ -1279,19 +1279,19 @@
             <!-- Time + status + actions -->
             <div class="flex items-center gap-1 mt-0.5">
               <span class="text-[10px] text-white/55">{{ formatMsgTime(msg.created_at) }}</span>
-              <span v-if="msg.edited_at" class="text-[10px] text-white/40 italic" title="Изменено">изм.</span>
+              <span v-if="msg.edited_at" class="text-[10px] text-white/40 italic" :title="langStore.t.chatEditedTitle">{{ langStore.t.chatEditedAbbr }}</span>
 
               <!-- Read status icons (only on my messages) -->
               <template v-if="isMine(msg)">
                 <button v-if="msg._failed" type="button" @click="retrySend(msg)"
-                  class="flex items-center gap-0.5 text-red-400 hover:text-red-300" title="Не отправлено — нажмите, чтобы повторить">
+                  class="flex items-center gap-0.5 text-red-400 hover:text-red-300" :title="langStore.t.chatNotSentRetryTitle">
                   <BIcon name="AlertCircle" class="w-3 h-3" />
                 </button>
-                <BIcon v-else-if="msg._sending" name="Clock" class="w-3 h-3 text-white/55" title="Отправляется..." />
-                <span v-else-if="isRead(msg)" class="flex items-center text-brand-accent" title="Прочитано">
+                <BIcon v-else-if="msg._sending" name="Clock" class="w-3 h-3 text-white/55" :title="langStore.t.chatSendingTitle" />
+                <span v-else-if="isRead(msg)" class="flex items-center text-brand-accent" :title="langStore.t.chatReadTitle">
                   <BIcon name="CheckCheck" class="w-3 h-3" />
                 </span>
-                <span v-else class="flex items-center text-white/55" title="Доставлено">
+                <span v-else class="flex items-center text-white/55" :title="langStore.t.chatDeliveredTitle">
                   <BIcon name="Check" class="w-3 h-3" />
                 </span>
               </template>
@@ -1299,31 +1299,31 @@
               <!-- Bubble action buttons (show on hover / tap) -->
               <div class="items-center gap-0.5 relative" :class="tappedMsgId === msg.id ? 'flex' : 'hidden group-hover:flex'">
                 <button type="button" @click.stop="toggleReactionPicker(msg.id)"
-                  class="p-0.5 rounded hover:text-amber-400 text-white/55 transition-colors" title="Реакция">
+                  class="p-0.5 rounded hover:text-amber-400 text-white/55 transition-colors" :title="langStore.t.chatReactionTitle">
                   <BIcon name="SmilePlus" class="w-3 h-3" />
                 </button>
                 <button type="button" @click="replyTo = msg"
-                  class="p-0.5 rounded hover:text-brand-accent text-white/55 transition-colors" title="Ответить">
+                  class="p-0.5 rounded hover:text-brand-accent text-white/55 transition-colors" :title="langStore.t.reply">
                   <BIcon name="CornerUpLeft" class="w-3 h-3" />
                 </button>
                 <button type="button" @click="openPinModal(msg)"
-                  class="p-0.5 rounded hover:text-amber-400 text-white/55 transition-colors" title="Закрепить">
+                  class="p-0.5 rounded hover:text-amber-400 text-white/55 transition-colors" :title="langStore.t.chatPinTitle">
                   <BIcon name="Pin" class="w-3 h-3" />
                 </button>
                 <button type="button" @click="startForward(msg)"
-                  class="p-0.5 rounded hover:text-brand-accent text-white/55 transition-colors" title="Переслать">
+                  class="p-0.5 rounded hover:text-brand-accent text-white/55 transition-colors" :title="langStore.t.chatForwardAction">
                   <BIcon name="Forward" class="w-3 h-3" />
                 </button>
                 <button v-if="msg.text" type="button" @click="copyMessageText(msg)"
-                  class="p-0.5 rounded hover:text-brand-accent text-white/55 transition-colors" title="Копировать">
+                  class="p-0.5 rounded hover:text-brand-accent text-white/55 transition-colors" :title="langStore.t.chatCopyMsgActionTitle">
                   <BIcon name="Copy" class="w-3 h-3" />
                 </button>
                 <button v-if="isMine(msg) && msg.type === 'text' && !msg._sending" @click="startEdit(msg)"
-                  class="p-0.5 rounded hover:text-brand-accent text-white/55 transition-colors" title="Изменить">
+                  class="p-0.5 rounded hover:text-brand-accent text-white/55 transition-colors" :title="langStore.t.chatEditMsgTitle">
                   <BIcon name="Pencil" class="w-3 h-3" />
                 </button>
                 <button v-if="isMine(msg) && !msg._sending" @click="deleteMsg(msg.id)"
-                  class="p-0.5 rounded hover:text-brand-error text-white/55 transition-colors" title="Удалить">
+                  class="p-0.5 rounded hover:text-brand-error text-white/55 transition-colors" :title="langStore.t.deleteBtn">
                   <BIcon name="Trash2" class="w-3 h-3" />
                 </button>
 
@@ -1370,7 +1370,7 @@
       <button v-if="showScrollDown" type="button"
         @click="scrollToBottom(true); unreadInChat = 0"
         class="absolute right-4 bottom-[88px] z-20 w-10 h-10 rounded-full bg-brand-card border border-brand-border shadow-xl flex items-center justify-center text-white hover:bg-brand-accent hover:border-brand-accent active:scale-95 transition-all"
-        title="Вниз">
+        :title="langStore.t.chatScrollDownTitle">
         <BIcon name="ChevronDown" class="w-5 h-5" />
         <span v-if="unreadInChat > 0"
           class="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-accent text-white text-[10px] font-bold flex items-center justify-center border-2 border-brand-card">
@@ -1405,22 +1405,22 @@
           class="fixed inset-0 z-[200] flex items-center justify-center p-4"
           style="background:rgba(0,0,0,.55)" @click.self="showDeleteModal = false">
           <div class="bg-brand-card border border-brand-border rounded-3xl p-6 w-full max-w-sm shadow-2xl">
-            <h3 class="text-lg font-bold text-white mb-2">Удалить диалог</h3>
-            <p class="text-sm text-white/55 mb-5">Выберите, как удалить переписку:</p>
+            <h3 class="text-lg font-bold text-white mb-2">{{ langStore.t.contextDeleteConv }}</h3>
+            <p class="text-sm text-white/55 mb-5">{{ langStore.t.chatDeleteConvChoiceLabel }}</p>
             <div class="flex flex-col gap-2">
               <button @click="deleteConversation('me')"
                 class="w-full px-4 py-2.5 rounded-xl text-sm font-medium bg-brand-bg border border-brand-border text-brand-offwhite hover:border-brand-accent/50 hover:text-white transition-all text-left">
-                Только для меня
-                <span class="block text-xs text-white/55 font-normal">Собеседник не увидит изменений</span>
+                {{ langStore.t.deleteOnlyMeTitle }}
+                <span class="block text-xs text-white/55 font-normal">{{ langStore.t.deleteOnlyMeHint }}</span>
               </button>
               <button @click="deleteConversation('all')"
                 class="w-full px-4 py-2.5 rounded-xl text-sm font-medium bg-brand-error/10 border border-brand-error/30 text-brand-error hover:bg-brand-error/20 transition-all text-left">
-                Для всех
-                <span class="block text-xs opacity-70 font-normal">Переписка будет удалена для обоих</span>
+                {{ langStore.t.deleteForAllTitle }}
+                <span class="block text-xs opacity-70 font-normal">{{ langStore.t.deleteForAllHint }}</span>
               </button>
               <button @click="showDeleteModal = false"
                 class="w-full px-4 py-2 rounded-xl text-sm text-white/55 hover:text-white hover:bg-brand-bg transition-colors">
-                Отмена
+                {{ langStore.t.cancel }}
               </button>
             </div>
           </div>
@@ -1436,22 +1436,22 @@
           style="background:rgba(0,0,0,.55)" @click.self="showBlockModal = false">
           <div class="bg-brand-card border border-brand-border rounded-3xl p-6 w-full max-w-sm shadow-2xl">
             <h3 class="text-lg font-bold text-white mb-2">
-              {{ isBlocked ? 'Разблокировать' : 'Заблокировать' }}
+              {{ isBlocked ? langStore.t.chatUnblockLabel : langStore.t.blockUserBtn }}
               {{ other?.display_name || other?.username }}
             </h3>
             <p class="text-sm text-white/55 mb-5">
-              <template v-if="isBlocked">Пользователь снова сможет писать вам.</template>
-              <template v-else>Оба пользователя не смогут писать друг другу.</template>
+              <template v-if="isBlocked">{{ langStore.t.chatUnblockHint }}</template>
+              <template v-else>{{ langStore.t.chatBlockHint }}</template>
             </p>
             <div class="flex gap-2">
               <button @click="toggleBlock()"
                 class="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
                 :class="isBlocked ? 'bg-brand-accent/10 border border-brand-accent/30 text-brand-accent hover:bg-brand-accent/20' : 'bg-brand-error/10 border border-brand-error/30 text-brand-error hover:bg-brand-error/20'">
-                {{ isBlocked ? 'Разблокировать' : 'Заблокировать' }}
+                {{ isBlocked ? langStore.t.chatUnblockLabel : langStore.t.blockUserBtn }}
               </button>
               <button @click="showBlockModal = false"
                 class="flex-1 px-4 py-2.5 rounded-xl text-sm text-white/55 hover:text-white hover:bg-brand-bg border border-brand-border transition-colors">
-                Отмена
+                {{ langStore.t.cancel }}
               </button>
             </div>
           </div>
@@ -1465,7 +1465,7 @@
           style="background:rgba(0,0,0,.55)" @click.self="closeForwardModal">
           <div class="bg-brand-card border border-brand-border rounded-3xl p-5 w-full max-w-sm shadow-2xl">
             <div class="flex items-center justify-between mb-4">
-              <h3 class="text-base font-bold text-white">{{ forwardList.length > 1 ? `Переслать ${forwardList.length} сообщения` : 'Переслать сообщение' }}</h3>
+              <h3 class="text-base font-bold text-white">{{ forwardList.length > 1 ? langStore.t.chatForwardCountedTitle.replace('{n}', String(forwardList.length)) : langStore.t.chatForwardSingleMsg }}</h3>
               <button @click="closeForwardModal" class="p-1.5 rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-colors">
                 <BIcon name="X" class="w-4 h-4" />
               </button>
@@ -1480,7 +1480,7 @@
             </div>
             <div v-else class="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl bg-brand-bg border border-brand-border/60">
               <BIcon name="Forward" class="w-4 h-4 text-brand-accent flex-shrink-0" />
-              <p class="text-[11px] text-white/55">Выбрано сообщений: {{ forwardList.length }}</p>
+              <p class="text-[11px] text-white/55">{{ langStore.t.chatSelectedMessagesCountLabel }}: {{ forwardList.length }}</p>
             </div>
             <!-- Conv list -->
             <div class="space-y-1 max-h-52 overflow-y-auto">
@@ -1497,7 +1497,7 @@
                 </div>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm text-white font-medium truncate leading-tight">
-                    {{ c.is_group ? (c.name || 'Группа') : (c.other_participants[0]?.user?.display_name || c.other_participants[0]?.user?.username || 'Собеседник') }}
+                    {{ c.is_group ? (c.name || langStore.t.chatGroupFallbackName) : (c.other_participants[0]?.user?.display_name || c.other_participants[0]?.user?.username || langStore.t.chatInterlocutorFallback) }}
                   </p>
                 </div>
               </button>
@@ -1516,39 +1516,39 @@
           <button @click="replyTo = contextMenuMsg; closeContextMenu()"
             class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
             <BIcon name="CornerUpLeft" class="w-4 h-4 text-white/55 flex-shrink-0" />
-            Ответить
+            {{ langStore.t.reply }}
           </button>
           <button v-if="isMine(contextMenuMsg) && contextMenuMsg.type === 'text' && !contextMenuMsg._sending"
             @click="startEdit(contextMenuMsg); closeContextMenu()"
             class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
             <BIcon name="Pencil" class="w-4 h-4 text-white/55 flex-shrink-0" />
-            Изменить
+            {{ langStore.t.chatEditMsgTitle }}
           </button>
           <button @click="openPinModal(contextMenuMsg); closeContextMenu()"
             class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
             <BIcon name="Pin" class="w-4 h-4 text-white/55 flex-shrink-0" />
-            Закрепить
+            {{ langStore.t.chatPinTitle }}
           </button>
           <button v-if="contextMenuMsg.text" @click="copyMessageText(contextMenuMsg); closeContextMenu()"
             class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
             <BIcon name="Copy" class="w-4 h-4 text-white/55 flex-shrink-0" />
-            Копировать текст
+            {{ langStore.t.chatCopyMsgTextAction }}
           </button>
           <button @click="startForward(contextMenuMsg); closeContextMenu()"
             class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
             <BIcon name="Forward" class="w-4 h-4 text-white/55 flex-shrink-0" />
-            Переслать
+            {{ langStore.t.chatForwardAction }}
           </button>
           <div class="border-t border-brand-border my-1" />
           <button @click="toggleSelect(contextMenuMsg.id); closeContextMenu()"
             class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
             <BIcon name="CheckSquare" class="w-4 h-4 text-white/55 flex-shrink-0" />
-            Выделить
+            {{ langStore.t.chatSelectMsgAction }}
           </button>
           <button v-if="isMine(contextMenuMsg) && !contextMenuMsg._sending" @click="deleteMsg(contextMenuMsg.id); closeContextMenu()"
             class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-error hover:bg-brand-error/8 transition-colors text-left">
             <BIcon name="Trash2" class="w-4 h-4 flex-shrink-0" />
-            Удалить
+            {{ langStore.t.deleteBtn }}
           </button>
         </div>
       </div>
@@ -1561,17 +1561,17 @@
           style="background:rgba(0,0,0,.55)" @click.self="showInvitePicker = false">
           <div class="bg-brand-card border border-brand-border rounded-3xl p-5 w-full max-w-sm shadow-2xl">
             <div class="flex items-center justify-between mb-4">
-              <h3 class="text-base font-bold text-white">Пригласить в «{{ conv?.name || 'группу' }}»</h3>
+              <h3 class="text-base font-bold text-white">{{ langStore.t.chatInviteToGroupTitle }} «{{ conv?.name || langStore.t.chatGroupFallbackAccusative }}»</h3>
               <button @click="showInvitePicker = false" class="p-1.5 rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-colors">
                 <BIcon name="X" class="w-4 h-4" />
               </button>
             </div>
             <p v-if="inviteSentTo" class="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl bg-brand-success/10 text-brand-success text-sm">
               <BIcon name="CheckCircle2" class="w-4 h-4 flex-shrink-0" />
-              Приглашение отправлено {{ inviteSentTo }}
+              {{ langStore.t.chatInviteSentLabel }} {{ inviteSentTo }}
             </p>
             <div v-if="!invitableConversations.length" class="text-center text-sm text-white/40 py-6">
-              Нет личных диалогов, чтобы отправить приглашение
+              {{ langStore.t.chatNoDmsForInvite }}
             </div>
             <div v-else class="space-y-1 max-h-64 overflow-y-auto">
               <button v-for="c in invitableConversations" :key="c.id"
@@ -1587,7 +1587,7 @@
                 </div>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm text-white font-medium truncate leading-tight">
-                    {{ c.other_participants[0]?.user?.display_name || c.other_participants[0]?.user?.username || 'Собеседник' }}
+                    {{ c.other_participants[0]?.user?.display_name || c.other_participants[0]?.user?.username || langStore.t.chatInterlocutorFallback }}
                   </p>
                 </div>
                 <BIcon v-if="invitingConvId === c.id" name="Loader2" class="w-4 h-4 text-brand-accent animate-spin flex-shrink-0" />
@@ -1617,11 +1617,11 @@
           <div class="flex gap-2">
             <button @click="goToProfile(mentionCard.username); mentionCard = null"
               class="flex-1 py-1.5 rounded-xl bg-brand-bg hover:bg-brand-border/40 text-xs text-brand-offwhite transition-colors">
-              Профиль
+              {{ langStore.t.profile }}
             </button>
             <button @click="openDM(mentionCard.id); mentionCard = null"
               class="flex-1 py-1.5 rounded-xl bg-brand-accent hover:bg-brand-accent-plus text-xs text-white transition-colors">
-              Написать
+              {{ langStore.t.msgBtnTitle }}
             </button>
           </div>
         </div>
@@ -1635,14 +1635,14 @@
         <span class="w-4 h-4 rounded-md bg-brand-accent/20 flex items-center justify-center">
           <BIcon name="CreditCard" class="w-2.5 h-2.5" />
         </span>
-        Запросить оплату
+        {{ langStore.t.chatRequestPaymentAction }}
       </button>
       <button type="button" @click="showTipPicker = !showTipPicker"
         class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-2xl bg-gradient-to-r from-brand-purple/15 to-brand-pink/10 border border-brand-pink/30 text-brand-pink text-xs font-bold hover:from-brand-purple/25 hover:to-brand-pink/15 transition-all active:scale-[0.98]">
         <span class="w-4 h-4 rounded-md bg-brand-pink/20 flex items-center justify-center">
           <BIcon name="Gift" class="w-2.5 h-2.5" />
         </span>
-        Поддержать
+        {{ langStore.t.chatSupportAction }}
       </button>
     </div>
 
@@ -1652,7 +1652,7 @@
       <Transition name="popover-up">
         <div v-if="showTipPicker" class="absolute bottom-full right-3 mb-2 z-50 bg-brand-card border border-brand-border rounded-2xl shadow-2xl p-3 w-56">
           <p class="text-xs font-bold text-white/70 mb-2 flex items-center gap-1.5">
-            <span class="text-sm">🎉</span> Отправить чаевые
+            <span class="text-sm">🎉</span> {{ langStore.t.chatSendTipAction }}
           </p>
           <div class="grid grid-cols-4 gap-1.5 mb-2">
             <button v-for="amt in [100, 300, 500, 1000]" :key="amt" type="button" @click="sendQuickTip(amt)"
@@ -1661,11 +1661,11 @@
             </button>
           </div>
           <div class="flex items-center gap-1.5">
-            <input v-model="customTipAmount" type="number" min="1" placeholder="Своя сумма"
+            <input v-model="customTipAmount" type="number" min="1" :placeholder="langStore.t.chatCustomAmountPlaceholder"
               class="flex-1 min-w-0 bg-brand-bg border border-brand-border rounded-xl px-2.5 py-1.5 text-xs text-white outline-none focus:border-brand-pink/50" />
             <button type="button" @click="sendQuickTip(Number(customTipAmount))" :disabled="!customTipAmount || Number(customTipAmount) <= 0"
               class="flex-shrink-0 px-3 py-1.5 rounded-xl bg-gradient-to-r from-brand-purple/25 to-brand-pink/25 text-brand-pink text-xs font-bold disabled:opacity-40 transition-all active:scale-95">
-              Отпр.
+              {{ langStore.t.chatSendAbbr }}
             </button>
           </div>
         </div>
@@ -1685,26 +1685,12 @@
           <StickerPanel @pick="sendSticker" @pickEmoji="insertEmojiFromStickers" />
         </div>
       </Transition>
-      <!-- Quick replies popover -->
-      <Transition name="popover-up">
-        <div v-if="showQuickReplies"
-          class="absolute bottom-full left-3 mb-2 z-50 w-72 max-w-[80vw] max-h-80 overflow-y-auto bg-brand-card border border-brand-border rounded-2xl shadow-2xl p-2">
-          <button v-for="(reply, i) in quickReplies" :key="i" type="button" @click="useQuickReply(reply)"
-            class="w-full text-left px-3 py-2.5 rounded-xl text-sm text-white/85 hover:bg-brand-bg transition-colors">
-            {{ reply }}
-          </button>
-          <p v-if="!quickReplies.length" class="px-3 py-4 text-xs text-white/40 text-center">
-            Нет шаблонов — добавь их в настройках профиля
-          </p>
-        </div>
-      </Transition>
-
       <form @submit.prevent="submit" class="flex items-end gap-2">
         <!-- Attachment button -->
         <button type="button" @click="fileInputEl?.click()"
           :disabled="isUploading || isRecording || pendingAttachments.length >= MAX_ATTACHMENTS"
           class="flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center text-white/55 hover:text-brand-accent hover:bg-brand-bg transition-all disabled:opacity-40"
-          title="Прикрепить медиа">
+          :title="langStore.t.chatAttachMediaTitle">
           <BIcon v-if="isUploading" name="Loader2" class="w-4 h-4 animate-spin" />
           <BIcon v-else name="Paperclip" class="w-4 h-4" />
         </button>
@@ -1712,29 +1698,20 @@
 
         <!-- Emoji button -->
         <button type="button"
-          @click="showEmojiPicker = !showEmojiPicker; showStickerPanel = false; showQuickReplies = false"
+          @click="showEmojiPicker = !showEmojiPicker; showStickerPanel = false"
           :class="['flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center transition-all',
             showEmojiPicker ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/55 hover:text-brand-accent hover:bg-brand-bg']"
-          title="Эмодзи">
+          :title="langStore.t.chatEmojiTitle">
           <BIcon name="Smile" class="w-5 h-5" />
         </button>
 
         <!-- Sticker button -->
         <button type="button"
-          @click="showStickerPanel = !showStickerPanel; showEmojiPicker = false; showQuickReplies = false"
+          @click="showStickerPanel = !showStickerPanel; showEmojiPicker = false"
           :class="['flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center transition-all',
             showStickerPanel ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/55 hover:text-brand-accent hover:bg-brand-bg']"
-          title="Стикеры">
+          :title="langStore.t.chatStickersTitle">
           <BIcon name="Sticker" class="w-5 h-5" />
-        </button>
-
-        <!-- Quick replies button -->
-        <button type="button"
-          @click="showQuickReplies = !showQuickReplies; showEmojiPicker = false; showStickerPanel = false"
-          :class="['flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center transition-all',
-            showQuickReplies ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/55 hover:text-brand-accent hover:bg-brand-bg']"
-          title="Быстрые ответы">
-          <BIcon name="MessageSquareDashed" class="w-5 h-5" />
         </button>
 
         <!-- Recording in progress bar (takes the place of the textarea row when recording) -->
@@ -1742,7 +1719,7 @@
           class="flex-1 flex items-center gap-2 px-3 h-10 rounded-2xl bg-brand-error/15 border border-brand-error/40 text-brand-error hover:bg-brand-error/25 transition-all">
           <span class="w-2 h-2 rounded-full bg-brand-error animate-ping flex-shrink-0" />
           <span class="text-xs font-mono flex-1">{{ fmtRecording(recordingSeconds) }}</span>
-          <span class="text-xs text-brand-error/70">нажмите для отправки</span>
+          <span class="text-xs text-brand-error/70">{{ langStore.t.chatTapToSendHint }}</span>
         </button>
 
         <div v-else class="flex-1 relative">
@@ -1750,7 +1727,7 @@
           <Transition name="mention-pop">
             <div v-if="mentionResults.length || mentionLoading"
               class="absolute bottom-full left-0 right-0 mb-1.5 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden z-40">
-              <div v-if="mentionLoading" class="px-4 py-3 text-xs text-white/55 text-center">Поиск...</div>
+              <div v-if="mentionLoading" class="px-4 py-3 text-xs text-white/55 text-center">{{ langStore.t.searchPlaceholder }}</div>
               <button v-for="u in mentionResults" :key="u.id" type="button" @click="selectMention(u.username)"
                 class="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-brand-bg transition-colors text-left">
                 <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover flex-shrink-0" @error="onAvatarError" />
@@ -1768,7 +1745,7 @@
           <div v-if="editingMsg" class="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-brand-bg border border-amber-400/40">
             <BIcon name="Pencil" class="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
             <div class="flex-1 min-w-0">
-              <p class="text-[10px] text-amber-400 font-semibold truncate leading-tight">Изменение сообщения</p>
+              <p class="text-[10px] text-amber-400 font-semibold truncate leading-tight">{{ langStore.t.chatEditingMessageLabel }}</p>
               <p class="text-[11px] text-white/55 truncate leading-tight">
                 {{ previewMsgText(editingMsg.text ?? undefined, 60) }}
               </p>
@@ -1782,10 +1759,10 @@
             <div class="w-0.5 h-8 rounded-full bg-brand-accent flex-shrink-0" />
             <div class="flex-1 min-w-0">
               <p class="text-[10px] text-brand-accent font-semibold truncate leading-tight">
-                {{ replyTo.sender?.display_name || replyTo.sender?.username || 'Сообщение' }}
+                {{ replyTo.sender?.display_name || replyTo.sender?.username || langStore.t.messageBtn }}
               </p>
               <p class="text-[11px] text-white/55 truncate leading-tight">
-                {{ replyTo.file_url && !replyTo.text ? '📎 Медиафайл' : previewMsgText(replyTo.text, 60) }}
+                {{ replyTo.file_url && !replyTo.text ? langStore.t.mediaFilePreview : previewMsgText(replyTo.text, 60) }}
               </p>
             </div>
             <button type="button" @click="replyTo = null" class="flex-shrink-0 p-0.5 text-white/55 hover:text-brand-error transition-colors">
@@ -1826,7 +1803,7 @@
               <div class="min-w-0 flex-1">
                 <p class="text-xs font-semibold text-white truncate">{{ a.name }}</p>
                 <p class="text-[10px] text-white/45 truncate">
-                  {{ a.failed ? 'Ошибка загрузки' : a.uploading ? `${a.progress}%` : formatFileSize(a.size) }}
+                  {{ a.failed ? langStore.t.chatUploadErrorLabel : a.uploading ? `${a.progress}%` : formatFileSize(a.size) }}
                 </p>
               </div>
               <button type="button" @click="removePendingAttachment(a.id)"
@@ -1836,7 +1813,7 @@
             </div>
           </TransitionGroup>
           <textarea ref="inputEl" v-model="draft" rows="1"
-            :placeholder="pendingAttachments.length ? 'Подпись (необязательно)...' : 'Написать сообщение...'"
+            :placeholder="pendingAttachments.length ? langStore.t.chatCaptionPlaceholder : langStore.t.chatMessagePlaceholder"
             class="block w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-[9px] text-sm text-white placeholder-brand-muted resize-none outline-none focus:border-brand-accent/60 transition-colors max-h-32 overflow-y-auto"
             @keydown.enter.exact.prevent="submit"
             @keydown.enter.shift.exact="newline"
@@ -1852,7 +1829,7 @@
             type="button" @click="startRecording"
             :disabled="isUploading"
             class="flex-shrink-0 w-10 h-10 rounded-2xl bg-brand-card border border-brand-border hover:bg-brand-bg text-white/55 hover:text-brand-accent transition-all flex items-center justify-center disabled:opacity-40"
-            title="Голосовое сообщение">
+            :title="langStore.t.chatVoiceMessageTitle">
             <BIcon name="Mic" class="w-4 h-4" />
           </button>
           <!-- Send: shown when there's text or at least one uploaded attachment -->
@@ -1860,7 +1837,7 @@
             type="submit"
             :disabled="(!draft.trim() && !pendingAttachments.some((a) => a.uploadedUrl && !a.failed)) || isUploading"
             class="flex-shrink-0 w-10 h-10 rounded-2xl bg-brand-accent hover:bg-brand-accent-plus disabled:opacity-30 transition-all shadow-lg shadow-brand-accent/20 active:scale-95 flex items-center justify-center"
-            title="Отправить">
+            :title="langStore.t.send">
             <BIcon name="SendHorizontal" class="w-4 h-4 text-white" />
           </button>
         </Transition>
@@ -1909,7 +1886,7 @@
             />
             <div v-else class="flex flex-col items-center gap-3 text-white/30">
               <BIcon name="ImageOff" class="w-12 h-12" />
-              <span class="text-xs">Изображение недоступно</span>
+              <span class="text-xs">{{ langStore.t.chatImageUnavailableLabel }}</span>
             </div>
           </div>
 
@@ -1933,7 +1910,7 @@
               </p>
               <div class="flex items-center gap-1 text-[11px] text-white/55">
                 <BIcon name="Sparkles" class="w-3 h-3" />
-                <span>История</span>
+                <span>{{ langStore.t.story }}</span>
                 <span v-if="activeStoryCard.expiresAt" class="flex items-center gap-0.5 ml-1">
                   <BIcon name="Clock" class="w-3 h-3" />
                   {{
@@ -1941,7 +1918,7 @@
                       const diff = Math.max(0, new Date(activeStoryCard.expiresAt).getTime() - Date.now())
                       const h = Math.floor(diff / 3_600_000)
                       const m = Math.floor((diff % 3_600_000) / 60_000)
-                      return h > 0 ? `${h}ч ${m}м` : `${m}м`
+                      return h > 0 ? `${h}${langStore.t.chatHourAbbr} ${m}${langStore.t.chatMinuteAbbr}` : `${m}${langStore.t.chatMinuteAbbr}`
                     })()
                   }}
                 </span>
@@ -1962,7 +1939,7 @@
             class="absolute bottom-0 left-0 right-0 z-10 px-4 pb-5 pt-8 bg-gradient-to-t from-black/80 to-transparent"
           >
             <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl px-4 py-3">
-              <p class="text-[10px] text-white/50 font-semibold uppercase tracking-wider mb-1">Ответ</p>
+              <p class="text-[10px] text-white/50 font-semibold uppercase tracking-wider mb-1">{{ langStore.t.chatReplyLabel }}</p>
               <p class="text-sm text-white leading-snug">{{ activeStoryCard.replyText }}</p>
             </div>
           </div>
@@ -1994,7 +1971,7 @@ import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from
 import { useRouter } from 'vue-router'
 import { useMessagesStore, type Message, type MsgSender, type Conversation, type PinnedMessage } from '@/stores/messages'
 import { useAuthStore } from '@/stores/auth'
-import { useLangStore } from '@/stores/lang'
+import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import type { Lang } from '@/locales/translations'
 import BIcon from '@/components/BIcon.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
@@ -2051,18 +2028,19 @@ const isPartnerOnline   = ref(false)
 const partnerLastSeenAt = ref<Date | null>(null)
 const partnerDevice     = ref<string | null>(null)
 const partnerLastSeenLabel = computed(() => {
-  if (!partnerLastSeenAt.value) return 'не в сети'
+  if (!partnerLastSeenAt.value) return langStore.t.chatOfflineLabel
   const seenAt = partnerLastSeenAt.value
   const diff = Math.floor((Date.now() - seenAt.getTime()) / 60000)
-  if (diff < 1) return 'был(а) в сети только что'
-  if (diff < 60) return `был(а) в сети ${diff} мин. назад`
+  if (diff < 1) return langStore.t.chatOnlineJustNow
+  if (diff < 60) return `${langStore.t.chatSeenPrefix} ${diff} ${langStore.t.chatMinAgoSuffix}`
   const h = Math.floor(diff / 60)
-  if (h < 24) return `был(а) в сети ${h} ч. назад`
+  if (h < 24) return `${langStore.t.chatSeenPrefix} ${h} ${langStore.t.chatHoursAgoSuffix}`
   const now = new Date()
-  const time = seenAt.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
+  const locale = LANG_TO_LOCALE[langStore.currentLang]
+  const time = seenAt.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
   const sameYear = seenAt.getFullYear() === now.getFullYear()
-  const date = seenAt.toLocaleDateString('ru', sameYear ? { day: 'numeric', month: 'long' } : { day: 'numeric', month: 'long', year: 'numeric' })
-  return `был(а) в сети ${date} в ${time}`
+  const date = seenAt.toLocaleDateString(locale, sameYear ? { day: 'numeric', month: 'long' } : { day: 'numeric', month: 'long', year: 'numeric' })
+  return `${langStore.t.chatSeenPrefix} ${date} ${langStore.t.chatSeenAtConnector} ${time}`
 })
 const partnerDeviceIcon = computed(() => {
   const kind = deviceKind(partnerDevice.value)
@@ -2224,15 +2202,6 @@ async function doAddMember(u: { id: string; username: string; display_name: stri
 // Emoji & sticker popovers
 const showEmojiPicker  = ref(false)
 const showStickerPanel = ref(false)
-// Quick replies (templates configured in profile automation settings)
-const showQuickReplies = ref(false)
-const quickReplies     = ref<string[]>([])
-async function loadQuickReplies() {
-  try {
-    const { data } = await api.get('/automation/me')
-    quickReplies.value = data.data.settings?.quick_replies ?? []
-  } catch { /* not critical — panel just stays empty */ }
-}
 // Reply / forward / mention card
 const replyTo      = ref<Message | null>(null)
 const forwardMsg   = ref<Message | null>(null)
@@ -2302,7 +2271,7 @@ async function doInviteToGroup(target: Conversation) {
   invitingConvId.value = target.id
   try {
     await store.sendGroupShare(target.id, props.conv.group_id)
-    inviteSentTo.value = target.other_participants[0]?.user?.display_name || target.other_participants[0]?.user?.username || 'пользователю'
+    inviteSentTo.value = target.other_participants[0]?.user?.display_name || target.other_participants[0]?.user?.username || langStore.t.chatToUserFallback
     setTimeout(() => { inviteSentTo.value = null; showInvitePicker.value = false }, 1200)
   } catch { /* silent */ }
   finally { invitingConvId.value = null }
@@ -2386,16 +2355,16 @@ async function doUnpin(scope: 'all' | 'me') {
 }
 
 // ── Media stats ──────────────────────────────────────────────────────────────
-const MEDIA_STAT_DEFS = [
-  { key: 'image',  label: 'Фото',     icon: 'Image' },
-  { key: 'video',  label: 'Видео',     icon: 'Video' },
-  { key: 'audio',  label: 'Аудио',     icon: 'Music' },
-  { key: 'voice',  label: 'Голос.',     icon: 'Mic' },
-  { key: 'file',   label: 'Файлы',     icon: 'FileText' },
-  { key: 'link',   label: 'Ссылки',    icon: 'Link' },
-]
+const MEDIA_STAT_DEFS = computed(() => [
+  { key: 'image',  label: langStore.t.chatMediaLabelPhoto,  icon: 'Image' },
+  { key: 'video',  label: langStore.t.chatMediaLabelVideo,  icon: 'Video' },
+  { key: 'audio',  label: langStore.t.chatMediaLabelAudio,  icon: 'Music' },
+  { key: 'voice',  label: langStore.t.chatMediaLabelVoice,  icon: 'Mic' },
+  { key: 'file',   label: langStore.t.chatMediaLabelFiles,  icon: 'FileText' },
+  { key: 'link',   label: langStore.t.chatMediaLabelLinks,  icon: 'Link' },
+])
 const mediaStatsList = computed(() =>
-  MEDIA_STAT_DEFS.map(d => ({ ...d, count: mediaStatsData.value[d.key] ?? 0 }))
+  MEDIA_STAT_DEFS.value.map(d => ({ ...d, count: mediaStatsData.value[d.key] ?? 0 }))
 )
 
 async function loadMediaStats() {
@@ -2404,10 +2373,11 @@ async function loadMediaStats() {
   try { mediaStatsData.value = await store.getMediaStats(props.convId) } finally { mediaStatsLoading.value = false }
 }
 
-// ── Media browser (opened from a stat row: Фото/Видео/Аудио/Голос/Ссылки) ──────
-const MEDIA_TYPE_TITLES: Record<string, string> = {
-  image: 'Фотографии', video: 'Видео', audio: 'Аудиофайлы', voice: 'Голосовые сообщения', link: 'Ссылки',
-}
+// ── Media browser (opened from a stat row: photo/video/audio/voice/links) ──────
+const MEDIA_TYPE_TITLES = computed<Record<string, string>>(() => ({
+  image: langStore.t.chatMediaTitlePhotos, video: langStore.t.chatMediaLabelVideo, audio: langStore.t.chatMediaTitleAudioFiles,
+  voice: langStore.t.chatMediaTitleVoiceMessages, link: langStore.t.chatMediaLabelLinks,
+}))
 const mediaBrowserType    = ref<string | null>(null)
 const mediaBrowserItems   = ref<Message[]>([])
 const mediaBrowserLoading = ref(false)
@@ -2446,7 +2416,7 @@ function onMediaBrowserScroll(e: Event) {
 function monthLabel(iso: string): string {
   const d = new Date(iso)
   const now = new Date()
-  const month = d.toLocaleDateString('ru', { month: 'long' })
+  const month = d.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'long' })
   const capped = month.charAt(0).toUpperCase() + month.slice(1)
   return d.getFullYear() === now.getFullYear() ? capped : `${capped} ${d.getFullYear()}`
 }
@@ -2570,12 +2540,6 @@ function insertEmojiFromStickers(emoji: string) {
   showStickerPanel.value = false
 }
 
-function useQuickReply(text: string) {
-  draft.value = text
-  showQuickReplies.value = false
-  nextTick(() => { inputEl.value?.focus(); autoResize() })
-}
-
 function isLastInGroup(idx: number) {
   const next = displayList.value[idx + 1]
   if (!next) return true
@@ -2613,7 +2577,7 @@ const STORY_REPLY_RE = /^\[story_reply:(\{[\s\S]*?\}|[^\]]*)\]\n?([\s\S]*)$/u
 /** Returns human-friendly short preview, stripping service tags */
 function previewMsgText(text: string | undefined, maxLen = 60): string {
   if (!text) return ''
-  if (/^\[story_reply:/u.test(text)) return '📸 Ответ на историю'
+  if (/^\[story_reply:/u.test(text)) return langStore.t.chatStoryReplyPreview
   return text.replace(FWD_RE, '').slice(0, maxLen)
 }
 
@@ -2691,7 +2655,7 @@ function getForwardedAuthor(msg: Message): string | null {
   if (msg.forwarded_from_sender_id) {
     return msg.forwarded_from_sender
       ? (msg.forwarded_from_sender.display_name || msg.forwarded_from_sender.username)
-      : 'Пользователь скрыт'
+      : langStore.t.chatHiddenUserFallback
   }
   const m = (msg.text || '').match(FWD_RE); return m ? m[1] : null
 }
@@ -2749,16 +2713,16 @@ function closeForwardModal() {
 }
 
 function forwardMsgPreview(msg: Message): string {
-  if (msg.type === 'sticker') return '🎭 Стикер'
-  if (msg.type === 'voice') return '🎤 Голосовое'
-  if (msg.type === 'audio') return '🎵 Аудио'
-  if (msg.type === 'post_share') return '📎 Пост'
-  if (msg.type === 'group_share') return '👥 Приглашение в группу'
-  if (msg.type === 'album') return `📎 Альбом · ${getAlbumFiles(msg).length}`
-  if (msg.text && isEncrypted(msg.text)) return '🔒 Зашифрованное сообщение'
-  if (msg.encrypted_text && !msg.text) return '🔒 Зашифрованное сообщение'
+  if (msg.type === 'sticker') return langStore.t.stickerPreview
+  if (msg.type === 'voice') return langStore.t.voiceMessagePreview
+  if (msg.type === 'audio') return langStore.t.chatAudioPreview
+  if (msg.type === 'post_share') return langStore.t.chatPostPreview
+  if (msg.type === 'group_share') return langStore.t.chatGroupInvitePreview
+  if (msg.type === 'album') return `${langStore.t.chatAlbumPreviewPrefix} · ${getAlbumFiles(msg).length}`
+  if (msg.text && isEncrypted(msg.text)) return langStore.t.encryptedMessagePreview
+  if (msg.encrypted_text && !msg.text) return langStore.t.encryptedMessagePreview
   if (msg.text) return previewMsgText(msg.text, 60)
-  if (msg.file_url) return '📎 Медиафайл'
+  if (msg.file_url) return langStore.t.mediaFilePreview
   return ''
 }
 async function doForward(targetConvId: string) {
@@ -2789,7 +2753,7 @@ function isRead(msg: Message): boolean {
 }
 
 function formatMsgTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
+  return new Date(iso).toLocaleTimeString(LANG_TO_LOCALE[langStore.currentLang], { hour: '2-digit', minute: '2-digit' })
 }
 
 // ── Order cards (chat-only payment request / tip) ──────────────────────────────
@@ -2802,7 +2766,7 @@ function isOverdue(deadline: string | undefined): boolean {
 }
 function formatDeadline(deadline: string | undefined): string {
   if (!deadline) return ''
-  return new Date(deadline).toLocaleDateString('ru', { day: 'numeric', month: 'long' })
+  return new Date(deadline).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'long' })
 }
 const payingId = ref<string | null>(null)
 async function payOrder(msg: Message) {
@@ -2867,11 +2831,12 @@ function formatDateDivider(iso: string): string {
   const today = startOfDay(now)
   const target = startOfDay(d)
   const diffDays = Math.round((today - target) / 86_400_000)
-  if (diffDays === 0) return 'Сегодня'
-  if (diffDays === 1) return 'Вчера'
-  if (diffDays < 7) return d.toLocaleDateString('ru', { weekday: 'long' })
-  if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString('ru', { day: 'numeric', month: 'long' })
-  return d.toLocaleDateString('ru', { day: 'numeric', month: 'long', year: 'numeric' })
+  const locale = LANG_TO_LOCALE[langStore.currentLang]
+  if (diffDays === 0) return langStore.t.chatTodayLabel
+  if (diffDays === 1) return langStore.t.chatYesterdayLabel
+  if (diffDays < 7) return d.toLocaleDateString(locale, { weekday: 'long' })
+  if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString(locale, { day: 'numeric', month: 'long' })
+  return d.toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 // ── Reactions helpers ─────────────────────────────────────────────────────────
@@ -3178,10 +3143,10 @@ function fileKind(file: File): 'image' | 'video' | 'audio' | 'file' {
 
 function formatFileSize(bytes: number): string {
   if (!bytes) return ''
-  if (bytes < 1024) return `${bytes} Б`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} КБ`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} ГБ`
+  if (bytes < 1024) return `${bytes} ${langStore.t.chatByteUnit}`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} ${langStore.t.chatKbUnit}`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} ${langStore.t.chatMbUnit}`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} ${langStore.t.chatGbUnit}`
 }
 
 /** Uploads one file as its own queued attachment slot; multiple can run concurrently. */
@@ -3223,7 +3188,7 @@ function addPendingFile(file: File) {
       item.progress = 100
     } catch (err: any) {
       item.failed = true
-      const msg = err?.response?.data?.error?.message || 'Не удалось загрузить файл'
+      const msg = err?.response?.data?.error?.message || langStore.t.chatFileUploadFailedError
       uploadError.value = msg
       if (uploadErrorTimer) clearTimeout(uploadErrorTimer)
       uploadErrorTimer = setTimeout(() => { uploadError.value = null }, 4000)
@@ -3396,7 +3361,6 @@ async function fetchOnlineStatus() {
 
 onMounted(() => {
   document.addEventListener('click', closeMenu)
-  loadQuickReplies()
   if (!props.conv?.is_group && !(isGroupDm.value && amGroupDmCustomer.value)) {
     fetchOnlineStatus()
     onlineTimer = setInterval(fetchOnlineStatus, 30_000)

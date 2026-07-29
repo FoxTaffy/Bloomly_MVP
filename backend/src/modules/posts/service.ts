@@ -1,7 +1,8 @@
 import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
-import { isTrustedMediaUrl } from '../media/service.js';
+import { isBlockedBy, getBlockerIds } from '../../lib/blocks.js';
+import { isTrustedMediaUrl, deleteFileByUrl } from '../media/service.js';
 import { groupService } from '../groups/service.js';
 import { extractKeywords } from '../../lib/textKeywords.js';
 import { interestsToTerms } from '../../lib/interestTags.js';
@@ -35,6 +36,9 @@ async function canManageAllComments(postId: string, userId: string, isAdmin: boo
 /** Throws a 403 unless the viewer is allowed to see userId's profile content. */
 async function assertProfileVisible(userId: string, viewerId?: string) {
   if (viewerId === userId) return;
+  if (await isBlockedBy(userId, viewerId)) {
+    throw Object.assign(new Error('PROFILE_BLOCKED'), { statusCode: 403 });
+  }
   const owner = await prisma.user.findUnique({ where: { id: userId }, select: { profile_visibility: true } });
   if (owner && !(await isAllowedByPrivacy(owner.profile_visibility, userId, viewerId))) {
     throw Object.assign(new Error('PROFILE_PRIVATE'), { statusCode: 403 });
@@ -60,6 +64,34 @@ export const REPAW_MULTIPLIER = 1.6;
 const AFFINITY_RANK_WEIGHT = 3;
 /** Flat per-matched-term bonus when a post lines up with a declared "Interest". */
 const INTEREST_RANK_WEIGHT = 1.5;
+/** Weight given to a passive view vs. an explicit like when reinforcing tag/keyword affinity. */
+export const VIEW_AFFINITY_MULTIPLIER = 0.15;
+/** Dwell time (ms) that counts as "gave this a proper look" — matches the frontend's MIN_VIEW_MS. */
+const DWELL_BASELINE_MS = 2000;
+/** Dwell time (ms) at which the view's affinity weight caps out — long past this, more time no longer means more interest. */
+const DWELL_SATURATION_MS = 20_000;
+/** Floor/ceiling multipliers applied on top of VIEW_AFFINITY_MULTIPLIER based on dwell time. */
+const DWELL_MIN_FACTOR = 0.5;
+const DWELL_MAX_FACTOR = 2.5;
+/** An explicit "не интересно" is a deliberate negative signal — stronger than scrolling past, comparable to a real dislike. */
+export const NOT_INTERESTED_MULTIPLIER = 1.2;
+/** How many "bell" (notify_posts) posts get pinned to the very top of page 1 of the personalised feed. */
+const BELL_FEED_LIMIT = 5;
+/** Feed score halves every N hours a post ages — keeps old-but-highly-rated posts from permanently burying fresh ones. */
+const RECENCY_HALF_LIFE_HOURS = 72;
+/** Window looked at for "is this suddenly taking off" trending detection. */
+const TRENDING_WINDOW_HOURS = 12;
+/** How strongly a recent engagement burst (likes/comments/repaws within TRENDING_WINDOW_HOURS) swings feed ranking. */
+const TRENDING_WEIGHT = 4;
+/** Minimum number of other authors between two posts by the same author/group in the final feed. */
+const AUTHOR_DIVERSITY_MIN_GAP = 2;
+/**
+ * Flat score bonus for posts the user has never opened. Sized against TRENDING_WEIGHT so a
+ * genuinely undiscovered post is favored over ordinary content, but a post currently on a real
+ * viral run (several recent votes/comments/repaws) can still outrank it — unseen is a strong
+ * signal, not an absolute override of everything else.
+ */
+const UNSEEN_BOOST = 40;
 
 export type PostTerm = { term: string; source: 'tag' | 'keyword'; weight: number };
 export type AffinityMap = Map<string, { score: number; likes: number; dislikes: number }>;
@@ -154,22 +186,59 @@ function negateDeltas(deltas: Map<string, number>): Map<string, number> {
   return new Map(Array.from(deltas, ([k, v]) => [k, -v]));
 }
 
+/** Maps raw dwell time to a linear factor between DWELL_MIN_FACTOR and DWELL_MAX_FACTOR. */
+function dwellFactor(dwellMs?: number): number {
+  if (dwellMs === undefined) return 1; // caller (e.g. old client, backfill script) didn't supply a duration
+  const clamped = Math.min(Math.max(dwellMs, DWELL_BASELINE_MS), DWELL_SATURATION_MS);
+  const t = (clamped - DWELL_BASELINE_MS) / (DWELL_SATURATION_MS - DWELL_BASELINE_MS);
+  return DWELL_MIN_FACTOR + t * (DWELL_MAX_FACTOR - DWELL_MIN_FACTOR);
+}
+
+/**
+ * Reinforces a viewer's tag/keyword affinity from a passive view — same term extraction and
+ * distribution as a like (see distributeVoteDelta), just far weaker (VIEW_AFFINITY_MULTIPLIER)
+ * since scrolling past a post is a much softer signal than an explicit like/repost. Scaled by
+ * how long they actually dwelled (see dwellFactor) — a 20s read is a stronger "I'm into this"
+ * signal than the 2s minimum that qualifies a view at all, same idea as TikTok/YouTube watch-time.
+ */
+export async function applyViewAffinity(userId: string, postId: string, dwellMs?: number) {
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    select: { content: true, title: true, is_nsfw: true, tags: { include: { tag: true } } },
+  });
+  if (!post) return;
+  const terms = getPostTerms(post);
+  if (terms.length === 0) return;
+  const deltas = distributeVoteDelta(terms, 1, new Map(), VIEW_AFFINITY_MULTIPLIER * dwellFactor(dwellMs));
+  const termSource = new Map(terms.map((t) => [t.term, t.source]));
+  await applyTermDeltas(prisma, userId, deltas, termSource, { likes: 0, dislikes: 0 });
+}
+
 async function getUserAffinityMap(userId: string): Promise<AffinityMap> {
   const rows = await prisma.userTagAffinity.findMany({ where: { user_id: userId } });
   return new Map(rows.map((r) => [r.term, { score: r.score, likes: r.likes, dislikes: r.dislikes }]));
 }
 
 /**
- * Re-orders an already-fetched candidate pool by how well each post's hashtags + content
- * keywords match the user's behavioral affinity (built from their likes/dislikes/reposts, see
- * toggleVote/toggleRepaw) and their declared "Interests". Ranking-only — never adds or drops posts.
+ * Re-orders an already-fetched candidate pool into a single feed-ranking score. Ranking-only —
+ * never adds or drops posts. The score combines:
+ *  - raw rating, decayed by age (RECENCY_HALF_LIFE_HOURS) so old-but-once-popular posts don't
+ *    permanently bury fresh ones,
+ *  - behavioral tag/keyword affinity (built from likes/dislikes/reposts, see toggleVote/toggleRepaw),
+ *  - declared "Interests",
+ *  - a trending bump for posts currently getting a burst of engagement (see trendingMap),
+ *  - a flat bonus for posts the user has never opened (per the durable PostView log, not just the
+ *    shallow recent-activity window used for exclusion) — see UNSEEN_BOOST. This is a strong
+ *    nudge, not a hard bucket: a real viral post can still beat a mediocre unseen one.
  */
-function rankByAffinity<T extends PostLike & { rating: number }>(
+function rankByAffinity<T extends PostLike & { id: string; rating: number; created_at: Date }>(
   posts: T[],
   affinity: AffinityMap,
   interestTerms: Set<string>,
+  seenIds: Set<string> = new Set(),
+  trendingMap: Map<string, number> = new Map(),
 ): T[] {
-  if (affinity.size === 0 && interestTerms.size === 0) return posts;
+  const now = Date.now();
   return posts
     .map((post) => {
       const terms = getPostTerms(post);
@@ -180,11 +249,56 @@ function rankByAffinity<T extends PostLike & { rating: number }>(
         if (a) behavioral += a.score * t.weight;
         if (interestTerms.has(t.term)) interestBoost += t.weight;
       }
-      return { post, score: post.rating + behavioral * AFFINITY_RANK_WEIGHT + interestBoost * INTEREST_RANK_WEIGHT };
+      const ageHours = (now - post.created_at.getTime()) / 3_600_000;
+      const decay = Math.pow(0.5, ageHours / RECENCY_HALF_LIFE_HOURS);
+      const trending = trendingMap.get(post.id) ?? 0;
+      const unseenBonus = seenIds.has(post.id) ? 0 : UNSEEN_BOOST;
+      const score = post.rating * decay
+        + behavioral * AFFINITY_RANK_WEIGHT
+        + interestBoost * INTEREST_RANK_WEIGHT
+        + trending * TRENDING_WEIGHT
+        + unseenBonus;
+      return { post, score };
     })
     .sort((a, b) => b.score - a.score)
     .map((s) => s.post);
 }
+
+/** post_id -> author identity key ("group:<id>" or "user:<id>") used to spread out consecutive posts by the same author/group. */
+function authorKey(post: any): string {
+  const groupId = post.groupPosts?.[0]?.group?.id ?? post.groupPosts?.[0]?.group_id;
+  return groupId ? `group:${groupId}` : `user:${post.author_id}`;
+}
+
+/**
+ * Greedy re-rank pass: pulls a lower-ranked-but-different-author post forward whenever the same
+ * author/group would otherwise appear twice within AUTHOR_DIVERSITY_MIN_GAP slots — same idea as
+ * an Instagram/TikTok-style feed never stacking one creator's posts back to back. Falls back to
+ * the next-best post (forced repeat) only if literally everything left is the same author.
+ */
+function diversifyByAuthor<T>(posts: T[]): T[] {
+  const pending = posts.slice();
+  const result: T[] = [];
+  while (pending.length > 0) {
+    const recentAuthors = result.slice(-AUTHOR_DIVERSITY_MIN_GAP).map(authorKey);
+    let idx = pending.findIndex((p) => !recentAuthors.includes(authorKey(p)));
+    if (idx === -1) idx = 0;
+    result.push(pending[idx]);
+    pending.splice(idx, 1);
+  }
+  return result;
+}
+
+/**
+ * Excludes posts belonging to a soft-deleted group. A group's own deletion (leave-empties-it or
+ * staff hard-delete) doesn't necessarily delete the Post rows themselves (see groups/service.ts
+ * `leave`/`removeMember`, which only sets Group.deleted_at) — without this, those posts kept
+ * showing up in every feed/search/permalink query as if the group were still around.
+ */
+// `none` (rather than `NOT: { some: ... }`) so this can be safely spread alongside another
+// top-level `NOT` filter (e.g. bellExcludeFilter in getPersonalizedPosts) without one clobbering
+// the other — object spread only keeps the last value for a duplicate key.
+const NOT_DELETED_GROUP_FILTER = { groupPosts: { none: { group: { deleted_at: { not: null } } } } };
 
 /** Reusable include for post queries */
 const POST_INCLUDE = {
@@ -333,7 +447,7 @@ export const postService = {
 
   async getPostById(postId: string) {
     const post = await prisma.post.findUnique({
-      where: { id: postId, deleted_at: null },
+      where: { id: postId, deleted_at: null, ...NOT_DELETED_GROUP_FILTER },
       include: {
         ...POST_INCLUDE,
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
@@ -342,14 +456,17 @@ export const postService = {
     return maskGroupAuthor(post);
   },
 
-  async getPosts(query: GetPostsQuery = {}) {
+  async getPosts(query: GetPostsQuery = {}, viewerId?: string) {
     const { search, category, tag, sort = 'new', safeMode = false, hasMedia = false, page, limit } = query;
     const pageNum = page ? Math.max(1, parseInt(page, 10)) : 1;
     const limitNum = limit ? Math.min(100, Math.max(1, parseInt(limit, 10))) : 20;
 
-    const where: any = { deleted_at: null, is_archived: false };
+    const where: any = { deleted_at: null, is_archived: false, ...NOT_DELETED_GROUP_FILTER };
     if (safeMode) where.is_nsfw = false;
     if (hasMedia) where.media_urls = { isEmpty: false };
+
+    const blockerIds = await getBlockerIds(viewerId);
+    if (blockerIds.length > 0) where.author_id = { notIn: blockerIds };
 
     if (search) {
       where.content = { contains: search, mode: 'insensitive' };
@@ -385,7 +502,7 @@ export const postService = {
     return posts.map(maskGroupAuthor);
   },
 
-  async searchPosts(query: string, safeMode: boolean = false, pageNum: number = 1, limitNum: number = 20) {
+  async searchPosts(query: string, safeMode: boolean = false, pageNum: number = 1, limitNum: number = 20, viewerId?: string) {
     const q = query.trim();
     if (!q) return [];
     const tagQuery = q.replace(/^#/, '');
@@ -393,6 +510,7 @@ export const postService = {
     const where: any = {
       deleted_at: null,
       is_archived: false,
+      ...NOT_DELETED_GROUP_FILTER,
       OR: [
         { content: { contains: q, mode: 'insensitive' } },
         { title: { contains: q, mode: 'insensitive' } },
@@ -400,6 +518,9 @@ export const postService = {
       ],
     };
     if (safeMode) where.is_nsfw = false;
+
+    const blockerIds = await getBlockerIds(viewerId);
+    if (blockerIds.length > 0) where.author_id = { notIn: blockerIds };
 
     const posts = await prisma.post.findMany({
       where,
@@ -439,12 +560,13 @@ export const postService = {
       .filter((a) => a.type === 'VIEW')
       .map((a) => a.post_id);
 
-    // Category scores: LIKE=3, VIEW=1
+    // Category scores: LIKE=3, VIEW scaled by how long they actually dwelled (same dwellFactor
+    // used to weigh tag affinity — a 20s read says more about taste than a 2s scroll-past).
     const categoryScores: Record<string, number> = {};
     for (const activity of activities) {
       const category = activity.post?.category;
       if (!category) continue;
-      const weight = activity.type === 'LIKE' ? 3 : 1;
+      const weight = activity.type === 'LIKE' ? 3 : dwellFactor(activity.duration ?? undefined);
       categoryScores[category] = (categoryScores[category] || 0) + weight;
     }
 
@@ -454,14 +576,43 @@ export const postService = {
       .map(([cat]) => cat);
 
     const nsfwFilter = safeMode ? { is_nsfw: false } : {};
-    const excludeIds = viewedPostIds.length > 0 ? { notIn: viewedPostIds } : undefined;
 
     // Fetched once up front so the mute-keywords filter can be baked into every query's `where`.
-    const [affinity, user] = await Promise.all([
+    const [affinity, user, bellFollows, bellGroups, blockerIds, notInterested] = await Promise.all([
       getUserAffinityMap(userId),
       prisma.user.findUnique({ where: { id: userId }, select: { interests: true, mute_keywords: true } }),
+      prisma.follow.findMany({ where: { follower_id: userId, notify_posts: true }, select: { following_id: true } }),
+      prisma.groupMember.findMany({ where: { user_id: userId, notify_posts: true }, select: { group_id: true } }),
+      getBlockerIds(userId),
+      prisma.postNotInterested.findMany({ where: { user_id: userId }, select: { post_id: true } }),
     ]);
     const muteFilter = muteKeywordsWhere(user?.mute_keywords ?? []);
+    const blockFilter = blockerIds.length > 0 ? { author_id: { notIn: blockerIds } } : {};
+    // "Не интересно" is a hard exclusion — unlike the shallow viewed-post skip below, it never resurfaces.
+    const hiddenPostIds = [...viewedPostIds, ...notInterested.map((n) => n.post_id)];
+    const excludeIds = hiddenPostIds.length > 0 ? { notIn: hiddenPostIds } : undefined;
+
+    // Posts from authors/groups the user rang the "bell" for (Follow/GroupMember.notify_posts).
+    // Computed on every page (not just page 1) because the algorithmic pool below excludes all
+    // bell-eligible posts unconditionally — bell's job is "surface the latest N from these", not
+    // "let the ranking pool also resurface the rest of them on later pages" (that duplicated posts
+    // across pages when this was page-1-only).
+    const bellAuthorIds = bellFollows.map((f) => f.following_id);
+    const bellGroupIds = bellGroups.map((g) => g.group_id);
+    const bellOr: any[] = [];
+    if (bellAuthorIds.length > 0) bellOr.push({ author_id: { in: bellAuthorIds } });
+    if (bellGroupIds.length > 0) bellOr.push({ groupPosts: { some: { group_id: { in: bellGroupIds } } } });
+    const bellExcludeFilter = bellOr.length > 0 ? { NOT: { OR: bellOr } } : {};
+
+    let bellPosts: any[] = [];
+    if (pageNum === 1 && bellOr.length > 0) {
+      bellPosts = await prisma.post.findMany({
+        where: { deleted_at: null, is_archived: false, OR: bellOr, id: excludeIds, ...nsfwFilter, ...muteFilter, ...blockFilter, ...NOT_DELETED_GROUP_FILTER },
+        orderBy: { created_at: 'desc' },
+        take: BELL_FEED_LIMIT,
+        include: postInclude,
+      });
+    }
 
     let personalizedPosts: any[] = [];
     let discoverPosts: any[] = [];
@@ -474,7 +625,7 @@ export const postService = {
     if (topCategories.length > 0) {
       // 60% from favourite categories
       personalizedPosts = await prisma.post.findMany({
-        where: { deleted_at: null, is_archived: false, category: { in: topCategories }, id: excludeIds, ...nsfwFilter, ...muteFilter },
+        where: { deleted_at: null, is_archived: false, category: { in: topCategories }, id: excludeIds, ...nsfwFilter, ...muteFilter, ...blockFilter, ...bellExcludeFilter, ...NOT_DELETED_GROUP_FILTER },
         orderBy: { rating: 'desc' },
         skip: pSkip,
         take: pLimit,
@@ -490,6 +641,9 @@ export const postService = {
           id: excludeIds,
           ...nsfwFilter,
           ...muteFilter,
+          ...blockFilter,
+          ...bellExcludeFilter,
+          ...NOT_DELETED_GROUP_FILTER,
         },
         orderBy: [{ rating: 'desc' }, { created_at: 'desc' }],
         skip: dSkip,
@@ -499,7 +653,7 @@ export const postService = {
     } else {
       // No activity yet — show popular new content
       discoverPosts = await prisma.post.findMany({
-        where: { deleted_at: null, is_archived: false, id: excludeIds, ...nsfwFilter, ...muteFilter },
+        where: { deleted_at: null, is_archived: false, id: excludeIds, ...nsfwFilter, ...muteFilter, ...blockFilter, ...bellExcludeFilter, ...NOT_DELETED_GROUP_FILTER },
         orderBy: [{ rating: 'desc' }, { created_at: 'desc' }],
         skip: (pageNum - 1) * limitNum,
         take: limitNum,
@@ -509,10 +663,32 @@ export const postService = {
 
     // Weigh the fetched pool by the user's behavioral tag/keyword affinity (like a scale — terms
     // they keep liking/reposting float up, terms they keep disliking sink) and their declared
-    // Interests, before interleaving.
+    // Interests, before interleaving. Also pull the real "have I ever opened this" signal from
+    // PostView (the shallow last-30-activity exclusion above only catches very recent repeats)
+    // so genuinely undiscovered posts get bucketed ahead of ones the user has already seen.
     const interestTerms = interestsToTerms(user?.interests ?? []);
-    personalizedPosts = rankByAffinity(personalizedPosts, affinity, interestTerms);
-    discoverPosts = rankByAffinity(discoverPosts, affinity, interestTerms);
+    const candidateIds = [...personalizedPosts, ...discoverPosts].map((p) => p.id);
+    const trendingCutoff = new Date(Date.now() - TRENDING_WINDOW_HOURS * 3_600_000);
+    const [seenViews, recentVotes, recentComments, recentRepaws] = candidateIds.length > 0
+      ? await Promise.all([
+          prisma.postView.findMany({ where: { user_id: userId, post_id: { in: candidateIds } }, select: { post_id: true } }),
+          prisma.vote.groupBy({ by: ['post_id'], where: { post_id: { in: candidateIds }, value: 1, deleted_at: null, created_at: { gte: trendingCutoff } }, _count: { _all: true } }),
+          prisma.comment.groupBy({ by: ['post_id'], where: { post_id: { in: candidateIds }, deleted_at: null, created_at: { gte: trendingCutoff } }, _count: { _all: true } }),
+          prisma.repaw.groupBy({ by: ['post_id'], where: { post_id: { in: candidateIds }, created_at: { gte: trendingCutoff } }, _count: { _all: true } }),
+        ])
+      : [[], [], [], []];
+    const seenIds = new Set(seenViews.map((v) => v.post_id));
+    // "Trending" = a recent burst of engagement, weighted like effort: like < comment < repaw
+    // (mirrors REPAW_MULTIPLIER's reasoning — a repost is a stronger signal than a like).
+    const trendingMap = new Map<string, number>();
+    const bumpTrending = (rows: { post_id: string; _count: { _all: number } }[], weight: number) => {
+      for (const r of rows) trendingMap.set(r.post_id, (trendingMap.get(r.post_id) ?? 0) + r._count._all * weight);
+    };
+    bumpTrending(recentVotes, 1);
+    bumpTrending(recentComments, 1.5);
+    bumpTrending(recentRepaws, 2);
+    personalizedPosts = rankByAffinity(personalizedPosts, affinity, interestTerms, seenIds, trendingMap);
+    discoverPosts = rankByAffinity(discoverPosts, affinity, interestTerms, seenIds, trendingMap);
 
     // Interleave: 3 personalised → 2 discover
     const result: any[] = [];
@@ -523,7 +699,9 @@ export const postService = {
       for (let i = 0; i < 2 && di < discoverPosts.length; i++, di++) result.push(discoverPosts[di]);
     }
 
-    return result.map(maskGroupAuthor);
+    // Diversify across the whole page, bell pins included — otherwise a bell pin and the very
+    // next personalized pick could still land back to back for the same author/group.
+    return diversifyByAuthor([...bellPosts, ...result]).map(maskGroupAuthor);
   },
 
   async toggleVote(userId: string, postId: string, value: 1 | -1) {
@@ -636,6 +814,67 @@ export const postService = {
       }
 
       return updated;
+    });
+  },
+
+  /**
+   * Explicit "не интересно" — unlike a passive scroll-past, this is a deliberate signal: it
+   * permanently hides the post from this user's personalized feed (see the PostNotInterested
+   * exclusion in getPersonalizedPosts) and applies a stronger negative affinity delta than a
+   * view, comparable to an actual dislike. Symmetric undo mirrors toggleVote's reverse path.
+   */
+  async setNotInterested(userId: string, postId: string, notInterested: boolean) {
+    return prisma.$transaction(async (tx) => {
+      const existing = await tx.postNotInterested.findUnique({
+        where: { user_id_post_id: { user_id: userId, post_id: postId } },
+      });
+
+      if (notInterested) {
+        if (existing) return { notInterested: true };
+        const post = await tx.post.findUnique({
+          where: { id: postId },
+          select: { content: true, title: true, is_nsfw: true, tags: { include: { tag: true } } },
+        });
+        if (!post) throw new Error('Post not found');
+        const terms = getPostTerms(post);
+        const termSource = new Map(terms.map((t) => [t.term, t.source]));
+        const affinity = await getUserAffinityMap(userId);
+        const deltas = distributeVoteDelta(terms, -1, affinity, NOT_INTERESTED_MULTIPLIER);
+        await applyTermDeltas(tx, userId, deltas, termSource, { likes: 0, dislikes: 0 });
+        try {
+          await tx.postNotInterested.create({
+            data: { user_id: userId, post_id: postId, term_deltas: Object.fromEntries(deltas) },
+          });
+        } catch (err: any) {
+          // Lost a race to a concurrent identical request (unique violation) — undo the
+          // redundant delta we just applied instead of double-counting it.
+          if (err?.code === 'P2002') {
+            await applyTermDeltas(tx, userId, negateDeltas(deltas), termSource, { likes: 0, dislikes: 0 });
+            return { notInterested: true };
+          }
+          throw err;
+        }
+        return { notInterested: true };
+      }
+
+      if (!existing) return { notInterested: false };
+      try {
+        await tx.postNotInterested.delete({ where: { user_id_post_id: { user_id: userId, post_id: postId } } });
+      } catch (err: any) {
+        // Already undone by a concurrent request — its reversal already ran, don't double-reverse.
+        if (err?.code === 'P2025') return { notInterested: false };
+        throw err;
+      }
+      if (existing.term_deltas) {
+        const post = await tx.post.findUnique({
+          where: { id: postId },
+          select: { content: true, title: true, is_nsfw: true, tags: { include: { tag: true } } },
+        });
+        const termSource = post ? new Map(getPostTerms(post).map((t) => [t.term, t.source])) : new Map();
+        const prevDeltas = new Map(Object.entries(existing.term_deltas as Record<string, number>));
+        await applyTermDeltas(tx, userId, negateDeltas(prevDeltas), termSource, { likes: 0, dislikes: 0 });
+      }
+      return { notInterested: false };
     });
   },
 
@@ -881,6 +1120,7 @@ export const postService = {
       notificationService.create({
         receiverId: post.author_id,
         senderId: userId,
+        senderGroupId: groupId ?? undefined,
         type: 'COMMENT',
         postId,
         commentId: comment.id,
@@ -898,6 +1138,7 @@ export const postService = {
             notificationService.create({
               receiverId: mentioned.id,
               senderId: userId,
+              senderGroupId: groupId ?? undefined,
               type: 'MENTION',
               postId,
               commentId: comment.id,
@@ -987,7 +1228,12 @@ export const postService = {
     if (!isAdmin && post.author_id !== userId && !(await canModerateAsGroupStaff(postId, userId))) {
       throw new Error('Not authorized');
     }
-    return prisma.post.update({ where: { id: postId }, data: { deleted_at: new Date() } });
+    const updated = await prisma.post.update({ where: { id: postId }, data: { deleted_at: new Date() } });
+    // Posts have no restore path, so the underlying files can be purged immediately
+    // instead of leaking in S3 until the 30-day hard-delete cron finally drops the row.
+    Promise.all([...post.media_urls, ...post.media_original_urls].map((url) => deleteFileByUrl(url)))
+      .catch((err) => console.error('[deletePost] media cleanup failed:', err));
+    return updated;
   },
 
   async editPost(userId: string, postId: string, content: string) {
@@ -1015,7 +1261,11 @@ export const postService = {
     if (comment.author_id !== userId && !(await canManageAllComments(comment.post_id, userId, isAdmin))) {
       throw new Error('Not authorized');
     }
-    return prisma.comment.update({ where: { id: commentId }, data: { deleted_at: new Date() } });
+    const updated = await prisma.comment.update({ where: { id: commentId }, data: { deleted_at: new Date() } });
+    if (comment.file_url) {
+      deleteFileByUrl(comment.file_url).catch((err) => console.error('[deleteComment] media cleanup failed:', err));
+    }
+    return updated;
   },
 
   /** Whether `userId` may delete any comment on this post (shown to the frontend so it can render a delete button on comments that aren't their own). */
@@ -1188,7 +1438,15 @@ export const postService = {
         )::int                                                                                       AS nsfw_pct
       FROM "Tag" t
       JOIN "PostTag" pt ON pt.tag_id = t.id
-      JOIN "Post"    p  ON p.id = pt.post_id AND p.deleted_at IS NULL
+      JOIN "Post"    p  ON p.id = pt.post_id
+                        AND p.deleted_at IS NULL
+                        AND p.is_archived = false
+                        AND cardinality(p.media_urls) > 0
+                        AND NOT EXISTS (
+                          SELECT 1 FROM "GroupPost" gp
+                          JOIN "Group" g ON g.id = gp.group_id
+                          WHERE gp.post_id = p.id AND g.deleted_at IS NOT NULL
+                        )
       GROUP BY t.id, t.name
       HAVING COUNT(DISTINCT pt.post_id) > 0
       ORDER BY month_count DESC, total_count DESC

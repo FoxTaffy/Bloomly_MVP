@@ -23,7 +23,7 @@
               <!-- Verification badge -->
               <VerificationBadge v-if="post.author.is_verified"
                 :type="post.author.verification_type"
-                img-class="w-4 h-4 flex-shrink-0" />
+                icon-class="w-4 h-4 flex-shrink-0" />
               <span v-if="showRepawLabel"
                 class="inline-flex items-center gap-1 text-[10px] text-white/55 bg-brand-card border border-brand-border px-1.5 py-0.5 rounded-md font-semibold">
                 <Repeat2 class="w-3 h-3" /> Репав

@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import {
-  createTicket, getMyTickets, getTicketForUser,
+  createTicket, getMyTickets, getTicketForUser, addUserMessage,
   adminGetTickets, adminReplyTicket,
 } from './service.js';
 import { isModerator } from '../../lib/roles.js';
@@ -32,6 +32,19 @@ export async function getMyTicketHandler(request: FastifyRequest, reply: Fastify
   const ticket = await getTicketForUser(userId, id);
   if (!ticket) return reply.code(404).send({ success: false, error: { message: 'Обращение не найдено' } });
   return reply.send({ success: true, data: { ticket } });
+}
+
+// POST /api/support/tickets/:id/messages
+export async function addTicketMessageHandler(request: FastifyRequest, reply: FastifyReply) {
+  const userId = (request.user as any).id;
+  const { id } = request.params as any;
+  const { message } = request.body as any;
+  if (!message?.trim()) {
+    return reply.code(400).send({ success: false, error: { message: 'Сообщение не может быть пустым' } });
+  }
+  const created = await addUserMessage(userId, id, message);
+  if (!created) return reply.code(404).send({ success: false, error: { message: 'Обращение не найдено' } });
+  return reply.code(201).send({ success: true, data: { message: created } });
 }
 
 // GET /api/support/admin/tickets

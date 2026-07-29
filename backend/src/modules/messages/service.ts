@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
+import { deleteFileByUrl } from '../media/service.js';
 import type { SendMessageInput, GetMessagesQuery } from './types.js';
 
 // ── In-process real-time delivery ─────────────────────────────────────────────
@@ -224,8 +225,10 @@ export const messageService = {
       JOIN "ConversationParticipant" cp
         ON cp.conversation_id = m.conversation_id
        AND cp.user_id = ${userId}::uuid
+      JOIN "Conversation" c ON c.id = m.conversation_id
       WHERE m.sender_id <> ${userId}::uuid
         AND m.deleted_at IS NULL
+        AND c.deleted_at IS NULL
         AND (cp.last_read_at IS NULL OR m.created_at > cp.last_read_at)
       GROUP BY m.conversation_id
     `;
@@ -255,26 +258,37 @@ export const messageService = {
   },
 
   /**
-   * Count unread messages across all conversations — single aggregated query.
+   * Count unread messages across all conversations, split by is_group so the client can
+   * show separate "ЛС" (personal, is_group=false — includes 1:1 DMs and a member's own
+   * community/group-DM thread) and "групповой чат" (is_group=true) badges.
    */
-  async getUnreadCount(userId: string): Promise<number> {
-    type Row = { count: bigint }
+  async getUnreadCount(userId: string): Promise<{ total: number; personal: number; group: number }> {
+    type Row = { is_group: boolean; count: bigint }
     const rows = await prisma.$queryRaw<Row[]>`
-      SELECT COUNT(*) AS count
+      SELECT c.is_group AS is_group, COUNT(*) AS count
       FROM "Message" m
       JOIN "ConversationParticipant" cp
         ON cp.conversation_id = m.conversation_id
        AND cp.user_id = ${userId}::uuid
+      JOIN "Conversation" c ON c.id = m.conversation_id
       WHERE m.sender_id   <> ${userId}::uuid
         AND m.deleted_at  IS NULL
+        AND c.deleted_at  IS NULL
         AND cp.archived   = false
         AND cp.hidden_at  IS NULL
         AND (
           cp.last_read_at IS NULL
           OR m.created_at > cp.last_read_at
         )
+      GROUP BY c.is_group
     `
-    return Number(rows[0]?.count ?? 0)
+    let personal = 0;
+    let group = 0;
+    for (const r of rows) {
+      if (r.is_group) group = Number(r.count);
+      else personal = Number(r.count);
+    }
+    return { total: personal + group, personal, group };
   },
 
   /**
@@ -317,7 +331,7 @@ export const messageService = {
 
     const conv = await prisma.conversation.findUnique({
       where: { id: conversationId },
-      select: { type: true, participants: { select: { user_id: true } } },
+      select: { type: true, group_id: true, group_dm_user_id: true, participants: { select: { user_id: true } } },
     });
     if (conv?.type === 'direct') {
       const recipientId = conv.participants.find((p: any) => p.user_id !== senderId)?.user_id;
@@ -366,6 +380,7 @@ export const messageService = {
         prisma.conversation.update({ where: { id: conversationId }, data: { updated_at: new Date() } }),
       ]);
       await this._broadcastNewMessage(conversationId, message);
+      await this._maybeSendGroupWelcome(conv, conversationId, senderId);
       return message;
     }
 
@@ -404,6 +419,7 @@ export const messageService = {
         prisma.conversation.update({ where: { id: conversationId }, data: { updated_at: new Date() } }),
       ]);
       await this._broadcastNewMessage(conversationId, message);
+      await this._maybeSendGroupWelcome(conv, conversationId, senderId);
       return message;
     }
 
@@ -465,7 +481,33 @@ export const messageService = {
     ]);
 
     await this._broadcastNewMessage(conversationId, message);
+    await this._maybeSendGroupWelcome(conv, conversationId, senderId);
     return message;
+  },
+
+  /**
+   * If this was a member's first-ever message into their personal community
+   * thread with a group, and that group has a welcome auto-reply configured,
+   * send it as the group owner. Best-effort — never blocks the member's own send.
+   */
+  async _maybeSendGroupWelcome(
+    conv: { type: string; group_id: string | null; group_dm_user_id: string | null } | null,
+    conversationId: string,
+    senderId: string,
+  ) {
+    if (!conv || conv.type !== 'community' || !conv.group_id || conv.group_dm_user_id !== senderId) return;
+    try {
+      const messageCount = await prisma.message.count({ where: { conversation_id: conversationId, sender_id: senderId } });
+      if (messageCount !== 1) return;
+
+      const group = await prisma.group.findUnique({
+        where: { id: conv.group_id },
+        select: { owner_id: true, welcome_msg_enabled: true, welcome_msg_text: true },
+      });
+      if (!group?.welcome_msg_enabled || !group.welcome_msg_text) return;
+
+      await this.sendMessage({ conversationId, senderId: group.owner_id, content: group.welcome_msg_text });
+    } catch { /* not critical — member's message already went through */ }
   },
 
   /**
@@ -474,19 +516,35 @@ export const messageService = {
   async _broadcastNewMessage(conversationId: string, message: unknown) {
     const [participants, conv] = await Promise.all([
       prisma.conversationParticipant.findMany({ where: { conversation_id: conversationId }, select: { user_id: true } }),
-      prisma.conversation.findUnique({ where: { id: conversationId }, select: { group_id: true, group_dm_user_id: true } }),
+      prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: {
+          group_id: true, group_dm_user_id: true,
+          group: { select: { id: true, slug: true, name: true, avatar_url: true } },
+        },
+      }),
     ]);
     const recipients = new Set(participants.map((p) => p.user_id));
     // Group-DM thread: staff aren't participants, but any admin/owner/moderator watching
-    // the group's inbox should still get the message pushed to them live.
+    // the group's inbox should still get the message pushed to them live. Carry the group's
+    // identity alongside the message so staff clients (who don't have this conversation in
+    // their local list) know to route a click to the group's "Обращения" inbox tab, not /messages.
+    let groupDm: { groupId: string; groupSlug: string; groupName: string | null; groupAvatarUrl: string | null; customerId: string } | null = null;
     if (conv?.group_id && conv.group_dm_user_id) {
       const staff = await prisma.groupMember.findMany({
         where: { group_id: conv.group_id, role: { in: ['owner', 'admin', 'moderator'] } },
         select: { user_id: true },
       });
       for (const s of staff) recipients.add(s.user_id);
+      groupDm = {
+        groupId: conv.group_id,
+        groupSlug: conv.group?.slug ?? conv.group_id,
+        groupName: conv.group?.name ?? null,
+        groupAvatarUrl: conv.group?.avatar_url ?? null,
+        customerId: conv.group_dm_user_id,
+      };
     }
-    const wsPayload = { type: 'new_message', data: message };
+    const wsPayload = { type: 'new_message', data: message, groupDm };
     for (const user_id of recipients) {
       messageSubscriptions.push(user_id, wsPayload);
     }
@@ -594,6 +652,12 @@ export const messageService = {
       where: { id: messageId },
       data: { deleted_at: new Date() },
     });
+
+    // Messages have no restore/undelete path, so the attachment can be purged now
+    // instead of leaking in S3 forever (there's no hard-delete cron for messages).
+    if (msg.file_url) {
+      deleteFileByUrl(msg.file_url).catch((err) => console.error('[deleteMessage] media cleanup failed:', err));
+    }
 
     // Broadcast to all participants so the message disappears in real time for everyone
     const parts = await prisma.conversationParticipant.findMany({
@@ -752,11 +816,21 @@ export const messageService = {
         data: { hidden_at: new Date() },
       });
     }
-    // for 'all': soft-delete the conversation
-    return prisma.conversation.update({
-      where: { id: conversationId },
-      data: { deleted_at: new Date() },
-    });
+    // for 'all': soft-delete the conversation and its messages together, so no
+    // other query (unread counts, etc.) can still pick up messages from a
+    // conversation that's no longer visible anywhere.
+    const now = new Date();
+    const [, conversation] = await prisma.$transaction([
+      prisma.message.updateMany({
+        where: { conversation_id: conversationId, deleted_at: null },
+        data: { deleted_at: now },
+      }),
+      prisma.conversation.update({
+        where: { id: conversationId },
+        data: { deleted_at: now },
+      }),
+    ]);
+    return conversation;
   },
 
   /** Return IDs of participants OTHER than the given user (for typing broadcasts). */
@@ -896,8 +970,8 @@ export const messageService = {
     });
     if (existing) return { conversation: existing, alreadyExists: true };
 
-    const group = await prisma.group.findUnique({ where: { id: groupId }, select: { name: true, avatar_url: true } });
-    if (!group) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
+    const group = await prisma.group.findUnique({ where: { id: groupId }, select: { name: true, avatar_url: true, deleted_at: true } });
+    if (!group || group.deleted_at) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
 
     const conversation = await prisma.conversation.create({
       data: {
@@ -950,6 +1024,43 @@ export const messageService = {
   },
 
   /**
+   * "Обращения" waiting for a reply, summed per group, across every group the caller
+   * owns/admins/moderates — powers the aggregate badge on the sidebar's "Группы" item
+   * and per-card badges on the groups grid, without an N+1 fetch per group.
+   */
+  async getMyGroupInboxCounts(userId: string): Promise<{ groupId: string; count: number }[]> {
+    const memberships = await prisma.groupMember.findMany({
+      where: { user_id: userId, role: { in: ['owner', 'admin', 'moderator'] } },
+      select: { group_id: true },
+    });
+    const groupIds = memberships.map((m) => m.group_id);
+    if (!groupIds.length) return [];
+
+    const threads = await prisma.conversation.findMany({
+      where: { group_id: { in: groupIds }, group_dm_user_id: { not: null }, deleted_at: null },
+      select: {
+        group_id: true,
+        group_dm_user_id: true,
+        messages: {
+          where: { deleted_at: null },
+          orderBy: { created_at: 'desc' },
+          take: 1,
+          select: { sender_id: true },
+        },
+      },
+    });
+
+    const counts: Record<string, number> = {};
+    for (const t of threads) {
+      const last = t.messages[0];
+      if (last && last.sender_id === t.group_dm_user_id) {
+        counts[t.group_id!] = (counts[t.group_id!] ?? 0) + 1;
+      }
+    }
+    return groupIds.map((groupId) => ({ groupId, count: counts[groupId] ?? 0 }));
+  },
+
+  /**
    * Fetch a single conversation by id, in the same shape getConversations() returns per-row.
    * Used by group staff to open a thread from the inbox (they aren't a ConversationParticipant).
    */
@@ -996,6 +1107,16 @@ export const messageService = {
   },
 
   async _assertParticipant(conversationId: string, userId: string) {
+    // Checked up front (not just filtered out of getConversations' listing) — otherwise a
+    // conversation soft-deleted alongside its group (see groups/service.ts
+    // softDeleteGroupAndConversations) stayed fully readable/writable to anyone who already
+    // had the conversationId, just invisible in the list.
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { deleted_at: true, group_id: true, group_dm_user_id: true },
+    });
+    if (!conv || conv.deleted_at) throw Object.assign(new Error('Conversation not found'), { statusCode: 404 });
+
     const p = await prisma.conversationParticipant.findFirst({
       where: { conversation_id: conversationId, user_id: userId },
     });
@@ -1003,11 +1124,7 @@ export const messageService = {
 
     // Group-DM staff bypass: any admin/owner/moderator of the group may act on a
     // member's personal thread with that group without being a participant on it.
-    const conv = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: { group_id: true, group_dm_user_id: true },
-    });
-    if (conv?.group_id && conv.group_dm_user_id) {
+    if (conv.group_id && conv.group_dm_user_id) {
       const role = await this._getGroupRole(conv.group_id, userId);
       if (role && ['owner', 'admin', 'moderator'].includes(role)) return;
     }

@@ -288,8 +288,16 @@ async function submit() {
     })
     sent.value = true
     setTimeout(() => close(), 2800)
-  } catch (e) {
-    sendError.value = 'Не удалось отправить жалобу. Попробуйте ещё раз.'
+  } catch (e: any) {
+    const status = e?.response?.status
+    const code = e?.response?.data?.error?.code
+    if (code === 'ALREADY_REPORTED' || status === 409) {
+      sendError.value = 'Вы уже отправляли жалобу на это — модераторы ещё не рассмотрели предыдущую.'
+    } else if (status === 429) {
+      sendError.value = 'Слишком много жалоб подряд. Подождите немного и попробуйте снова.'
+    } else {
+      sendError.value = 'Не удалось отправить жалобу. Попробуйте ещё раз.'
+    }
   } finally {
     isSending.value = false
   }

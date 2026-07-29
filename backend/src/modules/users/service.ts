@@ -2,6 +2,7 @@ import prisma from '../../config/prisma.js';
 import { deleteFileByUrl } from '../media/service.js';
 import { getUserBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
+import { isBlockedBy } from '../../lib/blocks.js';
 import sharp from 'sharp';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput } from './types.js';
 
@@ -30,6 +31,14 @@ const REGION_ALLOWED_BRANDS: Record<string, string[]> = {
 
 const CARD_BRAND_LABELS: Record<string, string> = { visa: 'Visa', mastercard: 'Mastercard', mir: 'МИР', card: 'эта карта' };
 
+/** Null out a profile status bubble once its expiresAt timestamp has passed. */
+function liveProfileStatus(status: unknown): unknown {
+  const s = status as { expiresAt?: number } | null;
+  if (!s || typeof s !== 'object') return null;
+  if (s.expiresAt && s.expiresAt < Date.now()) return null;
+  return s;
+}
+
 /** Reduce a birth_date down to whatever granularity its owner allows non-owners to see. */
 function redactBirthDate(birthDate: Date | null, visibility: string | null | undefined): Date | null {
   if (!birthDate) return null;
@@ -56,6 +65,7 @@ const PUBLIC_SELECT = {
   avatar_video_url: true,
   banner_url:      true,
   status:          true,
+  profile_status:  true,
   persona:         true,
   likes:           true,
   dislikes:        true,
@@ -141,8 +151,22 @@ export const usersService = {
 
     if (!raw) return null;
 
+    (raw as any).profile_status = liveProfileStatus((raw as any).profile_status);
+
     if (viewerId === raw.id) {
       return { ...raw, badge_level: getUserBadgeLevel((raw as any).artist_since) };
+    }
+
+    // The profile owner blocked the viewer — they can't see this profile at all.
+    if (await isBlockedBy(raw.id, viewerId)) {
+      return {
+        id: raw.id,
+        username: raw.username,
+        display_name: raw.display_name,
+        avatar_url: raw.avatar_url,
+        badge_type: raw.badge_type,
+        is_blocked_by_user: true,
+      };
     }
 
     // Whole-profile gate: return only an identity stub if the owner restricts who can view it

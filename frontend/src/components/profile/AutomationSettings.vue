@@ -1,16 +1,25 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import BIcon from '@/components/BIcon.vue'
 import api from '@/api'
 
+const router    = useRouter()
 const toast     = ref('')
-const newReply  = ref('')
-const addingReply = ref(false)
+
+const scheduledCount = ref(0)
+const draftCount     = ref(0)
+async function fetchScheduledCounts() {
+  try {
+    const res = await api.get('/posts/scheduled')
+    const posts: { status: string }[] = res.data?.data?.posts ?? []
+    scheduledCount.value = posts.filter(p => p.status === 'scheduled' || p.status === 'failed').length
+    draftCount.value = posts.filter(p => p.status === 'draft').length
+  } catch {}
+}
 
 interface AutoSettings {
   autoFollowBack:   boolean
-  welcomeMsg:       boolean
-  welcomeText:      string
   autoRepost:       boolean
   muteKeywords:     string[]
   quietHoursOn:     boolean
@@ -19,7 +28,6 @@ interface AutoSettings {
   notifyNewFan:     boolean
   notifyComment:    boolean
   notifyRepaw:      boolean
-  quickReplies:     string[]
   filterNsfw:       boolean
   filterSpam:       boolean
 }
@@ -31,8 +39,6 @@ const NSFW_LS_KEY = 'bloomly_automation_filter_nsfw'
 function defaultSettings(): AutoSettings {
   return {
     autoFollowBack:   false,
-    welcomeMsg:       false,
-    welcomeText:      'Привет! Спасибо что подписался 🐾',
     autoRepost:       false,
     muteKeywords:     [],
     quietHoursOn:     false,
@@ -41,7 +47,6 @@ function defaultSettings(): AutoSettings {
     notifyNewFan:     true,
     notifyComment:    true,
     notifyRepaw:      false,
-    quickReplies:     ['Спасибо! 🐾', 'Очень мило!', 'Скоро отвечу 👀'],
     filterNsfw:       localStorage.getItem(NSFW_LS_KEY) === 'true',
     filterSpam:       true,
   }
@@ -53,8 +58,6 @@ const s = ref<AutoSettings>(defaultSettings())
 // filterNsfw/autoRepost never round-trip the API — they aren't backend-backed.
 const API_KEY: Partial<Record<keyof AutoSettings, string>> = {
   autoFollowBack: 'auto_follow_back',
-  welcomeMsg:     'welcome_msg_enabled',
-  welcomeText:    'welcome_msg_text',
   muteKeywords:   'mute_keywords',
   quietHoursOn:   'quiet_hours_enabled',
   quietFrom:      'quiet_hours_from',
@@ -62,15 +65,12 @@ const API_KEY: Partial<Record<keyof AutoSettings, string>> = {
   notifyNewFan:   'notify_new_fan',
   notifyComment:  'notify_comment',
   notifyRepaw:    'notify_repaw',
-  quickReplies:   'quick_replies',
   filterSpam:     'filter_spam',
 }
 
 function fromApi(data: Record<string, any>): Partial<AutoSettings> {
   return {
     autoFollowBack: data.auto_follow_back,
-    welcomeMsg:     data.welcome_msg_enabled,
-    welcomeText:    data.welcome_msg_text,
     muteKeywords:   data.mute_keywords,
     quietHoursOn:   data.quiet_hours_enabled,
     quietFrom:      data.quiet_hours_from,
@@ -78,7 +78,6 @@ function fromApi(data: Record<string, any>): Partial<AutoSettings> {
     notifyNewFan:   data.notify_new_fan,
     notifyComment:  data.notify_comment,
     notifyRepaw:    data.notify_repaw,
-    quickReplies:   data.quick_replies,
     filterSpam:     data.filter_spam,
   }
 }
@@ -88,6 +87,7 @@ onMounted(async () => {
     const { data } = await api.get('/automation/me')
     Object.assign(s.value, fromApi(data.data.settings))
   } catch { /* keep local defaults if the fetch fails */ }
+  fetchScheduledCounts()
 })
 
 async function patchSettings(partial: Partial<AutoSettings>): Promise<boolean> {
@@ -123,10 +123,6 @@ function toggleProp(key: keyof AutoSettings) {
   })
 }
 
-async function saveWelcomeText() {
-  if (await patchSettings({ welcomeText: s.value.welcomeText })) showToast('Сохранено')
-}
-
 async function saveQuietHours() {
   await patchSettings({ quietFrom: s.value.quietFrom, quietTo: s.value.quietTo })
 }
@@ -153,23 +149,6 @@ async function removeKeyword(kw: string) {
   if (await patchSettings({ muteKeywords: next })) s.value.muteKeywords = next
 }
 
-// Quick replies
-async function addQuickReply() {
-  const t = newReply.value.trim()
-  if (!t) return
-  const next = [...s.value.quickReplies, t]
-  if (await patchSettings({ quickReplies: next })) {
-    s.value.quickReplies = next
-    newReply.value = ''
-    addingReply.value = false
-    showToast('Шаблон добавлен')
-  }
-}
-async function removeQuickReply(i: number) {
-  const next = s.value.quickReplies.filter((_, idx) => idx !== i)
-  if (await patchSettings({ quickReplies: next })) s.value.quickReplies = next
-}
-
 // Section definitions
 const sections = computed(() => [
   {
@@ -184,13 +163,6 @@ const sections = computed(() => [
         icon: 'UserPlus',
         label: 'Автоподписка в ответ',
         desc: 'Автоматически подписываться на тех, кто подписался на тебя',
-        soon: false
-      },
-      {
-        key: 'welcomeMsg',
-        icon: 'MessageCircle',
-        label: 'Приветственное сообщение',
-        desc: 'Отправлять сообщение новым подписчикам',
         soon: false
       },
     ]
@@ -291,24 +263,6 @@ const sections = computed(() => [
         </div>
       </div>
 
-      <!-- Welcome message text (if enabled) -->
-      <div v-if="sec.id === 'social' && s.welcomeMsg"
-        class="px-5 pb-4 pt-0 border-t border-brand-border/30">
-        <label class="block text-xs font-bold text-white/50 mb-2 mt-3">Текст приветствия</label>
-        <div class="flex gap-2">
-          <input
-            v-model="s.welcomeText"
-            type="text"
-            class="flex-1 bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none focus:border-brand-accent/60"
-            placeholder="Привет! Спасибо за подписку 🐾"
-          />
-          <button type="button" @click="saveWelcomeText"
-            class="px-4 py-2.5 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-colors">
-            <BIcon name="Check" class="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
       <!-- Quiet hours time picker (if enabled) -->
       <div v-if="sec.id === 'notify' && s.quietHoursOn"
         class="px-5 pb-4 pt-0 border-t border-brand-border/30 mt-0">
@@ -369,72 +323,21 @@ const sections = computed(() => [
       </div>
     </div>
 
-    <!-- Quick replies -->
-    <div class="bg-brand-bg border border-brand-border rounded-2xl overflow-hidden">
-      <div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-brand-border/60">
-        <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl flex items-center justify-center bg-brand-purple/10">
-            <BIcon name="MessageSquareDashed" class="w-4.5 h-4.5 text-brand-purple" />
-          </div>
-          <h3 class="font-extrabold text-white text-sm">Быстрые ответы</h3>
-        </div>
-        <button type="button" @click="addingReply = true"
-          class="text-xs font-bold text-brand-accent hover:text-brand-accent-plus transition-colors flex items-center gap-1">
-          <BIcon name="Plus" class="w-3.5 h-3.5" /> Добавить
-        </button>
-      </div>
-
-      <div class="p-5 space-y-2">
-        <p class="text-xs text-white/40 mb-3">Шаблоны ответов, доступные в чатах одним кликом</p>
-
-        <!-- Add form -->
-        <div v-if="addingReply" class="flex gap-2 mb-3">
-          <input
-            v-model="newReply"
-            type="text"
-            class="flex-1 bg-brand-card border border-brand-accent/40 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none"
-            placeholder="Текст шаблона…"
-            @keydown.enter="addQuickReply"
-            @keydown.esc="addingReply = false"
-            autofocus
-          />
-          <button type="button" @click="addQuickReply"
-            class="px-4 py-2.5 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-colors">
-            <BIcon name="Check" class="w-4 h-4" />
-          </button>
-          <button type="button" @click="addingReply = false"
-            class="px-3 py-2.5 rounded-xl bg-brand-card border border-brand-border text-white/50 text-sm hover:border-white/20 transition-colors">
-            <BIcon name="X" class="w-4 h-4" />
-          </button>
-        </div>
-
-        <!-- List -->
-        <div v-for="(reply, i) in s.quickReplies" :key="i"
-          class="group flex items-center gap-3 p-3 rounded-xl bg-brand-card/60 border border-brand-border/50 hover:border-brand-border transition-colors">
-          <BIcon name="MessageSquare" class="w-4 h-4 text-white/30 flex-shrink-0" />
-          <span class="flex-1 text-sm text-white/75">{{ reply }}</span>
-          <button type="button" @click="removeQuickReply(i)"
-            class="opacity-0 group-hover:opacity-100 w-7 h-7 rounded-lg flex items-center justify-center text-brand-error/60 hover:bg-brand-error/10 hover:text-brand-error transition-all">
-            <BIcon name="Trash2" class="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        <p v-if="!s.quickReplies.length" class="text-xs text-white/25 italic text-center py-4">Нет шаблонов</p>
-      </div>
-    </div>
-
-    <!-- Scheduled posts — coming soon banner -->
+    <!-- Scheduled posts -->
     <div class="relative overflow-hidden bg-brand-bg border border-brand-border rounded-2xl p-6">
       <div class="absolute inset-0 bg-gradient-to-r from-brand-purple/8 to-brand-accent/5 pointer-events-none" />
       <div class="relative flex items-start gap-4">
         <div class="w-12 h-12 rounded-2xl bg-brand-purple/15 flex items-center justify-center flex-shrink-0">
           <BIcon name="CalendarClock" class="w-6 h-6 text-brand-purple" />
         </div>
-        <div>
+        <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-1">
             <h3 class="font-extrabold text-white">Отложенные публикации</h3>
-            <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-accent/10 text-brand-accent border border-brand-accent/20">
-              Скоро
+            <span v-if="scheduledCount" class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-accent/10 text-brand-accent border border-brand-accent/20">
+              {{ scheduledCount }} запланировано
+            </span>
+            <span v-if="draftCount" class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-purple/10 text-brand-purple border border-brand-purple/20">
+              {{ draftCount }} черновиков
             </span>
           </div>
           <p class="text-sm text-white/45 leading-relaxed">
@@ -448,6 +351,13 @@ const sections = computed(() => [
               {{ feat }}
             </span>
           </div>
+          <button
+            @click="router.push('/scheduled-posts')"
+            class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-brand-purple text-white hover:brightness-110 transition-all"
+          >
+            <BIcon name="CalendarClock" class="w-3.5 h-3.5" />
+            Открыть отложенные публикации
+          </button>
         </div>
       </div>
     </div>

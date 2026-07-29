@@ -552,3 +552,12 @@ export const getNetworkStatsHandler = async (req: FastifyRequest, reply: Fastify
   const data = await adminService.getNetworkStats();
   return reply.send({ success: true, data, error: null });
 };
+
+export const getStickerPackDetailHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+  if (!requireAdmin(req, reply)) return;
+  const data = await adminService.getStickerPackDetail((req.params as any).packId);
+  if (!data) {
+    return reply.code(404).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Sticker pack not found' } });
+  }
+  return reply.send({ success: true, data, error: null });
+};

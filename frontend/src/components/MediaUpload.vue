@@ -49,6 +49,12 @@ function flashLimitReached() {
   rejectedTimer = setTimeout(() => { rejectedMsg.value = '' }, 3000)
 }
 
+function flashMessage(msg: string) {
+  rejectedMsg.value = msg
+  if (rejectedTimer) clearTimeout(rejectedTimer)
+  rejectedTimer = setTimeout(() => { rejectedMsg.value = '' }, 4000)
+}
+
 // ── Image compression ──────────────────────────────────────────────────────
 const MAX_PX = 1920
 const QUALITY = 0.85
@@ -180,8 +186,12 @@ const uploadFile = async (file: File, id: number) => {
     setTimeout(() => { const e2 = entry(); if (e2) e2.uploading = false }, 350)
     emitAll()
   } catch (err: any) {
-    const e = entry()
-    if (e) { e.uploading = false; e.progress = 0 }
+    // Drop the stuck preview instead of leaving a dead thumbnail behind, and
+    // actually tell the user something failed — this used to fail silently.
+    const idx = previews.value.findIndex(p => p.id === id)
+    if (idx !== -1) previews.value.splice(idx, 1)
+    const serverMessage = err?.response?.data?.error?.message
+    flashMessage(typeof serverMessage === 'string' && serverMessage ? serverMessage : 'Не удалось загрузить файл. Попробуйте ещё раз.')
     console.error('Upload failed:', err?.response?.data ?? err?.message)
   }
 }

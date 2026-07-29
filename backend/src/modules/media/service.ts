@@ -269,7 +269,7 @@ export async function convertGifAvatarToWebm(
  * Upload a raw buffer to MinIO without any processing (for trusted sources like Telegram).
  * The caller is responsible for ensuring the buffer is valid.
  */
-const RAW_UPLOAD_ALLOWED_FOLDERS = ['posts', 'comments', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers'] as const;
+const RAW_UPLOAD_ALLOWED_FOLDERS = ['posts', 'comments', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers', 'support'] as const;
 
 export async function uploadRawToMinIO(
   buffer: Buffer,
@@ -338,5 +338,34 @@ export async function deleteFileByUrl(url: string): Promise<void> {
  */
 export function isTrustedMediaUrl(url: string): boolean {
   return typeof url === 'string' && url.startsWith(`${PUBLIC_URL}/${BUCKET}/`);
+}
+
+/** Maps a stored MinIO URL back to its bucket object key, or null if it isn't one of ours. */
+export function urlToObjectKey(url: unknown): string | null {
+  const prefix = `${PUBLIC_URL}/${BUCKET}/`;
+  if (typeof url !== 'string' || !url.startsWith(prefix)) return null;
+  return url.slice(prefix.length);
+}
+
+/** Lists every object currently in the bucket — used by the orphaned-media cleanup script. */
+export async function listAllObjectKeys(): Promise<{ key: string; size: number; lastModified: Date }[]> {
+  await bucketReady;
+  const objects: { key: string; size: number; lastModified: Date }[] = [];
+  await new Promise<void>((resolve, reject) => {
+    const stream = minioClient.listObjectsV2(BUCKET, '', true);
+    stream.on('data', (obj) => {
+      if (obj.name) objects.push({ key: obj.name, size: obj.size ?? 0, lastModified: obj.lastModified ?? new Date(0) });
+    });
+    stream.on('end', () => resolve());
+    stream.on('error', reject);
+  });
+  return objects;
+}
+
+/** Bulk-deletes objects by key — used by the orphaned-media cleanup script. */
+export async function deleteObjectKeys(keys: string[]): Promise<void> {
+  if (keys.length === 0) return;
+  await bucketReady;
+  await minioClient.removeObjects(BUCKET, keys);
 }
 

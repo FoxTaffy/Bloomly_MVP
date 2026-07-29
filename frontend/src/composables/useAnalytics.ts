@@ -12,26 +12,38 @@ export function useAnalytics() {
     }
   };
 
+  // Below this, a card that merely scrolled through the viewport doesn't count as a "read".
+  const MIN_VIEW_MS = 2000;
+
   const observePost = (element: HTMLElement, postId: string) => {
     // Guard: element must be a real DOM Element
     if (!(element instanceof Element)) return () => {};
-    let timeoutId: ReturnType<typeof setTimeout>;
+
+    // Real accumulated dwell time (not a fixed threshold) — someone who lingers 20s on a post
+    // is a much stronger signal than someone who barely crosses MIN_VIEW_MS, and the backend
+    // weighs the resulting affinity nudge by this duration (see applyViewAffinity).
+    let visibleSince: number | null = null;
+    let accumulated = 0;
+
+    const flush = () => {
+      if (visibleSince !== null) {
+        accumulated += Date.now() - visibleSince;
+        visibleSince = null;
+      }
+      if (!viewedPostIds.has(postId) && accumulated >= MIN_VIEW_MS) {
+        viewedPostIds.add(postId);
+        trackActivity(postId, 'VIEW', accumulated);
+      }
+    };
 
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
+          if (viewedPostIds.has(postId)) return;
           if (entry.isIntersecting) {
-            // Schedule VIEW tracking only for posts not yet tracked this session
-            if (!viewedPostIds.has(postId)) {
-              const viewStartTime = Date.now();
-              timeoutId = setTimeout(() => {
-                const duration = Date.now() - viewStartTime;
-                viewedPostIds.add(postId);
-                trackActivity(postId, 'VIEW', duration);
-              }, 2000);
-            }
+            visibleSince = Date.now();
           } else {
-            clearTimeout(timeoutId);
+            flush();
           }
         });
       },
@@ -41,7 +53,7 @@ export function useAnalytics() {
     observer.observe(element);
 
     return () => {
-      clearTimeout(timeoutId);
+      flush();
       observer.unobserve(element);
     };
   };

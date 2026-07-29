@@ -3,6 +3,7 @@ import type { CreateListingInput, UpdateListingInput, GetListingsQuery, PlaceBid
 import { REVIEW_TAGS } from './types.js';
 import { recalcDenTrust } from './trust.service.js';
 import { notificationService } from '../notifications/service.js';
+import { deleteFileByUrl } from '../media/service.js';
 
 const LISTING_SELECT = {
   id: true,
@@ -200,6 +201,12 @@ export const dealersDenService = {
 
     const updated = await prisma.dealerListing.update({ where: { id }, data, select: LISTING_SELECT });
 
+    if (input.images !== undefined) {
+      const removed = existing.images.filter((url) => !input.images!.includes(url));
+      Promise.all(removed.map((url) => deleteFileByUrl(url)))
+        .catch((err) => console.error('[dealerListing.update] media cleanup failed:', err));
+    }
+
     // Notify wishlist users on price drop, unless they already have an unread price-drop
     // notification for this listing — otherwise repeatedly nudging the price down floods them.
     if (input.price !== undefined && parseFloat(input.price.toString()) < parseFloat(prevPrice.toString())) {
@@ -236,7 +243,12 @@ export const dealersDenService = {
   async delete(id: string, sellerId: string) {
     const existing = await prisma.dealerListing.findFirst({ where: { id, seller_id: sellerId, deleted_at: null } });
     if (!existing) return null;
-    return prisma.dealerListing.update({ where: { id }, data: { deleted_at: new Date() } });
+    const updated = await prisma.dealerListing.update({ where: { id }, data: { deleted_at: new Date() } });
+    // Listings have no restore path, so images can be purged now instead of
+    // leaking in S3 forever (there's no hard-delete cron for listings either).
+    Promise.all(existing.images.map((url) => deleteFileByUrl(url)))
+      .catch((err) => console.error('[dealerListing.delete] media cleanup failed:', err));
+    return updated;
   },
 
   async getMyListings(sellerId: string) {

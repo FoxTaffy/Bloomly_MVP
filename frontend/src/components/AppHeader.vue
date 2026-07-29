@@ -281,6 +281,14 @@ const closePostModal = () => { postModal.value = null }
 const POST_TYPES = ['LIKE', 'COMMENT', 'REPAW', 'MENTION', 'FOLLOW_POST', 'GROUP_POST', 'like', 'comment', 'repaw', 'mention', 'automod_ban']
 const PROFILE_TYPES = ['FOLLOW', 'RELATIONSHIP_ACCEPTED', 'follow', 'relationship_accepted']
 
+// ── Display identity for a notification — real user, or the group it was sent "as" ──
+const identityAvatar = (n: any): string | null => n.senderGroup?.avatar_url ?? n.sender?.avatar_url ?? null
+const identityName = (n: any): string => n.senderGroup?.name || n.sender?.display_name || n.sender?.username || ''
+const identityHref = (n: any): string => {
+  if (n.senderGroup?.slug) return `/groups/${n.senderGroup.slug}`
+  return '/profile/' + (n.sender?.username ?? '')
+}
+
 const onNotifClick = async (n: any) => {
   if (n.type === 'RELATIONSHIP_REQUEST') return
   // Mark this single notification as read
@@ -355,9 +363,6 @@ const onSearchModalInput = () => {
     } catch {} finally { searchModalLoading.value = false }
   }, 300)
 }
-
-const searchGoToUser = (username: string) => { closeSearchModal(); router.push(`/profile/${username}`) }
-const searchGoToGroup = (group: any) => { closeSearchModal(); router.push(`/groups/${group.slug || group.id}`) }
 
 // ── Default suggestions (shown when the search is opened but nothing is typed yet) ──
 const defaultSearchUsers = ref<any[]>([])
@@ -478,13 +483,13 @@ onUnmounted(() => {
         <BIcon name="ArrowLeft" class="w-4 h-4" />
         <span class="hidden sm:block">Назад</span>
       </button>
-      <div v-else class="flex items-center gap-2.5 cursor-pointer" @click="router.push({ name: 'home' })">
+      <router-link v-else :to="{ name: 'home' }" class="flex items-center gap-2.5 cursor-pointer">
         <div class="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center flex-shrink-0">
           <img src="/bloomly.png?v=2" alt="Bloomly" class="w-full h-full object-contain" />
         </div>
         <span class="text-xl md:text-2xl font-extrabold tracking-tight text-white">Bloomly</span>
         <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-brand-accent/15 text-brand-accent border border-brand-accent/30 leading-none">бета 5.0.0</span>
-      </div>
+      </router-link>
     </div>
 
     <!-- Center: Search -->
@@ -536,7 +541,7 @@ onUnmounted(() => {
               <!-- Recommended people -->
               <div v-if="defaultSearchUsers.length" class="flex flex-col gap-2 mb-4">
                 <p class="text-[10px] font-bold uppercase tracking-widest text-white/35 px-1">Люди</p>
-                <button v-for="user in defaultSearchUsers" :key="user.id" @click="searchGoToUser(user.username)"
+                <router-link v-for="user in defaultSearchUsers" :key="user.id" :to="`/profile/${user.username}`" @click="closeSearchModal()"
                   class="w-full flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border rounded-2xl hover:border-brand-accent/40 transition-all text-left">
                   <img :src="user.avatar_url || '/icons/badges/NN.jpg'"
                     class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0"
@@ -545,13 +550,13 @@ onUnmounted(() => {
                     <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
                     <p class="text-xs text-white/55">@{{ user.username }}</p>
                   </div>
-                </button>
+                </router-link>
               </div>
 
               <!-- Recommended groups -->
               <div v-if="defaultSearchGroups.length" class="flex flex-col gap-2">
                 <p class="text-[10px] font-bold uppercase tracking-widest text-white/35 px-1">Группы</p>
-                <button v-for="group in defaultSearchGroups" :key="group.id" @click="searchGoToGroup(group)"
+                <router-link v-for="group in defaultSearchGroups" :key="group.id" :to="`/groups/${group.slug || group.id}`" @click="closeSearchModal()"
                   class="w-full flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border rounded-2xl hover:border-brand-accent/40 transition-all text-left">
                   <img v-if="group.avatar_url" :src="group.avatar_url"
                     class="w-10 h-10 rounded-xl object-cover border border-brand-border flex-shrink-0"
@@ -566,7 +571,7 @@ onUnmounted(() => {
                     </p>
                     <p class="text-xs text-white/55">{{ group.members_count ?? 0 }} участников</p>
                   </div>
-                </button>
+                </router-link>
               </div>
 
               <!-- Nothing to suggest at all -->
@@ -589,7 +594,7 @@ onUnmounted(() => {
                 <!-- Люди -->
                 <div v-if="searchModalUsers.length" class="px-3 pt-3 flex flex-col gap-2">
                   <p class="text-[10px] font-bold uppercase tracking-widest text-white/35 px-1">Люди</p>
-                  <button v-for="user in searchModalUsers" :key="user.id" @click="searchGoToUser(user.username)"
+                  <router-link v-for="user in searchModalUsers" :key="user.id" :to="`/profile/${user.username}`" @click="closeSearchModal()"
                     class="w-full flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border rounded-2xl hover:border-brand-accent/40 transition-all text-left">
                     <img :src="user.avatar_url || '/icons/badges/NN.jpg'"
                       class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0"
@@ -598,12 +603,12 @@ onUnmounted(() => {
                       <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
                       <p class="text-xs text-white/55">@{{ user.username }}</p>
                     </div>
-                  </button>
+                  </router-link>
                 </div>
                 <!-- Группы -->
                 <div v-if="searchModalGroups.length" class="px-3 pt-3 pb-3 flex flex-col gap-2">
                   <p class="text-[10px] font-bold uppercase tracking-widest text-white/35 px-1">Группы</p>
-                  <button v-for="group in searchModalGroups" :key="group.id" @click="searchGoToGroup(group)"
+                  <router-link v-for="group in searchModalGroups" :key="group.id" :to="`/groups/${group.slug || group.id}`" @click="closeSearchModal()"
                     class="w-full flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border rounded-2xl hover:border-brand-accent/40 transition-all text-left">
                     <img v-if="group.avatar_url" :src="group.avatar_url"
                       class="w-10 h-10 rounded-xl object-cover border border-brand-border flex-shrink-0"
@@ -618,15 +623,15 @@ onUnmounted(() => {
                       </p>
                       <p class="text-xs text-white/55">{{ group.members_count ?? 0 }} участников</p>
                     </div>
-                  </button>
+                  </router-link>
                 </div>
               </template>
               <!-- Show all results -->
-              <button @click="goToFullSearch"
+              <router-link :to="{ path: '/search', query: { q: searchModalQuery.trim() } }" @click="closeSearchModal()"
                 class="w-full flex items-center justify-center gap-2 px-5 py-3.5 border-t border-brand-border text-sm font-semibold text-brand-accent hover:bg-brand-accent/5 transition-colors">
                 <BIcon name="Search" class="h-4 w-4" />
                 Показать все результаты
-              </button>
+              </router-link>
             </template>
           </div>
         </div>
@@ -707,22 +712,22 @@ onUnmounted(() => {
                         <BIcon :name="notifBadgeIcon(n.type)" class="w-2.5 h-2.5" />
                       </div>
                     </div>
-                    <div v-else class="relative flex-shrink-0 mt-0.5 cursor-pointer" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">
-                      <img :src="n.sender?.avatar_url || '/icons/badges/NN.jpg'"
+                    <router-link v-else :to="identityHref(n)" @click.stop="showNotifications = false" class="relative flex-shrink-0 mt-0.5 cursor-pointer">
+                      <img :src="identityAvatar(n) || '/icons/badges/NN.jpg'"
                         class="w-10 h-10 rounded-full object-cover border border-brand-border"
                         @error="onAvatarError" />
                       <!-- Type icon badge -->
                       <div :class="['absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center', notifBadgeClass(n.type)]">
                         <BIcon :name="notifBadgeIcon(n.type)" class="w-2.5 h-2.5" />
                       </div>
-                    </div>
+                    </router-link>
                     <!-- Text -->
                     <div class="min-w-0 flex-1">
                       <p v-if="isAutomodNotif(n)" class="text-sm text-white leading-snug font-semibold">
                         {{ automodMessage(n) }}
                       </p>
                       <p v-else class="text-sm text-white leading-snug">
-                        <span class="font-semibold cursor-pointer hover:underline" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">{{ n.sender?.display_name || n.sender?.username }}</span>
+                        <router-link :to="identityHref(n)" @click.stop="showNotifications = false" class="font-semibold cursor-pointer hover:underline">{{ identityName(n) }}</router-link>
                         {{ ' ' }}{{ notifTypeLabel(n.type, n.sender?.pronouns) }}
                       </p>
                       <p class="text-xs text-white/40 mt-0.5">{{ formatDate(n.created_at) }}</p>
@@ -763,21 +768,21 @@ onUnmounted(() => {
                         <BIcon :name="notifBadgeIcon(n.type)" class="w-2.5 h-2.5" />
                       </div>
                     </div>
-                    <div v-else class="relative flex-shrink-0 mt-0.5 cursor-pointer" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">
-                      <img :src="n.sender?.avatar_url || '/icons/badges/NN.jpg'"
+                    <router-link v-else :to="identityHref(n)" @click.stop="showNotifications = false" class="relative flex-shrink-0 mt-0.5 cursor-pointer">
+                      <img :src="identityAvatar(n) || '/icons/badges/NN.jpg'"
                         class="w-10 h-10 rounded-full object-cover border border-brand-border opacity-70"
                         @error="onAvatarError" />
                       <div :class="['absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center opacity-60', notifBadgeClass(n.type)]">
                         <BIcon :name="notifBadgeIcon(n.type)" class="w-2.5 h-2.5" />
                       </div>
-                    </div>
+                    </router-link>
                     <!-- Text -->
                     <div class="min-w-0 flex-1">
                       <p v-if="isAutomodNotif(n)" class="text-sm text-white/65 leading-snug font-semibold">
                         {{ automodMessage(n) }}
                       </p>
                       <p v-else class="text-sm text-white/65 leading-snug">
-                        <span class="font-semibold text-white/80 cursor-pointer hover:underline" @click.stop="showNotifications = false; router.push('/profile/' + n.sender?.username)">{{ n.sender?.display_name || n.sender?.username }}</span>
+                        <router-link :to="identityHref(n)" @click.stop="showNotifications = false" class="font-semibold text-white/80 cursor-pointer hover:underline">{{ identityName(n) }}</router-link>
                         {{ ' ' }}{{ notifTypeLabel(n.type, n.sender?.pronouns) }}
                       </p>
                       <p class="text-xs text-white/30 mt-0.5">{{ formatDate(n.created_at) }}</p>
@@ -789,12 +794,12 @@ onUnmounted(() => {
 
             <!-- Footer -->
             <div class="border-t border-brand-border flex-shrink-0 px-4 py-2.5">
-              <button @click="showNotifications = false; router.push('/notifications')"
+              <router-link to="/notifications" @click="showNotifications = false"
                 class="w-full py-2 rounded-xl text-sm text-white/55 hover:text-white hover:bg-white/5
                        font-medium transition-colors flex items-center justify-center gap-1.5">
                 <BIcon name="List" class="w-4 h-4" />
                 Все уведомления
-              </button>
+              </router-link>
             </div>
           </div>
         </Transition>

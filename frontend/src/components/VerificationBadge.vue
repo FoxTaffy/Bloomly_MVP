@@ -1,6 +1,6 @@
 <template>
   <span class="inline-flex" @mouseenter="onEnter" @mouseleave="onLeave">
-    <img :src="verificationBadgeIcon(type)" :class="imgClass" title="" />
+    <BIcon :name="verificationBadgeIconName(type)" :class="[iconClass, verificationBadgeColorClass(type)]" />
   </span>
 
   <Teleport to="body">
@@ -13,7 +13,7 @@
         @mouseleave="onLeave"
       >
         <div class="flex items-center gap-2 mb-1.5">
-          <img :src="verificationBadgeIcon(type)" class="w-6 h-6 flex-shrink-0" />
+          <BIcon :name="verificationBadgeIconName(type)" class="w-5 h-5 flex-shrink-0" :class="verificationBadgeColorClass(type)" />
           <span class="font-bold text-white text-sm leading-tight">{{ info.label }}</span>
         </div>
         <p class="text-xs text-white/55 leading-relaxed mb-2.5">{{ info.desc }}</p>
@@ -21,7 +21,7 @@
           :to="{ name: 'settings-profile', query: { section: 'sec-verification' } }"
           class="text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors inline-flex items-center gap-1"
         >
-          Подать заявку на верификацию →
+          {{ langStore.t.verBadgeApplyLink }}
         </router-link>
       </div>
     </Transition>
@@ -29,15 +29,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { verificationBadgeIcon, verificationTypeInfo } from '@/composables/useVerificationBadge'
+import { ref, computed } from 'vue'
+import BIcon from '@/components/BIcon.vue'
+import { verificationBadgeIconName, verificationBadgeColorClass, verificationTypeInfo } from '@/composables/useVerificationBadge'
+import { useLangStore } from '@/stores/lang'
 
 const props = defineProps<{
   type?: string | null
-  imgClass?: string
+  iconClass?: string
 }>()
 
-const info = verificationTypeInfo(props.type)
+const langStore = useLangStore()
+const info = computed(() => verificationTypeInfo(langStore.t, props.type))
 const show = ref(false)
 const pos = ref({ top: '0px', left: '0px' })
 let hideTimer: ReturnType<typeof setTimeout> | null = null
