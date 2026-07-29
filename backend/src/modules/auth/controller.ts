@@ -729,7 +729,10 @@ export const refreshHandler = async (
   });
 };
 
-// ── Выход (инвалидация всех refresh token пользователя) ──────────────────────
+// ── Выход (инвалидация только текущей сессии) ────────────────────────────────
+// Инвалидирует ровно тот refresh token, что пришёл с запросом, а не все сессии
+// пользователя — иначе логаут с одного устройства разлогинивал бы все остальные,
+// что противоречит функционалу "устройства и сессии" (revoke one / revoke others).
 export const logoutHandler = async (
   request: FastifyRequest<{ Body?: { refreshToken?: string } }>,
   reply: FastifyReply,
@@ -737,13 +740,10 @@ export const logoutHandler = async (
   const raw = ((request.cookies as any)?.refresh_token as string | undefined) ?? request.body?.refreshToken;
   if (raw) {
     const hash = createHash('sha256').update(raw).digest('hex');
-    const token = await prisma.refreshToken.findFirst({ where: { token_hash: hash }, select: { user_id: true } });
-    if (token) {
-      await prisma.refreshToken.updateMany({
-        where: { user_id: token.user_id, revoked: false },
-        data:  { revoked: true },
-      });
-    }
+    await prisma.refreshToken.updateMany({
+      where: { token_hash: hash, revoked: false },
+      data:  { revoked: true },
+    });
   }
   reply.clearCookie('refresh_token', { path: '/api/auth' });
   return reply.send({ success: true, data: null, error: null });
