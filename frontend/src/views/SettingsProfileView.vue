@@ -1038,24 +1038,18 @@
                         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                           <button v-for="vt in VER_TYPES" :key="vt.id"
                             type="button" @click="selectedVerType = vt.id as any"
-                            class="relative p-4 rounded-2xl border-2 transition-all text-left"
-                            :class="selectedVerType === vt.id
-                              ? `${vt.borderSel} ${vt.bgSel} shadow-lg`
-                              : `border-brand-border bg-brand-bg ${vt.borderHov}`">
-                            <div class="flex items-center gap-3 mb-2">
-                              <div class="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0">
-                                <img :src="verTypeIconUrl(vt.id)" :alt="vt.id" class="w-full h-full object-cover" />
-                              </div>
-                              <span class="font-bold text-xs leading-tight"
-                                :class="selectedVerType === vt.id ? vt.textSel : 'text-white'">
+                            class="relative rounded-2xl overflow-hidden transition-all text-left aspect-square"
+                            :class="selectedVerType === vt.id ? `ring-4 ${vt.ringSel} shadow-lg` : 'hover:brightness-110'">
+                            <img :src="verTypeIconUrl(vt.id)" :alt="vt.id" class="absolute inset-0 w-full h-full object-cover" />
+                            <div class="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 via-black/30 to-transparent px-3 pt-2.5 pb-6">
+                              <span class="font-extrabold text-sm sm:text-base text-white leading-tight drop-shadow">
                                 {{ (langStore.t as any)[vt.titleKey] }}
                               </span>
                             </div>
-                            <p class="text-[10px] text-white/45 leading-relaxed">{{ (langStore.t as any)[vt.hintKey] }}</p>
                             <div v-if="selectedVerType === vt.id"
-                              class="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center"
+                              class="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center"
                               :class="vt.badge">
-                              <svg class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                              <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
                             </div>
                           </button>
                         </div>
@@ -3245,15 +3239,15 @@ const evidenceUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
 const popularLinks = ref<string[]>([''])
 
 const VER_TYPES = [
-  { id: 'artist',    icon: 'Palette',       borderSel: 'border-purple-500', bgSel: 'bg-purple-500/10 shadow-purple-500/10', borderHov: 'hover:border-purple-500/40', textSel: 'text-purple-400', badge: 'bg-purple-500', badgeCls: 'bg-purple-500/10 border-purple-500/20 text-purple-400',    titleKey: 'verTypeArtist',    hintKey: 'verTypeArtistHint' },
-  { id: 'master',    icon: 'Hammer',        borderSel: 'border-amber-500',  bgSel: 'bg-amber-500/10 shadow-amber-500/10',   borderHov: 'hover:border-amber-500/40',  textSel: 'text-amber-400',  badge: 'bg-amber-500',  badgeCls: 'bg-amber-500/10 border-amber-500/20 text-amber-400',       titleKey: 'verTypeMaster',    hintKey: 'verTypeMasterHint' },
-  { id: 'fursuiter', icon: 'Shirt',         borderSel: 'border-cyan-500',   bgSel: 'bg-cyan-500/10 shadow-cyan-500/10',     borderHov: 'hover:border-cyan-500/40',   textSel: 'text-cyan-400',   badge: 'bg-cyan-500',   badgeCls: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400',          titleKey: 'verTypeFursuiter', hintKey: 'verTypeFursuiterHint' },
-  { id: 'popular',   icon: 'TrendingUp',    borderSel: 'border-blue-500',   bgSel: 'bg-blue-500/10 shadow-blue-500/10',     borderHov: 'hover:border-blue-500/40',   textSel: 'text-blue-400',   badge: 'bg-blue-500',   badgeCls: 'bg-blue-500/10 border-blue-500/20 text-blue-400',          titleKey: 'verTypePopular',   hintKey: 'verTypePopularHint' },
-  { id: 'writer',    icon: 'PenLine',       borderSel: 'border-rose-500',   bgSel: 'bg-rose-500/10 shadow-rose-500/10',     borderHov: 'hover:border-rose-500/40',   textSel: 'text-rose-400',   badge: 'bg-rose-500',   badgeCls: 'bg-rose-500/10 border-rose-500/20 text-rose-400',          titleKey: 'verTypeWriter',    hintKey: 'verTypeWriterHint' },
-  { id: 'organizer', icon: 'CalendarCheck', borderSel: 'border-indigo-500', bgSel: 'bg-indigo-500/10 shadow-indigo-500/10', borderHov: 'hover:border-indigo-500/40', textSel: 'text-indigo-400', badge: 'bg-indigo-500', badgeCls: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400',    titleKey: 'verTypeOrganizer', hintKey: 'verTypeOrganizerHint' },
-  { id: 'event',     icon: 'Ticket',        borderSel: 'border-emerald-500',bgSel: 'bg-emerald-500/10 shadow-emerald-500/10',borderHov: 'hover:border-emerald-500/40',textSel: 'text-emerald-400',badge: 'bg-emerald-500',badgeCls: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',  titleKey: 'verTypeEvent',     hintKey: 'verTypeEventHint' },
-  { id: 'photographer', icon: 'Camera',     borderSel: 'border-teal-500',    bgSel: 'bg-teal-500/10 shadow-teal-500/10',     borderHov: 'hover:border-teal-500/40',   textSel: 'text-teal-400',   badge: 'bg-teal-500',   badgeCls: 'bg-teal-500/10 border-teal-500/20 text-teal-400',          titleKey: 'verTypePhotographer', hintKey: 'verTypePhotographerHint' },
-  { id: 'programmer',   icon: 'Code2',      borderSel: 'border-fuchsia-500', bgSel: 'bg-fuchsia-500/10 shadow-fuchsia-500/10',borderHov: 'hover:border-fuchsia-500/40',textSel: 'text-fuchsia-400',badge: 'bg-fuchsia-500',badgeCls: 'bg-fuchsia-500/10 border-fuchsia-500/20 text-fuchsia-400',  titleKey: 'verTypeProgrammer',  hintKey: 'verTypeProgrammerHint' },
+  { id: 'artist',    icon: 'Palette',       ringSel: 'ring-purple-500',  badge: 'bg-purple-500', badgeCls: 'bg-purple-500/10 border-purple-500/20 text-purple-400',    titleKey: 'verTypeArtist',    hintKey: 'verTypeArtistHint' },
+  { id: 'master',    icon: 'Hammer',        ringSel: 'ring-amber-500',   badge: 'bg-amber-500',  badgeCls: 'bg-amber-500/10 border-amber-500/20 text-amber-400',       titleKey: 'verTypeMaster',    hintKey: 'verTypeMasterHint' },
+  { id: 'fursuiter', icon: 'Shirt',         ringSel: 'ring-cyan-500',    badge: 'bg-cyan-500',   badgeCls: 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400',          titleKey: 'verTypeFursuiter', hintKey: 'verTypeFursuiterHint' },
+  { id: 'popular',   icon: 'TrendingUp',    ringSel: 'ring-blue-500',    badge: 'bg-blue-500',   badgeCls: 'bg-blue-500/10 border-blue-500/20 text-blue-400',          titleKey: 'verTypePopular',   hintKey: 'verTypePopularHint' },
+  { id: 'writer',    icon: 'PenLine',       ringSel: 'ring-rose-500',    badge: 'bg-rose-500',   badgeCls: 'bg-rose-500/10 border-rose-500/20 text-rose-400',          titleKey: 'verTypeWriter',    hintKey: 'verTypeWriterHint' },
+  { id: 'organizer', icon: 'CalendarCheck', ringSel: 'ring-indigo-500',  badge: 'bg-indigo-500', badgeCls: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400',    titleKey: 'verTypeOrganizer', hintKey: 'verTypeOrganizerHint' },
+  { id: 'event',     icon: 'Ticket',        ringSel: 'ring-emerald-500', badge: 'bg-emerald-500',badgeCls: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400', titleKey: 'verTypeEvent',     hintKey: 'verTypeEventHint' },
+  { id: 'photographer', icon: 'Camera',     ringSel: 'ring-teal-500',    badge: 'bg-teal-500',   badgeCls: 'bg-teal-500/10 border-teal-500/20 text-teal-400',          titleKey: 'verTypePhotographer', hintKey: 'verTypePhotographerHint' },
+  { id: 'programmer',   icon: 'Code2',      ringSel: 'ring-fuchsia-500', badge: 'bg-fuchsia-500',badgeCls: 'bg-fuchsia-500/10 border-fuchsia-500/20 text-fuchsia-400', titleKey: 'verTypeProgrammer',  hintKey: 'verTypeProgrammerHint' },
 ] as const
 
 const verTypeMeta = computed(() => {

@@ -36,8 +36,9 @@
           <div class="p-4 grid grid-cols-1 gap-3">
             <div v-for="badge in achievementBadges" :key="badge.key"
               class="flex items-center gap-4 p-4 rounded-2xl bg-brand-bg border border-brand-border hover:border-brand-accent/30 transition-all group">
-              <div class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 overflow-hidden transition-transform group-hover:scale-105" :class="badge.iconBg">
-                <component :is="badge.iconComp" class="w-7 h-7" :class="badge.iconColor" />
+              <div class="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 overflow-hidden transition-transform group-hover:scale-105" :class="badge.iconImg ? '' : badge.iconBg">
+                <img v-if="badge.iconImg" :src="badge.iconImg" :alt="badge.label" class="w-full h-full object-cover" />
+                <component :is="badge.iconComp" v-else class="w-7 h-7" :class="badge.iconColor" />
               </div>
               <div class="min-w-0">
                 <p class="text-sm font-extrabold text-white leading-tight">{{ badge.label }}</p>
@@ -1888,8 +1889,9 @@
                 <div class="px-2 pb-2 space-y-0.5">
                   <div v-for="badge in achievementBadges" :key="badge.key"
                     class="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-brand-bg/60 transition-all group cursor-default">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden transition-transform group-hover:scale-110" :class="badge.iconBg">
-                      <component :is="badge.iconComp" class="w-3.5 h-3.5" :class="badge.iconColor" />
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden transition-transform group-hover:scale-110" :class="badge.iconImg ? '' : badge.iconBg">
+                      <img v-if="badge.iconImg" :src="badge.iconImg" :alt="badge.label" class="w-full h-full object-cover" />
+                      <component :is="badge.iconComp" v-else class="w-3.5 h-3.5" :class="badge.iconColor" />
                     </div>
                     <div class="min-w-0">
                       <p class="text-xs font-bold text-white leading-tight truncate">{{ badge.label }}</p>
@@ -2453,6 +2455,7 @@ import { extractHashtags, extractCommittedHashtags } from '@/lib/hashtags'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useTagSuggestions } from '@/composables/useTagSuggestions'
 import VerificationBadge from '@/components/VerificationBadge.vue'
+import { verTypeIconUrl } from '@/lib/verificationIcons'
 import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
 import {
   User, Users, UserPlus, UserMinus, UserX, UsersRound,
@@ -2461,11 +2464,10 @@ import {
   Image, Hash, Search, MapPin, Calendar, Link, Briefcase,
   FileText, BookImage, Send, Play, X, ArrowLeft,
   Crown, Shield, BadgeCheck, Flame, Sparkles, Award,
-  Palette, Hammer, Shirt, TrendingUp, PenLine, CalendarCheck,
   Footprints, Smile, SmilePlus, AlertCircle,
   LogOut, Camera, Eye, EyeOff, Info, Globe,
   Rabbit, PawPrint, Plus, Check, Twitter, Instagram, Youtube, Twitch, Github, Quote,
-  Wallet, ChevronRight, AtSign, ArrowUpRight, Archive, BarChart3, Code2, Ticket
+  Wallet, ChevronRight, AtSign, ArrowUpRight, Archive, BarChart3
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -3449,22 +3451,22 @@ const profileStats = computed(() => {
 })
 
 const achievementBadges = computed(() => {
-  const badges: { key: string; label: string; desc: string; iconComp: any; iconBg: string; iconColor: string }[] = []
+  const badges: { key: string; label: string; desc: string; iconComp?: any; iconImg?: string; iconBg: string; iconColor: string }[] = []
   const p = viewedProfile.value
   if (!p) return badges
   if (p.role === 'admin')            badges.push({ key: 'admin',      label: langStore.t.roleAdmin,      desc: langStore.t.profileRoleAdminDesc,     iconComp: Crown,      iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
   if (p.role === 'moderator')        badges.push({ key: 'mod',        label: langStore.t.profileRoleModerator,           desc: langStore.t.profileRoleModeratorDesc,     iconComp: Shield,     iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
   // Verification type specific badges
   const vt = (p as any).verification_type
-  if (vt === 'artist')         badges.push({ key: 'ver-artist',    label: langStore.t.verBadgeLabelArtist,       desc: langStore.t.verBadgeModDesc, iconComp: Palette,       iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
-  else if (vt === 'master')    badges.push({ key: 'ver-master',    label: langStore.t.verBadgeLabelMaster,       desc: langStore.t.verBadgeModDesc, iconComp: Hammer,        iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
-  else if (vt === 'fursuiter') badges.push({ key: 'ver-fursuiter', label: langStore.t.verBadgeLabelFursuiter,    desc: langStore.t.verBadgeModDesc, iconComp: Shirt,         iconBg: 'bg-cyan-500/20',    iconColor: 'text-cyan-400' })
-  else if (vt === 'popular')   badges.push({ key: 'ver-popular',   label: langStore.t.verBadgeLabelPopular,      desc: langStore.t.verBadgeModDesc, iconComp: TrendingUp,    iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
-  else if (vt === 'writer')    badges.push({ key: 'ver-writer',    label: langStore.t.verBadgeLabelWriter,       desc: langStore.t.verBadgeModDesc, iconComp: PenLine,       iconBg: 'bg-rose-500/20',    iconColor: 'text-rose-400' })
-  else if (vt === 'organizer') badges.push({ key: 'ver-organizer', label: langStore.t.verBadgeLabelOrganizer,    desc: langStore.t.verBadgeModDesc, iconComp: CalendarCheck, iconBg: 'bg-indigo-500/20',  iconColor: 'text-indigo-400' })
-  else if (vt === 'event')     badges.push({ key: 'ver-event',     label: langStore.t.verTypeEvent,              desc: langStore.t.verBadgeModDesc, iconComp: Ticket,        iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' })
-  else if (vt === 'photographer') badges.push({ key: 'ver-photographer', label: langStore.t.verBadgeLabelPhotographer, desc: langStore.t.verBadgeModDesc, iconComp: Camera, iconBg: 'bg-teal-500/20',    iconColor: 'text-teal-400' })
-  else if (vt === 'programmer')   badges.push({ key: 'ver-programmer',   label: langStore.t.verBadgeLabelProgrammer,  desc: langStore.t.verBadgeModDesc, iconComp: Code2,  iconBg: 'bg-fuchsia-500/20', iconColor: 'text-fuchsia-400' })
+  if (vt === 'artist')         badges.push({ key: 'ver-artist',    label: langStore.t.verBadgeLabelArtist,       desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('artist'),       iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
+  else if (vt === 'master')    badges.push({ key: 'ver-master',    label: langStore.t.verBadgeLabelMaster,       desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('master'),       iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
+  else if (vt === 'fursuiter') badges.push({ key: 'ver-fursuiter', label: langStore.t.verBadgeLabelFursuiter,    desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('fursuiter'),    iconBg: 'bg-cyan-500/20',    iconColor: 'text-cyan-400' })
+  else if (vt === 'popular')   badges.push({ key: 'ver-popular',   label: langStore.t.verBadgeLabelPopular,      desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('popular'),      iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
+  else if (vt === 'writer')    badges.push({ key: 'ver-writer',    label: langStore.t.verBadgeLabelWriter,       desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('writer'),       iconBg: 'bg-rose-500/20',    iconColor: 'text-rose-400' })
+  else if (vt === 'organizer') badges.push({ key: 'ver-organizer', label: langStore.t.verBadgeLabelOrganizer,    desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('organizer'),    iconBg: 'bg-indigo-500/20',  iconColor: 'text-indigo-400' })
+  else if (vt === 'event')     badges.push({ key: 'ver-event',     label: langStore.t.verTypeEvent,              desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('event'),        iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' })
+  else if (vt === 'photographer') badges.push({ key: 'ver-photographer', label: langStore.t.verBadgeLabelPhotographer, desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('photographer'), iconBg: 'bg-teal-500/20',    iconColor: 'text-teal-400' })
+  else if (vt === 'programmer')   badges.push({ key: 'ver-programmer',   label: langStore.t.verBadgeLabelProgrammer,  desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('programmer'),   iconBg: 'bg-fuchsia-500/20', iconColor: 'text-fuchsia-400' })
   else if (p.badge_type === 'verified' || (p as any).is_verified)   badges.push({ key: 'verified',   label: langStore.t.verBadgeLabelVerifiedPage, desc: langStore.t.verBadgeVerifiedAccountDesc, iconComp: BadgeCheck, iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
   if ((p._count?.posts ?? 0) >= 10)  badges.push({ key: 'active',     label: langStore.t.profileActiveAuthorBadgeLabel,      desc: langStore.t.profileActiveAuthorBadgeDesc,           iconComp: Flame,      iconBg: 'bg-red-500/20',     iconColor: 'text-red-400' })
   if ((p._count?.followers ?? 0) >= 50) badges.push({ key: 'popular', label: langStore.t.profilePopularBadgeLabel,          desc: langStore.t.profilePopularBadgeDesc,            iconComp: Sparkles,   iconBg: 'bg-yellow-500/20',  iconColor: 'text-yellow-400' })

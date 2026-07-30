@@ -15,3 +15,12 @@ export const isAdmin = (role: string | null | undefined) => rank(role) >= ROLE_R
 
 /** Owner only — role management and other owner-exclusive actions. */
 export const isOwner = (role: string | null | undefined) => role === 'owner';
+
+/**
+ * Can `actorRole` take a moderation action (ban/freeze/warn/etc.) against a user
+ * who currently holds `targetRole`? Peers can't discipline each other (e.g. one
+ * moderator freezing another), only strictly-higher-ranked staff can — except
+ * the owner tier, which can act on anyone including other owners.
+ */
+export const canModerateTarget = (actorRole: string | null | undefined, targetRole: string | null | undefined) =>
+  isOwner(actorRole) || rank(actorRole) > rank(targetRole);

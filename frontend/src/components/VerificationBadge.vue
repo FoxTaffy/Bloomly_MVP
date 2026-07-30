@@ -1,6 +1,7 @@
 <template>
   <span class="inline-flex" @mouseenter="onEnter" @mouseleave="onLeave">
-    <BIcon :name="verificationBadgeIconName(type)" :class="[iconClass, verificationBadgeColorClass(type)]" />
+    <img v-if="iconUrl" :src="iconUrl" :alt="type ?? ''" :class="iconClass" class="rounded-sm object-cover" />
+    <BIcon v-else name="BadgeCheck" :class="iconClass" class="text-brand-accent" />
   </span>
 
   <Teleport to="body">
@@ -13,7 +14,8 @@
         @mouseleave="onLeave"
       >
         <div class="flex items-center gap-2 mb-1.5">
-          <BIcon :name="verificationBadgeIconName(type)" class="w-5 h-5 flex-shrink-0" :class="verificationBadgeColorClass(type)" />
+          <img v-if="iconUrl" :src="iconUrl" :alt="type ?? ''" class="w-5 h-5 rounded-sm flex-shrink-0 object-cover" />
+          <BIcon v-else name="BadgeCheck" class="w-5 h-5 flex-shrink-0 text-brand-accent" />
           <span class="font-bold text-white text-sm leading-tight">{{ info.label }}</span>
         </div>
         <p class="text-xs text-white/55 leading-relaxed mb-2.5">{{ info.desc }}</p>
@@ -31,7 +33,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import BIcon from '@/components/BIcon.vue'
-import { verificationBadgeIconName, verificationBadgeColorClass, verificationTypeInfo } from '@/composables/useVerificationBadge'
+import { verificationBadgeIconUrl, verificationTypeInfo } from '@/composables/useVerificationBadge'
 import { useLangStore } from '@/stores/lang'
 
 const props = defineProps<{
@@ -41,6 +43,7 @@ const props = defineProps<{
 
 const langStore = useLangStore()
 const info = computed(() => verificationTypeInfo(langStore.t, props.type))
+const iconUrl = computed(() => verificationBadgeIconUrl(props.type))
 const show = ref(false)
 const pos = ref({ top: '0px', left: '0px' })
 let hideTimer: ReturnType<typeof setTimeout> | null = null

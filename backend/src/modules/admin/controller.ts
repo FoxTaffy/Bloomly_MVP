@@ -1,7 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { adminService } from './service.js';
 import prisma from '../../config/prisma.js';
-import { isModerator, isAdmin, isOwner } from '../../lib/roles.js';
+import { isModerator, isAdmin, isOwner, canModerateTarget } from '../../lib/roles.js';
 import { notificationService } from '../notifications/service.js';
 import { usersService } from '../users/service.js';
 import { applyAction, getPendingAppeals, decideAppeal } from '../automod/service.js';
@@ -35,6 +35,20 @@ const requireOwner = (req: FastifyRequest, reply: FastifyReply) => {
   const user = req.user as JwtUser;
   if (!isOwner(user.role)) {
     reply.code(403).send({ success: false, data: null, error: { code: 'FORBIDDEN', message: 'Only the owner can manage roles' } });
+    return false;
+  }
+  return true;
+};
+
+// Punitive actions (ban/freeze/warn) require the actor to outrank the target — otherwise
+// a moderator could ban/freeze another moderator, an admin, or even the owner.
+// Returns false (and already sent a 403) if the actor isn't allowed to act on this user;
+// a missing target is left to the underlying action to 404/no-op on as before.
+const requireCanModerate = async (req: FastifyRequest, reply: FastifyReply, targetUserId: string) => {
+  const actor = req.user as JwtUser;
+  const target = await prisma.user.findUnique({ where: { id: targetUserId }, select: { role: true } });
+  if (target && !canModerateTarget(actor.role, target.role)) {
+    reply.code(403).send({ success: false, data: null, error: { code: 'FORBIDDEN', message: 'Недостаточно прав для действия над этим пользователем' } });
     return false;
   }
   return true;
@@ -165,6 +179,7 @@ export const deleteUserHandler = async (
 ) => {
   // Banning/archiving is core moderator work — no admin-only gate here.
   if (!requireMod(req, reply)) return;
+  if (!(await requireCanModerate(req, reply, req.params.id))) return;
   const actor = req.user as JwtUser;
   await adminService.deleteUser(req.params.id);
   await notificationService.create({ receiverId: req.params.id, type: 'automod_ban' });
@@ -301,6 +316,10 @@ export const resolveReportIssueHandler = async (
   if (!reason?.trim()) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_INPUT', message: 'reason is required' } });
   }
+  // Same peer/higher-rank protection as the direct ban/freeze/warn endpoints — this
+  // path can also ban a user (deleteContent + targetType 'user'), so it needs the
+  // same guard against a moderator disciplining an equal-or-higher-ranked user.
+  if (targetType === 'user' && !(await requireCanModerate(req, reply, targetId))) return;
   await adminService.resolveReportIssue({ reportIds: ids, targetType, targetId, deleteContent, reason: reason.trim(), category, imageUrl, resolverId });
   await logAdminAction(resolverId, resolverId, 'resolve_report_issue', `Решена жалоба (${targetType}) с предупреждением: ${reason.trim()}`);
   return reply.send({ success: true, data: { count: ids.length }, error: null });
@@ -474,6 +493,7 @@ export const freezeUserHandler = async (
   reply: FastifyReply,
 ) => {
   if (!requireMod(req, reply)) return;
+  if (!(await requireCanModerate(req, reply, req.params.id))) return;
   const actor = req.user as JwtUser;
   const reason = req.body?.reason ?? 'Заморожен вручную модератором';
   await prisma.user.update({ where: { id: req.params.id }, data: { frozen_at: new Date(), frozen_reason: reason } });
@@ -505,6 +525,7 @@ export const warnUserHandler = async (
   reply: FastifyReply,
 ) => {
   if (!requireMod(req, reply)) return;
+  if (!(await requireCanModerate(req, reply, req.params.id))) return;
   const actor = req.user as JwtUser;
   const reason = req.body?.reason?.trim() || 'Предупреждение от модератора';
   await applyAction(req.params.id, 'warn', 'manual', reason, undefined, req.body?.postId, actor.id);
@@ -514,6 +535,7 @@ export const warnUserHandler = async (
 
 export const clearWarnsHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
   if (!requireMod(req, reply)) return;
+  if (!(await requireCanModerate(req, reply, req.params.id))) return;
   const actor = req.user as JwtUser;
   await prisma.user.update({ where: { id: req.params.id }, data: { warn_count: 0 } });
   await prisma.autoModLog.create({
