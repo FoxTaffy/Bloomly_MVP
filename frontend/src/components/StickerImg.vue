@@ -1,9 +1,12 @@
 <template>
-  <div class="relative w-full h-full overflow-hidden">
+  <div class="relative w-full h-full overflow-hidden flex items-center justify-center">
     <!-- Shimmer placeholder — shown while image is loading -->
-    <div v-if="!loaded" class="absolute inset-0 sticker-shimmer" />
+    <div v-if="!loaded && !failed" class="absolute inset-0 sticker-shimmer" />
+    <!-- Broken image (404/network error) — icon instead of the native alt-text fallback -->
+    <BIcon v-if="failed" name="ImageOff" class="w-1/3 h-1/3 text-white/20" />
     <!-- Image hidden until fully loaded, then fades in smoothly -->
     <img
+      v-else
       :src="src"
       :alt="alt"
       :class="['w-full h-full object-contain select-none', imgClass]"
@@ -11,13 +14,14 @@
       loading="lazy"
       draggable="false"
       @load="loaded = true"
-      @error="loaded = true"
+      @error="failed = true"
     />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import BIcon from '@/components/BIcon.vue'
 
 withDefaults(defineProps<{
   src: string
@@ -26,6 +30,7 @@ withDefaults(defineProps<{
 }>(), { alt: 'sticker', imgClass: '' })
 
 const loaded = ref(false)
+const failed = ref(false)
 </script>
 
 <style scoped>

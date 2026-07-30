@@ -11,6 +11,7 @@ import PostLightbox from '../components/PostLightbox.vue'
 import ResolveReportModal from '../components/ResolveReportModal.vue'
 import StickerPackDetailModal from '../components/StickerPackDetailModal.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import { verTypeIconUrl } from '@/lib/verificationIcons'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -521,17 +522,6 @@ const verTypeColors: Record<string, string> = {
   event: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
   photographer: 'text-teal-400 bg-teal-400/10 border-teal-400/20',
   programmer: 'text-fuchsia-400 bg-fuchsia-400/10 border-fuchsia-400/20',
-}
-const verTypeIcons: Record<string, string> = {
-  artist: 'Palette',
-  master: 'Hammer',
-  fursuiter: 'Shirt',
-  popular: 'TrendingUp',
-  writer: 'PenLine',
-  organizer: 'CalendarCheck',
-  event: 'Ticket',
-  photographer: 'Camera',
-  programmer: 'Code2',
 }
 
 // Tab switch data loading
@@ -2885,7 +2875,7 @@ const totalPendingBadge = computed(() => {
                   <div v-if="req.verification_type" class="mt-2.5">
                     <span class="text-xs font-bold pl-1.5 pr-2.5 py-1 rounded-full border inline-flex items-center gap-1.5"
                       :class="verTypeColors[req.verification_type] || 'text-blue-400 bg-blue-400/10 border-blue-400/20'">
-                      <BIcon :name="verTypeIcons[req.verification_type] || 'BadgeCheck'" class="w-3.5 h-3.5" />
+                      <img :src="verTypeIconUrl(req.verification_type)" :alt="req.verification_type" class="w-3.5 h-3.5 rounded-sm object-cover" />
                       {{ verTypeLabels[req.verification_type] || req.verification_type }}
                     </span>
                   </div>
