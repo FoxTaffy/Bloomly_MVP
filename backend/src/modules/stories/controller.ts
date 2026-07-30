@@ -109,7 +109,8 @@ export const getUserStoriesHandler = async (
     return reply.send({ success: true, data: { stories }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch user stories';
-    return reply.code(500).send({
+    const statusCode = (error as any)?.statusCode ?? 500;
+    return reply.code(statusCode).send({
       success: false,
       data: null,
       error: { code: 'GET_USER_STORIES_ERROR', message },

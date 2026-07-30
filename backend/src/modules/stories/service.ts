@@ -1,8 +1,22 @@
 import prisma from '../../config/prisma.js';
 import { isTrustedMediaUrl } from '../media/service.js';
+import { isAllowedByPrivacy } from '../../lib/privacy.js';
+import { isBlockedBy, getBlockerIds } from '../../lib/blocks.js';
 
 const STORY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MAX_ACTIVE_STORIES_PER_USER = 20;
+
+/** Throws a 403 unless the viewer is allowed to see userId's stories (mirrors posts/service.ts assertProfileVisible). */
+async function assertProfileVisible(userId: string, viewerId?: string) {
+  if (viewerId === userId) return;
+  if (await isBlockedBy(userId, viewerId)) {
+    throw Object.assign(new Error('PROFILE_BLOCKED'), { statusCode: 403 });
+  }
+  const owner = await prisma.user.findUnique({ where: { id: userId }, select: { profile_visibility: true } });
+  if (owner && !(await isAllowedByPrivacy(owner.profile_visibility, userId, viewerId))) {
+    throw Object.assign(new Error('PROFILE_PRIVATE'), { statusCode: 403 });
+  }
+}
 
 const userSelect = {
   id: true,
@@ -41,10 +55,12 @@ async function attachMeta<T extends { id: string }>(stories: T[], viewerId?: str
 export const storiesService = {
   async getActiveStories(viewerId?: string) {
     const since = new Date(Date.now() - STORY_TTL_MS);
+    const blockerIds = await getBlockerIds(viewerId);
     const stories = await prisma.story.findMany({
       where: {
         created_at: { gte: since },
         deleted_at: null,
+        ...(blockerIds.length > 0 ? { user_id: { notIn: blockerIds } } : {}),
       },
       include: { user: { select: userSelect } },
       orderBy: { created_at: 'desc' },
@@ -95,6 +111,7 @@ export const storiesService = {
   },
 
   async getStoriesByUser(userId: string, viewerId?: string) {
+    await assertProfileVisible(userId, viewerId);
     const since = new Date(Date.now() - STORY_TTL_MS);
     const stories = await prisma.story.findMany({
       where: {
