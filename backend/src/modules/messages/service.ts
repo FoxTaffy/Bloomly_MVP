@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
+import { isBlockedBy } from '../../lib/blocks.js';
 import { deleteFileByUrl } from '../media/service.js';
 import type { SendMessageInput, GetMessagesQuery } from './types.js';
 
@@ -136,6 +137,9 @@ export const messageService = {
       select: { messages_privacy: true },
     });
     if (!target) throw Object.assign(new Error('User not found'), { statusCode: 404 });
+    if ((await isBlockedBy(userB, userA)) || (await isBlockedBy(userA, userB))) {
+      throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
+    }
     if (!(await isAllowedByPrivacy(target.messages_privacy, userB, userA))) {
       throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
     }
@@ -340,6 +344,9 @@ export const messageService = {
           where: { id: recipientId },
           select: { messages_privacy: true },
         });
+        if ((await isBlockedBy(recipientId, senderId)) || (await isBlockedBy(senderId, recipientId))) {
+          throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
+        }
         if (recipient && !(await isAllowedByPrivacy(recipient.messages_privacy, recipientId, senderId))) {
           throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
         }
