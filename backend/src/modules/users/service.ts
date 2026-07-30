@@ -157,6 +157,9 @@ export const usersService = {
       return { ...raw, badge_level: getUserBadgeLevel((raw as any).artist_since) };
     }
 
+    // Wallet balance is private financial data — never expose it to anyone but the owner.
+    const { wallet: _wallet, ...rawWithoutWallet } = raw as any;
+
     // The profile owner blocked the viewer — they can't see this profile at all.
     if (await isBlockedBy(raw.id, viewerId)) {
       return {
@@ -182,7 +185,7 @@ export const usersService = {
     }
 
     // Attach computed badge_level
-    const withBadge = { ...raw, badge_level: getUserBadgeLevel((raw as any).artist_since) };
+    const withBadge = { ...rawWithoutWallet, badge_level: getUserBadgeLevel((raw as any).artist_since) };
 
     const result = { ...withBadge, birth_date: redactBirthDate((raw as any).birth_date, (raw as any).birth_date_visibility) };
 
