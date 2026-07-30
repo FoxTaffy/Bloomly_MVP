@@ -59,19 +59,23 @@ export async function purchaseItem(userId: string, itemId: string) {
 
   // For paid items we'd charge wallet here — for MVP just allow free items or handle payment externally
   if (!item.is_free && Number(item.price) > 0) {
-    // Deduct from wallet
-    const wallet = await prisma.wallet.findUnique({ where: { user_id: userId } });
-    if (!wallet || wallet.balance < item.price) {
-      throw Object.assign(new Error('Insufficient balance'), { statusCode: 402 });
-    }
-    await prisma.$transaction([
-      prisma.wallet.update({
-        where: { user_id: userId },
-        data: { balance: { decrement: item.price } },
-      }),
-      prisma.userShopItem.create({ data: { user_id: userId, item_id: itemId } }),
-      prisma.shopItem.update({ where: { id: itemId }, data: { downloads_count: { increment: 1 } } }),
-    ]);
+    // Deduct from wallet atomically inside a single transaction: `balance` and `price` are
+    // Prisma Decimal instances, whose `<`/`>` compare the underlying *string* representation
+    // (e.g. "5" < "100" is false lexicographically) — always compare via Number()/toNumber().
+    // The WHERE clause re-checks the balance at update time so two concurrent purchases
+    // can't both pass a stale check and drive the wallet negative.
+    const price = Number(item.price);
+    await prisma.$transaction(async (tx) => {
+      const debited = await tx.wallet.updateMany({
+        where: { user_id: userId, balance: { gte: price } },
+        data: { balance: { decrement: price } },
+      });
+      if (debited.count === 0) {
+        throw Object.assign(new Error('Insufficient balance'), { statusCode: 402 });
+      }
+      await tx.userShopItem.create({ data: { user_id: userId, item_id: itemId } });
+      await tx.shopItem.update({ where: { id: itemId }, data: { downloads_count: { increment: 1 } } });
+    });
   } else {
     // Free item
     await prisma.$transaction([
