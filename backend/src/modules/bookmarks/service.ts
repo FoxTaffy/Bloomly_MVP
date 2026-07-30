@@ -28,7 +28,13 @@ export const bookmarksService = {
       await prisma.userBookmark.delete({ where: { id: existing.id } });
       return { bookmarked: false };
     }
-    await prisma.userBookmark.create({ data: { user_id: userId, target_id: targetId } });
+    try {
+      await prisma.userBookmark.create({ data: { user_id: userId, target_id: targetId } });
+    } catch (err: any) {
+      // A racing duplicate click can slip past the findUnique check above and hit the
+      // unique(user_id, target_id) constraint — that just means it's already bookmarked.
+      if (err?.code !== 'P2002') throw err;
+    }
     return { bookmarked: true };
   },
 
@@ -61,7 +67,11 @@ export const bookmarksService = {
       await prisma.groupBookmark.delete({ where: { id: existing.id } });
       return { bookmarked: false };
     }
-    await prisma.groupBookmark.create({ data: { user_id: userId, group_id: groupId } });
+    try {
+      await prisma.groupBookmark.create({ data: { user_id: userId, group_id: groupId } });
+    } catch (err: any) {
+      if (err?.code !== 'P2002') throw err;
+    }
     return { bookmarked: true };
   },
 
