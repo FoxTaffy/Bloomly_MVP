@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { groupService } from './service.js';
 import { messageService } from '../messages/service.js';
 import { moderatePost, moderateGroupMessage } from '../automod/service.js';
+import { isModerator } from '../../lib/roles.js';
 import type { JwtUser, GetGroupsQuery, CreateGroupInput, UpdateGroupInput, CreateEventInput, UpdateEventInput, CreateTicketTierInput, UpdateCommissionInput, RateGroupInput, CreateGroupPostInput, RsvpEventInput, SubEventInput, UpdateSubEventInput, CreateOrderInput } from './types.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -66,6 +67,13 @@ export const updateGroupHandler = async (
 ) => {
   try {
     if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    // The verified badge is a platform-staff-only grant — a group's own admin/owner must not be able to self-award it.
+    if (request.body.isVerified !== undefined) {
+      const user = request.user as any;
+      if (!isModerator(user.role)) {
+        return fail(reply, 403, 'FORBIDDEN', 'Only platform staff can change group verification status');
+      }
+    }
     // Finance and member-visibility fields are sensitive — only the owner may change them.
     const OWNER_ONLY_FIELDS: (keyof UpdateGroupInput)[] = ['donationsEnabled', 'bankCardMasked', 'hideAdmins', 'hiddenMemberIds', 'businessEnabled'];
     const touchesOwnerOnlyField = OWNER_ONLY_FIELDS.some((f) => request.body[f] !== undefined);
