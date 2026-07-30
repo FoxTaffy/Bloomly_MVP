@@ -63,12 +63,14 @@ export const getPostByIdHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const post = await postService.getPostById(request.params.id);
+    const viewerId = (request.user as JwtUser | undefined)?.id;
+    const post = await postService.getPostById(request.params.id, viewerId);
     if (!post) return reply.code(404).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Post not found' } });
     return reply.send({ success: true, data: { post }, error: null });
   } catch (error: unknown) {
+    const statusCode = (error as any)?.statusCode ?? 500;
     const message = error instanceof Error ? error.message : 'Failed to fetch post';
-    return reply.code(500).send({ success: false, data: null, error: { code: 'FETCH_POST_ERROR', message } });
+    return reply.code(statusCode).send({ success: false, data: null, error: { code: 'FETCH_POST_ERROR', message } });
   }
 };
 

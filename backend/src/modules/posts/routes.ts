@@ -107,7 +107,7 @@ export async function postsRoutes(fastify: FastifyInstance) {
 
   // ── Single-post actions ─────────────────────────────────────────────────
   fastify.post('/', { schema: createPostSchema, onRequest: [fastify.authenticate] }, createPostHandler as any);
-  fastify.get('/:id', getPostByIdHandler as any);
+  fastify.get('/:id', tryAuth, getPostByIdHandler as any);
   fastify.delete('/:id', auth, deletePostHandler as any);
   fastify.patch('/:id',  auth, editPostHandler as any);
   fastify.post('/:id/vote',      { schema: voteSchema, onRequest: [fastify.authenticate], config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, votePostHandler as any);

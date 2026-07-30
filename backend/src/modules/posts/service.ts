@@ -445,7 +445,7 @@ export const postService = {
   },
 
 
-  async getPostById(postId: string) {
+  async getPostById(postId: string, viewerId?: string) {
     const post = await prisma.post.findUnique({
       where: { id: postId, deleted_at: null, ...NOT_DELETED_GROUP_FILTER },
       include: {
@@ -453,6 +453,12 @@ export const postService = {
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
       },
     });
+    if (!post) return null;
+    // A direct-link fetch must respect blocks the same way feeds/search do — otherwise
+    // a blocked user could just open the post URL to bypass the block entirely.
+    if (await isBlockedBy(post.author_id, viewerId)) {
+      throw Object.assign(new Error('PROFILE_BLOCKED'), { statusCode: 403 });
+    }
     return maskGroupAuthor(post);
   },
 
@@ -1094,6 +1100,9 @@ export const postService = {
     if (post.comments_disabled && post.author_id !== userId) {
       throw Object.assign(new Error('COMMENTS_DISABLED'), { statusCode: 403 });
     }
+    if (post.author_id !== userId && (await isBlockedBy(post.author_id, userId))) {
+      throw Object.assign(new Error('COMMENTS_DISABLED'), { statusCode: 403 });
+    }
     if (!(await isAllowedByPrivacy(post.author.comments_privacy, post.author_id, userId))) {
       throw Object.assign(new Error('COMMENTS_DISABLED'), { statusCode: 403 });
     }
@@ -1159,16 +1168,19 @@ export const postService = {
       muteFilter = muteKeywordsWhere(prefs?.mute_keywords ?? []);
       filterSpam = prefs?.filter_spam ?? false;
     }
+    // Comments from either side of a block relationship must stay hidden, same as posts/stories.
+    const blockerIds = await getBlockerIds(viewerId);
+    const blockFilter = blockerIds.length > 0 ? { author_id: { notIn: blockerIds } } : {};
 
     const topLevel = await prisma.comment.findMany({
-      where: { post_id: postId, parent_id: null, deleted_at: null, ...muteFilter },
+      where: { post_id: postId, parent_id: null, deleted_at: null, ...muteFilter, ...blockFilter },
       orderBy: { created_at: 'asc' },
       include: {
         author: { select: AUTHOR_SELECT },
         group: { select: { id: true, slug: true, name: true, avatar_url: true } },
         _count: { select: { replies: true } },
         replies: {
-          where: { deleted_at: null, ...muteFilter },
+          where: { deleted_at: null, ...muteFilter, ...blockFilter },
           orderBy: { created_at: 'asc' },
           include: {
             author: { select: AUTHOR_SELECT },

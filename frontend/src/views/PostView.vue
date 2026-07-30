@@ -89,7 +89,7 @@ const fetchPost = async () => {
       notFound.value = true
     }
   } catch (e: any) {
-    if (e?.response?.status === 404) notFound.value = true
+    if (e?.response?.status === 404 || e?.response?.status === 403) notFound.value = true
   } finally {
     loading.value = false
   }
