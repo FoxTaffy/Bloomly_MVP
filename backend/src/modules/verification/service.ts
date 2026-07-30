@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma.js';
+import { isTrustedMediaUrl } from '../media/service.js';
 
 /**
  * «Честная верификация» — Anti-AI verification system.
@@ -178,10 +179,13 @@ export async function requestVerification(
     throw new Error(`Invalid verification type. Must be one of: ${VERIFICATION_TYPES.join(', ')}`);
   }
 
-  // "popular" is backed by social links instead of uploaded evidence files
+  // "popular" is backed by social links instead of uploaded evidence files.
+  // For everything else, only accept URLs produced by our own upload endpoint — otherwise
+  // a raw client could submit arbitrary external/`javascript:` URLs that later get rendered
+  // as <img>/<a href> in the admin review panel.
   const finalEvidenceUrls = verificationType === 'popular'
     ? (socialLinks ?? []).filter((l) => l && l.trim())
-    : evidenceUrls;
+    : (evidenceUrls ?? []).filter(isTrustedMediaUrl);
   const finalEvidenceText = evidenceText?.trim() ? evidenceText.trim().slice(0, 2000) : null;
 
   // Text can stand in for (or supplement) uploaded evidence, except for "popular" which always needs a link.
