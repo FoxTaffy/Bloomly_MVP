@@ -132,6 +132,15 @@ onMounted(() => {
     }
     auth.error = errMap[route.query.error as string] ?? langStore.t.loginOauthError
   }
+  // OAuth-вход с включённой 2FA — бэкенд прислал mfaToken вместо готовых токенов
+  // (см. OAuthCallbackView.vue), продолжаем тем же экраном подтверждения кода,
+  // что и при обычном логине по паролю.
+  if (route.query.oauth2fa && route.query.mfaToken) {
+    mfaToken.value = route.query.mfaToken as string
+    twoFactorMethod.value = (route.query.method as 'totp' | 'email') ?? null
+    mode.value = 'twofactor'
+    if (twoFactorMethod.value === 'email') startResendTimer()
+  }
   const card = document.getElementById('auth-card')
   if (card) {
     card.addEventListener('mousemove', (e: MouseEvent) => {

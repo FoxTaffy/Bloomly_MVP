@@ -557,6 +557,25 @@ export const oauthCallbackHandler = async (
 
     // ── ОБЫЧНЫЙ ВХОД / РЕГИСТРАЦИЯ ────────────────────────────────────────────
     const { user } = await findOrCreateOAuthUser(provider, oauthUser);
+
+    // Пользователь мог включить 2FA (TOTP/email), войдя через пароль, а затем
+    // привязать OAuth-провайдер — без этой проверки "Войти через Google/Yandex"
+    // полностью обходил второй фактор (findOrCreateOAuthUser находит существующий
+    // аккаунт и по email, так что достаточно совпадения почты у провайдера).
+    // Ведём себя так же, как loginHandler: не выдаём токены сразу, а отправляем
+    // на фронтенд mfaToken, чтобы пользователь подтвердил второй фактор.
+    if (user.two_factor_method) {
+      if (user.two_factor_method === 'email') {
+        await authService.resendLoginTwoFactor(user.id);
+      }
+      const mfaToken = createMfaToken(user.id);
+      if (client === 'mobile') {
+        const target = mobileRedirect ?? 'bloomly://auth/callback';
+        return reply.redirect(302, `${target}?mfaToken=${mfaToken}&method=${user.two_factor_method}`);
+      }
+      return reply.redirect(302, `${FRONTEND_URL()}/auth/callback?mfaToken=${mfaToken}&method=${user.two_factor_method}`);
+    }
+
     const token = issueAccessToken(request, user.id, user.role);
     // OAuth-вход не спрашивает "запомнить меня" — всегда выдаём persistent-сессию,
     // иначе вход через Google/Yandex/etc. живёт всего 24ч и разлогинивает раньше обычного

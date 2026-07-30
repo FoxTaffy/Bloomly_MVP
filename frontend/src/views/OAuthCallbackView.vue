@@ -10,6 +10,17 @@ const auth   = useAuthStore()
 
 onMounted(async () => {
   const token = route.query.token as string | undefined
+  const mfaToken = route.query.mfaToken as string | undefined
+  const method = route.query.method as string | undefined
+
+  // Аккаунт с включённой 2FA — бэкенд не выдал токены сразу, а прислал
+  // mfaToken (тот же механизм, что и обычный логин по паролю). Передаём
+  // пользователя на экран ввода второго фактора вместо мгновенного входа.
+  if (mfaToken) {
+    router.replace({ name: 'login', query: { mfaToken, method: method ?? 'totp', oauth2fa: '1' } })
+    return
+  }
+
   if (!token) {
     router.replace({ name: 'login', query: { error: 'oauth_failed' } })
     return
