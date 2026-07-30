@@ -558,6 +558,17 @@ export const oauthCallbackHandler = async (
     // ── ОБЫЧНЫЙ ВХОД / РЕГИСТРАЦИЯ ────────────────────────────────────────────
     const { user } = await findOrCreateOAuthUser(provider, oauthUser);
 
+    // Забаненные/замороженные аккаунты не должны обходить модерацию, логинясь
+    // через OAuth вместо email+пароля — loginHandler это проверяет, а этот путь
+    // раньше нет, хотя findOrCreateOAuthUser ищет пользователя без фильтра по
+    // deleted_at/frozen_at.
+    if (user.deleted_at) {
+      return reply.redirect(302, `${FRONTEND_URL()}/auth?error=account_banned`);
+    }
+    if (user.frozen_at) {
+      return reply.redirect(302, `${FRONTEND_URL()}/auth?error=account_frozen`);
+    }
+
     // Пользователь мог включить 2FA (TOTP/email), войдя через пароль, а затем
     // привязать OAuth-провайдер — без этой проверки "Войти через Google/Yandex"
     // полностью обходил второй фактор (findOrCreateOAuthUser находит существующий
