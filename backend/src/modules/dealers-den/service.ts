@@ -335,11 +335,22 @@ export const dealersDenService = {
     if (listing.raffle_max_tickets && listing.raffle_tickets_sold >= listing.raffle_max_tickets)
       throw new Error('RAFFLE_FULL');
 
-    return prisma.dealerListing.update({
-      where: { id: listingId },
+    // Read-then-increment left a TOCTOU window (same class of bug as placeBid): with one
+    // ticket left, two concurrent buyers could both pass the check above and both increment,
+    // overselling past raffle_max_tickets. The WHERE re-checks the sold count still has room
+    // at update time, so only one of two racing requests can win it; the loser gets RAFFLE_FULL
+    // instead of silently overselling.
+    const updateResult = await prisma.dealerListing.updateMany({
+      where: {
+        id: listingId,
+        status: 'active',
+        ...(listing.raffle_max_tickets ? { raffle_tickets_sold: { lt: listing.raffle_max_tickets } } : {}),
+      },
       data: { raffle_tickets_sold: { increment: 1 } },
-      select: LISTING_SELECT,
     });
+    if (updateResult.count === 0) throw new Error('RAFFLE_FULL');
+
+    return prisma.dealerListing.findUniqueOrThrow({ where: { id: listingId }, select: LISTING_SELECT });
   },
 
   // ── comments ──────────────────────────────────────────────────────────────
@@ -562,6 +573,22 @@ export const dealersDenService = {
       throw new Error('SLOTS_FULL');
 
     const { booking, queuePosition } = await prisma.$transaction(async (tx) => {
+      // Re-check-and-reserve a slot atomically inside the transaction: the plain "check
+      // then increment" above happens *before* the transaction starts, so it isn't
+      // protected by Serializable isolation and two concurrent bookings could both pass
+      // it and both increment commission_slots_taken, overbooking past the seller's
+      // configured limit. Guarding the increment's WHERE with the same condition makes
+      // only one of two racing requests able to claim the last slot.
+      if (listing.commission_slots_total !== null) {
+        const reserved = await tx.dealerListing.updateMany({
+          where: { id: listingId, commission_slots_taken: { lt: listing.commission_slots_total } },
+          data: { commission_slots_taken: { increment: 1 } },
+        });
+        if (reserved.count === 0) throw new Error('SLOTS_FULL');
+      } else {
+        await tx.dealerListing.update({ where: { id: listingId }, data: { commission_slots_taken: { increment: 1 } } });
+      }
+
       const lastBooking = await tx.commissionBooking.findFirst({
         where: { listing_id: listingId, deleted_at: null },
         orderBy: { queue_position: 'desc' },
@@ -572,7 +599,6 @@ export const dealersDenService = {
         data: { listing_id: listingId, buyer_id: buyerId, queue_position: pos, form_data: input.formData as any },
         include: { buyer: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
       });
-      await tx.dealerListing.update({ where: { id: listingId }, data: { commission_slots_taken: { increment: 1 } } });
       return { booking: created, queuePosition: pos };
     }, { isolationLevel: 'Serializable' });
 
