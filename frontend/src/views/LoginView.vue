@@ -129,6 +129,8 @@ onMounted(() => {
     const errMap: Record<string, string> = {
       oauth_denied: langStore.t.loginOauthDenied,
       oauth_failed: langStore.t.loginOauthFailed,
+      account_banned: langStore.t.loginOauthBanned,
+      account_frozen: langStore.t.loginOauthFrozen,
     }
     auth.error = errMap[route.query.error as string] ?? langStore.t.loginOauthError
   }
