@@ -110,6 +110,8 @@ export async function placeBidHandler(req: FastifyRequest, reply: FastifyReply) 
     if (msg === 'LISTING_INACTIVE')   return reply.status(409).send({ success: false, error: 'Аукцион не активен' });
     if (msg === 'AUCTION_ENDED')      return reply.status(409).send({ success: false, error: 'Аукцион завершён' });
     if (msg.startsWith('MIN_BID:'))   return reply.status(422).send({ success: false, error: `Минимальная ставка: ${msg.split(':')[1]}` });
+    if (msg === 'INVALID_BID_AMOUNT') return reply.status(422).send({ success: false, error: 'Некорректная сумма ставки' });
+    if (msg === 'BID_CONFLICT')       return reply.status(409).send({ success: false, error: 'Кто-то только что сделал ставку раньше вас, попробуйте снова' });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to place bid' });
   }

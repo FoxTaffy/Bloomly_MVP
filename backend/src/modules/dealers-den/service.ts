@@ -260,44 +260,62 @@ export const dealersDenService = {
   },
 
   // ── place bid ───────────────────────────────────────────────────────────────
+  // Wrapped in a transaction with an optimistic-concurrency guard (updateMany where
+  // current_bid still matches what we last read) to close a TOCTOU race: two concurrent
+  // bids reading the same current_bid could otherwise both pass the min-amount check and
+  // both "win", corrupting current_bid/bid_count and possibly double-triggering auto-buy.
   async placeBid(listingId: string, bidderId: string, input: PlaceBidInput) {
-    const listing = await prisma.dealerListing.findFirst({
-      where: { id: listingId, deleted_at: null, listing_kind: { in: ['auction', 'ych'] } },
-    });
-    if (!listing) throw new Error('LISTING_NOT_FOUND');
-    if (listing.seller_id === bidderId) throw new Error('CANNOT_BID_OWN');
-    if (listing.status !== 'active') throw new Error('LISTING_INACTIVE');
-    if (listing.auction_ends_at && new Date() > listing.auction_ends_at) throw new Error('AUCTION_ENDED');
-
-    const minAmount = listing.current_bid
-      ? parseFloat(listing.current_bid.toString()) + parseFloat(listing.bid_increment.toString())
-      : parseFloat(listing.price.toString());
-
     if (input.amount <= 0) throw new Error('INVALID_BID_AMOUNT');
-    if (input.amount < minAmount) throw new Error(`MIN_BID:${minAmount}`);
 
-    const bid = await prisma.dealerBid.create({
-      data: { listing_id: listingId, bidder_id: bidderId, amount: input.amount, message: input.message },
-      include: { bidder: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
-    });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const listing = await prisma.dealerListing.findFirst({
+        where: { id: listingId, deleted_at: null, listing_kind: { in: ['auction', 'ych'] } },
+      });
+      if (!listing) throw new Error('LISTING_NOT_FOUND');
+      if (listing.seller_id === bidderId) throw new Error('CANNOT_BID_OWN');
+      if (listing.status !== 'active') throw new Error('LISTING_INACTIVE');
+      if (listing.auction_ends_at && new Date() > listing.auction_ends_at) throw new Error('AUCTION_ENDED');
 
-    const updatedListing = await prisma.dealerListing.update({
-      where: { id: listingId },
-      data: {
-        current_bid: input.amount,
-        bid_count: { increment: 1 },
-        ...(listing.auto_buy_price && input.amount >= parseFloat(listing.auto_buy_price.toString())
-          ? { status: 'sold', winner_id: bidderId }
-          : {}),
-      },
-      select: LISTING_SELECT,
-    });
+      const minAmount = listing.current_bid
+        ? parseFloat(listing.current_bid.toString()) + parseFloat(listing.bid_increment.toString())
+        : parseFloat(listing.price.toString());
 
-    if (updatedListing.status === 'sold') {
-      await recalcDenTrust(listing.seller_id);
+      if (input.amount < minAmount) throw new Error(`MIN_BID:${minAmount}`);
+
+      const result = await prisma.$transaction(async (tx) => {
+        const updateResult = await tx.dealerListing.updateMany({
+          where: {
+            id: listingId,
+            status: 'active',
+            current_bid: listing.current_bid ?? null,
+          },
+          data: {
+            current_bid: input.amount,
+            bid_count: { increment: 1 },
+            ...(listing.auto_buy_price && input.amount >= parseFloat(listing.auto_buy_price.toString())
+              ? { status: 'sold', winner_id: bidderId }
+              : {}),
+          },
+        });
+        if (updateResult.count === 0) return null;
+
+        const bid = await tx.dealerBid.create({
+          data: { listing_id: listingId, bidder_id: bidderId, amount: input.amount, message: input.message },
+          include: { bidder: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
+        });
+        const updatedListing = await tx.dealerListing.findUniqueOrThrow({ where: { id: listingId }, select: LISTING_SELECT });
+        return { bid, listing: updatedListing };
+      });
+
+      if (!result) continue; // current_bid changed under us — re-read and retry
+
+      if (result.listing.status === 'sold') {
+        await recalcDenTrust(listing.seller_id);
+      }
+      return result;
     }
 
-    return { bid, listing: updatedListing };
+    throw new Error('BID_CONFLICT');
   },
 
   async getBids(listingId: string, limit = 20) {
