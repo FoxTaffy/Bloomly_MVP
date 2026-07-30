@@ -472,18 +472,32 @@ export const groupService = {
     if (!group) throw new Error('Group not found');
     if (this.isEventExpired(group)) throw new Error('EVENT_EXPIRED');
 
-    // Check if already a member
-    const existing = await prisma.groupMember.findUnique({
-      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
-    });
-    const membership = await prisma.groupMember.upsert({
-      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
-      update: {},
-      create: { group_id: groupId, user_id: userId, role: 'member' },
-      include: { group: { select: GROUP_LIST_SELECT } },
-    });
-    // Increment members_count only if the user was NOT already a member
-    if (!existing) {
+    // Create the membership row directly (instead of a separate "does it exist?" read
+    // followed by an upsert) so the unique constraint is the single source of truth for
+    // whether this call actually created a new member. Doing a read-then-upsert here left
+    // a TOCTOU window: two concurrent join requests could both see "not a member yet" and
+    // both increment members_count, even though only one membership row can ever exist —
+    // permanently inflating the count above the real member total.
+    let membership;
+    let created = false;
+    try {
+      membership = await prisma.groupMember.create({
+        data: { group_id: groupId, user_id: userId, role: 'member' },
+        include: { group: { select: GROUP_LIST_SELECT } },
+      });
+      created = true;
+    } catch (err: any) {
+      if (err.code === 'P2002') {
+        membership = await prisma.groupMember.findUniqueOrThrow({
+          where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+          include: { group: { select: GROUP_LIST_SELECT } },
+        });
+      } else {
+        throw err;
+      }
+    }
+    // Increment members_count only if this call actually created the membership
+    if (created) {
       await prisma.group.update({
         where: { id: groupId },
         data: { members_count: { increment: 1 } },
