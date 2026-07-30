@@ -938,7 +938,7 @@
                       <div v-if="verificationStatus.verificationType && verTypeMeta[verificationStatus.verificationType]"
                         class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-xs font-bold"
                         :class="verTypeMeta[verificationStatus.verificationType].badgeCls">
-                        <BIcon :name="verTypeMeta[verificationStatus.verificationType].icon" class="w-4 h-4 flex-shrink-0" />
+                        <img :src="verTypeIconUrl(verificationStatus.verificationType)" :alt="verificationStatus.verificationType" class="w-4 h-4 rounded-sm flex-shrink-0 object-cover" />
                         {{ verTypeMeta[verificationStatus.verificationType].label }}
                       </div>
                       <div class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
@@ -958,7 +958,7 @@
                       <div v-if="verificationStatus.latestRequest.verification_type && verTypeMeta[verificationStatus.latestRequest.verification_type]"
                         class="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold"
                         :class="verTypeMeta[verificationStatus.latestRequest.verification_type].badgeCls">
-                        <BIcon :name="verTypeMeta[verificationStatus.latestRequest.verification_type].icon" class="w-4 h-4 flex-shrink-0" />
+                        <img :src="verTypeIconUrl(verificationStatus.latestRequest.verification_type)" :alt="verificationStatus.latestRequest.verification_type" class="w-4 h-4 rounded-sm flex-shrink-0 object-cover" />
                         {{ verTypeMeta[verificationStatus.latestRequest.verification_type].label }}
                       </div>
                     </div>
@@ -1043,8 +1043,8 @@
                               ? `${vt.borderSel} ${vt.bgSel} shadow-lg`
                               : `border-brand-border bg-brand-bg ${vt.borderHov}`">
                             <div class="flex items-center gap-3 mb-2">
-                              <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" :class="vt.badgeCls">
-                                <BIcon :name="vt.icon" class="w-5 h-5" />
+                              <div class="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0">
+                                <img :src="verTypeIconUrl(vt.id)" :alt="vt.id" class="w-full h-full object-cover" />
                               </div>
                               <span class="font-bold text-xs leading-tight"
                                 :class="selectedVerType === vt.id ? vt.textSel : 'text-white'">
@@ -1926,6 +1926,7 @@ import MediaUpload from '@/components/MediaUpload.vue'
 import DateInput from '@/components/DateInput.vue'
 import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
 import { FAVORITE_CATEGORIES } from '@/lib/interests'
+import { verTypeIconUrl } from '@/lib/verificationIcons'
 import api from '@/api'
 import { PROFILE_THEMES, PROFILE_FRAMES, readRawDataUrl, readScaledDataUrl, maskEmail } from '@/lib/utils'
 import { PAYMENT_REGIONS } from '@/lib/paymentRegions'
@@ -3337,12 +3338,12 @@ const completenessFields = computed(() => {
   ]
 })
 
+// Mirrors the backend's own /verification/completeness calculation (7 fields, 80% threshold)
+// so the UI never shows "ready to submit" when the server would reject the request.
 const localCompleteness = computed(() => {
-  const fields = completenessFields.value
-  if (!fields.length) return { percentage: 0, canSubmit: false }
-  const met = fields.filter(f => f.met).length
-  const percentage = Math.round((met / fields.length) * 100)
-  return { percentage, canSubmit: percentage >= 75 }
+  const c = profileCompleteness.value
+  if (!c) return { percentage: 0, canSubmit: false }
+  return { percentage: c.percentage ?? 0, canSubmit: !!c.canSubmit }
 })
 
 // ── Birth date helpers ─────────────────────────────────────────────────────
