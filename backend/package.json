@@ -1,6 +1,6 @@
 {
   "name": "bloomly-backend",
-  "version": "1.5.125",
+  "version": "1.5.126",
   "type": "module",
   "scripts": {
     "dev": "node --loader ts-node/esm src/server.ts",
