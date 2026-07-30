@@ -13,9 +13,27 @@ const FRIEND_USER_SELECT = {
   deceased_at:  true,
 } as const;
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const friendsService = {
+  /**
+   * Resolve the "Добавить по ID" input, which per its placeholder ("ID или
+   * @username...") accepts either a raw UUID or a @username — look up the
+   * username case so we never hand a non-UUID string to a `@db.Uuid` column
+   * (Prisma throws a raw, user-hostile error for that instead of "not found").
+   */
+  async _resolveTargetId(input: string): Promise<string> {
+    const trimmed = input.trim();
+    if (UUID_RE.test(trimmed)) return trimmed;
+    const username = trimmed.replace(/^@/, '');
+    const user = await prisma.user.findUnique({ where: { username }, select: { id: true } });
+    if (!user) throw new Error('Пользователь не найден');
+    return user.id;
+  },
+
   /** Send a friend request from currentUserId to targetId */
-  async sendRequest(requesterId: string, addresseeId: string) {
+  async sendRequest(requesterId: string, targetInput: string) {
+    const addresseeId = await this._resolveTargetId(targetInput);
     if (requesterId === addresseeId) throw new Error('Cannot send friend request to yourself');
 
     // Check if a friendship record already exists in either direction
