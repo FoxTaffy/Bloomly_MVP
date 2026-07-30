@@ -6,6 +6,15 @@ export const relationshipsService = {
   async sendRequest(fromId: string, toId: string) {
     if (fromId === toId) throw Object.assign(new Error('Нельзя отправить запрос себе'), { statusCode: 400 });
 
+    // Нельзя отправлять запрос, уже находясь в отношениях — иначе acceptRequest
+    // перезапишет relationship_with у отправителя, а его текущий партнёр
+    // останется висеть с "отношениями" на человека, который на самом деле
+    // уже в паре с кем-то другим (битая ссылка в одну сторону).
+    const sender = await prisma.user.findUnique({ where: { id: fromId }, select: { relationship_with: true } });
+    if (sender?.relationship_with) {
+      throw Object.assign(new Error('Вы уже состоите в отношениях'), { statusCode: 400 });
+    }
+
     // Cancel any old declined/accepted request before creating a new one
     await prisma.relationshipRequest.deleteMany({
       where: { from_id: fromId, to_id: toId, status: { in: ['declined', 'accepted'] } },
@@ -38,6 +47,19 @@ export const relationshipsService = {
       where: { id: requestId, to_id: userId, status: 'pending' },
     });
     if (!req) throw Object.assign(new Error('Запрос не найден'), { statusCode: 404 });
+
+    // Обе стороны могли успеть вступить в отношения с кем-то ещё, пока запрос
+    // висел pending (отправитель мог обойти проверку в sendRequest другим
+    // запросом, принятым раньше) — перепроверяем перед записью, иначе одна
+    // из сторон перезатрёт существующего партнёра.
+    const [fromUser, toUser] = await Promise.all([
+      prisma.user.findUnique({ where: { id: req.from_id }, select: { relationship_with: true } }),
+      prisma.user.findUnique({ where: { id: req.to_id },   select: { relationship_with: true } }),
+    ]);
+    if (fromUser?.relationship_with || toUser?.relationship_with) {
+      await prisma.relationshipRequest.update({ where: { id: requestId }, data: { status: 'declined' } });
+      throw Object.assign(new Error('Один из пользователей уже состоит в отношениях'), { statusCode: 409 });
+    }
 
     const now = new Date();
 
