@@ -1,6 +1,7 @@
 import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
+import { getBlockerIds } from '../../lib/blocks.js';
 
 /** Throws a 403 unless the viewer is allowed to see userId's friends/followers list. */
 async function assertFriendsListVisible(userId: string, viewerId?: string) {
@@ -139,8 +140,18 @@ export const followsService = {
       where: { follower_id: userId },
       select: { following_id: true },
     });
-    const authorIds = followingRows.map((r) => r.following_id);
+    let authorIds = followingRows.map((r) => r.following_id);
     if (!authorIds.length) return [];
+
+    // Не показываем посты авторов, с которыми есть взаимная блокировка —
+    // иначе заблокированный автор (или тот, кто заблокировал нас) всё равно
+    // остаётся видимым в ленте подписок, хотя пропадает из общей ленты/поиска.
+    const blockerIds = await getBlockerIds(userId);
+    if (blockerIds.length) {
+      const blockedSet = new Set(blockerIds);
+      authorIds = authorIds.filter((id) => !blockedSet.has(id));
+      if (!authorIds.length) return [];
+    }
 
     const skip = (page - 1) * limit;
     return prisma.post.findMany({
