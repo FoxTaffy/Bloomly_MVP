@@ -555,6 +555,12 @@ export const groupService = {
     if (requesterWeight < 3 && role === 'admin') {
       throw new Error('Only the group owner can assign the admin role');
     }
+    // Same rule as removeMember: can only change the role of a member with a strictly
+    // lower role weight — otherwise an admin could demote/reshuffle their peer admins.
+    const targetWeight = roleWeight(current?.role);
+    if (targetWeight >= requesterWeight) {
+      throw new Error('Not authorized to change the role of a member with an equal or higher role');
+    }
 
     return prisma.groupMember.update({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
@@ -1535,20 +1541,26 @@ export const groupService = {
     if (!group || group.deleted_at) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
     if (!group.donations_enabled) throw Object.assign(new Error('Donations are not enabled for this group'), { statusCode: 400 });
 
-    const wallet = await prisma.wallet.findUnique({ where: { user_id: userId } });
-    if (!wallet || Number(wallet.balance) < clean) {
-      throw Object.assign(new Error('Insufficient wallet balance'), { statusCode: 402 });
-    }
+    // Debit + credit + ledger entry all happen inside one interactive transaction so a
+    // failure partway through can't debit the wallet without crediting the group (or
+    // vice versa). The WHERE clause on the debit re-checks the balance at update time,
+    // so two concurrent donations can't both pass a stale check and drive the wallet negative.
+    return prisma.$transaction(async (tx) => {
+      const debited = await tx.wallet.updateMany({
+        where: { user_id: userId, balance: { gte: clean } },
+        data: { balance: { decrement: clean } },
+      });
+      if (debited.count === 0) {
+        throw Object.assign(new Error('Insufficient wallet balance'), { statusCode: 402 });
+      }
 
-    const [, updatedGroup, transaction] = await prisma.$transaction([
-      prisma.wallet.update({ where: { user_id: userId }, data: { balance: { decrement: clean } } }),
-      prisma.group.update({ where: { id: groupId }, data: { balance: { increment: clean } } }),
-      prisma.groupTransaction.create({
+      const updatedGroup = await tx.group.update({ where: { id: groupId }, data: { balance: { increment: clean } } });
+      const transaction = await tx.groupTransaction.create({
         data: { group_id: groupId, user_id: userId, type: 'DONATION', amount: clean, message: message?.trim().slice(0, 280) || null },
         include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
-      }),
-    ]);
-    return { balance: updatedGroup.balance, transaction };
+      });
+      return { balance: updatedGroup.balance, transaction };
+    });
   },
 
   async getGroupBalance(groupId: string) {
