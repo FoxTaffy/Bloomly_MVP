@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
+import { isBlockedBy } from '../../lib/blocks.js';
 
 const FRIEND_USER_SELECT = {
   id:           true,
@@ -35,6 +36,12 @@ export const friendsService = {
   async sendRequest(requesterId: string, targetInput: string) {
     const addresseeId = await this._resolveTargetId(targetInput);
     if (requesterId === addresseeId) throw new Error('Cannot send friend request to yourself');
+
+    // Same block-awareness gap as messages/follows had: without this, a blocked user could
+    // still friend-request their blocker (or vice versa) and route around the block entirely.
+    if ((await isBlockedBy(addresseeId, requesterId)) || (await isBlockedBy(requesterId, addresseeId))) {
+      throw new Error('Cannot send friend request to this user');
+    }
 
     // Check if a friendship record already exists in either direction
     const existing = await prisma.friendship.findFirst({
@@ -75,6 +82,9 @@ export const friendsService = {
     if (!friendship) throw new Error('Friend request not found');
     if (friendship.addressee_id !== addresseeId) throw new Error('Forbidden');
     if (friendship.status !== 'pending') throw new Error('Request is not pending');
+    if (await isBlockedBy(friendship.requester_id, addresseeId) || await isBlockedBy(addresseeId, friendship.requester_id)) {
+      throw new Error('Cannot accept a request involving a blocked user');
+    }
 
     const updated = await prisma.friendship.update({
       where: { id: friendshipId },
