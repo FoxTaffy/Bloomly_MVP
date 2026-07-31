@@ -2121,13 +2121,18 @@ const totalPendingBadge = computed(() => {
 
               <!-- Body -->
               <div class="p-4 flex flex-col gap-3 flex-1">
-                <router-link :to="`/profile/${post.author?.username}`" target="_blank" class="flex items-center gap-2 min-w-0 group/user">
-                  <img v-if="post.author?.avatar_url" :src="post.author.avatar_url"
+                <router-link :to="post.groupPosts?.[0]?.group ? `/groups/${post.groupPosts[0].group.slug}` : `/profile/${post.author?.username}`" target="_blank" class="flex items-center gap-2 min-w-0 group/user">
+                  <img v-if="post.groupPosts?.[0]?.group?.avatar_url" :src="post.groupPosts[0].group.avatar_url"
+                    class="w-7 h-7 rounded-lg object-cover border border-white/10 flex-shrink-0 group-hover/user:opacity-80 transition-opacity" />
+                  <div v-else-if="post.groupPosts?.[0]?.group" class="w-7 h-7 rounded-lg border border-white/10 bg-[#4C67CF]/15 flex items-center justify-center text-[#4C67CF] font-bold text-xs flex-shrink-0">
+                    {{ post.groupPosts[0].group.name[0].toUpperCase() }}
+                  </div>
+                  <img v-else-if="post.author?.avatar_url" :src="post.author.avatar_url"
                     class="w-7 h-7 rounded-full object-cover border border-white/10 flex-shrink-0 group-hover/user:opacity-80 transition-opacity" />
                   <div v-else class="w-7 h-7 rounded-full border border-white/10 bg-[#4C67CF]/15 flex items-center justify-center text-[#4C67CF] font-bold text-xs flex-shrink-0">
                     {{ (post.author?.display_name || post.author?.username || '?')[0].toUpperCase() }}
                   </div>
-                  <span class="text-sm font-bold text-white truncate group-hover/user:text-[#4C67CF] transition-colors">{{ post.author?.display_name || post.author?.username }}</span>
+                  <span class="text-sm font-bold text-white truncate group-hover/user:text-[#4C67CF] transition-colors">{{ post.groupPosts?.[0]?.group?.name || post.author?.display_name || post.author?.username }}</span>
                   <span class="text-[11px] text-white/30 flex-shrink-0 ml-auto">{{ formatDate(post.created_at) }}</span>
                 </router-link>
 

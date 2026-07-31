@@ -345,6 +345,7 @@ export const adminService = {
         where, skip, take: limit, orderBy: { created_at: 'desc' },
         include: {
           author: { select: { id: true, username: true, display_name: true, avatar_url: true, badge_type: true } },
+          groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true } } } },
           _count: { select: { comments: true, repaws: true } },
         },
       }),
