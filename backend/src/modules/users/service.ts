@@ -472,11 +472,25 @@ export const usersService = {
 
   async blockUser(blockerId: string, blockedId: string) {
     if (blockerId === blockedId) throw new Error('Cannot block yourself');
-    await prisma.block.upsert({
-      where: { blocker_id_blocked_id: { blocker_id: blockerId, blocked_id: blockedId } },
-      create: { blocker_id: blockerId, blocked_id: blockedId },
-      update: {},
-    });
+    await prisma.$transaction([
+      prisma.block.upsert({
+        where: { blocker_id_blocked_id: { blocker_id: blockerId, blocked_id: blockedId } },
+        create: { blocker_id: blockerId, blocked_id: blockedId },
+        update: {},
+      }),
+      // A block should sever any existing follow tie in either direction — otherwise the
+      // blocked person keeps showing up as a follower/following, and their content only
+      // stays hidden through separate feed-level block filters rather than actually undoing
+      // the relationship.
+      prisma.follow.deleteMany({
+        where: {
+          OR: [
+            { follower_id: blockerId, following_id: blockedId },
+            { follower_id: blockedId, following_id: blockerId },
+          ],
+        },
+      }),
+    ]);
   },
 
   async unblockUser(blockerId: string, blockedId: string) {

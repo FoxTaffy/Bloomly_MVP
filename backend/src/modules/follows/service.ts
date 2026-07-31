@@ -1,7 +1,7 @@
 import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
-import { getBlockerIds } from '../../lib/blocks.js';
+import { getBlockerIds, isBlockedBy } from '../../lib/blocks.js';
 
 /** Throws a 403 unless the viewer is allowed to see userId's friends/followers list. */
 async function assertFriendsListVisible(userId: string, viewerId?: string) {
@@ -31,6 +31,13 @@ export const followsService = {
       });
       return { following: false };
     } else {
+      // A block in either direction must prevent a new follow relationship from forming —
+      // otherwise the feed/notification block filters elsewhere just hide the symptom
+      // (posts, notifications) while the follow edge itself, and everything keyed off it
+      // (follower counts, "follows you" badges), stays intact.
+      if ((await isBlockedBy(followingId, followerId)) || (await isBlockedBy(followerId, followingId))) {
+        throw new Error('Cannot follow a blocked user');
+      }
       await prisma.follow.create({ data: { follower_id: followerId, following_id: followingId } });
       // Send notification
       await notificationService.create({
