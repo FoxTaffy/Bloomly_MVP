@@ -25,15 +25,39 @@ const REPORTS_MAX_BYTES = 10 * 1024 * 1024;
 const MESSAGE_UPLOAD_LIMITS_BY_TIER: Record<string, number> = {
   free: 2 * GB,
   lite: 4 * GB,
-  pro: 4 * GB,
-  business: 4 * GB,
+  pro: 8 * GB,
+  business: 16 * GB,
 };
 
-async function resolveMaxBytes(folder: Folder, userId: string): Promise<number> {
-  if (folder === 'reports') return REPORTS_MAX_BYTES;
-  if (folder !== 'messages') return DEFAULT_MAX_BYTES;
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { subscription_tier: true } });
-  return MESSAGE_UPLOAD_LIMITS_BY_TIER[user?.subscription_tier ?? 'free'] ?? MESSAGE_UPLOAD_LIMITS_BY_TIER.free;
+// Cumulative "media storage" quota advertised on the subscription page (5/20/100 GB).
+// Free has no marketed storage allowance and stays uncapped at this layer — it's
+// already bounded by the per-file limits above.
+const STORAGE_QUOTA_BYTES_BY_TIER: Record<string, number | null> = {
+  free: null,
+  lite: 5 * GB,
+  pro: 20 * GB,
+  business: 100 * GB,
+};
+// Folders that count toward that quota — the content people actually upload.
+// Avatars/banners/stickers/reports/verification are small, system-managed assets.
+const STORAGE_TRACKED_FOLDERS = new Set<Folder>(['posts', 'comments', 'messages', 'backgrounds']);
+
+async function resolveUploadLimits(folder: Folder, userId: string): Promise<{
+  maxBytes: number;
+  storageQuotaBytes: number | null;
+  storageUsedBytes: bigint;
+}> {
+  if (folder === 'reports') return { maxBytes: REPORTS_MAX_BYTES, storageQuotaBytes: null, storageUsedBytes: 0n };
+  const needsTierInfo = folder === 'messages' || STORAGE_TRACKED_FOLDERS.has(folder);
+  if (!needsTierInfo) return { maxBytes: DEFAULT_MAX_BYTES, storageQuotaBytes: null, storageUsedBytes: 0n };
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { subscription_tier: true, storage_used_bytes: true } });
+  const tier = user?.subscription_tier ?? 'free';
+  const maxBytes = folder === 'messages'
+    ? (MESSAGE_UPLOAD_LIMITS_BY_TIER[tier] ?? MESSAGE_UPLOAD_LIMITS_BY_TIER.free)
+    : DEFAULT_MAX_BYTES;
+  const storageQuotaBytes = STORAGE_TRACKED_FOLDERS.has(folder) ? (STORAGE_QUOTA_BYTES_BY_TIER[tier] ?? null) : null;
+  return { maxBytes, storageQuotaBytes, storageUsedBytes: user?.storage_used_bytes ?? 0n };
 }
 
 function formatMaxSize(bytes: number): string {
@@ -76,7 +100,7 @@ export const uploadFileHandler = async (
   }
 
   const { id: userId } = request.user as { id: string };
-  const maxBytes = await resolveMaxBytes(folder, userId);
+  const { maxBytes, storageQuotaBytes, storageUsedBytes } = await resolveUploadLimits(folder, userId);
 
   try {
     const chunks: Buffer[] = [];
@@ -105,6 +129,17 @@ export const uploadFileHandler = async (
         success: false,
         data: null,
         error: { code: 'NO_FILE', message: 'Uploaded file is empty' },
+      });
+    }
+
+    if (storageQuotaBytes !== null && storageUsedBytes + BigInt(buf.length) > BigInt(storageQuotaBytes)) {
+      return reply.code(413).send({
+        success: false,
+        data: null,
+        error: {
+          code: 'STORAGE_QUOTA_EXCEEDED',
+          message: `Хранилище заполнено (лимит ${formatMaxSize(storageQuotaBytes)}). Освободите место или перейдите на тариф выше.`,
+        },
       });
     }
 
@@ -139,6 +174,16 @@ export const uploadFileHandler = async (
     }
 
     const { url, originalUrl, isSilentVideo } = await uploadFile(buf, data.filename, data.mimetype, folder);
+
+    if (STORAGE_TRACKED_FOLDERS.has(folder)) {
+      // Best-effort metering: the upload already succeeded, so a failure here
+      // shouldn't fail the request — it would just under-count this user's usage.
+      prisma.user.update({
+        where: { id: userId },
+        data: { storage_used_bytes: { increment: buf.length } },
+      }).catch((err) => (request.server as any).log.error({ err }, 'Failed to update storage usage'));
+    }
+
     return reply.send({ success: true, data: { url, originalUrl, isSilentVideo }, error: null });
   } catch (err: any) {
     if (err instanceof UploadValidationError) {

@@ -238,6 +238,23 @@ export const usersService = {
       if (user?.is_verified) throw new Error('Verified users cannot change artist_since');
     }
 
+    // ── Security: subscription-tier-gated profile customization ─────────────
+    // Clearing back to the default/none is always allowed (e.g. after a downgrade);
+    // only setting a non-default value requires the matching tier.
+    const wantsTheme = typeof (data as any).profile_theme === 'string' && !['', 'default'].includes((data as any).profile_theme);
+    const wantsFrame = typeof (data as any).profile_frame === 'string' && !['', 'none'].includes((data as any).profile_frame);
+    const wantsBg    = typeof (data as any).profile_bg_url === 'string' && (data as any).profile_bg_url !== '';
+    if (wantsTheme || wantsFrame || wantsBg) {
+      const tierUser = await prisma.user.findUnique({ where: { id, deleted_at: null }, select: { subscription_tier: true } });
+      const tier = tierUser?.subscription_tier ?? 'free';
+      if (wantsTheme && tier === 'free') {
+        throw Object.assign(new Error('LITE_REQUIRED'), { statusCode: 402 });
+      }
+      if ((wantsFrame || wantsBg) && !['pro', 'business'].includes(tier)) {
+        throw Object.assign(new Error('PRO_REQUIRED'), { statusCode: 402 });
+      }
+    }
+
     // ── Normalise birth_date to a proper Date if it's a plain string ────────
     if (typeof (data as any).birth_date === 'string') {
       const raw = (data as any).birth_date as string;
@@ -356,7 +373,14 @@ export const usersService = {
   async searchUsers(query: string, limit = 8, page = 1) {
     const q = query.trim();
     if (!q) return [];
-    return prisma.user.findMany({
+    const skip = (Math.max(1, page) - 1) * limit;
+
+    // Priority search (Lite+ perk): paid-tier profiles are ranked above free ones.
+    // Prisma can't order by an arbitrary tier-rank expression, so we overfetch a
+    // candidate page ordered by recency and re-sort by tier in application code;
+    // Array#sort is stable, so ties keep their original (recency) order.
+    const overfetch = Math.min(200, Math.max((skip + limit) * 5, limit * 5));
+    const candidates = await prisma.user.findMany({
       where: {
         deleted_at: null,
         OR: [
@@ -365,10 +389,14 @@ export const usersService = {
         ],
       },
       select: PUBLIC_SELECT,
-      skip: (Math.max(1, page) - 1) * limit,
-      take: limit,
+      take: overfetch,
       orderBy: { created_at: 'desc' },
     });
+
+    const tierRank: Record<string, number> = { business: 3, pro: 2, lite: 1, free: 0 };
+    candidates.sort((a, b) => (tierRank[(b as any).subscription_tier] ?? 0) - (tierRank[(a as any).subscription_tier] ?? 0));
+
+    return candidates.slice(skip, skip + limit);
   },
 
   async getRecommendedUsers(currentUserId: string, limit = 6) {
@@ -497,17 +525,42 @@ export const usersService = {
     });
   },
 
-  /** Change subscription tier. Validated allowlist prevents SQL-injection / unexpected values. */
+  /**
+   * Change subscription tier. Validated allowlist prevents SQL-injection / unexpected values.
+   * There is no real payment processor wired up yet, so upgrading to a paid tier is gated on
+   * having at least one saved card (`PaymentMethod`) — this is a placeholder barrier, not a
+   * real charge, but it closes the trivial "any authenticated user can self-grant `business`
+   * with zero card on file" hole. Downgrading to `free` is always allowed.
+   */
   async updateSubscriptionTier(userId: string, tier: string) {
     const ALLOWED_TIERS = ['free', 'lite', 'pro', 'business'] as const;
     if (!ALLOWED_TIERS.includes(tier as any)) {
       throw Object.assign(new Error(`Invalid tier: ${tier}`), { statusCode: 400 });
     }
-    return prisma.user.update({
-      where: { id: userId, deleted_at: null },
-      data: { subscription_tier: tier },
-      select: { id: true, subscription_tier: true },
-    });
+
+    if (tier !== 'free') {
+      const hasPaymentMethod = await prisma.paymentMethod.findFirst({
+        where: { user_id: userId },
+        select: { id: true },
+      });
+      if (!hasPaymentMethod) {
+        throw Object.assign(new Error('PAYMENT_METHOD_REQUIRED'), { statusCode: 402 });
+      }
+    }
+
+    const [, user] = await prisma.$transaction([
+      prisma.subscriptionPlan.updateMany({
+        where: { user_id: userId, ends_at: null },
+        data: { ends_at: new Date() },
+      }),
+      prisma.user.update({
+        where: { id: userId, deleted_at: null },
+        data: { subscription_tier: tier },
+        select: { id: true, subscription_tier: true },
+      }),
+      prisma.subscriptionPlan.create({ data: { user_id: userId, tier } }),
+    ]);
+    return user;
   },
 
   /** Aggregated profile analytics (top post, friends growth, totals) — Lite+ subscribers only. */
