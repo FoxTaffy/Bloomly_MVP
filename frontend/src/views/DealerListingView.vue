@@ -124,15 +124,19 @@ async function submitBid() {
 // ── Raffle ───────────────────────────────────────────────────────────────────
 const isBuyingTicket = ref(false)
 const ticketSuccess  = ref(false)
+const ticketError    = ref('')
 
 async function buyTicket() {
   if (!auth.user) { router.push({ name: 'login' }); return }
   if (!listing.value) return
   isBuyingTicket.value = true
+  ticketError.value = ''
   try {
     await store.buyRaffleTicket(listing.value.id)
     ticketSuccess.value = true
-  } catch {} finally {
+  } catch (e: any) {
+    ticketError.value = e?.response?.data?.error ?? langStore.t.dealerListingGenericError
+  } finally {
     isBuyingTicket.value = false
   }
 }
@@ -932,6 +936,7 @@ async function submitReport() {
                         class="w-full flex items-center justify-center gap-2 py-3.5 text-white/60 font-bold rounded-2xl border border-brand-border hover:border-brand-success/40 hover:text-white transition-all text-sm">
                         <BIcon name="LogIn" class="w-4 h-4" /> {{ langStore.t.dealerListingLoginToParticipate }}
                       </button>
+                      <div v-if="ticketError" class="text-brand-error text-xs bg-brand-error/8 border border-brand-error/15 rounded-xl px-4 py-2.5 mt-2">{{ ticketError }}</div>
                     </template>
                     <div v-else-if="isSoldOut(listing)"
                       class="flex items-center gap-2 bg-brand-success/10 border border-brand-success/20 rounded-2xl px-4 py-3">
