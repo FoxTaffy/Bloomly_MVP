@@ -112,6 +112,7 @@ export async function placeBidHandler(req: FastifyRequest, reply: FastifyReply) 
     if (msg.startsWith('MIN_BID:'))   return reply.status(422).send({ success: false, error: `Минимальная ставка: ${msg.split(':')[1]}` });
     if (msg === 'INVALID_BID_AMOUNT') return reply.status(422).send({ success: false, error: 'Некорректная сумма ставки' });
     if (msg === 'BID_CONFLICT')       return reply.status(409).send({ success: false, error: 'Кто-то только что сделал ставку раньше вас, попробуйте снова' });
+    if (msg === 'SELLER_FROZEN')      return reply.status(403).send({ success: false, error: 'Аккаунт продавца заморожен в Ярмарке' });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to place bid' });
   }
@@ -137,6 +138,7 @@ export async function buyRaffleTicketHandler(req: FastifyRequest, reply: Fastify
   } catch (err: any) {
     const msg: string = err?.message ?? '';
     if (msg === 'RAFFLE_FULL') return reply.status(409).send({ success: false, error: 'Все билеты разобраны' });
+    if (msg === 'SELLER_FROZEN') return reply.status(403).send({ success: false, error: 'Аккаунт продавца заморожен в Ярмарке' });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to buy ticket' });
   }
@@ -325,6 +327,7 @@ export async function createBookingHandler(req: FastifyRequest, reply: FastifyRe
     const msg: string = err?.message ?? '';
     if (msg === 'LISTING_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Лот не найден' });
     if (msg === 'DEN_FROZEN')        return reply.status(403).send({ success: false, error: 'Ваш аккаунт заморожен' });
+    if (msg === 'SELLER_FROZEN')     return reply.status(403).send({ success: false, error: 'Аккаунт продавца заморожен в Ярмарке' });
     if (msg === 'SLOTS_FULL')        return reply.status(409).send({ success: false, error: 'Все слоты заняты' });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to create booking' });
