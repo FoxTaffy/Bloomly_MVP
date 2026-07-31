@@ -69,9 +69,20 @@ async function processUid(client: ImapFlow, uid: number) {
       })
     : null;
 
-  if (existing) {
-    const ticket = await prisma.supportTicket.findUnique({ where: { id: existing.ticket_id } });
-    if (!ticket) return;
+  // A Message-ID isn't a secret — it can leak via a forward, a CC'd bystander, or just
+  // reading the raw source of an email you received — and the `From` header on inbound
+  // mail is trivially spoofable. Without checking the sender actually owns the thread,
+  // anyone who obtains one of these IDs could inject messages into a stranger's support
+  // ticket. Only treat it as a continuation if the sender matches who the ticket is with.
+  const existingTicket = existing
+    ? await prisma.supportTicket.findUnique({ where: { id: existing.ticket_id }, include: { user: { select: { email: true } } } })
+    : null;
+  const ownerEmail = existingTicket
+    ? (existingTicket.external_email || existingTicket.user?.email || existingTicket.contact_email)?.toLowerCase()
+    : null;
+
+  if (existingTicket && ownerEmail && ownerEmail === fromAddr) {
+    const ticket = existingTicket;
     await prisma.$transaction([
       prisma.supportTicketMessage.create({
         data: {
