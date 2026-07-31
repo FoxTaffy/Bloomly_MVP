@@ -210,6 +210,7 @@ export async function createReviewHandler(req: FastifyRequest, reply: FastifyRep
     if (msg === 'NOT_SOLD')            return reply.status(409).send({ success: false, error: 'Можно оставить отзыв только после продажи' });
     if (msg === 'CANNOT_REVIEW_OWN')   return reply.status(403).send({ success: false, error: 'Нельзя оставлять отзыв на свой лот' });
     if (msg === 'INVALID_RATING')      return reply.status(422).send({ success: false, error: 'Рейтинг: 1-5' });
+    if (msg === 'NOT_BUYER')           return reply.status(403).send({ success: false, error: 'Оставить отзыв может только покупатель этого лота' });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to create review' });
   }
@@ -385,6 +386,8 @@ export async function createDisputeHandler(req: FastifyRequest, reply: FastifyRe
     const msg: string = err?.message ?? '';
     if (msg === 'LISTING_NOT_FOUND')    return reply.status(404).send({ success: false, error: 'Лот не найден или не продан' });
     if (msg === 'CANNOT_DISPUTE_OWN')   return reply.status(403).send({ success: false, error: 'Нельзя открыть спор на свой лот' });
+    if (msg === 'NOT_BUYER')            return reply.status(403).send({ success: false, error: 'Открыть спор может только покупатель этого лота' });
+    if (msg === 'ALREADY_DISPUTED')     return reply.status(409).send({ success: false, error: 'Вы уже открыли спор по этому лоту' });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to create dispute' });
   }

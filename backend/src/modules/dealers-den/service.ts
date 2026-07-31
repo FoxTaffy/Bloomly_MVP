@@ -276,6 +276,9 @@ export const dealersDenService = {
       if (listing.status !== 'active') throw new Error('LISTING_INACTIVE');
       if (listing.auction_ends_at && new Date() > listing.auction_ends_at) throw new Error('AUCTION_ENDED');
 
+      const seller = await prisma.user.findUnique({ where: { id: listing.seller_id }, select: { den_frozen: true } });
+      if (seller?.den_frozen) throw new Error('SELLER_FROZEN');
+
       const minAmount = listing.current_bid
         ? parseFloat(listing.current_bid.toString()) + parseFloat(listing.bid_increment.toString())
         : parseFloat(listing.price.toString());
@@ -334,6 +337,9 @@ export const dealersDenService = {
     if (!listing) throw new Error('LISTING_NOT_FOUND');
     if (listing.raffle_max_tickets && listing.raffle_tickets_sold >= listing.raffle_max_tickets)
       throw new Error('RAFFLE_FULL');
+
+    const seller = await prisma.user.findUnique({ where: { id: listing.seller_id }, select: { den_frozen: true } });
+    if (seller?.den_frozen) throw new Error('SELLER_FROZEN');
 
     // Read-then-increment left a TOCTOU window (same class of bug as placeBid): with one
     // ticket left, two concurrent buyers could both pass the check above and both increment,
@@ -397,6 +403,16 @@ export const dealersDenService = {
     if (listing.status !== 'sold') throw new Error('NOT_SOLD');
     if (listing.seller_id === reviewerId) throw new Error('CANNOT_REVIEW_OWN');
     if (input.rating < 1 || input.rating > 5) throw new Error('INVALID_RATING');
+
+    // Where a buyer is actually identifiable on-platform (auction/YCH winner, commission
+    // booking), require it — otherwise any logged-in user could leave a review on someone
+    // else's sold listing they never bought, polluting the seller's public rating.
+    if (listing.listing_kind === 'auction' || listing.listing_kind === 'ych') {
+      if (listing.winner_id !== reviewerId) throw new Error('NOT_BUYER');
+    } else if (listing.listing_kind === 'commission_queue') {
+      const booking = await prisma.commissionBooking.findFirst({ where: { listing_id: listingId, buyer_id: reviewerId, deleted_at: null } });
+      if (!booking) throw new Error('NOT_BUYER');
+    }
 
     const validTags = (input.tags ?? []).filter(t => (REVIEW_TAGS as readonly string[]).includes(t));
 
@@ -569,6 +585,9 @@ export const dealersDenService = {
     const denUser = await prisma.user.findUnique({ where: { id: buyerId }, select: { den_frozen: true } });
     if (denUser?.den_frozen) throw new Error('DEN_FROZEN');
 
+    const seller = await prisma.user.findUnique({ where: { id: listing.seller_id }, select: { den_frozen: true } });
+    if (seller?.den_frozen) throw new Error('SELLER_FROZEN');
+
     if (listing.commission_slots_total !== null && listing.commission_slots_taken >= listing.commission_slots_total)
       throw new Error('SLOTS_FULL');
 
@@ -659,6 +678,20 @@ export const dealersDenService = {
     const listing = await prisma.dealerListing.findFirst({ where: { id: listingId, status: 'sold', deleted_at: null } });
     if (!listing) throw new Error('LISTING_NOT_FOUND');
     if (listing.seller_id === buyerId) throw new Error('CANNOT_DISPUTE_OWN');
+
+    // Same buyer-identity check as reviews, but higher stakes: an unresolved dispute
+    // auto-resolves in the "buyer"'s favor after 48h of seller silence, and 3 lost
+    // disputes freezes the seller's Den account — without this, any user could file
+    // fake disputes against listings they never bought to get a seller frozen.
+    if (listing.listing_kind === 'auction' || listing.listing_kind === 'ych') {
+      if (listing.winner_id !== buyerId) throw new Error('NOT_BUYER');
+    } else if (listing.listing_kind === 'commission_queue') {
+      const booking = await prisma.commissionBooking.findFirst({ where: { listing_id: listingId, buyer_id: buyerId, deleted_at: null } });
+      if (!booking) throw new Error('NOT_BUYER');
+    }
+
+    const alreadyOpen = await prisma.denDispute.findFirst({ where: { listing_id: listingId, buyer_id: buyerId, deleted_at: null } });
+    if (alreadyOpen) throw new Error('ALREADY_DISPUTED');
 
     return prisma.denDispute.create({
       data: { listing_id: listingId, buyer_id: buyerId, seller_id: listing.seller_id, reason: input.reason },
