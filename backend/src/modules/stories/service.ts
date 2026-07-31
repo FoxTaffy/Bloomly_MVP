@@ -1,5 +1,5 @@
 import prisma from '../../config/prisma.js';
-import { isTrustedMediaUrl } from '../media/service.js';
+import { isTrustedMediaUrl, deleteFileByUrl } from '../media/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy, getBlockerIds } from '../../lib/blocks.js';
 
@@ -99,15 +99,21 @@ export const storiesService = {
   async deleteStory(storyId: string, userId: string) {
     const story = await prisma.story.findUnique({
       where: { id: storyId },
-      select: { user_id: true, deleted_at: true },
+      select: { user_id: true, deleted_at: true, image_url: true, video_url: true },
     });
     if (!story || story.deleted_at) return null;
     if (story.user_id !== userId) return false; // not owner
 
-    return prisma.story.update({
+    const updated = await prisma.story.update({
       where: { id: storyId },
       data: { deleted_at: new Date() },
     });
+    // Stories have no restore path and the nightly cron only hard-deletes long-expired
+    // rows, so without this the image/video would otherwise sit in S3 for up to a day
+    // (or forever, for NSFW content someone deliberately wants gone right away).
+    [story.image_url, story.video_url].filter((u): u is string => !!u)
+      .forEach((url) => deleteFileByUrl(url).catch((err) => console.error('[story.delete] media cleanup failed:', err)));
+    return updated;
   },
 
   async getStoriesByUser(userId: string, viewerId?: string) {

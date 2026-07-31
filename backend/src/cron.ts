@@ -98,6 +98,35 @@ export function initCronJobs() {
     }
   });
 
+  // Stories: hard-delete expired/soft-deleted rows and purge their media — every day at 03:30.
+  // Stories are filtered out of every query once expires_at passes, but the rows (and their
+  // image/video in S3) were never actually removed — every story ever posted leaked its media
+  // forever, since expired stories are also invisible to the orphaned-media scanner script
+  // (it treats all Story rows as referenced regardless of expiry/deleted_at).
+  cron.schedule('30 3 * * *', async () => {
+    console.log('[CRON] Running story cleanup task...');
+    try {
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24h grace period past expiry/deletion before hard-deleting
+      const expired = await prisma.story.findMany({
+        where: { OR: [{ expires_at: { lte: cutoff } }, { deleted_at: { lte: cutoff } }] },
+        select: { id: true, image_url: true, video_url: true },
+      });
+      if (expired.length > 0) {
+        const ids = expired.map((s) => s.id);
+        await prisma.$transaction([
+          prisma.storyVote.deleteMany({ where: { story_id: { in: ids } } }),
+          prisma.storyView.deleteMany({ where: { story_id: { in: ids } } }),
+          prisma.story.deleteMany({ where: { id: { in: ids } } }),
+        ]);
+        const mediaUrls = expired.flatMap((s) => [s.image_url, s.video_url]).filter((u): u is string => !!u);
+        await Promise.all(mediaUrls.map((url) => deleteFileByUrl(url)));
+        console.log(`[CRON] Story cleanup: removed ${expired.length} expired stor${expired.length === 1 ? 'y' : 'ies'}, purged ${mediaUrls.length} file(s).`);
+      }
+    } catch (err: any) {
+      console.error('[CRON] Story cleanup error:', err.message);
+    }
+  });
+
   // Den disputes: auto-resolve unanswered disputes every hour
   cron.schedule('0 * * * *', async () => {
     try {
