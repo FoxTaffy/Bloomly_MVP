@@ -345,7 +345,9 @@ export const changePasswordHandler = async (
 ) => {
   try {
     const { id } = request.user as JwtPayload;
-    await authService.changePassword(id, request.body.currentPassword, request.body.newPassword);
+    const raw = (request.cookies as any)?.refresh_token as string | undefined;
+    const currentTokenHash = raw ? createHash('sha256').update(raw).digest('hex') : undefined;
+    await authService.changePassword(id, request.body.currentPassword, request.body.newPassword, currentTokenHash);
     return reply.send({ success: true, data: { message: 'Пароль успешно изменён' }, error: null });
   } catch (e: any) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'CHANGE_PASSWORD_ERROR', message: e.message } });

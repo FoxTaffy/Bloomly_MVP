@@ -195,7 +195,14 @@ export class AuthService {
     const e = email.toLowerCase().trim();
     await verifyOtp(e, code, 'reset');
     const hashed = await bcrypt.hash(newPassword, 10);
+    const user = await prisma.user.findFirst({ where: { email: e, deleted_at: null }, select: { id: true } });
     await prisma.user.updateMany({ where: { email: e, deleted_at: null }, data: { password: hashed } });
+    // A password reset is often triggered because the account was compromised — leaving
+    // whatever sessions an attacker already holds valid would defeat the point. Sign out
+    // everywhere and require signing back in with the new password.
+    if (user) {
+      await prisma.refreshToken.updateMany({ where: { user_id: user.id, revoked: false }, data: { revoked: true } });
+    }
   }
 
   /**
@@ -203,7 +210,7 @@ export class AuthService {
    * the current one must be supplied and match. OAuth-only accounts (no
    * password yet) may set one without providing `currentPassword`.
    */
-  async changePassword(userId: string, currentPassword: string | undefined, newPassword: string) {
+  async changePassword(userId: string, currentPassword: string | undefined, newPassword: string, currentTokenHash?: string) {
     if (newPassword.length < 8) throw new Error('Пароль должен содержать минимум 8 символов');
     if (newPassword.length > 128) throw new Error('Пароль слишком длинный');
 
@@ -218,6 +225,16 @@ export class AuthService {
 
     const hashed = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
+    // Same rationale as resetPassword: a stolen session shouldn't survive the legitimate
+    // user changing their password. Keep the session making this request alive (like
+    // revokeOtherSessionsHandler does for the equivalent explicit action).
+    await prisma.refreshToken.updateMany({
+      where: {
+        user_id: userId, revoked: false,
+        ...(currentTokenHash ? { token_hash: { not: currentTokenHash } } : {}),
+      },
+      data: { revoked: true },
+    });
   }
 
   /** Смена email Step 1 — код отправляется на ТЕКУЩУЮ (старую) почту */
