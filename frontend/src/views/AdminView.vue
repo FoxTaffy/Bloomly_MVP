@@ -2890,6 +2890,20 @@ const totalPendingBadge = computed(() => {
                     </span>
                   </div>
 
+                  <!-- Group roles — lets the reviewer see whether the requester actually
+                       owns/admins a group, vs. just being a member (relevant for
+                       organizer/event verification claims). -->
+                  <div v-if="req.user?.groupMemberships?.length" class="mt-2.5 flex flex-wrap gap-1.5">
+                    <span class="text-[10px] font-bold text-white/30 uppercase tracking-wide flex items-center">{{ langStore.t.adminGroupRolesLabel }}:</span>
+                    <span v-for="gm in req.user.groupMemberships" :key="gm.group.id"
+                      class="text-[11px] font-semibold px-2 py-0.5 rounded-full border inline-flex items-center gap-1"
+                      :class="gm.role === 'owner'
+                        ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                        : 'text-white/60 bg-white/5 border-white/[0.08]'">
+                      {{ gm.group.name }} · {{ gm.role === 'owner' ? langStore.t.roleOwner : gm.role === 'admin' ? langStore.t.roleAdmin : langStore.t.roleModerator }}
+                    </span>
+                  </div>
+
                   <div class="h-px bg-white/[0.06] my-4" />
 
                   <!-- Body: criteria + evidence side by side on wide screens -->

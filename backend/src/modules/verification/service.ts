@@ -236,6 +236,10 @@ export async function adminGetRequests(status?: string, page = 1, limit = 20) {
           select: {
             id: true, username: true, display_name: true,
             avatar_url: true, email: true, created_at: true,
+            groupMemberships: {
+              where: { role: { in: ['owner', 'admin', 'moderator'] } },
+              select: { role: true, group: { select: { id: true, name: true } } },
+            },
           },
         },
       },
