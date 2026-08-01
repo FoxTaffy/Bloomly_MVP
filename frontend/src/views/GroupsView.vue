@@ -136,7 +136,14 @@ async function loadStaticData() {
 }
 
 const activeAds = ref<any[]>([])
+const adSlotMode = computed<'ads' | 'offer' | 'hidden'>(() => {
+  const tier = (authStore.user as any)?.subscription_tier ?? 'free'
+  if (tier === 'lite' || tier === 'pro') return 'hidden'
+  if (tier === 'business') return 'offer'
+  return 'ads'
+})
 async function loadActiveAds() {
+  if (adSlotMode.value !== 'ads') return
   try {
     const res = await api.get('/admin/ads/active')
     if (res.data.success) activeAds.value = res.data.data.ads
@@ -255,8 +262,9 @@ function fmtMembers(n: number): string {
       <main class="flex-1 min-w-0 pb-28">
 
         <!-- ════════ AD SLOT ════════ -->
-        <div class="mb-6">
-          <AdSlot variant="hero" :ad="activeAds[0] ?? null" />
+        <div v-if="adSlotMode !== 'hidden'" class="mb-6">
+          <AdSlot v-if="adSlotMode === 'offer'" variant="hero" :ad="null" />
+          <AdSlot v-else-if="activeAds[0]" variant="hero" :ad="activeAds[0]" />
         </div>
 
         <!-- ════════ SEARCH + CATEGORIES + CREATE ════════ -->

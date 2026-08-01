@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma.js';
+import { sanitizeDisplayText } from '../../lib/sanitizeText.js';
 import { containsToxicLanguage } from '../automod/service.js';
 import { getGroupBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
@@ -300,11 +301,13 @@ export const groupService = {
 
   // ── create ────────────────────────────────────────────────────────────────
   async create(ownerId: string, input: CreateGroupInput) {
+    const name = sanitizeDisplayText(input.name ?? '', 120);
+    if (!name) throw new Error('Group name is required');
     return prisma.$transaction(async (tx) => {
       const group = await tx.group.create({
         data: {
           slug: input.slug.toLowerCase().replace(/[^a-z0-9_-]/g, ''),
-          name: input.name,
+          name,
           type: input.type,
           description: input.description,
           owner_id: ownerId,
@@ -332,7 +335,11 @@ export const groupService = {
       : null;
 
     const data: any = {};
-    if (input.name !== undefined) data.name = input.name;
+    if (input.name !== undefined) {
+      const name = sanitizeDisplayText(input.name ?? '', 120);
+      if (!name) throw new Error('Group name is required');
+      data.name = name;
+    }
     if (input.description !== undefined) data.description = input.description;
     if (input.avatarUrl !== undefined) data.avatar_url = input.avatarUrl;
     if (input.bannerUrl !== undefined) data.banner_url = input.bannerUrl;
@@ -629,11 +636,13 @@ export const groupService = {
   },
 
   async createCustomRole(groupId: string, data: { name: string; color?: string; icon?: string; permissions?: string[] }) {
+    const name = sanitizeDisplayText(data.name ?? '', 50);
+    if (!name) throw new Error('Role name is required');
     const count = await prisma.groupCustomRole.count({ where: { group_id: groupId } });
     return prisma.groupCustomRole.create({
       data: {
         group_id: groupId,
-        name: data.name,
+        name,
         color: data.color ?? '#9ca3af',
         icon: data.icon ?? '🎖️',
         permissions: data.permissions ?? [],
@@ -643,10 +652,15 @@ export const groupService = {
   },
 
   async updateCustomRole(groupId: string, roleId: string, data: { name?: string; color?: string; icon?: string; permissions?: string[] }) {
+    let name: string | undefined;
+    if (data.name !== undefined) {
+      name = sanitizeDisplayText(data.name ?? '', 50);
+      if (!name) throw new Error('Role name is required');
+    }
     return prisma.groupCustomRole.update({
       where: { id: roleId, group_id: groupId },
       data: {
-        ...(data.name !== undefined && { name: data.name }),
+        ...(name !== undefined && { name }),
         ...(data.color !== undefined && { color: data.color }),
         ...(data.icon !== undefined && { icon: data.icon }),
         ...(data.permissions !== undefined && { permissions: data.permissions }),
@@ -753,7 +767,7 @@ export const groupService = {
     return prisma.ticketTier.create({
       data: {
         event_id: input.eventId,
-        name: input.name,
+        name: sanitizeDisplayText(input.name ?? '', 100),
         price: input.price,
         currency: input.currency ?? 'USD',
         total_count: input.totalCount,
@@ -765,7 +779,7 @@ export const groupService = {
 
   async updateTicketTier(tierId: string, input: Partial<Omit<CreateTicketTierInput, 'eventId'>>) {
     const data: any = {};
-    if (input.name !== undefined) data.name = input.name;
+    if (input.name !== undefined) data.name = sanitizeDisplayText(input.name ?? '', 100);
     if (input.price !== undefined) data.price = input.price;
     if (input.currency !== undefined) data.currency = input.currency;
     if (input.totalCount !== undefined) data.total_count = input.totalCount;

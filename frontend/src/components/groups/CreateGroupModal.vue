@@ -361,7 +361,7 @@ function submit() {
           <!-- Name -->
           <div>
             <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 block">Название</label>
-            <input v-model="name" placeholder="Bloomly NEWS, FurMarket…"
+            <input v-model="name" placeholder="Bloomly NEWS, FurMarket…" maxlength="120"
               class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-none" />
           </div>
 
@@ -879,10 +879,15 @@ function submit() {
                 class="w-9 h-9 rounded-xl border-2 transition-all duration-200 hover:scale-110"
                 :class="accentColor === c ? 'border-white scale-110 shadow-lg' : 'border-transparent'"
                 :style="{ backgroundColor: c }" @click="accentColor = c" />
-              <label class="w-9 h-9 rounded-xl border-2 border-dashed border-brand-border hover:border-brand-accent/40 flex items-center justify-center cursor-pointer transition-colors">
+              <label class="relative w-9 h-9 rounded-xl border-2 border-dashed border-brand-border hover:border-brand-accent/40 flex items-center justify-center cursor-pointer transition-colors overflow-hidden">
                 <BIcon name="Pipette" class="w-4 h-4 text-white/30" />
-                <input v-model="accentColor" type="color" class="sr-only" />
+                <input v-model="accentColor" type="color" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
               </label>
+            </div>
+            <div class="relative">
+              <span class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border border-white/20" :style="{ backgroundColor: accentColor }" />
+              <input v-model="accentColor" maxlength="9" placeholder="#4C67CF"
+                class="w-full bg-brand-bg border border-brand-border rounded-2xl pl-11 pr-4 py-3 text-white text-sm placeholder-white/30 font-mono focus:border-brand-accent focus:outline-none" />
             </div>
           </div>
 

@@ -786,6 +786,19 @@ onUnmounted(() => {
                         {{ ' ' }}{{ notifTypeLabel(n.type, n.sender?.pronouns) }}
                       </p>
                       <p class="text-xs text-white/30 mt-0.5">{{ formatDate(n.created_at) }}</p>
+                      <!-- Relationship request -->
+                      <div v-if="n.type === 'RELATIONSHIP_REQUEST' && !n._relDone" class="flex gap-2 mt-2">
+                        <button @click.stop="acceptRelationship(n)" :disabled="relActionLoading[n.id]"
+                          class="flex-1 py-1 rounded-lg bg-pink-500 hover:bg-pink-400 disabled:opacity-50 text-white text-xs font-bold transition-colors">
+                          Принять
+                        </button>
+                        <button @click.stop="declineRelationship(n)" :disabled="relActionLoading[n.id]"
+                          class="flex-1 py-1 rounded-lg bg-brand-bg border border-brand-border hover:border-white/20 disabled:opacity-50 text-white/55 hover:text-white text-xs font-semibold transition-colors">
+                          Отклонить
+                        </button>
+                      </div>
+                      <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'accepted'" class="text-xs text-pink-400 mt-1 font-semibold">❤️ Принято</p>
+                      <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'declined'" class="text-xs text-white/40 mt-1">Отклонено</p>
                     </div>
                   </div>
                 </template>

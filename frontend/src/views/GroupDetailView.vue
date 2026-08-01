@@ -973,7 +973,7 @@ const vClickOutside = {
                 <!-- Name row -->
                 <div class="mt-4">
                   <div class="flex items-center flex-wrap gap-2 mb-2">
-                    <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white tracking-tight">{{ group.name }}</h1>
+                    <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white tracking-tight min-w-0 max-w-full break-words [overflow-wrap:anywhere]">{{ group.name }}</h1>
                     <!-- Badges -->
                     <span v-if="ticketStatusLabel"
                       class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase border"

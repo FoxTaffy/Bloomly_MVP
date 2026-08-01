@@ -50,8 +50,36 @@ const notifTypeLabel = (type: string) => {
     LIKE: 'поставил(а) + вашей публикации', COMMENT: 'прокомментировал(а) вашу публикацию',
     REPAW: 'поставил(а) RePaw вашей публикации', FOLLOW: 'подписался(ась) на вас',
     MENTION: 'упомянул(а) вас', FOLLOW_POST: 'опубликовал(а) новый пост', GROUP_POST: 'новый пост в сообществе',
+    RELATIONSHIP_REQUEST: 'хочет быть вашим партнёром 💕', RELATIONSHIP_ACCEPTED: 'принял(а) ваш запрос в отношения ❤️',
   }
   return map[type.toUpperCase()] ?? type
+}
+
+// ── Relationship request actions ──────────────────────────────────────────────
+const relActionLoading = ref<Record<string, boolean>>({})
+
+const acceptRelationship = async (n: any) => {
+  const reqId = n.ref_id
+  if (!reqId) return
+  relActionLoading.value[n.id] = true
+  try {
+    await api.post(`/relationships/${reqId}/accept`)
+    n._relDone = 'accepted'
+  } catch (e: any) {
+    alert(e?.response?.data?.error?.message ?? 'Ошибка')
+  } finally { relActionLoading.value[n.id] = false }
+}
+
+const declineRelationship = async (n: any) => {
+  const reqId = n.ref_id
+  if (!reqId) return
+  relActionLoading.value[n.id] = true
+  try {
+    await api.post(`/relationships/${reqId}/decline`)
+    n._relDone = 'declined'
+  } catch (e: any) {
+    alert(e?.response?.data?.error?.message ?? 'Ошибка')
+  } finally { relActionLoading.value[n.id] = false }
 }
 
 const formatDate = (d: string) => new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -66,9 +94,10 @@ const identityHref = (n: any): string | null => {
   return null
 }
 
-// Real link target — null for automod_warn (opens a modal instead of navigating).
+// Real link target — null for automod_warn (opens a modal instead of navigating) and
+// RELATIONSHIP_REQUEST (row shows Accept/Decline buttons instead of navigating away).
 const notifHref = (n: any): string | null => {
-  if (n.type === 'automod_warn') return null
+  if (n.type === 'automod_warn' || n.type === 'RELATIONSHIP_REQUEST') return null
   if (identityIsGroup(n)) return identityHref(n)
   if (n.sender?.username && ['FOLLOW', 'RELATIONSHIP_ACCEPTED', 'follow', 'relationship_accepted'].includes(n.type)) {
     return `/profile/${n.sender.username}`
@@ -140,6 +169,19 @@ onMounted(fetchAll)
                 {{ ' ' }}{{ notifTypeLabel(n.type) }}
               </p>
               <p class="text-xs text-white/40 mt-0.5">{{ formatDate(n.created_at) }}</p>
+              <!-- Relationship request -->
+              <div v-if="n.type === 'RELATIONSHIP_REQUEST' && !n._relDone" class="flex gap-2 mt-2 max-w-xs">
+                <button @click.stop.prevent="acceptRelationship(n)" :disabled="relActionLoading[n.id]"
+                  class="flex-1 py-1 rounded-lg bg-pink-500 hover:bg-pink-400 disabled:opacity-50 text-white text-xs font-bold transition-colors">
+                  Принять
+                </button>
+                <button @click.stop.prevent="declineRelationship(n)" :disabled="relActionLoading[n.id]"
+                  class="flex-1 py-1 rounded-lg bg-brand-bg border border-brand-border hover:border-white/20 disabled:opacity-50 text-white/55 hover:text-white text-xs font-semibold transition-colors">
+                  Отклонить
+                </button>
+              </div>
+              <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'accepted'" class="text-xs text-pink-400 mt-1 font-semibold">❤️ Принято</p>
+              <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'declined'" class="text-xs text-white/40 mt-1">Отклонено</p>
             </div>
             <div v-if="!n.is_read" class="w-2 h-2 bg-brand-accent rounded-full flex-shrink-0 mt-2"></div>
           </component>

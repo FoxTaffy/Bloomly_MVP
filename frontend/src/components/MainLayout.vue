@@ -394,8 +394,17 @@ const toggleFollow = async (userId: string) => {
 }
 
 // ── Active Ads ───────────────────────────────────────────────────────────────
+// Реклама доступна только на Free (монетизация) и Business (предложение разместить
+// свою рекламу вместо чужой). На Lite/Pro реклама скрыта — это преимущество подписки.
 const activeAds = ref<any[]>([])
+const adSlotMode = computed<'ads' | 'offer' | 'hidden'>(() => {
+  const tier = (auth.user as any)?.subscription_tier ?? 'free'
+  if (tier === 'lite' || tier === 'pro') return 'hidden'
+  if (tier === 'business') return 'offer'
+  return 'ads'
+})
 const fetchActiveAds = async () => {
+  if (adSlotMode.value !== 'ads') return
   try {
     const res = await api.get('/admin/ads/active')
     if (res.data.success) activeAds.value = res.data.data.ads
@@ -871,9 +880,11 @@ onDeactivated(() => {
       <!-- Left Sidebar -->
       <AppSidebar v-model:activeNav="activeNav">
         <template #bottom>
-          <div class="space-y-3">
-            <AdSlot v-for="ad in activeAds" :key="ad.id" :ad="ad" />
-            <AdSlot v-if="!activeAds.length" :ad="null" />
+          <div v-if="adSlotMode !== 'hidden'" class="space-y-3">
+            <template v-if="adSlotMode === 'ads'">
+              <AdSlot v-for="ad in activeAds" :key="ad.id" :ad="ad" />
+            </template>
+            <AdSlot v-else-if="adSlotMode === 'offer'" :ad="null" />
           </div>
         </template>
       </AppSidebar>
@@ -1346,7 +1357,8 @@ onDeactivated(() => {
         </Transition>
 
         <!-- Ad placement -->
-        <AdSlot :ad="activeAds[0] ?? null" variant="hero" />
+        <AdSlot v-if="adSlotMode === 'offer'" :ad="null" variant="hero" />
+        <AdSlot v-else-if="adSlotMode === 'ads' && activeAds[0]" :ad="activeAds[0]" variant="hero" />
 
         <!-- Feed -->
         <div v-if="isLoadingPosts" class="space-y-4">
@@ -1391,7 +1403,8 @@ onDeactivated(() => {
       <aside class="w-80 hidden xl:block sticky top-24 self-start space-y-6">
 
         <!-- Ad placement -->
-        <AdSlot :ad="activeAds[1] ?? activeAds[0] ?? null" />
+        <AdSlot v-if="adSlotMode === 'offer'" :ad="null" />
+        <AdSlot v-else-if="adSlotMode === 'ads' && (activeAds[1] ?? activeAds[0])" :ad="activeAds[1] ?? activeAds[0]" />
 
         <!-- Trending Hashtags -->
         <div>

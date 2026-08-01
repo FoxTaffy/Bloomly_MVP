@@ -604,6 +604,17 @@
       :original-images="lightboxOriginalUrls"
       :start-index="lightboxIndex"
       :post-id="post.id"
+      :author-id="post.author?.id"
+      :rating="localRating"
+      :initial-vote="localVote"
+      :initial-repawed="localRepawed"
+      :initial-favourited="localFavourited"
+      :repaw-count="localRepaws"
+      :comments-count="post._count?.comments ?? 0"
+      :views-count="post.views_count ?? 0"
+      @voted="({ vote, rating }) => { localVote = vote; localRating = rating }"
+      @repaw-toggled="({ repawed, count }) => { localRepawed = repawed; localRepaws = count }"
+      @favourite-changed="({ favourited }) => { localFavourited = favourited; emit('favouriteChanged', post.id, favourited) }"
       @close="lightboxOpen = false"
     />
   </div>

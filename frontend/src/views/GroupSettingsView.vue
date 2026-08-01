@@ -1264,7 +1264,7 @@ async function deleteGroup() {
                   <div class="p-6 space-y-5">
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsFieldName }}</label>
-                      <input v-model="form.name" class="field-input" :placeholder="langStore.t.groupSettingsNamePlaceholder" />
+                      <input v-model="form.name" class="field-input" maxlength="120" :placeholder="langStore.t.groupSettingsNamePlaceholder" />
                     </div>
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 flex items-center justify-between">
@@ -1277,7 +1277,7 @@ async function deleteGroup() {
                       <div class="relative">
                         <span class="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-sm">@</span>
                         <input v-model="form.slug"
-                          class="field-input pl-8 pr-10 transition-colors"
+                          class="field-input !pl-8 !pr-10 transition-colors"
                           :class="form.slug
                             ? (settingsSlugError ? '!border-brand-error focus:!border-brand-error' : '!border-brand-success focus:!border-brand-success')
                             : ''"
@@ -1449,14 +1449,18 @@ async function deleteGroup() {
                     <div class="px-6 pb-6 space-y-5 border-t border-brand-border/40 pt-5 mt-2">
                       <div>
                         <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsAccentColor }}</label>
-                        <div class="flex flex-wrap gap-2">
+                        <div class="flex flex-wrap gap-2 mb-3">
                           <button v-for="c in presetColors" :key="c" type="button" class="w-9 h-9 rounded-xl border-2 transition-all duration-200 hover:scale-110"
                             :class="form.accentColor === c ? 'border-white scale-110 shadow-lg' : 'border-transparent'"
                             :style="{ backgroundColor: c }" @click="form.accentColor = c" />
-                          <label class="w-9 h-9 rounded-xl border-2 border-dashed border-brand-border hover:border-brand-accent/40 flex items-center justify-center cursor-pointer transition-colors">
+                          <label class="relative w-9 h-9 rounded-xl border-2 border-dashed border-brand-border hover:border-brand-accent/40 flex items-center justify-center cursor-pointer transition-colors overflow-hidden">
                             <BIcon name="Pipette" class="w-4 h-4 text-white/30" />
-                            <input v-model="form.accentColor" type="color" class="sr-only" />
+                            <input v-model="form.accentColor" type="color" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                           </label>
+                        </div>
+                        <div class="relative">
+                          <span class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border border-white/20" :style="{ backgroundColor: form.accentColor }" />
+                          <input v-model="form.accentColor" maxlength="9" placeholder="#4C67CF" class="field-input !pl-11 font-mono" />
                         </div>
                       </div>
 

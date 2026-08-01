@@ -3,6 +3,7 @@ import { deleteFileByUrl } from '../media/service.js';
 import { getUserBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy } from '../../lib/blocks.js';
+import { sanitizeFields, sanitizeDisplayText } from '../../lib/sanitizeText.js';
 import sharp from 'sharp';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput } from './types.js';
 
@@ -197,6 +198,30 @@ export const usersService = {
   },
 
   async updateUser(id: string, data: UpdateUserInput) {
+    // ── Strip Zalgo/zero-width/bidi-override tricks from free-text fields ───
+    sanitizeFields(data as Record<string, any>, {
+      display_name: 50,
+      bio: 300,
+      status: 100,
+      website: 200,
+      location: 100,
+      pronouns: 30,
+      job_title: 80,
+      relationship_status: 50,
+      country: 80,
+      fursona_name: 80,
+      fursona_color: 50,
+      fursona_gender: 50,
+      fav_food: 80,
+      fav_animal: 80,
+      fav_music: 80,
+      fav_artist: 80,
+      fav_film: 80,
+    });
+    if ((data as any).profile_status && typeof (data as any).profile_status.text === 'string') {
+      (data as any).profile_status.text = sanitizeDisplayText((data as any).profile_status.text, 60);
+    }
+
     // ── Fetch current media URLs before overwriting ─────────────────────
     const current = await prisma.user.findUnique({
       where: { id, deleted_at: null },
@@ -693,6 +718,7 @@ export const usersService = {
 
   /** Create a new character. The first one a user creates becomes primary automatically. */
   async createFursona(userId: string, data: UpsertFursonaInput) {
+    sanitizeFields(data as Record<string, any>, { name: 80, species_other: 50 });
     const count = await prisma.fursona.count({ where: { user_id: userId, deleted_at: null } });
     if (count >= 10) {
       throw Object.assign(new Error('You can create up to 10 characters'), { statusCode: 400 });
@@ -708,6 +734,7 @@ export const usersService = {
   },
 
   async updateFursona(userId: string, fursonaId: string, data: UpsertFursonaInput) {
+    sanitizeFields(data as Record<string, any>, { name: 80, species_other: 50 });
     const existing = await prisma.fursona.findFirst({
       where: { id: fursonaId, user_id: userId, deleted_at: null },
     });

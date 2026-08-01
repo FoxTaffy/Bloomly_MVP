@@ -364,6 +364,13 @@ export const submitAdHandler = async (
   reply: FastifyReply,
 ) => {
   const requesterId = (req.user as JwtUser | undefined)?.id;
+  // Placing ads is a Business-subscription perk — matches the "featAdCampaigns" pricing bullet.
+  const requester = requesterId
+    ? await prisma.user.findUnique({ where: { id: requesterId }, select: { subscription_tier: true } })
+    : null;
+  if (requester?.subscription_tier !== 'business') {
+    return reply.code(402).send({ success: false, data: null, error: { code: 'BUSINESS_REQUIRED', message: 'Placing ads requires a Business subscription' } });
+  }
   const ad = await adminService.submitAd({ ...req.body, requesterId });
   return reply.code(201).send({ success: true, data: { ad }, error: null });
 };

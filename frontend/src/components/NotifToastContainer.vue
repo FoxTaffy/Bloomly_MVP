@@ -52,6 +52,9 @@ function onClick(t: typeof toasts.value[0]) {
     router.push({ name: 'group-admin-tools', params: { slugOrId: t.groupSlug }, query: { tab: 'inbox' } })
   } else if (t.convId) {
     router.push({ name: 'messages', query: { c: t.convId } })
+  } else if (t.type === 'RELATIONSHIP_REQUEST') {
+    // Accept/decline happens from the notifications list, not a fire-and-forget toast.
+    router.push('/notifications')
   } else if (t.postId) {
     router.push(`/post/${t.postId}`)
   } else if (t.senderUsername) {

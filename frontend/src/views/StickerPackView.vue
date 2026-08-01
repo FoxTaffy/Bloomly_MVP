@@ -163,7 +163,7 @@ const chartData = computed(() => {
 
         <!-- Back -->
         <button
-          @click="router.push({ name: 'stickers' })"
+          @click="router.push({ name: 'shop' })"
           class="flex items-center gap-2 text-white/55 hover:text-white text-sm font-semibold mb-4 transition-colors">
           <BIcon name="ArrowLeft" class="w-4 h-4" />
           Обратно к стикерам
@@ -184,7 +184,7 @@ const chartData = computed(() => {
           <h2 class="text-2xl font-bold text-white mb-2">Пак не найден</h2>
           <p class="text-white/55 text-sm mb-6">Он мог быть удалён или скрыт</p>
           <button
-            @click="router.push({ name: 'stickers' })"
+            @click="router.push({ name: 'shop' })"
             class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-purple/80 hover:bg-brand-purple text-white text-sm font-bold rounded-xl transition-all">
             <BIcon name="Sticker" class="w-4 h-4" />
             К стикерам
@@ -255,7 +255,7 @@ const chartData = computed(() => {
                   </button>
                   <button
                     v-if="isOwn()"
-                    @click="router.push({ name: 'stickers' })"
+                    @click="router.push({ name: 'shop' })"
                     class="flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-2xl bg-brand-bg border border-brand-border hover:bg-brand-border text-white transition-all">
                     <BIcon name="Pencil" class="w-4 h-4" />
                     Управление

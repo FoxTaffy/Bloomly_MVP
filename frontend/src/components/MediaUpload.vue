@@ -26,7 +26,7 @@ let rejectedTimer: ReturnType<typeof setTimeout> | null = null
 // Native <input accept> only filters the OS file picker — drag/drop and
 // clipboard paste bypass it entirely, so re-check every file against the
 // same allow-list before it's queued for upload.
-const acceptPatterns = () => (props.accept ?? 'image/*,video/*,audio/*').split(',').map(p => p.trim()).filter(Boolean)
+const acceptPatterns = () => (props.accept ?? 'image/*,video/*').split(',').map(p => p.trim()).filter(Boolean)
 
 function isFileAccepted(file: File): boolean {
   return acceptPatterns().some(pattern => {
@@ -300,7 +300,7 @@ defineExpose({
       type="file"
       class="hidden"
       @change="(e) => { const el = e.target as HTMLInputElement; const snapshot = Array.from(el.files ?? []); el.value = ''; processFiles(snapshot) }"
-      :accept="accept ?? 'image/*,video/*,audio/*'"
+      :accept="accept ?? 'image/*,video/*'"
       :multiple="multiple !== false"
     />
 

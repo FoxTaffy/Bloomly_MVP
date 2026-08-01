@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLangStore } from '@/stores/lang'
+import { useAuthStore } from '@/stores/auth'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { formatCount } from '@/lib/utils'
 import api from '@/api'
@@ -13,6 +14,7 @@ import { onAvatarError } from '@/composables/useAvatarFallback'
 
 const router = useRouter()
 const langStore = useLangStore()
+const authStore = useAuthStore()
 const { nsfwEnabled: nsfwMode } = useNsfwMode()
 
 const isVideoUrl = (url: string) => /\.(mp4|webm|mov|mkv|ogv)$/i.test(url.split('?')[0])
@@ -66,6 +68,24 @@ const tiles = computed<Tile[]>(() => {
   return list
 })
 
+// Per-post viewer status (vote/repaw/favourite) — same pattern as MainLayout/ProfileView
+interface PostStatus { repawed: boolean; favourited: boolean; userVote: 1 | -1 | 0 }
+const postStatus = reactive<Record<string, PostStatus>>({})
+
+async function fetchStatusFor(loadedPosts: any[]) {
+  if (!authStore.isAuthenticated) return
+  const ids = [...new Set(loadedPosts.map((p: any) => p.id))].filter(id => !(id in postStatus))
+  if (!ids.length) return
+  try {
+    const res = await api.get(`/posts/status?ids=${ids.join(',')}`)
+    if (res.data.success) {
+      for (const s of res.data.data) {
+        postStatus[s.id] = { repawed: s.repawed ?? false, favourited: s.favourited ?? false, userVote: s.userVote ?? 0 }
+      }
+    }
+  } catch { /* non-critical */ }
+}
+
 async function fetchPosts(reset = true) {
   if (reset) {
     isLoading.value = true
@@ -92,6 +112,7 @@ async function fetchPosts(reset = true) {
       const loaded = (res.data.data.posts ?? []).filter((p: any) => p && p.author)
       posts.value = reset ? loaded : [...posts.value, ...loaded]
       hasMore.value = loaded.length === PAGE_SIZE
+      fetchStatusFor(loaded)
     }
   } catch (e) {
     console.error('fetchPosts', e)
@@ -210,22 +231,34 @@ onMounted(() => {
           <div class="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-4">
             <div v-for="tile in tiles" :key="tile.key"
               @click="openTile(tile)"
-              class="mb-4 break-inside-avoid group relative rounded-2xl overflow-hidden bg-brand-card border border-brand-border cursor-pointer hover:ring-2 hover:ring-brand-accent/50 transition-all">
-              <img :src="tile.url" loading="lazy" class="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.03]" />
+              class="mb-4 break-inside-avoid group relative rounded-2xl overflow-hidden bg-brand-card border border-brand-border cursor-pointer shadow-sm hover:shadow-xl hover:shadow-black/40 hover:ring-2 hover:ring-brand-accent/50 hover:-translate-y-0.5 transition-all duration-200">
+              <img :src="tile.url" loading="lazy" class="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.04]" />
 
-              <!-- Rating badge -->
+              <!-- Rating badge (hot sort) -->
               <div v-if="sortKey === 'hot' && tile.post.rating > 0"
                 class="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white text-[11px] font-bold">
                 <BIcon name="Star" class="w-3 h-3 text-amber-400" />
                 {{ formatCount(tile.post.rating) }}
               </div>
 
-              <!-- Bottom gradient overlay with author -->
-              <div class="absolute inset-x-0 bottom-0 p-3 pt-8 bg-gradient-to-t from-black/85 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                <div class="flex items-center gap-2 cursor-pointer" @click.stop="goToProfile(tile.post.author.username)">
+              <!-- Multi-image indicator -->
+              <div v-if="tile.images.length > 1"
+                class="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white">
+                <BIcon name="Images" class="w-3 h-3" />
+              </div>
+
+              <!-- Bottom gradient overlay: author always visible, stats fade in on hover -->
+              <div class="absolute inset-x-0 bottom-0 p-2.5 pt-9 flex items-end justify-between gap-2 bg-gradient-to-t from-black/85 via-black/25 to-transparent">
+                <div class="flex items-center gap-1.5 min-w-0 cursor-pointer" @click.stop="goToProfile(tile.post.author.username)">
                   <img :src="tile.post.author.avatar_url || '/default-avatar.png'" @error="onAvatarError"
                     class="w-6 h-6 rounded-full object-cover border border-white/20 flex-shrink-0" />
-                  <span class="text-xs font-bold text-white truncate">{{ tile.post.author.display_name || tile.post.author.username }}</span>
+                  <span class="text-xs font-bold text-white truncate hover:text-brand-accent transition-colors">{{ tile.post.author.display_name || tile.post.author.username }}</span>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0 text-white/85 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span v-if="tile.post._count?.comments" class="flex items-center gap-0.5 text-[11px] font-bold">
+                    <BIcon name="MessageSquare" class="w-3.5 h-3.5" />
+                    {{ formatCount(tile.post._count.comments) }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -255,6 +288,26 @@ onMounted(() => {
       :author="lightboxTile.post.author"
       :created-at="lightboxTile.post.created_at"
       :content="lightboxTile.post.content"
+      :rating="lightboxTile.post.rating"
+      :initial-vote="postStatus[lightboxTile.post.id]?.userVote ?? 0"
+      :initial-repawed="postStatus[lightboxTile.post.id]?.repawed ?? false"
+      :initial-favourited="postStatus[lightboxTile.post.id]?.favourited ?? false"
+      :repaw-count="lightboxTile.post._count?.repaws ?? 0"
+      :comments-count="lightboxTile.post._count?.comments ?? 0"
+      :views-count="lightboxTile.post.views_count ?? 0"
+      @voted="({ postId, vote, rating }) => {
+        const p = posts.find(p => p.id === postId)
+        if (p) p.rating = rating
+        postStatus[postId] = { ...(postStatus[postId] ?? { repawed: false, favourited: false }), userVote: vote }
+      }"
+      @repaw-toggled="({ postId, repawed, count }) => {
+        const p = posts.find(p => p.id === postId)
+        if (p?._count) p._count.repaws = count
+        postStatus[postId] = { ...(postStatus[postId] ?? { userVote: 0, favourited: false }), repawed }
+      }"
+      @favourite-changed="({ postId, favourited }) => {
+        postStatus[postId] = { ...(postStatus[postId] ?? { userVote: 0, repawed: false }), favourited }
+      }"
       @close="lightboxTile = null"
     />
   </div>

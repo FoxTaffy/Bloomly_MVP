@@ -409,7 +409,7 @@
                 <!-- Name row -->
                 <div class="mt-4">
                   <div class="flex items-center flex-wrap gap-2 mb-2">
-                    <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white tracking-tight">{{ profileDisplayName }}</h1>
+                    <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white tracking-tight min-w-0 max-w-full break-words [overflow-wrap:anywhere]">{{ profileDisplayName }}</h1>
                     <!-- Deceased badge -->
                     <span v-if="(viewedProfile as any)?.deceased_at"
                       class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 text-white/60 flex-shrink-0"
@@ -1933,7 +1933,7 @@
         <!-- Header -->
         <div class="flex items-center justify-between px-5 py-4 flex-shrink-0" @click.stop>
           <div class="flex items-center gap-3">
-            <span class="text-white font-bold text-base">
+            <span class="text-white font-bold text-base min-w-0 max-w-full truncate">
               {{ viewedProfile?.display_name || viewedProfile?.username }}
             </span>
             <span v-if="avatarGallery.length > 1" class="text-white/40 text-sm tabular-nums">
