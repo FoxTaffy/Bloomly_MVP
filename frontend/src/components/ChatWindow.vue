@@ -1283,7 +1283,12 @@
 
               <!-- Read status icons (only on my messages) -->
               <template v-if="isMine(msg)">
-                <button v-if="msg._failed" type="button" @click="retrySend(msg)"
+                <button v-if="msg._failed && msg._failReason === 'DAILY_MESSAGE_LIMIT_REACHED'" type="button"
+                  @click="router.push('/subscription')"
+                  class="flex items-center gap-0.5 text-amber-400 hover:text-amber-300" :title="langStore.t.chatDailyLimitReachedTitle">
+                  <BIcon name="Lock" class="w-3 h-3" />
+                </button>
+                <button v-else-if="msg._failed" type="button" @click="retrySend(msg)"
                   class="flex items-center gap-0.5 text-red-400 hover:text-red-300" :title="langStore.t.chatNotSentRetryTitle">
                   <BIcon name="AlertCircle" class="w-3 h-3" />
                 </button>

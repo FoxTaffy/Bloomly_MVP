@@ -1,4 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
+import prisma from '../../config/prisma.js';
 import { groupService } from './service.js';
 import { messageService } from '../messages/service.js';
 import { moderatePost, moderateGroupMessage } from '../automod/service.js';
@@ -73,6 +74,17 @@ export const updateGroupHandler = async (
       const { id: userId } = request.user as JwtUser;
       if (!(await groupService.isOwner(request.params.id, userId))) {
         return fail(reply, 403, 'FORBIDDEN', 'Only the group owner can change finance or member-visibility settings');
+      }
+    }
+    // Custom group background/frame/theme are a Business-subscription perk — gated here
+    // to match the (previously frontend-only) upsell in group settings.
+    const BUSINESS_TIER_FIELDS: (keyof UpdateGroupInput)[] = ['groupBgUrl', 'groupFrame', 'groupTheme'];
+    const touchesBusinessField = BUSINESS_TIER_FIELDS.some((f) => request.body[f] !== undefined && request.body[f] !== null && request.body[f] !== '');
+    if (touchesBusinessField) {
+      const { id: userId } = request.user as JwtUser;
+      const requester = await prisma.user.findUnique({ where: { id: userId }, select: { subscription_tier: true } });
+      if (requester?.subscription_tier !== 'business') {
+        return fail(reply, 402, 'BUSINESS_REQUIRED', 'Group customization requires a Business subscription');
       }
     }
     const group = await groupService.update(request.params.id, request.body);
