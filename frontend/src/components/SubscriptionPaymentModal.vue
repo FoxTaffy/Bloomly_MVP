@@ -116,20 +116,22 @@ async function payWithNewCard() {
   sending.value = true
   errorMsg.value = ''
   flipped.value = false
+  // The backend requires a card on file before it will grant a paid tier, so the card
+  // must be saved before charging — not after. If the user didn't ask to keep it, it's
+  // removed again once the "charge" has gone through.
+  let newMethodId: string | null = null
   try {
+    const [expMonth, expYear] = cardExp.value.split('/')
+    const saved = await api.post('/users/me/payment-methods', {
+      cardNumber: cardNum.value,
+      expMonth: Number(expMonth),
+      expYear: 2000 + Number(expYear),
+      holderName: cardName.value,
+    })
+    newMethodId = saved.data?.data?.id ?? null
     await chargeSubscription()
-    if (saveCard.value) {
-      const [expMonth, expYear] = cardExp.value.split('/')
-      try {
-        await api.post('/users/me/payment-methods', {
-          cardNumber: cardNum.value,
-          expMonth: Number(expMonth),
-          expYear: 2000 + Number(expYear),
-          holderName: cardName.value,
-        })
-      } catch {
-        // Saving the card is best-effort — the payment itself already succeeded.
-      }
+    if (!saveCard.value && newMethodId) {
+      await api.delete(`/users/me/payment-methods/${newMethodId}`).catch(() => {})
     }
   } catch {
     errorMsg.value = langStore.t.subToastError

@@ -60,6 +60,7 @@ model User {
   fav_film                       String?                   @db.VarChar(80)
   public_key                     String?
   subscription_tier              String                    @default("free") @db.VarChar(20)
+  storage_used_bytes             BigInt                    @default(0)
   profile_theme                  String?                   @db.VarChar(50)
   profile_bg_url                 String?
   profile_frame                  String?                   @db.VarChar(50)
@@ -171,6 +172,7 @@ model User {
   last_seen_at                   DateTime?
   payment_region                 String?                   @db.VarChar(10)
   paymentMethods                 PaymentMethod[]
+  subscriptionPlans              SubscriptionPlan[]
   supportTickets                 SupportTicket[]           @relation("SupportTicketUser")
   supportTicketMessages          SupportTicketMessage[]    @relation("SupportTicketMessageSender")
   two_factor_method              String?                   @db.VarChar(10)
@@ -198,6 +200,21 @@ model PaymentMethod {
   is_default  Boolean  @default(false)
   created_at  DateTime @default(now())
   user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+/// Audit trail of subscription tier changes. Table already existed in the DB
+/// (created by migration 20260302300000) but was never wired into Prisma Client.
+model SubscriptionPlan {
+  id         String    @id @default(uuid()) @db.Uuid
+  user_id    String    @db.Uuid
+  tier       String    @default("free") @db.VarChar(20)
+  starts_at  DateTime  @default(now())
+  ends_at    DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
 }

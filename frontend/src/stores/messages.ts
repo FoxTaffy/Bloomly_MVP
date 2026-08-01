@@ -37,6 +37,7 @@ export interface Message {
   sender: MsgSender
   _sending?: boolean
   _failed?: boolean
+  _failReason?: string
 }
 
 export interface PinnedMessage {
@@ -459,10 +460,11 @@ export const useMessagesStore = defineStore('messages', () => {
         if (idx !== -1) list.splice(idx, 1, { ...msg, _sending: false })
         else if (!list.some((m) => m.id === msg.id)) list.push(msg)
       }
-    } catch {
+    } catch (err: any) {
       const list = messages.value[convId]
       const idx = list?.findIndex((m) => m.id === tempId) ?? -1
-      if (list && idx !== -1) list.splice(idx, 1, { ...list[idx], _sending: false, _failed: true })
+      const reason = err?.response?.data?.error?.message as string | undefined
+      if (list && idx !== -1) list.splice(idx, 1, { ...list[idx], _sending: false, _failed: true, _failReason: reason })
     }
   }
 

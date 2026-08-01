@@ -2865,15 +2865,26 @@ const totalPendingBadge = computed(() => {
                     </div>
                   </router-link>
 
-                  <span v-if="req.verification_type"
-                    class="inline-flex items-center gap-2 rounded-xl border pl-1 pr-3 py-1 flex-shrink-0"
-                    :class="verTypeColors[req.verification_type] || 'text-blue-400 bg-blue-400/10 border-blue-400/20'">
-                    <img :src="verTypeIconUrl(req.verification_type)" :alt="verTypeLabels[req.verification_type] || req.verification_type" class="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
-                    <span class="text-sm font-extrabold">{{ verTypeLabels[req.verification_type] || req.verification_type }}</span>
-                  </span>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                      <span class="text-xs font-extrabold px-2.5 py-1 rounded-full border"
+                        :class="req.status==='pending'
+                          ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                          : req.status==='approved'
+                            ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                            : 'text-rose-400 bg-rose-500/10 border-rose-500/20'">
+                        {{ {pending: langStore.t.adminVerStatusPending, approved: langStore.t.adminVerStatusApproved, rejected: langStore.t.adminVerStatusRejected}[req.status] }}
+                      </span>
+                      <span class="text-[10px] text-white/25 whitespace-nowrap">{{ formatDate(req.created_at) }}</span>
+                    </div>
+                  </div>
 
-                  <span class="text-[10px] text-white/25 whitespace-nowrap flex-shrink-0 ml-auto pl-2">{{ formatDate(req.created_at) }}</span>
-                </div>
+                  <div v-if="req.verification_type" class="mt-2.5">
+                    <span class="text-xs font-bold pl-1.5 pr-2.5 py-1 rounded-full border inline-flex items-center gap-1.5"
+                      :class="verTypeColors[req.verification_type] || 'text-blue-400 bg-blue-400/10 border-blue-400/20'">
+                      <BIcon :name="verTypeIcons[req.verification_type] || 'BadgeCheck'" class="w-3.5 h-3.5" />
+                      {{ verTypeLabels[req.verification_type] || req.verification_type }}
+                    </span>
+                  </div>
 
                 <!-- Criteria: single wrapping row, never overflows -->
                 <div class="px-4 flex flex-wrap items-center gap-1 min-w-0">

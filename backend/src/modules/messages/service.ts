@@ -109,6 +109,9 @@ function inferFileType(fileUrl: string, mediaType?: string): string {
 
 const MAX_ALBUM_FILES = 10;
 
+// Free-tier daily message cap advertised on the subscription page (Lite+ is unlimited).
+const FREE_DAILY_MESSAGE_LIMIT = 50;
+
 // ── Service ───────────────────────────────────────────────────────────────────
 export const messageService = {
   /**
@@ -332,6 +335,18 @@ export const messageService = {
    */
   async sendMessage({ conversationId, senderId, content, encrypted_text, file_url, media_type, reply_to_id, type, metadata, attachments }: SendMessageInput) {
     await this._assertParticipant(conversationId, senderId);
+
+    const sender = await prisma.user.findUnique({ where: { id: senderId }, select: { subscription_tier: true } });
+    if ((sender?.subscription_tier ?? 'free') === 'free') {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const sentToday = await prisma.message.count({
+        where: { sender_id: senderId, created_at: { gte: startOfDay }, deleted_at: null },
+      });
+      if (sentToday >= FREE_DAILY_MESSAGE_LIMIT) {
+        throw Object.assign(new Error('DAILY_MESSAGE_LIMIT_REACHED'), { statusCode: 402 });
+      }
+    }
 
     const conv = await prisma.conversation.findUnique({
       where: { id: conversationId },
