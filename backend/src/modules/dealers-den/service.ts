@@ -47,6 +47,12 @@ const LISTING_SELECT = {
       verification_type: true,
     },
   },
+  avatarFrame: {
+    select: {
+      id: true, status: true, rejection_reason: true,
+      default_offset_x: true, default_offset_y: true, default_scale: true, default_rotation: true,
+    },
+  },
 };
 
 export const dealersDenService = {
@@ -96,6 +102,22 @@ export const dealersDenService = {
     ]);
 
     return { listings, total, page, limit };
+  },
+
+  // ── trending tags ──────────────────────────────────────────────────────────
+  async getTrendingTags(limit = 12) {
+    const listings = await prisma.dealerListing.findMany({
+      where: { status: 'active', deleted_at: null },
+      select: { tags: true },
+    });
+    const counts = new Map<string, number>();
+    for (const l of listings) {
+      for (const tag of l.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([tag, count]) => ({ tag, count }));
   },
 
   // ── get single with extended info ─────────────────────────────────────────
@@ -194,7 +216,10 @@ export const dealersDenService = {
     if (input.quantity    !== undefined) data.quantity    = input.quantity;
     if (input.isNsfw      !== undefined) data.is_nsfw     = input.isNsfw;
     if (input.tags        !== undefined) data.tags        = input.tags;
-    if (input.status      !== undefined) data.status      = input.status;
+    // Avatar frame listings can only go active/archived via the admin approval flow
+    // (avatarFramesService.adminReview) — otherwise a seller could self-publish a
+    // never-reviewed frame by just PATCHing status through this generic endpoint.
+    if (input.status !== undefined && existing.category !== 'avatar_frame') data.status = input.status;
     if (input.commissionSlotsTotal !== undefined) data.commission_slots_total = input.commissionSlotsTotal;
     if (input.commissionEtaDays    !== undefined) data.commission_eta_days    = input.commissionEtaDays;
     if (input.commissionFormFields !== undefined) data.commission_form_fields = input.commissionFormFields;
@@ -248,6 +273,20 @@ export const dealersDenService = {
     // leaking in S3 forever (there's no hard-delete cron for listings either).
     Promise.all(existing.images.map((url) => deleteFileByUrl(url)))
       .catch((err) => console.error('[dealerListing.delete] media cleanup failed:', err));
+
+    // Avatar frames are a special case: once the artist deletes the listing, the source
+    // art is gone (image gets purged above), so anyone still displaying it on their
+    // profile would just show a broken image. Unequip it everywhere and retire the frame.
+    if (existing.category === 'avatar_frame') {
+      const frame = await prisma.avatarFrame.findUnique({ where: { listing_id: id } });
+      if (frame) {
+        await prisma.$transaction([
+          prisma.user.updateMany({ where: { profile_frame_id: frame.id }, data: { profile_frame_id: null } }),
+          prisma.avatarFrame.update({ where: { id: frame.id }, data: { deleted_at: new Date() } }),
+        ]);
+      }
+    }
+
     return updated;
   },
 

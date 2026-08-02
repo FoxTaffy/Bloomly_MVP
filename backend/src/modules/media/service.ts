@@ -88,7 +88,7 @@ export async function uploadFile(
   buffer: Buffer,
   originalName: string,
   mimeType: string,
-  folder: 'posts' | 'comments' | 'avatars' | 'banners' | 'messages' | 'backgrounds' | 'stickers' | 'reports' | 'verification' = 'posts',
+  folder: 'posts' | 'comments' | 'avatars' | 'banners' | 'messages' | 'backgrounds' | 'stickers' | 'reports' | 'verification' | 'avatar-frames' = 'posts',
 ): Promise<{ url: string; originalUrl?: string; isSilentVideo?: boolean }> {
   // Await only if the startup promise hasn't resolved yet (no-op on subsequent calls)
   await bucketReady;

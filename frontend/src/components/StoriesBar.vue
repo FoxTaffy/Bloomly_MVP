@@ -89,13 +89,14 @@ defineExpose({ fetchStories, userStories })
 // ── Own status note ──────────────────────────────────────────────────────────
 const statusNote = ref<StatusNote | null>(null)
 
-function loadStatusNote() {
+async function loadStatusNote() {
+  if (!auth.user?.id) return
   try {
-    const raw = localStorage.getItem('profile_status')
-    if (!raw) return
-    const d = JSON.parse(raw)
-    if (d.expiresAt && d.expiresAt < Date.now()) { localStorage.removeItem('profile_status'); return }
-    if (d.text || d.music) {
+    const res = await api.get(`/users/${auth.user.id}`)
+    const d = res.data?.data?.user?.profile_status
+    if (!d) return
+    if (d.expiresAt && d.expiresAt < Date.now()) return
+    if (d.text || d.emoji || d.music) {
       statusNote.value = { emoji: d.emoji ?? '', text: d.text ?? '', color: d.color ?? '', music: d.music ?? null }
     }
   } catch {}
@@ -145,11 +146,7 @@ function openGroup(group: Story[]) {
                   style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;word-break:break-all">{{ statusNote.text }}</span>
               </div>
               <div v-if="statusNote.music" class="flex items-center gap-1.5">
-                <div class="flex items-end gap-[2px] h-3 flex-shrink-0">
-                  <span v-for="(h, i) in [50,100,65,85]" :key="i"
-                    class="w-[3px] rounded-full bg-white note-bar"
-                    :style="`height:${h}%; animation-delay:${i*0.08}s`" />
-                </div>
+                <img v-if="statusNote.music.artworkUrl" :src="statusNote.music.artworkUrl" class="w-6 h-6 rounded-md object-cover flex-shrink-0" />
                 <div class="min-w-0 overflow-hidden">
                   <p class="text-[10px] font-bold leading-tight truncate">{{ statusNote.music.artist }}</p>
                   <p class="text-[9px] opacity-70 leading-tight truncate">{{ statusNote.music.title }}</p>
@@ -286,12 +283,5 @@ function openGroup(group: Story[]) {
 }
 .stories-scrollbar::-webkit-scrollbar {
   display: none;
-}
-.note-bar {
-  animation: noteBar 0.6s ease-in-out infinite;
-}
-@keyframes noteBar {
-  0%, 100% { transform: scaleY(0.35) }
-  50%       { transform: scaleY(1) }
 }
 </style>

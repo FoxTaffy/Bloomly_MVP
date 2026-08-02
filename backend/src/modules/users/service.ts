@@ -105,6 +105,8 @@ const PUBLIC_SELECT = {
   profile_theme:        true,
   profile_bg_url:       true,
   profile_frame:        true,
+  profile_frame_id:     true,
+  equippedFrame:        { select: { id: true, image_url: true, name: true } },
   is_verified:          true,
   verified_at:          true,
   verification_type:    true,
@@ -151,6 +153,16 @@ export const usersService = {
       : await prisma.user.findFirst({ where: { username: id, deleted_at: null }, ...PROFILE_SELECT });
 
     if (!raw) return null;
+
+    // The frame image lives on AvatarFrame, but positioning is per-owner (UserAvatarFrame) —
+    // merge this profile's own calibration in so viewers render it exactly as this user set it.
+    if ((raw as any).equippedFrame) {
+      const calibration = await prisma.userAvatarFrame.findUnique({
+        where: { user_id_frame_id: { user_id: raw.id, frame_id: (raw as any).profile_frame_id } },
+        select: { offset_x: true, offset_y: true, scale: true, rotation: true },
+      });
+      (raw as any).equippedFrame = { ...(raw as any).equippedFrame, ...(calibration ?? { offset_x: 0, offset_y: 0, scale: 1, rotation: 0 }) };
+    }
 
     (raw as any).profile_status = liveProfileStatus((raw as any).profile_status);
 
@@ -218,8 +230,13 @@ export const usersService = {
       fav_artist: 80,
       fav_film: 80,
     });
-    if ((data as any).profile_status && typeof (data as any).profile_status.text === 'string') {
-      (data as any).profile_status.text = sanitizeDisplayText((data as any).profile_status.text, 60);
+    if ((data as any).profile_status) {
+      const status = (data as any).profile_status;
+      if (typeof status.text === 'string') status.text = sanitizeDisplayText(status.text, 60);
+      if (status.music) {
+        if (typeof status.music.title === 'string') status.music.title = sanitizeDisplayText(status.music.title, 200);
+        if (typeof status.music.artist === 'string') status.music.artist = sanitizeDisplayText(status.music.artist, 200);
+      }
     }
 
     // ── Fetch current media URLs before overwriting ─────────────────────
@@ -281,6 +298,17 @@ export const usersService = {
       if ((wantsFrame || wantsBg) && !['pro', 'business'].includes(tier)) {
         throw Object.assign(new Error('PRO_REQUIRED'), { statusCode: 402 });
       }
+    }
+
+    // ── Image-based avatar frames: ownership-gated, not tier-gated ───────────
+    // Unlike the legacy profile_frame presets above, these are acquired via
+    // Dealers' Den (free claim once approved), so equipping one just requires
+    // owning it — no subscription tier required.
+    if ((data as any).profile_frame_id !== undefined && (data as any).profile_frame_id !== null) {
+      const owns = await prisma.userAvatarFrame.findFirst({
+        where: { user_id: id, frame_id: (data as any).profile_frame_id, frame: { deleted_at: null } },
+      });
+      if (!owns) throw new Error('FRAME_NOT_OWNED');
     }
 
     // ── Normalise birth_date to a proper Date if it's a plain string ────────
@@ -1042,6 +1070,63 @@ export const usersService = {
       prisma.paymentMethod.update({ where: { id }, data: { is_default: true } }),
     ]);
     return { id };
+  },
+
+  /**
+   * Proxies track search to the iTunes Search API server-side so it isn't at the mercy
+   * of a given user's browser being able to reach itunes.apple.com directly (frequently
+   * blocked/unreachable from Russia/CIS). Tries the RU storefront first since that's
+   * where most of our users are, then falls back to the US storefront (the default
+   * iTunes catalog) if RU comes back empty — some tracks are only listed in one or the
+   * other.
+   */
+  async searchMusic(term: string) {
+    const q = encodeURIComponent(term.trim());
+    const fetchCatalog = async (country: string) => {
+      const res = await fetch(`https://itunes.apple.com/search?term=${q}&media=music&entity=song&limit=8&country=${country}`);
+      if (!res.ok) throw Object.assign(new Error('iTunes search failed'), { statusCode: 502 });
+      const data = await res.json();
+      return Array.isArray(data.results) ? data.results : [];
+    };
+
+    let results = await fetchCatalog('RU');
+    if (results.length === 0) results = await fetchCatalog('US');
+
+    // Route artwork/preview through our own proxy (see fetchMusicMedia below) —
+    // Apple's CDN (mzstatic.com / itunes.apple.com) is frequently unreachable from
+    // Russia/CIS even when the search API itself (proxied server-side, above) works,
+    // which otherwise leaves every thumbnail broken and the preview button silently dead.
+    const proxied = (raw: string) => raw ? `/api/users/music/proxy?url=${encodeURIComponent(raw)}` : '';
+
+    return results.map((track: any) => ({
+      title: track.trackName ?? '',
+      artist: track.artistName ?? '',
+      artworkUrl: proxied((track.artworkUrl100 ?? '').replace('100x100bb', '300x300bb')),
+      previewUrl: proxied(track.previewUrl ?? ''),
+    }));
+  },
+
+  /** Allowlisted passthrough for Apple's music CDN — see searchMusic above for why this exists. */
+  async fetchMusicMedia(rawUrl: string): Promise<{ contentType: string; buffer: Buffer }> {
+    let parsed: URL;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      throw Object.assign(new Error('Invalid URL'), { statusCode: 400 });
+    }
+    const ALLOWED_HOST = /^([a-z0-9-]+\.)*(mzstatic\.com|apple\.com)$/i;
+    if (parsed.protocol !== 'https:' || !ALLOWED_HOST.test(parsed.hostname)) {
+      throw Object.assign(new Error('Host not allowed'), { statusCode: 400 });
+    }
+    const res = await fetch(parsed.toString());
+    if (!res.ok) throw Object.assign(new Error('Upstream fetch failed'), { statusCode: 502 });
+    const buffer = Buffer.from(await res.arrayBuffer());
+    let contentType = res.headers.get('content-type') || 'application/octet-stream';
+    // Apple serves 30s preview clips as legit playable AAC/M4A but mislabels the
+    // response as audio/x-m4p (the FairPlay-DRM MIME type) — browsers refuse to play
+    // that type via <audio>, so play() silently no-ops. Same bytes, correct label.
+    if (contentType === 'audio/x-m4p') contentType = 'audio/mp4';
+    return { contentType, buffer };
   },
 
 };

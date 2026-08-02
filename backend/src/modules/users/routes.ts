@@ -11,6 +11,7 @@ import {
   getFursonasHandler, createFursonaHandler, updateFursonaHandler, deleteFursonaHandler, setPrimaryFursonaHandler,
   getReferenceImagesHandler, addReferenceImageHandler, updateReferenceImageHandler, deleteReferenceImageHandler, getWatermarkedReferenceImageHandler,
   getFursuitsHandler, createFursuitHandler, updateFursuitHandler, deleteFursuitHandler,
+  searchMusicHandler, proxyMusicMediaHandler,
 } from './controller.js';
 import {
   getUserParamsSchema, updateUserSchema, updateUsernameSchema, pinPostSchema,
@@ -25,6 +26,15 @@ export async function usersRoutes(fastify: FastifyInstance) {
 
   // GET /api/users/recommended
   fastify.get('/recommended', auth, getRecommendedUsersHandler as any);
+
+  // GET /api/users/music/search?q= — server-side proxy for the status music picker
+  // (avoids relying on the client's browser being able to reach itunes.apple.com directly)
+  fastify.get('/music/search', auth, searchMusicHandler as any);
+
+  // GET /api/users/music/proxy?url= — passthrough for Apple's music CDN (artwork/preview
+  // audio), allowlisted to mzstatic.com/apple.com. Public: browser <img>/<audio> tags can't
+  // attach the Bearer token, and there's nothing sensitive being proxied here.
+  fastify.get('/music/proxy', proxyMusicMediaHandler as any);
 
   // PATCH /api/users/me — update own profile
   fastify.patch('/me', { schema: updateUserSchema, onRequest: [fastify.authenticate] }, updateMeHandler as any);

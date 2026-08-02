@@ -854,9 +854,9 @@
                     </div>
                     <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <button v-for="(frame, id) in PROFILE_FRAMES" :key="id" type="button"
-                        @click="form.profile_frame = id"
+                        @click="form.profile_frame = id; form.profile_frame_id = null"
                         class="relative flex items-center gap-3 rounded-2xl px-4 py-3 border-2 transition-all"
-                        :class="form.profile_frame === id
+                        :class="form.profile_frame === id && !form.profile_frame_id
                           ? 'border-brand-accent bg-brand-accent/10'
                           : 'border-brand-border hover:border-white/20 bg-brand-bg'">
                         <!-- Mini avatar preview with frame -->
@@ -865,7 +865,60 @@
                           B
                         </div>
                         <span class="text-xs font-bold text-white">{{ frame.label }}</span>
-                        <BIcon v-if="form.profile_frame === id" name="Check" class="w-4 h-4 text-brand-accent ml-auto flex-shrink-0" />
+                        <BIcon v-if="form.profile_frame === id && !form.profile_frame_id" name="Check" class="w-4 h-4 text-brand-accent ml-auto flex-shrink-0" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- ── Owned image-based frames (from Dealers' Den) ─────── -->
+                  <div>
+                    <div class="flex items-center justify-between mb-3">
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.avatarFrameMineTitle }}</label>
+                      <router-link to="/dealers-den" class="text-[11px] font-bold text-brand-accent hover:underline">{{ langStore.t.avatarFrameFindMore }}</router-link>
+                    </div>
+                    <p v-if="!myFrames.length" class="text-xs text-white/35">{{ langStore.t.avatarFrameNoneOwned }}</p>
+                    <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div v-for="mf in myFrames" :key="mf.id"
+                        class="relative flex flex-col gap-2 rounded-2xl px-4 py-3 border-2 transition-all"
+                        :class="form.profile_frame_id === mf.id
+                          ? 'border-brand-accent bg-brand-accent/10'
+                          : 'border-brand-border hover:border-white/20 bg-brand-bg'">
+                        <button type="button" class="flex items-center gap-3" @click="form.profile_frame_id = mf.id; form.profile_frame = ''">
+                          <div class="relative w-10 h-10 flex-shrink-0">
+                            <div class="w-10 h-10 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm overflow-hidden">
+                              <img v-if="authStore.avatarUrl" :src="authStore.avatarUrl" class="w-full h-full object-cover" />
+                            </div>
+                            <AvatarFrameOverlay :frame="{ image_url: mf.image_url, offset_x: mf.offset_x, offset_y: mf.offset_y, scale: mf.scale, rotation: mf.rotation }" />
+                          </div>
+                          <span class="text-xs font-bold text-white truncate">{{ mf.name }}</span>
+                          <BIcon v-if="form.profile_frame_id === mf.id" name="Check" class="w-4 h-4 text-brand-accent ml-auto flex-shrink-0" />
+                        </button>
+                        <button type="button" @click="openFrameCalibration(mf)" class="text-[10px] font-bold text-white/40 hover:text-brand-accent text-left">
+                          {{ langStore.t.avatarFrameCustomizeBtn }}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- ── Calibration editor modal ──────────────────────────── -->
+                  <div v-if="calibratingFrame" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" @click.self="calibratingFrame = null">
+                    <div class="bg-brand-card border border-brand-border rounded-3xl w-full max-w-sm p-5 space-y-4">
+                      <div class="flex items-center justify-between">
+                        <h3 class="text-sm font-black text-white">{{ langStore.t.avatarFrameCalibrateTitle }}</h3>
+                        <button @click="calibratingFrame = null" class="w-8 h-8 rounded-full bg-white/8 hover:bg-white/15 flex items-center justify-center">
+                          <BIcon name="X" class="w-4 h-4 text-white/60" />
+                        </button>
+                      </div>
+                      <FrameEditor
+                        :avatar-url="authStore.avatarUrl || '/icons/badges/NN.jpg'"
+                        :frame-image-url="calibratingFrame.image_url"
+                        v-model="calibrationDraft"
+                      />
+                      <button type="button" :disabled="savingCalibration" @click="saveFrameCalibration"
+                        class="w-full flex items-center justify-center gap-2 py-3 text-white text-sm font-bold rounded-2xl transition-all disabled:opacity-50"
+                        style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+                        <span v-if="savingCalibration" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        {{ langStore.t.avatarFrameSubmitAction }}
                       </button>
                     </div>
                   </div>
@@ -1929,6 +1982,9 @@ import type { PaymentMethod } from '@/types/paymentMethod'
 import AddCardModal from '@/components/AddCardModal.vue'
 import ImageCropModal from '@/components/shared/ImageCropModal.vue'
 import { useConfirm } from '@/composables/useConfirm'
+import AvatarFrameOverlay from '@/components/AvatarFrameOverlay.vue'
+import FrameEditor, { type FrameCalibration } from '@/components/FrameEditor.vue'
+import { useDealersDenStore, type OwnedAvatarFrame } from '@/stores/dealersDen'
 
 const userStore   = useUserStore()
 const authStore   = useAuthStore()
@@ -2521,6 +2577,7 @@ const form = reactive({
   profile_theme:       '' as string,
   profile_bg_url:      '' as string,
   profile_frame:       '' as string,
+  profile_frame_id:    null as string | null,
   social_links:        {} as Record<string, string>,
   donate_url:          '' as string,
   messages_privacy:         'everyone' as string,
@@ -2567,6 +2624,7 @@ const savedForm = reactive({
   profile_theme:       '' as string,
   profile_bg_url:      '' as string,
   profile_frame:       '' as string,
+  profile_frame_id:    null as string | null,
   social_links:        {} as Record<string, string>,
   donate_url:          '' as string,
   messages_privacy:         'everyone' as string,
@@ -2612,6 +2670,7 @@ function snapshotToSaved() {
   savedForm.profile_theme       = form.profile_theme
   savedForm.profile_bg_url      = form.profile_bg_url
   savedForm.profile_frame       = form.profile_frame
+  savedForm.profile_frame_id    = form.profile_frame_id
   savedForm.social_links        = { ...form.social_links }
   savedForm.donate_url          = form.donate_url
   savedForm.messages_privacy         = form.messages_privacy
@@ -2657,6 +2716,7 @@ function resetForm() {
   form.profile_theme       = savedForm.profile_theme
   form.profile_bg_url      = savedForm.profile_bg_url
   form.profile_frame       = savedForm.profile_frame
+  form.profile_frame_id    = savedForm.profile_frame_id
   form.social_links        = { ...savedForm.social_links }
   form.donate_url          = savedForm.donate_url
   form.messages_privacy         = savedForm.messages_privacy
@@ -2709,6 +2769,7 @@ const isDirty = computed(() => {
     form.profile_theme       !== savedForm.profile_theme ||
     form.profile_bg_url      !== savedForm.profile_bg_url ||
     form.profile_frame       !== savedForm.profile_frame ||
+    form.profile_frame_id    !== savedForm.profile_frame_id ||
     form.donate_url          !== savedForm.donate_url ||
     form.messages_privacy         !== savedForm.messages_privacy ||
     form.forward_identity_privacy !== savedForm.forward_identity_privacy ||
@@ -2728,8 +2789,41 @@ const isDirty = computed(() => {
     fursonaIsDirty.value
 })
 
+const denStore = useDealersDenStore()
+const myFrames = ref<OwnedAvatarFrame[]>([])
+const calibratingFrame = ref<OwnedAvatarFrame | null>(null)
+const calibrationDraft = ref<FrameCalibration>({ offsetX: 0, offsetY: 0, scale: 1, rotation: 0 })
+const savingCalibration = ref(false)
+
+function openFrameCalibration(frame: OwnedAvatarFrame) {
+  calibratingFrame.value = frame
+  calibrationDraft.value = { offsetX: frame.offset_x, offsetY: frame.offset_y, scale: frame.scale, rotation: frame.rotation }
+}
+
+async function saveFrameCalibration() {
+  if (!calibratingFrame.value) return
+  savingCalibration.value = true
+  try {
+    await denStore.updateFrameCalibration(calibratingFrame.value.id, calibrationDraft.value)
+    const idx = myFrames.value.findIndex(f => f.id === calibratingFrame.value!.id)
+    if (idx !== -1) {
+      myFrames.value[idx] = {
+        ...myFrames.value[idx],
+        offset_x: calibrationDraft.value.offsetX, offset_y: calibrationDraft.value.offsetY,
+        scale: calibrationDraft.value.scale, rotation: calibrationDraft.value.rotation,
+      }
+    }
+    calibratingFrame.value = null
+  } catch (err) {
+    console.error('[SettingsProfileView] failed to save frame calibration:', err)
+  } finally {
+    savingCalibration.value = false
+  }
+}
+
 onMounted(async () => {
   await userStore.fetchMyProfile()
+  denStore.getMyAvatarFrames().then(frames => { myFrames.value = frames }).catch(() => {})
   const p = userStore.profile
   if (!p) return
   form.username            = authStore.user?.username ?? ''
@@ -2762,6 +2856,7 @@ onMounted(async () => {
   form.profile_theme       = (p as any).profile_theme  ?? ''
   form.profile_bg_url      = (p as any).profile_bg_url ?? ''
   form.profile_frame       = (p as any).profile_frame  ?? ''
+  form.profile_frame_id    = (p as any).profile_frame_id ?? null
   form.social_links        = { ...((p as any).social_links ?? {}) }
   form.donate_url          = (p as any).donate_url ?? ''
   form.messages_privacy         = (p as any).messages_privacy         ?? 'everyone'
@@ -3128,6 +3223,7 @@ async function handleSubmit() {
     profile_theme:       form.profile_theme  || null,
     profile_bg_url:      form.profile_bg_url || null,
     profile_frame:       form.profile_frame  || null,
+    profile_frame_id:    form.profile_frame_id || null,
     social_links:        form.social_links,
     donate_url:          form.donate_url || null,
     messages_privacy:         form.messages_privacy,

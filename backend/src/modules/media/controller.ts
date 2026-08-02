@@ -14,7 +14,7 @@ const REPORTS_ALLOWED_MIME_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif',
 ]);
 
-const ALLOWED_FOLDERS = ['posts', 'comments', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers', 'reports', 'verification'] as const;
+const ALLOWED_FOLDERS = ['posts', 'comments', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers', 'reports', 'verification', 'avatar-frames'] as const;
 type Folder = typeof ALLOWED_FOLDERS[number];
 
 const GB = 1024 * 1024 * 1024;
@@ -22,6 +22,7 @@ const GB = 1024 * 1024 * 1024;
 // per-subscription-tier cap instead (large videos/music sent as chat attachments).
 const DEFAULT_MAX_BYTES = 100 * 1024 * 1024;
 const REPORTS_MAX_BYTES = 10 * 1024 * 1024;
+const FRAME_MAX_BYTES = 5 * 1024 * 1024;
 const MESSAGE_UPLOAD_LIMITS_BY_TIER: Record<string, number> = {
   free: 2 * GB,
   lite: 4 * GB,
@@ -48,6 +49,7 @@ async function resolveUploadLimits(folder: Folder, userId: string): Promise<{
   storageUsedBytes: bigint;
 }> {
   if (folder === 'reports') return { maxBytes: REPORTS_MAX_BYTES, storageQuotaBytes: null, storageUsedBytes: 0n };
+  if (folder === 'avatar-frames') return { maxBytes: FRAME_MAX_BYTES, storageQuotaBytes: null, storageUsedBytes: 0n };
   const needsTierInfo = folder === 'messages' || STORAGE_TRACKED_FOLDERS.has(folder);
   if (!needsTierInfo) return { maxBytes: DEFAULT_MAX_BYTES, storageQuotaBytes: null, storageUsedBytes: 0n };
 
@@ -148,6 +150,15 @@ export const uploadFileHandler = async (
         success: false,
         data: null,
         error: { code: 'STICKER_FORMAT', message: 'Стикер должен быть в формате PNG' },
+      });
+    }
+
+    // Frame art needs an alpha channel to overlay over an avatar — only PNG guarantees that here.
+    if (folder === 'avatar-frames' && data.mimetype !== 'image/png') {
+      return reply.code(422).send({
+        success: false,
+        data: null,
+        error: { code: 'FRAME_FORMAT', message: 'Рамка должна быть в формате PNG с прозрачным фоном' },
       });
     }
 

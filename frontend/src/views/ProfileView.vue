@@ -272,6 +272,10 @@
                       </button>
                     </div>
 
+                    <!-- Image-based avatar frame overlay: unclipped, sits above the avatar card,
+                         suppressed during an active story same as the legacy CSS ring above. -->
+                    <AvatarFrameOverlay v-if="!hasStory && equippedFrame" :frame="equippedFrame" class="z-20" />
+
                     <!-- Online dot (z-30 чтобы всегда поверх карт) -->
                     <span v-if="isProfileOnline"
                       class="absolute bottom-1 right-1 md:bottom-1.5 md:right-1.5 w-4 h-4 md:w-5 md:h-5 rounded-full bg-brand-success border-[3px] border-brand-card shadow-sm z-30 transition-all duration-500"
@@ -301,11 +305,12 @@
                                 style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;word-break:break-all">{{ profileStatus.text }}</span>
                             </div>
                             <!-- Music -->
-                            <div v-if="profileStatus.music" class="flex items-center gap-1.5">
-                              <div class="flex items-end gap-[2px] h-3 flex-shrink-0">
-                                <span v-for="(h, i) in [50,100,65,85]" :key="i"
-                                  class="w-[3px] rounded-full bg-white note-bar-profile"
-                                  :style="`height:${h}%; animation-delay:${i*0.08}s`" />
+                            <div v-if="profileStatus.music" class="flex items-center gap-1.5" @click.stop="toggleStatusMusicPreview">
+                              <div class="relative w-6 h-6 rounded-md overflow-hidden flex-shrink-0 bg-black/30">
+                                <img v-if="profileStatus.music.artworkUrl" :src="profileStatus.music.artworkUrl" class="w-full h-full object-cover" />
+                                <div class="absolute inset-0 flex items-center justify-center bg-black/35 hover:bg-black/50 transition-colors">
+                                  <BIcon :name="isStatusMusicPlaying ? 'Pause' : 'Play'" class="w-2.5 h-2.5 text-white" />
+                                </div>
                               </div>
                               <div class="min-w-0 overflow-hidden">
                                 <p class="text-[10px] font-bold leading-tight truncate">{{ profileStatus.music.artist }}</p>
@@ -314,9 +319,9 @@
                             </div>
                             <!-- Empty own profile -->
                             <span v-if="!hasActiveStatus && isOwnProfile"
-                              class="flex items-center gap-1 text-[11px] text-white/85">
-                              <BIcon name="Plus" class="w-3 h-3" />{{ langStore.t.addStatusLabel }}</span>
-                            <span v-if="statusTimeRemaining" class="flex items-center gap-0.5 mt-0.5 text-[9px] opacity-45">
+                              class="flex items-center gap-1 text-[11px] text-white/60">
+                              {{ langStore.t.emptyBio }}</span>
+                            <span v-if="hasActiveStatus && statusTimeRemaining" class="flex items-center gap-0.5 mt-0.5 text-[9px] opacity-45">
                               <BIcon name="Clock" class="w-2.5 h-2.5" />{{ statusTimeRemaining }}</span>
                           </div>
                           <!-- Arrow tail -->
@@ -325,6 +330,8 @@
                         </button>
                       </div>
                     </Transition>
+                    <audio ref="statusPreviewAudioEl" class="hidden"
+                      @play="isStatusMusicPlaying = true" @pause="isStatusMusicPlaying = false" @ended="isStatusMusicPlaying = false" />
                   </div>
 
                   <!-- Action buttons (positioned to side of avatar) -->
@@ -1744,7 +1751,7 @@
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-1.5">
                         <p class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.profileStatusLabel }}</p>
-                        <span v-if="statusTimeRemaining" class="flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-brand-bg text-white/35 border border-brand-border">
+                        <span v-if="hasActiveStatus && statusTimeRemaining" class="flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full bg-brand-bg text-white/35 border border-brand-border">
                           <BIcon name="Clock" class="w-2.5 h-2.5" />{{ statusTimeRemaining }}</span>
                       </div>
                       <p v-if="profileStatus.text" class="text-sm font-semibold text-white truncate">{{ profileStatus.text }}</p>
@@ -1757,16 +1764,23 @@
                     </button>
                   </div>
                   <!-- Music attached to status -->
-                  <div v-if="profileStatus.music && profileStatus.text" class="flex items-center gap-2.5 px-4 py-2.5 border-t border-brand-border/50 bg-brand-bg/30">
-                    <img :src="profileStatus.music.artworkUrl" class="w-8 h-8 rounded-lg object-cover flex-shrink-0 shadow" />
+                  <div v-if="profileStatus.music" class="flex items-center gap-2.5 px-4 py-2.5 border-t border-brand-border/50 bg-brand-bg/30 hover:bg-brand-bg/50 transition-colors cursor-pointer"
+                    @click.stop="toggleStatusMusicPreview">
+                    <div class="relative w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 shadow">
+                      <img v-if="profileStatus.music.artworkUrl" :src="profileStatus.music.artworkUrl" class="w-full h-full object-cover" />
+                      <div class="absolute inset-0 flex items-center justify-center bg-black/35 hover:bg-black/50 transition-colors">
+                        <BIcon :name="isStatusMusicPlaying ? 'Pause' : 'Play'" class="w-3 h-3 text-white" />
+                      </div>
+                    </div>
                     <div class="min-w-0 flex-1">
                       <p class="text-[10px] font-bold text-white/60 truncate">{{ profileStatus.music.title }}</p>
                       <p class="text-[9px] text-white/35 truncate">{{ profileStatus.music.artist }}</p>
                     </div>
-                    <div class="flex items-end gap-[2px] h-3 flex-shrink-0">
-                      <span v-for="(h, i) in [50,100,65,85]" :key="i"
-                        class="w-[3px] rounded-full note-bar-profile"
-                        :style="`height:${h}%; animation-delay:${i*0.08}s; background:${statusBubbleColor}`" />
+                    <div class="flex items-center gap-1.5 flex-shrink-0" @click.stop>
+                      <BIcon name="Volume2" class="w-3 h-3 text-white/30" />
+                      <input type="range" min="0" max="1" step="0.05" :value="statusPreviewVolume" @input="setStatusMusicVolume"
+                        class="w-14 status-volume-slider"
+                        :style="{ '--slider-fill': `${statusPreviewVolume * 100}%`, '--slider-color': statusBubbleColor }" />
                     </div>
                   </div>
                 </div>
@@ -2377,24 +2391,30 @@
                       <BIcon name="Loader" class="w-4 h-4 animate-spin mr-2" />
                       <span class="text-xs">{{ langStore.t.profileSearchingEllipsisLabel }}</span>
                     </div>
+                    <div v-else-if="statusMusicError" class="flex items-center justify-center py-3 text-white/40 text-xs">
+                      {{ langStore.t.profileMusicSearchFailedLabel }}
+                    </div>
                     <div v-else-if="statusMusicResults.length" class="space-y-1 max-h-48 overflow-y-auto">
-                      <button v-for="track in statusMusicResults" :key="track.trackId"
+                      <button v-for="(track, idx) in statusMusicResults" :key="idx"
                         @click="selectStatusTrack(track)"
                         class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-brand-bg transition-all text-left group">
-                        <img :src="track.artworkUrl100" class="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+                        <img :src="track.artworkUrl" class="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
                         <div class="min-w-0 flex-1">
-                          <p class="text-xs font-semibold text-white truncate group-hover:text-brand-accent transition-colors">{{ track.trackName }}</p>
-                          <p class="text-[10px] text-white/45 truncate">{{ track.artistName }}</p>
+                          <p class="text-xs font-semibold text-white truncate group-hover:text-brand-accent transition-colors">{{ track.title }}</p>
+                          <p class="text-[10px] text-white/45 truncate">{{ track.artist }}</p>
                         </div>
                         <BIcon name="Plus" class="w-3.5 h-3.5 text-white/25 group-hover:text-brand-accent transition-colors flex-shrink-0" />
                       </button>
+                    </div>
+                    <div v-else-if="statusMusicQuery.trim()" class="flex items-center justify-center py-3 text-white/40 text-xs">
+                      {{ langStore.t.profileMusicNoResultsLabel }}
                     </div>
                   </div>
                 </Transition>
 
                 <!-- Selected track preview -->
                 <div v-if="statusEditMusic" class="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-brand-bg border border-brand-border">
-                  <img :src="statusEditMusic.artworkUrl || statusEditMusic.artworkUrl" class="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-md" />
+                  <img :src="statusEditMusic.artworkUrl" class="w-10 h-10 rounded-xl object-cover flex-shrink-0 shadow-md" />
                   <div class="min-w-0 flex-1">
                     <p class="text-xs font-bold text-white truncate">{{ statusEditMusic.title }}</p>
                     <p class="text-[10px] text-white/50 truncate">{{ statusEditMusic.artist }}</p>
@@ -2441,6 +2461,7 @@ import MediaUpload from '@/components/MediaUpload.vue'
 import PostScheduleMenu from '@/components/PostScheduleMenu.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
 import BIcon from '@/components/BIcon.vue'
+import AvatarFrameOverlay from '@/components/AvatarFrameOverlay.vue'
 import SoonBadge from '@/components/groups/SoonBadge.vue'
 import AppBadge from '@/components/shared/AppBadge.vue'
 import AppHeader from '@/components/AppHeader.vue'
@@ -2651,6 +2672,38 @@ const statusShowMusicSearch = ref(false)
 const statusMusicQuery = ref('')
 const statusMusicResults = ref<any[]>([])
 const statusMusicLoading = ref(false)
+const statusPreviewAudioEl = ref<HTMLAudioElement | null>(null)
+const isStatusMusicPlaying = ref(false)
+const statusPreviewVolume = ref(Number(localStorage.getItem('bloomly_status_preview_volume') ?? '0.7'))
+function toggleStatusMusicPreview() {
+  const url = profileStatus.music?.previewUrl
+  const audio = statusPreviewAudioEl.value
+  if (!url || !audio) return
+  if (isStatusMusicPlaying.value) {
+    audio.pause()
+    return
+  }
+  if (audio.src !== url) audio.src = url
+  audio.volume = statusPreviewVolume.value
+  audio.play().catch(() => {})
+}
+function setStatusMusicVolume(e: Event) {
+  const v = parseFloat((e.target as HTMLInputElement).value)
+  if (!isFinite(v)) return
+  statusPreviewVolume.value = v
+  if (statusPreviewAudioEl.value) statusPreviewAudioEl.value.volume = v
+  localStorage.setItem('bloomly_status_preview_volume', String(v))
+}
+// Stop any preview playing for the previous profile/track before it's replaced —
+// otherwise navigating to another user (or saving a new track on your own status)
+// leaves the old preview audio running silently while the play/pause icon flips
+// to reflect the new (unrelated) track.
+watch(() => profileStatus.music?.previewUrl, (next, prev) => {
+  if (next === prev) return
+  const audio = statusPreviewAudioEl.value
+  if (audio) audio.pause()
+  isStatusMusicPlaying.value = false
+})
 let statusMusicTimer: ReturnType<typeof setTimeout> | null = null
 
 const emojiCategories = [
@@ -2680,7 +2733,14 @@ function shadeColor(hex: string, percent: number): string {
 }
 const statusBubbleGradient = computed(() => `linear-gradient(135deg, ${shadeColor(statusBubbleColor.value, 16)}, ${shadeColor(statusBubbleColor.value, -20)})`)
 const statusEditBubbleGradient = computed(() => `linear-gradient(135deg, ${shadeColor(statusEditBubbleColor.value, 16)}, ${shadeColor(statusEditBubbleColor.value, -20)})`)
-const hasActiveStatus = computed(() => !!(profileStatus.text || profileStatus.emoji || profileStatus.music))
+// Ticks so statusTimeRemaining actually counts down and an expired status
+// disappears on its own instead of staying visible until the next page load.
+const statusNowTick = ref(Date.now())
+let statusNowTickInterval: ReturnType<typeof setInterval> | null = null
+const hasActiveStatus = computed(() => {
+  if (profileStatus.expiresAt && profileStatus.expiresAt <= statusNowTick.value) return false
+  return !!(profileStatus.text || profileStatus.emoji || profileStatus.music)
+})
 
 const statusDurations = computed(() => [
   { label: `30${langStore.t.profileDurationMinuteShort}`, value: 1800 },
@@ -2703,7 +2763,7 @@ const statusColors = [
 
 const statusTimeRemaining = computed(() => {
   if (!profileStatus.expiresAt) return ''
-  const diff = profileStatus.expiresAt - Date.now()
+  const diff = profileStatus.expiresAt - statusNowTick.value
   if (diff <= 0) return ''
   const h = Math.floor(diff / 3600000)
   const m = Math.floor((diff % 3600000) / 60000)
@@ -2726,7 +2786,8 @@ function applyProfileStatus(status: any) {
 async function saveProfileStatus() {
   if (statusSaving.value) return
   statusSaving.value = true
-  const expiresAt = statusEditDuration.value > 0 ? Date.now() + statusEditDuration.value * 1000 : 0
+  const hasContent = !!(statusEditEmoji.value || statusEditText.value || statusEditMusic.value)
+  const expiresAt = hasContent && statusEditDuration.value > 0 ? Date.now() + statusEditDuration.value * 1000 : 0
   const payload = {
     emoji: statusEditEmoji.value,
     text: statusEditText.value,
@@ -2749,7 +2810,17 @@ async function saveProfileStatus() {
 function openStatusEdit() {
   statusEditEmoji.value = profileStatus.emoji
   statusEditText.value = profileStatus.text
-  statusEditDuration.value = 86400
+  if (hasActiveStatus.value && profileStatus.expiresAt) {
+    // Preserve the current expiry instead of silently resetting a longer-lived
+    // status back down to the 24h default just because the editor was reopened.
+    const remainingMs = profileStatus.expiresAt - Date.now()
+    const bucket = statusDurations.value.map(d => d.value).filter(v => v > 0).find(v => v * 1000 >= remainingMs)
+    statusEditDuration.value = bucket ?? statusDurations.value[statusDurations.value.length - 2].value
+  } else if (hasActiveStatus.value) {
+    statusEditDuration.value = 0 // was set to "forever"
+  } else {
+    statusEditDuration.value = 86400
+  }
   statusEditColor.value = profileStatus.color || '#4C67CF'
   statusEditMusic.value = profileStatus.music
   statusShowMusicSearch.value = !!profileStatus.music
@@ -2772,25 +2843,27 @@ async function clearProfileStatus() {
 function pickStatusColor(hex: string) {
   statusEditColor.value = hex
 }
+const statusMusicError = ref(false)
 function onStatusMusicSearch() {
   if (statusMusicTimer) clearTimeout(statusMusicTimer)
-  if (!statusMusicQuery.value.trim()) { statusMusicResults.value = []; statusMusicLoading.value = false; return }
+  if (!statusMusicQuery.value.trim()) { statusMusicResults.value = []; statusMusicLoading.value = false; statusMusicError.value = false; return }
   statusMusicLoading.value = true
   statusMusicTimer = setTimeout(async () => {
     try {
-      const q = encodeURIComponent(statusMusicQuery.value.trim())
-      const res = await fetch(`https://itunes.apple.com/search?term=${q}&media=music&entity=song&limit=6`)
-      const data = await res.json()
-      statusMusicResults.value = data.results ?? []
-    } catch { statusMusicResults.value = [] }
-    finally { statusMusicLoading.value = false }
+      const res = await api.get('/users/music/search', { params: { q: statusMusicQuery.value.trim() } })
+      statusMusicResults.value = res.data?.data?.tracks ?? []
+      statusMusicError.value = false
+    } catch {
+      statusMusicResults.value = []
+      statusMusicError.value = true
+    } finally { statusMusicLoading.value = false }
   }, 420)
 }
 function selectStatusTrack(track: any) {
   statusEditMusic.value = {
-    title: track.trackName ?? '',
-    artist: track.artistName ?? '',
-    artworkUrl: (track.artworkUrl100 ?? '').replace('100x100bb', '300x300bb'),
+    title: track.title ?? '',
+    artist: track.artist ?? '',
+    artworkUrl: track.artworkUrl ?? '',
     previewUrl: track.previewUrl ?? '',
   }
   statusMusicQuery.value = ''
@@ -3287,6 +3360,8 @@ const bannerStyle = computed(() => {
 
 const avatarRingStyle = computed(() => {
   const p = viewedProfile.value
+  // Image-based frame takes over the avatar border entirely — no legacy CSS ring underneath it.
+  if ((p as any)?.equippedFrame) return {}
   const frameId = (p as any)?.profile_frame as string | undefined
   // Theme accent for default_ring / no frame
   const themeId = (p as any).profile_theme as string | undefined
@@ -3304,6 +3379,8 @@ const avatarRingStyle = computed(() => {
   if (frameId && frameStyleMap[frameId]) return frameStyleMap[frameId]
   return { borderColor: `${accentColor}80` }
 })
+
+const equippedFrame = computed(() => (viewedProfile.value as any)?.equippedFrame ?? null)
 
 const accentStyle = computed(() => {
   const color = viewedProfile.value?.accent_color ?? '#4C67CF'
@@ -4035,11 +4112,13 @@ onMounted(() => {
   loadProfile()
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('keydown', onGalleryKeydown)
+  statusNowTickInterval = setInterval(() => { statusNowTick.value = Date.now() }, 30000)
 })
 onUnmounted(() => {
   document.body.style.overflow = ''
   window.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('keydown', onGalleryKeydown)
+  if (statusNowTickInterval) clearInterval(statusNowTickInterval)
 })
 watch(() => route.params.username, () => { aboutTab.value = 'about'; activeContentTab.value = 'posts'; loadProfile() })
 // stories are loaded inside loadProfile via fetchProfileStories
@@ -4049,6 +4128,50 @@ watch(() => route.params.username, () => { aboutTab.value = 'about'; activeConte
 <style scoped>
 .note-bar-profile {
   animation: noteBarProfile 0.6s ease-in-out infinite;
+}
+
+/* ── Status music preview volume slider ─────────────────────────────────── */
+.status-volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(to right,
+    var(--slider-color, #4C67CF) var(--slider-fill, 70%),
+    rgba(255,255,255,0.15) var(--slider-fill, 70%));
+  outline: none;
+  cursor: pointer;
+}
+.status-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.45);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.status-volume-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+.status-volume-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.45);
+  cursor: pointer;
+}
+.status-volume-slider::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.15);
+}
+.status-volume-slider::-moz-range-progress {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--slider-color, #4C67CF);
 }
 
 /* ── Species chip on own profile banner: subtle glow to hint it's clickable ── */

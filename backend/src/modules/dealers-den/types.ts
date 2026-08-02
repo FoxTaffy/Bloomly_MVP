@@ -1,5 +1,5 @@
 export type ListingStatus   = 'active' | 'sold' | 'draft' | 'archived';
-export type ListingCategory = 'art' | 'fursuit' | 'badge' | 'print' | 'music' | 'craft' | 'merch' | 'other';
+export type ListingCategory = 'art' | 'fursuit' | 'badge' | 'print' | 'music' | 'craft' | 'merch' | 'avatar_frame' | 'other';
 export type ListingType     = 'digital' | 'physical' | 'both';
 export type ListingKind     = 'fixed' | 'auction' | 'ych' | 'raffle' | 'commission_queue';
 

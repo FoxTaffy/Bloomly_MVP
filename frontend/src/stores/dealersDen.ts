@@ -4,7 +4,7 @@ import api from '../api'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 export type ListingStatus   = 'active' | 'sold' | 'draft' | 'archived'
-export type ListingCategory = 'art' | 'fursuit' | 'badge' | 'print' | 'music' | 'craft' | 'merch' | 'other'
+export type ListingCategory = 'art' | 'fursuit' | 'badge' | 'print' | 'music' | 'craft' | 'merch' | 'avatar_frame' | 'other'
 export type ListingType     = 'digital' | 'physical' | 'both'
 export type ListingKind     = 'fixed' | 'auction' | 'ych' | 'raffle' | 'commission_queue'
 
@@ -80,6 +80,32 @@ export interface CommissionBooking {
   created_at: string
   updated_at: string
   buyer: Pick<ListingSeller, 'id' | 'username' | 'display_name' | 'avatar_url'>
+}
+
+export interface AvatarFrame {
+  id: string
+  listing_id: string | null
+  creator_id: string
+  name: string
+  image_url: string
+  price: string
+  default_offset_x: number
+  default_offset_y: number
+  default_scale: number
+  default_rotation: number
+  status: 'pending' | 'approved' | 'rejected'
+  rejection_reason: string | null
+  reviewed_by: string | null
+  reviewed_at: string | null
+  created_at: string
+  creator: Pick<ListingSeller, 'id' | 'username' | 'display_name' | 'avatar_url'>
+}
+
+export interface OwnedAvatarFrame extends AvatarFrame {
+  offset_x: number
+  offset_y: number
+  scale: number
+  rotation: number
 }
 
 export interface DenDispute {
@@ -163,6 +189,16 @@ export interface DealerListing {
   wishlist_count?: number
   is_wishlisted?: boolean
   review_summary?: ReviewSummary
+  // Present only when category === 'avatar_frame'
+  avatarFrame?: {
+    id: string
+    status: 'pending' | 'approved' | 'rejected'
+    rejection_reason: string | null
+    default_offset_x: number
+    default_offset_y: number
+    default_scale: number
+    default_rotation: number
+  } | null
 }
 
 export interface CreateListingInput {
@@ -416,6 +452,52 @@ export const useDealersDenStore = defineStore('dealersDen', () => {
     return data.data
   }
 
+  // ── Avatar frames ─────────────────────────────────────────────────────────
+
+  async function createAvatarFrame(input: {
+    name: string
+    imageUrl: string
+    price?: number
+    tags?: string[]
+    defaultOffsetX?: number
+    defaultOffsetY?: number
+    defaultScale?: number
+    defaultRotation?: number
+  }) {
+    const { data } = await api.post('/avatar-frames', input)
+    return data.data.frame as AvatarFrame
+  }
+
+  async function getTrendingTags() {
+    const { data } = await api.get('/dealers-den/tags/trending')
+    return data.data.tags as { tag: string; count: number }[]
+  }
+
+  async function claimAvatarFrame(frameId: string) {
+    const { data } = await api.post(`/avatar-frames/${frameId}/claim`)
+    return data.data.owned as OwnedAvatarFrame
+  }
+
+  async function updateFrameCalibration(frameId: string, input: { offsetX?: number; offsetY?: number; scale?: number; rotation?: number }) {
+    const { data } = await api.patch(`/avatar-frames/${frameId}/calibration`, input)
+    return data.data.owned as OwnedAvatarFrame
+  }
+
+  async function getMyAvatarFrames() {
+    const { data } = await api.get('/avatar-frames/mine')
+    return data.data.frames as OwnedAvatarFrame[]
+  }
+
+  async function adminGetFrameSubmissions(status?: string, page = 1) {
+    const { data } = await api.get('/admin/avatar-frames', { params: { status, page } })
+    return data.data as { submissions: AvatarFrame[]; total: number; page: number; limit: number }
+  }
+
+  async function adminReviewFrame(frameId: string, action: 'approve' | 'reject', reason?: string) {
+    const { data } = await api.patch(`/admin/avatar-frames/${frameId}`, { action, reason })
+    return data.data.frame as AvatarFrame
+  }
+
   return {
     listings, currentListing, myListings, wishlist, weeklyTop, isLoading, total,
     // Listings
@@ -440,5 +522,8 @@ export const useDealersDenStore = defineStore('dealersDen', () => {
     getSellerPage,
     // Fairs
     getCurrentFair, getFair, applyToFair,
+    // Avatar frames
+    createAvatarFrame, claimAvatarFrame, updateFrameCalibration, getMyAvatarFrames,
+    adminGetFrameSubmissions, adminReviewFrame, getTrendingTags,
   }
 })

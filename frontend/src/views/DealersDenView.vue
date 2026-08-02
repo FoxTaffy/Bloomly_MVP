@@ -2,7 +2,7 @@
 import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDealersDenStore, type DealerListing, type ListingKind } from '@/stores/dealersDen'
 import { useNsfwMode } from '@/composables/useNsfwMode'
@@ -12,8 +12,10 @@ import AppSidebar   from '@/components/AppSidebar.vue'
 import BIcon        from '@/components/BIcon.vue'
 import MediaUpload  from '@/components/MediaUpload.vue'
 import DenWeeklyTop from '@/components/DenWeeklyTop.vue'
+import SubmitFrameModal from '@/components/SubmitFrameModal.vue'
 
 const router = useRouter()
+const route  = useRoute()
 const auth   = useAuthStore()
 const store  = useDealersDenStore()
 const { confirmDialog } = useConfirm()
@@ -35,6 +37,15 @@ const canSell = computed(() => {
   return u.is_verified === true && (u.verification_type === 'artist' || u.verification_type === 'master')
 })
 
+// Avatar frames go through their own submission/approval flow (admins publish instantly,
+// artist-verified users go into a moderation queue) — narrower than general Den selling rights.
+const canSellFrames = computed(() => {
+  const u = auth.user as any
+  if (!u) return false
+  return ['admin', 'owner'].includes(u.role) || (u.is_verified === true && u.verification_type === 'artist')
+})
+const showFrameModal = ref(false)
+
 // ── Tabs ───────────────────────────────────────────────────────────────────────
 type MainTab = 'browse' | 'my'
 const activeTab = ref<MainTab>('browse')
@@ -50,6 +61,7 @@ const CATS = computed(() => [
   { key: 'music',   label: langStore.t.dealersDenCatMusic, icon: 'Music'     },
   { key: 'craft',   label: 'Handmade',                    icon: 'Scissors'   },
   { key: 'merch',   label: langStore.t.dealersDenCatMerch, icon: 'Shirt'     },
+  { key: 'avatar_frame', label: langStore.t.dealersDenCatFrame, icon: 'CircleDashed' },
   { key: 'other',   label: langStore.t.other,             icon: 'Package'    },
 ])
 const selectedCategory = ref('all')
@@ -103,6 +115,23 @@ async function loadData() {
     auth.user ? store.loadMyListings() : Promise.resolve(),
   ])
 }
+
+// Clicking a #hashtag chip (here or on a listing's detail page) lands here via
+// ?search=<tag> — the same free-text search already OR-matches against tags server-side.
+if (typeof route.query.search === 'string') {
+  searchQuery.value = route.query.search
+  selectedCategory.value = 'all'
+}
+
+function filterByTag(tag: string) {
+  selectedCategory.value = 'all'
+  searchQuery.value = tag
+  applyFilter()
+}
+
+const trendingTags = ref<{ tag: string; count: number }[]>([])
+store.getTrendingTags().then(tags => { trendingTags.value = tags }).catch(() => {})
+
 onMounted(loadData)
 
 // Перезагрузка при смене сортировки / NSFW-режима
@@ -846,6 +875,14 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 </div>
               </div>
             </div>
+
+            <!-- Hashtags — shared across every kind's info bar above -->
+            <div v-if="listing.tags?.length" class="px-3 pb-2.5 flex flex-wrap gap-1" @click.stop>
+              <button v-for="tag in listing.tags.slice(0, 4)" :key="tag" @click="filterByTag(tag)"
+                class="text-[9px] font-bold text-brand-accent/80 bg-brand-accent/8 hover:bg-brand-accent/15 px-2 py-0.5 rounded-full transition-colors">
+                #{{ tag }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -891,6 +928,22 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             class="w-full flex items-center justify-center gap-2 py-3 text-white/60 text-sm font-bold rounded-2xl transition-all border border-brand-border hover:border-brand-accent/40 hover:text-white">
             <BIcon name="LogIn" class="w-4 h-4" /> {{ langStore.t.dealersDenLoginToSellBtn }}
           </button>
+        </div>
+
+        <button v-if="canSellFrames" @click="showFrameModal = true"
+          class="w-full flex items-center justify-center gap-2 py-3 text-white text-sm font-bold rounded-2xl transition-all shadow-lg hover:opacity-90 border border-brand-border bg-brand-card">
+          <BIcon name="CircleDashed" class="w-4 h-4" /> {{ langStore.t.avatarFrameSubmitBtn }}
+        </button>
+
+        <!-- Trending hashtags -->
+        <div v-if="trendingTags.length" class="bg-brand-card border border-brand-border rounded-2xl p-3.5 space-y-2.5">
+          <h4 class="text-xs font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealersDenTrendingTagsLabel }}</h4>
+          <div class="flex flex-wrap gap-1.5">
+            <button v-for="t in trendingTags" :key="t.tag" @click="filterByTag(t.tag)"
+              class="text-[10px] font-bold text-brand-accent bg-brand-accent/8 hover:bg-brand-accent/15 px-2.5 py-1 rounded-full transition-colors">
+              #{{ t.tag }}
+            </button>
+          </div>
         </div>
 
         <!-- Quick filter mini-cards (like Stickers) -->
@@ -1072,11 +1125,12 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               </div>
             </div>
 
-            <!-- Category -->
+            <!-- Category (avatar_frame excluded — that category only goes through the
+                 dedicated "Загрузить рамку" submission flow, never this generic form) -->
             <div>
               <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.category }}</label>
               <div class="flex flex-wrap gap-2">
-                <button v-for="cat in CATS.slice(1)" :key="cat.key"
+                <button v-for="cat in CATS.slice(1).filter(c => c.key !== 'avatar_frame')" :key="cat.key"
                   @click="form.category = cat.key as any"
                   class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all border"
                   :class="form.category === cat.key
@@ -1386,6 +1440,8 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
         </div>
       </transition>
     </Teleport>
+
+    <SubmitFrameModal v-model="showFrameModal" />
 
   </div>
 </template>

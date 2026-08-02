@@ -4,7 +4,7 @@ import {
   deleteListingHandler, getMyListingsHandler, placeBidHandler, getBidsHandler,
   buyRaffleTicketHandler, getCommentsHandler, addCommentHandler, deleteCommentHandler,
   getTrustHandler, createReviewHandler, getListingReviewsHandler, getSellerReviewsHandler,
-  deleteReviewHandler, getWeeklyTopHandler, recalcWeeklyTopHandler,
+  deleteReviewHandler, getWeeklyTopHandler, recalcWeeklyTopHandler, getTrendingTagsHandler,
   addToWishlistHandler, removeFromWishlistHandler, getMyWishlistHandler,
   createBookingHandler, getBookingsHandler, updateBookingHandler, cancelBookingHandler,
   createDisputeHandler, replyDisputeHandler, getMyDisputesHandler,
@@ -63,6 +63,7 @@ export async function dealersDenRoutes(fastify: FastifyInstance) {
   fastify.delete('/reviews/:reviewId',       auth, deleteReviewHandler as any);
 
   // ── Weekly Top ──
+  fastify.get('/tags/trending',           getTrendingTagsHandler as any);
   fastify.get('/weekly-top',              getWeeklyTopHandler as any);
   fastify.post('/weekly-top/recalc', adminOnly, recalcWeeklyTopHandler as any);
 

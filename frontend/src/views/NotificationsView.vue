@@ -29,7 +29,7 @@ const markAllRead = async () => {
   } catch {}
 }
 
-const AUTOMOD_TYPES = ['automod_warn', 'automod_freeze', 'automod_unfreeze', 'automod_ban', 'automod_clear_warns', 'admin_broadcast']
+const AUTOMOD_TYPES = ['automod_warn', 'automod_freeze', 'automod_unfreeze', 'automod_ban', 'automod_clear_warns', 'admin_broadcast', 'avatar_frame_approved', 'avatar_frame_rejected']
 const isAutomodNotif = (n: any) => AUTOMOD_TYPES.includes(n.type)
 
 const automodMessage = (n: any) => {
@@ -41,6 +41,8 @@ const automodMessage = (n: any) => {
     case 'automod_ban': return `🚫 Аккаунт заблокирован${meta.reason ? ' — ' + meta.reason : ''}`
     case 'automod_clear_warns': return '✅ Предупреждения сброшены модератором'
     case 'admin_broadcast': return `📣 ${meta.title ?? ''}${meta.body ? ' — ' + meta.body : ''}`
+    case 'avatar_frame_approved': return `🖼️ Рамка «${meta.name ?? ''}» одобрена и доступна в Ярмарке`
+    case 'avatar_frame_rejected': return `🖼️ Рамка «${meta.name ?? ''}» отклонена${meta.reason ? ' — ' + meta.reason : ''}`
     default: return ''
   }
 }

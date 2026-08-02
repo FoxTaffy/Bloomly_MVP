@@ -64,6 +64,10 @@ model User {
   profile_theme                  String?                   @db.VarChar(50)
   profile_bg_url                 String?
   profile_frame                  String?                   @db.VarChar(50)
+  profile_frame_id                String?                   @db.Uuid
+  equippedFrame                   AvatarFrame?              @relation("EquippedFrame", fields: [profile_frame_id], references: [id], onDelete: SetNull)
+  ownedAvatarFrames                UserAvatarFrame[]
+  createdAvatarFrames              AvatarFrame[]             @relation("AvatarFrameCreator")
   artist_since                   DateTime?                 @db.Timestamp(6)
   verification_type              String?                   @db.VarChar(30)
   adRequests                     Advertisement[]           @relation("AdRequester")
@@ -1287,6 +1291,7 @@ model DealerListing {
   bookings         CommissionBooking[]
   disputes         DenDispute[]
   fairParticipants DenFairParticipant[]
+  avatarFrame      AvatarFrame?
 
   @@index([seller_id])
   @@index([status])
@@ -1294,6 +1299,50 @@ model DealerListing {
   @@index([listing_kind])
   @@index([auction_ends_at])
   @@index([created_at(sort: Desc)])
+}
+
+// ── Avatar Frames ─────────────────────────────────────────────────────────────
+
+model AvatarFrame {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  listing_id        String?   @unique @db.Uuid
+  creator_id        String    @db.Uuid
+  name              String    @db.VarChar(120)
+  image_url         String
+  price             Decimal   @default(0) @db.Decimal(10, 2)
+  default_offset_x  Float     @default(0)
+  default_offset_y  Float     @default(0)
+  default_scale     Float     @default(1)
+  default_rotation  Float     @default(0)
+  status            String    @default("pending") @db.VarChar(20) // pending | approved | rejected
+  rejection_reason  String?
+  reviewed_by       String?   @db.Uuid
+  reviewed_at       DateTime? @db.Timestamp(6)
+  created_at        DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at        DateTime? @db.Timestamp(6)
+
+  creator      User              @relation("AvatarFrameCreator", fields: [creator_id], references: [id], onDelete: Cascade)
+  listing      DealerListing?    @relation(fields: [listing_id], references: [id], onDelete: SetNull)
+  owners       UserAvatarFrame[]
+  equippedBy   User[]            @relation("EquippedFrame")
+
+  @@index([status])
+  @@index([creator_id])
+}
+
+model UserAvatarFrame {
+  user_id     String   @db.Uuid
+  frame_id    String   @db.Uuid
+  offset_x    Float    @default(0)
+  offset_y    Float    @default(0)
+  scale       Float    @default(1)
+  rotation    Float    @default(0)
+  acquired_at DateTime @default(now()) @db.Timestamp(6)
+
+  user  User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  frame AvatarFrame @relation(fields: [frame_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, frame_id])
 }
 
 model DenTrustScore {

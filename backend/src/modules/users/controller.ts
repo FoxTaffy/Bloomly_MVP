@@ -67,6 +67,39 @@ export async function getRecommendedUsersHandler(
   return reply.send({ success: true, data: { users }, error: null });
 }
 
+export async function proxyMusicMediaHandler(
+  request: FastifyRequest<{ Querystring: { url?: string } }>,
+  reply: FastifyReply,
+) {
+  const { url } = request.query as any;
+  if (!url) return reply.code(400).send();
+  try {
+    const { contentType, buffer } = await usersService.fetchMusicMedia(url);
+    return reply
+      .header('Content-Type', contentType)
+      .header('Cache-Control', 'public, max-age=86400, immutable')
+      .header('X-Content-Options', 'nosniff')
+      .send(buffer);
+  } catch (e: any) {
+    return reply.code(e?.statusCode ?? 502).send();
+  }
+}
+
+export async function searchMusicHandler(
+  request: FastifyRequest<{ Querystring: { q?: string } }>,
+  reply: FastifyReply,
+) {
+  const { q = '' } = request.query as any;
+  if (!q.trim()) return reply.send({ success: true, data: { tracks: [] }, error: null });
+
+  try {
+    const tracks = await usersService.searchMusic(q);
+    return reply.send({ success: true, data: { tracks }, error: null });
+  } catch {
+    return reply.code(502).send({ success: false, data: null, error: { code: 'MUSIC_SEARCH_FAILED', message: 'Music search is unavailable' } });
+  }
+}
+
 export async function pinPostHandler(
   request: FastifyRequest<{ Params: { postId: string } }>,
   reply: FastifyReply,

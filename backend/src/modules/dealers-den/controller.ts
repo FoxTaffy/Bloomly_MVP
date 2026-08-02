@@ -47,6 +47,13 @@ export async function createListingHandler(req: FastifyRequest, reply: FastifyRe
     return reply.status(403).send({ success: false, error: 'Ваш аккаунт в Ярмарке заморожен' });
   }
   const input = req.body as CreateListingInput;
+  // Avatar frames have their own approval-gated pipeline (POST /api/avatar-frames) that
+  // creates the linked AvatarFrame row and enforces admin-vs-artist review — creating this
+  // category through the generic listing endpoint would produce an unreviewable listing
+  // with no AvatarFrame behind it at all.
+  if (input.category === 'avatar_frame') {
+    return reply.status(400).send({ success: false, error: 'Рамки для аватара создаются через отдельную форму загрузки рамки' });
+  }
   try {
     const listing = await dealersDenService.create(user.id, input);
     return reply.status(201).send({ success: true, data: { listing } });
@@ -256,6 +263,16 @@ export async function deleteReviewHandler(req: FastifyRequest, reply: FastifyRep
 }
 
 // ── Weekly Top ────────────────────────────────────────────────────────────────
+
+export async function getTrendingTagsHandler(req: FastifyRequest, reply: FastifyReply) {
+  try {
+    const tags = await dealersDenService.getTrendingTags();
+    return reply.send({ success: true, data: { tags } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ success: false, error: 'Failed to load trending tags' });
+  }
+}
 
 export async function getWeeklyTopHandler(req: FastifyRequest, reply: FastifyReply) {
   try {

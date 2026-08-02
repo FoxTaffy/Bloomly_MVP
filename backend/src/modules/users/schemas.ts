@@ -100,6 +100,7 @@ export const updateUserSchema = {
       profile_theme:        { type: 'string', enum: ['default', 'violet', 'crimson', 'emerald', 'amber', 'ocean', 'sakura', 'night', null], nullable: true },
       profile_bg_url:       { type: 'string', nullable: true },
       profile_frame:        { type: 'string', enum: ['none', 'default_ring', 'gold', 'neon', 'rainbow', 'silver', 'fire', null], nullable: true },
+      profile_frame_id:     { type: 'string', nullable: true },
       artist_since:         { type: 'string', format: 'date', nullable: true },
       onboarding_done:     { type: 'boolean' },
       donate_url:          { type: 'string', maxLength: 500, nullable: true },

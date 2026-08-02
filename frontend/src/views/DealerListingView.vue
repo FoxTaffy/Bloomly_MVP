@@ -13,6 +13,7 @@ import DenTrustBadge      from '@/components/DenTrustBadge.vue'
 import DenWishlistButton  from '@/components/DenWishlistButton.vue'
 import CommissionQueueCard from '@/components/CommissionQueueCard.vue'
 import DenReviewCard      from '@/components/DenReviewCard.vue'
+import FrameEditor        from '@/components/FrameEditor.vue'
 import api from '@/api'
 
 const router = useRouter()
@@ -36,6 +37,7 @@ onMounted(async () => {
     if (listing.value) {
       isWishlisted.value  = listing.value.is_wishlisted ?? false
       wishlistCount.value = listing.value.wishlist_count ?? 0
+      if (listing.value.category === 'avatar_frame') await loadOwnedFrames()
     }
   } catch (err: any) {
     console.error('[DealerListingView] load error:', err?.message)
@@ -252,6 +254,44 @@ const canLeaveReview = computed(() =>
 function contactSeller() {
   if (!listing.value) return
   router.push({ name: 'messages', query: { userId: listing.value.seller.id } })
+}
+
+function goToTag(tag: string) {
+  router.push({ name: 'dealers-den', query: { search: tag } })
+}
+
+// ── Avatar frame claim (free, instant — no in-app purchase flow exists yet) ──
+const ownedFrameIds = ref<Set<string>>(new Set())
+const isClaimingFrame = ref(false)
+const claimFrameError = ref('')
+
+const isAvatarFrame = computed(() => listing.value?.category === 'avatar_frame')
+const frameOwned = computed(() => !!listing.value?.avatarFrame && ownedFrameIds.value.has(listing.value.avatarFrame.id))
+const frameCalibration = computed(() => {
+  const f = listing.value?.avatarFrame
+  return f ? { offsetX: f.default_offset_x, offsetY: f.default_offset_y, scale: f.default_scale, rotation: f.default_rotation } : { offsetX: 0, offsetY: 0, scale: 1, rotation: 0 }
+})
+
+async function loadOwnedFrames() {
+  if (!auth.user) return
+  try {
+    const mine = await store.getMyAvatarFrames()
+    ownedFrameIds.value = new Set(mine.map(f => f.id))
+  } catch { /* non-critical */ }
+}
+
+async function claimFrame() {
+  if (!listing.value?.avatarFrame || isClaimingFrame.value) return
+  isClaimingFrame.value = true
+  claimFrameError.value = ''
+  try {
+    await store.claimAvatarFrame(listing.value.avatarFrame.id)
+    ownedFrameIds.value.add(listing.value.avatarFrame.id)
+  } catch (err: any) {
+    claimFrameError.value = err?.response?.data?.error ?? langStore.t.avatarFrameSubmitFailed
+  } finally {
+    isClaimingFrame.value = false
+  }
 }
 
 // ── Edit ─────────────────────────────────────────────────────────────────────
@@ -519,10 +559,10 @@ async function submitReport() {
 
               <!-- Tags -->
               <div v-if="listing.tags.length" class="flex flex-wrap gap-2">
-                <span v-for="tag in listing.tags" :key="tag"
-                  class="text-xs text-brand-accent bg-brand-accent/8 border border-brand-accent/20 px-3 py-1 rounded-full">
+                <button v-for="tag in listing.tags" :key="tag" type="button" @click="goToTag(tag)"
+                  class="text-xs text-brand-accent bg-brand-accent/8 hover:bg-brand-accent/15 border border-brand-accent/20 px-3 py-1 rounded-full transition-colors">
                   #{{ tag }}
-                </span>
+                </button>
               </div>
 
               <!-- Meta -->
@@ -969,6 +1009,17 @@ async function submitReport() {
                     </div>
                   </div>
                   <div class="p-5 space-y-4">
+                    <!-- Avatar frame preview: rendered on the viewer's own avatar, using the
+                         seller's chosen default calibration from the submission editor. -->
+                    <div v-if="isAvatarFrame" class="flex justify-center py-2">
+                      <FrameEditor
+                        :avatar-url="auth.avatarUrl || '/icons/badges/NN.jpg'"
+                        :frame-image-url="listing.images[0]"
+                        :model-value="frameCalibration"
+                        :draggable="false"
+                        :size="160"
+                      />
+                    </div>
                     <div class="flex items-end justify-between">
                       <div>
                         <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">{{ langStore.t.dealerListingPriceLabel }}</p>
@@ -990,6 +1041,33 @@ async function submitReport() {
                       <BIcon name="PackageX" class="w-5 h-5 text-brand-error" />
                       <p class="text-xs font-bold text-brand-error">{{ langStore.t.dealerListingOutOfStock }}</p>
                     </div>
+                    <template v-else-if="isAvatarFrame">
+                      <div v-if="listing.avatarFrame?.status === 'pending'"
+                        class="flex items-center gap-2 bg-brand-yellow/10 border border-brand-yellow/20 rounded-2xl px-4 py-3">
+                        <BIcon name="Clock" class="w-4 h-4 text-brand-yellow" />
+                        <p class="text-xs font-bold text-brand-yellow">{{ langStore.t.avatarFramePendingBadge }}</p>
+                      </div>
+                      <div v-else-if="listing.avatarFrame?.status === 'rejected'"
+                        class="flex items-center gap-2 bg-brand-error/10 border border-brand-error/20 rounded-2xl px-4 py-3">
+                        <BIcon name="X" class="w-4 h-4 text-brand-error" />
+                        <p class="text-xs font-bold text-brand-error">{{ listing.avatarFrame?.rejection_reason || langStore.t.avatarFrameSubmitFailed }}</p>
+                      </div>
+                      <button v-else-if="!auth.user" @click="router.push({ name: 'login' })"
+                        class="w-full flex items-center justify-center gap-2 py-3.5 text-white/60 font-bold rounded-2xl border border-brand-border hover:border-brand-accent/40 hover:text-white transition-all text-sm">
+                        <BIcon name="LogIn" class="w-4 h-4" /> {{ langStore.t.dealerListingLoginToBuy }}
+                      </button>
+                      <button v-else-if="frameOwned" disabled
+                        class="w-full flex items-center justify-center gap-2 py-3.5 text-white/40 font-bold rounded-2xl border border-brand-border text-sm cursor-default">
+                        <BIcon name="Check" class="w-4 h-4" /> {{ langStore.t.avatarFrameClaimedBtn }}
+                      </button>
+                      <button v-else @click="claimFrame" :disabled="isClaimingFrame"
+                        class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm disabled:opacity-50"
+                        style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+                        <span v-if="isClaimingFrame" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <BIcon v-else name="Sparkles" class="w-4 h-4" /> {{ langStore.t.avatarFrameClaimBtn }}
+                      </button>
+                      <p v-if="claimFrameError" class="text-xs text-brand-error mt-2">{{ claimFrameError }}</p>
+                    </template>
                     <template v-else>
                       <button v-if="auth.user && auth.user.id !== listing.seller_id"
                         @click="contactSeller"
