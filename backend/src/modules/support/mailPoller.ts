@@ -40,6 +40,27 @@ async function uploadAttachments(attachments: Attachment[] = []): Promise<string
   return urls;
 }
 
+/**
+ * Доверяем только проверке подлинности, которую выполнил наш собственный почтовый сервер.
+ * Заголовок From и любые Authentication-Results, которые прислал отправитель, доказательством не
+ * являются. Нужна переменная MAIL_AUTHSERV_ID — имя authserv-id нашего приёмника. Без неё всё
+ * входящее считается непроверенным.
+ * Проверка: в заголовке от нашего сервера есть dkim=pass, а домен подписи совпадает с доменом From.
+ */
+export function senderAuthenticated(authResults: unknown, fromAddr: string): boolean {
+  const authServ = process.env.MAIL_AUTHSERV_ID?.trim().toLowerCase();
+  if (!authServ || !authResults || !fromAddr.includes('@')) return false;
+  const fromDomain = fromAddr.split('@')[1].toLowerCase();
+  const lines = (Array.isArray(authResults) ? authResults : [authResults]).map((v) => String(v).toLowerCase());
+  return lines.some((line) => {
+    const servId = line.trim().split(/[\s;]+/)[0];
+    if (servId !== authServ) return false;
+    if (!/\bdkim=pass\b/.test(line)) return false;
+    const signingDomain = /header\.d=([^\s;]+)/.exec(line)?.[1];
+    return !!signingDomain && (fromDomain === signingDomain || fromDomain.endsWith(`.${signingDomain}`));
+  });
+}
+
 function referencesOf(parsed: { inReplyTo?: string; references?: string | string[] }): string[] {
   const refs = new Set<string>();
   if (parsed.inReplyTo) refs.add(parsed.inReplyTo);
@@ -81,7 +102,10 @@ async function processUid(client: ImapFlow, uid: number) {
     ? (existingTicket.external_email || existingTicket.user?.email || existingTicket.contact_email)?.toLowerCase()
     : null;
 
-  if (existingTicket && ownerEmail && ownerEmail === fromAddr) {
+  // Без доверенной проверки подлинности письмо не продолжает чужой тред и не привязывается к аккаунту
+  const trusted = senderAuthenticated(parsed.headers.get('authentication-results'), fromAddr);
+
+  if (trusted && existingTicket && ownerEmail && ownerEmail === fromAddr) {
     const ticket = existingTicket;
     await prisma.$transaction([
       prisma.supportTicketMessage.create({
@@ -105,7 +129,9 @@ async function processUid(client: ImapFlow, uid: number) {
     return;
   }
 
-  const linkedUser = await prisma.user.findUnique({ where: { email: fromAddr }, select: { id: true } });
+  const linkedUser = trusted
+    ? await prisma.user.findUnique({ where: { email: fromAddr }, select: { id: true } })
+    : null;
   await prisma.supportTicket.create({
     data: {
       user_id: linkedUser?.id,
