@@ -490,6 +490,8 @@ export const getAutoModLogsHandler = async (
 
 export const unfreezeUserHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
   if (!requireMod(req, reply)) return;
+  // Модератор не должен снимать заморозку, наложенную админом или владельцем
+  if (!(await requireCanModerate(req, reply, req.params.id))) return;
   const actor = req.user as JwtUser;
   await prisma.user.update({ where: { id: req.params.id }, data: { frozen_at: null, frozen_reason: null } });
   await prisma.autoModLog.create({
@@ -520,6 +522,7 @@ export const markDeceasedHandler = async (
   reply: FastifyReply,
 ) => {
   if (!requireMod(req, reply)) return;
+  if (!(await requireCanModerate(req, reply, req.params.id))) return;
   const note = req.body?.note ?? null;
   await prisma.user.update({ where: { id: req.params.id }, data: { deceased_at: new Date(), deceased_note: note } });
   return reply.send({ success: true, data: null, error: null });
@@ -527,6 +530,7 @@ export const markDeceasedHandler = async (
 
 export const unmarkDeceasedHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
   if (!requireMod(req, reply)) return;
+  if (!(await requireCanModerate(req, reply, req.params.id))) return;
   await prisma.user.update({ where: { id: req.params.id }, data: { deceased_at: null, deceased_note: null } });
   return reply.send({ success: true, data: null, error: null });
 };
