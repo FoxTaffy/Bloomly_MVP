@@ -34,7 +34,7 @@ services:
     build: ./backend
     restart: always
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     env_file: .env
     environment:
       MINIO_ENDPOINT: minio
@@ -73,12 +73,12 @@ services:
       dockerfile: Dockerfile
     restart: always
     ports:
-      - "5173:3000"
+      - "127.0.0.1:5173:3000"
     environment:
       - VITE_API_URL=https://bloomly.fun
 
   minio:
-    image: minio/minio
+    image: pgsty/minio
     container_name: bloomly-minio
     volumes:
       - minio_data:/data
