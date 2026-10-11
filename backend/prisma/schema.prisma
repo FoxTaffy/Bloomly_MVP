@@ -85,6 +85,7 @@ model User {
   notifications                  Notification[]            @relation("NotificationReceiver")
   sentNotifications              Notification[]            @relation("NotificationSender")
   posts                          Post[]                    @relation("PostAuthor")
+  mediaObjects                   MediaObject[]
   rewardPosts                    Post[]                    @relation("PostRewardFor")
   scheduledPosts                 ScheduledPost[]
   sentRelationshipRequests       RelationshipRequest[]     @relation("SentRelationshipRequests")
@@ -241,6 +242,7 @@ model EmailOtp {
   purpose    String   @db.VarChar(30)
   expires_at DateTime
   used       Boolean  @default(false)
+  attempts   Int      @default(0)
   created_at DateTime @default(now())
 
   @@index([email, purpose])
@@ -285,6 +287,24 @@ model Post {
   notInterested       PostNotInterested[]
 
   @@index([author_id])
+  @@index([deleted_at, created_at])
+  @@index([rating])
+}
+
+// Файл в хранилище и его владелец. Объекты без записи (загружены до введения учёта)
+// не имеют владельца: их нельзя прикреплять к новому контенту и удалять через API.
+model MediaObject {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  object_key  String    @unique @db.VarChar(255)
+  owner_id    String?   @db.Uuid
+  folder      String    @db.VarChar(40)
+  size_bytes  BigInt
+  created_at  DateTime  @default(now())
+  deleted_at  DateTime?
+
+  owner User? @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+
+  @@index([owner_id])
 }
 
 /// Explicit "не интересно" feedback — unlike a soft skip/scroll-past, this permanently excludes
