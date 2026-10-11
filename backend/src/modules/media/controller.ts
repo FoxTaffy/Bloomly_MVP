@@ -1,6 +1,28 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { uploadFile, UploadValidationError, convertGifAvatarToWebm, reserveStorage, releaseStorage, recordMediaOwner } from './service.js';
 import prisma from '../../config/prisma.js';
+import { sniffMatches } from '../../lib/fileSniff.js';
+
+/** Лимиты загрузки собраны здесь: одно место, чтобы менять их вместе с nginx и API. */
+const MAX_CONCURRENT_UPLOADS_PER_USER = 3;
+/** Запас на заголовки multipart сверх размера файла. */
+const MULTIPART_OVERHEAD_BYTES = 1024 * 1024;
+
+// Счётчик активных загрузок на процесс. При нескольких инстансах лимит действует на каждый отдельно.
+const activeUploads = new Map<string, number>();
+
+function acquireUploadSlot(userId: string): boolean {
+  const current = activeUploads.get(userId) ?? 0;
+  if (current >= MAX_CONCURRENT_UPLOADS_PER_USER) return false;
+  activeUploads.set(userId, current + 1);
+  return true;
+}
+
+function releaseUploadSlot(userId: string): void {
+  const current = activeUploads.get(userId) ?? 0;
+  if (current <= 1) activeUploads.delete(userId);
+  else activeUploads.set(userId, current - 1);
+}
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif',
@@ -104,6 +126,26 @@ export const uploadFileHandler = async (
   const { id: userId } = request.user as { id: string };
   const { maxBytes, storageQuotaBytes } = await resolveUploadLimits(folder, userId);
 
+  // Отсекаем заведомо большой запрос по заголовку до буферизации тела
+  const declaredBytes = Number(request.headers['content-length'] ?? 0);
+  if (declaredBytes > maxBytes + MULTIPART_OVERHEAD_BYTES) {
+    return reply.code(413).send({
+      success: false,
+      data: null,
+      error: { code: 'FILE_TOO_LARGE', message: `Файл превышает максимальный размер (${formatMaxSize(maxBytes)})` },
+    });
+  }
+
+  // Ограничиваем одновременные загрузки одного пользователя: иначе несколько больших файлов
+  // сразу заполняют память процесса
+  if (!acquireUploadSlot(userId)) {
+    return reply.code(429).send({
+      success: false,
+      data: null,
+      error: { code: 'TOO_MANY_UPLOADS', message: 'Слишком много одновременных загрузок. Попробуйте чуть позже' },
+    });
+  }
+
   try {
     const chunks: Buffer[] = [];
     let total = 0;
@@ -131,6 +173,15 @@ export const uploadFileHandler = async (
         success: false,
         data: null,
         error: { code: 'NO_FILE', message: 'Uploaded file is empty' },
+      });
+    }
+
+    // Тип объявляет клиент: проверяем, что содержимое действительно этого формата
+    if (!sniffMatches(buf, data.mimetype)) {
+      return reply.code(415).send({
+        success: false,
+        data: null,
+        error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Содержимое файла не соответствует его типу' },
       });
     }
 
@@ -215,5 +266,7 @@ export const uploadFileHandler = async (
       data: null,
       error: { code: 'UPLOAD_ERROR', message: err?.message ?? String(err) },
     });
+  } finally {
+    releaseUploadSlot(userId);
   }
 };

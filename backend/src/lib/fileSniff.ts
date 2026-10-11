@@ -1,0 +1,39 @@
+// Проверка содержимого файла по сигнатуре (magic bytes). Заголовок Content-Type присылает клиент,
+// поэтому файл, объявленный как video/mp4, но содержащий HTML, не должен проходить.
+// Список покрывает разрешённые типы загрузки (media/controller.ts). Неизвестный тип — отказ.
+
+const ascii = (buf: Buffer, text: string, offset = 0) =>
+  buf.subarray(offset, offset + text.length).toString('latin1') === text;
+
+export function sniffMatches(buf: Buffer, mime: string): boolean {
+  if (buf.length < 12) return false;
+  switch (mime) {
+    case 'image/jpeg':
+      return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+    case 'image/png':
+      return buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    case 'image/gif':
+      return ascii(buf, 'GIF8');
+    case 'image/webp':
+      return ascii(buf, 'RIFF') && ascii(buf, 'WEBP', 8);
+    case 'image/avif':
+    case 'video/mp4':
+    case 'video/quicktime':
+    case 'audio/mp4':
+      // Контейнер ISO BMFF: слово ftyp на смещении 4
+      return ascii(buf, 'ftyp', 4);
+    case 'video/webm':
+    case 'audio/webm':
+      // EBML-заголовок Matroska/WebM
+      return buf.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+    case 'audio/ogg':
+      return ascii(buf, 'OggS');
+    case 'audio/wav':
+      return ascii(buf, 'RIFF') && ascii(buf, 'WAVE', 8);
+    case 'audio/mpeg':
+      // ID3-тег или кадр MPEG (синхрослово 11 бит)
+      return ascii(buf, 'ID3') || (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0);
+    default:
+      return false;
+  }
+}
