@@ -314,6 +314,11 @@ export async function sendOtpEmail(
 
   const apiKey = process.env.BREVO_API_KEY
   if (!apiKey) {
+    // Код в логе — это готовый доступ к аккаунту, поэтому в production его не пишем.
+    if (process.env.NODE_ENV === 'production') {
+      console.error(`[EMAIL][NO_KEY] BREVO_API_KEY не задан, письмо (${purpose}) не отправлено`)
+      return
+    }
     console.log(`[EMAIL][NO_KEY] ${purpose} OTP for ${to} (${l}): ${code}`)
     return
   }
