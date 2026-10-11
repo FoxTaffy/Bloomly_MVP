@@ -98,8 +98,21 @@ export class AuthService {
   }
 
   /** Повторная отправка OTP */
-  async resendOtp(email: string, purpose: OtpPurpose) {
+  async resendOtp(email: string, purpose: 'register' | 'reset' | 'unfreeze') {
     const e = email.toLowerCase().trim();
+    // Письмо шлём только тому, у кого аккаунт в подходящем состоянии: иначе эндпоинт
+    // без авторизации рассылает коды на любые адреса. Для остальных — молча ничего не делаем
+    // (как requestPasswordReset), чтобы не раскрывать наличие аккаунта.
+    const user = await prisma.user.findFirst({
+      where: { email: e, deleted_at: null },
+      select: { email_verified: true, frozen_at: true },
+    });
+    const allowed =
+      purpose === 'register' ? !!user && !user.email_verified :
+      purpose === 'reset'    ? !!user :
+      /* unfreeze */           !!user?.frozen_at;
+    if (!allowed) return;
+
     const code = await createOtp(e, purpose);
     await sendOtpEmail(e, code, purpose);
   }

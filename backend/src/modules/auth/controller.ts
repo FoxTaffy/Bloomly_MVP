@@ -182,7 +182,7 @@ export const verifyEmailHandler = async (
 
 // ── Повторная отправка OTP ────────────────────────────────────────────────────
 export const resendOtpHandler = async (
-  request: FastifyRequest<{ Body: { email: string; purpose: 'register' | 'reset' | 'unfreeze' | 'change_email' } }>,
+  request: FastifyRequest<{ Body: { email: string; purpose: 'register' | 'reset' | 'unfreeze' } }>,
   reply: FastifyReply,
 ) => {
   try {
