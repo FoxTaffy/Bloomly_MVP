@@ -1,5 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { usersService } from './service.js';
+import { usersService, withRedactedBirthDate } from './service.js';
 import { isAdult } from '../../lib/age.js';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput, JwtPayload } from './types.js';
 
@@ -54,7 +54,8 @@ export async function searchUsersHandler(
   reply: FastifyReply,
 ) {
   const { q = '', limit, page } = request.query as any;
-  const users = await usersService.searchUsers(q, limit ? parseInt(limit, 10) : 8, page ? parseInt(page, 10) : 1);
+  const users = (await usersService.searchUsers(q, limit ? parseInt(limit, 10) : 8, page ? parseInt(page, 10) : 1))
+    .map(withRedactedBirthDate);
   return reply.send({ success: true, data: { users }, error: null });
 }
 
@@ -63,7 +64,7 @@ export async function getRecommendedUsersHandler(
   reply: FastifyReply,
 ) {
   const payload = request.user as JwtPayload;
-  const users = await usersService.getRecommendedUsers(payload.id);
+  const users = (await usersService.getRecommendedUsers(payload.id)).map(withRedactedBirthDate);
   return reply.send({ success: true, data: { users }, error: null });
 }
 

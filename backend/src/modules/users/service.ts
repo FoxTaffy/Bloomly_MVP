@@ -41,7 +41,13 @@ function liveProfileStatus(status: unknown): unknown {
 }
 
 /** Reduce a birth_date down to whatever granularity its owner allows non-owners to see. */
-function redactBirthDate(birthDate: Date | null, visibility: string | null | undefined): Date | null {
+/** Публичная карточка пользователя из списков (поиск, рекомендации): дата рождения — по настройке владельца */
+export function withRedactedBirthDate<T extends { birth_date?: Date | null; birth_date_visibility?: string | null }>(user: T) {
+  const { birth_date_visibility, ...rest } = user;
+  return { ...rest, birth_date: redactBirthDate(user.birth_date ?? null, birth_date_visibility) };
+}
+
+export function redactBirthDate(birthDate: Date | null, visibility: string | null | undefined): Date | null {
   if (!birthDate) return null;
   switch (visibility) {
     case 'full':
