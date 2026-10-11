@@ -1301,6 +1301,15 @@ export const groupService = {
   },
 
   // ── Group Messages ─────────────────────────────────────────────────────────
+  /** Чат группы видят и пишут только её участники (is_public на чат не влияет). */
+  async assertGroupMember(groupId: string, userId: string) {
+    const member = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      select: { role: true },
+    });
+    if (!member) throw Object.assign(new Error('Чат доступен только участникам группы'), { statusCode: 403 });
+  },
+
   async getGroupMessages(groupId: string, before?: string, limit = 50) {
     const where: any = { group_id: groupId, deleted_at: null };
     if (before) where.created_at = { lt: new Date(before) };

@@ -767,11 +767,13 @@ export const getGroupMessagesHandler = async (
   reply: FastifyReply,
 ) => {
   try {
+    const { id: userId } = request.user as JwtUser;
+    await groupService.assertGroupMember(request.params.id, userId);
     const limit = Math.min(Number(request.query.limit) || 50, 100);
     const messages = await groupService.getGroupMessages(request.params.id, request.query.before, limit);
     return ok(reply, { messages });
   } catch (e: any) {
-    return fail(reply, 500, 'GET_MESSAGES_ERROR', e.message);
+    return fail(reply, e.statusCode ?? 500, 'GET_MESSAGES_ERROR', e.message);
   }
 };
 
@@ -783,12 +785,13 @@ export const sendGroupMessageHandler = async (
     const { id: userId } = request.user as JwtUser;
     const { text } = request.body;
     if (!text?.trim()) return fail(reply, 400, 'EMPTY_MESSAGE', 'Message text is required');
+    await groupService.assertGroupMember(request.params.id, userId);
     const msg = await groupService.sendGroupMessage(request.params.id, userId, text.trim());
     // fire-and-forget automod check (does not block the response)
     moderateGroupMessage(userId).catch((err) => console.error('[AUTOMOD] moderateGroupMessage error:', err));
     return ok(reply, { message: msg }, 201);
   } catch (e: any) {
-    return fail(reply, 400, 'SEND_MESSAGE_ERROR', e.message);
+    return fail(reply, e.statusCode ?? 400, 'SEND_MESSAGE_ERROR', e.message);
   }
 };
 

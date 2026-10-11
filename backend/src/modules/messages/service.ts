@@ -1313,6 +1313,9 @@ export const messageService = {
     const source = await prisma.message.findUnique({ where: { id: sourceMessageId } });
     if (!source) throw Object.assign(new Error('Source message not found'), { statusCode: 404 });
     if (source.deleted_at) throw Object.assign(new Error('Cannot forward deleted message'), { statusCode: 400 });
+    // Пересылать можно только из беседы, в которой отправитель сам состоит: иначе по UUID
+    // сообщения можно было скопировать чужой текст и вложение
+    await this._assertParticipant(source.conversation_id, senderId);
     await this._assertParticipant(targetConvId, senderId);
 
     const [fwdSenderRaw, [message]] = await Promise.all([
