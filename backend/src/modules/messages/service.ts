@@ -1278,6 +1278,26 @@ export const messageService = {
    */
   async setConversationKeys(convId: string, callerId: string, keys: Record<string, string>) {
     await this._assertParticipant(convId, callerId);
+    const targetIds = Object.keys(keys);
+    if (targetIds.length > 500) throw Object.assign(new Error('Слишком много ключей за один запрос'), { statusCode: 400 });
+    // Ключи получают только участники беседы
+    const members = await prisma.conversationParticipant.findMany({
+      where: { conversation_id: convId, user_id: { in: targetIds } },
+      select: { user_id: true },
+    });
+    const memberIds = new Set(members.map((m) => m.user_id));
+    if (targetIds.some((id) => !memberIds.has(id))) {
+      throw Object.assign(new Error('Ключ можно задать только участникам беседы'), { statusCode: 400 });
+    }
+    // Чужой уже выданный ключ не перезаписываем: иначе участник подменял бы ключ другому и
+    // читал бы его переписку. Свой ключ обновлять можно.
+    const existing = await (prisma as any).conversationKey.findMany({
+      where: { conversation_id: convId, user_id: { in: targetIds, not: callerId } },
+      select: { user_id: true },
+    });
+    if (existing.length > 0) {
+      throw Object.assign(new Error('Ключи других участников нельзя перезаписать'), { statusCode: 403 });
+    }
     const upserts = Object.entries(keys).map(([userId, encryptedKey]) =>
       (prisma as any).conversationKey.upsert({
         where: { conversation_id_user_id: { conversation_id: convId, user_id: userId } },
