@@ -367,7 +367,7 @@
                       </button>
                       <!-- Donate button -->
                       <a v-if="(viewedProfile as any).donate_url"
-                        :href="(viewedProfile as any).donate_url"
+                        :href="safeHref((viewedProfile as any).donate_url)"
                         target="_blank" rel="noopener noreferrer"
                         class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/60">
                         <BIcon name="HeartHandshake" class="w-4 h-4" />
@@ -2447,6 +2447,7 @@
 </template>
 
 <script setup lang="ts">
+import { safeHref } from '@/utils/safeHref'
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHead } from '@unhead/vue'

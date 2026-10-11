@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { safeHref } from '@/utils/safeHref'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
@@ -2632,7 +2633,7 @@ const totalPendingBadge = computed(() => {
                 </div>
                 <p class="font-bold text-sm text-white">{{ ad.title }}</p>
                 <p v-if="ad.description" class="text-xs text-white/40 mt-0.5 line-clamp-1">{{ ad.description }}</p>
-                <a :href="ad.link_url" target="_blank" class="text-xs text-[#4C67CF] hover:text-[#4C67CF]/80 mt-0.5 block truncate transition-colors">{{ ad.link_url }}</a>
+                <a :href="safeHref(ad.link_url)" target="_blank"class="text-xs text-[#4C67CF] hover:text-[#4C67CF]/80 mt-0.5 block truncate transition-colors">{{ ad.link_url }}</a>
                 <div class="flex items-center gap-2 mt-1.5 flex-wrap">
                   <router-link v-if="ad.requester" :to="`/profile/${ad.requester.username}`" target="_blank"
                     class="text-[11px] text-white/35 hover:text-white/60 transition-colors">
