@@ -277,8 +277,11 @@ export class AuthService {
 
   /** Шаг 1 подключения TOTP — сгенерировать секрет (ещё не активирован) + QR-код */
   async setupTotp(userId: string) {
-    const user = await prisma.user.findUnique({ where: { id: userId, deleted_at: null }, select: { email: true } });
+    const user = await prisma.user.findUnique({ where: { id: userId, deleted_at: null }, select: { email: true, two_factor_method: true } });
     if (!user) throw new Error('Пользователь не найден');
+    // Перезапись секрета при активной 2FA отдавала бы аккаунт тому, у кого есть access-токен:
+    // сначала отключите текущий метод (это требует пароль), потом подключайте новый.
+    if (user.two_factor_method) throw new Error('Сначала отключите текущую двухфакторную аутентификацию');
 
     const secret = authenticator.generateSecret();
     await prisma.user.update({ where: { id: userId }, data: { totp_secret: encryptTotpSecret(secret) } });
