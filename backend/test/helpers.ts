@@ -43,10 +43,23 @@ export async function createUser(over: Record<string, unknown> = {}) {
   return { user, token, auth: { authorization: `Bearer ${token}` } };
 }
 
-export async function api(method: string, url: string, opts: { headers?: Record<string, string>; body?: unknown } = {}) {
+let ipCounter = 0;
+/** A fresh client IP per call so per-IP rate limits don't leak between tests. */
+export function freshIp() {
+  ipCounter += 1;
+  return `10.${(ipCounter >> 16) & 255}.${(ipCounter >> 8) & 255}.${ipCounter & 255}`;
+}
+
+export async function api(
+  method: string,
+  url: string,
+  opts: { headers?: Record<string, string>; body?: unknown; cookies?: Record<string, string>; ip?: string } = {},
+) {
   const a = await getApp();
-  const res = await a.inject({ method: method as any, url, headers: opts.headers, payload: opts.body as any });
+  const headers = { 'x-forwarded-for': opts.ip ?? freshIp(), ...(opts.headers ?? {}) };
+  const res = await a.inject({ method: method as any, url, headers, cookies: opts.cookies, payload: opts.body as any });
   let json: any = null;
   try { json = res.json(); } catch { /* not json */ }
-  return { status: res.statusCode, json, res };
+  const cookie = (name: string) => res.cookies.find((c) => c.name === name)?.value;
+  return { status: res.statusCode, json, res, cookie };
 }
