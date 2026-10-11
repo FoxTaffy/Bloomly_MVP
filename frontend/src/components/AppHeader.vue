@@ -432,7 +432,8 @@ const onGlobalKeydown = (e: KeyboardEvent) => {
 }
 
 // ── Logout ────────────────────────────────────────────────────────────────────
-const handleLogout = () => { auth.logout(); router.push({ name: 'login' }) }
+// Ждём очистки сессии: иначе guard видит ещё живой токен и редиректит с /login обратно на главную
+const handleLogout = async () => { await auth.logout(); router.push({ name: 'login' }) }
 
 function formatDate(d: string) {
   const date = new Date(d)
