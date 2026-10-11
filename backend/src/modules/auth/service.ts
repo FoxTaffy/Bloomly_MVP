@@ -17,18 +17,44 @@ function genCode(): string {
 
 type OtpPurpose = 'register' | 'reset' | 'unfreeze' | 'change_email' | 'login_2fa' | 'enable_2fa_email';
 
+/** Неверных вводов на один код и на один email+назначение за окно — дальше код не проверяем. */
+const OTP_MAX_ATTEMPTS = 5;
+const OTP_WINDOW_MS = 15 * 60 * 1000;
+const OTP_LOCKED_MESSAGE = 'Слишком много попыток. Запросите новый код позже';
+
+/** Новый код не выдаём, пока попытки в окне не исчерпаны: иначе переотправка сбрасывала бы счётчик. */
+export class OtpLockedError extends Error {}
+
+/** Для потоков без авторизации (сброс, разморозка, переотправка): блокировка молча пропускается,
+ *  ответ остаётся таким же, как для несуществующего аккаунта. */
+async function issueOtpSilently(email: string, purpose: OtpPurpose) {
+  try {
+    const code = await createOtp(email, purpose);
+    await sendOtpEmail(email, code, purpose);
+  } catch (err) {
+    if (!(err instanceof OtpLockedError)) throw err;
+  }
+}
+
 async function createOtp(email: string, purpose: OtpPurpose) {
+  const spent = await prisma.emailOtp.aggregate({
+    where: { email, purpose, created_at: { gte: new Date(Date.now() - OTP_WINDOW_MS) } },
+    _sum: { attempts: true },
+  });
+  if ((spent._sum.attempts ?? 0) >= OTP_MAX_ATTEMPTS) throw new OtpLockedError(OTP_LOCKED_MESSAGE);
+
   await prisma.emailOtp.deleteMany({ where: { email, purpose, used: false } });
   const code = genCode();
   await prisma.emailOtp.create({
-    data: { email, code, purpose, expires_at: new Date(Date.now() + 15 * 60 * 1000) },
+    data: { email, code, purpose, expires_at: new Date(Date.now() + OTP_WINDOW_MS) },
   });
   return code;
 }
 
 async function verifyOtp(email: string, code: string, purpose: OtpPurpose) {
+  // Берём действующий код по email и назначению и сравниваем его с введённым в коде приложения
   const otp = await prisma.emailOtp.findFirst({
-    where: { email, code, purpose, used: false },
+    where: { email, purpose, used: false },
     orderBy: { created_at: 'desc' },
   });
   if (!otp) throw new Error('Неверный код');
@@ -36,7 +62,18 @@ async function verifyOtp(email: string, code: string, purpose: OtpPurpose) {
     await prisma.emailOtp.delete({ where: { id: otp.id } });
     throw new Error('Срок действия кода истёк');
   }
-  await prisma.emailOtp.update({ where: { id: otp.id }, data: { used: true } });
+
+  // Попытку засчитываем атомарно до сравнения: параллельные запросы не обходят лимит
+  const counted = await prisma.emailOtp.updateMany({
+    where: { id: otp.id, used: false, attempts: { lt: OTP_MAX_ATTEMPTS } },
+    data: { attempts: { increment: 1 } },
+  });
+  if (counted.count === 0) throw new Error(OTP_LOCKED_MESSAGE);
+  if (otp.code !== code) throw new Error('Неверный код');
+
+  // Одноразовость: код можно погасить только один раз, даже при гонке двух верных запросов
+  const claimed = await prisma.emailOtp.updateMany({ where: { id: otp.id, used: false }, data: { used: true } });
+  if (claimed.count !== 1) throw new Error('Неверный код');
 }
 
 // ── AuthService ───────────────────────────────────────────────────────────────
@@ -113,8 +150,7 @@ export class AuthService {
       /* unfreeze */           !!user?.frozen_at;
     if (!allowed) return;
 
-    const code = await createOtp(e, purpose);
-    await sendOtpEmail(e, code, purpose);
+    await issueOtpSilently(e, purpose);
   }
 
   /**
@@ -171,8 +207,7 @@ export class AuthService {
     const user = await prisma.user.findFirst({ where: { email: e, deleted_at: null, frozen_at: { not: null } } });
     if (!user) return; // silent — не палим наличие/статус аккаунта
 
-    const code = await createOtp(e, 'unfreeze');
-    await sendOtpEmail(e, code, 'unfreeze');
+    await issueOtpSilently(e, 'unfreeze');
   }
 
   /** Подтверждение кода разморозки — снимает frozen_at/frozen_reason */
@@ -197,8 +232,7 @@ export class AuthService {
     const user = await prisma.user.findFirst({ where: { email: e, deleted_at: null } });
     if (!user) return; // silent
 
-    const code = await createOtp(e, 'reset');
-    await sendOtpEmail(e, code, 'reset');
+    await issueOtpSilently(e, 'reset');
   }
 
   /** Сброс пароля Step 2 — установить новый пароль */
