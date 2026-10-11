@@ -74,7 +74,7 @@ if (!process.env.ALLOWED_ORIGINS && process.env.NODE_ENV === 'production') {
 // limit (e.g. client_max_body_size) must be raised to match, or it will 413 first.
 const MAX_UPLOAD_BYTES = 4_300 * 1024 * 1024;
 
-const fastify = Fastify({ logger: true, bodyLimit: MAX_UPLOAD_BYTES, trustProxy: true });
+const fastify = Fastify({ logger: process.env.NODE_ENV !== 'test', bodyLimit: MAX_UPLOAD_BYTES, trustProxy: true });
 
 // Allow specific origins in production; fall back to wildcard for development only
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -404,4 +404,7 @@ const start = async () => {
   }
 };
 
-start();
+// Tests import the app and drive it via fastify.inject() — no port, no cron.
+if (process.env.BLOOMLY_NO_LISTEN !== '1') start();
+
+export default fastify;

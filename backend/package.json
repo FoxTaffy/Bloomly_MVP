@@ -6,6 +6,7 @@
     "dev": "node --loader ts-node/esm src/server.ts",
     "start": "node dist/server.js",
     "build": "npx tsc -p tsconfig.json",
+    "test": "vitest run",
     "db:migrate": "npx prisma migrate dev",
     "db:generate": "npx prisma generate",
     "db:seed": "node --loader ts-node/esm seed.ts",
@@ -45,6 +46,7 @@
     "@types/sharp": "^0.32.0",
     "prisma": "^5.10.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^2.1.9"
   }
 }
