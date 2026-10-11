@@ -1,7 +1,7 @@
 import prisma from '../../config/prisma.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy } from '../../lib/blocks.js';
-import { deleteFileByUrl } from '../media/service.js';
+import { deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import type { SendMessageInput, GetMessagesQuery } from './types.js';
 
 // ── In-process real-time delivery ─────────────────────────────────────────────
@@ -335,6 +335,9 @@ export const messageService = {
    */
   async sendMessage({ conversationId, senderId, content, encrypted_text, file_url, media_type, reply_to_id, type, metadata, attachments }: SendMessageInput) {
     await this._assertParticipant(conversationId, senderId);
+    // Вложения — только файлы самого отправителя
+    await assertOwnedMedia(file_url, senderId);
+    for (const a of attachments ?? []) await assertOwnedMedia(a.url, senderId);
 
     const sender = await prisma.user.findUnique({ where: { id: senderId }, select: { subscription_tier: true } });
     if ((sender?.subscription_tier ?? 'free') === 'free') {
@@ -678,7 +681,7 @@ export const messageService = {
     // Messages have no restore/undelete path, so the attachment can be purged now
     // instead of leaking in S3 forever (there's no hard-delete cron for messages).
     if (msg.file_url) {
-      deleteFileByUrl(msg.file_url).catch((err) => console.error('[deleteMessage] media cleanup failed:', err));
+      deleteFileByUrl(msg.file_url, msg.sender_id).catch((err) => console.error('[deleteMessage] media cleanup failed:', err));
     }
 
     // Broadcast to all participants so the message disappears in real time for everyone

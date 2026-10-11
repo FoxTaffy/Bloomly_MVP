@@ -1,5 +1,5 @@
 import prisma from '../../config/prisma.js';
-import { isTrustedMediaUrl, deleteFileByUrl } from '../media/service.js';
+import { isTrustedMediaUrl, deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy, getBlockerIds } from '../../lib/blocks.js';
 
@@ -75,6 +75,8 @@ export const storiesService = {
     if ((imageUrl && !isTrustedMediaUrl(imageUrl)) || (videoUrl && !isTrustedMediaUrl(videoUrl))) {
       throw new Error('INVALID_MEDIA_URL');
     }
+    await assertOwnedMedia(imageUrl, userId);
+    await assertOwnedMedia(videoUrl, userId);
 
     const since = new Date(Date.now() - STORY_TTL_MS);
     const activeCount = await prisma.story.count({
@@ -112,7 +114,7 @@ export const storiesService = {
     // rows, so without this the image/video would otherwise sit in S3 for up to a day
     // (or forever, for NSFW content someone deliberately wants gone right away).
     [story.image_url, story.video_url].filter((u): u is string => !!u)
-      .forEach((url) => deleteFileByUrl(url).catch((err) => console.error('[story.delete] media cleanup failed:', err)));
+      .forEach((url) => deleteFileByUrl(url, story.user_id).catch((err) => console.error('[story.delete] media cleanup failed:', err)));
     return updated;
   },
 

@@ -2,7 +2,7 @@ import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy, getBlockerIds } from '../../lib/blocks.js';
-import { isTrustedMediaUrl, deleteFileByUrl } from '../media/service.js';
+import { isTrustedMediaUrl, deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import { groupService } from '../groups/service.js';
 import { extractKeywords } from '../../lib/textKeywords.js';
 import { interestsToTerms } from '../../lib/interestTags.js';
@@ -397,11 +397,15 @@ export const postService = {
       ),
     );
 
+    // Прикреплять можно только файлы, которые автор загрузил сам (иначе чужой файл
+    // потом удалялся бы вместе с этим постом)
+    for (const url of [...mediaUrls, ...mediaOriginalUrls]) await assertOwnedMedia(url, authorId);
+
     return prisma.$transaction(async (tx) => {
       const post = await tx.post.create({
-        data: { 
-          content, 
-          author_id: authorId, 
+        data: {
+          content,
+          author_id: authorId,
           is_nsfw: isNsfw,
           is_ai_generated: isAiGenerated,
           is_announcement: isAnnouncement,
@@ -1106,6 +1110,7 @@ export const postService = {
     if (file_url && !isTrustedMediaUrl(file_url)) {
       throw Object.assign(new Error('INVALID_MEDIA_URL'), { statusCode: 422 });
     }
+    await assertOwnedMedia(file_url, userId);
     if (groupId && !(await groupService.isAtLeastModerator(groupId, userId))) {
       throw Object.assign(new Error('Not authorized to comment as this group'), { statusCode: 403 });
     }
@@ -1261,7 +1266,7 @@ export const postService = {
     const updated = await prisma.post.update({ where: { id: postId }, data: { deleted_at: new Date() } });
     // Posts have no restore path, so the underlying files can be purged immediately
     // instead of leaking in S3 until the 30-day hard-delete cron finally drops the row.
-    Promise.all([...post.media_urls, ...post.media_original_urls].map((url) => deleteFileByUrl(url)))
+    Promise.all([...post.media_urls, ...post.media_original_urls].map((url) => deleteFileByUrl(url, post.author_id)))
       .catch((err) => console.error('[deletePost] media cleanup failed:', err));
     return updated;
   },
@@ -1293,7 +1298,7 @@ export const postService = {
     }
     const updated = await prisma.comment.update({ where: { id: commentId }, data: { deleted_at: new Date() } });
     if (comment.file_url) {
-      deleteFileByUrl(comment.file_url).catch((err) => console.error('[deleteComment] media cleanup failed:', err));
+      deleteFileByUrl(comment.file_url, comment.author_id).catch((err) => console.error('[deleteComment] media cleanup failed:', err));
     }
     return updated;
   },

@@ -3,7 +3,7 @@ import { sanitizeDisplayText } from '../../lib/sanitizeText.js';
 import { containsToxicLanguage } from '../automod/service.js';
 import { getGroupBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
-import { isTrustedMediaUrl, deleteFileByUrl } from '../media/service.js';
+import { isTrustedMediaUrl, deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import { notificationService } from '../notifications/service.js';
 import { requireSafeLink, sanitizeLinkRecord } from '../../lib/safeLink.js';
 import type {
@@ -330,9 +330,21 @@ export const groupService = {
   },
 
   // ── update ────────────────────────────────────────────────────────────────
-  async update(groupId: string, input: UpdateGroupInput) {
+  async update(groupId: string, input: UpdateGroupInput, actorId?: string) {
+    // Картинки группы — только файлы того, кто их ставит (изменённые поля)
+    if (actorId) {
+      const current = await prisma.group.findUnique({ where: { id: groupId }, select: { avatar_url: true, banner_url: true, group_bg_url: true } });
+      const picked: [string | undefined, string | null | undefined][] = [
+        [input.avatarUrl, current?.avatar_url],
+        [input.bannerUrl, current?.banner_url],
+        [input.groupBgUrl, current?.group_bg_url],
+      ];
+      for (const [next, prev] of picked) {
+        if (typeof next === 'string' && next && next !== prev) await assertOwnedMedia(next, actorId);
+      }
+    }
     const prevMedia = (input.avatarUrl !== undefined || input.bannerUrl !== undefined || input.groupBgUrl !== undefined)
-      ? await prisma.group.findUnique({ where: { id: groupId }, select: { avatar_url: true, banner_url: true, group_bg_url: true } })
+      ? await prisma.group.findUnique({ where: { id: groupId }, select: { avatar_url: true, banner_url: true, group_bg_url: true, owner_id: true } })
       : null;
 
     const data: any = {};
@@ -411,7 +423,7 @@ export const groupService = {
         input.bannerUrl !== undefined && prevMedia.banner_url && prevMedia.banner_url !== input.bannerUrl ? prevMedia.banner_url : null,
         input.groupBgUrl !== undefined && prevMedia.group_bg_url && prevMedia.group_bg_url !== input.groupBgUrl ? prevMedia.group_bg_url : null,
       ].filter((url): url is string => !!url);
-      Promise.all(replaced.map((url) => deleteFileByUrl(url)))
+      Promise.all(replaced.map((url) => deleteFileByUrl(url, prevMedia!.owner_id)))
         .catch((err) => console.error('[group.update] media cleanup failed:', err));
     }
 
@@ -431,6 +443,7 @@ export const groupService = {
     const group = await prisma.group.findUnique({
       where: { id: groupId },
       select: {
+        owner_id: true,
         avatar_url: true,
         banner_url: true,
         group_bg_url: true,
@@ -461,7 +474,7 @@ export const groupService = {
       group.group_bg_url,
       ...sponsors.map((s) => s?.logo_url),
     ].filter((url): url is string => !!url);
-    await Promise.all(mediaUrls.map((url) => deleteFileByUrl(url).catch(() => {})));
+    await Promise.all(mediaUrls.map((url) => deleteFileByUrl(url, group.owner_id).catch(() => {})));
 
     await prisma.$transaction([
       prisma.post.deleteMany({ where: { id: { in: postIds } } }),

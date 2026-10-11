@@ -261,7 +261,8 @@ export async function importTelegramHandler(req: FastifyRequest, reply: FastifyR
   const { link, maxStickers } = req.body as { link: string; maxStickers?: number };
   if (!link) return reply.status(400).send({ error: 'link is required' });
   try {
-    const result = await stickersService.importFromTelegram(link, maxStickers);
+    const userId = (req as any).user.id as string;
+    const result = await stickersService.importFromTelegram(link, maxStickers, userId);
     return reply.send({ data: result });
   } catch (err: any) {
     if (err.code === 'NO_TOKEN') {

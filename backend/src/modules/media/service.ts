@@ -6,6 +6,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import os from 'os';
+import prisma from '../../config/prisma.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -317,18 +318,107 @@ export async function getStorageStats(): Promise<{ totalBytes: number; totalObje
   };
 }
 
+/** Папки, объём которых учитывается в квоте хранилища пользователя. */
+export const STORAGE_TRACKED_FOLDER_NAMES = new Set(['posts', 'comments', 'messages', 'backgrounds']);
+
 /**
- * Try to delete a file from MinIO by its public URL.
- * Silently ignores errors (e.g. file already gone, external URL).
+ * Атомарно резервирует место под загрузку. Проверка и увеличение счётчика — одна операция
+ * в БД, поэтому параллельные загрузки не проходят вместе сверх лимита.
+ * limitBytes = null — без лимита (только учёт). Возвращает false, если места нет.
  */
-export async function deleteFileByUrl(url: string): Promise<void> {
-  const prefix = `${PUBLIC_URL}/${BUCKET}/`;
-  if (!url || !url.startsWith(prefix)) return;           // not a MinIO file
-  const objectName = url.slice(prefix.length);
+export async function reserveStorage(userId: string, bytes: number, limitBytes: number | null): Promise<boolean> {
+  const size = BigInt(bytes);
+  const result = await prisma.user.updateMany({
+    where: {
+      id: userId,
+      ...(limitBytes !== null ? { storage_used_bytes: { lte: BigInt(limitBytes) - size } } : {}),
+    },
+    data: { storage_used_bytes: { increment: size } },
+  });
+  return result.count === 1;
+}
+
+/** Возвращает зарезервированное место (неудачная загрузка). Не уходит ниже нуля. */
+export async function releaseStorage(userId: string, bytes: number): Promise<void> {
+  await prisma.$executeRaw`UPDATE "User" SET storage_used_bytes = GREATEST(storage_used_bytes - ${BigInt(bytes)}, 0) WHERE id = ${userId}::uuid`;
+}
+
+/**
+ * Записывает владельца объекта сразу после успешной записи в хранилище.
+ * Без этого файл не может быть ни прикреплён к контенту, ни удалён.
+ */
+export async function recordMediaOwner(url: string, ownerId: string, folder: string, sizeBytes: number): Promise<void> {
+  const key = urlToObjectKey(url);
+  if (!key) throw new Error('Not a stored media URL');
+  await prisma.mediaObject.create({
+    data: { object_key: key, owner_id: ownerId, folder, size_bytes: BigInt(sizeBytes) },
+  });
+}
+
+/**
+ * Файл можно прикрепить к контенту, только если его загрузил сам пользователь.
+ * Случайный UUID в URL — не разрешение: проверяется запись о владельце.
+ * Пустое значение разрешено (очистка поля).
+ */
+export async function assertOwnedMedia(url: unknown, ownerId: string): Promise<void> {
+  if (url === undefined || url === null || url === '') return;
+  const key = urlToObjectKey(url);
+  if (!key) throw Object.assign(new Error('Недопустимая ссылка на файл'), { statusCode: 400 });
+  const row = await prisma.mediaObject.findUnique({
+    where: { object_key: key },
+    select: { owner_id: true, deleted_at: true },
+  });
+  if (!row || row.deleted_at || row.owner_id !== ownerId) {
+    throw Object.assign(new Error('Файл не принадлежит вам или не загружен'), { statusCode: 403 });
+  }
+}
+
+/**
+ * Системная очистка истёкшего или окончательно удалённого контента (cron). Здесь владелец
+ * не проверяется: срок хранения истёк, и пользователь уже не вправе на файл ссылаться.
+ * Квота освобождается один раз, повторный вызов ничего не делает.
+ */
+export async function purgeMediaUrl(url: string): Promise<void> {
+  const key = urlToObjectKey(url);
+  if (!key) return;
+  const row = await prisma.mediaObject.findUnique({ where: { object_key: key }, select: { owner_id: true, folder: true, size_bytes: true, deleted_at: true } });
+  if (row && !row.deleted_at) {
+    const claimed = await prisma.mediaObject.updateMany({
+      where: { object_key: key, deleted_at: null },
+      data: { deleted_at: new Date() },
+    });
+    if (claimed.count === 1 && row.owner_id && STORAGE_TRACKED_FOLDER_NAMES.has(row.folder)) {
+      await releaseStorage(row.owner_id, Number(row.size_bytes));
+    }
+  }
   try {
-    await minioClient.removeObject(BUCKET, objectName);
+    await minioClient.removeObject(BUCKET, key);
   } catch {
-    // best-effort – never throw
+    // best-effort: как и при обычном удалении
+  }
+}
+
+/**
+ * Удаляет файл из хранилища, только если его загрузил ownerId. Чужой или неизвестный файл
+ * не трогаем. Повторный вызов ничего не делает, квота уменьшается ровно один раз.
+ */
+export async function deleteFileByUrl(url: string, ownerId: string | null): Promise<void> {
+  const key = urlToObjectKey(url);
+  if (!key || !ownerId) return;
+  const claimed = await prisma.mediaObject.updateMany({
+    where: { object_key: key, owner_id: ownerId, deleted_at: null },
+    data: { deleted_at: new Date() },
+  });
+  if (claimed.count === 0) return;
+
+  const row = await prisma.mediaObject.findUnique({ where: { object_key: key }, select: { size_bytes: true, folder: true } });
+  if (row && STORAGE_TRACKED_FOLDER_NAMES.has(row.folder)) {
+    await releaseStorage(ownerId, Number(row.size_bytes));
+  }
+  try {
+    await minioClient.removeObject(BUCKET, key);
+  } catch {
+    // best-effort: запись уже помечена удалённой, файл можно подчистить фоновой задачей
   }
 }
 
@@ -338,6 +428,11 @@ export async function deleteFileByUrl(url: string): Promise<void> {
  */
 export function isTrustedMediaUrl(url: string): boolean {
   return typeof url === 'string' && url.startsWith(`${PUBLIC_URL}/${BUCKET}/`);
+}
+
+/** Публичный URL объекта по его ключу (обратно к urlToObjectKey). */
+export function mediaUrlForKey(key: string): string {
+  return `${PUBLIC_URL}/${BUCKET}/${key}`;
 }
 
 /** Maps a stored MinIO URL back to its bucket object key, or null if it isn't one of ours. */

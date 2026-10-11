@@ -95,7 +95,7 @@ export const updateGroupHandler = async (
         return fail(reply, 402, 'BUSINESS_REQUIRED', 'Group customization requires a Business subscription');
       }
     }
-    const group = await groupService.update(request.params.id, request.body);
+    const group = await groupService.update(request.params.id, request.body, (request.user as JwtUser).id);
     return ok(reply, { group });
   } catch (e: any) {
     if (e instanceof Error && e.message === 'CATEGORY_CHANGE_COOLDOWN') {

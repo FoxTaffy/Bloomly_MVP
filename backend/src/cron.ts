@@ -5,7 +5,7 @@ import { activityService } from './modules/activities/service.js';
 import { dealersDenService } from './modules/dealers-den/service.js';
 import { pollSupportInbox } from './modules/support/mailPoller.js';
 import { scheduledPostService } from './modules/posts/scheduledService.js';
-import { deleteFileByUrl } from './modules/media/service.js';
+import { purgeMediaUrl } from './modules/media/service.js';
 
 export function initCronJobs() {
   console.log('[CRON] Initializing background tasks...');
@@ -66,7 +66,7 @@ export function initCronJobs() {
       ]);
 
       if (expiringMediaUrls.length > 0) {
-        await Promise.all(expiringMediaUrls.map((url) => deleteFileByUrl(url)));
+        await Promise.all(expiringMediaUrls.map((url) => purgeMediaUrl(url)));
         console.log(`[CRON] Purged ${expiringMediaUrls.length} S3 file(s) belonging to hard-deleted rows.`);
       }
 
@@ -119,7 +119,7 @@ export function initCronJobs() {
           prisma.story.deleteMany({ where: { id: { in: ids } } }),
         ]);
         const mediaUrls = expired.flatMap((s) => [s.image_url, s.video_url]).filter((u): u is string => !!u);
-        await Promise.all(mediaUrls.map((url) => deleteFileByUrl(url)));
+        await Promise.all(mediaUrls.map((url) => purgeMediaUrl(url)));
         console.log(`[CRON] Story cleanup: removed ${expired.length} expired stor${expired.length === 1 ? 'y' : 'ies'}, purged ${mediaUrls.length} file(s).`);
       }
     } catch (err: any) {

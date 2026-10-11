@@ -1,5 +1,5 @@
 import prisma from '../../config/prisma.js';
-import { deleteFileByUrl, isTrustedMediaUrl } from '../media/service.js';
+import { deleteFileByUrl, isTrustedMediaUrl, assertOwnedMedia } from '../media/service.js';
 import { getUserBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy } from '../../lib/blocks.js';
@@ -248,8 +248,14 @@ export const usersService = {
     // ── Fetch current media URLs before overwriting ─────────────────────
     const current = await prisma.user.findUnique({
       where: { id, deleted_at: null },
-      select: { avatar_url: true, avatar_video_url: true, banner_url: true },
+      select: { avatar_url: true, avatar_video_url: true, banner_url: true, profile_bg_url: true },
     });
+    // Новые файлы профиля — только загруженные самим пользователем. Проверяем лишь изменённые поля,
+    // чтобы сохранение профиля не ломалось на файлах, которые уже стоят.
+    for (const field of ['avatar_url', 'avatar_video_url', 'banner_url', 'profile_bg_url'] as const) {
+      const next = (data as any)[field];
+      if (typeof next === 'string' && next && next !== (current as any)?.[field]) await assertOwnedMedia(next, id);
+    }
 
     if (current) {
       const historyEntries: { user_id: string; type: string; url: string; video_url?: string | null }[] = [];
@@ -374,8 +380,8 @@ export const usersService = {
     if (!item) throw Object.assign(new Error('History item not found'), { statusCode: 404 });
 
     await prisma.mediaHistory.delete({ where: { id: historyId } });
-    deleteFileByUrl(item.url).catch(() => {});
-    if (item.video_url) deleteFileByUrl(item.video_url).catch(() => {});
+    deleteFileByUrl(item.url, userId).catch(() => {});
+    if (item.video_url) deleteFileByUrl(item.video_url, userId).catch(() => {});
   },
 
   async restoreAvatarFromHistory(userId: string, historyId: string) {
@@ -808,7 +814,7 @@ export const usersService = {
         where: { id: { in: refs.map((r) => r.id) } },
         data: { deleted_at: new Date() },
       });
-      for (const r of refs) deleteFileByUrl(r.image_url).catch(() => {});
+      for (const r of refs) deleteFileByUrl(r.image_url, userId).catch(() => {});
     }
 
     let newPrimaryId: string | null = null;
@@ -849,6 +855,7 @@ export const usersService = {
 
   async addReferenceImage(userId: string, fursonaId: string, data: UpsertReferenceImageInput) {
     if (!data.image_url) throw Object.assign(new Error('image_url is required'), { statusCode: 400 });
+    await assertOwnedMedia(data.image_url, userId);
 
     const fursona = await prisma.fursona.findFirst({
       where: { id: fursonaId, user_id: userId, deleted_at: null },
@@ -872,11 +879,12 @@ export const usersService = {
     });
     if (!existing) throw Object.assign(new Error('Reference image not found'), { statusCode: 404 });
 
+    if (data.image_url && data.image_url !== existing.image_url) await assertOwnedMedia(data.image_url, userId);
     if (data.image_url !== undefined && existing.image_url && existing.image_url !== data.image_url) {
       await prisma.mediaHistory.create({
         data: { user_id: userId, type: 'fursona_reference', url: existing.image_url },
       });
-      deleteFileByUrl(existing.image_url).catch(() => {});
+      deleteFileByUrl(existing.image_url, userId).catch(() => {});
     }
 
     return prisma.fursonaReferenceImage.update({
@@ -894,7 +902,7 @@ export const usersService = {
     await prisma.mediaHistory.create({
       data: { user_id: userId, type: 'fursona_reference', url: existing.image_url },
     });
-    deleteFileByUrl(existing.image_url).catch(() => {});
+    deleteFileByUrl(existing.image_url, userId).catch(() => {});
 
     return prisma.fursonaReferenceImage.update({
       where: { id: refId },
@@ -974,6 +982,7 @@ export const usersService = {
   },
 
   async createFursuit(userId: string, data: UpsertFursuitInput) {
+    await assertOwnedMedia((data as any).image_url, userId);
     return prisma.fursuit.create({
       data: { user_id: userId, ...data },
     });
@@ -985,11 +994,12 @@ export const usersService = {
     });
     if (!existing) throw Object.assign(new Error('Fursuit not found'), { statusCode: 404 });
 
+    if (data.image_url && data.image_url !== existing.image_url) await assertOwnedMedia(data.image_url, userId);
     if (data.image_url !== undefined && existing.image_url && existing.image_url !== data.image_url) {
       await prisma.mediaHistory.create({
         data: { user_id: userId, type: 'fursuit_image', url: existing.image_url },
       });
-      deleteFileByUrl(existing.image_url).catch(() => {});
+      deleteFileByUrl(existing.image_url, userId).catch(() => {});
     }
 
     return prisma.fursuit.update({

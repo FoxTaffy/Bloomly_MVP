@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { uploadFile, UploadValidationError, convertGifAvatarToWebm } from './service.js';
+import { uploadFile, UploadValidationError, convertGifAvatarToWebm, reserveStorage, releaseStorage, recordMediaOwner } from './service.js';
 import prisma from '../../config/prisma.js';
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -102,7 +102,7 @@ export const uploadFileHandler = async (
   }
 
   const { id: userId } = request.user as { id: string };
-  const { maxBytes, storageQuotaBytes, storageUsedBytes } = await resolveUploadLimits(folder, userId);
+  const { maxBytes, storageQuotaBytes } = await resolveUploadLimits(folder, userId);
 
   try {
     const chunks: Buffer[] = [];
@@ -131,17 +131,6 @@ export const uploadFileHandler = async (
         success: false,
         data: null,
         error: { code: 'NO_FILE', message: 'Uploaded file is empty' },
-      });
-    }
-
-    if (storageQuotaBytes !== null && storageUsedBytes + BigInt(buf.length) > BigInt(storageQuotaBytes)) {
-      return reply.code(413).send({
-        success: false,
-        data: null,
-        error: {
-          code: 'STORAGE_QUOTA_EXCEEDED',
-          message: `Хранилище заполнено (лимит ${formatMaxSize(storageQuotaBytes)}). Освободите место или перейдите на тариф выше.`,
-        },
       });
     }
 
@@ -181,21 +170,37 @@ export const uploadFileHandler = async (
         h: parseFraction(query.cropH, 1),
       };
       const { posterUrl, videoUrl } = await convertGifAvatarToWebm(buf, crop);
+      // Оба файла принадлежат загрузившему: иначе аватар из GIF нельзя сохранить в профиль
+      await recordMediaOwner(posterUrl, userId, folder, 0);
+      await recordMediaOwner(videoUrl, userId, folder, 0);
       return reply.send({ success: true, data: { url: posterUrl, videoUrl }, error: null });
     }
 
-    const { url, originalUrl, isSilentVideo } = await uploadFile(buf, data.filename, data.mimetype, folder);
-
-    if (STORAGE_TRACKED_FOLDERS.has(folder)) {
-      // Best-effort metering: the upload already succeeded, so a failure here
-      // shouldn't fail the request — it would just under-count this user's usage.
-      prisma.user.update({
-        where: { id: userId },
-        data: { storage_used_bytes: { increment: buf.length } },
-      }).catch((err) => (request.server as any).log.error({ err }, 'Failed to update storage usage'));
+    // Квота резервируется атомарно до записи в хранилище; при ошибке место возвращается
+    const tracked = STORAGE_TRACKED_FOLDERS.has(folder);
+    if (tracked && !(await reserveStorage(userId, buf.length, storageQuotaBytes))) {
+      return reply.code(413).send({
+        success: false,
+        data: null,
+        error: {
+          code: 'STORAGE_QUOTA_EXCEEDED',
+          message: `Хранилище заполнено (лимит ${formatMaxSize(storageQuotaBytes ?? 0)}). Освободите место или перейдите на тариф выше.`,
+        },
+      });
     }
 
-    return reply.send({ success: true, data: { url, originalUrl, isSilentVideo }, error: null });
+    let uploaded: Awaited<ReturnType<typeof uploadFile>>;
+    try {
+      uploaded = await uploadFile(buf, data.filename, data.mimetype, folder);
+      await recordMediaOwner(uploaded.url, userId, folder, buf.length);
+      // Полноразмерный оригинал не считается в квоте второй раз
+      if (uploaded.originalUrl) await recordMediaOwner(uploaded.originalUrl, userId, folder, 0);
+    } catch (err) {
+      if (tracked) await releaseStorage(userId, buf.length);
+      throw err;
+    }
+
+    return reply.send({ success: true, data: { url: uploaded.url, originalUrl: uploaded.originalUrl, isSilentVideo: uploaded.isSilentVideo }, error: null });
   } catch (err: any) {
     if (err instanceof UploadValidationError) {
       return reply.code(422).send({
