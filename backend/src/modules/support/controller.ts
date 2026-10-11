@@ -12,10 +12,15 @@ export async function createTicketHandler(request: FastifyRequest, reply: Fastif
   if (!subject?.trim() || !message?.trim()) {
     return reply.code(400).send({ success: false, error: { message: 'Заполните тему и сообщение' } });
   }
-  const ticket = await createTicket(userId, {
-    type, subject, message, contactEmail: contact_email, attachmentUrls: attachment_urls,
-  });
-  return reply.code(201).send({ success: true, data: { ticket } });
+  try {
+    const ticket = await createTicket(userId, {
+      type, subject, message, contactEmail: contact_email, attachmentUrls: attachment_urls,
+    });
+    return reply.code(201).send({ success: true, data: { ticket } });
+  } catch (e: any) {
+    if (!e?.statusCode) throw e;
+    return reply.code(e.statusCode).send({ success: false, error: { message: e.message } });
+  }
 }
 
 // GET /api/support/tickets
