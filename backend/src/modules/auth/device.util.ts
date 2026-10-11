@@ -25,11 +25,8 @@ export function parseDeviceName(userAgent: string | undefined | null): string {
   return `${browser} · ${os}`;
 }
 
-/** Извлекает реальный IP клиента с учётом заголовков прокси */
+/** IP клиента. Заголовки прокси учитывает Fastify (trustProxy в server.ts), а не этот код:
+ *  ручной разбор X-Forwarded-For позволял подставить любой IP. */
 export function getClientIp(request: FastifyRequest): string | undefined {
-  const forwarded = request.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.length > 0) {
-    return forwarded.split(',')[0].trim();
-  }
   return request.ip;
 }

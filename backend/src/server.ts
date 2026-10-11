@@ -74,7 +74,14 @@ if (!process.env.ALLOWED_ORIGINS && process.env.NODE_ENV === 'production') {
 // limit (e.g. client_max_body_size) must be raised to match, or it will 413 first.
 const MAX_UPLOAD_BYTES = 4_300 * 1024 * 1024;
 
-const fastify = Fastify({ logger: process.env.NODE_ENV !== 'test', bodyLimit: MAX_UPLOAD_BYTES, trustProxy: true });
+// Доверяем X-Forwarded-For только от своих прокси (loopback — nginx на хосте, uniquelocal —
+// docker-сеть). При trustProxy: true Fastify брал самый левый IP из заголовка, а его клиент
+// подставляет сам, что обходило rate-limit. TRUST_PROXY можно задать списком IP/CIDR.
+const fastify = Fastify({
+  logger: process.env.NODE_ENV !== 'test',
+  bodyLimit: MAX_UPLOAD_BYTES,
+  trustProxy: process.env.TRUST_PROXY || 'loopback,uniquelocal',
+});
 
 // Allow specific origins in production; fall back to wildcard for development only
 const allowedOrigins = process.env.ALLOWED_ORIGINS
