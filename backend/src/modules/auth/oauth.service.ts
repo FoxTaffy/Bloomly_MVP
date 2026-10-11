@@ -52,7 +52,8 @@ const providers: Record<OAuthProvider, ProviderConfig> = {
         headers: { Authorization: `Bearer ${token}` },
       })
       const d = await r.json() as any
-      return { id: d.sub, email: d.email ?? null, name: d.name ?? null, avatar: d.picture ?? null }
+      // Email берём только подтверждённый: непроверенный адрес нельзя использовать для привязки
+      return { id: d.sub, email: d.email_verified === true ? (d.email ?? null) : null, name: d.name ?? null, avatar: d.picture ?? null }
     },
   },
 
@@ -105,7 +106,8 @@ const providers: Record<OAuthProvider, ProviderConfig> = {
         },
       })
       const d = (await r.json() as any).data?.[0]
-      return { id: d.id, email: d.email ?? null, name: d.display_name ?? null, avatar: d.profile_image_url ?? null }
+      // Twitch не подтверждает email: адрес не используем ни для привязки, ни для входа
+      return { id: d.id, email: null, name: d.display_name ?? null, avatar: d.profile_image_url ?? null }
     },
   },
 }
@@ -240,6 +242,9 @@ export async function findOrCreateOAuthUser(provider: OAuthProvider, oauthUser: 
       where: { email: oauthUser.email.toLowerCase(), deleted_at: null },
     })
     if (byEmail) {
+      // Привязываем только к аккаунту с подтверждённой почтой: непроверенный аккаунт мог быть
+      // создан с чужим адресом, и OAuth-вход отдал бы его тому, кто владеет адресом у провайдера
+      if (!byEmail.email_verified) throw new Error('Email уже занят непроверенным аккаунтом')
       // Привязываем этот OAuth к существующему аккаунту
       await prisma.oAuthAccount.create({
         data: { user_id: byEmail.id, provider, provider_id: oauthUser.id },
