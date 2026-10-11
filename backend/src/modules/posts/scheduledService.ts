@@ -185,10 +185,8 @@ export const scheduledPostService = {
         await publishRow(row);
         published++;
       } catch (err: any) {
-        await prisma.scheduledPost.update({
-          where: { id: row.id },
-          data: { status: 'failed', last_error: err?.message ?? 'Publish failed' },
-        }).catch(() => {});
+        // 409 — строку уже публикует другой запуск: её статус трогать нельзя
+        if (err?.statusCode === 409) continue;
       }
     }
     return published;
@@ -196,6 +194,24 @@ export const scheduledPostService = {
 };
 
 async function publishRow(row: Awaited<ReturnType<typeof prisma.scheduledPost.findUniqueOrThrow>>) {
+  // Захват строки до публикации: ручная публикация и cron не опубликуют пост дважды
+  const claim = await prisma.scheduledPost.updateMany({
+    where: { id: row.id, status: { in: ['draft', 'scheduled', 'failed'] } },
+    data: { status: 'publishing' },
+  });
+  if (claim.count !== 1) throw Object.assign(new Error('Post is already being published'), { statusCode: 409 });
+  try {
+    return await publishClaimedRow(row);
+  } catch (err: any) {
+    await prisma.scheduledPost.update({
+      where: { id: row.id },
+      data: { status: 'failed', last_error: err?.message ?? 'Publish failed' },
+    }).catch(() => {});
+    throw err;
+  }
+}
+
+async function publishClaimedRow(row: Awaited<ReturnType<typeof prisma.scheduledPost.findUniqueOrThrow>>) {
   const post = row.group_id
     ? await groupService.createGroupPost(row.group_id, row.author_id, {
         content: row.content,
