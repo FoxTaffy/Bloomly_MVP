@@ -587,14 +587,25 @@ export const messageService = {
     await this._assertParticipant(request.conversation_id, userId);
     if (request.sender_id === userId) throw Object.assign(new Error('Cannot pay your own request'), { statusCode: 400 });
 
-    const meta = (request.metadata as Record<string, any>) ?? {};
-    if (meta.status === 'paid') throw Object.assign(new Error('Already paid'), { statusCode: 400 });
+    // В групповой беседе отметить оплату может только указанный в запросе плательщик
+    const conv = await prisma.conversation.findUnique({ where: { id: request.conversation_id }, select: { type: true } });
+    const rawMeta = (request.metadata as Record<string, any>) ?? {};
+    if (conv?.type === 'group' && rawMeta.payer_id !== userId) {
+      throw Object.assign(new Error('Оплату в групповой беседе может отметить только плательщик'), { statusCode: 403 });
+    }
 
-    const nextMeta = { ...meta, status: 'paid', paid_at: new Date().toISOString() };
-    // Paying settles the prepayment portion when one was requested, not the full order total.
-    const dueAmount = meta.prepaymentPercent ? (meta.amount * meta.prepaymentPercent) / 100 : meta.amount;
-    const [updatedRequest, confirmation] = await prisma.$transaction([
-      prisma.message.update({
+    // Проверку статуса и смену на «оплачено» делаем под блокировкой строки: два параллельных
+    // подтверждения не создадут два подтверждения оплаты
+    const { updatedRequest, confirmation, dueAmount, meta } = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Message" WHERE id = ${messageId}::uuid FOR UPDATE`;
+      const locked = await tx.message.findUnique({ where: { id: messageId }, select: { metadata: true } });
+      const currentMeta = (locked?.metadata as Record<string, any>) ?? {};
+      if (currentMeta.status === 'paid') throw Object.assign(new Error('Already paid'), { statusCode: 400 });
+
+      const nextMeta = { ...currentMeta, status: 'paid', paid_at: new Date().toISOString() };
+      // Оплата закрывает предоплату, если она была запрошена, а не полную сумму заказа
+      const due = currentMeta.prepaymentPercent ? (currentMeta.amount * currentMeta.prepaymentPercent) / 100 : currentMeta.amount;
+      const updated = await tx.message.update({
         where: { id: messageId },
         data: { metadata: nextMeta as any },
         include: {
@@ -606,14 +617,14 @@ export const messageService = {
             },
           },
         },
-      }),
-      prisma.message.create({
+      });
+      const created = await tx.message.create({
         data: {
           conversation_id: request.conversation_id,
           sender_id: userId,
           type: 'payment_confirmation',
           reply_to_id: messageId,
-          metadata: { amount: dueAmount, description: meta.description } as any,
+          metadata: { amount: due, description: currentMeta.description } as any,
         },
         include: {
           sender: { select: senderSelect },
@@ -624,8 +635,9 @@ export const messageService = {
             },
           },
         },
-      }),
-    ]);
+      });
+      return { updatedRequest: updated, confirmation: created, dueAmount: due, meta: currentMeta };
+    });
 
     const parts = await prisma.conversationParticipant.findMany({
       where: { conversation_id: request.conversation_id },
