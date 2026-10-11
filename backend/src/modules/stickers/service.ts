@@ -138,11 +138,14 @@ export const stickersService = {
   },
 
   // ── get by id ─────────────────────────────────────────────────────────────
-  async getById(id: string) {
-    return prisma.stickerPack.findFirst({
+  async getById(id: string, requesterId?: string) {
+    const pack = await prisma.stickerPack.findFirst({
       where: { id, deleted_at: null },
       select: PACK_SELECT,
     });
+    // Черновик не отдаём никому, кроме автора: раньше он читался по одному UUID
+    if (pack && pack.status === 'draft' && pack.author_id !== requesterId) return null;
+    return pack;
   },
 
   // ── create ────────────────────────────────────────────────────────────────
@@ -221,6 +224,16 @@ export const stickersService = {
   async addToCollection(userId: string, packId: string) {
     const pack = await prisma.stickerPack.findFirst({ where: { id: packId, deleted_at: null, status: 'published' } });
     if (!pack) return null;
+    // Платных паков пока нельзя купить: бесплатный сбор раздавал их всем
+    if (Number(pack.price) > 0 && pack.author_id !== userId) {
+      throw Object.assign(new Error('Платный пак нельзя добавить без покупки'), { statusCode: 402 });
+    }
+    // Счётчик скачиваний растёт только при первом добавлении, а не на каждый повторный запрос
+    const existing = await prisma.userStickerPack.findUnique({
+      where: { user_id_pack_id: { user_id: userId, pack_id: packId } },
+      select: { user_id: true },
+    });
+    if (existing) return true;
 
     await prisma.$transaction([
       prisma.userStickerPack.upsert({

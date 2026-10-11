@@ -1,5 +1,5 @@
 import prisma from '../../config/prisma.js';
-import { deleteFileByUrl } from '../media/service.js';
+import { deleteFileByUrl, isTrustedMediaUrl } from '../media/service.js';
 import { getUserBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy } from '../../lib/blocks.js';
@@ -908,11 +908,13 @@ export const usersService = {
       select: { image_url: true },
     });
     if (!ref?.image_url) return null;
+    // Серверный fetch только по нашим файлам: иначе произвольный URL (169.254.169.254, внутренние сервисы) — SSRF
+    if (!isTrustedMediaUrl(ref.image_url)) return null;
 
     const owner = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } });
     const username = owner?.username ?? 'unknown';
 
-    const response = await fetch(ref.image_url);
+    const response = await fetch(ref.image_url, { redirect: 'error', signal: AbortSignal.timeout(15_000) });
     if (!response.ok) return null;
     const srcBuffer = Buffer.from(await response.arrayBuffer());
 
