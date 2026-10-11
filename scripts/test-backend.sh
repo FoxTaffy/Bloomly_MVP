@@ -4,8 +4,8 @@
 # see AUDIT.md). Never touches the production stack: separate network + container names, no .env.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-NET=bloomly-audit-net
-PG=bloomly-audit-pg
+NET="${TEST_NET:-bloomly-audit-net}"
+PG="${TEST_PG:-bloomly-audit-pg}"
 IMG="${NODE_IMAGE:-bloomly-audit-node}"
 
 docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET" >/dev/null
