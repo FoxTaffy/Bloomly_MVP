@@ -5,6 +5,7 @@ import { getGroupBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isTrustedMediaUrl, deleteFileByUrl } from '../media/service.js';
 import { notificationService } from '../notifications/service.js';
+import { requireSafeLink, sanitizeLinkRecord } from '../../lib/safeLink.js';
 import type {
   CreateGroupInput,
   UpdateGroupInput,
@@ -314,7 +315,7 @@ export const groupService = {
           avatar_url: input.avatarUrl,
           banner_url: input.bannerUrl,
           accent_color: input.accentColor,
-          social_links: input.socialLinks ?? {},
+          social_links: sanitizeLinkRecord(input.socialLinks),
           is_public: input.isPublic ?? true,
           members_count: 1, // owner is the first member
         },
@@ -344,7 +345,7 @@ export const groupService = {
     if (input.avatarUrl !== undefined) data.avatar_url = input.avatarUrl;
     if (input.bannerUrl !== undefined) data.banner_url = input.bannerUrl;
     if (input.accentColor !== undefined) data.accent_color = input.accentColor;
-    if (input.socialLinks !== undefined) data.social_links = input.socialLinks;
+    if (input.socialLinks !== undefined) data.social_links = sanitizeLinkRecord(input.socialLinks);
     if (input.isPublic !== undefined) data.is_public = input.isPublic;
     if (input.rulesText !== undefined) data.rules_text = input.rulesText;
     if (input.faq !== undefined) data.faq = input.faq;
@@ -691,7 +692,7 @@ export const groupService = {
         is_recurring: input.isRecurring ?? false,
         theme: input.theme ?? {},
         is_top: input.isTop ?? false,
-        registration_url: input.registrationUrl,
+        registration_url: requireSafeLink(input.registrationUrl, 'регистрация'),
       },
       select: EVENT_SELECT,
     });
@@ -710,7 +711,7 @@ export const groupService = {
     if (input.status !== undefined) data.status = input.status;
     if (input.theme !== undefined) data.theme = input.theme;
     if (input.isTop !== undefined) data.is_top = input.isTop;
-    if (input.registrationUrl !== undefined) data.registration_url = input.registrationUrl || null;
+    if (input.registrationUrl !== undefined) data.registration_url = requireSafeLink(input.registrationUrl, 'регистрация');
     if (input.shortCode !== undefined && input.shortCode.trim()) data.short_code = input.shortCode.trim().toUpperCase();
 
     return prisma.event.update({ where: { id: eventId }, data, select: EVENT_SELECT });

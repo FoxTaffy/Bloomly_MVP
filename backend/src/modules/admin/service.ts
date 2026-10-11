@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { notificationService } from '../notifications/service.js';
 import { getStorageStats } from '../media/service.js';
 import { applyAction, type TargetSnapshot } from '../automod/service.js';
+import { normalizeSafeLink } from '../../lib/safeLink.js';
 
 export const adminService = {
   // ── Overview stats ────────────────────────────────────────────────────────
@@ -603,10 +604,13 @@ export const adminService = {
     requesterId?: string; title: string; description?: string;
     imageUrl?: string; linkUrl: string; contactInfo?: string; priceLabel?: string;
   }) {
+    // Ссылка рекламы показывается всем посетителям — javascript:-схему отсекаем на записи
+    const linkUrl = normalizeSafeLink(input.linkUrl);
+    if (!linkUrl) throw new Error('Недопустимая ссылка рекламы: разрешены только http(s), mailto и tel');
     return prisma.advertisement.create({ data: {
       requester_id: input.requesterId, title: input.title,
       description:  input.description, image_url: input.imageUrl,
-      link_url: input.linkUrl, contact_info: input.contactInfo,
+      link_url: linkUrl, contact_info: input.contactInfo,
       price_label: input.priceLabel,
     }});
   },

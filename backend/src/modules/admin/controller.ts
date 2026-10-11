@@ -371,8 +371,12 @@ export const submitAdHandler = async (
   if (requester?.subscription_tier !== 'business') {
     return reply.code(402).send({ success: false, data: null, error: { code: 'BUSINESS_REQUIRED', message: 'Placing ads requires a Business subscription' } });
   }
-  const ad = await adminService.submitAd({ ...req.body, requesterId });
-  return reply.code(201).send({ success: true, data: { ad }, error: null });
+  try {
+    const ad = await adminService.submitAd({ ...req.body, requesterId });
+    return reply.code(201).send({ success: true, data: { ad }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_AD_LINK', message: e.message } });
+  }
 };
 
 export const reviewAdHandler = async (
