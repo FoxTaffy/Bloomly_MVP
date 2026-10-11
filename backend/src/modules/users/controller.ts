@@ -216,6 +216,11 @@ export async function updateSubscriptionHandler(
   try {
     const { id: userId } = request.user as JwtPayload;
     const { tier } = request.body;
+    // Платный тариф без процессора оплаты выдавался по любой сохранённой «карте».
+    // В production смена на платный тариф — только через админа, пока нет реальной оплаты.
+    if (process.env.NODE_ENV === 'production' && tier !== 'free') {
+      return reply.code(403).send({ success: false, data: null, error: { code: 'PAYMENT_NOT_AVAILABLE', message: 'Оплата подписки пока недоступна' } });
+    }
     const data = await usersService.updateSubscriptionTier(userId, tier);
     return reply.send({ success: true, data, error: null });
   } catch (e: any) {
