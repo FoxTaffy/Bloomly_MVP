@@ -3,6 +3,7 @@ import { useLangStore } from '@/stores/lang'
 
 export interface NotifToast {
   id: string
+  sourceId?: string
   type: string
   senderName: string
   senderAvatar: string | null
@@ -18,7 +19,9 @@ export interface NotifToast {
 }
 
 const toasts = ref<NotifToast[]>([])
+const toastTimers = new Map<string, ReturnType<typeof setTimeout>>()
 let counter = 0
+const MAX_TOASTS = 4
 
 const typeLabel: Record<string, string> = {
   LIKE:                 'поставил(а) + вашей публикации',
@@ -47,6 +50,9 @@ function subscriptionPostLabel(type: string, pronouns?: string | null): string |
 
 export function useNotifToast() {
   function addToast(notif: any) {
+    const sourceId = notif?.id ? String(notif.id) : null
+    if (sourceId && toasts.value.some(t => t.sourceId === sourceId)) return
+
     const id = String(++counter)
     const sender = notif.sender ?? {}
     // Actions taken "as" a group (group posts, group comments) mask the real sender.
@@ -54,6 +60,7 @@ export function useNotifToast() {
     const isWarn = notif.type === 'automod_warn'
     const t: NotifToast = {
       id,
+      sourceId: sourceId ?? undefined,
       type: notif.type ?? '',
       senderName: isWarn ? 'Bloomly' : (senderGroup?.name || sender.display_name || sender.username || 'Кто-то'),
       senderAvatar: senderGroup?.avatar_url ?? sender.avatar_url ?? null,
@@ -67,16 +74,21 @@ export function useNotifToast() {
       meta: notif.meta,
       createdAt: new Date(),
     }
-    toasts.value.unshift(t)
-    // Auto-remove after 5s
-    setTimeout(() => remove(id), 5000)
+    toasts.value = [t, ...toasts.value].slice(0, MAX_TOASTS)
+
+    const timer = setTimeout(() => remove(id), 5000)
+    toastTimers.set(id, timer)
   }
 
   /** New chat message — shown with the actual message preview instead of a generic label. */
   function addMessageToast(opts: { senderName: string; senderAvatar: string | null; senderUsername: string; text: string; convId: string; isGroupDm?: boolean; groupSlug?: string }) {
+    const dedupeKey = `${opts.convId}:${opts.senderUsername}:${opts.text}`
+    if (toasts.value.some(t => t.sourceId === dedupeKey)) return
+
     const id = String(++counter)
     const t: NotifToast = {
       id,
+      sourceId: dedupeKey,
       type: opts.isGroupDm ? 'GROUP_DM' : 'MESSAGE',
       senderName: opts.senderName,
       senderAvatar: opts.senderAvatar,
@@ -87,11 +99,18 @@ export function useNotifToast() {
       groupSlug: opts.groupSlug,
       createdAt: new Date(),
     }
-    toasts.value.unshift(t)
-    setTimeout(() => remove(id), 5000)
+    toasts.value = [t, ...toasts.value].slice(0, MAX_TOASTS)
+
+    const timer = setTimeout(() => remove(id), 5000)
+    toastTimers.set(id, timer)
   }
 
   function remove(id: string) {
+    const timer = toastTimers.get(id)
+    if (timer) {
+      clearTimeout(timer)
+      toastTimers.delete(id)
+    }
     toasts.value = toasts.value.filter(t => t.id !== id)
   }
 

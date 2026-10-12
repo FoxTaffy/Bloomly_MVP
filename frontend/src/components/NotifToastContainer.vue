@@ -34,14 +34,14 @@ function onClick(t: typeof toasts.value[0]) {
 <template>
   <Teleport to="body">
     <div class="fixed bottom-20 md:bottom-6 right-4 z-[9000] flex flex-col gap-2.5 items-end pointer-events-none" style="max-width: 340px">
-      <TransitionGroup name="notif-toast">
+      <TransitionGroup name="notif-toast" tag="div" class="flex flex-col items-end gap-2.5">
         <div
           v-for="t in toasts"
           :key="t.id"
-          class="notif-toast-card group pointer-events-auto relative w-[320px] overflow-hidden flex items-start gap-3 pl-3.5 pr-3 py-3 backdrop-blur-xl rounded-2xl shadow-card cursor-pointer transition-colors"
+          class="notif-toast-card group pointer-events-auto relative w-[320px] overflow-hidden flex items-start gap-3 pl-3.5 pr-3 py-3 rounded-2xl border shadow-[0_18px_44px_rgba(0,0,0,0.35)] cursor-pointer transition-all duration-200 backdrop-blur-xl bg-gradient-to-br from-white/8 via-brand-card/95 to-brand-card/90"
           :class="t.type === 'automod_warn'
-            ? 'bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/15'
-            : 'bg-brand-card/95 border border-brand-border hover:bg-brand-card'"
+            ? 'border-amber-400/35 hover:border-amber-300/50 shadow-[0_18px_44px_rgba(245,158,11,0.18)]'
+            : 'border-brand-border/80 hover:border-brand-accent/40'"
           @click="onClick(t)"
         >
           <!-- Accent stripe in the notification type's colour -->
@@ -51,7 +51,7 @@ function onClick(t: typeof toasts.value[0]) {
           <div class="relative flex-shrink-0 mt-0.5">
             <img
               :src="t.senderAvatar || '/icons/badges/NN.jpg'"
-              class="w-10 h-10 rounded-full object-cover ring-1 ring-brand-border"
+              class="w-10 h-10 rounded-full object-cover ring-2 ring-brand-card/80 shadow-lg"
               @error="onAvatarError"
             />
             <div
@@ -62,10 +62,10 @@ function onClick(t: typeof toasts.value[0]) {
             </div>
           </div>
 
-          <!-- Text: sender on top, action / preview below -->
+          <!-- Text -->
           <div class="min-w-0 flex-1 pt-0.5">
-            <p class="text-[13px] font-bold text-white leading-tight truncate">{{ t.senderName }}</p>
-            <p class="text-[13px] text-white/65 leading-snug mt-0.5 line-clamp-2 break-words">{{ t.message }}</p>
+            <p class="text-[13px] font-extrabold text-white leading-tight truncate">{{ t.senderName }}</p>
+            <p class="text-[13px] text-white/70 leading-snug mt-0.5 line-clamp-2 break-words">{{ t.message }}</p>
           </div>
 
           <!-- Close -->
@@ -77,8 +77,8 @@ function onClick(t: typeof toasts.value[0]) {
             <BIcon name="X" class="w-3.5 h-3.5" />
           </button>
 
-          <!-- Lifetime bar: drains over the 5 s auto-dismiss, pauses on hover -->
-          <span class="notif-toast-progress absolute left-0 bottom-0 h-[2px] w-full origin-left bg-white/20" />
+          <!-- Lifetime bar -->
+          <span class="notif-toast-progress absolute left-0 bottom-0 h-[2px] w-full origin-left bg-gradient-to-r from-brand-accent via-white/80 to-white/40" />
         </div>
       </TransitionGroup>
     </div>

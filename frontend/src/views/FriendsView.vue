@@ -5,6 +5,7 @@ const langStore = useLangStore()
 import { useRouter } from 'vue-router'
 import { useFriendsStore } from '@/stores/friends'
 import type { FriendUser } from '@/stores/friends'
+import { matchesFriendSearch } from '@/utils/friendSearch'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
@@ -73,10 +74,8 @@ const displayedList = computed(() => {
   if (mainTab.value === 'followers') raw = [...friendsStore.followers]
   if (mainTab.value === 'following') raw = [...friendsStore.following]
 
-  const q = searchQuery.value.toLowerCase().trim()
-  if (q) raw = raw.filter(
-    (f) => (f.display_name ?? '').toLowerCase().includes(q) || f.username.toLowerCase().includes(q)
-  )
+  const q = searchQuery.value.trim()
+  if (q) raw = raw.filter((f) => matchesFriendSearch(f, q))
 
   // Сортировка: сначала онлайн, потом алфавит
   return raw.sort((a, b) => {

@@ -20,6 +20,7 @@
     "lucide-vue-next": "^0.395.0",
     "pinia": "^2.1.0",
     "qrcode": "^1.5.4",
+    "tsx": "^4.23.15",
     "vue": "^3.4.0",
     "vue-advanced-cropper": "^2.8.9",
     "vue-router": "^4.3.0"

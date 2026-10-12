@@ -129,15 +129,15 @@ export const useFriendsStore = defineStore('friends', () => {
 
   async function acceptRequest(id: string) {
     await api.post(`/friends/requests/${id}/accept`)
-    requests.value = requests.value.filter((r) => r.id !== id)
-    requestsCount.value = requests.value.length
-    await loadFriends()
+    await Promise.all([
+      loadRequests(),
+      loadFriends(),
+    ])
   }
 
   async function rejectRequest(id: string) {
     await api.post(`/friends/requests/${id}/reject`)
-    requests.value = requests.value.filter((r) => r.id !== id)
-    requestsCount.value = requests.value.length
+    await loadRequests()
   }
 
   async function removeFriend(friendId: string) {

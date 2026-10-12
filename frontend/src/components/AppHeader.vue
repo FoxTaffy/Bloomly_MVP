@@ -120,7 +120,11 @@ const connectNotifSSE = () => {
         const data = JSON.parse(e.data)
         if (data.type && data.type !== 'heartbeat') {
           const notif = data.data ?? data
-          notifications.value.unshift(normalizeNotif(notif))
+          const normalized = normalizeNotif(notif)
+          const alreadyPresent = notifications.value.some((n: any) => String(n.id) === String(normalized.id))
+          if (alreadyPresent) return
+
+          notifications.value.unshift(normalized)
           unreadCount.value++
           addToast(notif)
         }
@@ -704,8 +708,8 @@ onUnmounted(() => {
                     <span class="text-[10px] font-bold tracking-widest text-white/35 uppercase">Новые</span>
                   </div>
                   <div v-for="n in notifications.filter(n => !n.is_read)" :key="n.id"
-                    class="flex items-start gap-3 px-4 py-3 mx-2 mb-0.5 rounded-2xl cursor-pointer transition-colors"
-                    :class="n.type === 'automod_warn' ? 'bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/30' : 'bg-brand-accent/5 hover:bg-brand-accent/10'"
+                    class="flex items-start gap-3 px-4 py-3 mx-2 mb-1.5 rounded-2xl cursor-pointer transition-all border"
+                    :class="n.type === 'automod_warn' ? 'bg-amber-500/10 hover:bg-amber-500/15 border-amber-500/30' : 'bg-brand-accent/5 hover:bg-brand-accent/10 border-brand-border/60'"
                     @click="onNotifClick(n)">
                     <!-- Avatar + type badge -->
                     <div v-if="isAutomodNotif(n)" class="relative flex-shrink-0 mt-0.5">
@@ -760,8 +764,8 @@ onUnmounted(() => {
                     <span class="text-[10px] font-bold tracking-widest text-white/35 uppercase">Просмотренные</span>
                   </div>
                   <div v-for="n in notifications.filter(n => n.is_read)" :key="n.id"
-                    class="flex items-start gap-3 px-4 py-3 mx-2 mb-0.5 rounded-2xl cursor-pointer transition-colors"
-                    :class="n.type === 'automod_warn' ? 'bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20' : 'hover:bg-white/5'"
+                    class="flex items-start gap-3 px-4 py-3 mx-2 mb-1.5 rounded-2xl cursor-pointer transition-all border border-transparent hover:border-brand-border/60 hover:bg-white/[0.03]"
+                    :class="n.type === 'automod_warn' ? 'bg-amber-500/5 hover:bg-amber-500/10 border-amber-500/20' : ''"
                     @click="onNotifClick(n)">
                     <!-- Avatar + type badge -->
                     <div v-if="isAutomodNotif(n)" class="relative flex-shrink-0 mt-0.5 opacity-70">
