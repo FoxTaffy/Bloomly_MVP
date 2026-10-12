@@ -224,7 +224,8 @@ const categories = [
 let searchDebounce: ReturnType<typeof setTimeout>
 const onHeaderSearch = () => { clearTimeout(searchDebounce); searchDebounce = setTimeout(() => fetchPosts(), 300) }
 
-const handleLogout = () => { auth.logout(); router.push({ name: 'login' }) }
+// Ждём очистки сессии: иначе guard видит ещё живой токен и редиректит с /login обратно на главную
+const handleLogout = async () => { await auth.logout(); router.push({ name: 'login' }) }
 
 // ── Post status (repawed / favourited / userVote) ────────────────────────────
 const postStatus = reactive<Record<string, { repawed: boolean; favourited: boolean; repawCount: number; userVote: 1 | -1 | 0 }>>({})

@@ -10,6 +10,8 @@
  * Tone is informal ("ты" / "du" / "tu" …) to match the original Bloomly voice.
  */
 
+import { isDevEnv } from '../../lib/env.js';
+
 const BREVO_URL = 'https://api.brevo.com/v3/smtp/email'
 
 type Purpose = 'register' | 'reset' | 'unfreeze' | 'change_email' | 'login_2fa' | 'enable_2fa_email'
@@ -314,6 +316,11 @@ export async function sendOtpEmail(
 
   const apiKey = process.env.BREVO_API_KEY
   if (!apiKey) {
+    // Код в логе — это готовый доступ к аккаунту, поэтому в production его не пишем.
+    if (!isDevEnv()) {
+      console.error(`[EMAIL][NO_KEY] BREVO_API_KEY не задан, письмо (${purpose}) не отправлено`)
+      return
+    }
     console.log(`[EMAIL][NO_KEY] ${purpose} OTP for ${to} (${l}): ${code}`)
     return
   }

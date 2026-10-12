@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { safeHref } from '@/utils/safeHref'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
@@ -2281,7 +2282,7 @@ const totalPendingBadge = computed(() => {
 
                   <!-- Evidence attached by the reporter -->
                   <div v-if="folder.reports[0].evidence_urls?.length" class="flex gap-2 mt-2 flex-wrap">
-                    <a v-for="(url, ei) in folder.reports[0].evidence_urls" :key="ei" :href="url" target="_blank" rel="noopener"
+                    <a v-for="(url, ei) in folder.reports[0].evidence_urls" :key="ei" :href="safeHref(url)" target="_blank" rel="noopener noreferrer"
                       class="w-14 h-14 rounded-lg overflow-hidden border border-white/[0.08] flex-shrink-0">
                       <img :src="url" class="w-full h-full object-cover" />
                     </a>
@@ -2430,7 +2431,7 @@ const totalPendingBadge = computed(() => {
                         </p>
                         <p class="text-xs text-white/70 whitespace-pre-wrap">{{ m.body }}</p>
                         <div v-if="m.attachment_urls?.length" class="flex gap-2 mt-2 flex-wrap">
-                          <a v-for="(url, ai) in m.attachment_urls" :key="ai" :href="url" target="_blank" rel="noopener"
+                          <a v-for="(url, ai) in m.attachment_urls" :key="ai" :href="safeHref(url)" target="_blank" rel="noopener noreferrer"
                             class="w-16 h-16 rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
                             <img :src="url" class="w-full h-full object-cover" />
                           </a>
@@ -2632,7 +2633,7 @@ const totalPendingBadge = computed(() => {
                 </div>
                 <p class="font-bold text-sm text-white">{{ ad.title }}</p>
                 <p v-if="ad.description" class="text-xs text-white/40 mt-0.5 line-clamp-1">{{ ad.description }}</p>
-                <a :href="ad.link_url" target="_blank" class="text-xs text-[#4C67CF] hover:text-[#4C67CF]/80 mt-0.5 block truncate transition-colors">{{ ad.link_url }}</a>
+                <a :href="safeHref(ad.link_url)" target="_blank"class="text-xs text-[#4C67CF] hover:text-[#4C67CF]/80 mt-0.5 block truncate transition-colors">{{ ad.link_url }}</a>
                 <div class="flex items-center gap-2 mt-1.5 flex-wrap">
                   <router-link v-if="ad.requester" :to="`/profile/${ad.requester.username}`" target="_blank"
                     class="text-[11px] text-white/35 hover:text-white/60 transition-colors">

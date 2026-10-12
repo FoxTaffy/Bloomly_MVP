@@ -3,15 +3,17 @@
   "version": "1.5.144",
   "type": "module",
   "scripts": {
-    "dev": "node --loader ts-node/esm src/server.ts",
+    "dev": "NODE_ENV=development node --loader ts-node/esm src/server.ts",
     "start": "node dist/server.js",
     "build": "npx tsc -p tsconfig.json",
+    "test": "vitest run",
     "db:migrate": "npx prisma migrate dev",
     "db:generate": "npx prisma generate",
     "db:seed": "node --loader ts-node/esm seed.ts",
     "db:backfill-tag-affinity": "node --loader ts-node/esm src/scripts/backfillTagAffinity.ts",
     "db:cleanup-orphaned-media": "node --loader ts-node/esm src/scripts/cleanupOrphanedMedia.ts",
-    "db:cleanup-deleted-media": "node --loader ts-node/esm src/scripts/cleanupDeletedMedia.ts"
+    "db:cleanup-deleted-media": "node --loader ts-node/esm src/scripts/cleanupDeletedMedia.ts",
+    "db:migrate-legacy-private-media": "node --loader ts-node/esm src/scripts/migrateLegacyPrivateMedia.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
@@ -46,6 +48,7 @@
     "@types/sharp": "^0.32.0",
     "prisma": "^5.10.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^2.1.9"
   }
 }

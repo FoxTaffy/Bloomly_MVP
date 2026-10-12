@@ -1,7 +1,7 @@
 import prisma from '../../config/prisma.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy } from '../../lib/blocks.js';
-import { deleteFileByUrl } from '../media/service.js';
+import { deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import type { SendMessageInput, GetMessagesQuery } from './types.js';
 
 // ── In-process real-time delivery ─────────────────────────────────────────────
@@ -335,6 +335,9 @@ export const messageService = {
    */
   async sendMessage({ conversationId, senderId, content, encrypted_text, file_url, media_type, reply_to_id, type, metadata, attachments }: SendMessageInput) {
     await this._assertParticipant(conversationId, senderId);
+    // Вложения — только файлы самого отправителя
+    await assertOwnedMedia(file_url, senderId);
+    for (const a of attachments ?? []) await assertOwnedMedia(a.url, senderId);
 
     const sender = await prisma.user.findUnique({ where: { id: senderId }, select: { subscription_tier: true } });
     if ((sender?.subscription_tier ?? 'free') === 'free') {
@@ -584,14 +587,25 @@ export const messageService = {
     await this._assertParticipant(request.conversation_id, userId);
     if (request.sender_id === userId) throw Object.assign(new Error('Cannot pay your own request'), { statusCode: 400 });
 
-    const meta = (request.metadata as Record<string, any>) ?? {};
-    if (meta.status === 'paid') throw Object.assign(new Error('Already paid'), { statusCode: 400 });
+    // В групповой беседе отметить оплату может только указанный в запросе плательщик
+    const conv = await prisma.conversation.findUnique({ where: { id: request.conversation_id }, select: { type: true } });
+    const rawMeta = (request.metadata as Record<string, any>) ?? {};
+    if (conv?.type === 'group' && rawMeta.payer_id !== userId) {
+      throw Object.assign(new Error('Оплату в групповой беседе может отметить только плательщик'), { statusCode: 403 });
+    }
 
-    const nextMeta = { ...meta, status: 'paid', paid_at: new Date().toISOString() };
-    // Paying settles the prepayment portion when one was requested, not the full order total.
-    const dueAmount = meta.prepaymentPercent ? (meta.amount * meta.prepaymentPercent) / 100 : meta.amount;
-    const [updatedRequest, confirmation] = await prisma.$transaction([
-      prisma.message.update({
+    // Проверку статуса и смену на «оплачено» делаем под блокировкой строки: два параллельных
+    // подтверждения не создадут два подтверждения оплаты
+    const { updatedRequest, confirmation, dueAmount, meta } = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Message" WHERE id = ${messageId}::uuid FOR UPDATE`;
+      const locked = await tx.message.findUnique({ where: { id: messageId }, select: { metadata: true } });
+      const currentMeta = (locked?.metadata as Record<string, any>) ?? {};
+      if (currentMeta.status === 'paid') throw Object.assign(new Error('Already paid'), { statusCode: 400 });
+
+      const nextMeta = { ...currentMeta, status: 'paid', paid_at: new Date().toISOString() };
+      // Оплата закрывает предоплату, если она была запрошена, а не полную сумму заказа
+      const due = currentMeta.prepaymentPercent ? (currentMeta.amount * currentMeta.prepaymentPercent) / 100 : currentMeta.amount;
+      const updated = await tx.message.update({
         where: { id: messageId },
         data: { metadata: nextMeta as any },
         include: {
@@ -603,14 +617,14 @@ export const messageService = {
             },
           },
         },
-      }),
-      prisma.message.create({
+      });
+      const created = await tx.message.create({
         data: {
           conversation_id: request.conversation_id,
           sender_id: userId,
           type: 'payment_confirmation',
           reply_to_id: messageId,
-          metadata: { amount: dueAmount, description: meta.description } as any,
+          metadata: { amount: due, description: currentMeta.description } as any,
         },
         include: {
           sender: { select: senderSelect },
@@ -621,8 +635,9 @@ export const messageService = {
             },
           },
         },
-      }),
-    ]);
+      });
+      return { updatedRequest: updated, confirmation: created, dueAmount: due, meta: currentMeta };
+    });
 
     const parts = await prisma.conversationParticipant.findMany({
       where: { conversation_id: request.conversation_id },
@@ -678,7 +693,7 @@ export const messageService = {
     // Messages have no restore/undelete path, so the attachment can be purged now
     // instead of leaking in S3 forever (there's no hard-delete cron for messages).
     if (msg.file_url) {
-      deleteFileByUrl(msg.file_url).catch((err) => console.error('[deleteMessage] media cleanup failed:', err));
+      deleteFileByUrl(msg.file_url, msg.sender_id).catch((err) => console.error('[deleteMessage] media cleanup failed:', err));
     }
 
     // Broadcast to all participants so the message disappears in real time for everyone
@@ -745,33 +760,38 @@ export const messageService = {
     if (msg.deleted_at) throw Object.assign(new Error('Message deleted'), { statusCode: 400 });
     await this._assertParticipant(msg.conversation_id, userId);
 
-    const current = (msg.reactions as Record<string, string[]> | null) ?? {};
-    const next: Record<string, string[]> = { ...current };
-    const list = next[emoji] ? [...next[emoji]] : [];
-    const idx = list.indexOf(userId);
-    if (idx === -1) {
-      list.push(userId);
-    } else {
-      list.splice(idx, 1);
-    }
-    if (list.length === 0) {
-      delete next[emoji];
-    } else {
-      next[emoji] = list;
-    }
+    // Читаем и пишем реакции под блокировкой строки: без неё параллельные реакции перезаписывали друг друга
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Message" WHERE id = ${messageId}::uuid FOR UPDATE`;
+      const fresh = await tx.message.findUnique({ where: { id: messageId }, select: { reactions: true } });
+      const current = (fresh?.reactions as Record<string, string[]> | null) ?? {};
+      const next: Record<string, string[]> = { ...current };
+      const list = next[emoji] ? [...next[emoji]] : [];
+      const idx = list.indexOf(userId);
+      if (idx === -1) {
+        list.push(userId);
+      } else {
+        list.splice(idx, 1);
+      }
+      if (list.length === 0) {
+        delete next[emoji];
+      } else {
+        next[emoji] = list;
+      }
 
-    const updated = await prisma.message.update({
-      where: { id: messageId },
-      data: { reactions: Object.keys(next).length ? next : null as any },
-      include: {
-        sender: { select: senderSelect },
-        reply_to: {
-          select: {
-            id: true, text: true, type: true, file_url: true,
-            sender: { select: { id: true, username: true, display_name: true } },
+      return tx.message.update({
+        where: { id: messageId },
+        data: { reactions: Object.keys(next).length ? next : null as any },
+        include: {
+          sender: { select: senderSelect },
+          reply_to: {
+            select: {
+              id: true, text: true, type: true, file_url: true,
+              sender: { select: { id: true, username: true, display_name: true } },
+            },
           },
         },
-      },
+      });
     });
 
     const parts = await prisma.conversationParticipant.findMany({
@@ -1278,6 +1298,26 @@ export const messageService = {
    */
   async setConversationKeys(convId: string, callerId: string, keys: Record<string, string>) {
     await this._assertParticipant(convId, callerId);
+    const targetIds = Object.keys(keys);
+    if (targetIds.length > 500) throw Object.assign(new Error('Слишком много ключей за один запрос'), { statusCode: 400 });
+    // Ключи получают только участники беседы
+    const members = await prisma.conversationParticipant.findMany({
+      where: { conversation_id: convId, user_id: { in: targetIds } },
+      select: { user_id: true },
+    });
+    const memberIds = new Set(members.map((m) => m.user_id));
+    if (targetIds.some((id) => !memberIds.has(id))) {
+      throw Object.assign(new Error('Ключ можно задать только участникам беседы'), { statusCode: 400 });
+    }
+    // Чужой уже выданный ключ не перезаписываем: иначе участник подменял бы ключ другому и
+    // читал бы его переписку. Свой ключ обновлять можно.
+    const existing = await (prisma as any).conversationKey.findMany({
+      where: { conversation_id: convId, user_id: { in: targetIds, not: callerId } },
+      select: { user_id: true },
+    });
+    if (existing.length > 0) {
+      throw Object.assign(new Error('Ключи других участников нельзя перезаписать'), { statusCode: 403 });
+    }
     const upserts = Object.entries(keys).map(([userId, encryptedKey]) =>
       (prisma as any).conversationKey.upsert({
         where: { conversation_id_user_id: { conversation_id: convId, user_id: userId } },
@@ -1313,6 +1353,9 @@ export const messageService = {
     const source = await prisma.message.findUnique({ where: { id: sourceMessageId } });
     if (!source) throw Object.assign(new Error('Source message not found'), { statusCode: 404 });
     if (source.deleted_at) throw Object.assign(new Error('Cannot forward deleted message'), { statusCode: 400 });
+    // Пересылать можно только из беседы, в которой отправитель сам состоит: иначе по UUID
+    // сообщения можно было скопировать чужой текст и вложение
+    await this._assertParticipant(source.conversation_id, senderId);
     await this._assertParticipant(targetConvId, senderId);
 
     const [fwdSenderRaw, [message]] = await Promise.all([

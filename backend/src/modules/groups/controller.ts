@@ -95,7 +95,7 @@ export const updateGroupHandler = async (
         return fail(reply, 402, 'BUSINESS_REQUIRED', 'Group customization requires a Business subscription');
       }
     }
-    const group = await groupService.update(request.params.id, request.body);
+    const group = await groupService.update(request.params.id, request.body, (request.user as JwtUser).id);
     return ok(reply, { group });
   } catch (e: any) {
     if (e instanceof Error && e.message === 'CATEGORY_CHANGE_COOLDOWN') {
@@ -767,11 +767,13 @@ export const getGroupMessagesHandler = async (
   reply: FastifyReply,
 ) => {
   try {
+    const { id: userId } = request.user as JwtUser;
+    await groupService.assertGroupMember(request.params.id, userId);
     const limit = Math.min(Number(request.query.limit) || 50, 100);
     const messages = await groupService.getGroupMessages(request.params.id, request.query.before, limit);
     return ok(reply, { messages });
   } catch (e: any) {
-    return fail(reply, 500, 'GET_MESSAGES_ERROR', e.message);
+    return fail(reply, e.statusCode ?? 500, 'GET_MESSAGES_ERROR', e.message);
   }
 };
 
@@ -789,7 +791,7 @@ export const sendGroupMessageHandler = async (
     moderateGroupMessage(userId).catch((err) => console.error('[AUTOMOD] moderateGroupMessage error:', err));
     return ok(reply, { message: msg }, 201);
   } catch (e: any) {
-    return fail(reply, 400, 'SEND_MESSAGE_ERROR', e.message);
+    return fail(reply, e.statusCode ?? 400, 'SEND_MESSAGE_ERROR', e.message);
   }
 };
 
@@ -890,7 +892,7 @@ export const updateGroupTodoHandler = async (
     const group = await groupService.getGroupOwner(request.params.id);
     if (!group) return fail(reply, 404, 'NOT_FOUND', 'Group not found');
     if (group.owner_id !== userId) return fail(reply, 403, 'FORBIDDEN', 'Only group owner can manage the queue');
-    const item = await groupService.updateTodoItem(request.params.itemId, request.body);
+    const item = await groupService.updateTodoItem(request.params.id, request.params.itemId, request.body);
     return ok(reply, { item });
   } catch (e: any) {
     return fail(reply, 500, 'UPDATE_TODO_ERROR', e.message);
@@ -906,7 +908,7 @@ export const deleteGroupTodoHandler = async (
     const group = await groupService.getGroupOwner(request.params.id);
     if (!group) return fail(reply, 404, 'NOT_FOUND', 'Group not found');
     if (group.owner_id !== userId) return fail(reply, 403, 'FORBIDDEN', 'Only group owner can manage the queue');
-    await groupService.deleteTodoItem(request.params.itemId);
+    await groupService.deleteTodoItem(request.params.id, request.params.itemId);
     return ok(reply, { success: true });
   } catch (e: any) {
     return fail(reply, 500, 'DELETE_TODO_ERROR', e.message);

@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { isDevEnv } from './env.js';
 
 // ── Короткоживущий токен ожидания второго фактора ──────────────────────────────
 // Намеренно НЕ подписывается через @fastify/jwt: там `authenticate`-декоратор
@@ -7,11 +8,17 @@ import { createHmac, timingSafeEqual } from 'crypto';
 // секрет/схему, он работал бы как обычный access token и позволил бы обойти
 // второй фактор. Отдельный HMAC-секрет и формат гарантируют, что этот токен
 // годится только для ручной проверки в /auth/login/2fa/*.
-const secret = process.env.TWO_FACTOR_ENCRYPTION_KEY || 'insecure-dev-fallback-key';
+// Публичный fallback-секрет подделал бы mfaToken, поэтому вне dev/test без ключа токен не выдаём.
+function getSecret(): string {
+  const key = process.env.TWO_FACTOR_ENCRYPTION_KEY;
+  if (key) return key;
+  if (!isDevEnv()) throw new Error('TWO_FACTOR_ENCRYPTION_KEY is required');
+  return 'insecure-dev-fallback-key';
+}
 const TTL_MS = 5 * 60 * 1000;
 
 function sign(payload: string): string {
-  return createHmac('sha256', secret).update(payload).digest('base64url');
+  return createHmac('sha256', getSecret()).update(payload).digest('base64url');
 }
 
 export function createMfaToken(userId: string): string {

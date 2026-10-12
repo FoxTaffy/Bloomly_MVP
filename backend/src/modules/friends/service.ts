@@ -1,6 +1,21 @@
 import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import { isBlockedBy } from '../../lib/blocks.js';
+import { redactBirthDate } from '../users/service.js';
+
+/** Даты рождения друзей с учётом их настроек приватности. В общие ответы дата не попадает. */
+async function visibleBirthDates(userIds: string[]): Promise<Map<string, Date>> {
+  const rows = await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, birth_date: true, birth_date_visibility: true },
+  });
+  const dates = new Map<string, Date>();
+  for (const row of rows) {
+    const visible = redactBirthDate(row.birth_date, row.birth_date_visibility);
+    if (visible) dates.set(row.id, visible);
+  }
+  return dates;
+}
 
 const FRIEND_USER_SELECT = {
   id:           true,
@@ -10,7 +25,6 @@ const FRIEND_USER_SELECT = {
   banner_url:   true,
   badge_type:   true,
   location:     true,
-  birth_date:   true,
   deceased_at:  true,
 } as const;
 
@@ -265,13 +279,14 @@ export const friendsService = {
   /** Friends with upcoming birthdays in the next 30 days */
   async getUpcomingBirthdays(userId: string) {
     const friends = await this.getFriends(userId);
+    const dates = await visibleBirthDates(friends.map((f) => f.id));
     const now = new Date();
     const currentYear = now.getFullYear();
 
     return friends
-      .filter((f) => f.birth_date)
+      .filter((f) => dates.has(f.id))
       .map((f) => {
-        const bd = new Date(f.birth_date as Date);
+        const bd = new Date(dates.get(f.id) as Date);
         // Birthday this year (or next year if already passed)
         let upcoming = new Date(currentYear, bd.getMonth(), bd.getDate());
         if (upcoming < now) upcoming = new Date(currentYear + 1, bd.getMonth(), bd.getDate());
@@ -285,14 +300,15 @@ export const friendsService = {
   /** Friends whose birthday is yesterday, today, or tomorrow (for the messages banner) */
   async getNearbyBirthdays(userId: string) {
     const friends = await this.getFriends(userId);
+    const dates = await visibleBirthDates(friends.map((f) => f.id));
     const now = new Date();
     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const currentYear = now.getFullYear();
 
     return friends
-      .filter((f) => f.birth_date)
+      .filter((f) => dates.has(f.id))
       .map((f) => {
-        const bd = new Date(f.birth_date as Date);
+        const bd = new Date(dates.get(f.id) as Date);
         let occurrence = new Date(currentYear, bd.getMonth(), bd.getDate());
         let daysOffset = Math.round((occurrence.getTime() - todayMidnight.getTime()) / (1000 * 60 * 60 * 24));
         // Birthday already passed by more than a day this year — check next year's occurrence instead

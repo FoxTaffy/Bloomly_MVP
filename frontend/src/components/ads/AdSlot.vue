@@ -1,7 +1,7 @@
 <template>
   <a
     v-if="ad"
-    :href="ad.link_url"
+    :href="safeHref(ad.link_url)"
     target="_blank"
     rel="noopener noreferrer sponsored"
     @click="trackClick"
@@ -55,6 +55,7 @@
 </template>
 
 <script setup lang="ts">
+import { safeHref } from '@/utils/safeHref'
 import { ref, watch } from 'vue'
 import BIcon from '../BIcon.vue'
 import AdRequestModal from './AdRequestModal.vue'

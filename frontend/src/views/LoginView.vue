@@ -170,6 +170,8 @@ function switchMode(next: Mode) {
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
 function loginWith(provider: string) {
+  // Метка «вход начат в этой вкладке»: колбэк без неё (чужая ссылка с #token=) не принимаем
+  sessionStorage.setItem('oauth_started', '1')
   window.location.href = `${API_BASE}/api/auth/oauth/${provider}`
 }
 

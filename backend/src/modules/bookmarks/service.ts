@@ -1,5 +1,8 @@
 import prisma from '../../config/prisma.js';
 
+// Цвет идёт в style-строку на фронтенде: принимаем только #rrggbb, иначе лезут лишние CSS-свойства
+const normalizeHexColor = (color?: string | null) => (color && /^#[0-9a-f]{6}$/i.test(color) ? color : '#4C67CF');
+
 const USER_SELECT = {
   id: true, username: true, display_name: true,
   avatar_url: true, banner_url: true, bio: true,
@@ -107,7 +110,7 @@ export const bookmarksService = {
 
   async createLabel(userId: string, name: string, color?: string) {
     return prisma.postBookmarkLabel.create({
-      data: { user_id: userId, name: name.trim().slice(0, 60), color: color ?? '#4C67CF' },
+      data: { user_id: userId, name: name.trim().slice(0, 60), color: normalizeHexColor(color) },
     });
   },
 

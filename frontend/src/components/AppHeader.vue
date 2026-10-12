@@ -432,7 +432,8 @@ const onGlobalKeydown = (e: KeyboardEvent) => {
 }
 
 // ── Logout ────────────────────────────────────────────────────────────────────
-const handleLogout = () => { auth.logout(); router.push({ name: 'login' }) }
+// Ждём очистки сессии: иначе guard видит ещё живой токен и редиректит с /login обратно на главную
+const handleLogout = async () => { await auth.logout(); router.push({ name: 'login' }) }
 
 function formatDate(d: string) {
   const date = new Date(d)
@@ -488,7 +489,7 @@ onUnmounted(() => {
           <img src="/bloomly.png?v=2" alt="Bloomly" class="w-full h-full object-contain" />
         </div>
         <span class="text-xl md:text-2xl font-extrabold tracking-tight text-white">Bloomly</span>
-        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-brand-accent/15 text-brand-accent border border-brand-accent/30 leading-none">бета 5.2.255</span>
+        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-brand-accent/15 text-brand-accent border border-brand-accent/30 leading-none">бета 5.2.256</span>
       </router-link>
     </div>
 

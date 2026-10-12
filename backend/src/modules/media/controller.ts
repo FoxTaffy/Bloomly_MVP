@@ -1,6 +1,41 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { uploadFile, UploadValidationError, convertGifAvatarToWebm } from './service.js';
+import { createWriteStream } from 'fs';
+import { mkdtemp, open, readFile, rm, stat } from 'fs/promises';
+import os from 'os';
+import path from 'path';
+import { pipeline } from 'stream/promises';
+import {
+  uploadFile, uploadStreamedFile, UploadValidationError, convertGifAvatarToWebm,
+  reserveStorage, releaseStorage, recordMediaOwner, removeObjectByUrl,
+  canReadPrivateMedia, findPrivateMediaRow, openPrivateObject,
+} from './service.js';
 import prisma from '../../config/prisma.js';
+import { sniffMatches } from '../../lib/fileSniff.js';
+import {
+  FOLDER_MAX_BYTES, IMAGE_MAX_BYTES, MAX_CONCURRENT_UPLOADS_GLOBAL, MAX_CONCURRENT_UPLOADS_PER_USER,
+  MESSAGE_LIMIT_BY_TIER, PLATFORM_MAX_UPLOAD_BYTES, STORAGE_QUOTA_BYTES_BY_TIER, STORAGE_TRACKED_FOLDERS,
+  UPLOAD_TIMEOUT_MS, MULTIPART_OVERHEAD_BYTES,
+} from '../../config/uploads.js';
+
+// Счётчики активных загрузок на процесс. При нескольких инстансах лимит действует на каждый отдельно.
+const activeUploads = new Map<string, number>();
+let activeUploadsTotal = 0;
+
+function acquireUploadSlot(userId: string): boolean {
+  if (activeUploadsTotal >= MAX_CONCURRENT_UPLOADS_GLOBAL) return false;
+  const current = activeUploads.get(userId) ?? 0;
+  if (current >= MAX_CONCURRENT_UPLOADS_PER_USER) return false;
+  activeUploads.set(userId, current + 1);
+  activeUploadsTotal += 1;
+  return true;
+}
+
+function releaseUploadSlot(userId: string): void {
+  const current = activeUploads.get(userId) ?? 0;
+  if (current <= 1) activeUploads.delete(userId);
+  else activeUploads.set(userId, current - 1);
+  activeUploadsTotal = Math.max(0, activeUploadsTotal - 1);
+}
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif',
@@ -17,53 +52,32 @@ const REPORTS_ALLOWED_MIME_TYPES = new Set([
 const ALLOWED_FOLDERS = ['posts', 'comments', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers', 'reports', 'verification', 'avatar-frames'] as const;
 type Folder = typeof ALLOWED_FOLDERS[number];
 
-const GB = 1024 * 1024 * 1024;
-// Unchanged behavior for every folder except chat attachments, which get a
-// per-subscription-tier cap instead (large videos/music sent as chat attachments).
-const DEFAULT_MAX_BYTES = 100 * 1024 * 1024;
-const REPORTS_MAX_BYTES = 10 * 1024 * 1024;
-const FRAME_MAX_BYTES = 5 * 1024 * 1024;
-const MESSAGE_UPLOAD_LIMITS_BY_TIER: Record<string, number> = {
-  free: 2 * GB,
-  lite: 4 * GB,
-  pro: 8 * GB,
-  business: 16 * GB,
-};
+const DEFAULT_MAX_BYTES = PLATFORM_MAX_UPLOAD_BYTES;
 
-// Cumulative "media storage" quota advertised on the subscription page (5/20/100 GB).
-// Free has no marketed storage allowance and stays uncapped at this layer — it's
-// already bounded by the per-file limits above.
-const STORAGE_QUOTA_BYTES_BY_TIER: Record<string, number | null> = {
-  free: null,
-  lite: 5 * GB,
-  pro: 20 * GB,
-  business: 100 * GB,
-};
-// Folders that count toward that quota — the content people actually upload.
-// Avatars/banners/stickers/reports/verification are small, system-managed assets.
-const STORAGE_TRACKED_FOLDERS = new Set<Folder>(['posts', 'comments', 'messages', 'backgrounds']);
+function formatMaxSize(bytes: number): string {
+  const GB = 1024 * 1024 * 1024;
+  return bytes >= GB ? `${(bytes / GB).toFixed(0)} ГБ` : `${Math.round(bytes / (1024 * 1024))} МБ`;
+}
 
+/**
+ * Лимиты для запроса: размер файла по папке и тарифу, квота хранилища.
+ * Значения тарифа обрезаются до PLATFORM_MAX_UPLOAD_BYTES (см. config/uploads.ts).
+ */
 async function resolveUploadLimits(folder: Folder, userId: string): Promise<{
   maxBytes: number;
   storageQuotaBytes: number | null;
-  storageUsedBytes: bigint;
 }> {
-  if (folder === 'reports') return { maxBytes: REPORTS_MAX_BYTES, storageQuotaBytes: null, storageUsedBytes: 0n };
-  if (folder === 'avatar-frames') return { maxBytes: FRAME_MAX_BYTES, storageQuotaBytes: null, storageUsedBytes: 0n };
+  const folderMax = Math.min(FOLDER_MAX_BYTES[folder] ?? DEFAULT_MAX_BYTES, PLATFORM_MAX_UPLOAD_BYTES);
   const needsTierInfo = folder === 'messages' || STORAGE_TRACKED_FOLDERS.has(folder);
-  if (!needsTierInfo) return { maxBytes: DEFAULT_MAX_BYTES, storageQuotaBytes: null, storageUsedBytes: 0n };
+  if (!needsTierInfo) return { maxBytes: folderMax, storageQuotaBytes: null };
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { subscription_tier: true, storage_used_bytes: true } });
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { subscription_tier: true } });
   const tier = user?.subscription_tier ?? 'free';
   const maxBytes = folder === 'messages'
-    ? (MESSAGE_UPLOAD_LIMITS_BY_TIER[tier] ?? MESSAGE_UPLOAD_LIMITS_BY_TIER.free)
-    : DEFAULT_MAX_BYTES;
+    ? Math.min(MESSAGE_LIMIT_BY_TIER[tier] ?? MESSAGE_LIMIT_BY_TIER.free, PLATFORM_MAX_UPLOAD_BYTES)
+    : folderMax;
   const storageQuotaBytes = STORAGE_TRACKED_FOLDERS.has(folder) ? (STORAGE_QUOTA_BYTES_BY_TIER[tier] ?? null) : null;
-  return { maxBytes, storageQuotaBytes, storageUsedBytes: user?.storage_used_bytes ?? 0n };
-}
-
-function formatMaxSize(bytes: number): string {
-  return bytes >= GB ? `${(bytes / GB).toFixed(0)} ГБ` : `${Math.round(bytes / (1024 * 1024))} МБ`;
+  return { maxBytes, storageQuotaBytes };
 }
 
 /** Parses a 0..1 crop fraction from a query param; falls back to `def` if missing/invalid. */
@@ -76,57 +90,96 @@ function isAllowedMime(mime: string, folder: Folder): boolean {
   return folder === 'reports' ? REPORTS_ALLOWED_MIME_TYPES.has(mime) : ALLOWED_MIME_TYPES.has(mime);
 }
 
+const tooLarge = (reply: FastifyReply, maxBytes: number) => reply.code(413).send({
+  success: false,
+  data: null,
+  error: { code: 'FILE_TOO_LARGE', message: `Файл превышает максимальный размер (${formatMaxSize(maxBytes)})` },
+});
+
+/** Первые байты файла для проверки сигнатуры. Весь файл в память не читаем. */
+async function readHead(filePath: string, length = 64): Promise<Buffer> {
+  const fh = await open(filePath, 'r');
+  try {
+    const buf = Buffer.alloc(length);
+    const { bytesRead } = await fh.read(buf, 0, length, 0);
+    return buf.subarray(0, bytesRead);
+  } finally {
+    await fh.close();
+  }
+}
+
 export const uploadFileHandler = async (
   request: FastifyRequest,
   reply: FastifyReply,
 ) => {
-  const data = await request.file();
-
-  if (!data) {
-    return reply.code(400).send({
-      success: false,
-      data: null,
-      error: { code: 'NO_FILE', message: 'No file uploaded' },
-    });
-  }
-
+  const { id: userId } = request.user as { id: string };
   const rawFolder = (request.query as any).folder ?? 'posts';
   const folder: Folder = ALLOWED_FOLDERS.includes(rawFolder as Folder) ? (rawFolder as Folder) : 'posts';
 
-  if (!isAllowedMime(data.mimetype, folder)) {
-    return reply.code(415).send({
+  const { maxBytes, storageQuotaBytes } = await resolveUploadLimits(folder, userId);
+
+  // Отсекаем заведомо большой запрос по заголовку до приёма тела
+  const declaredBytes = Number(request.headers['content-length'] ?? 0);
+  if (declaredBytes > maxBytes + MULTIPART_OVERHEAD_BYTES) return tooLarge(reply, maxBytes);
+
+  // Слоты ограничивают одновременную работу: и на пользователя, и на процесс целиком
+  if (!acquireUploadSlot(userId)) {
+    return reply.code(429).send({
       success: false,
       data: null,
-      error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: folder === 'reports' ? 'К жалобе можно приложить только изображение' : 'File type not allowed' },
+      error: { code: 'TOO_MANY_UPLOADS', message: 'Слишком много одновременных загрузок. Попробуйте чуть позже' },
     });
   }
 
-  const { id: userId } = request.user as { id: string };
-  const { maxBytes, storageQuotaBytes, storageUsedBytes } = await resolveUploadLimits(folder, userId);
-
+  let tmpDir: string | null = null;
   try {
-    const chunks: Buffer[] = [];
-    let total = 0;
-    let tooLarge = false;
-    for await (const chunk of data.file as AsyncIterable<Buffer>) {
-      total += chunk.length;
-      // Keep draining instead of breaking early so the multipart parser finishes
-      // reading the request body cleanly; just stop buffering past the cap.
-      if (total > maxBytes) { tooLarge = true; continue; }
-      chunks.push(chunk as Buffer);
+    let data;
+    try {
+      data = await request.file({ limits: { fileSize: maxBytes } });
+    } catch (err: any) {
+      if (err?.code === 'FST_REQ_FILE_TOO_LARGE') return tooLarge(reply, maxBytes);
+      throw err;
     }
 
-    if (tooLarge) {
-      return reply.code(413).send({
+    if (!data) {
+      return reply.code(400).send({
         success: false,
         data: null,
-        error: { code: 'FILE_TOO_LARGE', message: `Файл превышает максимальный размер (${formatMaxSize(maxBytes)})` },
+        error: { code: 'NO_FILE', message: 'No file uploaded' },
       });
     }
 
-    const buf = Buffer.concat(chunks);
+    if (!isAllowedMime(data.mimetype, folder)) {
+      return reply.code(415).send({
+        success: false,
+        data: null,
+        error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: folder === 'reports' ? 'К жалобе можно приложить только изображение' : 'File type not allowed' },
+      });
+    }
 
-    if (buf.length === 0) {
+    // Приём потоком во временный файл: память не растёт с размером, а таймаут обрывает зависшую отправку
+    tmpDir = await mkdtemp(path.join(os.tmpdir(), 'upload-'));
+    const filePath = path.join(tmpDir, 'payload');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+    try {
+      await pipeline(data.file, createWriteStream(filePath), { signal: controller.signal });
+    } catch (err: any) {
+      if (err?.code === 'FST_REQ_FILE_TOO_LARGE') return tooLarge(reply, maxBytes);
+      if (err?.name === 'AbortError') {
+        return reply.code(408).send({
+          success: false, data: null,
+          error: { code: 'UPLOAD_TIMEOUT', message: 'Загрузка заняла слишком много времени' },
+        });
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+    if (data.file.truncated) return tooLarge(reply, maxBytes);
+
+    const { size: sizeBytes } = await stat(filePath);
+    if (sizeBytes === 0) {
       return reply.code(400).send({
         success: false,
         data: null,
@@ -134,14 +187,12 @@ export const uploadFileHandler = async (
       });
     }
 
-    if (storageQuotaBytes !== null && storageUsedBytes + BigInt(buf.length) > BigInt(storageQuotaBytes)) {
-      return reply.code(413).send({
+    // Тип объявляет клиент: проверяем, что содержимое действительно этого формата
+    if (!sniffMatches(await readHead(filePath), data.mimetype)) {
+      return reply.code(415).send({
         success: false,
         data: null,
-        error: {
-          code: 'STORAGE_QUOTA_EXCEEDED',
-          message: `Хранилище заполнено (лимит ${formatMaxSize(storageQuotaBytes)}). Освободите место или перейдите на тариф выше.`,
-        },
+        error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: 'Содержимое файла не соответствует его типу' },
       });
     }
 
@@ -170,6 +221,13 @@ export const uploadFileHandler = async (
       });
     }
 
+    const isImage = data.mimetype.startsWith('image/');
+
+    // Изображения декодируются sharp в память, поэтому для них отдельный и меньший лимит
+    if (isImage && sizeBytes > Math.min(IMAGE_MAX_BYTES, maxBytes)) {
+      return tooLarge(reply, Math.min(IMAGE_MAX_BYTES, maxBytes));
+    }
+
     // Animated GIF avatars are transcoded: a 1:1-cropped static poster (→ avatar_url)
     // plus a full-frame WebM (→ avatar_video_url), far smaller than the source GIF.
     if (folder === 'avatars' && data.mimetype === 'image/gif') {
@@ -180,22 +238,81 @@ export const uploadFileHandler = async (
         w: parseFraction(query.cropW, 1),
         h: parseFraction(query.cropH, 1),
       };
-      const { posterUrl, videoUrl } = await convertGifAvatarToWebm(buf, crop);
+      const { posterUrl, videoUrl } = await convertGifAvatarToWebm(await readFileBuffer(filePath), crop);
+      // Оба файла принадлежат загрузившему: иначе аватар из GIF нельзя сохранить в профиль
+      await recordMediaOwner(posterUrl, userId, folder, 0);
+      await recordMediaOwner(videoUrl, userId, folder, 0);
       return reply.send({ success: true, data: { url: posterUrl, videoUrl }, error: null });
     }
 
-    const { url, originalUrl, isSilentVideo } = await uploadFile(buf, data.filename, data.mimetype, folder);
-
-    if (STORAGE_TRACKED_FOLDERS.has(folder)) {
-      // Best-effort metering: the upload already succeeded, so a failure here
-      // shouldn't fail the request — it would just under-count this user's usage.
-      prisma.user.update({
-        where: { id: userId },
-        data: { storage_used_bytes: { increment: buf.length } },
-      }).catch((err) => (request.server as any).log.error({ err }, 'Failed to update storage usage'));
+    // Квота резервируется атомарно до записи в хранилище по размеру исходника.
+    // После записи резерв сверяется с фактически сохранёнными объектами.
+    const tracked = STORAGE_TRACKED_FOLDERS.has(folder);
+    if (tracked && !(await reserveStorage(userId, sizeBytes, storageQuotaBytes))) {
+      return reply.code(413).send({
+        success: false,
+        data: null,
+        error: {
+          code: 'STORAGE_QUOTA_EXCEEDED',
+          message: `Хранилище заполнено (лимит ${formatMaxSize(storageQuotaBytes ?? 0)}). Освободите место или перейдите на тариф выше.`,
+        },
+      });
     }
 
-    return reply.send({ success: true, data: { url, originalUrl, isSilentVideo }, error: null });
+    // Сколько места сейчас удерживается за этой загрузкой. Меняется при сверке с фактическим размером,
+    // откат освобождает ровно это значение.
+    let held = tracked ? sizeBytes : 0;
+    const uploadedUrls: string[] = [];
+    try {
+      if (isImage) {
+        const buf = await readFileBuffer(filePath);
+        const uploaded = await uploadFile(buf, data.filename, data.mimetype, folder);
+        uploadedUrls.push(uploaded.url);
+        if (uploaded.originalUrl) uploadedUrls.push(uploaded.originalUrl);
+
+        // Фактический размер: отображаемая копия (webp) и, если есть, оригинал — раздельно
+        const displaySize = uploaded.sizeBytes;
+        const originalSize = uploaded.originalSizeBytes ?? 0;
+        if (tracked) {
+          const delta = displaySize + originalSize - sizeBytes;
+          if (delta > 0) {
+            if (!(await reserveStorage(userId, delta, storageQuotaBytes))) {
+              throw Object.assign(new Error('STORAGE_QUOTA_EXCEEDED'), { code: 'STORAGE_QUOTA_EXCEEDED' });
+            }
+            held += delta;
+          } else if (delta < 0) {
+            await releaseStorage(userId, -delta);
+            held += delta;
+          }
+        }
+        await recordMediaOwner(uploaded.url, userId, folder, displaySize);
+        if (uploaded.originalUrl) await recordMediaOwner(uploaded.originalUrl, userId, folder, originalSize);
+
+        return reply.send({ success: true, data: { url: uploaded.url, originalUrl: uploaded.originalUrl }, error: null });
+      }
+
+      const uploaded = await uploadStreamedFile({
+        filePath,
+        originalName: data.filename,
+        mimeType: data.mimetype,
+        folder,
+      });
+      uploadedUrls.push(uploaded.url);
+      await recordMediaOwner(uploaded.url, userId, folder, uploaded.sizeBytes);
+      return reply.send({ success: true, data: { url: uploaded.url, isSilentVideo: uploaded.isSilentVideo }, error: null });
+    } catch (err) {
+      // Откат: удаляем уже записанные объекты и возвращаем удерживаемое место
+      await Promise.all(uploadedUrls.map((url) => removeObjectByUrl(url)));
+      if (tracked && held > 0) await releaseStorage(userId, held);
+      if ((err as any)?.code === 'STORAGE_QUOTA_EXCEEDED') {
+        return reply.code(413).send({
+          success: false,
+          data: null,
+          error: { code: 'STORAGE_QUOTA_EXCEEDED', message: 'Хранилище заполнено. Освободите место или перейдите на тариф выше.' },
+        });
+      }
+      throw err;
+    }
   } catch (err: any) {
     if (err instanceof UploadValidationError) {
       return reply.code(422).send({
@@ -210,5 +327,42 @@ export const uploadFileHandler = async (
       data: null,
       error: { code: 'UPLOAD_ERROR', message: err?.message ?? String(err) },
     });
+  } finally {
+    releaseUploadSlot(userId);
+    if (tmpDir) await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
+};
+
+const readFileBuffer = (filePath: string): Promise<Buffer> => readFile(filePath);
+
+/**
+ * GET /api/media/private?url=… — отдача закрытого файла (жалобы, верификация, поддержка).
+ * Прямая ссылка на такой объект анонимно не работает: бакет запрещает чтение private/.
+ * Права проверяются здесь. Не найдено и запрещено различаем, потому что сам факт
+ * существования объекта владельцу-чужаку знать не нужно, поэтому оба случая — 404.
+ */
+export const getPrivateMediaHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+  const url = (request.query as any)?.url;
+  if (typeof url !== 'string' || url.length === 0 || url.length > 2048) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_URL', message: 'Некорректная ссылка' } });
+  }
+  const row = await findPrivateMediaRow(url);
+  const actor = request.user as { id: string; role: string };
+  if (!row || !canReadPrivateMedia(row, actor)) {
+    return reply.code(404).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Файл не найден' } });
+  }
+
+  const { stream, size, contentType } = await openPrivateObject(row.object_key);
+  reply.header('Cache-Control', 'private, no-store');
+  reply.header('X-Content-Type-Options', 'nosniff');
+  // Ответ не должен исполняться как документ: даже если тип ошибочен, в браузере он не отрисуется
+  reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+  if (row.folder === 'support') {
+    reply.header('Content-Type', 'application/octet-stream');
+    reply.header('Content-Disposition', 'attachment');
+  } else {
+    reply.header('Content-Type', contentType);
+  }
+  reply.header('Content-Length', size);
+  return reply.send(stream);
 };

@@ -162,7 +162,7 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.delete('/events/:eventId/subevents/:subId', auth, deleteSubEventHandler as any);
 
   // ── Group chat (REST fallback) ─────────────────────────────────────────────
-  fastify.get('/:id/chat', getGroupMessagesHandler as any);
+  fastify.get('/:id/chat', auth, getGroupMessagesHandler as any);
   fastify.post('/:id/chat', auth, sendGroupMessageHandler as any);
   // ── Community Conversation ────────────────────────────────────────────────────
   fastify.post('/:id/dm', auth, startGroupDmHandler as any);        // any member: find-or-create my personal thread with the group

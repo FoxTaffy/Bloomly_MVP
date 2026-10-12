@@ -35,7 +35,7 @@ export async function stickersRoutes(fastify: FastifyInstance) {
 
   fastify.get('/',            tryAuth, listPacksHandler as any);
   fastify.get('/find-by-url', auth, findByUrlHandler as any);
-  fastify.get('/:id',         getPackHandler   as any);
+  fastify.get('/:id',         tryAuth, getPackHandler   as any);
 
   fastify.post('/',      auth, createPackHandler            as any);
   fastify.patch('/:id',  auth, updatePackHandler            as any);

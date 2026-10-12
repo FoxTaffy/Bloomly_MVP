@@ -25,16 +25,23 @@ function replyToAddress(ticket: { external_email: string | null; contact_email: 
   return ticket.external_email || ticket.contact_email;
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export async function createTicket(userId: string, input: {
   type: string; subject: string; message: string; contactEmail?: string;
   attachmentUrls?: string[];
 }) {
+  // Адрес для ответа должен быть настоящим email: иначе поле использовалось для рассылки
+  const contactEmail = input.contactEmail?.trim().slice(0, 254) || null;
+  if (contactEmail && !EMAIL_RE.test(contactEmail)) {
+    throw Object.assign(new Error('Некорректный email для ответа'), { statusCode: 400 });
+  }
   const ticket = await prisma.supportTicket.create({
     data: {
       user_id: userId,
       type: SUPPORT_TICKET_TYPES.includes(input.type as SupportTicketType) ? input.type : 'question',
       subject: input.subject.trim().slice(0, 150),
-      contact_email: input.contactEmail?.trim().slice(0, 255) || null,
+      contact_email: contactEmail,
       messages: {
         create: {
           sender_type: 'user',
@@ -49,9 +56,11 @@ export async function createTicket(userId: string, input: {
     include: messagesOrder,
   });
 
-  const to = replyToAddress(ticket);
-  if (to) {
-    sendSupportEmail(to, `Обращение принято: ${ticket.subject}`, input.message.trim().slice(0, 3000))
+  // Подтверждение шлём только на адрес самого аккаунта, а не на contact_email:
+  // иначе тело обращения, написанное любым текстом, уходило бы произвольному адресату
+  const owner = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (owner?.email) {
+    sendSupportEmail(owner.email, `Обращение принято: ${ticket.subject}`, input.message.trim().slice(0, 3000))
       .catch((err) => console.error('[SUPPORT_MAIL] Failed to send ack email:', err));
   }
 

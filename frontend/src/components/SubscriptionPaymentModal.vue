@@ -130,12 +130,13 @@ async function payWithNewCard() {
     })
     newMethodId = saved.data?.data?.id ?? null
     await chargeSubscription()
-    if (!saveCard.value && newMethodId) {
-      await api.delete(`/users/me/payment-methods/${newMethodId}`).catch(() => {})
-    }
   } catch {
     errorMsg.value = langStore.t.subToastError
   } finally {
+    // Карту, которую пользователь не хотел сохранять, удаляем и при успехе, и при ошибке оплаты
+    if (!saveCard.value && newMethodId) {
+      await api.delete(`/users/me/payment-methods/${newMethodId}`).catch(() => {})
+    }
     sending.value = false
   }
 }

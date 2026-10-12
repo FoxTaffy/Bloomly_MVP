@@ -1,12 +1,12 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { adminService } from './service.js';
 import prisma from '../../config/prisma.js';
-import { isModerator, isAdmin, isOwner, canModerateTarget } from '../../lib/roles.js';
+import { ROLE_RANK, isModerator, isAdmin, isOwner, canModerateTarget } from '../../lib/roles.js';
 import { notificationService } from '../notifications/service.js';
 import { usersService } from '../users/service.js';
 import { applyAction, getPendingAppeals, decideAppeal } from '../automod/service.js';
 import { getAllSettings, setSetting, type SettingKey } from '../../lib/settings.js';
-import { isTrustedMediaUrl } from '../media/service.js';
+import { assertOwnedMedia } from '../media/service.js';
 
 interface JwtUser { id: string; role: string }
 
@@ -98,6 +98,9 @@ export const updateUserRoleHandler = async (
   reply: FastifyReply,
 ) => {
   if (!requireOwner(req, reply)) return;
+  if (!Object.keys(ROLE_RANK).includes(req.body.role)) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_ROLE', message: 'Неизвестная роль' } });
+  }
   const actor = req.user as JwtUser;
   const user = await adminService.updateUserRole(req.params.id, req.body.role, req.body.badge_type);
   await logAdminAction(actor.id, req.params.id, 'role_change', `Роль изменена на "${req.body.role}"`);
@@ -214,6 +217,8 @@ export const restoreUserHandler = async (
   reply: FastifyReply,
 ) => {
   if (!requireMod(req, reply)) return;
+  // Модератор не может снять бан с того, кого не может банить (иначе вернул бы админа/владельца)
+  if (!(await requireCanModerate(req, reply, req.params.id))) return;
   const actor = req.user as JwtUser;
   const user = await adminService.restoreUser(req.params.id);
   await logAdminAction(actor.id, req.params.id, 'unban', 'Аккаунт разбанен модератором');
@@ -274,9 +279,11 @@ export const submitReportHandler = async (
   const { targetType, targetId, reason, evidenceUrls } = req.body;
   // Only accept URLs our own upload endpoint produced, and only up to the cap —
   // a raw client can otherwise post an arbitrarily large/external array of "evidence".
+  // Проверяем владение, а не только домен: иначе чужой файл или приватная папка reports/ уходили бы как улика
   const trustedEvidenceUrls = Array.isArray(evidenceUrls)
-    ? evidenceUrls.filter(url => typeof url === 'string' && isTrustedMediaUrl(url)).slice(0, MAX_REPORT_EVIDENCE_FILES)
+    ? evidenceUrls.filter((url): url is string => typeof url === 'string' && url.length > 0).slice(0, MAX_REPORT_EVIDENCE_FILES)
     : [];
+  for (const url of trustedEvidenceUrls) await assertOwnedMedia(url, reporterId);
   const report = await adminService.createReport({ reporterId, targetType, targetId, reason, evidenceUrls: trustedEvidenceUrls });
   return reply.code(201).send({ success: true, data: { report }, error: null });
 };
@@ -371,8 +378,12 @@ export const submitAdHandler = async (
   if (requester?.subscription_tier !== 'business') {
     return reply.code(402).send({ success: false, data: null, error: { code: 'BUSINESS_REQUIRED', message: 'Placing ads requires a Business subscription' } });
   }
-  const ad = await adminService.submitAd({ ...req.body, requesterId });
-  return reply.code(201).send({ success: true, data: { ad }, error: null });
+  try {
+    const ad = await adminService.submitAd({ ...req.body, requesterId });
+    return reply.code(201).send({ success: true, data: { ad }, error: null });
+  } catch (e: any) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_AD_LINK', message: e.message } });
+  }
 };
 
 export const reviewAdHandler = async (
@@ -486,6 +497,8 @@ export const getAutoModLogsHandler = async (
 
 export const unfreezeUserHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
   if (!requireMod(req, reply)) return;
+  // Модератор не должен снимать заморозку, наложенную админом или владельцем
+  if (!(await requireCanModerate(req, reply, req.params.id))) return;
   const actor = req.user as JwtUser;
   await prisma.user.update({ where: { id: req.params.id }, data: { frozen_at: null, frozen_reason: null } });
   await prisma.autoModLog.create({
@@ -516,6 +529,7 @@ export const markDeceasedHandler = async (
   reply: FastifyReply,
 ) => {
   if (!requireMod(req, reply)) return;
+  if (!(await requireCanModerate(req, reply, req.params.id))) return;
   const note = req.body?.note ?? null;
   await prisma.user.update({ where: { id: req.params.id }, data: { deceased_at: new Date(), deceased_note: note } });
   return reply.send({ success: true, data: null, error: null });
@@ -523,6 +537,7 @@ export const markDeceasedHandler = async (
 
 export const unmarkDeceasedHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
   if (!requireMod(req, reply)) return;
+  if (!(await requireCanModerate(req, reply, req.params.id))) return;
   await prisma.user.update({ where: { id: req.params.id }, data: { deceased_at: null, deceased_note: null } });
   return reply.send({ success: true, data: null, error: null });
 };

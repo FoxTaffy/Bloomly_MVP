@@ -11,6 +11,8 @@
  *   OAUTH_REDIRECT_BASE  – базовый URL callback'а, напр. https://bloomly.fun/api
  */
 
+import { isDevEnv } from '../../lib/env.js';
+
 import { randomBytes, createHash } from 'crypto'
 import prisma from '../../config/prisma.js'
 
@@ -52,7 +54,8 @@ const providers: Record<OAuthProvider, ProviderConfig> = {
         headers: { Authorization: `Bearer ${token}` },
       })
       const d = await r.json() as any
-      return { id: d.sub, email: d.email ?? null, name: d.name ?? null, avatar: d.picture ?? null }
+      // Email берём только подтверждённый: непроверенный адрес нельзя использовать для привязки
+      return { id: d.sub, email: d.email_verified === true ? (d.email ?? null) : null, name: d.name ?? null, avatar: d.picture ?? null }
     },
   },
 
@@ -105,7 +108,8 @@ const providers: Record<OAuthProvider, ProviderConfig> = {
         },
       })
       const d = (await r.json() as any).data?.[0]
-      return { id: d.id, email: d.email ?? null, name: d.display_name ?? null, avatar: d.profile_image_url ?? null }
+      // Twitch не подтверждает email: адрес не используем ни для привязки, ни для входа
+      return { id: d.id, email: null, name: d.display_name ?? null, avatar: d.profile_image_url ?? null }
     },
   },
 }
@@ -113,9 +117,14 @@ const providers: Record<OAuthProvider, ProviderConfig> = {
 // ── State + PKCE store (TTL 10 min) ──────────────────────────────────────────
 interface StateEntry { provider: OAuthProvider; codeVerifier?: string; createdAt: number; linkUserId?: string; client?: 'mobile'; mobileRedirect?: string }
 
-// Мобильный редирект принимаем только со "своих" схем — иначе callback можно было бы
-// использовать как open-redirect для увода access/refresh токена на чужой домен.
-const MOBILE_REDIRECT_RE = /^(bloomly|exp|exps):\/\//i
+// Мобильный редирект уносит access/refresh токены в URL, поэтому принимаем только свою схему
+// bloomly://. exp:// (Expo Go) разрешён только вне production. Хост не проверяем регэкспом:
+// схема без ограничения хоста (exp://evil.example) раньше отдавала токены чужому серверу.
+// Проверка в момент вызова, а не при загрузке модуля: dotenv в server.ts стартует позже импортов.
+export function isAllowedMobileRedirect(url: string): boolean {
+  if (/^bloomly:\/\//i.test(url)) return true
+  return isDevEnv() && /^exp:\/\//i.test(url)
+}
 const stateStore = new Map<string, StateEntry>()
 
 function pruneExpiredStates() {
@@ -150,7 +159,7 @@ export function buildOAuthUrl(
   pruneExpiredStates()
   const cfg   = providers[provider]
   const state = base64urlEncode(randomBytes(16))
-  const safeRedirect = mobileRedirect && MOBILE_REDIRECT_RE.test(mobileRedirect) ? mobileRedirect : undefined
+  const safeRedirect = mobileRedirect && isAllowedMobileRedirect(mobileRedirect) ? mobileRedirect : undefined
   const entry: StateEntry = {
     provider, createdAt: Date.now(),
     ...(linkUserId ? { linkUserId } : {}),
@@ -235,6 +244,9 @@ export async function findOrCreateOAuthUser(provider: OAuthProvider, oauthUser: 
       where: { email: oauthUser.email.toLowerCase(), deleted_at: null },
     })
     if (byEmail) {
+      // Привязываем только к аккаунту с подтверждённой почтой: непроверенный аккаунт мог быть
+      // создан с чужим адресом, и OAuth-вход отдал бы его тому, кто владеет адресом у провайдера
+      if (!byEmail.email_verified) throw new Error('Email уже занят непроверенным аккаунтом')
       // Привязываем этот OAuth к существующему аккаунту
       await prisma.oAuthAccount.create({
         data: { user_id: byEmail.id, provider, provider_id: oauthUser.id },

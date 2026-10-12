@@ -1,6 +1,13 @@
 import prisma from '../../config/prisma.js';
-import { uploadRawToMinIO } from '../media/service.js';
+import { uploadRawToMinIO, recordMediaOwner, assertOwnedMedia } from '../media/service.js';
 import type { CreatePackInput, UpdatePackInput, GetPacksQuery } from './types.js';
+
+// Цвет обложки уходит в style-строку: допускаем только hex, иначе можно внедрить url() и лишние свойства
+function checkCoverColor(color: string | null | undefined): string | null | undefined {
+  if (color === undefined || color === null || color === '') return color === '' ? null : color;
+  if (!/^#[0-9a-f]{3,8}$/i.test(color)) throw Object.assign(new Error('Некорректный цвет обложки'), { statusCode: 400 });
+  return color;
+}
 
 // ── Telegram import helpers ───────────────────────────────────────────────
 const TG_API = (token: string) => `https://api.telegram.org/bot${token}`;
@@ -20,7 +27,7 @@ async function tgJson(url: string): Promise<any> {
   return body.result;
 }
 
-async function downloadStickerUrl(token: string, fileId: string): Promise<string | null> {
+async function downloadStickerUrl(token: string, fileId: string, ownerId: string): Promise<string | null> {
   try {
     const fileInfo = await tgJson(`${TG_API(token)}/getFile?file_id=${fileId}`);
     const filePath: string = fileInfo.file_path;
@@ -29,7 +36,10 @@ async function downloadStickerUrl(token: string, fileId: string): Promise<string
     const buf = Buffer.from(await res.arrayBuffer());
     const ext  = filePath.endsWith('.webm') ? '.webm' : '.webp';
     const mime = ext === '.webm' ? 'video/webm' : 'image/webp';
-    return await uploadRawToMinIO(buf, ext, mime, 'stickers');
+    const url = await uploadRawToMinIO(buf, ext, mime, 'stickers');
+    // Импортированный стикер принадлежит тому, кто импортировал пак
+    await recordMediaOwner(url, ownerId, 'stickers', buf.length);
+    return url;
   } catch {
     return null;
   }
@@ -138,22 +148,27 @@ export const stickersService = {
   },
 
   // ── get by id ─────────────────────────────────────────────────────────────
-  async getById(id: string) {
-    return prisma.stickerPack.findFirst({
+  async getById(id: string, requesterId?: string) {
+    const pack = await prisma.stickerPack.findFirst({
       where: { id, deleted_at: null },
       select: PACK_SELECT,
     });
+    // Черновик не отдаём никому, кроме автора: раньше он читался по одному UUID
+    if (pack && pack.status === 'draft' && pack.author_id !== requesterId) return null;
+    return pack;
   },
 
   // ── create ────────────────────────────────────────────────────────────────
   async create(authorId: string, input: CreatePackInput) {
+    await assertOwnedMedia(input.coverUrl, authorId);
+    for (const url of input.stickers ?? []) await assertOwnedMedia(url, authorId);
     return prisma.stickerPack.create({
       data: {
         author_id:         authorId,
         name:              input.name,
         description:       input.description,
         cover_url:         input.coverUrl,
-        cover_bg_color:    input.coverBgColor,
+        cover_bg_color:    checkCoverColor(input.coverBgColor),
         cover_sticker_idx: input.coverStickerIdx ?? null,
         stickers:          input.stickers     ?? [],
         nsfw_stickers:     input.nsfwStickers  ?? [],
@@ -174,12 +189,14 @@ export const stickersService = {
   async update(id: string, authorId: string, input: UpdatePackInput) {
     const existing = await prisma.stickerPack.findFirst({ where: { id, author_id: authorId, deleted_at: null } });
     if (!existing) return null;
+    if (input.coverUrl && input.coverUrl !== existing.cover_url) await assertOwnedMedia(input.coverUrl, authorId);
+    for (const url of input.stickers ?? []) if (!existing.stickers.includes(url)) await assertOwnedMedia(url, authorId);
 
     const data: any = {};
     if (input.name             !== undefined) data.name              = input.name;
     if (input.description      !== undefined) data.description       = input.description;
     if (input.coverUrl         !== undefined) data.cover_url         = input.coverUrl;
-    if (input.coverBgColor     !== undefined) data.cover_bg_color    = input.coverBgColor;
+    if (input.coverBgColor     !== undefined) data.cover_bg_color    = checkCoverColor(input.coverBgColor);
     if (input.coverStickerIdx  !== undefined) data.cover_sticker_idx = input.coverStickerIdx;
     if (input.stickers         !== undefined) data.stickers          = input.stickers;
     if (input.nsfwStickers     !== undefined) data.nsfw_stickers     = input.nsfwStickers;
@@ -221,6 +238,16 @@ export const stickersService = {
   async addToCollection(userId: string, packId: string) {
     const pack = await prisma.stickerPack.findFirst({ where: { id: packId, deleted_at: null, status: 'published' } });
     if (!pack) return null;
+    // Платных паков пока нельзя купить: бесплатный сбор раздавал их всем
+    if (Number(pack.price) > 0 && pack.author_id !== userId) {
+      throw Object.assign(new Error('Платный пак нельзя добавить без покупки'), { statusCode: 402 });
+    }
+    // Счётчик скачиваний растёт только при первом добавлении, а не на каждый повторный запрос
+    const existing = await prisma.userStickerPack.findUnique({
+      where: { user_id_pack_id: { user_id: userId, pack_id: packId } },
+      select: { user_id: true },
+    });
+    if (existing) return true;
 
     await prisma.$transaction([
       prisma.userStickerPack.upsert({
@@ -410,7 +437,7 @@ export const stickersService = {
   },
 
   // ── Telegram import ────────────────────────────────────────────────────
-  async importFromTelegram(input: string, maxStickers = 60) {
+  async importFromTelegram(input: string, maxStickers = 60, ownerId: string) {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) {
       throw Object.assign(new Error('Telegram Bot Token не настроен на сервере'), { code: 'NO_TOKEN' });
@@ -431,7 +458,7 @@ export const stickersService = {
     const limited = candidates.slice(0, maxStickers);
 
     // Download + upload in batches of 5
-    const urls = await batchProcess(limited, 5, (s) => downloadStickerUrl(token, s.file_id));
+    const urls = await batchProcess(limited, 5, (s) => downloadStickerUrl(token, s.file_id, ownerId));
     const validUrls = urls.filter(Boolean) as string[];
 
     return {

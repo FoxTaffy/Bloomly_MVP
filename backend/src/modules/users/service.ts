@@ -1,11 +1,33 @@
 import prisma from '../../config/prisma.js';
-import { deleteFileByUrl } from '../media/service.js';
+import { deleteFileByUrl, isTrustedMediaUrl, assertOwnedMedia } from '../media/service.js';
 import { getUserBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy } from '../../lib/blocks.js';
 import { sanitizeFields, sanitizeDisplayText } from '../../lib/sanitizeText.js';
+import { normalizeSafeLink, requireSafeLink } from '../../lib/safeLink.js';
 import sharp from 'sharp';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput } from './types.js';
+
+const MUSIC_MAX_BYTES = 15 * 1024 * 1024;
+
+// Соцсети профиля: значение со схемой (https:, javascript:, data:) проходит только безопасную проверку;
+// голые ники (например Discord) остаются текстом. Фронтенд решает, делать ли из них ссылку.
+function cleanSocialLinks(links: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(links)) {
+    if (typeof value !== 'string') continue;
+    const text = value.trim().slice(0, 500);
+    if (!text) continue;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(text)) {
+      const safe = normalizeSafeLink(text);
+      if (!safe) throw Object.assign(new Error(`Недопустимая ссылка: ${key}`), { statusCode: 400 });
+      out[key] = safe;
+    } else {
+      out[key] = text;
+    }
+  }
+  return out;
+}
 
 // Sentinel year used to carry a day+month without revealing the real year.
 // Must be a leap year so Feb 29 birthdays don't overflow into March.
@@ -41,7 +63,13 @@ function liveProfileStatus(status: unknown): unknown {
 }
 
 /** Reduce a birth_date down to whatever granularity its owner allows non-owners to see. */
-function redactBirthDate(birthDate: Date | null, visibility: string | null | undefined): Date | null {
+/** Публичная карточка пользователя из списков (поиск, рекомендации): дата рождения — по настройке владельца */
+export function withRedactedBirthDate<T extends { birth_date?: Date | null; birth_date_visibility?: string | null }>(user: T) {
+  const { birth_date_visibility, ...rest } = user;
+  return { ...rest, birth_date: redactBirthDate(user.birth_date ?? null, birth_date_visibility) };
+}
+
+export function redactBirthDate(birthDate: Date | null, visibility: string | null | undefined): Date | null {
   if (!birthDate) return null;
   switch (visibility) {
     case 'full':
@@ -242,8 +270,14 @@ export const usersService = {
     // ── Fetch current media URLs before overwriting ─────────────────────
     const current = await prisma.user.findUnique({
       where: { id, deleted_at: null },
-      select: { avatar_url: true, avatar_video_url: true, banner_url: true },
+      select: { avatar_url: true, avatar_video_url: true, banner_url: true, profile_bg_url: true },
     });
+    // Новые файлы профиля — только загруженные самим пользователем. Проверяем лишь изменённые поля,
+    // чтобы сохранение профиля не ломалось на файлах, которые уже стоят.
+    for (const field of ['avatar_url', 'avatar_video_url', 'banner_url', 'profile_bg_url'] as const) {
+      const next = (data as any)[field];
+      if (typeof next === 'string' && next && next !== (current as any)?.[field]) await assertOwnedMedia(next, id);
+    }
 
     if (current) {
       const historyEntries: { user_id: string; type: string; url: string; video_url?: string | null }[] = [];
@@ -332,6 +366,10 @@ export const usersService = {
       }
     }
 
+    if (data.social_links && typeof data.social_links === 'object') {
+      (data as any).social_links = cleanSocialLinks(data.social_links as Record<string, unknown>);
+    }
+
     return prisma.user.update({
       where: { id, deleted_at: null },
       data: data as any,
@@ -368,8 +406,8 @@ export const usersService = {
     if (!item) throw Object.assign(new Error('History item not found'), { statusCode: 404 });
 
     await prisma.mediaHistory.delete({ where: { id: historyId } });
-    deleteFileByUrl(item.url).catch(() => {});
-    if (item.video_url) deleteFileByUrl(item.video_url).catch(() => {});
+    deleteFileByUrl(item.url, userId).catch(() => {});
+    if (item.video_url) deleteFileByUrl(item.video_url, userId).catch(() => {});
   },
 
   async restoreAvatarFromHistory(userId: string, historyId: string) {
@@ -802,7 +840,7 @@ export const usersService = {
         where: { id: { in: refs.map((r) => r.id) } },
         data: { deleted_at: new Date() },
       });
-      for (const r of refs) deleteFileByUrl(r.image_url).catch(() => {});
+      for (const r of refs) deleteFileByUrl(r.image_url, userId).catch(() => {});
     }
 
     let newPrimaryId: string | null = null;
@@ -843,6 +881,7 @@ export const usersService = {
 
   async addReferenceImage(userId: string, fursonaId: string, data: UpsertReferenceImageInput) {
     if (!data.image_url) throw Object.assign(new Error('image_url is required'), { statusCode: 400 });
+    await assertOwnedMedia(data.image_url, userId);
 
     const fursona = await prisma.fursona.findFirst({
       where: { id: fursonaId, user_id: userId, deleted_at: null },
@@ -866,11 +905,12 @@ export const usersService = {
     });
     if (!existing) throw Object.assign(new Error('Reference image not found'), { statusCode: 404 });
 
+    if (data.image_url && data.image_url !== existing.image_url) await assertOwnedMedia(data.image_url, userId);
     if (data.image_url !== undefined && existing.image_url && existing.image_url !== data.image_url) {
       await prisma.mediaHistory.create({
         data: { user_id: userId, type: 'fursona_reference', url: existing.image_url },
       });
-      deleteFileByUrl(existing.image_url).catch(() => {});
+      deleteFileByUrl(existing.image_url, userId).catch(() => {});
     }
 
     return prisma.fursonaReferenceImage.update({
@@ -888,7 +928,7 @@ export const usersService = {
     await prisma.mediaHistory.create({
       data: { user_id: userId, type: 'fursona_reference', url: existing.image_url },
     });
-    deleteFileByUrl(existing.image_url).catch(() => {});
+    deleteFileByUrl(existing.image_url, userId).catch(() => {});
 
     return prisma.fursonaReferenceImage.update({
       where: { id: refId },
@@ -908,11 +948,13 @@ export const usersService = {
       select: { image_url: true },
     });
     if (!ref?.image_url) return null;
+    // Серверный fetch только по нашим файлам: иначе произвольный URL (169.254.169.254, внутренние сервисы) — SSRF
+    if (!isTrustedMediaUrl(ref.image_url)) return null;
 
     const owner = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } });
     const username = owner?.username ?? 'unknown';
 
-    const response = await fetch(ref.image_url);
+    const response = await fetch(ref.image_url, { redirect: 'error', signal: AbortSignal.timeout(15_000) });
     if (!response.ok) return null;
     const srcBuffer = Buffer.from(await response.arrayBuffer());
 
@@ -966,22 +1008,26 @@ export const usersService = {
   },
 
   async createFursuit(userId: string, data: UpsertFursuitInput) {
+    await assertOwnedMedia((data as any).image_url, userId);
+    if (data.external_maker_links) data.external_maker_links = data.external_maker_links.map((l) => requireSafeLink(l, 'maker link')).filter((l): l is string => !!l);
     return prisma.fursuit.create({
       data: { user_id: userId, ...data },
     });
   },
 
   async updateFursuit(userId: string, fursuitId: string, data: UpsertFursuitInput) {
+    if (data.external_maker_links) data.external_maker_links = data.external_maker_links.map((l) => requireSafeLink(l, 'maker link')).filter((l): l is string => !!l);
     const existing = await prisma.fursuit.findFirst({
       where: { id: fursuitId, user_id: userId, deleted_at: null },
     });
     if (!existing) throw Object.assign(new Error('Fursuit not found'), { statusCode: 404 });
 
+    if (data.image_url && data.image_url !== existing.image_url) await assertOwnedMedia(data.image_url, userId);
     if (data.image_url !== undefined && existing.image_url && existing.image_url !== data.image_url) {
       await prisma.mediaHistory.create({
         data: { user_id: userId, type: 'fursuit_image', url: existing.image_url },
       });
-      deleteFileByUrl(existing.image_url).catch(() => {});
+      deleteFileByUrl(existing.image_url, userId).catch(() => {});
     }
 
     return prisma.fursuit.update({
@@ -1118,9 +1164,13 @@ export const usersService = {
     if (parsed.protocol !== 'https:' || !ALLOWED_HOST.test(parsed.hostname)) {
       throw Object.assign(new Error('Host not allowed'), { statusCode: 400 });
     }
-    const res = await fetch(parsed.toString());
+    // Редиректы запрещены: разрешённый хост не должен переводить запрос на произвольный адрес.
+    const res = await fetch(parsed.toString(), { redirect: 'error' });
     if (!res.ok) throw Object.assign(new Error('Upstream fetch failed'), { statusCode: 502 });
+    const declared = Number(res.headers.get('content-length') ?? 0);
+    if (declared > MUSIC_MAX_BYTES) throw Object.assign(new Error('Upstream file too large'), { statusCode: 502 });
     const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length > MUSIC_MAX_BYTES) throw Object.assign(new Error('Upstream file too large'), { statusCode: 502 });
     let contentType = res.headers.get('content-type') || 'application/octet-stream';
     // Apple serves 30s preview clips as legit playable AAC/M4A but mislabels the
     // response as audio/x-m4p (the FairPlay-DRM MIME type) — browsers refuse to play

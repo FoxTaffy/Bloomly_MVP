@@ -1,5 +1,5 @@
 import prisma from '../../config/prisma.js';
-import { isTrustedMediaUrl } from '../media/service.js';
+import { assertOwnedMedia } from '../media/service.js';
 import { groupService } from '../groups/service.js';
 import { postService } from './service.js';
 import { moderatePost } from '../automod/service.js';
@@ -24,11 +24,11 @@ export interface ScheduledPostInput {
 }
 
 /** Same "content or media" + trust + count validation createPost/createGroupPost use, shared here so drafts/scheduled posts can't smuggle in something the live path would reject. */
-function validateContentAndMedia(content: string, mediaUrls: string[], mediaOriginalUrls: string[]) {
+async function validateContentAndMedia(ownerId: string, content: string, mediaUrls: string[], mediaOriginalUrls: string[]) {
   if (!content && mediaUrls.length === 0) throw Object.assign(new Error('Content is required'), { statusCode: 400 });
   if (mediaUrls.length > MAX_MEDIA_PER_POST) throw Object.assign(new Error('TOO_MANY_MEDIA_FILES'), { statusCode: 422 });
-  if (mediaUrls.some((url) => !isTrustedMediaUrl(url))) throw Object.assign(new Error('INVALID_MEDIA_URL'), { statusCode: 422 });
-  if (mediaOriginalUrls.some((url) => !isTrustedMediaUrl(url))) throw Object.assign(new Error('INVALID_MEDIA_URL'), { statusCode: 422 });
+  // Владение, а не только домен бакета: иначе в отложенный пост можно вставить чужой файл
+  for (const url of [...mediaUrls, ...mediaOriginalUrls]) await assertOwnedMedia(url, ownerId);
 }
 
 function normalizeTags(tags?: string[]): string[] {
@@ -64,7 +64,7 @@ export const scheduledPostService = {
     const content = (input.content ?? '').trim();
     const mediaUrls = (input.mediaUrls ?? []).filter(Boolean);
     const mediaOriginalUrls = input.mediaOriginalUrls?.length === mediaUrls.length ? input.mediaOriginalUrls : [];
-    validateContentAndMedia(content, mediaUrls, mediaOriginalUrls);
+    await validateContentAndMedia(userId, content, mediaUrls, mediaOriginalUrls);
 
     if (input.groupId) await assertGroupPermission(input.groupId, userId);
 
@@ -121,7 +121,7 @@ export const scheduledPostService = {
     const content = (input.content ?? existing.content).trim();
     const mediaUrls = input.mediaUrls !== undefined ? input.mediaUrls.filter(Boolean) : existing.media_urls;
     const mediaOriginalUrls = input.mediaOriginalUrls?.length === mediaUrls.length ? input.mediaOriginalUrls : (input.mediaUrls !== undefined ? [] : existing.media_original_urls);
-    validateContentAndMedia(content, mediaUrls, mediaOriginalUrls);
+    await validateContentAndMedia(userId, content, mediaUrls, mediaOriginalUrls);
 
     const groupId = input.groupId !== undefined ? input.groupId : existing.group_id ?? undefined;
     if (groupId) await assertGroupPermission(groupId, userId);
@@ -185,10 +185,8 @@ export const scheduledPostService = {
         await publishRow(row);
         published++;
       } catch (err: any) {
-        await prisma.scheduledPost.update({
-          where: { id: row.id },
-          data: { status: 'failed', last_error: err?.message ?? 'Publish failed' },
-        }).catch(() => {});
+        // 409 — строку уже публикует другой запуск: её статус трогать нельзя
+        if (err?.statusCode === 409) continue;
       }
     }
     return published;
@@ -196,6 +194,24 @@ export const scheduledPostService = {
 };
 
 async function publishRow(row: Awaited<ReturnType<typeof prisma.scheduledPost.findUniqueOrThrow>>) {
+  // Захват строки до публикации: ручная публикация и cron не опубликуют пост дважды
+  const claim = await prisma.scheduledPost.updateMany({
+    where: { id: row.id, status: { in: ['draft', 'scheduled', 'failed'] } },
+    data: { status: 'publishing' },
+  });
+  if (claim.count !== 1) throw Object.assign(new Error('Post is already being published'), { statusCode: 409 });
+  try {
+    return await publishClaimedRow(row);
+  } catch (err: any) {
+    await prisma.scheduledPost.update({
+      where: { id: row.id },
+      data: { status: 'failed', last_error: err?.message ?? 'Publish failed' },
+    }).catch(() => {});
+    throw err;
+  }
+}
+
+async function publishClaimedRow(row: Awaited<ReturnType<typeof prisma.scheduledPost.findUniqueOrThrow>>) {
   const post = row.group_id
     ? await groupService.createGroupPost(row.group_id, row.author_id, {
         content: row.content,

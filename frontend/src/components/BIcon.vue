@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import * as icons from 'lucide-vue-next'
+import { iconMap } from '@/lib/icons'
 
 const props = defineProps<{
   name: string
@@ -8,7 +8,7 @@ const props = defineProps<{
 }>()
 
 const iconComponent = computed(() => {
-  return (icons as any)[props.name]
+  return iconMap[props.name]
 })
 </script>
 

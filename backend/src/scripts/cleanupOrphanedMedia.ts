@@ -44,7 +44,7 @@ async function collectReferencedKeys(): Promise<Set<string>> {
     prisma.report.findMany({ select: { evidence_urls: true } }),
     prisma.autoModLog.findMany({ select: { image_url: true } }),
     prisma.conversation.findMany({ select: { avatar_url: true, banner_url: true } }),
-    prisma.message.findMany({ select: { file_url: true } }),
+    prisma.message.findMany({ select: { file_url: true, metadata: true } }),
     prisma.group.findMany({ select: { avatar_url: true, banner_url: true, group_bg_url: true, sponsors: true } }),
     prisma.event.findMany({ select: { banner_url: true } }),
     prisma.verificationRequest.findMany({ select: { evidence_urls: true } }),
@@ -62,6 +62,14 @@ async function collectReferencedKeys(): Promise<Set<string>> {
     prisma.dealerListing.findMany({ select: { images: true } }),
   ]);
 
+  // Изображения рамок аватара и медиа отложенных постов раньше не учитывались: --execute удалял живые файлы
+  const [frames, scheduledPosts] = await Promise.all([
+    prisma.avatarFrame.findMany({ select: { image_url: true } }),
+    prisma.scheduledPost.findMany({ select: { media_urls: true, media_original_urls: true } }),
+  ]);
+  frames.forEach((f) => add(f.image_url));
+  scheduledPosts.forEach((p) => { addAll(p.media_urls); addAll(p.media_original_urls); });
+
   users.forEach((u) => { add(u.avatar_url); add(u.avatar_video_url); add(u.banner_url); add(u.fursona_photo_url); add(u.fursuit_photo_url); add(u.profile_bg_url); });
   posts.forEach((p) => { addAll(p.media_urls); addAll(p.media_original_urls); });
   stories.forEach((s) => { add(s.image_url); add(s.video_url); });
@@ -71,7 +79,12 @@ async function collectReferencedKeys(): Promise<Set<string>> {
   reports.forEach((r) => addAll(r.evidence_urls));
   automodLogs.forEach((a) => add(a.image_url));
   conversations.forEach((c) => { add(c.avatar_url); add(c.banner_url); });
-  messages.forEach((m) => add(m.file_url));
+  // Альбомы хранят файлы в metadata.files, а file_url у них пустой
+  messages.forEach((m) => {
+    add(m.file_url);
+    const files = (m.metadata as { files?: { url?: unknown }[] } | null)?.files;
+    if (Array.isArray(files)) files.forEach((f) => add(f?.url));
+  });
   groups.forEach((g) => {
     add(g.avatar_url); add(g.banner_url); add(g.group_bg_url);
     const sponsors = Array.isArray(g.sponsors) ? g.sponsors : [];

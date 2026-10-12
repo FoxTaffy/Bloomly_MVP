@@ -1,7 +1,7 @@
 import prisma from '../../config/prisma.js';
 import { isAdmin as isAdminRole } from '../../lib/roles.js';
 import { notificationService } from '../notifications/service.js';
-import { deleteFileByUrl } from '../media/service.js';
+import { deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import type { CreateAvatarFrameInput, CalibrationInput } from './types.js';
 
 const FRAME_SELECT = {
@@ -28,6 +28,7 @@ export const avatarFramesService = {
   async create(userId: string, role: string | null | undefined, input: CreateAvatarFrameInput) {
     if (!input.name?.trim()) throw new Error('INVALID_NAME');
     if (!input.imageUrl) throw new Error('INVALID_IMAGE');
+    await assertOwnedMedia(input.imageUrl, userId);
     if (input.price !== undefined && input.price < 0) throw new Error('INVALID_PRICE');
 
     const admin = isAdminRole(role);
@@ -183,7 +184,7 @@ export const avatarFramesService = {
     // A rejected frame is never claimable, so its uploaded art would otherwise sit
     // orphaned in storage forever (same cleanup dealersDenService.delete does on removal).
     if (action === 'reject') {
-      deleteFileByUrl(frame.image_url).catch((err) => console.error('[avatarFrames.adminReview] media cleanup failed:', err));
+      deleteFileByUrl(frame.image_url, frame.creator_id).catch((err) => console.error('[avatarFrames.adminReview] media cleanup failed:', err));
     }
 
     await notificationService.create({

@@ -2,7 +2,7 @@ import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy, getBlockerIds } from '../../lib/blocks.js';
-import { isTrustedMediaUrl, deleteFileByUrl } from '../media/service.js';
+import { isTrustedMediaUrl, deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import { groupService } from '../groups/service.js';
 import { extractKeywords } from '../../lib/textKeywords.js';
 import { interestsToTerms } from '../../lib/interestTags.js';
@@ -43,6 +43,22 @@ async function assertProfileVisible(userId: string, viewerId?: string) {
   if (owner && !(await isAllowedByPrivacy(owner.profile_visibility, userId, viewerId))) {
     throw Object.assign(new Error('PROFILE_PRIVATE'), { statusCode: 403 });
   }
+}
+
+/** Убирает посты авторов, чей профиль скрыт от смотрящего (настройка профиля и блокировки). */
+async function filterByProfilePrivacy<T extends { author_id: string }>(rows: T[], viewerId?: string): Promise<T[]> {
+  const authorIds = [...new Set(rows.map((r) => r.author_id))].filter((id) => id !== viewerId);
+  if (authorIds.length === 0) return rows;
+  const owners = await prisma.user.findMany({
+    where: { id: { in: authorIds } },
+    select: { id: true, profile_visibility: true },
+  });
+  const visible = new Set<string>();
+  for (const owner of owners) {
+    if (await isBlockedBy(owner.id, viewerId)) continue;
+    if (await isAllowedByPrivacy(owner.profile_visibility, owner.id, viewerId)) visible.add(owner.id);
+  }
+  return rows.filter((r) => r.author_id === viewerId || visible.has(r.author_id));
 }
 
 /** Reusable author select for posts — includes verification fields */
@@ -381,11 +397,15 @@ export const postService = {
       ),
     );
 
+    // Прикреплять можно только файлы, которые автор загрузил сам (иначе чужой файл
+    // потом удалялся бы вместе с этим постом)
+    for (const url of [...mediaUrls, ...mediaOriginalUrls]) await assertOwnedMedia(url, authorId);
+
     return prisma.$transaction(async (tx) => {
       const post = await tx.post.create({
-        data: { 
-          content, 
-          author_id: authorId, 
+        data: {
+          content,
+          author_id: authorId,
           is_nsfw: isNsfw,
           is_ai_generated: isAiGenerated,
           is_announcement: isAnnouncement,
@@ -459,6 +479,8 @@ export const postService = {
     if (await isBlockedBy(post.author_id, viewerId)) {
       throw Object.assign(new Error('PROFILE_BLOCKED'), { statusCode: 403 });
     }
+    // Пост закрытого профиля по прямой ссылке — так же, как в ленте
+    await assertProfileVisible(post.author_id, viewerId);
     return maskGroupAuthor(post);
   },
 
@@ -505,7 +527,7 @@ export const postService = {
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
       },
     });
-    return posts.map(maskGroupAuthor);
+    return (await filterByProfilePrivacy(posts, viewerId)).map(maskGroupAuthor);
   },
 
   async searchPosts(query: string, safeMode: boolean = false, pageNum: number = 1, limitNum: number = 20, viewerId?: string) {
@@ -541,7 +563,7 @@ export const postService = {
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
       },
     });
-    return posts.map(maskGroupAuthor);
+    return (await filterByProfilePrivacy(posts, viewerId)).map(maskGroupAuthor);
   },
 
   async getPersonalizedPosts(userId: string, safeMode: boolean = false, pageNum: number = 1, limitNum: number = 30) {
@@ -712,6 +734,8 @@ export const postService = {
 
   async toggleVote(userId: string, postId: string, value: 1 | -1) {
     return prisma.$transaction(async (tx) => {
+      // Блокируем пост: два параллельных голоса иначе оба откатили бы эффект на сродство тегов дважды
+      await tx.$queryRaw`SELECT id FROM "Post" WHERE id = ${postId}::uuid FOR UPDATE`;
       const existingVote = await tx.vote.findUnique({
         where: { user_id_post_id: { user_id: userId, post_id: postId } },
       });
@@ -1088,6 +1112,7 @@ export const postService = {
     if (file_url && !isTrustedMediaUrl(file_url)) {
       throw Object.assign(new Error('INVALID_MEDIA_URL'), { statusCode: 422 });
     }
+    await assertOwnedMedia(file_url, userId);
     if (groupId && !(await groupService.isAtLeastModerator(groupId, userId))) {
       throw Object.assign(new Error('Not authorized to comment as this group'), { statusCode: 403 });
     }
@@ -1243,7 +1268,7 @@ export const postService = {
     const updated = await prisma.post.update({ where: { id: postId }, data: { deleted_at: new Date() } });
     // Posts have no restore path, so the underlying files can be purged immediately
     // instead of leaking in S3 until the 30-day hard-delete cron finally drops the row.
-    Promise.all([...post.media_urls, ...post.media_original_urls].map((url) => deleteFileByUrl(url)))
+    Promise.all([...post.media_urls, ...post.media_original_urls].map((url) => deleteFileByUrl(url, post.author_id)))
       .catch((err) => console.error('[deletePost] media cleanup failed:', err));
     return updated;
   },
@@ -1275,7 +1300,7 @@ export const postService = {
     }
     const updated = await prisma.comment.update({ where: { id: commentId }, data: { deleted_at: new Date() } });
     if (comment.file_url) {
-      deleteFileByUrl(comment.file_url).catch((err) => console.error('[deleteComment] media cleanup failed:', err));
+      deleteFileByUrl(comment.file_url, comment.author_id).catch((err) => console.error('[deleteComment] media cleanup failed:', err));
     }
     return updated;
   },

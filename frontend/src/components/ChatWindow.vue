@@ -992,9 +992,9 @@
               <div
                 v-if="(msg.file_url || msg.text || '').startsWith('http')"
                 class="cursor-pointer hover:scale-110 transition-transform active:scale-95"
-                @click="openStickerPack(msg.file_url || msg.text || '')">
+                @click="openStickerPack(msg.file_url || '')">
                 <StickerRenderer
-                  :src="msg.file_url || msg.text || ''"
+                  :src="msg.file_url || ''"
                   size="xl"
                   :loop="true"
                   :autoplay="true"

@@ -63,11 +63,27 @@ export const relationshipsService = {
 
     const now = new Date();
 
-    await prisma.$transaction([
-      prisma.relationshipRequest.update({ where: { id: requestId }, data: { status: 'accepted' } }),
-      prisma.user.update({ where: { id: req.from_id }, data: { relationship_with: req.to_id, relationship_since: now } }),
-      prisma.user.update({ where: { id: req.to_id },   data: { relationship_with: req.from_id, relationship_since: now } }),
-    ]);
+    // Условные обновления: если кто-то успел принять другую заявку или заявка уже обработана,
+    // счётчик вернёт 0 и вся транзакция откатится (проверка выше не защищает от гонки).
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.relationshipRequest.updateMany({
+        where: { id: requestId, status: 'pending' },
+        data: { status: 'accepted' },
+      });
+      if (claimed.count !== 1) throw Object.assign(new Error('Запрос не найден'), { statusCode: 404 });
+
+      const from = await tx.user.updateMany({
+        where: { id: req.from_id, relationship_with: null },
+        data: { relationship_with: req.to_id, relationship_since: now },
+      });
+      const to = await tx.user.updateMany({
+        where: { id: req.to_id, relationship_with: null },
+        data: { relationship_with: req.from_id, relationship_since: now },
+      });
+      if (from.count !== 1 || to.count !== 1) {
+        throw Object.assign(new Error('Один из пользователей уже состоит в отношениях'), { statusCode: 409 });
+      }
+    });
 
     // Notify the original sender that their request was accepted
     await notificationService.create({

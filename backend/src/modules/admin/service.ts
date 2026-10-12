@@ -3,6 +3,21 @@ import { Prisma } from '@prisma/client';
 import { notificationService } from '../notifications/service.js';
 import { getStorageStats } from '../media/service.js';
 import { applyAction, type TargetSnapshot } from '../automod/service.js';
+import { normalizeSafeLink } from '../../lib/safeLink.js';
+
+/** Одобренная реклама в текущем окне показа (для счётчиков показов и кликов). */
+function liveAdWhere(adId: string) {
+  const now = new Date();
+  return {
+    id: adId,
+    status: 'active',
+    deleted_at: null,
+    AND: [
+      { OR: [{ starts_at: null }, { starts_at: { lte: now } }] },
+      { OR: [{ ends_at: null }, { ends_at: { gte: now } }] },
+    ],
+  };
+}
 
 export const adminService = {
   // ── Overview stats ────────────────────────────────────────────────────────
@@ -268,13 +283,13 @@ export const adminService = {
   },
 
   async deleteUser(userId: string) {
-    return prisma.user.update({ where: { id: userId }, data: { deleted_at: new Date() } });
+    return prisma.user.update({ where: { id: userId }, data: { deleted_at: new Date(), is_banned: true } });
   },
 
   async restoreUser(userId: string) {
     return prisma.user.update({
       where: { id: userId },
-      data: { deleted_at: null },
+      data: { deleted_at: null, is_banned: false },
       select: { id: true, username: true, display_name: true, email: true, role: true, badge_type: true, avatar_url: true, created_at: true, deleted_at: true },
     });
   },
@@ -603,10 +618,13 @@ export const adminService = {
     requesterId?: string; title: string; description?: string;
     imageUrl?: string; linkUrl: string; contactInfo?: string; priceLabel?: string;
   }) {
+    // Ссылка рекламы показывается всем посетителям — javascript:-схему отсекаем на записи
+    const linkUrl = normalizeSafeLink(input.linkUrl);
+    if (!linkUrl) throw new Error('Недопустимая ссылка рекламы: разрешены только http(s), mailto и tel');
     return prisma.advertisement.create({ data: {
       requester_id: input.requesterId, title: input.title,
       description:  input.description, image_url: input.imageUrl,
-      link_url: input.linkUrl, contact_info: input.contactInfo,
+      link_url: linkUrl, contact_info: input.contactInfo,
       price_label: input.priceLabel,
     }});
   },
@@ -630,12 +648,14 @@ export const adminService = {
     });
   },
 
+  // Счётчики растут только у активной рекламы в её окне показа: без этого любой мог накручивать
+  // показы и клики на неодобренные объявления и портить отчёты рекламодателям.
   async trackAdImpression(adId: string) {
-    return prisma.advertisement.update({ where: { id: adId }, data: { impressions: { increment: 1 } } });
+    return prisma.advertisement.updateMany({ where: liveAdWhere(adId), data: { impressions: { increment: 1 } } });
   },
 
   async trackAdClick(adId: string) {
-    return prisma.advertisement.update({ where: { id: adId }, data: { clicks: { increment: 1 } } });
+    return prisma.advertisement.updateMany({ where: liveAdWhere(adId), data: { clicks: { increment: 1 } } });
   },
 
   // ──  Sticker Banners  ──────────────────────────────────────────────────

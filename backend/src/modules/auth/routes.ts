@@ -39,6 +39,8 @@ export async function authRoutes(fastify: FastifyInstance) {
         },
       },
     },
+    // Каждая регистрация шлёт письмо: без своего лимита её можно было гонять по глобальным 600/мин
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
   }, registerHandler);
 
   fastify.post('/verify-email', {

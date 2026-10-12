@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
+import { isDevEnv } from './env.js';
 
 // ── AES-256-GCM at-rest encryption for TOTP secrets ────────────────────────────
 // TOTP secrets are as sensitive as passwords: anyone who reads them out of the
@@ -6,14 +7,16 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypt
 // store them in plaintext.
 const rawKey = process.env.TWO_FACTOR_ENCRYPTION_KEY;
 if (!rawKey) {
-  if (process.env.NODE_ENV === 'production') {
-    console.error('[FATAL] TWO_FACTOR_ENCRYPTION_KEY env variable is not set. Refusing to start in production.');
+  if (!isDevEnv()) {
+    console.error('[FATAL] TWO_FACTOR_ENCRYPTION_KEY env variable is not set. Refusing to start outside development/test.');
     process.exit(1);
   }
   console.warn('[WARN] TWO_FACTOR_ENCRYPTION_KEY is not set. Using insecure fallback for development only.');
 }
 // Accepts any length input and derives a stable 32-byte key from it, so the
 // env var itself doesn't have to be a raw hex-encoded key.
+// Без ключа вне dev/test шифровать нечем: fallback не используем, иначе секреты 2FA шифруются публичной строкой.
+if (!rawKey && !isDevEnv()) throw new Error('TWO_FACTOR_ENCRYPTION_KEY is required');
 const key = createHash('sha256').update(rawKey || 'insecure-dev-fallback-key').digest();
 
 export function encryptTotpSecret(plain: string): string {

@@ -37,7 +37,9 @@ export async function listPacksHandler(req: FastifyRequest, reply: FastifyReply)
 export async function getPackHandler(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as { id: string };
   try {
-    const pack = await stickersService.getById(id);
+    // Черновик отдаём только автору; requesterId придёт из tryAuth, без токена — undefined
+    const requesterId = (req as any).user?.id as string | undefined;
+    const pack = await stickersService.getById(id, requesterId);
     if (!pack) return reply.status(404).send({ error: 'Pack not found' });
     return reply.send({ data: { pack } });
   } catch (err) {
@@ -114,7 +116,8 @@ export async function addToCollectionHandler(req: FastifyRequest, reply: Fastify
     const result = await stickersService.addToCollection(user.id, id);
     if (!result) return reply.status(404).send({ error: 'Pack not found' });
     return reply.send({ data: { ok: true } });
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.statusCode) return reply.status(err.statusCode).send({ error: err.message });
     req.log.error(err);
     return reply.status(500).send({ error: 'Failed to add to collection' });
   }
@@ -137,7 +140,7 @@ export async function getPackStatsHandler(req: FastifyRequest, reply: FastifyRep
   const { id } = req.params as { id: string };
   const { period } = req.query as { period?: string };
   try {
-    const pack = await stickersService.getById(id);
+    const pack = await stickersService.getById(id, user.id);
     if (!pack) return reply.status(404).send({ error: 'Pack not found' });
     if (pack.author_id !== user.id && !isAdmin(user.role)) {
       return reply.status(403).send({ error: 'Only the pack owner can view its stats' });
@@ -258,7 +261,8 @@ export async function importTelegramHandler(req: FastifyRequest, reply: FastifyR
   const { link, maxStickers } = req.body as { link: string; maxStickers?: number };
   if (!link) return reply.status(400).send({ error: 'link is required' });
   try {
-    const result = await stickersService.importFromTelegram(link, maxStickers);
+    const userId = (req as any).user.id as string;
+    const result = await stickersService.importFromTelegram(link, maxStickers, userId);
     return reply.send({ data: result });
   } catch (err: any) {
     if (err.code === 'NO_TOKEN') {

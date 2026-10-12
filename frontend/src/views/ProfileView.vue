@@ -367,7 +367,7 @@
                       </button>
                       <!-- Donate button -->
                       <a v-if="(viewedProfile as any).donate_url"
-                        :href="(viewedProfile as any).donate_url"
+                        :href="safeHref((viewedProfile as any).donate_url)"
                         target="_blank" rel="noopener noreferrer"
                         class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/60">
                         <BIcon name="HeartHandshake" class="w-4 h-4" />
@@ -1086,7 +1086,7 @@
                               <BIcon name="Scissors" class="w-3 h-3" /> {{ langStore.t.verTypeMaster }}
                             </span>
                             <a v-for="link in profileFursuits[0].external_maker_links" :key="link"
-                              :href="link" target="_blank" rel="noopener noreferrer"
+                              :href="safeHref(link)" target="_blank" rel="noopener noreferrer"
                               class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-bg border border-brand-border text-white/70 hover:text-brand-accent hover:border-brand-accent/50 text-xs font-semibold transition-all"
                               @click.stop>
                               <BIcon name="ExternalLink" class="w-3 h-3" />
@@ -1159,7 +1159,7 @@
                               </p>
                               <div class="flex flex-wrap gap-1.5">
                                 <a v-for="link in suit.external_maker_links" :key="link"
-                                  :href="link" target="_blank" rel="noopener noreferrer"
+                                  :href="safeHref(link)" target="_blank" rel="noopener noreferrer"
                                   class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-bg border border-brand-border text-white/70 hover:text-brand-accent hover:border-brand-accent/50 text-xs font-semibold transition-all"
                                   @click.stop>
                                   <BIcon name="ExternalLink" class="w-3 h-3" />
@@ -1867,7 +1867,7 @@
                 </div>
                 <div v-if="activeSocialLinks.length" class="px-2 pb-2 space-y-0.5">
                   <a v-for="net in activeSocialLinks" :key="net.key"
-                    :href="socialUrl(net.key, (viewedProfile as any).social_links[net.key])" target="_blank" rel="noopener noreferrer"
+                    :href="safeHref(socialUrl(net.key, (viewedProfile as any).social_links[net.key]))" target="_blank" rel="noopener noreferrer"
                     class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all group">
                     <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                       :style="{ backgroundColor: net.color + '22' }">
@@ -2447,6 +2447,7 @@
 </template>
 
 <script setup lang="ts">
+import { safeHref } from '@/utils/safeHref'
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHead } from '@unhead/vue'
@@ -3350,7 +3351,7 @@ const avatarSrc = computed(() => {
 const bannerStyle = computed(() => {
   const p = viewedProfile.value
   if (!p) return {}
-  if (p.banner_url) return { backgroundImage: `url('${p.banner_url}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
+  if (p.banner_url) return { backgroundImage: `url('${String(p.banner_url).replace(/['"\\()\s]/g, encodeURIComponent)}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
   // Use theme accent if set, otherwise profile accent_color
   const themeId = (p as any).profile_theme as string | undefined
   const themeAccent = themeId && PROFILE_THEMES[themeId] ? PROFILE_THEMES[themeId].accent : null
@@ -3580,6 +3581,8 @@ const activeSocialLinks = computed(() => {
 function socialUrl(key: string, val: string) {
   if (key === 'other') return val.startsWith('http') ? val : 'https://' + val
   if (val.startsWith('http')) return val
+  // Discord хранит ник, а не ссылку: ссылки на профиль по нику нет
+  if (key === 'discord') return ''
   const map: Record<string, string> = { telegram: 'https://t.me/', twitter: 'https://x.com/', instagram: 'https://instagram.com/', youtube: 'https://youtube.com/@', twitch: 'https://twitch.tv/', furaffinity: 'https://www.furaffinity.net/user/', vk: 'https://vk.com/', discord: '', github: 'https://github.com/' }
   // Users may type the handle with or without a leading "@" — normalize so the
   // built URL never ends up with none or a doubled "@" (e.g. youtube.com/@@handle).

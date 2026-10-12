@@ -292,7 +292,7 @@ export async function applyAction(
   });
 
   if (action === 'ban') {
-    await prisma.user.update({ where: { id: userId }, data: { deleted_at: new Date(), frozen_reason: `[AUTOMOD BAN] ${reason}` } });
+    await prisma.user.update({ where: { id: userId }, data: { deleted_at: new Date(), is_banned: true, frozen_reason: `[AUTOMOD BAN] ${reason}` } });
     await notificationService.create({ receiverId: userId, type: 'automod_ban', postId, meta: { reason } });
     console.log(`[AUTOMOD] BAN user=${userId} reason=${reason}`);
     return log.id;
@@ -308,7 +308,9 @@ export async function applyAction(
   }
 
   if (action === 'warn') {
-    const newWarnCount = (user.warn_count ?? 0) + 1;
+    // Атомарный инкремент: параллельные нарушения раньше писали один и тот же старый счётчик
+    const bumped = await prisma.user.update({ where: { id: userId }, data: { warn_count: { increment: 1 } }, select: { warn_count: true } });
+    const newWarnCount = bumped.warn_count;
     const warnMeta = {
       count: newWarnCount, limit: WARNS_BEFORE_BAN, reason, category,
       imageUrl: imageUrl ?? undefined, autoModLogId: log.id,
@@ -318,7 +320,7 @@ export async function applyAction(
       // Escalate to a reversible freeze, never an automatic permanent ban.
       // A human moderator reviews the log and decides whether to lift it or ban manually.
       if (!user.frozen_at) {
-        await prisma.user.update({ where: { id: userId }, data: { warn_count: newWarnCount, frozen_at: new Date(), frozen_reason: `[AUTOMOD FREEZE after ${newWarnCount} warns] ${reason}` } });
+        await prisma.user.update({ where: { id: userId }, data: { frozen_at: new Date(), frozen_reason: `[AUTOMOD FREEZE after ${newWarnCount} warns] ${reason}` } });
         await prisma.autoModLog.create({ data: { user_id: userId, action: 'freeze', reason: `Аккаунт заморожен после ${newWarnCount} предупреждений — проверка модератором`, category, score: 1, details } });
         await notificationService.create({ receiverId: userId, type: 'automod_warn', postId, meta: warnMeta });
         await notificationService.create({
@@ -326,11 +328,8 @@ export async function applyAction(
           meta: { reason: `Аккаунт заморожен после ${newWarnCount} предупреждений` },
         });
         console.log(`[AUTOMOD] FREEZE (warn limit) user=${userId}`);
-      } else {
-        await prisma.user.update({ where: { id: userId }, data: { warn_count: newWarnCount } });
       }
     } else {
-      await prisma.user.update({ where: { id: userId }, data: { warn_count: newWarnCount } });
       await notificationService.create({ receiverId: userId, type: 'automod_warn', postId, meta: warnMeta });
       console.log(`[AUTOMOD] WARN user=${userId} count=${newWarnCount} reason=${reason}`);
     }
@@ -373,17 +372,17 @@ export async function getPendingAppeals() {
 
 export async function decideAppeal(logId: string, resolverId: string, decision: 'accepted' | 'rejected') {
   const log = await prisma.autoModLog.findUnique({ where: { id: logId } });
-  if (!log || log.appeal_status !== 'pending') throw new Error('No pending appeal');
+  if (!log) throw new Error('No pending appeal');
 
-  await prisma.autoModLog.update({
-    where: { id: logId },
+  // Условный переход из pending: два модератора не могут принять одну апелляцию и дважды снять предупреждение
+  const claimed = await prisma.autoModLog.updateMany({
+    where: { id: logId, appeal_status: 'pending' },
     data: { appeal_status: decision, appeal_resolved_at: new Date(), appeal_resolved_by: resolverId },
   });
+  if (claimed.count !== 1) throw new Error('No pending appeal');
 
   if (decision === 'accepted') {
-    const user = await prisma.user.findUnique({ where: { id: log.user_id }, select: { warn_count: true } });
-    const newCount = Math.max(0, (user?.warn_count ?? 1) - 1);
-    await prisma.user.update({ where: { id: log.user_id }, data: { warn_count: newCount } });
+    await prisma.user.updateMany({ where: { id: log.user_id, warn_count: { gt: 0 } }, data: { warn_count: { decrement: 1 } } });
     await notificationService.create({ receiverId: log.user_id, type: 'automod_appeal_accepted', meta: { autoModLogId: logId } });
   } else {
     await notificationService.create({ receiverId: log.user_id, type: 'automod_appeal_rejected', meta: { autoModLogId: logId } });

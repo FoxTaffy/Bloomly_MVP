@@ -345,11 +345,14 @@ async function submitBid() {
     bidError.value = err?.response?.data?.message ?? err?.response?.data?.error ?? langStore.t.dealersDenGenericRetryError
   } finally { isBidding.value = false }
 }
+const buyingTicketId = ref<string | null>(null)
 async function submitRaffleTicket(listing: DealerListing, e: Event) {
   e.stopPropagation()
   if (!auth.user) { router.push({ name: 'login' }); return }
+  if (buyingTicketId.value) return
   if (!(await confirmDialog(langStore.t.dealersDenBuyTicketConfirm + ' ' + formatPrice(listing.price, listing.currency) + '?'))) return
-  await store.buyRaffleTicket(listing.id)
+  buyingTicketId.value = listing.id
+  try { await store.buyRaffleTicket(listing.id) } finally { buyingTicketId.value = null }
 }
 </script>
 
@@ -834,7 +837,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   </div>
                   <div class="flex items-center justify-between gap-1">
                     <p class="text-xs font-black text-brand-success tabular-nums">{{ formatPrice(listing.price, listing.currency) }}<span class="text-[8px] text-white/30 font-normal">/{{ langStore.t.dealersDenPiecesAbbr }}</span></p>
-                    <button v-if="!isSoldOut(listing)" @click.stop="submitRaffleTicket(listing, $event)"
+                    <button v-if="!isSoldOut(listing)" @click.stop="submitRaffleTicket(listing, $event)" :disabled="buyingTicketId === listing.id"
                       class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-white shadow-sm transition-all hover:opacity-90 active:scale-95"
                       style="background: linear-gradient(135deg, #66C770, #059669)">
                       <BIcon name="Ticket" class="w-3 h-3" /> {{ langStore.t.dealersDenTicketBtn }}

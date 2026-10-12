@@ -3,7 +3,7 @@ import type { CreateListingInput, UpdateListingInput, GetListingsQuery, PlaceBid
 import { REVIEW_TAGS } from './types.js';
 import { recalcDenTrust } from './trust.service.js';
 import { notificationService } from '../notifications/service.js';
-import { deleteFileByUrl } from '../media/service.js';
+import { deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 
 const LISTING_SELECT = {
   id: true,
@@ -168,6 +168,7 @@ export const dealersDenService = {
     if (input.quantity !== undefined && input.quantity < 1) throw new Error('INVALID_QUANTITY');
     if (input.bidIncrement !== undefined && input.bidIncrement <= 0) throw new Error('INVALID_BID_INCREMENT');
     const kind = input.listingKind ?? 'fixed';
+    for (const url of input.images ?? []) await assertOwnedMedia(url, sellerId);
     return prisma.dealerListing.create({
       data: {
         seller_id:    sellerId,
@@ -212,7 +213,10 @@ export const dealersDenService = {
     if (input.currency    !== undefined) data.currency    = input.currency;
     if (input.category    !== undefined) data.category    = input.category;
     if (input.type        !== undefined) data.type        = input.type;
-    if (input.images      !== undefined) data.images      = input.images;
+    if (input.images      !== undefined) {
+      for (const url of input.images) if (!existing.images.includes(url)) await assertOwnedMedia(url, sellerId);
+      data.images = input.images;
+    }
     if (input.quantity    !== undefined) data.quantity    = input.quantity;
     if (input.isNsfw      !== undefined) data.is_nsfw     = input.isNsfw;
     if (input.tags        !== undefined) data.tags        = input.tags;
@@ -228,7 +232,7 @@ export const dealersDenService = {
 
     if (input.images !== undefined) {
       const removed = existing.images.filter((url) => !input.images!.includes(url));
-      Promise.all(removed.map((url) => deleteFileByUrl(url)))
+      Promise.all(removed.map((url) => deleteFileByUrl(url, existing.seller_id)))
         .catch((err) => console.error('[dealerListing.update] media cleanup failed:', err));
     }
 
@@ -271,7 +275,7 @@ export const dealersDenService = {
     const updated = await prisma.dealerListing.update({ where: { id }, data: { deleted_at: new Date() } });
     // Listings have no restore path, so images can be purged now instead of
     // leaking in S3 forever (there's no hard-delete cron for listings either).
-    Promise.all(existing.images.map((url) => deleteFileByUrl(url)))
+    Promise.all(existing.images.map((url) => deleteFileByUrl(url, sellerId)))
       .catch((err) => console.error('[dealerListing.delete] media cleanup failed:', err));
 
     // Avatar frames are a special case: once the artist deletes the listing, the source
@@ -768,11 +772,13 @@ export const dealersDenService = {
 
     const status = winner === 'buyer' ? 'resolved_buyer' : 'resolved_seller';
 
+    // Условный переход из open: повторный клик или второй админ не засчитывают спор повторно
     await prisma.$transaction(async (tx) => {
-      await tx.denDispute.update({
-        where: { id: disputeId },
+      const claimed = await tx.denDispute.updateMany({
+        where: { id: disputeId, status: 'open' },
         data: { status, resolved_by: adminId, resolution, resolved_at: new Date() },
       });
+      if (claimed.count !== 1) throw new Error('DISPUTE_CLOSED');
       if (winner === 'buyer') {
         await tx.denTrustScore.upsert({
           where: { user_id: dispute.seller_id },
@@ -800,17 +806,20 @@ export const dealersDenService = {
     });
 
     for (const d of stale) {
-      await prisma.$transaction(async (tx) => {
-        await tx.denDispute.update({
-          where: { id: d.id },
+      const claimed = await prisma.$transaction(async (tx) => {
+        const r = await tx.denDispute.updateMany({
+          where: { id: d.id, status: 'open' },
           data: { status: 'auto_resolved', resolution: 'Продавец не ответил в течение 48 часов', resolved_at: new Date() },
         });
+        if (r.count !== 1) return false; // уже закрыт админом или другим запуском
         await tx.denTrustScore.upsert({
           where: { user_id: d.seller_id },
           create: { user_id: d.seller_id, disputes_lost: 1 },
           update: { disputes_lost: { increment: 1 } },
         });
+        return true;
       });
+      if (!claimed) continue;
       await recalcDenTrust(d.seller_id);
       await Promise.all([
         notificationService.create({ receiverId: d.buyer_id, type: 'den_dispute_auto_resolved', refId: d.id }),

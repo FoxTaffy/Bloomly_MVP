@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { safeHref } from '@/utils/safeHref'
 import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
@@ -361,7 +362,7 @@ async function toggleCollection(pack: StickerPack) {
                   <h2 class="text-white font-black text-xl md:text-2xl leading-tight drop-shadow-lg mb-1">{{ b.title }}</h2>
                   <p v-if="b.subtitle" class="text-white/80 text-sm leading-snug drop-shadow mb-3 max-w-sm">{{ b.subtitle }}</p>
                   <div class="flex items-center gap-3 flex-wrap">
-                    <a v-if="b.link_url" :href="b.link_url" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-white text-black text-sm font-extrabold hover:bg-white/90 transition-all shadow-lg">
+                    <a v-if="b.link_url" :href="safeHref(b.link_url)"class="inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-white text-black text-sm font-extrabold hover:bg-white/90 transition-all shadow-lg">
                       Открыть коллекцию <BIcon name="ChevronRight" class="w-3.5 h-3.5" />
                     </a>
                     <span v-if="b.price_label" class="text-white/75 text-sm font-semibold">{{ b.price_label }}</span>
@@ -501,7 +502,7 @@ async function toggleCollection(pack: StickerPack) {
               @click="router.push({ name: 'sticker-pack', params: { id: pack.id } })">
               <!-- Cover -->
               <div class="relative w-full aspect-square overflow-hidden"
-                :style="`background: ${pack.cover_bg_color ?? '#12101e'}`">
+                :style="{ background: pack.cover_bg_color ?? '#12101e' }">
                 <img v-if="pack.cover_url" :src="pack.cover_url" :alt="pack.name"
                   class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400" />
                 <div v-else-if="pack.stickers.length" class="w-full h-full grid grid-cols-3 gap-px p-1" style="background: rgba(255,255,255,0.02)">
@@ -636,7 +637,7 @@ async function toggleCollection(pack: StickerPack) {
 
             <!-- Cover square -->
             <div class="relative w-full aspect-square overflow-hidden"
-              :style="`background: ${pack.cover_bg_color ?? '#12101e'}`">
+              :style="{ background: pack.cover_bg_color ?? '#12101e' }">
 
               <template v-if="pack.cover_url">
                 <img :src="pack.cover_url" :alt="pack.name"

@@ -17,16 +17,64 @@ function genCode(): string {
 
 type OtpPurpose = 'register' | 'reset' | 'unfreeze' | 'change_email' | 'login_2fa' | 'enable_2fa_email';
 
-/** Неверных вводов на email+назначение за окно — дальше код не проверяем и новый не выпускаем. */
+/** Неверных вводов на один код и на один email+назначение за окно — дальше код не проверяем. */
 const OTP_MAX_ATTEMPTS = 5;
-const OTP_WINDOW_MS = 15 * 60 * 1000;
-const OTP_LOCKED_MESSAGE = 'Слишком много неверных попыток. Попробуйте через 15 минут';
 
-/** Бросается при исчерпанном лимите попыток; тихие ручки (сброс, разморозка) её глотают. */
-class OtpLockedError extends Error {}
+// ── Блокировка входа ─────────────────────────────────────────────────────────
+// Per-IP лимит не мешает перебору с множества адресов, поэтому считаем неудачи на аккаунте.
+const LOGIN_MAX_FAILURES = 10;
+const TWO_FA_MAX_FAILURES = 5;
+const LOCK_MS = 15 * 60 * 1000;
+const TOTP_PERIOD_SECONDS = 30;
+const LOCKED_MESSAGE = 'Слишком много неудачных попыток. Попробуйте через 15 минут';
+// Хэш-заглушка: при несуществующем email тоже выполняем bcrypt, чтобы время ответа не выдавало учётку
+const DUMMY_BCRYPT_HASH = bcrypt.hashSync('bloomly-dummy-password', 10);
+
+function assertNotLocked(user: { login_locked_until: Date | null }) {
+  if (user.login_locked_until && user.login_locked_until > new Date()) {
+    throw Object.assign(new Error(LOCKED_MESSAGE), { statusCode: 429 });
+  }
+}
+
+/** Засчитывает неудачу и при достижении порога блокирует аккаунт на LOCK_MS */
+async function recordFailure(userId: string, field: 'failed_login_count' | 'failed_2fa_count', max: number) {
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { [field]: { increment: 1 } },
+    select: { failed_login_count: true, failed_2fa_count: true },
+  });
+  if (updated[field] >= max) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { failed_login_count: 0, failed_2fa_count: 0, login_locked_until: new Date(Date.now() + LOCK_MS) },
+    });
+  }
+}
+
+async function resetFailures(userId: string) {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { failed_login_count: 0, failed_2fa_count: 0, login_locked_until: null },
+  });
+}
+const OTP_WINDOW_MS = 15 * 60 * 1000;
+const OTP_LOCKED_MESSAGE = 'Слишком много попыток. Запросите новый код позже';
+
+/** Новый код не выдаём, пока попытки в окне не исчерпаны: иначе переотправка сбрасывала бы счётчик. */
+export class OtpLockedError extends Error {}
+
+/** Для потоков без авторизации (сброс, разморозка, переотправка): блокировка молча пропускается,
+ *  ответ остаётся таким же, как для несуществующего аккаунта. */
+async function issueOtpSilently(email: string, purpose: OtpPurpose) {
+  try {
+    const code = await createOtp(email, purpose);
+    await sendOtpEmail(email, code, purpose);
+  } catch (err) {
+    if (!(err instanceof OtpLockedError)) throw err;
+  }
+}
 
 async function createOtp(email: string, purpose: OtpPurpose) {
-  // Счётчик считаем по всем кодам окна, включая уже погашенные: перевыпуск не должен его обнулять
   const spent = await prisma.emailOtp.aggregate({
     where: { email, purpose, created_at: { gte: new Date(Date.now() - OTP_WINDOW_MS) } },
     _sum: { attempts: true },
@@ -43,7 +91,7 @@ async function createOtp(email: string, purpose: OtpPurpose) {
 }
 
 async function verifyOtp(email: string, code: string, purpose: OtpPurpose) {
-  // Берём действующий код по email и назначению и сравниваем его с введённым
+  // Берём действующий код по email и назначению и сравниваем его с введённым в коде приложения
   const otp = await prisma.emailOtp.findFirst({
     where: { email, purpose, used: false },
     orderBy: { created_at: 'desc' },
@@ -59,10 +107,10 @@ async function verifyOtp(email: string, code: string, purpose: OtpPurpose) {
     where: { id: otp.id, used: false, attempts: { lt: OTP_MAX_ATTEMPTS } },
     data: { attempts: { increment: 1 } },
   });
-  if (counted.count === 0) throw new OtpLockedError(OTP_LOCKED_MESSAGE);
+  if (counted.count === 0) throw new Error(OTP_LOCKED_MESSAGE);
   if (otp.code !== code) throw new Error('Неверный код');
 
-  // Одноразовость: код гасится только один раз, даже при гонке двух верных запросов
+  // Одноразовость: код можно погасить только один раз, даже при гонке двух верных запросов
   const claimed = await prisma.emailOtp.updateMany({ where: { id: otp.id, used: false }, data: { used: true } });
   if (claimed.count !== 1) throw new Error('Неверный код');
 }
@@ -81,15 +129,20 @@ export class AuthService {
     const email = data.email.toLowerCase().trim();
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Забаненный аккаунт не освобождает email: иначе бан обходится повторной регистрацией.
+    // Освобождаются только email/username самоудалённых аккаунтов.
+    const bannedWithEmail = await prisma.user.findFirst({ where: { email, is_banned: true }, select: { id: true } });
+    if (bannedWithEmail) throw Object.assign(new Error('Не удалось зарегистрироваться с этим email'), { statusCode: 400 });
+
     try {
       const user = await prisma.$transaction(async (tx) => {
         const suffix = `_del_${Date.now()}`;
         await tx.user.updateMany({
-          where: { email, deleted_at: { not: null } },
+          where: { email, deleted_at: { not: null }, is_banned: false },
           data: { email: email + suffix },
         });
         await tx.user.updateMany({
-          where: { username, deleted_at: { not: null } },
+          where: { username, deleted_at: { not: null }, is_banned: false },
           data: { username: username + suffix },
         });
 
@@ -126,10 +179,22 @@ export class AuthService {
   }
 
   /** Повторная отправка OTP */
-  async resendOtp(email: string, purpose: OtpPurpose) {
+  async resendOtp(email: string, purpose: 'register' | 'reset' | 'unfreeze') {
     const e = email.toLowerCase().trim();
-    const code = await createOtp(e, purpose);
-    await sendOtpEmail(e, code, purpose);
+    // Письмо шлём только тому, у кого аккаунт в подходящем состоянии: иначе эндпоинт
+    // без авторизации рассылает коды на любые адреса. Для остальных — молча ничего не делаем
+    // (как requestPasswordReset), чтобы не раскрывать наличие аккаунта.
+    const user = await prisma.user.findFirst({
+      where: { email: e, deleted_at: null },
+      select: { email_verified: true, frozen_at: true },
+    });
+    const allowed =
+      purpose === 'register' ? !!user && !user.email_verified :
+      purpose === 'reset'    ? !!user :
+      /* unfreeze */           !!user?.frozen_at;
+    if (!allowed) return;
+
+    await issueOtpSilently(e, purpose);
   }
 
   /**
@@ -141,10 +206,18 @@ export class AuthService {
     const user = await prisma.user.findFirst({
       where: { email: { equals: email, mode: 'insensitive' } },
     });
-    if (!user || !user.password) return null;
+    if (!user || !user.password) {
+      await bcrypt.compare(password, DUMMY_BCRYPT_HASH);
+      return null;
+    }
+    assertNotLocked(user);
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return null;
+    if (!isMatch) {
+      await recordFailure(user.id, 'failed_login_count', LOGIN_MAX_FAILURES);
+      return null;
+    }
+    await resetFailures(user.id);
 
     const { password: _pw, ...rest } = user;
     return rest;
@@ -186,12 +259,7 @@ export class AuthService {
     const user = await prisma.user.findFirst({ where: { email: e, deleted_at: null, frozen_at: { not: null } } });
     if (!user) return; // silent — не палим наличие/статус аккаунта
 
-    try {
-      const code = await createOtp(e, 'unfreeze');
-      await sendOtpEmail(e, code, 'unfreeze');
-    } catch (err) {
-      if (!(err instanceof OtpLockedError)) throw err; // лимит — тоже молча, как для несуществующего аккаунта
-    }
+    await issueOtpSilently(e, 'unfreeze');
   }
 
   /** Подтверждение кода разморозки — снимает frozen_at/frozen_reason */
@@ -216,12 +284,7 @@ export class AuthService {
     const user = await prisma.user.findFirst({ where: { email: e, deleted_at: null } });
     if (!user) return; // silent
 
-    try {
-      const code = await createOtp(e, 'reset');
-      await sendOtpEmail(e, code, 'reset');
-    } catch (err) {
-      if (!(err instanceof OtpLockedError)) throw err; // лимит — тоже молча
-    }
+    await issueOtpSilently(e, 'reset');
   }
 
   /** Сброс пароля Step 2 — установить новый пароль */
@@ -296,14 +359,19 @@ export class AuthService {
     const taken = await prisma.user.findFirst({ where: { email: { equals: ne, mode: 'insensitive' }, deleted_at: null } });
     if (taken) throw new Error('Этот email уже используется');
 
+    // Код пришёл на старый адрес, владение новым не доказано: сбрасываем подтверждение и просим
+    // подтвердить новый email отдельным кодом. Иначе OAuth-привязка к чужому адресу (email_verified)
+    // позволяла захватить чужой вход.
     try {
-      await prisma.user.update({ where: { id: userId }, data: { email: ne, email_verified: true } });
+      await prisma.user.update({ where: { id: userId }, data: { email: ne, email_verified: false } });
     } catch (error: unknown) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new Error('Этот email уже используется');
       }
       throw error;
     }
+    const verifyCode = await createOtp(ne, 'register');
+    await sendOtpEmail(ne, verifyCode, 'register');
     return ne;
   }
 
@@ -313,8 +381,11 @@ export class AuthService {
 
   /** Шаг 1 подключения TOTP — сгенерировать секрет (ещё не активирован) + QR-код */
   async setupTotp(userId: string) {
-    const user = await prisma.user.findUnique({ where: { id: userId, deleted_at: null }, select: { email: true } });
+    const user = await prisma.user.findUnique({ where: { id: userId, deleted_at: null }, select: { email: true, two_factor_method: true } });
     if (!user) throw new Error('Пользователь не найден');
+    // Перезапись секрета при активной 2FA отдавала бы аккаунт тому, у кого есть access-токен:
+    // сначала отключите текущий метод (это требует пароль), потом подключайте новый.
+    if (user.two_factor_method) throw new Error('Сначала отключите текущую двухфакторную аутентификацию');
 
     const secret = authenticator.generateSecret();
     await prisma.user.update({ where: { id: userId }, data: { totp_secret: encryptTotpSecret(secret) } });
@@ -372,14 +443,27 @@ export class AuthService {
   async verifyLoginTwoFactor(userId: string, code: string) {
     const user = await prisma.user.findUnique({
       where: { id: userId, deleted_at: null },
-      select: { email: true, two_factor_method: true, totp_secret: true },
+      select: { email: true, two_factor_method: true, totp_secret: true, totp_last_step: true, login_locked_until: true },
     });
     if (!user) throw new Error('Пользователь не найден');
+    assertNotLocked(user);
 
     if (user.two_factor_method === 'totp') {
       if (!user.totp_secret) throw new Error('Неверный код');
       const secret = decryptTotpSecret(user.totp_secret);
-      if (!authenticator.verify({ token: code, secret })) throw new Error('Неверный код');
+      // otplib по умолчанию принимает только текущее 30-секундное окно (window = 0)
+      const step = Math.floor(Date.now() / 1000 / TOTP_PERIOD_SECONDS);
+      if (!authenticator.verify({ token: code, secret }) || user.totp_last_step === step) {
+        await recordFailure(userId, 'failed_2fa_count', TWO_FA_MAX_FAILURES);
+        throw new Error('Неверный код');
+      }
+      // Код одноразовый: фиксируем шаг атомарно, чтобы один код не прошёл дважды параллельными запросами
+      const claimed = await prisma.user.updateMany({
+        where: { id: userId, OR: [{ totp_last_step: null }, { totp_last_step: { lt: step } }] },
+        data: { totp_last_step: step },
+      });
+      if (claimed.count !== 1) throw new Error('Неверный код');
+      await resetFailures(userId);
     } else if (user.two_factor_method === 'email') {
       await verifyOtp(user.email, code, 'login_2fa');
     } else {
