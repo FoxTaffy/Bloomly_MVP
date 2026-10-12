@@ -48,6 +48,26 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.get('/users/frozen',     auth, getFrozenUsersHandler as any);
   fastify.patch('/users/:id/role', auth, updateUserRoleHandler as any);
   fastify.patch('/users/:id/subscription', auth, updateUserSubscriptionHandler as any);
+  fastify.patch('/users/:id/profile', {
+    schema: {
+      body: {
+        type: 'object',
+        properties: {
+          username:     { type: 'string', minLength: 3, maxLength: 30, pattern: '^[a-z0-9_]+$' },
+          display_name: { type: 'string', maxLength: 50 },
+          bio:          { type: 'string', maxLength: 300 },
+          status:       { type: 'string', maxLength: 100 },
+          pronouns:     { type: 'string', maxLength: 30 },
+          location:     { type: 'string', maxLength: 100 },
+          website:      { type: 'string', maxLength: 200 },
+          job_title:    { type: 'string', maxLength: 80 },
+          country:      { type: 'string', maxLength: 80 },
+        },
+        additionalProperties: false,
+      },
+    },
+    onRequest: [fastify.authenticate],
+  }, updateUserProfileHandler as any);
   fastify.delete('/users/:id',     auth, deleteUserHandler as any);
   fastify.post('/users/:id/restore', auth, restoreUserHandler as any);
   fastify.post('/users/:id/deceased',   auth, markDeceasedHandler as any);
