@@ -639,14 +639,15 @@ export const usersService = {
    * having at least one saved card (`PaymentMethod`) — this is a placeholder barrier, not a
    * real charge, but it closes the trivial "any authenticated user can self-grant `business`
    * with zero card on file" hole. Downgrading to `free` is always allowed.
+   * `skipPaymentCheck` is for staff-granted (comped) tiers from the admin panel, which are not purchases.
    */
-  async updateSubscriptionTier(userId: string, tier: string) {
+  async updateSubscriptionTier(userId: string, tier: string, opts: { skipPaymentCheck?: boolean } = {}) {
     const ALLOWED_TIERS = ['free', 'lite', 'pro', 'business'] as const;
     if (!ALLOWED_TIERS.includes(tier as any)) {
       throw Object.assign(new Error(`Invalid tier: ${tier}`), { statusCode: 400 });
     }
 
-    if (tier !== 'free') {
+    if (tier !== 'free' && !opts.skipPaymentCheck) {
       const hasPaymentMethod = await prisma.paymentMethod.findFirst({
         where: { user_id: userId },
         select: { id: true },

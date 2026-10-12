@@ -53,7 +53,7 @@ export default function EventDetailScreen() {
         <View className="p-4">
           <Text className="mb-2 text-2xl font-extrabold text-brand-offwhite">{event.title}</Text>
           <View className="mb-1.5 flex-row items-center gap-2">
-            <Calendar size={16} color="#3A4060" />
+            <Calendar size={16} color="#7C86AE" />
             <Text className="text-brand-muted">
               {starts.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })} ·{' '}
               {starts.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
@@ -61,7 +61,7 @@ export default function EventDetailScreen() {
           </View>
           {event.location_name ? (
             <View className="mb-4 flex-row items-center gap-2">
-              <MapPin size={16} color="#3A4060" />
+              <MapPin size={16} color="#7C86AE" />
               <Text className="text-brand-muted">{event.location_name}</Text>
             </View>
           ) : null}

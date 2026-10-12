@@ -136,6 +136,15 @@ export function initCronJobs() {
     }
   });
 
+  // Den auctions: close auctions past their end time (winner = top bid) every 5 minutes
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      await dealersDenService.closeExpiredAuctions();
+    } catch (err: any) {
+      console.error('[CRON] closeExpiredAuctions error:', err.message);
+    }
+  });
+
   // Support inbox: poll bloomly_support@pm.me (via Proton Bridge) for new/replied messages — every minute
   cron.schedule('*/1 * * * *', async () => {
     try {

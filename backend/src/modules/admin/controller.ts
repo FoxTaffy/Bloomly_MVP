@@ -85,11 +85,49 @@ export const updateUserSubscriptionHandler = async (
   if (!requireAdmin(req, reply)) return;
   const actor = req.user as JwtUser;
   try {
-    const user = await usersService.updateSubscriptionTier(req.params.id, req.body.tier);
+    // Staff-granted tiers are comps, not purchases — no saved card required.
+    const user = await usersService.updateSubscriptionTier(req.params.id, req.body.tier, { skipPaymentCheck: true });
     await logAdminAction(actor.id, req.params.id, 'subscription_change', `Тариф изменён на "${req.body.tier}"`);
     return reply.send({ success: true, data: { user }, error: null });
   } catch (err: any) {
     return reply.code(err.statusCode || 400).send({ success: false, data: null, error: { code: 'INVALID_TIER', message: err.message } });
+  }
+};
+
+// Fields an admin may edit on someone else's profile. Role, subscription, verification and
+// media stay out of this path on purpose — those have their own endpoints with their own rules.
+const ADMIN_EDITABLE_PROFILE_FIELDS = ['display_name', 'bio', 'status', 'pronouns', 'location', 'website', 'job_title', 'country'] as const;
+
+export const updateUserProfileHandler = async (
+  req: FastifyRequest<{ Params: { id: string }; Body: Record<string, string | undefined> }>,
+  reply: FastifyReply,
+) => {
+  if (!requireAdmin(req, reply)) return;
+  if (!(await requireCanModerate(req, reply, req.params.id))) return;
+  const actor = req.user as JwtUser;
+
+  const data: Record<string, string> = {};
+  for (const field of ADMIN_EDITABLE_PROFILE_FIELDS) {
+    if (typeof req.body[field] === 'string') data[field] = req.body[field] as string;
+  }
+  const { username } = req.body;
+  if (Object.keys(data).length === 0 && typeof username !== 'string') {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'NOTHING_TO_UPDATE', message: 'No editable fields provided' } });
+  }
+
+  try {
+    if (typeof username === 'string') {
+      await usersService.updateUsername(req.params.id, username);
+    }
+    const user = Object.keys(data).length > 0
+      ? await usersService.updateUser(req.params.id, data as any)
+      : null;
+    const changed = [...Object.keys(data), ...(typeof username === 'string' ? ['username'] : [])];
+    await logAdminAction(actor.id, req.params.id, 'profile_edit', `Профиль изменён администратором: ${changed.join(', ')}`);
+    return reply.send({ success: true, data: { user }, error: null });
+  } catch (err: any) {
+    const taken = err?.message === 'Этот никнейм уже занят';
+    return reply.code(taken ? 409 : 400).send({ success: false, data: null, error: { code: taken ? 'USERNAME_TAKEN' : 'PROFILE_UPDATE_FAILED', message: err.message } });
   }
 };
 

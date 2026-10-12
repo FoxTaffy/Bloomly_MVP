@@ -19,6 +19,7 @@ export interface User {
   profile_frame?: string | null
   email_verified?: boolean
   is_verified?: boolean
+  verification_type?: string | null
   onboarding_done?: boolean
   payment_region?: string | null
   is_adult?: boolean

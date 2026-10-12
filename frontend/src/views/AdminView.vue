@@ -10,6 +10,7 @@ import BIcon from '../components/BIcon.vue'
 import MediaUpload from '../components/MediaUpload.vue'
 import PostLightbox from '../components/PostLightbox.vue'
 import ResolveReportModal from '../components/ResolveReportModal.vue'
+import AdminEditUserModal from '../components/AdminEditUserModal.vue'
 import StickerPackDetailModal from '../components/StickerPackDetailModal.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { verTypeIconUrl } from '@/lib/verificationIcons'
@@ -150,12 +151,23 @@ const updateUserRole = async (userId: string, role: string) => {
   } catch {}
 }
 
+// Short-lived error banner for per-user actions (tier change, profile edit) — previously these failed silently.
+const actionError = ref('')
+let actionErrorTimer: ReturnType<typeof setTimeout> | null = null
+const showActionError = (message: string) => {
+  actionError.value = message
+  if (actionErrorTimer) clearTimeout(actionErrorTimer)
+  actionErrorTimer = setTimeout(() => { actionError.value = '' }, 5000)
+}
+
 const updateUserSubscription = async (userId: string, tier: string) => {
   try {
     await api.patch(`/admin/users/${userId}/subscription`, { tier })
     const u = users.value.find(u => u.id === userId)
     if (u) u.subscription_tier = tier
-  } catch {}
+  } catch (e: any) {
+    showActionError(e?.response?.data?.error?.message || 'Не удалось изменить подписку')
+  }
 }
 
 // ── Per-row user tier / role dropdowns ──────────────────────────────────
@@ -197,6 +209,13 @@ onBeforeUnmount(() => {
 const selectUserTier = (userId: string, tier: string) => {
   updateUserSubscription(userId, tier)
   activeUserMenu.value = null
+}
+
+// ── Staff profile editor for other users ──────────────────────────────
+const editingUser = ref<any>(null)
+const onUserProfileSaved = (patch: Record<string, string>) => {
+  const u = users.value.find(x => x.id === editingUser.value?.id)
+  if (u) Object.assign(u, patch)
 }
 const selectUserRole = (userId: string, role: string) => {
   updateUserRole(userId, role)
@@ -1254,6 +1273,10 @@ const totalPendingBadge = computed(() => {
 <template>
   <div class="min-h-screen bg-brand-bg text-white font-nunito flex relative isolate">
 
+    <div v-if="actionError" class="fixed top-4 left-1/2 -translate-x-1/2 z-[130] px-4 py-2.5 rounded-xl bg-rose-500 text-white text-xs font-bold shadow-xl">
+      {{ actionError }}
+    </div>
+
     <!-- ═══════════════════ SIDEBAR ═══════════════════════════════════════ -->
     <aside class="w-64 flex-shrink-0 hidden md:flex flex-col fixed top-0 left-0 h-full z-30
       bg-brand-card border-r border-brand-border">
@@ -1261,10 +1284,10 @@ const totalPendingBadge = computed(() => {
       <!-- Logo -->
       <div class="px-5 pt-6 pb-5 border-b border-brand-border">
         <div class="flex items-center gap-2.5">
-          <div class="w-9 h-9 rounded-xl flex items-center justify-center bg-brand-accent flex-shrink-0">
-            <BIcon name="Flower2" class="w-4.5 h-4.5 text-white" />
+          <div class="w-9 h-9 flex items-center justify-center flex-shrink-0">
+            <img src="/bloomly.png?v=2" alt="Bloomly" class="w-full h-full object-contain" />
           </div>
-          <p class="font-extrabold text-white text-base leading-none">Bloomly</p>
+          <p class="font-extrabold text-white text-xl tracking-tight leading-none">Bloomly</p>
           <span class="text-[10px] font-extrabold px-2 py-1 rounded-full bg-brand-accent/15 text-brand-accent border border-brand-accent/25 tracking-[0.1em]">ADMIN</span>
         </div>
       </div>
@@ -1738,6 +1761,11 @@ const totalPendingBadge = computed(() => {
                   static lg:absolute lg:right-4 lg:top-1/2 lg:-translate-y-1/2 lg:z-10
                   opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:pointer-events-none lg:group-hover:pointer-events-auto
                   transition-opacity lg:bg-[#0B1030]/95 lg:backdrop-blur-md lg:rounded-full lg:pl-3 lg:pr-2 lg:py-2 lg:shadow-xl lg:shadow-black/50 lg:border lg:border-white/10">
+                  <button v-if="isAdminPlus" type="button" title="Редактировать профиль" @click="editingUser = user"
+                    class="flex items-center justify-center bg-white/[0.06] border border-transparent rounded-full w-7 h-7 text-white/70
+                      hover:bg-white/[0.08] hover:text-white cursor-pointer transition-all">
+                    <BIcon name="Pencil" class="w-3.5 h-3.5" />
+                  </button>
                   <button v-if="isAdminPlus" type="button" data-user-menu :title="langStore.t.adminGrantRevokeSubTooltip"
                     @click="toggleUserMenu(`tier-${user.id}`, $event)"
                     class="flex items-center gap-1 bg-white/[0.06] border border-transparent rounded-full pl-2.5 pr-2 py-1.5 text-xs font-bold text-white/70
@@ -4045,6 +4073,7 @@ const totalPendingBadge = computed(() => {
   </div>
 
   <StickerPackDetailModal v-if="openedPackId" :pack-id="openedPackId" @close="closeStickerPackDetail" />
+  <AdminEditUserModal v-if="editingUser" :user="editingUser" @saved="onUserProfileSaved" @close="editingUser = null" />
 </template>
 
 <style scoped>

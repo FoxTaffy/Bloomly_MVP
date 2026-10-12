@@ -91,7 +91,7 @@ export default function FeedScreen() {
                 value={draft}
                 onChangeText={setDraft}
                 placeholder="Что у вас нового?"
-                placeholderTextColor="#3A4060"
+                placeholderTextColor="#7C86AE"
                 className="flex-1 text-brand-offwhite"
                 multiline
               />
@@ -106,7 +106,7 @@ export default function FeedScreen() {
                   </Text>
                 </Pressable>
               ) : (
-                <Hash size={18} color="#3A4060" />
+                <Hash size={18} color="#7C86AE" />
               )}
             </View>
           </View>

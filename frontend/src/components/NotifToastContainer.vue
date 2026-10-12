@@ -4,44 +4,11 @@ import { useNotifToast } from '@/composables/useNotifToast'
 import { useWarningModalStore } from '@/stores/warningModal'
 import BIcon from './BIcon.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
+import { notifBadgeIcon, notifBadgeColor } from '@/lib/notifVisuals'
 
 const router = useRouter()
 const { toasts, remove } = useNotifToast()
 const warningModal = useWarningModalStore()
-
-const badgeIcon: Record<string, string> = {
-  LIKE:    'Heart',
-  COMMENT: 'MessageSquare',
-  REPAW:   'Repeat2',
-  FOLLOW:  'UserPlus',
-  MENTION: 'AtSign',
-  RELATIONSHIP_REQUEST:  'HeartHandshake',
-  RELATIONSHIP_ACCEPTED: 'Heart',
-  FOLLOW_POST: 'FileText',
-  GROUP_POST:  'FileText',
-  GROUP_EVENT: 'Calendar',
-  GROUP_JOIN:  'Users',
-  MESSAGE:     'MessageCircle',
-  GROUP_DM:    'Inbox',
-  automod_warn: 'ShieldAlert',
-}
-
-const badgeColor: Record<string, string> = {
-  LIKE:    'bg-rose-500',
-  COMMENT: 'bg-brand-accent',
-  REPAW:   'bg-emerald-500',
-  FOLLOW:  'bg-violet-500',
-  MENTION: 'bg-amber-500',
-  RELATIONSHIP_REQUEST:  'bg-pink-500',
-  RELATIONSHIP_ACCEPTED: 'bg-pink-500',
-  FOLLOW_POST: 'bg-violet-500',
-  GROUP_POST:  'bg-brand-accent',
-  GROUP_EVENT: 'bg-amber-500',
-  GROUP_JOIN:  'bg-emerald-500',
-  MESSAGE:     'bg-sky-500',
-  GROUP_DM:    'bg-brand-accent',
-  automod_warn: 'bg-amber-500',
-}
 
 function onClick(t: typeof toasts.value[0]) {
   if (t.type === 'automod_warn') {
@@ -71,42 +38,47 @@ function onClick(t: typeof toasts.value[0]) {
         <div
           v-for="t in toasts"
           :key="t.id"
-          class="pointer-events-auto flex items-start gap-3 px-4 py-3 backdrop-blur-xl rounded-2xl shadow-2xl cursor-pointer transition-colors w-[320px]"
+          class="notif-toast-card group pointer-events-auto relative w-[320px] overflow-hidden flex items-start gap-3 pl-3.5 pr-3 py-3 backdrop-blur-xl rounded-2xl shadow-card cursor-pointer transition-colors"
           :class="t.type === 'automod_warn'
             ? 'bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/15'
             : 'bg-brand-card/95 border border-brand-border hover:bg-brand-card'"
           @click="onClick(t)"
         >
-          <!-- Avatar + badge -->
-          <div class="relative flex-shrink-0">
+          <!-- Accent stripe in the notification type's colour -->
+          <span class="absolute left-0 top-3 bottom-3 w-[3px] rounded-full" :class="notifBadgeColor(t.type)" />
+
+          <!-- Avatar + type badge -->
+          <div class="relative flex-shrink-0 mt-0.5">
             <img
               :src="t.senderAvatar || '/icons/badges/NN.jpg'"
-              class="w-10 h-10 rounded-full object-cover border border-brand-border"
+              class="w-10 h-10 rounded-full object-cover ring-1 ring-brand-border"
               @error="onAvatarError"
             />
             <div
-              class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center text-white"
-              :class="badgeColor[t.type] ?? 'bg-white/20'"
+              class="absolute -bottom-1 -right-1 w-[22px] h-[22px] rounded-full ring-2 ring-brand-card flex items-center justify-center text-white shadow-sm"
+              :class="notifBadgeColor(t.type)"
             >
-              <BIcon :name="badgeIcon[t.type] ?? 'Bell'" class="w-2.5 h-2.5" />
+              <BIcon :name="notifBadgeIcon(t.type)" class="w-3 h-3" />
             </div>
           </div>
 
-          <!-- Text -->
-          <div class="min-w-0 flex-1">
-            <p class="text-sm text-white leading-snug">
-              <span class="font-semibold">{{ t.senderName }}</span>
-              {{ ' ' }}{{ t.message }}
-            </p>
+          <!-- Text: sender on top, action / preview below -->
+          <div class="min-w-0 flex-1 pt-0.5">
+            <p class="text-[13px] font-bold text-white leading-tight truncate">{{ t.senderName }}</p>
+            <p class="text-[13px] text-white/65 leading-snug mt-0.5 line-clamp-2 break-words">{{ t.message }}</p>
           </div>
 
           <!-- Close -->
           <button
-            class="flex-shrink-0 text-white/35 hover:text-white transition-colors -mt-0.5"
+            class="flex-shrink-0 -mt-1 -mr-0.5 p-1 rounded-full text-white/30 hover:text-white hover:bg-white/10 transition-colors"
+            aria-label="Закрыть"
             @click.stop="remove(t.id)"
           >
-            <BIcon name="X" class="w-4 h-4" />
+            <BIcon name="X" class="w-3.5 h-3.5" />
           </button>
+
+          <!-- Lifetime bar: drains over the 5 s auto-dismiss, pauses on hover -->
+          <span class="notif-toast-progress absolute left-0 bottom-0 h-[2px] w-full origin-left bg-white/20" />
         </div>
       </TransitionGroup>
     </div>
@@ -115,17 +87,28 @@ function onClick(t: typeof toasts.value[0]) {
 
 <style scoped>
 .notif-toast-enter-active {
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .notif-toast-leave-active {
   transition: all 0.25s ease-in;
 }
 .notif-toast-enter-from {
   opacity: 0;
-  transform: translateX(40px) scale(0.9);
+  transform: translateX(40px) scale(0.92);
 }
 .notif-toast-leave-to {
   opacity: 0;
-  transform: translateX(40px) scale(0.9);
+  transform: translateX(40px) scale(0.92);
+}
+
+.notif-toast-progress {
+  animation: notif-toast-drain 5s linear forwards;
+}
+.notif-toast-card:hover .notif-toast-progress {
+  animation-play-state: paused;
+}
+@keyframes notif-toast-drain {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
 }
 </style>

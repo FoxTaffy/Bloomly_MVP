@@ -17,6 +17,7 @@ export interface CreateGroupInput {
   accentColor?: string;
   socialLinks?: Record<string, string>;
   isPublic?: boolean;
+  rubric?: string;
 }
 
 export interface UpdateGroupInput {
@@ -41,6 +42,7 @@ export interface UpdateGroupInput {
   completedWorks?: number;
   guaranteeText?: string;
   category?: string;
+  rubric?: string | null;
   isVerified?: boolean;
   groupBgUrl?: string;
   groupFrame?: string;

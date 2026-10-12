@@ -6,6 +6,7 @@ import BIcon from '@/components/BIcon.vue'
 import type { GroupType } from '@/stores/groups'
 import api from '@/api'
 import { compressImageForUpload } from '@/lib/utils'
+import { GROUP_RUBRIC_OPTIONS, DEFAULT_RUBRIC } from '@/lib/groupRubrics'
 
 // ── Emit ─────────────────────────────────────────────────────────────────────
 export interface CreateGroupPayload {
@@ -30,12 +31,10 @@ export interface CreateGroupPayload {
   commissionMaxQueue?: number
   // Social / static / community
   socialLinks?: Record<string, string>
-  // News
-  newsCategory?: string
+  // News / brand rubric (separate from the general category)
+  rubric?: string
   // Shop
   shopCurrency?: string
-  // Brand
-  brandCategory?: string
   // Media
   avatarUrl?: string
   bannerUrl?: string
@@ -125,21 +124,11 @@ function toggleStyle(key: string) {
 }
 
 // News
-const newsCategory = ref('general')
-const newsCategories = ['general', 'fandom', 'tech', 'art', 'events', 'gaming']
-const newsCategoryLabels: Record<string, string> = {
-  general: 'Общие', fandom: 'Фандом', tech: 'Технологии', art: 'Арт', events: 'Афиша', gaming: 'Гейминг',
-}
+// Rubric (news / brand) — options come from the shared list used by group settings too
+const rubric = ref('')
 
 // Shop
 const shopCurrency = ref('RUB')
-
-// Brand
-const brandCategory = ref('studio')
-const brandCategories = ['studio', 'convention', 'agency', 'publisher', 'service', 'other']
-const brandCategoryLabels: Record<string, string> = {
-  studio: 'Студия', convention: 'Конвенция', agency: 'Агентство', publisher: 'Издательство', service: 'Сервис', other: 'Другое',
-}
 
 // Social (for static, community)
 const socialTelegram = ref('')
@@ -196,6 +185,8 @@ const presetColors = ['#4C67CF', '#66C770', '#E14664', '#FFC01F', '#CD83F5', '#E
 watch(type, (t) => {
   const found = types.find(tt => tt.value === t)
   if (found) accentColor.value = found.color
+  // Each rubric list belongs to one type — start from that type's default when it changes
+  rubric.value = t === 'news' || t === 'brand' ? DEFAULT_RUBRIC[t] : ''
 })
 
 // ── Step labels ─────────────────────────────────────────────────────────────
@@ -272,9 +263,8 @@ function submit() {
     payload.commissionStyles = commissionStyles.value
   }
 
-  if (type.value === 'news') payload.newsCategory = newsCategory.value
+  if (type.value === 'news' || type.value === 'brand') payload.rubric = rubric.value
   if (type.value === 'shop') payload.shopCurrency = shopCurrency.value
-  if (type.value === 'brand') payload.brandCategory = brandCategory.value
 
   // Social links for static, community, news, brand
   if (['static', 'community', 'news', 'brand', 'shop'].includes(type.value)) {
@@ -592,11 +582,11 @@ function submit() {
             <div>
               <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-2 block">Категория канала</label>
               <div class="grid grid-cols-3 gap-2">
-                <button v-for="cat in newsCategories" :key="cat"
+                <button v-for="opt in GROUP_RUBRIC_OPTIONS.news" :key="opt.value"
                   class="py-2.5 rounded-xl border text-xs font-bold transition-all"
-                  :class="newsCategory === cat ? 'bg-brand-yellow/10 border-brand-yellow/40 text-brand-yellow' : 'bg-brand-bg/40 border-brand-border text-white/40'"
-                  @click="newsCategory = cat">
-                  {{ newsCategoryLabels[cat] }}
+                  :class="rubric === opt.value ? 'bg-brand-yellow/10 border-brand-yellow/40 text-brand-yellow' : 'bg-brand-bg/40 border-brand-border text-white/40'"
+                  @click="rubric = opt.value">
+                  {{ opt.label }}
                 </button>
               </div>
             </div>
@@ -681,11 +671,11 @@ function submit() {
             <div>
               <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-2 block">Категория</label>
               <div class="grid grid-cols-3 gap-2">
-                <button v-for="cat in brandCategories" :key="cat"
+                <button v-for="opt in GROUP_RUBRIC_OPTIONS.brand" :key="opt.value"
                   class="py-2.5 rounded-xl border text-xs font-bold transition-all"
-                  :class="brandCategory === cat ? 'bg-[#00D4AA]/10 border-[#00D4AA]/40 text-[#00D4AA]' : 'bg-brand-bg/40 border-brand-border text-white/40'"
-                  @click="brandCategory = cat">
-                  {{ brandCategoryLabels[cat] }}
+                  :class="rubric === opt.value ? 'bg-[#00D4AA]/10 border-[#00D4AA]/40 text-[#00D4AA]' : 'bg-brand-bg/40 border-brand-border text-white/40'"
+                  @click="rubric = opt.value">
+                  {{ opt.label }}
                 </button>
               </div>
             </div>

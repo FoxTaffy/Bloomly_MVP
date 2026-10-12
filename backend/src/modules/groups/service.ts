@@ -28,6 +28,35 @@ function roleWeight(role?: string | null): number {
   return role ? (ROLE_WEIGHT[role] ?? 0) : 0;
 }
 
+// One slug format for create and update: lowercase, dash-separated, no leading/trailing dashes.
+function normalizeSlug(raw: string): string {
+  return raw.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+}
+
+// Rubrics are the type-specific sub-categories picked when creating news / brand groups.
+// They live in their own column and never touch `category` (the general category with cooldown).
+export const GROUP_RUBRICS: Partial<Record<string, readonly string[]>> = {
+  news: ['general', 'fandom', 'tech', 'art', 'events', 'gaming'],
+  brand: ['studio', 'convention', 'agency', 'publisher', 'service', 'other'],
+};
+
+function resolveRubric(type: string, rubric: string | null | undefined): string | null {
+  const allowed = GROUP_RUBRICS[type];
+  if (!allowed || !rubric) return null;
+  if (!allowed.includes(rubric)) throw Object.assign(new Error('Unknown rubric for this group type'), { statusCode: 400 });
+  return rubric;
+}
+
+// hidden_member_ids is stored as a JSON string array; tolerate malformed values.
+function parseHiddenIds(raw: string | null | undefined): string[] {
+  try {
+    const v = JSON.parse(raw || '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Soft-deletes a group and its group-DM Conversation(s) together. Without this, a group going
  * away (auto-deleted once empty, or staff hard-delete) left its Conversation row(s) fully intact
@@ -83,6 +112,7 @@ const GROUP_SELECT = {
   is_verified: true,
   category: true,
   category_changed_at: true,
+  rubric: true,
   event_date: true,
   event_expired_at: true,
   group_bg_url: true,
@@ -304,12 +334,15 @@ export const groupService = {
   async create(ownerId: string, input: CreateGroupInput) {
     const name = sanitizeDisplayText(input.name ?? '', 120);
     if (!name) throw new Error('Group name is required');
+    const slug = normalizeSlug(input.slug);
+    if (!slug) throw new Error('Group slug is required');
     return prisma.$transaction(async (tx) => {
       const group = await tx.group.create({
         data: {
-          slug: input.slug.toLowerCase().replace(/[^a-z0-9_-]/g, ''),
+          slug,
           name,
           type: input.type,
+          rubric: resolveRubric(input.type, input.rubric),
           description: input.description,
           owner_id: ownerId,
           avatar_url: input.avatarUrl,
@@ -372,7 +405,8 @@ export const groupService = {
     if (input.completedWorks !== undefined) data.completed_works = input.completedWorks;
     if (input.guaranteeText !== undefined) data.guarantee_text = input.guaranteeText;
     if (input.slug !== undefined) {
-      const newSlug = input.slug.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+      const newSlug = normalizeSlug(input.slug);
+      if (!newSlug) throw new Error('Group slug is required');
       // Fetch current slug to save as alias
       const current = await prisma.group.findUnique({ where: { id: groupId }, select: { slug: true, slug_aliases: true } });
       if (current && current.slug !== newSlug) {
@@ -396,6 +430,10 @@ export const groupService = {
         data.category_changed_at = new Date();
       }
       data.category = newCategory;
+    }
+    if (input.rubric !== undefined) {
+      const g = await prisma.group.findUnique({ where: { id: groupId }, select: { type: true } });
+      if (g) data.rubric = resolveRubric(g.type, input.rubric);
     }
     if (input.isVerified !== undefined) data.is_verified = input.isVerified;
     if (input.groupBgUrl !== undefined) data.group_bg_url = input.groupBgUrl || null;
@@ -571,10 +609,19 @@ export const groupService = {
     return result;
   },
 
-  async getMembers(groupId: string, page = 1, limit = 30) {
+  async getMembers(groupId: string, page = 1, limit = 30, viewerId: string | null = null) {
     const skip = (page - 1) * limit;
+    const where: any = { group_id: groupId };
+    // Owner's "hide admins" / "hide members" settings apply to everyone below admin level.
+    const viewerWeight = viewerId ? await groupService.getRoleWeight(groupId, viewerId) : 0;
+    if (viewerWeight < 2) {
+      const group = await prisma.group.findUnique({ where: { id: groupId }, select: { hide_admins: true, hidden_member_ids: true } });
+      const hiddenIds = parseHiddenIds(group?.hidden_member_ids);
+      if (hiddenIds.length) where.user_id = { notIn: hiddenIds };
+      if (group?.hide_admins) where.role = { notIn: ['owner', 'admin'] };
+    }
     return prisma.groupMember.findMany({
-      where: { group_id: groupId },
+      where,
       include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true, banner_url: true } } },
       orderBy: { joined_at: 'asc' },
       skip,
@@ -588,7 +635,8 @@ export const groupService = {
     const current = await prisma.groupMember.findUnique({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
     });
-    if (current?.role === 'owner') throw new Error('Cannot change the role of the group owner');
+    if (!current) throw Object.assign(new Error('Member not found'), { statusCode: 404 });
+    if (current.role === 'owner') throw new Error('Cannot change the role of the group owner');
 
     const requester = await prisma.groupMember.findUnique({
       where: { group_id_user_id: { group_id: groupId, user_id: requesterId } },
@@ -740,8 +788,8 @@ export const groupService = {
   },
 
   async getEvent(eventId: string) {
-    return prisma.event.findUnique({
-      where: { id: eventId },
+    return prisma.event.findFirst({
+      where: { id: eventId, group: { deleted_at: null } },
       select: {
         ...EVENT_SELECT,
         tickets: { orderBy: { price: 'asc' } },
@@ -918,19 +966,39 @@ export const groupService = {
     return roleWeight(member?.role);
   },
 
+  // Members and subscribers can read subscriber_only posts; everyone else cannot.
+  async hasSubscriberAccess(groupId: string, userId: string): Promise<boolean> {
+    // Any membership counts (plain members have role weight 0), so check the row, not the weight.
+    const member = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      select: { role: true },
+    });
+    if (member) return true;
+    const sub = await prisma.groupSubscriber.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      select: { group_id: true },
+    });
+    return !!sub;
+  },
+
   // owner/admin/moderator can moderate content (delete others' posts/comments) in this group.
   async isAtLeastModerator(groupId: string, userId: string): Promise<boolean> {
     return (await groupService.getRoleWeight(groupId, userId)) >= 1;
   },
 
   // ── Group posts ──────────────────────────────────────────────────────────
-  async getGroupPosts(groupId: string, page = 1, limit = 20, hasMedia = false) {
+  async getGroupPosts(groupId: string, page = 1, limit = 20, hasMedia = false, viewerId: string | null = null) {
     const skip = (page - 1) * limit;
+    const hasSubscriberAccess = viewerId ? await groupService.hasSubscriberAccess(groupId, viewerId) : false;
     return prisma.groupPost.findMany({
       where: {
         group_id: groupId,
         group: { deleted_at: null },
-        post: { deleted_at: null, ...(hasMedia ? { media_urls: { isEmpty: false } } : {}) },
+        post: {
+          deleted_at: null,
+          ...(hasSubscriberAccess ? {} : { subscriber_only: false }),
+          ...(hasMedia ? { media_urls: { isEmpty: false } } : {}),
+        },
       },
       include: {
         post: {
@@ -1050,6 +1118,11 @@ export const groupService = {
 
   // ── Groups shared between two users ──────────────────────────────────────
   async getCommonGroups(userId: string, currentUserId: string) {
+    if (userId !== currentUserId) {
+      const owner = await prisma.user.findUnique({ where: { id: userId }, select: { groups_visibility: true } });
+      if (!owner) return [];
+      if (!(await isAllowedByPrivacy(owner.groups_visibility, userId, currentUserId))) return [];
+    }
     const [userGroupIds, myGroupIds] = await Promise.all([
       prisma.groupMember.findMany({
         where: { user_id: userId, group: { deleted_at: null, is_public: true } },
@@ -1250,19 +1323,21 @@ export const groupService = {
   },
 
   async cancelRsvp(eventId: string, userId: string) {
-    const prev = await prisma.eventAttendee.findUnique({
-      where: { event_id_user_id: { event_id: eventId, user_id: userId } },
-      select: { status: true },
-    });
-    const wasCountable = prev && (prev.status === 'going' || prev.status === 'maybe');
-    await Promise.all([
-      prisma.eventAttendee.delete({
+    // Same row lock as rsvpEvent: two parallel cancels must not both decrement attendee_count.
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId}::uuid FOR UPDATE`;
+      const prev = await tx.eventAttendee.findUnique({
         where: { event_id_user_id: { event_id: eventId, user_id: userId } },
-      }).catch(() => null),
-      wasCountable
-        ? prisma.event.update({ where: { id: eventId }, data: { attendee_count: { decrement: 1 } } })
-        : Promise.resolve(null),
-    ]);
+        select: { status: true },
+      });
+      if (!prev) return;
+      await tx.eventAttendee.delete({
+        where: { event_id_user_id: { event_id: eventId, user_id: userId } },
+      });
+      if (prev.status === 'going' || prev.status === 'maybe') {
+        await tx.event.update({ where: { id: eventId }, data: { attendee_count: { decrement: 1 } } });
+      }
+    });
   },
 
   async getEventAttendees(eventId: string, page = 1, limit = 50) {
@@ -1347,6 +1422,7 @@ export const groupService = {
   },
 
   async sendGroupMessage(groupId: string, userId: string, text: string) {
+    if (text.length > 4000) throw Object.assign(new Error('Text too long'), { statusCode: 400 });
     const msg = await prisma.groupMessage.create({
       data: { group_id: groupId, user_id: userId, text },
       include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
@@ -1455,11 +1531,9 @@ export const groupService = {
       });
       data.position = (last?.position ?? -1) + 1;
     }
-    let status = data.status;
-    if (!status) {
-      const cols = await groupService.getTodoColumns(groupId);
-      status = cols[0]?.key ?? 'WAITING';
-    }
+    const cols = await groupService.getTodoColumns(groupId);
+    const status = data.status ?? cols[0]?.key ?? 'WAITING';
+    if (!cols.some((c) => c.key === status)) throw Object.assign(new Error('Unknown todo column'), { statusCode: 400 });
     return prisma.groupTodoItem.create({
       data: {
         group_id: groupId,
@@ -1478,7 +1552,11 @@ export const groupService = {
     const update: any = {};
     if (data.title !== undefined) update.title = data.title.trim();
     if (data.description !== undefined) update.description = data.description?.trim() || null;
-    if (data.status !== undefined) update.status = data.status;
+    if (data.status !== undefined) {
+      const cols = await groupService.getTodoColumns(groupId);
+      if (!cols.some((c) => c.key === data.status)) throw Object.assign(new Error('Unknown todo column'), { statusCode: 400 });
+      update.status = data.status;
+    }
     if (data.position !== undefined) update.position = data.position;
     return prisma.groupTodoItem.update({ where: { id: itemId }, data: update });
   },
@@ -1528,6 +1606,7 @@ export const groupService = {
       where: { group_id_user_id: { group_id: groupId, user_id: customerId } },
     });
     if (!member) throw Object.assign(new Error('Not a group member'), { statusCode: 403 });
+    if (customerId === group.owner_id) throw Object.assign(new Error('Владелец не может оформить заказ в своей группе'), { statusCode: 400 });
     if (!input.title?.trim()) throw Object.assign(new Error('Title is required'), { statusCode: 400 });
 
     return prisma.$transaction(async (tx) => {

@@ -128,6 +128,22 @@ const isBuyingTicket = ref(false)
 const ticketSuccess  = ref(false)
 const ticketError    = ref('')
 
+const isDrawing = ref(false)
+// Seller-only: picks the winner from the sold tickets right away.
+async function drawWinner() {
+  if (!listing.value) return
+  if (!(await confirmDialog(langStore.t.dealerListingDrawConfirm))) return
+  isDrawing.value = true
+  ticketError.value = ''
+  try {
+    await store.drawRaffle(listing.value.id)
+  } catch (e: any) {
+    ticketError.value = e?.response?.data?.error ?? langStore.t.dealerListingGenericError
+  } finally {
+    isDrawing.value = false
+  }
+}
+
 async function buyTicket() {
   if (!auth.user) { router.push({ name: 'login' }); return }
   if (!listing.value) return
@@ -943,7 +959,7 @@ async function submitReport() {
                       <div>
                         <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">{{ langStore.t.dealerListingTicketPriceLabel }}</p>
                         <p class="text-3xl font-black text-brand-success leading-none tabular-nums">
-                          {{ listing.price === '0' || listing.price === 0 ? langStore.t.dealerListingFreeCaps : formatPrice(listing.price, listing.currency) }}
+                          {{ parseFloat(String(listing.price)) === 0 ? langStore.t.dealerListingFreeCaps : formatPrice(listing.price, listing.currency) }}
                         </p>
                       </div>
                       <div v-if="listing.raffle_max_tickets" class="text-right">
@@ -963,8 +979,20 @@ async function submitReport() {
                         <p class="text-[10px] text-white/40 mt-0.5">{{ langStore.t.dealerListingWatchRaffleResults }}</p>
                       </div>
                     </div>
-                    <!-- Buy CTA -->
-                    <template v-if="!isSoldOut(listing) && !ticketSuccess">
+                    <!-- Seller: draw the winner (and see own ticket count as a buyer) -->
+                    <div v-if="auth.user && listing.my_raffle_tickets" class="text-xs text-white/50">
+                      {{ langStore.t.dealerListingMyTicketsLabel }}: <span class="font-bold text-brand-success">{{ listing.my_raffle_tickets }}</span>
+                    </div>
+                    <button v-if="auth.user?.id === listing.seller_id && !isSoldOut(listing) && listing.raffle_tickets_sold > 0"
+                      @click="drawWinner" :disabled="isDrawing"
+                      class="w-full flex items-center justify-center gap-2 py-3 text-white font-extrabold rounded-2xl transition-all hover:opacity-90 text-sm disabled:opacity-40 border border-brand-success/30 bg-brand-success/10">
+                      <span v-if="isDrawing" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <BIcon v-else name="Trophy" class="w-4 h-4 text-brand-success" />
+                      {{ langStore.t.dealerListingDrawBtn }}
+                    </button>
+                    <div v-if="ticketError && auth.user?.id === listing.seller_id" class="text-brand-error text-xs bg-brand-error/8 border border-brand-error/15 rounded-xl px-4 py-2.5">{{ ticketError }}</div>
+                    <!-- Buy CTA (sellers can't buy into their own raffle) -->
+                    <template v-if="!isSoldOut(listing) && !ticketSuccess && auth.user?.id !== listing.seller_id && !listing.my_raffle_tickets">
                       <button v-if="auth.user" @click="buyTicket" :disabled="isBuyingTicket"
                         class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm disabled:opacity-40"
                         style="background: linear-gradient(135deg, #66C770, #059669)">
@@ -1025,7 +1053,7 @@ async function submitReport() {
                         <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">{{ langStore.t.dealerListingPriceLabel }}</p>
                         <p class="text-4xl font-black leading-none tabular-nums"
                           :class="isSoldOut(listing) ? 'text-white/30 line-through' : 'text-brand-yellow'">
-                          {{ listing.price === '0' || listing.price === 0 ? langStore.t.dealerListingFreePrice : formatPrice(listing.price, listing.currency) }}
+                          {{ parseFloat(String(listing.price)) === 0 ? langStore.t.dealerListingFreePrice : formatPrice(listing.price, listing.currency) }}
                         </p>
                       </div>
                       <div v-if="listing.quantity > 1" class="text-right">

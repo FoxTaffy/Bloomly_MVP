@@ -4,7 +4,7 @@ import api from '../api'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 export type ListingStatus   = 'active' | 'sold' | 'draft' | 'archived'
-export type ListingCategory = 'art' | 'fursuit' | 'badge' | 'print' | 'music' | 'craft' | 'merch' | 'avatar_frame' | 'other'
+export type ListingCategory = 'art' | 'fursuit' | 'badge' | 'print' | 'music' | 'craft' | 'merch' | 'sticker' | 'avatar_frame' | 'other'
 export type ListingType     = 'digital' | 'physical' | 'both'
 export type ListingKind     = 'fixed' | 'auction' | 'ych' | 'raffle' | 'commission_queue'
 
@@ -188,6 +188,7 @@ export interface DealerListing {
   // Extended (from getById)
   wishlist_count?: number
   is_wishlisted?: boolean
+  my_raffle_tickets?: number
   review_summary?: ReviewSummary
   // Present only when category === 'avatar_frame'
   avatarFrame?: {
@@ -226,9 +227,18 @@ export interface CreateListingInput {
   commissionFormFields?: { label: string; required: boolean; type: string }[]
 }
 
+export const LISTINGS_PAGE_SIZE = 20
+
+export interface ListingsParams {
+  category?: string; type?: string; search?: string; sellerId?: string
+  minPrice?: number; maxPrice?: number; currency?: string
+  listingKind?: string; sort?: string; excludeNsfw?: string
+}
+
 // ── Store ─────────────────────────────────────────────────────────────────────
 export const useDealersDenStore = defineStore('dealersDen', () => {
   const listings       = ref<DealerListing[]>([])
+  const listingsPage   = ref(1)
   const currentListing = ref<DealerListing | null>(null)
   const myListings     = ref<DealerListing[]>([])
   const wishlist       = ref<DealerListing[]>([])
@@ -238,19 +248,38 @@ export const useDealersDenStore = defineStore('dealersDen', () => {
 
   // ── Listings ──────────────────────────────────────────────────────────────
 
-  async function loadListings(params?: {
-    page?: number; limit?: number; category?: string
-    type?: string; search?: string; sellerId?: string
-    minPrice?: number; maxPrice?: number; currency?: string
-    listingKind?: string; sort?: string; excludeNsfw?: string
-  }) {
+  // Every listing request bumps this counter; a response is applied only if no newer
+  // request started after it, so fast filter changes can't leave a stale list on screen.
+  let listRequestSeq = 0
+  const isLoadingMore = ref(false)
+
+  async function loadListings(params?: ListingsParams) {
+    const seq = ++listRequestSeq
     isLoading.value = true
     try {
-      const { data } = await api.get('/dealers-den', { params })
-      listings.value = data.data.listings
-      total.value    = data.data.total
+      const { data } = await api.get('/dealers-den', { params: { ...params, page: 1, limit: LISTINGS_PAGE_SIZE } })
+      if (seq !== listRequestSeq) return
+      listings.value     = data.data.listings
+      total.value        = data.data.total
+      listingsPage.value = 1
     } finally {
-      isLoading.value = false
+      if (seq === listRequestSeq) isLoading.value = false
+    }
+  }
+
+  // Appends the next page to the current listings (same filters as the last loadListings call).
+  async function loadMoreListings(params?: ListingsParams) {
+    const seq = ++listRequestSeq
+    isLoadingMore.value = true
+    try {
+      const nextPage = listingsPage.value + 1
+      const { data } = await api.get('/dealers-den', { params: { ...params, page: nextPage, limit: LISTINGS_PAGE_SIZE } })
+      if (seq !== listRequestSeq) return
+      listings.value     = [...listings.value, ...data.data.listings]
+      total.value        = data.data.total
+      listingsPage.value = nextPage
+    } finally {
+      if (seq === listRequestSeq) isLoadingMore.value = false
     }
   }
 
@@ -310,6 +339,16 @@ export const useDealersDenStore = defineStore('dealersDen', () => {
   async function getBids(listingId: string) {
     const { data } = await api.get(`/dealers-den/${listingId}/bids`)
     return data.data.bids as DealerBid[]
+  }
+
+  // Seller draws a raffle winner from the sold tickets.
+  async function drawRaffle(listingId: string) {
+    const { data } = await api.post(`/dealers-den/${listingId}/draw`)
+    const updated = data.data.listing as DealerListing
+    const idx = listings.value.findIndex(l => l.id === listingId)
+    if (idx !== -1) listings.value[idx] = updated
+    if (currentListing.value?.id === listingId) currentListing.value = updated
+    return updated
   }
 
   async function buyRaffleTicket(listingId: string) {
@@ -499,11 +538,11 @@ export const useDealersDenStore = defineStore('dealersDen', () => {
   }
 
   return {
-    listings, currentListing, myListings, wishlist, weeklyTop, isLoading, total,
+    listings, currentListing, myListings, wishlist, weeklyTop, isLoading, isLoadingMore, total,
     // Listings
-    loadListings, loadListing, loadMyListings, createListing, updateListing, deleteListing,
+    loadListings, loadMoreListings, loadListing, loadMyListings, createListing, updateListing, deleteListing,
     // Auction/Raffle
-    placeBid, getBids, buyRaffleTicket,
+    placeBid, getBids, buyRaffleTicket, drawRaffle,
     // Comments
     getComments, addComment, deleteComment,
     // Trust

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { rubricOptionsFor } from '@/lib/groupRubrics'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, onMounted, computed, reactive, watch } from 'vue'
@@ -534,6 +535,7 @@ const form = reactive({
   socialVk: '',
   socialWebsite: '',
   category: '',
+  rubric: '',
   hideAdmins: false,
   hiddenMemberIds: [] as string[],
   groupBgUrl: '',
@@ -573,6 +575,7 @@ const savedForm = reactive({
   productionTime: '', deliveryInfo: '', completedWorks: 0, guaranteeText: '',
   socialTelegram: '', socialDiscord: '', socialTwitter: '', socialVk: '', socialWebsite: '',
   category: '',
+  rubric: '',
   hideAdmins: false,
   hiddenMemberIds: [] as string[],
   groupBgUrl: '',
@@ -599,6 +602,7 @@ function snapshotToSaved() {
     socialTelegram: form.socialTelegram, socialDiscord: form.socialDiscord,
     socialTwitter: form.socialTwitter, socialVk: form.socialVk, socialWebsite: form.socialWebsite,
     category: form.category,
+    rubric: form.rubric,
     hideAdmins: form.hideAdmins,
     hiddenMemberIds: [...form.hiddenMemberIds],
     groupBgUrl: form.groupBgUrl,
@@ -626,6 +630,7 @@ function resetForm() {
     socialTelegram: savedForm.socialTelegram, socialDiscord: savedForm.socialDiscord,
     socialTwitter: savedForm.socialTwitter, socialVk: savedForm.socialVk, socialWebsite: savedForm.socialWebsite,
     category: savedForm.category,
+    rubric: savedForm.rubric,
     hideAdmins: savedForm.hideAdmins,
     hiddenMemberIds: [...savedForm.hiddenMemberIds],
     groupBgUrl: savedForm.groupBgUrl,
@@ -653,7 +658,7 @@ const isDirty = computed(() => {
     form.guaranteeText !== savedForm.guaranteeText ||
     form.socialTelegram !== savedForm.socialTelegram || form.socialDiscord !== savedForm.socialDiscord ||
     form.socialTwitter !== savedForm.socialTwitter || form.socialVk !== savedForm.socialVk ||
-    form.socialWebsite !== savedForm.socialWebsite || form.category !== savedForm.category ||
+    form.socialWebsite !== savedForm.socialWebsite || form.category !== savedForm.category || form.rubric !== savedForm.rubric ||
     form.groupBgUrl !== savedForm.groupBgUrl || form.groupFrame !== savedForm.groupFrame ||
     form.groupTheme !== savedForm.groupTheme || form.hideAdmins !== savedForm.hideAdmins ||
     JSON.stringify(form.hiddenMemberIds) !== JSON.stringify(savedForm.hiddenMemberIds) ||
@@ -934,6 +939,7 @@ async function load() {
   form.socialVk = sl.vk || ''
   form.socialWebsite = sl.website || ''
   form.category = g.category || ''
+  form.rubric = g.rubric || ''
   categoryChangedAt.value = g.category_changed_at || null
   form.groupBgUrl = g.group_bg_url || ''
   form.groupFrame = g.group_frame || ''
@@ -1039,6 +1045,7 @@ async function save() {
       completedWorks: form.completedWorks,
       guaranteeText: form.guaranteeText,
       category: form.category || undefined,
+      rubric: form.rubric || undefined,
       groupBgUrl: form.groupBgUrl || undefined,
       groupFrame: form.groupFrame || undefined,
       groupTheme: form.groupTheme || undefined,
@@ -1319,6 +1326,13 @@ async function deleteGroup() {
                       <p v-else class="text-white/30 text-xs mt-1.5">
                         {{ langStore.t.groupSettingsCategoryLimit }}
                       </p>
+                    </div>
+                    <div v-if="rubricOptionsFor(group?.type).length">
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">Рубрика</label>
+                      <select v-model="form.rubric" class="field-input appearance-none">
+                        <option value="">— Не выбрана —</option>
+                        <option v-for="opt in rubricOptionsFor(group?.type)" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                      </select>
                     </div>
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsShortDescription }}</label>

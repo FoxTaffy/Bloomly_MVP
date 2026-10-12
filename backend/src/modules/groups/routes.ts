@@ -105,7 +105,7 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.post('/:id/leave', auth, leaveGroupHandler as any);
   fastify.patch('/:id/pin', auth, togglePinGroupHandler as any);
   fastify.patch('/:id/notify', auth, toggleGroupNotificationHandler as any);
-  fastify.get('/:id/members', getMembersHandler as any);
+  fastify.get('/:id/members', { onRequest: [fastify.tryAuthenticate] }, getMembersHandler as any);
   fastify.patch('/:id/members/:userId/role', auth, setMemberRoleHandler as any);
   fastify.delete('/:id/members/:userId', auth, removeMemberHandler as any);
   fastify.post('/:id/subscribe', auth, subscribeGroupHandler as any);
@@ -118,7 +118,7 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.delete('/:id/roles/:roleId', auth, deleteCustomRoleHandler as any);
 
   // ── Group posts ──────────────────────────────────────────────────────────
-  fastify.get('/:id/posts', getGroupPostsHandler as any);
+  fastify.get('/:id/posts', { onRequest: [fastify.tryAuthenticate] }, getGroupPostsHandler as any);
   fastify.post('/:id/posts', auth, createGroupPostHandler as any);
 
   // ── Creative Kanban ────────────────────────────────────────────────────

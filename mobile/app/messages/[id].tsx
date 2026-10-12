@@ -100,7 +100,7 @@ export default function ChatThreadScreen() {
         <View className="flex-1">
           <Text className="font-bold text-brand-offwhite">{title}</Text>
           <View className="flex-row items-center gap-1">
-            <Wifi size={10} color={connected ? '#66C770' : '#3A4060'} />
+            <Wifi size={10} color={connected ? '#66C770' : '#7C86AE'} />
             <Text className="text-xs text-brand-muted">{connected ? 'На связи' : 'Подключение...'}</Text>
           </View>
         </View>
@@ -121,7 +121,7 @@ export default function ChatThreadScreen() {
             value={draft}
             onChangeText={setDraft}
             placeholder="Сообщение..."
-            placeholderTextColor="#3A4060"
+            placeholderTextColor="#7C86AE"
             className="flex-1 rounded-2xl border border-brand-border bg-brand-card px-4 py-2.5 text-brand-offwhite"
             multiline
           />

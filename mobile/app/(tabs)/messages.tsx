@@ -17,8 +17,8 @@ export default function MessagesScreen() {
       </View>
 
       <View className="mx-4 mb-2 mt-2 flex-row items-center gap-2 rounded-2xl border border-brand-border bg-brand-card px-4 py-3">
-        <Search size={16} color="#3A4060" />
-        <TextInput placeholder="Поиск диалогов..." placeholderTextColor="#3A4060" className="flex-1 text-brand-offwhite" />
+        <Search size={16} color="#7C86AE" />
+        <TextInput placeholder="Поиск диалогов..." placeholderTextColor="#7C86AE" className="flex-1 text-brand-offwhite" />
       </View>
 
       <FlatList
