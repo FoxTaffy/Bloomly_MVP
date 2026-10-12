@@ -10,9 +10,10 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#4C67CF',
-        tabBarInactiveTintColor: '#3A4060',
-        tabBarStyle: { backgroundColor: '#16192F', borderTopColor: '#2A2D45' },
+        tabBarActiveTintColor: '#A1B4FF',
+        tabBarInactiveTintColor: '#7C86AE',
+        tabBarLabelStyle: { fontFamily: 'Nunito_700Bold', fontSize: 11, marginBottom: 4 },
+        tabBarStyle: { backgroundColor: '#16192F', borderTopColor: '#2A2D45', paddingTop: 6 },
       }}
     >
       <Tabs.Screen

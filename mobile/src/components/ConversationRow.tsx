@@ -34,7 +34,7 @@ export function ConversationRow({ conversation, onPress }: { conversation: Conve
         </View>
         <View className="mt-0.5 flex-row items-center justify-between">
           <View className="mr-2 flex-1 flex-row items-center gap-1">
-            {last?.type === 'voice' || last?.type === 'audio' ? <Mic size={12} color="#3A4060" /> : null}
+            {last?.type === 'voice' || last?.type === 'audio' ? <Mic size={12} color="#7C86AE" /> : null}
             <Text className="flex-1 text-sm text-brand-muted" numberOfLines={1}>
               {preview}
             </Text>

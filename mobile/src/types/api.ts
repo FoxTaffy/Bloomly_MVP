@@ -162,3 +162,24 @@ export interface AppNotification {
   meta: Record<string, unknown> | null;
   sender: { id: string; username: string; display_name: string | null; avatar_url: string | null; badge_type: string | null } | null;
 }
+
+export interface UserSummary {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  is_verified: boolean;
+  verification_type: string | null;
+}
+
+export interface Comment {
+  id: string;
+  post_id: string;
+  parent_id: string | null;
+  content: string;
+  created_at: string;
+  author: PostAuthor | null;
+  group: { id: string; slug: string; name: string; avatar_url: string | null } | null;
+  _count: { replies: number };
+  replies?: Comment[];
+}

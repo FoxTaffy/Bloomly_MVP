@@ -16,7 +16,7 @@ module.exports = {
           bg: '#16192F',
           card: '#1F223C',
           border: '#2A2D45',
-          muted: '#3A4060',
+          muted: '#9AA3C7',
           offwhite: '#F9FAFD',
           accent: '#4C67CF',
           'accent-plus': '#31458F',

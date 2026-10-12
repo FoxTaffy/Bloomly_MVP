@@ -41,7 +41,7 @@ export function EventCard({
       <View className="p-4">
         <Text className="mb-1 text-lg font-extrabold text-brand-offwhite">{event.title}</Text>
         <View className="mb-3 flex-row items-center gap-1.5">
-          <Calendar size={14} color="#3A4060" />
+          <Calendar size={14} color="#7C86AE" />
           <Text className="text-sm text-brand-muted">
             {dateLabel} · {timeLabel}
           </Text>

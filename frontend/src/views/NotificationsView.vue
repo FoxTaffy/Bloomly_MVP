@@ -8,6 +8,7 @@ import { useWarningModalStore } from '@/stores/warningModal'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useLangStore } from '@/stores/lang'
 import { isDenNotification, denNotificationKey } from '@/lib/denNotifications'
+import { notifBadgeIcon, notifBadgeColor } from '@/lib/notifVisuals'
 
 const warningModal = useWarningModalStore()
 const langStore = useLangStore()
@@ -157,24 +158,34 @@ onMounted(fetchAll)
         <div v-else class="space-y-1.5">
           <component :is="notifHref(n) ? 'router-link' : 'div'" v-for="n in notifications" :key="n.id"
             :to="notifHref(n) ?? undefined"
-            class="flex items-start gap-3 px-4 py-3 rounded-2xl cursor-pointer transition-colors"
+            class="group relative flex items-start gap-3.5 pl-5 pr-4 py-3.5 rounded-2xl cursor-pointer transition-colors overflow-hidden"
             :class="[
               n.type === 'automod_warn' ? 'bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/30' :
-              !n.is_read ? 'bg-brand-accent/5 hover:bg-brand-accent/10' : 'bg-brand-card hover:bg-white/5 border border-brand-border',
+              !n.is_read ? 'bg-brand-accent/10 hover:bg-brand-accent/15 border border-brand-accent/20' : 'bg-brand-card hover:bg-white/[0.04] border border-brand-border',
             ]"
             @click="onClick(n)">
-            <div v-if="isAutomodNotif(n)" class="w-10 h-10 rounded-full bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center flex-shrink-0">
-              <span class="text-white font-black text-sm select-none" style="letter-spacing:-1px">B</span>
+            <!-- Unread stripe -->
+            <span v-if="!n.is_read" class="absolute left-0 top-3 bottom-3 w-[3px] rounded-full bg-brand-accent" />
+
+            <div class="relative flex-shrink-0">
+              <div v-if="isAutomodNotif(n)" class="w-11 h-11 rounded-full bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center ring-1 ring-white/10">
+                <span class="text-white font-black text-sm select-none" style="letter-spacing:-1px">B</span>
+              </div>
+              <img v-else :src="identityAvatar(n) || '/icons/badges/NN.jpg'"
+                class="w-11 h-11 rounded-full object-cover ring-1 ring-brand-border" @error="onAvatarError" />
+              <div class="absolute -bottom-1 -right-1 w-[22px] h-[22px] rounded-full ring-2 ring-brand-card flex items-center justify-center text-white shadow-sm"
+                :class="notifBadgeColor(n.type)">
+                <BIcon :name="notifBadgeIcon(n.type)" class="w-3 h-3" />
+              </div>
             </div>
-            <img v-else :src="identityAvatar(n) || '/icons/badges/NN.jpg'"
-              class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0" @error="onAvatarError" />
-            <div class="min-w-0 flex-1">
+
+            <div class="min-w-0 flex-1 pt-0.5">
               <p v-if="isAutomodNotif(n)" class="text-sm text-white leading-snug font-semibold">{{ automodMessage(n) }}</p>
-              <p v-else class="text-sm text-white leading-snug">
-                <span class="font-semibold">{{ identityName(n) }}</span>
+              <p v-else class="text-sm leading-snug" :class="n.is_read ? 'text-white/75' : 'text-white'">
+                <span class="font-bold text-white">{{ identityName(n) }}</span>
                 {{ ' ' }}{{ notifTypeLabel(n.type) }}
               </p>
-              <p class="text-xs text-white/40 mt-0.5">{{ formatDate(n.created_at) }}</p>
+              <p class="text-[11px] text-white/35 mt-1 tabular-nums">{{ formatDate(n.created_at) }}</p>
               <!-- Relationship request -->
               <div v-if="n.type === 'RELATIONSHIP_REQUEST' && !n._relDone" class="flex gap-2 mt-2 max-w-xs">
                 <button @click.stop.prevent="acceptRelationship(n)" :disabled="relActionLoading[n.id]"
@@ -189,7 +200,6 @@ onMounted(fetchAll)
               <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'accepted'" class="text-xs text-pink-400 mt-1 font-semibold">❤️ Принято</p>
               <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'declined'" class="text-xs text-white/40 mt-1">Отклонено</p>
             </div>
-            <div v-if="!n.is_read" class="w-2 h-2 bg-brand-accent rounded-full flex-shrink-0 mt-2"></div>
           </component>
         </div>
       </main>

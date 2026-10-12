@@ -12,8 +12,8 @@ export default function DiscoverScreen() {
       <View className="px-4 py-2">
         <Text className="mb-4 text-2xl font-extrabold text-brand-offwhite">Поиск</Text>
         <View className="mb-6 flex-row items-center gap-2 rounded-2xl border border-brand-border bg-brand-card px-4 py-3">
-          <Search size={18} color="#3A4060" />
-          <TextInput placeholder="Найти людей, теги, посты" placeholderTextColor="#3A4060" className="flex-1 text-brand-offwhite" />
+          <Search size={18} color="#7C86AE" />
+          <TextInput placeholder="Найти людей, теги, посты" placeholderTextColor="#7C86AE" className="flex-1 text-brand-offwhite" />
         </View>
         <Text className="mb-3 text-sm font-semibold text-brand-muted">В ТРЕНДЕ</Text>
       </View>
