@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import {
-  getStatsHandler, getUsersHandler, updateUserRoleHandler, updateUserSubscriptionHandler, deleteUserHandler,
+  getStatsHandler, getUsersHandler, updateUserRoleHandler, updateUserSubscriptionHandler, updateUserProfileHandler, deleteUserHandler,
   getArchivedUsersHandler, getFrozenUsersHandler, restoreUserHandler,
   getPostsAdminHandler, deletePostAdminHandler,
   getReportsHandler, submitReportHandler, resolveReportHandler, resolveReportsBatchHandler, resolveReportIssueHandler,
