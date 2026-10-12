@@ -595,6 +595,14 @@ export const groupService = {
     });
   },
 
+  async assertGroupMember(groupId: string, userId: string) {
+    const member = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      select: { role: true },
+    });
+    if (!member) throw Object.assign(new Error('Чат доступен только участникам группы'), { statusCode: 403 });
+  },
+
   async removeMember(groupId: string, requesterId: string, targetUserId: string) {
     const target = await prisma.groupMember.findUnique({
       where: { group_id_user_id: { group_id: groupId, user_id: targetUserId } },

@@ -27,6 +27,7 @@ import { stickersRoutes } from './modules/stickers/routes.js';
 import { shopRoutes } from './modules/shop/routes.js';
 import { activitiesRoutes } from './modules/activities/routes.js';
 import { automodRoutes } from './modules/automod/routes.js';
+import { moderateGroupMessage } from './modules/automod/service.js';
 import { automationRoutes } from './modules/automation/routes.js';
 import { seoRoutes } from './modules/seo/routes.js';
 import { updatesRoutes } from './modules/updates/routes.js';
@@ -337,7 +338,10 @@ fastify.register(async function (fastify) {
           const { groupId, content } = msg;
           if (!groupId || !content) return;
           try {
+            await groupService.assertGroupMember(groupId as string, authedUserId);
             const saved = await groupService.sendGroupMessage(groupId as string, authedUserId, (content as string).trim());
+            // fire-and-forget automod check, как в REST (sendGroupMessageHandler)
+            moderateGroupMessage(authedUserId).catch((err) => console.error('[AUTOMOD] moderateGroupMessage error:', err));
             const members = await prisma.groupMember.findMany({ where: { group_id: groupId as string }, select: { user_id: true } });
             for (const m of members) {
               messageSubscriptions.push(m.user_id, { type: 'group_message', groupId, message: saved });

@@ -241,6 +241,7 @@ model EmailOtp {
   purpose    String   @db.VarChar(30)
   expires_at DateTime
   used       Boolean  @default(false)
+  attempts   Int      @default(0)
   created_at DateTime @default(now())
 
   @@index([email, purpose])

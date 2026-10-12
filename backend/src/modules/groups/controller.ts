@@ -783,6 +783,7 @@ export const sendGroupMessageHandler = async (
     const { id: userId } = request.user as JwtUser;
     const { text } = request.body;
     if (!text?.trim()) return fail(reply, 400, 'EMPTY_MESSAGE', 'Message text is required');
+    await groupService.assertGroupMember(request.params.id, userId);
     const msg = await groupService.sendGroupMessage(request.params.id, userId, text.trim());
     // fire-and-forget automod check (does not block the response)
     moderateGroupMessage(userId).catch((err) => console.error('[AUTOMOD] moderateGroupMessage error:', err));
