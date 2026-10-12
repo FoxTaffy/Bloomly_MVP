@@ -158,6 +158,10 @@ export async function uploadFile(
     throw new Error('uploadFile принимает только изображения; видео и аудио — через uploadStreamedFile');
   }
 
+  if (!mimeType.startsWith('image/')) {
+    throw new Error('uploadFile принимает только изображения; видео и аудио — через uploadStreamedFile');
+  }
+
   let finalBuffer = buffer;
   let finalMimeType = mimeType;
   let finalExt = path.extname(originalName).toLowerCase() || '.bin';
