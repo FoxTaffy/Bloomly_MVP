@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } 
 import {
   listListingsHandler, getListingHandler, createListingHandler, updateListingHandler,
   deleteListingHandler, getMyListingsHandler, placeBidHandler, getBidsHandler,
-  buyRaffleTicketHandler, getCommentsHandler, addCommentHandler, deleteCommentHandler,
+  buyRaffleTicketHandler, drawRaffleHandler, getCommentsHandler, addCommentHandler, deleteCommentHandler,
   getTrustHandler, createReviewHandler, getListingReviewsHandler, getSellerReviewsHandler,
   deleteReviewHandler, getWeeklyTopHandler, recalcWeeklyTopHandler, getTrendingTagsHandler,
   addToWishlistHandler, removeFromWishlistHandler, getMyWishlistHandler,
@@ -38,7 +38,7 @@ export async function dealersDenRoutes(fastify: FastifyInstance) {
   // ── Listings ──
   fastify.get('/',              tryAuth, listListingsHandler as any);
   fastify.get('/me',    auth,   getMyListingsHandler as any);
-  fastify.get('/:id',           getListingHandler as any);
+  fastify.get('/:id',           tryAuth, getListingHandler as any);
   fastify.post('/',     auth,   createListingHandler as any);
   fastify.patch('/:id', { onRequest: [fastify.authenticate], config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, updateListingHandler as any);
   fastify.delete('/:id', auth,  deleteListingHandler as any);
@@ -47,6 +47,7 @@ export async function dealersDenRoutes(fastify: FastifyInstance) {
   fastify.post('/:id/bid',    auth, placeBidHandler as any);
   fastify.get('/:id/bids',         getBidsHandler as any);
   fastify.post('/:id/ticket', auth, buyRaffleTicketHandler as any);
+  fastify.post('/:id/draw',   auth, drawRaffleHandler as any);
 
   // ── Comments ──
   fastify.get('/:id/comments',         getCommentsHandler as any);
@@ -63,7 +64,7 @@ export async function dealersDenRoutes(fastify: FastifyInstance) {
   fastify.delete('/reviews/:reviewId',       auth, deleteReviewHandler as any);
 
   // ── Weekly Top ──
-  fastify.get('/tags/trending',           getTrendingTagsHandler as any);
+  fastify.get('/tags/trending',           tryAuth, getTrendingTagsHandler as any);
   fastify.get('/weekly-top',              getWeeklyTopHandler as any);
   fastify.post('/weekly-top/recalc', adminOnly, recalcWeeklyTopHandler as any);
 

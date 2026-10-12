@@ -9,6 +9,9 @@ import type {
 import prisma from '../../config/prisma.js';
 import { isAdmin as isAdminRole } from '../../lib/roles.js';
 import { requestIsAdult } from '../../lib/age.js';
+import { validateListingInput } from './validation.js';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ── Listings ──────────────────────────────────────────────────────────────────
 
@@ -16,7 +19,8 @@ export async function listListingsHandler(req: FastifyRequest, reply: FastifyRep
   try {
     const query = req.query as GetListingsQuery;
     if (!requestIsAdult((req as any).user)) query.excludeNsfw = '1';
-    const result = await dealersDenService.list(query);
+    const viewerId = (req as any).user?.id as string | undefined;
+    const result = await dealersDenService.list(query, viewerId);
     return reply.send({ success: true, data: result });
   } catch (err) {
     req.log.error(err);
@@ -26,9 +30,10 @@ export async function listListingsHandler(req: FastifyRequest, reply: FastifyRep
 
 export async function getListingHandler(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as { id: string };
+  if (!UUID_RE.test(id)) return reply.status(404).send({ success: false, error: 'Listing not found' });
   const currentUserId = (req as any).user?.id as string | undefined;
   try {
-    const listing = await dealersDenService.getById(id, currentUserId);
+    const listing = await dealersDenService.getById(id, currentUserId, requestIsAdult((req as any).user));
     if (!listing) return reply.status(404).send({ success: false, error: 'Listing not found' });
     return reply.send({ success: true, data: { listing } });
   } catch (err) {
@@ -54,6 +59,8 @@ export async function createListingHandler(req: FastifyRequest, reply: FastifyRe
   if (input.category === 'avatar_frame') {
     return reply.status(400).send({ success: false, error: 'Рамки для аватара создаются через отдельную форму загрузки рамки' });
   }
+  const invalid = validateListingInput(req.body as Record<string, any>, 'create');
+  if (invalid) return reply.status(400).send({ success: false, error: invalid });
   try {
     const listing = await dealersDenService.create(user.id, input);
     return reply.status(201).send({ success: true, data: { listing } });
@@ -66,7 +73,10 @@ export async function createListingHandler(req: FastifyRequest, reply: FastifyRe
 export async function updateListingHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = (req as any).user as { id: string };
   const { id } = req.params as { id: string };
+  if (!UUID_RE.test(id)) return reply.status(404).send({ success: false, error: 'Listing not found or not yours' });
   const input = req.body as UpdateListingInput;
+  const invalid = validateListingInput(input as Record<string, any>, 'update');
+  if (invalid) return reply.status(400).send({ success: false, error: invalid });
   try {
     const listing = await dealersDenService.update(id, user.id, input);
     if (!listing) return reply.status(404).send({ success: false, error: 'Listing not found or not yours' });
@@ -144,10 +154,31 @@ export async function buyRaffleTicketHandler(req: FastifyRequest, reply: Fastify
     return reply.send({ success: true, data: { listing } });
   } catch (err: any) {
     const msg: string = err?.message ?? '';
+    if (msg === 'LISTING_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Розыгрыш не найден' });
+    if (msg === 'CANNOT_BUY_OWN') return reply.status(403).send({ success: false, error: 'Нельзя купить билет в свой розыгрыш' });
+    if (msg === 'ALREADY_HAS_TICKET') return reply.status(409).send({ success: false, error: 'Вы уже купили билет в этом розыгрыше: один билет на человека' });
     if (msg === 'RAFFLE_FULL') return reply.status(409).send({ success: false, error: 'Все билеты разобраны' });
     if (msg === 'SELLER_FROZEN') return reply.status(403).send({ success: false, error: 'Аккаунт продавца заморожен в Ярмарке' });
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to buy ticket' });
+  }
+}
+
+export async function drawRaffleHandler(req: FastifyRequest, reply: FastifyReply) {
+  const user = (req as any).user as { id: string };
+  const { id } = req.params as { id: string };
+  if (!UUID_RE.test(id)) return reply.status(404).send({ success: false, error: 'Розыгрыш не найден' });
+  try {
+    const listing = await dealersDenService.drawRaffle(id, user.id);
+    return reply.send({ success: true, data: { listing } });
+  } catch (err: any) {
+    const msg: string = err?.message ?? '';
+    if (msg === 'LISTING_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Розыгрыш не найден' });
+    if (msg === 'NOT_SELLER') return reply.status(403).send({ success: false, error: 'Провести розыгрыш может только продавец' });
+    if (msg === 'LISTING_INACTIVE') return reply.status(409).send({ success: false, error: 'Розыгрыш уже завершён или не активен' });
+    if (msg === 'NO_TICKETS') return reply.status(409).send({ success: false, error: 'Пока никто не купил билет' });
+    req.log.error(err);
+    return reply.status(500).send({ success: false, error: 'Failed to draw raffle' });
   }
 }
 
@@ -266,7 +297,7 @@ export async function deleteReviewHandler(req: FastifyRequest, reply: FastifyRep
 
 export async function getTrendingTagsHandler(req: FastifyRequest, reply: FastifyReply) {
   try {
-    const tags = await dealersDenService.getTrendingTags();
+    const tags = await dealersDenService.getTrendingTags(requestIsAdult((req as any).user));
     return reply.send({ success: true, data: { tags } });
   } catch (err) {
     req.log.error(err);

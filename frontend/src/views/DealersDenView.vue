@@ -13,6 +13,7 @@ import BIcon        from '@/components/BIcon.vue'
 import MediaUpload  from '@/components/MediaUpload.vue'
 import DenWeeklyTop from '@/components/DenWeeklyTop.vue'
 import SubmitFrameModal from '@/components/SubmitFrameModal.vue'
+import DenCountdown from '@/components/DenCountdown.vue'
 
 const router = useRouter()
 const route  = useRoute()
@@ -59,7 +60,7 @@ const CATS = computed(() => [
   { key: 'badge',   label: langStore.t.dealersDenCatBadges, icon: 'Award'    },
   { key: 'print',   label: langStore.t.dealersDenCatPrints, icon: 'Printer'  },
   { key: 'music',   label: langStore.t.dealersDenCatMusic, icon: 'Music'     },
-  { key: 'craft',   label: 'Handmade',                    icon: 'Scissors'   },
+  { key: 'craft',   label: langStore.t.dealersDenCatCraft, icon: 'Scissors'   },
   { key: 'merch',   label: langStore.t.dealersDenCatMerch, icon: 'Shirt'     },
   { key: 'avatar_frame', label: langStore.t.dealersDenCatFrame, icon: 'CircleDashed' },
   { key: 'other',   label: langStore.t.other,             icon: 'Package'    },
@@ -96,25 +97,39 @@ function onSearchInput() {
 }
 
 // ── Listings ──────────────────────────────────────────────────────────────────
+// "My listings" is loaded in full, so the category/kind/type/search filters are applied here.
+function matchesFilters(l: DealerListing) {
+  if (selectedKind.value && l.listing_kind !== selectedKind.value) return false
+  if (selectedCategory.value !== 'all' && l.category !== selectedCategory.value) return false
+  if (selectedType.value && l.type !== selectedType.value) return false
+  const q = searchQuery.value.trim().toLowerCase()
+  if (q && !l.title.toLowerCase().includes(q) && !(l.description ?? '').toLowerCase().includes(q) && !l.tags.includes(q)) return false
+  return true
+}
+
 const displayListings = computed<DealerListing[]>(() => {
-  if (activeTab.value === 'my') return store.myListings
+  if (activeTab.value === 'my') return store.myListings.filter(matchesFilters)
   return store.listings
 })
 
+function listingsFilters() {
+  return {
+    category:    selectedCategory.value !== 'all' ? selectedCategory.value as any : undefined,
+    type:        selectedType.value  || undefined,
+    listingKind: selectedKind.value  || undefined,
+    search:      searchQuery.value || undefined,
+    sort:        selectedSort.value !== 'newest' ? selectedSort.value : undefined,
+  }
+}
+
 async function loadData() {
-  const isStickerCat = selectedCategory.value === 'sticker'
   await Promise.all([
-    store.loadListings({
-      category:    !isStickerCat && selectedCategory.value !== 'all' ? selectedCategory.value as any : undefined,
-      type:        selectedType.value  || undefined,
-      listingKind: selectedKind.value  || undefined,
-      search:      isStickerCat ? 'sticker' : (searchQuery.value || undefined),
-      sort:        selectedSort.value !== 'newest' ? selectedSort.value : undefined,
-      // NSFW показываем в ленте (блюрим на фронте)
-    }),
+    store.loadListings(listingsFilters()),
     auth.user ? store.loadMyListings() : Promise.resolve(),
   ])
 }
+
+function loadMore() { store.loadMoreListings(listingsFilters()) }
 
 // Clicking a #hashtag chip (here or on a listing's detail page) lands here via
 // ?search=<tag> — the same free-text search already OR-matches against tags server-side.
@@ -154,39 +169,17 @@ function selectKind(k: string)       { selectedKind.value = k as any; loadData()
 // ── Countdown timer ────────────────────────────────────────────────────────────
 const now = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval>
-onMounted(() => { clockTimer = setInterval(() => { now.value = Date.now() }, 1000) })
+onMounted(() => { clockTimer = setInterval(() => { now.value = Date.now() }, 15000) })
 onUnmounted(() => { clearInterval(clockTimer); clearTimeout(searchTimer) })
 
-function formatCountdown(endsAt: string | null): string {
-  if (!endsAt) return ''
-  const diff = new Date(endsAt).getTime() - now.value
-  if (diff <= 0) return langStore.t.dealersDenAuctionEnded
-  const d = Math.floor(diff / 86400000)
-  const h = Math.floor((diff % 86400000) / 3600000)
-  const m = Math.floor((diff % 3600000) / 60000)
-  const s = Math.floor((diff % 60000) / 1000)
-  if (d > 0) return `${d}${langStore.t.dealersDenDayAbbr} ${h}${langStore.t.dealersDenHourAbbr}`
-  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
-  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
-}
-
-function isAuctionHot(endsAt: string | null) {
-  if (!endsAt) return false
-  return (new Date(endsAt).getTime() - now.value) < 3600000
+// Auctions and YCH stop accepting bids once their end time passes (the server rejects them too).
+// Only the "ended" check reads this clock, so 15 seconds is plenty; live countdowns tick in DenCountdown.
+function isAuctionEnded(l: DealerListing) {
+  return !!l.auction_ends_at && new Date(l.auction_ends_at).getTime() <= now.value
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const CURRENCIES = ['USD', 'EUR', 'RUB', 'GBP', 'JPY', 'CNY']
-const CAT_LABELS = computed<Record<string, string>>(() => ({
-  art: langStore.t.dealersDenCatArt, fursuit: langStore.t.fursuitTab, badge: langStore.t.dealersDenCatBadge, print: langStore.t.dealersDenCatPrint,
-  music: langStore.t.dealersDenCatMusic, craft: 'Handmade', merch: langStore.t.dealersDenCatMerch, sticker: langStore.t.dealersDenCatSticker, other: langStore.t.other,
-}))
-const TYPE_LABELS = computed<Record<string, string>>(() => ({ digital: langStore.t.dealersDenTypeDigital, physical: langStore.t.dealersDenTypePhysical, both: langStore.t.dealersDenTypeBoth }))
-const TYPE_COLOR: Record<string, string> = {
-  digital:  'text-brand-accent  bg-brand-accent/10  border-brand-accent/30',
-  physical: 'text-brand-success bg-brand-success/10 border-brand-success/30',
-  both:     'text-brand-yellow  bg-brand-yellow/10  border-brand-yellow/30',
-}
 const KIND_META = computed<Record<string, { label: string; icon: string; color: string; border: string; bg: string }>>(() => ({
   fixed:            { label: langStore.t.dealersDenKindFixed,    icon: 'Tag',         color: 'text-brand-accent',   border: 'border-brand-accent/40',   bg: 'bg-brand-accent/15'   },
   auction:          { label: langStore.t.dealersDenKindAuction,  icon: 'Hammer',      color: 'text-brand-yellow',   border: 'border-brand-yellow/40',   bg: 'bg-brand-yellow/15'   },
@@ -227,6 +220,7 @@ const form = ref({
   category: 'art' as any, type: 'digital' as any, listingKind: 'fixed' as ListingKind,
   images: [] as string[], quantity: 1, isNsfw: false, tags: '', status: 'active' as any,
   auctionEndsAt: '', bidIncrement: 5, autoBuyPrice: 0, raffleMaxTickets: 0,
+  commissionSlotsTotal: 1 as number | '', commissionEtaDays: '' as number | '', commissionFieldsText: '',
 })
 
 function resetForm() {
@@ -235,7 +229,17 @@ function resetForm() {
     category: 'art', type: 'digital', listingKind: 'fixed',
     images: [], quantity: 1, isNsfw: false, tags: '', status: 'active',
     auctionEndsAt: '', bidIncrement: 5, autoBuyPrice: 0, raffleMaxTickets: 0,
+  commissionSlotsTotal: 1 as number | '', commissionEtaDays: '' as number | '', commissionFieldsText: '',
   }
+}
+
+// One field per line; a trailing * marks the field as required.
+function parseFormFields(text: string) {
+  return text.split('\n').map(l => l.trim()).filter(Boolean).map(line => ({
+    label: line.replace(/\*$/, '').trim(),
+    required: line.endsWith('*'),
+    type: 'text',
+  })).filter(f => f.label)
 }
 
 function isFormDirty() { return form.value.title.trim() !== '' || form.value.description.trim() !== '' }
@@ -257,7 +261,7 @@ async function submitCreate() {
   try {
     await store.createListing({
       title: form.value.title, description: form.value.description || undefined,
-      price: form.value.price, currency: form.value.currency,
+      price: Number(form.value.price), currency: form.value.currency,
       category: form.value.category, type: form.value.type,
       listingKind: form.value.listingKind, images: form.value.images,
       quantity: form.value.quantity, isNsfw: form.value.isNsfw,
@@ -267,6 +271,11 @@ async function submitCreate() {
       bidIncrement:     form.value.bidIncrement     || 1,
       autoBuyPrice:     form.value.autoBuyPrice     || undefined,
       raffleMaxTickets: form.value.raffleMaxTickets || undefined,
+      ...(form.value.listingKind === 'commission_queue' ? {
+        commissionSlotsTotal: Number(form.value.commissionSlotsTotal),
+        commissionEtaDays:    form.value.commissionEtaDays === '' ? undefined : Number(form.value.commissionEtaDays),
+        commissionFormFields: parseFormFields(form.value.commissionFieldsText),
+      } : {}),
     })
     showCreateModal.value = false
   } catch (err: any) {
@@ -279,7 +288,10 @@ const showEditModal = ref(false)
 const isUpdating    = ref(false)
 const editError     = ref('')
 const editingId     = ref('')
-const editForm      = ref({ title: '', description: '', price: 0, currency: 'USD', quantity: 1, status: 'active' as any })
+const editForm      = ref({ title: '', description: '', price: 0, currency: 'USD', quantity: 1, status: 'active' as any, tags: '', isNsfw: false })
+// Photos: already-saved ones (removable) plus anything uploaded in this session.
+const editKeptImages = ref<string[]>([])
+const editNewImages  = ref<string[]>([])
 
 function openEdit(listing: DealerListing) {
   editingId.value = listing.id
@@ -287,7 +299,10 @@ function openEdit(listing: DealerListing) {
     title: listing.title, description: listing.description ?? '',
     price: parseFloat(String(listing.price)), currency: listing.currency,
     quantity: listing.quantity, status: listing.status,
+    tags: listing.tags.join(', '), isNsfw: listing.is_nsfw,
   }
+  editKeptImages.value = [...listing.images]
+  editNewImages.value  = []
   showEditModal.value = true
 }
 async function tryCloseEdit() {
@@ -302,6 +317,9 @@ async function submitEdit() {
       title: editForm.value.title, description: editForm.value.description,
       price: editForm.value.price, currency: editForm.value.currency,
       quantity: editForm.value.quantity,
+      tags: editForm.value.tags.split(',').map(t => t.trim()).filter(Boolean),
+      isNsfw: editForm.value.isNsfw,
+      images: [...editKeptImages.value, ...editNewImages.value],
     })
     showEditModal.value = false
   } catch (err: any) {
@@ -412,7 +430,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                       Dealers' Den
                     </h1>
                     <p class="text-white/50 text-xs mt-0.5 font-medium">
-                      {{ store.isLoading ? '…' : `${store.listings.length} ${langStore.t.dealersDenListingsCountLabel}` }} &nbsp;·&nbsp; {{ langStore.t.dealersDenMarketplaceTagline }}
+                      {{ store.isLoading ? '…' : `${store.total} ${langStore.t.dealersDenListingsCountLabel}` }} &nbsp;·&nbsp; {{ langStore.t.dealersDenMarketplaceTagline }}
                     </p>
                   </div>
                 </div>
@@ -444,7 +462,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <!-- Stats row -->
             <div class="flex gap-3 mt-5 flex-wrap">
               <div v-for="stat in [
-                { icon: 'ShoppingBag',  label: langStore.t.dealersDenListingsStatLabel, value: store.listings.length },
+                { icon: 'ShoppingBag',  label: langStore.t.dealersDenListingsStatLabel, value: store.total },
                 { icon: 'Hammer',       label: langStore.t.dealersDenStatAuctions,  value: store.listings.filter(l => l.listing_kind === 'auction' || l.listing_kind === 'ych').length },
                 { icon: 'Gift',         label: langStore.t.dealersDenStatRaffles, value: store.listings.filter(l => l.listing_kind === 'raffle').length },
                 { icon: 'ListOrdered',  label: langStore.t.dealersDenStatCommissions,   value: store.listings.filter(l => l.listing_kind === 'commission_queue').length },
@@ -555,7 +573,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
           <h2 class="text-sm font-bold text-white/60 uppercase tracking-widest flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-brand-error animate-pulse inline-block" />
             <BIcon name="Flame" class="w-4 h-4 text-brand-yellow" />
-            Live · {{ langStore.t.dealersDenLabelAuctions }}
+            {{ langStore.t.dealersDenLiveLabel }} · {{ langStore.t.dealersDenLabelAuctions }}
           </h2>
           <div class="flex gap-3 overflow-x-auto scrollbar-none pb-1">
             <div v-for="listing in liveAuctions" :key="listing.id"
@@ -572,10 +590,10 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   <span class="text-[10px] font-extrabold text-brand-yellow leading-none">
                     {{ formatPrice(listing.current_bid ?? listing.price, listing.currency) }}
                   </span>
-                  <span class="text-[9px] font-bold tabular-nums"
-                    :class="isAuctionHot(listing.auction_ends_at) ? 'text-brand-error' : 'text-white/60'">
-                    {{ formatCountdown(listing.auction_ends_at) }}
-                  </span>
+                  <DenCountdown v-slot="{ text, hot }" :ends-at="listing.auction_ends_at">
+                    <span class="text-[9px] font-bold tabular-nums"
+                      :class="hot ? 'text-brand-error' : 'text-white/60'">{{ text }}</span>
+                  </DenCountdown>
                 </div>
               </div>
               <div class="p-2.5">
@@ -596,7 +614,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <BIcon name="LayoutGrid" class="w-4 h-4 text-brand-accent" />
             {{ activeTab === 'my' ? langStore.t.dealersDenMyListingsLabel : selectedKind ? (KINDS.find(k => k.key === selectedKind)?.label ?? langStore.t.dealersDenCatalogFallback) : langStore.t.dealersDenAllListingsLabel }}
           </h2>
-          <span class="text-xs text-white/35 font-medium">{{ displayListings.length }} {{ langStore.t.dealersDenPiecesAbbr }}</span>
+          <span class="text-xs text-white/35 font-medium">{{ activeTab === 'my' ? displayListings.length : store.total }} {{ langStore.t.dealersDenPiecesAbbr }}</span>
         </div>
 
         <!-- ═══════════════════════════════════════════
@@ -691,14 +709,14 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
               <!-- Auction countdown bottom-right -->
               <div v-if="(listing.listing_kind === 'auction' || listing.listing_kind === 'ych') && !isSoldOut(listing)" class="absolute bottom-2 right-2">
-                <span class="text-[9px] font-extrabold tabular-nums px-2 py-0.5 rounded-full backdrop-blur-sm"
-                  :class="isAuctionHot(listing.auction_ends_at) ? 'bg-brand-error/90 text-white' : 'bg-black/60 text-white/80'">
-                  {{ formatCountdown(listing.auction_ends_at) || '—' }}
-                </span>
+                <DenCountdown v-slot="{ text, hot }" :ends-at="listing.auction_ends_at">
+                  <span class="text-[9px] font-extrabold tabular-nums px-2 py-0.5 rounded-full backdrop-blur-sm"
+                    :class="hot ? 'bg-brand-error/90 text-white' : 'bg-black/60 text-white/80'">{{ text || '—' }}</span>
+                </DenCountdown>
               </div>
 
               <!-- My controls -->
-              <div v-if="activeTab === 'my'" class="absolute bottom-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity" @click.stop>
+              <div v-if="activeTab === 'my'" class="absolute bottom-2 right-2 flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" @click.stop>
                 <button @click="openEdit(listing)"
                   class="w-7 h-7 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-brand-accent transition-all">
                   <BIcon name="Pencil" class="w-3.5 h-3.5 text-white" />
@@ -735,11 +753,11 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                     <p class="text-[8px] text-white/30 mt-0.5">{{ listing.bid_count ?? 0 }} {{ langStore.t.dealersDenBidsCountSuffix }}</p>
                   </div>
                   <div class="flex flex-col items-end gap-1.5">
-                    <span class="text-[9px] font-extrabold tabular-nums leading-none"
-                      :class="isAuctionHot(listing.auction_ends_at) ? 'text-brand-error' : 'text-white/50'">
-                      {{ formatCountdown(listing.auction_ends_at) || '—' }}
-                    </span>
-                    <button v-if="!isSoldOut(listing)" @click.stop="openBidModal(listing, $event)"
+                    <DenCountdown v-slot="{ text, hot }" :ends-at="listing.auction_ends_at">
+                      <span class="text-[9px] font-extrabold tabular-nums leading-none"
+                        :class="hot ? 'text-brand-error' : 'text-white/50'">{{ text || '—' }}</span>
+                    </DenCountdown>
+                    <button v-if="!isSoldOut(listing) && !isAuctionEnded(listing)" @click.stop="openBidModal(listing, $event)"
                       class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-white shadow-sm transition-all hover:opacity-90 active:scale-95"
                       style="background: linear-gradient(135deg, #FFC01F, #E76F51)">
                       <BIcon name="Hammer" class="w-3 h-3" /> {{ langStore.t.dealersDenBidWord }}
@@ -783,14 +801,14 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                     <div>
                       <p class="text-[8px] text-white/35 uppercase tracking-wider leading-none mb-0.5">{{ langStore.t.dealersDenBidWord }}</p>
                       <p class="text-xs font-black text-brand-purple tabular-nums leading-none">{{ formatPrice(listing.current_bid ?? listing.price, listing.currency) }}</p>
-                      <p v-if="listing.auto_buy_price" class="text-[8px] text-brand-yellow/70 mt-0.5 font-bold">AB: {{ formatPrice(listing.auto_buy_price, listing.currency) }}</p>
+                      <p v-if="listing.auto_buy_price" class="text-[8px] text-brand-yellow/70 mt-0.5 font-bold">{{ langStore.t.dealersDenBuyNowShort }}: {{ formatPrice(listing.auto_buy_price, listing.currency) }}</p>
                     </div>
-                    <button v-if="!isSoldOut(listing)" @click.stop="openBidModal(listing, $event)"
+                    <button v-if="!isSoldOut(listing) && !isAuctionEnded(listing)" @click.stop="openBidModal(listing, $event)"
                       class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-white shadow-sm transition-all hover:opacity-90 active:scale-95"
                       style="background: linear-gradient(135deg, #CD83F5, #7C3AED)">
                       <BIcon name="Paintbrush" class="w-3 h-3" /> {{ langStore.t.dealersDenSlotBtn }}
                     </button>
-                    <span v-else class="text-[9px] font-bold text-brand-error/70">{{ langStore.t.dealersDenAllTaken }}</span>
+                    <span v-else class="text-[9px] font-bold text-brand-error/70">{{ isAuctionEnded(listing) ? langStore.t.dealersDenAuctionEnded : langStore.t.dealersDenAllTaken }}</span>
                   </div>
                 </div>
               </div>
@@ -848,6 +866,31 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               </div>
             </div>
 
+            <!-- ── COMMISSION QUEUE ── -->
+            <div v-else-if="listing.listing_kind === 'commission_queue'" class="flex flex-col">
+              <div class="px-3 pt-2.5 pb-1.5">
+                <h3 class="font-extrabold text-white text-xs leading-tight line-clamp-1">{{ listing.title }}</h3>
+                <div class="flex items-center gap-1 mt-0.5">
+                  <span class="text-[10px] text-violet-300/80 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
+                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                </div>
+              </div>
+              <div class="mx-2 mb-2 rounded-xl px-2.5 py-2 flex items-center justify-between gap-2"
+                style="background: rgba(167,139,250,0.08); border: 1px solid rgba(167,139,250,0.2)">
+                <div>
+                  <p class="text-[8px] text-white/35 uppercase tracking-wider leading-none mb-0.5">{{ langStore.t.dealersDenCommissionSlotsLabel }}</p>
+                  <p class="text-sm font-black text-violet-300 tabular-nums leading-none">
+                    {{ listing.commission_slots_total == null ? '∞' : Math.max(0, listing.commission_slots_total - listing.commission_slots_taken) }}
+                    <span class="text-[8px] font-bold text-white/35">{{ langStore.t.dealersDenCommissionSlotsFree }}</span>
+                  </p>
+                </div>
+                <div class="text-right">
+                  <p class="text-xs font-black text-violet-300 tabular-nums leading-none">{{ formatPrice(listing.price, listing.currency) }}</p>
+                  <p v-if="listing.commission_eta_days != null" class="text-[8px] text-white/30 mt-0.5">{{ langStore.t.dealersDenCommissionEtaLabel }}: {{ listing.commission_eta_days }}</p>
+                </div>
+              </div>
+            </div>
+
             <!-- ── FIXED (default) ── -->
             <div v-else class="p-3">
               <div class="flex items-start justify-between gap-2">
@@ -873,7 +916,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                     <span v-if="listing.quantity > 1" class="text-[9px] text-brand-success/80 font-medium tabular-nums">
                       <BIcon name="Package" class="w-2.5 h-2.5 inline" /> {{ listing.quantity - (listing.quantity_sold ?? 0) }} {{ langStore.t.dealersDenPiecesAbbr }}
                     </span>
-                    <span v-else-if="listing.price === 0" class="text-[9px] font-bold text-brand-success">{{ langStore.t.subFree }}</span>
+                    <span v-else-if="parseFloat(String(listing.price)) === 0" class="text-[9px] font-bold text-brand-success">{{ langStore.t.subFree }}</span>
                   </template>
                 </div>
               </div>
@@ -887,6 +930,14 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- Next page of the catalogue (browse only; "my listings" is loaded in full) -->
+        <div v-if="activeTab === 'browse' && store.listings.length < store.total" class="flex justify-center">
+          <button @click="loadMore" :disabled="store.isLoadingMore"
+            class="px-6 py-2.5 rounded-full text-sm font-bold bg-brand-card border border-brand-border text-white/70 hover:text-white hover:border-white/20 transition-all disabled:opacity-40">
+            {{ langStore.t.dealersDenLoadMore }}
+          </button>
         </div>
 
       </main>
@@ -977,7 +1028,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
           <h4 class="text-xs font-bold text-white/35 uppercase tracking-wider mb-3">{{ langStore.t.dealersDenStatsTitle }}</h4>
           <div class="flex items-center justify-between">
             <span class="text-xs text-white/45">{{ langStore.t.dealersDenListingsStatLabel }}</span>
-            <span class="text-sm font-bold text-white">{{ store.listings.length }}</span>
+            <span class="text-sm font-bold text-white">{{ store.total }}</span>
           </div>
           <div class="flex items-center justify-between">
             <span class="text-xs text-white/45">{{ langStore.t.dealersDenLiveAuctionsStatLabel }}</span>
@@ -1028,12 +1079,13 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <!-- Kind -->
             <div>
               <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenSaleTypeLabel }}</label>
-              <div class="grid grid-cols-4 gap-2">
+              <div class="grid grid-cols-3 sm:grid-cols-5 gap-2">
                 <button v-for="k in [
                     { key: 'fixed',   icon: 'Tag',        label: langStore.t.dealersDenKindFixed, from: '#3148FF', to: '#4C67CF' },
                     { key: 'auction', icon: 'Hammer',     label: langStore.t.dealersDenKindAuction, from: '#FFC01F', to: '#E76F51' },
                     { key: 'ych',     icon: 'Paintbrush', label: 'YCH',        from: '#CD83F5', to: '#7C3AED' },
                     { key: 'raffle',  icon: 'Gift',       label: langStore.t.dealersDenKindRaffle, from: '#66C770', to: '#059669' },
+                    { key: 'commission_queue', icon: 'ListOrdered', label: langStore.t.dealersDenKindCommissions, from: '#a78bfa', to: '#7c3aed' },
                   ]" :key="k.key"
                   @click="form.listingKind = k.key as ListingKind"
                   class="relative overflow-hidden rounded-2xl py-3.5 flex flex-col items-center gap-1.5 transition-all border"
@@ -1078,7 +1130,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   <input v-model.number="form.price" type="number" min="0" step="0.01" placeholder="0.00"
                     class="w-full rounded-2xl px-4 py-3 pr-16 text-sm text-white outline-none transition-all" />
                   <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/20 font-bold">
-                    {{ form.price === 0 ? 'FREE' : form.currency }}
+                    {{ Number(form.price) === 0 ? langStore.t.subFree : form.currency }}
                   </span>
                 </div>
               </div>
@@ -1112,6 +1164,31 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenAutoBuyOptionalLabel }}</label>
                 <input v-model.number="form.autoBuyPrice" type="number" min="0" step="0.01" :placeholder="langStore.t.dealersDenAutoBuyPlaceholder"
                   class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
+              </div>
+            </div>
+
+            <!-- Commission queue fields -->
+            <div v-if="form.listingKind === 'commission_queue'"
+              class="bg-violet-400/5 border border-violet-400/15 rounded-2xl p-4 space-y-4">
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenCommissionSlotsLabel }} <span class="text-brand-accent normal-case font-normal">*</span></label>
+                  <input v-model.number="form.commissionSlotsTotal" type="number" min="1" max="1000"
+                    class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenCommissionEtaLabel }}</label>
+                  <input v-model.number="form.commissionEtaDays" type="number" min="0" max="365"
+                    class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">
+                  {{ langStore.t.dealersDenCommissionFieldsLabel }}
+                  <span class="normal-case font-normal text-white/20">{{ langStore.t.dealersDenCommissionFieldsHint }}</span>
+                </label>
+                <textarea v-model="form.commissionFieldsText" rows="3" placeholder="Reference link*&#10;Colour palette"
+                  class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all resize-none" />
               </div>
             </div>
 
@@ -1217,7 +1294,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 class="px-5 py-3 border border-white/8 text-white/40 text-sm font-bold rounded-2xl transition-all hover:bg-white/5 hover:text-white">
                 {{ langStore.t.cancel }}
               </button>
-              <button @click="submitCreate" :disabled="isCreating || !form.title.trim()"
+              <button @click="submitCreate" :disabled="isCreating || !form.title.trim() || String(form.price) === ''"
                 class="flex-1 flex items-center justify-center gap-2 py-3 disabled:opacity-35 disabled:cursor-not-allowed text-white text-sm font-bold rounded-2xl transition-all shadow-lg hover:opacity-90"
                 :style="form.title.trim() ? 'background: linear-gradient(135deg, #3148FF, #4C67CF)' : 'background: rgba(255,255,255,0.06)'">
                 <span v-if="isCreating" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -1268,6 +1345,19 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.fursuitDescLabel }}</label>
               <textarea v-model="editForm.description" rows="3" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all resize-none" />
             </div>
+            <div>
+              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenPhotosLabel }}</label>
+              <div v-if="editKeptImages.length" class="flex gap-2 flex-wrap mb-3">
+                <div v-for="(url, i) in editKeptImages" :key="url" class="relative w-16 h-16 rounded-xl overflow-hidden border border-white/10">
+                  <img :src="url" class="w-full h-full object-cover" />
+                  <button type="button" @click="editKeptImages.splice(i, 1)"
+                    class="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/70 flex items-center justify-center hover:bg-brand-error transition-all">
+                    <BIcon name="X" class="w-3 h-3 text-white" />
+                  </button>
+                </div>
+              </div>
+              <MediaUpload type="posts" :multiple="true" :max-files="20" @uploaded="(urls: string[]) => { editNewImages = urls }" />
+            </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenPriceLabel }}</label>
@@ -1294,6 +1384,22 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   <option value="archived">{{ langStore.t.archiveBtn }}</option>
                 </select>
               </div>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">
+                {{ langStore.t.dealersDenTagsLabel }} <span class="normal-case font-normal text-white/20">{{ langStore.t.dealersDenTagsHint }}</span>
+              </label>
+              <input v-model="editForm.tags" :placeholder="langStore.t.dealersDenTagsPlaceholder"
+                class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all" />
+            </div>
+            <div class="flex items-center justify-between p-4 rounded-2xl bg-brand-error/5 border border-brand-error/15">
+              <p class="text-sm font-bold text-white">{{ langStore.t.dealersDenNsfwContentLabel }}</p>
+              <button type="button" @click="editForm.isNsfw = !editForm.isNsfw"
+                class="w-12 h-6 rounded-full transition-all relative flex-shrink-0"
+                :class="editForm.isNsfw ? 'bg-brand-error' : 'bg-white/10'">
+                <div class="w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all shadow-md"
+                  :class="editForm.isNsfw ? 'left-6' : 'left-0.5'" />
+              </button>
             </div>
             <div class="flex gap-3 pt-1">
               <div v-if="editError" class="w-full text-red-400 text-xs font-medium bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">{{ editError }}</div>
@@ -1350,9 +1456,9 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               </div>
               <div class="text-right">
                 <p class="text-[9px] text-white/30 uppercase tracking-wider mb-1">{{ langStore.t.dealersDenUntilEndLabel }}</p>
-                <p class="text-xl font-black tabular-nums" :class="isAuctionHot(bidListing.auction_ends_at) ? 'text-brand-error' : 'text-white'">
-                  {{ formatCountdown(bidListing.auction_ends_at) || '—' }}
-                </p>
+                <DenCountdown v-slot="{ text, hot }" :ends-at="bidListing?.auction_ends_at ?? null">
+                  <p class="text-xl font-black tabular-nums" :class="hot ? 'text-brand-error' : 'text-white'">{{ text || '—' }}</p>
+                </DenCountdown>
               </div>
             </div>
 

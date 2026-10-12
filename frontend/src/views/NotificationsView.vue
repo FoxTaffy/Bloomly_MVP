@@ -6,8 +6,11 @@ import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import { useWarningModalStore } from '@/stores/warningModal'
 import { onAvatarError } from '@/composables/useAvatarFallback'
+import { useLangStore } from '@/stores/lang'
+import { isDenNotification, denNotificationKey } from '@/lib/denNotifications'
 
 const warningModal = useWarningModalStore()
+const langStore = useLangStore()
 
 const notifications = ref<any[]>([])
 const isLoading = ref(false)
@@ -48,6 +51,7 @@ const automodMessage = (n: any) => {
 }
 
 const notifTypeLabel = (type: string) => {
+  if (isDenNotification(type)) return (langStore.t as any)[denNotificationKey(type)] ?? type
   const map: Record<string, string> = {
     LIKE: 'поставил(а) + вашей публикации', COMMENT: 'прокомментировал(а) вашу публикацию',
     REPAW: 'поставил(а) RePaw вашей публикации', FOLLOW: 'подписался(ась) на вас',

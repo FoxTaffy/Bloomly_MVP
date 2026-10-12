@@ -1006,14 +1006,19 @@ export const messageService = {
 
   /** Find or create the calling user's personal thread with a group. Idempotent. */
   async startGroupDm(groupId: string, userId: string): Promise<{ conversation: any; alreadyExists: boolean }> {
+    const group = await prisma.group.findUnique({ where: { id: groupId }, select: { name: true, avatar_url: true, deleted_at: true } });
+    if (!group || group.deleted_at) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
+    // Route contract is "any member": non-members must not be able to open a thread with the group.
+    if (!(await this._getGroupRole(groupId, userId))) {
+      throw Object.assign(new Error('Написать сообществу могут только участники группы'), { statusCode: 403 });
+    }
+
     const existing = await prisma.conversation.findUnique({
       where: { group_id_group_dm_user_id: { group_id: groupId, group_dm_user_id: userId } },
       include: { participants: { include: { user: { select: senderSelect } } } },
     });
-    if (existing) return { conversation: existing, alreadyExists: true };
-
-    const group = await prisma.group.findUnique({ where: { id: groupId }, select: { name: true, avatar_url: true, deleted_at: true } });
-    if (!group || group.deleted_at) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
+    if (existing && !existing.deleted_at) return { conversation: existing, alreadyExists: true };
+    if (existing) throw Object.assign(new Error('Conversation is no longer available'), { statusCode: 404 });
 
     const conversation = await prisma.conversation.create({
       data: {

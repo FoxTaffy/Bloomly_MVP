@@ -220,9 +220,10 @@ export const getMembersHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const page = parseInt(request.query.page ?? '1', 10);
-    const limit = parseInt(request.query.limit ?? '30', 10);
-    const members = await groupService.getMembers(request.params.id, page, limit);
+    const page = Math.max(1, parseInt(request.query.page ?? '1', 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(request.query.limit ?? '30', 10) || 30));
+    const viewerId = (request.user as JwtUser | undefined)?.id ?? null;
+    const members = await groupService.getMembers(request.params.id, page, limit, viewerId);
     return ok(reply, { members });
   } catch (e: any) {
     return fail(reply, 500, 'MEMBERS_ERROR', e.message);
@@ -239,7 +240,7 @@ export const setMemberRoleHandler = async (
     const member = await groupService.setMemberRole(request.params.id, requesterId, request.params.userId, request.body.role as any);
     return ok(reply, { member });
   } catch (e: any) {
-    const status = /not authorized/i.test(e.message) ? 403 : 400;
+    const status = e.statusCode ?? (/not authorized/i.test(e.message) ? 403 : 400);
     return fail(reply, status, 'SET_ROLE_ERROR', e.message);
   }
 };
@@ -490,7 +491,8 @@ export const getGroupPostsHandler = async (
     const page = parseInt(request.query.page ?? '1', 10);
     const limit = parseInt(request.query.limit ?? '20', 10);
     const hasMedia = request.query.hasMedia === 'true';
-    const posts = await groupService.getGroupPosts(request.params.id, page, limit, hasMedia);
+    const viewerId = (request.user as JwtUser | undefined)?.id ?? null;
+    const posts = await groupService.getGroupPosts(request.params.id, page, limit, hasMedia, viewerId);
     return ok(reply, { posts });
   } catch (e: any) {
     return fail(reply, 500, 'GROUP_POSTS_ERROR', e.message);
@@ -879,7 +881,7 @@ export const createGroupTodoHandler = async (
     const item = await groupService.createTodoItem(request.params.id, { title, description, status });
     return ok(reply, { item }, 201);
   } catch (e: any) {
-    return fail(reply, 500, 'CREATE_TODO_ERROR', e.message);
+    return fail(reply, e.statusCode ?? 500, 'CREATE_TODO_ERROR', e.message);
   }
 };
 
@@ -895,7 +897,7 @@ export const updateGroupTodoHandler = async (
     const item = await groupService.updateTodoItem(request.params.id, request.params.itemId, request.body);
     return ok(reply, { item });
   } catch (e: any) {
-    return fail(reply, 500, 'UPDATE_TODO_ERROR', e.message);
+    return fail(reply, e.statusCode ?? 500, 'UPDATE_TODO_ERROR', e.message);
   }
 };
 

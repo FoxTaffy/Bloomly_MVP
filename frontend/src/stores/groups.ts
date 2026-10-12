@@ -64,6 +64,7 @@ export interface Group {
   is_looking_for_volunteers: boolean
   is_verified: boolean
   category: string | null
+  rubric: string | null
   event_date: string | null
   event_expired_at: string | null
   group_bg_url: string | null

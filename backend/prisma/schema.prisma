@@ -157,6 +157,7 @@ model User {
   denReviewsReceived             DenReview[]               @relation("DenReviewTarget")
   denWeeklyTops                  DenWeeklyTop[]
   denWishlist                    DenWishlist[]
+  denRaffleTickets               DenRaffleTicket[]
   commissionBookings             CommissionBooking[]
   disputesBuyer                  DenDispute[]              @relation("DisputeBuyer")
   disputesSeller                 DenDispute[]              @relation("DisputeSeller")
@@ -910,6 +911,7 @@ model Group {
   is_verified         Boolean   @default(false) // Official / verified community
   category            String?   @db.VarChar(50) // art | cosplay | fandom | dev | music | etc.
   category_changed_at DateTime? // last time category was changed — gates 1x/month cooldown
+  rubric              String?   @db.VarChar(50) // news | brand sub-category picked at creation (separate from category)
 
   // Event lifecycle (type == "event" only) — admin-set date; once past, SOON badges are cleared
   // and plain members are demoted to notification-only subscribers until a new date is set.
@@ -1314,6 +1316,7 @@ model DealerListing {
   comments         DealerListingComment[]
   reviews          DenReview[]
   wishlistItems    DenWishlist[]
+  raffleTickets    DenRaffleTicket[]
   bookings         CommissionBooking[]
   disputes         DenDispute[]
   fairParticipants DenFairParticipant[]
@@ -1422,6 +1425,22 @@ model DenWeeklyTop {
 
   @@unique([user_id, week_start])
   @@index([week_start, rank])
+}
+
+// One row per ticket bought in a raffle. The raffle_tickets_sold counter on DealerListing
+// is kept in step with these rows; the rows are what a winner is drawn from.
+model DenRaffleTicket {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  listing_id String   @db.Uuid
+  buyer_id   String   @db.Uuid
+  created_at DateTime @default(now())
+
+  listing DealerListing @relation(fields: [listing_id], references: [id], onDelete: Cascade)
+  buyer   User          @relation(fields: [buyer_id], references: [id], onDelete: Cascade)
+
+  // One ticket per person per raffle; the DB enforces it so racing purchases can't both succeed.
+  @@unique([listing_id, buyer_id])
+  @@index([listing_id])
 }
 
 model DenWishlist {

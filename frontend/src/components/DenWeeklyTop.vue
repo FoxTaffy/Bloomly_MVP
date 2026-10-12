@@ -2,16 +2,16 @@
   <div class="bg-brand-card border border-brand-border rounded-2xl overflow-hidden">
     <div class="px-4 py-3 border-b border-brand-border flex items-center justify-between">
       <h4 class="text-xs font-bold text-white/35 uppercase tracking-wider flex items-center gap-1.5">
-        <BIcon name="Trophy" class="w-3.5 h-3.5 text-brand-yellow" /> Топ недели
+        <BIcon name="Trophy" class="w-3.5 h-3.5 text-brand-yellow" /> {{ langStore.t.denTopTitle }}
       </h4>
       <span v-if="weekStart" class="text-[10px] text-white/25">{{ weekStart }}</span>
     </div>
 
-    <div v-if="isLoading" class="py-6 text-center text-white/25 text-xs">Загрузка...</div>
+    <div v-if="isLoading" class="py-6 text-center text-white/25 text-xs">{{ langStore.t.denTopLoading }}</div>
 
     <div v-else-if="!top.length" class="py-6 text-center text-white/20 text-xs">
       <BIcon name="TrophyOff" class="w-6 h-6 mx-auto mb-1.5 opacity-20" />
-      Нет данных за эту неделю
+      {{ langStore.t.denTopEmpty }}
     </div>
 
     <div v-else class="divide-y divide-brand-border">
@@ -34,7 +34,7 @@
             {{ entry.user.display_name || entry.user.username }}
           </p>
           <p class="text-[10px] text-white/35 leading-tight">
-            {{ entry.sales_count }} прод. · {{ Number(entry.avg_rating).toFixed(1) }}★
+            {{ entry.sales_count }} {{ langStore.t.denTopSalesSuffix }} · {{ Number(entry.avg_rating).toFixed(1) }}★
           </p>
         </div>
         <span class="text-xs font-black text-brand-accent tabular-nums flex-shrink-0">
@@ -49,8 +49,10 @@
 import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import BIcon from '@/components/BIcon.vue'
+import { useLangStore } from '@/stores/lang'
 import { useDealersDenStore, type DenWeeklyTopEntry } from '../stores/dealersDen'
 
+const langStore = useLangStore()
 const store     = useDealersDenStore()
 const top       = ref<DenWeeklyTopEntry[]>([])
 const weekStart = ref('')

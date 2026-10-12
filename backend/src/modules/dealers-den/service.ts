@@ -1,9 +1,15 @@
+import { randomInt } from 'crypto';
 import prisma from '../../config/prisma.js';
 import type { CreateListingInput, UpdateListingInput, GetListingsQuery, PlaceBidInput, CreateReviewInput, CreateBookingInput, UpdateBookingInput, CreateDisputeInput, ReplyDisputeInput } from './types.js';
 import { REVIEW_TAGS } from './types.js';
 import { recalcDenTrust } from './trust.service.js';
 import { notificationService } from '../notifications/service.js';
 import { deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
+
+// Tags are matched case-insensitively (search lowercases its query), so store them lowercased.
+function normalizeTags(tags: string[] | undefined): string[] {
+  return [...new Set((tags ?? []).map(t => t.trim().toLowerCase()).filter(Boolean))];
+}
 
 const LISTING_SELECT = {
   id: true,
@@ -57,17 +63,21 @@ const LISTING_SELECT = {
 
 export const dealersDenService = {
   // ── list listings ─────────────────────────────────────────────────────────
-  async list(query: GetListingsQuery) {
+  async list(query: GetListingsQuery, viewerId?: string) {
     const page  = Math.max(1, parseInt(query.page  ?? '1',  10));
     const limit = Math.min(50, Math.max(1, parseInt(query.limit ?? '20', 10)));
     const skip  = (page - 1) * limit;
 
     const where: any = { deleted_at: null };
 
-    if (query.status) {
+    // Drafts and archived listings are private to their seller. Other viewers may only see
+    // active listings in the catalogue, and active+sold on a seller's own page.
+    const isOwnList = !!viewerId && query.sellerId === viewerId;
+    if (!isOwnList) {
+      const allowed = query.sellerId ? ['active', 'sold'] : ['active'];
+      where.status = query.status && allowed.includes(query.status) ? query.status : { in: allowed };
+    } else if (query.status) {
       where.status = query.status;
-    } else if (!query.sellerId) {
-      where.status = 'active';
     }
 
     if (query.category)    where.category    = query.category;
@@ -105,23 +115,21 @@ export const dealersDenService = {
   },
 
   // ── trending tags ──────────────────────────────────────────────────────────
-  async getTrendingTags(limit = 12) {
-    const listings = await prisma.dealerListing.findMany({
-      where: { status: 'active', deleted_at: null },
-      select: { tags: true },
-    });
-    const counts = new Map<string, number>();
-    for (const l of listings) {
-      for (const tag of l.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
-    }
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, limit)
-      .map(([tag, count]) => ({ tag, count }));
+  // Aggregated in SQL (no full scan into memory). NSFW listings only feed the tag cloud
+  // for viewers who passed the age gate, so their tag names don't leak to minors.
+  async getTrendingTags(viewerIsAdult = false, limit = 12) {
+    return prisma.$queryRaw<{ tag: string; count: number }[]>`
+      SELECT t AS tag, COUNT(*)::int AS count
+      FROM "DealerListing", unnest("tags") AS t
+      WHERE "status" = 'active' AND "deleted_at" IS NULL
+        AND (${viewerIsAdult}::boolean OR "is_nsfw" = false)
+      GROUP BY t
+      ORDER BY count DESC, t ASC
+      LIMIT ${limit}`;
   },
 
   // ── get single with extended info ─────────────────────────────────────────
-  async getById(id: string, currentUserId?: string) {
+  async getById(id: string, currentUserId?: string, viewerIsAdult = false) {
     const listing = await prisma.dealerListing.findFirst({
       where: { id, deleted_at: null },
       select: {
@@ -137,6 +145,14 @@ export const dealersDenService = {
     });
     if (!listing) return null;
 
+    // Same visibility rules as the catalogue: the seller always sees their own listing,
+    // everyone else gets 404 for drafts/archived and for NSFW lots when not age-verified.
+    const isOwner = !!currentUserId && listing.seller_id === currentUserId;
+    if (!isOwner) {
+      if (!['active', 'sold'].includes(listing.status)) return null;
+      if (listing.is_nsfw && !viewerIsAdult) return null;
+    }
+
     const [wishlistCount, isWishlisted, reviews] = await Promise.all([
       prisma.denWishlist.count({ where: { listing_id: id } }),
       currentUserId ? prisma.denWishlist.findUnique({ where: { user_id_listing_id: { user_id: currentUserId, listing_id: id } } }).then(Boolean) : false,
@@ -148,6 +164,10 @@ export const dealersDenService = {
     for (const r of reviews) for (const t of r.tags) tagCounts[t] = (tagCounts[t] ?? 0) + 1;
     const tags = Object.entries(tagCounts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count);
 
+    const myRaffleTickets = currentUserId && listing.listing_kind === 'raffle'
+      ? await prisma.denRaffleTicket.count({ where: { listing_id: id, buyer_id: currentUserId } })
+      : 0;
+
     const { seller, ...rest } = listing as any;
     return {
       ...rest,
@@ -158,6 +178,7 @@ export const dealersDenService = {
       },
       wishlist_count: wishlistCount,
       is_wishlisted: isWishlisted,
+      my_raffle_tickets: myRaffleTickets,
       review_summary: { avg_rating: avgRating, total: reviews.length, tags },
     };
   },
@@ -182,7 +203,7 @@ export const dealersDenService = {
         images:       input.images          ?? [],
         quantity:     input.quantity        ?? 1,
         is_nsfw:      input.isNsfw          ?? false,
-        tags:         input.tags            ?? [],
+        tags:         normalizeTags(input.tags),
         status:       input.status          ?? 'active',
         // auction fields
         auction_ends_at:    input.auctionEndsAt ? new Date(input.auctionEndsAt) : undefined,
@@ -219,7 +240,7 @@ export const dealersDenService = {
     }
     if (input.quantity    !== undefined) data.quantity    = input.quantity;
     if (input.isNsfw      !== undefined) data.is_nsfw     = input.isNsfw;
-    if (input.tags        !== undefined) data.tags        = input.tags;
+    if (input.tags        !== undefined) data.tags        = normalizeTags(input.tags);
     // Avatar frame listings can only go active/archived via the admin approval flow
     // (avatarFramesService.adminReview) — otherwise a seller could self-publish a
     // never-reviewed frame by just PATCHing status through this generic endpoint.
@@ -373,32 +394,85 @@ export const dealersDenService = {
     });
   },
 
+  // ── raffle ────────────────────────────────────────────────────────────────
+  // Each purchase writes one DenRaffleTicket row and bumps the counter in the same transaction.
+  // The guarded updateMany stops two racing buyers from overselling the last ticket.
+  // Selling out draws the winner straight away; otherwise the seller draws when they choose.
   async buyRaffleTicket(listingId: string, buyerId: string) {
     const listing = await prisma.dealerListing.findFirst({
       where: { id: listingId, listing_kind: 'raffle', status: 'active', deleted_at: null },
     });
     if (!listing) throw new Error('LISTING_NOT_FOUND');
+    if (listing.seller_id === buyerId) throw new Error('CANNOT_BUY_OWN');
     if (listing.raffle_max_tickets && listing.raffle_tickets_sold >= listing.raffle_max_tickets)
       throw new Error('RAFFLE_FULL');
 
     const seller = await prisma.user.findUnique({ where: { id: listing.seller_id }, select: { den_frozen: true } });
     if (seller?.den_frozen) throw new Error('SELLER_FROZEN');
 
-    // Read-then-increment left a TOCTOU window (same class of bug as placeBid): with one
-    // ticket left, two concurrent buyers could both pass the check above and both increment,
-    // overselling past raffle_max_tickets. The WHERE re-checks the sold count still has room
-    // at update time, so only one of two racing requests can win it; the loser gets RAFFLE_FULL
-    // instead of silently overselling.
-    const updateResult = await prisma.dealerListing.updateMany({
-      where: {
-        id: listingId,
-        status: 'active',
-        ...(listing.raffle_max_tickets ? { raffle_tickets_sold: { lt: listing.raffle_max_tickets } } : {}),
-      },
-      data: { raffle_tickets_sold: { increment: 1 } },
+    const sold = await prisma.$transaction(async (tx) => {
+      const r = await tx.dealerListing.updateMany({
+        where: {
+          id: listingId,
+          status: 'active',
+          winner_id: null,
+          ...(listing.raffle_max_tickets ? { raffle_tickets_sold: { lt: listing.raffle_max_tickets } } : {}),
+        },
+        data: { raffle_tickets_sold: { increment: 1 } },
+      });
+      if (r.count === 0) return false;
+      try {
+        await tx.denRaffleTicket.create({ data: { listing_id: listingId, buyer_id: buyerId } });
+      } catch (err: any) {
+        if (err?.code === 'P2002') throw new Error('ALREADY_HAS_TICKET'); // unique(listing_id, buyer_id); rolls back the counter bump
+        throw err;
+      }
+      return true;
     });
-    if (updateResult.count === 0) throw new Error('RAFFLE_FULL');
+    if (!sold) throw new Error('RAFFLE_FULL');
 
+    const updated = await prisma.dealerListing.findUniqueOrThrow({ where: { id: listingId }, select: LISTING_SELECT });
+    if (listing.raffle_max_tickets && updated.raffle_tickets_sold >= listing.raffle_max_tickets) {
+      try {
+        return await dealersDenService.drawRaffle(listingId);
+      } catch {
+        return updated; // someone else drew it first; the listing is already settled
+      }
+    }
+    return updated;
+  },
+
+  // Picks a winner uniformly among ticket rows. Only the seller may draw when called with sellerId;
+  // the automatic draw on sell-out passes no sellerId.
+  async drawRaffle(listingId: string, sellerId?: string) {
+    const listing = await prisma.dealerListing.findFirst({
+      where: { id: listingId, listing_kind: 'raffle', deleted_at: null },
+    });
+    if (!listing) throw new Error('LISTING_NOT_FOUND');
+    if (sellerId && listing.seller_id !== sellerId) throw new Error('NOT_SELLER');
+    if (listing.status !== 'active') throw new Error('LISTING_INACTIVE');
+
+    const count = await prisma.denRaffleTicket.count({ where: { listing_id: listingId } });
+    if (count === 0) throw new Error('NO_TICKETS');
+
+    const ticket = await prisma.denRaffleTicket.findFirst({
+      where: { listing_id: listingId },
+      orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+      skip: randomInt(count),
+      select: { buyer_id: true },
+    });
+    if (!ticket) throw new Error('NO_TICKETS');
+
+    const r = await prisma.dealerListing.updateMany({
+      where: { id: listingId, status: 'active' },
+      data: { status: 'sold', winner_id: ticket.buyer_id },
+    });
+    if (r.count !== 1) throw new Error('LISTING_INACTIVE');
+
+    await recalcDenTrust(listing.seller_id);
+    await notificationService.create({
+      receiverId: ticket.buyer_id, senderId: listing.seller_id, type: 'den_raffle_won', refId: listingId,
+    });
     return prisma.dealerListing.findUniqueOrThrow({ where: { id: listingId }, select: LISTING_SELECT });
   },
 
@@ -827,6 +901,38 @@ export const dealersDenService = {
       ]);
     }
     return stale.length;
+  },
+
+  // ── close ended auctions and YCH (call via cron) ──────────────────────────
+  // Auctions used to stay 'active' forever after their end time: the bid button kept showing
+  // and no winner was ever recorded. Highest bid wins (earliest bid breaks ties); no bids -> archived.
+  async closeExpiredAuctions() {
+    const expired = await prisma.dealerListing.findMany({
+      where: { listing_kind: { in: ['auction', 'ych'] }, status: 'active', deleted_at: null, auction_ends_at: { lte: new Date() } },
+      select: { id: true, seller_id: true },
+    });
+
+    let closed = 0;
+    for (const l of expired) {
+      const topBid = await prisma.dealerBid.findFirst({
+        where: { listing_id: l.id },
+        orderBy: [{ amount: 'desc' }, { created_at: 'asc' }],
+        select: { bidder_id: true },
+      });
+      const r = await prisma.dealerListing.updateMany({
+        where: { id: l.id, status: 'active' },
+        data: topBid
+          ? { status: 'sold', winner_id: topBid.bidder_id }
+          : { status: 'archived' },
+      });
+      if (r.count !== 1) continue; // changed by someone else in the meantime
+      closed++;
+      if (topBid) {
+        await recalcDenTrust(l.seller_id);
+        await notificationService.create({ receiverId: topBid.bidder_id, senderId: l.seller_id, type: 'den_auction_won', refId: l.id });
+      }
+    }
+    return closed;
   },
 
   // ── seller page ───────────────────────────────────────────────────────────

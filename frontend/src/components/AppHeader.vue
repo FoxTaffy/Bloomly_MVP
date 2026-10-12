@@ -13,6 +13,7 @@ import api from '@/api'
 import BIcon from './BIcon.vue'
 import PostCard from './PostCard.vue'
 import PostComments from './PostComments.vue'
+import { isDenNotification, denNotificationKey, DEN_NOTIFICATION_ICONS } from '@/lib/denNotifications'
 
 const props = withDefaults(defineProps<{
   showBack?: boolean
@@ -155,6 +156,7 @@ const notifTypeLabel = (type: string, pronouns?: string | null) => {
     RELATIONSHIP_REQUEST:  { m: 'хочет быть вашим партнёром 💕',  f: 'хочет быть вашим партнёром 💕',  n: 'хочет быть вашим партнёром 💕' },
     RELATIONSHIP_ACCEPTED: { m: 'принял ваш запрос в отношения ❤️', f: 'приняла ваш запрос в отношения ❤️', n: 'принял(а) ваш запрос в отношения ❤️' },
   }
+  if (isDenNotification(type)) return (langStore.t as any)[denNotificationKey(type)] ?? type
   const key = type.toUpperCase()
   // These two use the localized translations dict (all 8 languages) rather than the hardcoded RU map above.
   if (key === 'FOLLOW_POST' || key === 'GROUP_POST') {
@@ -168,6 +170,7 @@ const notifTypeLabel = (type: string, pronouns?: string | null) => {
 }
 
 const notifBadgeIcon = (type: string) => {
+  if (isDenNotification(type)) return DEN_NOTIFICATION_ICONS[type] ?? 'Store'
   const map: Record<string, string> = {
     LIKE: 'Heart', like: 'Heart',
     COMMENT: 'MessageSquare', comment: 'MessageSquare',
