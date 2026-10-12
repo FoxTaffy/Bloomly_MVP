@@ -2282,7 +2282,7 @@ const totalPendingBadge = computed(() => {
 
                   <!-- Evidence attached by the reporter -->
                   <div v-if="folder.reports[0].evidence_urls?.length" class="flex gap-2 mt-2 flex-wrap">
-                    <a v-for="(url, ei) in folder.reports[0].evidence_urls" :key="ei" :href="url" target="_blank" rel="noopener"
+                    <a v-for="(url, ei) in folder.reports[0].evidence_urls" :key="ei" :href="safeHref(url)" target="_blank" rel="noopener noreferrer"
                       class="w-14 h-14 rounded-lg overflow-hidden border border-white/[0.08] flex-shrink-0">
                       <img :src="url" class="w-full h-full object-cover" />
                     </a>
@@ -2431,7 +2431,7 @@ const totalPendingBadge = computed(() => {
                         </p>
                         <p class="text-xs text-white/70 whitespace-pre-wrap">{{ m.body }}</p>
                         <div v-if="m.attachment_urls?.length" class="flex gap-2 mt-2 flex-wrap">
-                          <a v-for="(url, ai) in m.attachment_urls" :key="ai" :href="url" target="_blank" rel="noopener"
+                          <a v-for="(url, ai) in m.attachment_urls" :key="ai" :href="safeHref(url)" target="_blank" rel="noopener noreferrer"
                             class="w-16 h-16 rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
                             <img :src="url" class="w-full h-full object-cover" />
                           </a>

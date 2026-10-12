@@ -482,7 +482,7 @@ const chartData = computed(() => {
               <!-- Author -->
               <div
                 class="bg-brand-bg border border-brand-border rounded-2xl p-4 flex items-center gap-3 cursor-pointer"
-                @click="router.push(`/profile/${pack.author.username}`)">
+                @click="router.push(`/profile/${encodeURIComponent(pack.author.username)}`)">
                 <img
                   v-if="pack.author.avatar_url"
                   :src="pack.author.avatar_url"

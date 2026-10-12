@@ -734,6 +734,8 @@ export const postService = {
 
   async toggleVote(userId: string, postId: string, value: 1 | -1) {
     return prisma.$transaction(async (tx) => {
+      // Блокируем пост: два параллельных голоса иначе оба откатили бы эффект на сродство тегов дважды
+      await tx.$queryRaw`SELECT id FROM "Post" WHERE id = ${postId}::uuid FOR UPDATE`;
       const existingVote = await tx.vote.findUnique({
         where: { user_id_post_id: { user_id: userId, post_id: postId } },
       });

@@ -772,11 +772,13 @@ export const dealersDenService = {
 
     const status = winner === 'buyer' ? 'resolved_buyer' : 'resolved_seller';
 
+    // Условный переход из open: повторный клик или второй админ не засчитывают спор повторно
     await prisma.$transaction(async (tx) => {
-      await tx.denDispute.update({
-        where: { id: disputeId },
+      const claimed = await tx.denDispute.updateMany({
+        where: { id: disputeId, status: 'open' },
         data: { status, resolved_by: adminId, resolution, resolved_at: new Date() },
       });
+      if (claimed.count !== 1) throw new Error('DISPUTE_CLOSED');
       if (winner === 'buyer') {
         await tx.denTrustScore.upsert({
           where: { user_id: dispute.seller_id },
@@ -804,17 +806,20 @@ export const dealersDenService = {
     });
 
     for (const d of stale) {
-      await prisma.$transaction(async (tx) => {
-        await tx.denDispute.update({
-          where: { id: d.id },
+      const claimed = await prisma.$transaction(async (tx) => {
+        const r = await tx.denDispute.updateMany({
+          where: { id: d.id, status: 'open' },
           data: { status: 'auto_resolved', resolution: 'Продавец не ответил в течение 48 часов', resolved_at: new Date() },
         });
+        if (r.count !== 1) return false; // уже закрыт админом или другим запуском
         await tx.denTrustScore.upsert({
           where: { user_id: d.seller_id },
           create: { user_id: d.seller_id, disputes_lost: 1 },
           update: { disputes_lost: { increment: 1 } },
         });
+        return true;
       });
+      if (!claimed) continue;
       await recalcDenTrust(d.seller_id);
       await Promise.all([
         notificationService.create({ receiverId: d.buyer_id, type: 'den_dispute_auto_resolved', refId: d.id }),

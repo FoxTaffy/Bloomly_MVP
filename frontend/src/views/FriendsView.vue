@@ -117,7 +117,7 @@ async function handleSendRequest(targetId: string) {
     addSuccess.value = true; addInput.value = ''
     setTimeout(() => { addSuccess.value = false }, 3000)
   } catch (e: any) {
-    addError.value = e?.response?.data?.error ?? 'Ошибка'
+    addError.value = e?.response?.data?.error?.message ?? 'Ошибка'
   } finally { addLoading.value = false }
 }
 

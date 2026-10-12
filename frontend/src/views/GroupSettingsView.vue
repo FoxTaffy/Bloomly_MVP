@@ -1081,12 +1081,15 @@ async function save() {
 
 // ── Delete ──────────────────────────────────────────────────────────────────
 const showDeleteConfirm = ref(false)
+const deleting = ref(false)
 async function deleteGroup() {
-  if (!group.value) return
+  if (!group.value || deleting.value) return
+  deleting.value = true
   try {
     await groupsStore.deleteGroup(group.value.id)
     router.push({ name: 'groups' })
   } catch (err: any) {
+    deleting.value = false
     showDeleteConfirm.value = false
     const code = err.response?.data?.error?.code
     showToast('error', code === 'GROUP_HAS_FINANCIAL_HISTORY'
@@ -2643,7 +2646,7 @@ async function deleteGroup() {
                     </div>
 
                     <div class="pt-2">
-                      <button @click="handleSave" :disabled="saving || !isDirty"
+                      <button @click="save" :disabled="saving || !isDirty"
                         class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
                         <BIcon v-if="saving" name="Loader2" class="w-4 h-4 animate-spin" />
                         <BIcon v-else name="Check" class="w-4 h-4" />
@@ -3097,7 +3100,7 @@ async function deleteGroup() {
                         @click="showDeleteConfirm = true">{{ langStore.t.deleteBtn }}</button>
                       <div v-else class="flex gap-2">
                         <button type="button" class="px-3 py-2 rounded-xl bg-brand-bg border border-brand-border text-white/50 text-xs font-bold" @click="showDeleteConfirm = false">{{ langStore.t.cancel }}</button>
-                        <button type="button" class="px-3 py-2 rounded-xl bg-brand-error text-white text-xs font-bold" @click="deleteGroup">{{ langStore.t.confirmBtn }}</button>
+                        <button type="button" :disabled="deleting" class="px-3 py-2 rounded-xl bg-brand-error text-white text-xs font-bold" @click="deleteGroup">{{ langStore.t.confirmBtn }}</button>
                       </div>
                     </div>
                   </div>

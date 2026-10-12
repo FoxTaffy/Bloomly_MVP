@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { usersService, withRedactedBirthDate } from './service.js';
 import { isAdult } from '../../lib/age.js';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput, JwtPayload } from './types.js';
+import { isDevEnv } from '../../lib/env.js';
 
 
 export async function getUserHandler(
@@ -79,7 +80,7 @@ export async function proxyMusicMediaHandler(
     return reply
       .header('Content-Type', contentType)
       .header('Cache-Control', 'public, max-age=86400, immutable')
-      .header('X-Content-Options', 'nosniff')
+      .header('X-Content-Type-Options', 'nosniff')
       .send(buffer);
   } catch (e: any) {
     return reply.code(e?.statusCode ?? 502).send();
@@ -218,7 +219,7 @@ export async function updateSubscriptionHandler(
     const { tier } = request.body;
     // Платный тариф без процессора оплаты выдавался по любой сохранённой «карте».
     // В production смена на платный тариф — только через админа, пока нет реальной оплаты.
-    if (process.env.NODE_ENV === 'production' && tier !== 'free') {
+    if (!isDevEnv() && tier !== 'free') {
       return reply.code(403).send({ success: false, data: null, error: { code: 'PAYMENT_NOT_AVAILABLE', message: 'Оплата подписки пока недоступна' } });
     }
     const data = await usersService.updateSubscriptionTier(userId, tier);
@@ -485,7 +486,7 @@ export async function getWatermarkedReferenceImageHandler(
     return reply
       .header('Content-Type', result.mimeType)
       .header('Cache-Control', 'private, no-store')
-      .header('X-Content-Options', 'nosniff')
+      .header('X-Content-Type-Options', 'nosniff')
       .send(result.buffer);
   } catch (e: any) {
     return reply.code(500).send({ success: false, data: null, error: { code: 'REFERENCE_ERROR', message: e.message } });

@@ -226,7 +226,7 @@ export const groupService = {
   async ensureEventExpirySwept(groupId: string) {
     const group = await prisma.group.findUnique({
       where: { id: groupId },
-      select: { id: true, type: true, event_date: true, event_expired_at: true },
+      select: { id: true, type: true, event_date: true, event_expired_at: true, deleted_at: true },
     });
     if (!group) return null;
     if (this.isEventExpired(group) && !group.event_expired_at) {
@@ -403,6 +403,15 @@ export const groupService = {
     if (input.groupTheme !== undefined) data.group_theme = input.groupTheme || null;
     if (input.hideAdmins !== undefined) data.hide_admins = input.hideAdmins;
     if (input.hiddenMemberIds !== undefined) data.hidden_member_ids = JSON.stringify(input.hiddenMemberIds);
+    if (input.donationsEnabled !== undefined || input.bankCardMasked !== undefined) {
+      // Пожертвования без карты для выплат принимались бы в никуда: проверяем на сервере, а не только в UI
+      const current = await prisma.group.findUnique({ where: { id: groupId }, select: { bank_card_masked: true } });
+      const card = input.bankCardMasked !== undefined ? input.bankCardMasked : current?.bank_card_masked;
+      if (input.donationsEnabled === true && !card) {
+        throw Object.assign(new Error('Чтобы принимать пожертвования, привяжите карту для выплат'), { statusCode: 400 });
+      }
+      if (input.bankCardMasked !== undefined && !input.bankCardMasked) data.donations_enabled = false;
+    }
     if (input.donationsEnabled !== undefined) data.donations_enabled = input.donationsEnabled;
     if (input.bankCardMasked !== undefined) data.bank_card_masked = input.bankCardMasked || null;
     if (input.supportTiers !== undefined) data.support_tiers = input.supportTiers;
@@ -490,7 +499,7 @@ export const groupService = {
   // ── membership ────────────────────────────────────────────────────────────
   async join(groupId: string, userId: string) {
     const group = await this.ensureEventExpirySwept(groupId);
-    if (!group) throw new Error('Group not found');
+    if (!group || group.deleted_at) throw new Error('Group not found');
     if (this.isEventExpired(group)) throw new Error('EVENT_EXPIRED');
 
     // Create the membership row directly (instead of a separate "does it exist?" read
@@ -1216,26 +1225,28 @@ export const groupService = {
 
   // ── RSVP ──────────────────────────────────────────────────────────────────
   async rsvpEvent(eventId: string, userId: string, status: 'going' | 'maybe' | 'not_going') {
-    const prev = await prisma.eventAttendee.findUnique({
-      where: { event_id_user_id: { event_id: eventId, user_id: userId } },
-      select: { status: true },
-    });
-    const wasCountable = prev && (prev.status === 'going' || prev.status === 'maybe');
-    const isCountable  = status === 'going' || status === 'maybe';
-    const delta = (isCountable ? 1 : 0) - (wasCountable ? 1 : 0);
+    return prisma.$transaction(async (tx) => {
+      // Блокируем событие: два параллельных «иду» раньше оба читали старый статус и оба прибавляли +1
+      await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId}::uuid FOR UPDATE`;
+      const prev = await tx.eventAttendee.findUnique({
+        where: { event_id_user_id: { event_id: eventId, user_id: userId } },
+        select: { status: true },
+      });
+      const wasCountable = prev && (prev.status === 'going' || prev.status === 'maybe');
+      const isCountable  = status === 'going' || status === 'maybe';
+      const delta = (isCountable ? 1 : 0) - (wasCountable ? 1 : 0);
 
-    const [attendee] = await Promise.all([
-      prisma.eventAttendee.upsert({
+      const attendee = await tx.eventAttendee.upsert({
         where: { event_id_user_id: { event_id: eventId, user_id: userId } },
         update: { status, confirmed_at: new Date() },
         create: { event_id: eventId, user_id: userId, status },
         include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
-      }),
-      delta !== 0
-        ? prisma.event.update({ where: { id: eventId }, data: { attendee_count: { increment: delta } } })
-        : Promise.resolve(null),
-    ]);
-    return attendee;
+      });
+      if (delta !== 0) {
+        await tx.event.update({ where: { id: eventId }, data: { attendee_count: { increment: delta } } });
+      }
+      return attendee;
+    });
   },
 
   async cancelRsvp(eventId: string, userId: string) {
@@ -1460,7 +1471,10 @@ export const groupService = {
     });
   },
 
-  async updateTodoItem(itemId: string, data: { title?: string; description?: string; status?: string; position?: number }) {
+  async updateTodoItem(groupId: string, itemId: string, data: { title?: string; description?: string; status?: string; position?: number }) {
+    // Пункт ищем только внутри своей группы: владелец группы A не должен править пункты группы B
+    const owned = await prisma.groupTodoItem.findFirst({ where: { id: itemId, group_id: groupId, deleted_at: null }, select: { id: true } });
+    if (!owned) throw Object.assign(new Error('Todo item not found'), { statusCode: 404 });
     const update: any = {};
     if (data.title !== undefined) update.title = data.title.trim();
     if (data.description !== undefined) update.description = data.description?.trim() || null;
@@ -1469,11 +1483,13 @@ export const groupService = {
     return prisma.groupTodoItem.update({ where: { id: itemId }, data: update });
   },
 
-  async deleteTodoItem(itemId: string) {
-    return prisma.groupTodoItem.update({
-      where: { id: itemId },
+  async deleteTodoItem(groupId: string, itemId: string) {
+    const result = await prisma.groupTodoItem.updateMany({
+      where: { id: itemId, group_id: groupId, deleted_at: null },
       data: { deleted_at: new Date() },
     });
+    if (result.count === 0) throw Object.assign(new Error('Todo item not found'), { statusCode: 404 });
+    return { id: itemId };
   },
 
   async reorderTodoItems(groupId: string, orderedIds: string[]) {

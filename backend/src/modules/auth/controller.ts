@@ -8,6 +8,7 @@ import { getSetting } from '../../lib/settings.js';
 import { isAdult } from '../../lib/age.js';
 import { createMfaToken, verifyMfaToken } from '../../lib/mfaToken.js';
 import type { RegisterInput, LoginInput, JwtPayload } from './types.js';
+import { isDevEnv } from '../../lib/env.js';
 
 const authService = new AuthService();
 
@@ -28,6 +29,23 @@ function pruneRotationReplays() {
   for (const [k, v] of recentRotations) {
     if (now - v.storedAt > ROTATION_GRACE_MS) recentRotations.delete(k);
   }
+}
+
+// Replay отдаёт токены только если сессия, выданная ротацией, всё ещё жива в БД. Иначе выход,
+// смена пароля или отзыв устройства в течение 15 секунд не отзывали бы кэшированную пару.
+async function validReplay(hash: string): Promise<RotationReplay | undefined> {
+  pruneRotationReplays();
+  const replay = recentRotations.get(hash);
+  if (!replay) return undefined;
+  const current = await prisma.refreshToken.findUnique({
+    where: { token_hash: createHash('sha256').update(replay.refreshToken).digest('hex') },
+    select: { revoked: true, expires_at: true },
+  });
+  if (!current || current.revoked || current.expires_at < new Date()) {
+    recentRotations.delete(hash);
+    return undefined;
+  }
+  return replay;
 }
 
 // ── Вспомогательный селект полного профиля ────────────────────────────────────
@@ -111,7 +129,7 @@ async function issueRefreshToken(
 
   const cookieOpts: Parameters<typeof reply.setCookie>[2] = {
     httpOnly: true,
-    secure:   process.env.NODE_ENV === 'production',
+    secure:   !isDevEnv(),
     sameSite: 'strict',
     path:     '/api/auth',
   };
@@ -309,6 +327,10 @@ export const loginHandler = async (
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';
+    // Блокировка аккаунта после серии неудачных попыток — 429, а не внутренняя ошибка
+    if ((error as { statusCode?: number })?.statusCode === 429) {
+      return reply.code(429).send({ success: false, data: null, error: { code: 'ACCOUNT_LOCKED', message } });
+    }
     return reply.code(500).send({ success: false, data: null, error: { code: 'INTERNAL_ERROR', message } });
   }
 };
@@ -481,6 +503,7 @@ export const loginVerify2faHandler = async (
       error: null,
     });
   } catch (e: any) {
+    if (e?.statusCode === 429) return reply.code(429).send({ success: false, data: null, error: { code: 'ACCOUNT_LOCKED', message: e.message } });
     return reply.code(400).send({ success: false, data: null, error: { code: 'MFA_VERIFY_ERROR', message: e.message } });
   }
 };
@@ -504,6 +527,22 @@ export const loginResend2faHandler = async (
   }
 };
 
+// ── OAuth: привязка state к браузеру ──────────────────────────────────────────
+// Без этого любой мог начать OAuth у себя, вывести жертву на колбэк со своим code/state и
+// залогинить её в свой аккаунт (login CSRF). State кладём в httpOnly-cookie браузера, который
+// начал вход, и в колбэке требуем совпадения. SameSite=Lax нужен, чтобы cookie пришла на
+// top-level редирект от провайдера.
+const OAUTH_STATE_COOKIE = 'oauth_state';
+function setOAuthStateCookie(reply: FastifyReply, state: string) {
+  reply.setCookie(OAUTH_STATE_COOKIE, state, {
+    httpOnly: true,
+    secure:   !isDevEnv(),
+    sameSite: 'lax',
+    path:     '/api/auth',
+    maxAge:   10 * 60,
+  });
+}
+
 // ── OAuth: редирект на провайдера ─────────────────────────────────────────────
 export const oauthRedirectHandler = async (
   request: FastifyRequest<{ Params: { provider: string }; Querystring: { client?: string; redirect?: string } }>,
@@ -517,7 +556,8 @@ export const oauthRedirectHandler = async (
 
   try {
     const client = request.query.client === 'mobile' ? 'mobile' : undefined;
-    const { url } = buildOAuthUrl(provider, undefined, client, request.query.redirect);
+    const { url, state } = buildOAuthUrl(provider, undefined, client, request.query.redirect);
+    setOAuthStateCookie(reply, state);
     return reply.redirect(302, url);
   } catch (e: any) {
     return reply.code(500).send({ success: false, data: null, error: { code: 'OAUTH_ERROR', message: e.message } });
@@ -535,6 +575,11 @@ export const oauthCallbackHandler = async (
   const { code, state, error } = request.query;
 
   if (error || !code || !state) {
+    return reply.redirect(302, `${FRONTEND_URL()}/auth?error=oauth_denied`);
+  }
+  const stateCookie = (request.cookies as any)?.[OAUTH_STATE_COOKIE] as string | undefined;
+  reply.clearCookie(OAUTH_STATE_COOKIE, { path: '/api/auth' });
+  if (!stateCookie || stateCookie !== state) {
     return reply.redirect(302, `${FRONTEND_URL()}/auth?error=oauth_denied`);
   }
 
@@ -586,7 +631,7 @@ export const oauthCallbackHandler = async (
         const target = mobileRedirect ?? 'bloomly://auth/callback';
         return reply.redirect(302, `${target}?mfaToken=${mfaToken}&method=${user.two_factor_method}`);
       }
-      return reply.redirect(302, `${FRONTEND_URL()}/auth/callback?mfaToken=${mfaToken}&method=${user.two_factor_method}`);
+      return reply.redirect(302, `${FRONTEND_URL()}/auth/callback#mfaToken=${mfaToken}&method=${user.two_factor_method}`);
     }
 
     const token = issueAccessToken(request, user.id, user.role);
@@ -599,7 +644,8 @@ export const oauthCallbackHandler = async (
       const target = mobileRedirect ?? 'bloomly://auth/callback';
       return reply.redirect(302, `${target}?token=${token}&refreshToken=${refreshToken}`);
     }
-    return reply.redirect(302, `${FRONTEND_URL()}/auth/callback?token=${token}`);
+    // Токен во фрагменте: фрагмент не уходит на сервер и не попадает в access-лог nginx
+    return reply.redirect(302, `${FRONTEND_URL()}/auth/callback#token=${token}`);
   } catch (e: any) {
     console.error('[OAuth callback error]', e instanceof Error ? e.message : 'Unknown error');
     return reply.redirect(302, `${FRONTEND_URL()}/auth?error=oauth_failed`);
@@ -617,7 +663,8 @@ export const linkInitHandler = async (
     return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_PROVIDER', message: 'Unknown OAuth provider' } });
   }
   const { id } = request.user as JwtPayload;
-  const { url } = buildOAuthUrl(provider, id);
+  const { url, state } = buildOAuthUrl(provider, id);
+  setOAuthStateCookie(reply, state);
   return reply.send({ success: true, data: { url }, error: null });
 };
 
@@ -680,12 +727,11 @@ export const refreshHandler = async (
   // хэшем) не разлогинивал пользователя, если параллельный запрос уже
   // провернул ротацию.
   if (!record || record.revoked) {
-    pruneRotationReplays();
-    const replay = recentRotations.get(hash);
+    const replay = await validReplay(hash);
     if (replay) {
       const cookieOpts: Parameters<typeof reply.setCookie>[2] = {
         httpOnly: true,
-        secure:   process.env.NODE_ENV === 'production',
+        secure:   !isDevEnv(),
         sameSite: 'strict',
         path:     '/api/auth',
       };
@@ -728,12 +774,11 @@ export const refreshHandler = async (
     for (let attempt = 0; attempt < 6 && !recentRotations.has(hash); attempt++) {
       await new Promise((r) => setTimeout(r, 50));
     }
-    pruneRotationReplays();
-    const replay = recentRotations.get(hash);
+    const replay = await validReplay(hash);
     if (replay) {
       const cookieOpts: Parameters<typeof reply.setCookie>[2] = {
         httpOnly: true,
-        secure:   process.env.NODE_ENV === 'production',
+        secure:   !isDevEnv(),
         sameSite: 'strict',
         path:     '/api/auth',
       };

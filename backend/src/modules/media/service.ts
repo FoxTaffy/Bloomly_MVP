@@ -16,17 +16,20 @@ import {
   PRIVATE_KEY_PREFIX,
   STORAGE_TRACKED_FOLDERS,
 } from '../../config/uploads.js';
+import { isDevEnv } from '../../lib/env.js';
 
 const execFileAsync = promisify(execFile);
+const FFMPEG_TIMEOUT_MS = 90_000;
 
 // ── MinIO (local S3-compatible storage) ───────────────────────────────────
 const minioPassword = process.env.MINIO_ROOT_PASSWORD;
+// Запасного пароля в коде нет: публичный дефолт давал бы root-доступ к хранилищу.
 if (!minioPassword) {
-  if (process.env.NODE_ENV === 'production') {
-    console.error('[FATAL] MINIO_ROOT_PASSWORD env variable is not set. Refusing to start in production.');
+  if (!isDevEnv()) {
+    console.error('[FATAL] MINIO_ROOT_PASSWORD env variable is not set. Refusing to start outside development/test.');
     process.exit(1);
   }
-  console.warn('[WARN] MINIO_ROOT_PASSWORD is not set. Using insecure fallback for development only.');
+  console.warn('[WARN] MINIO_ROOT_PASSWORD is not set. Storage requests will fail until it is configured.');
 }
 
 const minioClient = new Minio.Client({
@@ -34,7 +37,7 @@ const minioClient = new Minio.Client({
   port:      parseInt(process.env.MINIO_PORT || '9000'),
   useSSL:    process.env.MINIO_USE_SSL === 'true',
   accessKey: process.env.MINIO_ROOT_USER     || 'admin',
-  secretKey: minioPassword                   || 'bloomly_secret_123',
+  secretKey: minioPassword                   || '',
 });
 
 const BUCKET     = process.env.MINIO_BUCKET     || 'bloomly';
@@ -211,7 +214,9 @@ export async function uploadFile(
       finalExt = '.webp';
     } catch (err: any) {
       console.error('Sharp failed to process image:', err.message);
-      // Fallback to original buffer and extension if sharp fails
+      // Раньше тут был fallback на исходный буфер: оригинал с EXIF/GPS и картинка сверх лимита
+      // пикселей уходили в хранилище и отдавались всем. Теперь такой файл отклоняется.
+      throw Object.assign(new Error('Не удалось обработать изображение'), { statusCode: 400 });
     }
   }
 
@@ -255,7 +260,8 @@ export async function uploadStreamedFile(args: {
 export type AvatarCropRect = { x: number; y: number; w: number; h: number }; // fractions 0..1 of the source image
 
 async function runFfmpeg(args: string[]): Promise<void> {
-  await execFileAsync('ffmpeg', args, { maxBuffer: 1024 * 1024 * 64 });
+  // Таймаут: тяжёлый GIF/видео не должен держать слот загрузки и CPU бесконечно
+  await execFileAsync('ffmpeg', args, { maxBuffer: 1024 * 1024 * 64, timeout: FFMPEG_TIMEOUT_MS, killSignal: 'SIGKILL' });
 }
 
 /**

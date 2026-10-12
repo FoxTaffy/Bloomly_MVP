@@ -4,8 +4,30 @@ import { getUserBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy } from '../../lib/blocks.js';
 import { sanitizeFields, sanitizeDisplayText } from '../../lib/sanitizeText.js';
+import { normalizeSafeLink, requireSafeLink } from '../../lib/safeLink.js';
 import sharp from 'sharp';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput } from './types.js';
+
+const MUSIC_MAX_BYTES = 15 * 1024 * 1024;
+
+// Соцсети профиля: значение со схемой (https:, javascript:, data:) проходит только безопасную проверку;
+// голые ники (например Discord) остаются текстом. Фронтенд решает, делать ли из них ссылку.
+function cleanSocialLinks(links: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(links)) {
+    if (typeof value !== 'string') continue;
+    const text = value.trim().slice(0, 500);
+    if (!text) continue;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(text)) {
+      const safe = normalizeSafeLink(text);
+      if (!safe) throw Object.assign(new Error(`Недопустимая ссылка: ${key}`), { statusCode: 400 });
+      out[key] = safe;
+    } else {
+      out[key] = text;
+    }
+  }
+  return out;
+}
 
 // Sentinel year used to carry a day+month without revealing the real year.
 // Must be a leap year so Feb 29 birthdays don't overflow into March.
@@ -342,6 +364,10 @@ export const usersService = {
       } else {
         (data as any).relationship_since = null;
       }
+    }
+
+    if (data.social_links && typeof data.social_links === 'object') {
+      (data as any).social_links = cleanSocialLinks(data.social_links as Record<string, unknown>);
     }
 
     return prisma.user.update({
@@ -983,12 +1009,14 @@ export const usersService = {
 
   async createFursuit(userId: string, data: UpsertFursuitInput) {
     await assertOwnedMedia((data as any).image_url, userId);
+    if (data.external_maker_links) data.external_maker_links = data.external_maker_links.map((l) => requireSafeLink(l, 'maker link')).filter((l): l is string => !!l);
     return prisma.fursuit.create({
       data: { user_id: userId, ...data },
     });
   },
 
   async updateFursuit(userId: string, fursuitId: string, data: UpsertFursuitInput) {
+    if (data.external_maker_links) data.external_maker_links = data.external_maker_links.map((l) => requireSafeLink(l, 'maker link')).filter((l): l is string => !!l);
     const existing = await prisma.fursuit.findFirst({
       where: { id: fursuitId, user_id: userId, deleted_at: null },
     });
@@ -1136,9 +1164,13 @@ export const usersService = {
     if (parsed.protocol !== 'https:' || !ALLOWED_HOST.test(parsed.hostname)) {
       throw Object.assign(new Error('Host not allowed'), { statusCode: 400 });
     }
-    const res = await fetch(parsed.toString());
+    // Редиректы запрещены: разрешённый хост не должен переводить запрос на произвольный адрес.
+    const res = await fetch(parsed.toString(), { redirect: 'error' });
     if (!res.ok) throw Object.assign(new Error('Upstream fetch failed'), { statusCode: 502 });
+    const declared = Number(res.headers.get('content-length') ?? 0);
+    if (declared > MUSIC_MAX_BYTES) throw Object.assign(new Error('Upstream file too large'), { statusCode: 502 });
     const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length > MUSIC_MAX_BYTES) throw Object.assign(new Error('Upstream file too large'), { statusCode: 502 });
     let contentType = res.headers.get('content-type') || 'application/octet-stream';
     // Apple serves 30s preview clips as legit playable AAC/M4A but mislabels the
     // response as audio/x-m4p (the FairPlay-DRM MIME type) — browsers refuse to play

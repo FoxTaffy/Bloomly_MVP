@@ -502,7 +502,7 @@ async function toggleCollection(pack: StickerPack) {
               @click="router.push({ name: 'sticker-pack', params: { id: pack.id } })">
               <!-- Cover -->
               <div class="relative w-full aspect-square overflow-hidden"
-                :style="`background: ${pack.cover_bg_color ?? '#12101e'}`">
+                :style="{ background: pack.cover_bg_color ?? '#12101e' }">
                 <img v-if="pack.cover_url" :src="pack.cover_url" :alt="pack.name"
                   class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400" />
                 <div v-else-if="pack.stickers.length" class="w-full h-full grid grid-cols-3 gap-px p-1" style="background: rgba(255,255,255,0.02)">
@@ -637,7 +637,7 @@ async function toggleCollection(pack: StickerPack) {
 
             <!-- Cover square -->
             <div class="relative w-full aspect-square overflow-hidden"
-              :style="`background: ${pack.cover_bg_color ?? '#12101e'}`">
+              :style="{ background: pack.cover_bg_color ?? '#12101e' }">
 
               <template v-if="pack.cover_url">
                 <img :src="pack.cover_url" :alt="pack.name"

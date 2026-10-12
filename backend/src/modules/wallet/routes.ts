@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import { topupWallet, getWallet } from './service.js';
+import { isDevEnv } from '../../lib/env.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -22,7 +23,7 @@ export async function walletRoutes(fastify: FastifyInstance) {
   fastify.post('/topup', auth, async (req: FastifyRequest, reply: FastifyReply) => {
     // Бесплатное пополнение создаёт деньги из ничего (их можно тратить в магазине и донатить группам).
     // Доступно только вне production и только до подключения платёжного шлюза.
-    if (process.env.NODE_ENV === 'production') {
+    if (!isDevEnv()) {
       return reply.code(403).send(err('TOPUP_DISABLED', 'Пополнение баланса временно недоступно'));
     }
     const userId = (req as any).user.id as string;

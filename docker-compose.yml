@@ -1,7 +1,19 @@
+# Общие настройки для всех сервисов: ротация json-логов, чтобы логи запросов не забили диск,
+# и `init` — корректная обработка сигналов и зомби-процессов (ffmpeg/sharp).
+x-common: &common
+  init: true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 services:
   db:
+    <<: *common
     image: postgres:16-alpine
     restart: always
+    mem_limit: 2g
     shm_size: '256mb'
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -12,12 +24,14 @@ services:
     command: >
       postgres
         -c max_connections=100
-        -c shared_buffers=128MB
-        -c effective_cache_size=256MB
-        -c maintenance_work_mem=32MB
+        -c shared_buffers=1GB
+        -c effective_cache_size=4GB
+        -c maintenance_work_mem=256MB
         -c checkpoint_completion_target=0.9
-        -c wal_buffers=8MB
-        -c work_mem=4MB
+        -c wal_buffers=16MB
+        -c work_mem=16MB
+        -c random_page_cost=1.1
+        -c effective_io_concurrency=200
         -c tcp_keepalives_idle=60
         -c tcp_keepalives_interval=10
         -c tcp_keepalives_count=5
@@ -31,17 +45,29 @@ services:
       start_period: 30s
 
   api:
+    <<: *common
     build: ./backend
     restart: always
+    # Жёсткий потолок памяти: утечка или тяжёлая загрузка не должны положить весь хост.
+    # max-old-space-size держим ниже mem_limit, чтобы V8 успевал собрать мусор до OOM-killer.
+    mem_limit: 2g
+    stop_grace_period: 20s
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8080/api/auth/me',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     ports:
       - "127.0.0.1:8080:8080"
     env_file: .env
     environment:
+      NODE_OPTIONS: "--max-old-space-size=1536"
       MINIO_ENDPOINT: minio
       MINIO_PORT: "9000"
       MINIO_USE_SSL: "false"
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-bloomly_secret_123}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?задайте MINIO_ROOT_PASSWORD в .env}
       MINIO_BUCKET: bloomly
       MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-https://bloomly.fun/s3}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
@@ -68,18 +94,22 @@ services:
         condition: service_started
 
   frontend:
+    <<: *common
     build:
       context: ./frontend
       dockerfile: Dockerfile
     restart: always
+    mem_limit: 128m
     ports:
       - "127.0.0.1:5173:3000"
     environment:
       - VITE_API_URL=https://bloomly.fun
 
   minio:
+    <<: *common
     image: pgsty/minio
     container_name: bloomly-minio
+    mem_limit: 1g
     volumes:
       - minio_data:/data
     ports:
@@ -87,7 +117,7 @@ services:
       - "127.0.0.1:9001:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-bloomly_secret_123}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?задайте MINIO_ROOT_PASSWORD в .env}
       MINIO_BROWSER_REDIRECT_URL: https://bloomly.fun/minio-console
     command: server /data --console-address ":9001"
     restart: always

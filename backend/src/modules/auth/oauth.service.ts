@@ -11,6 +11,8 @@
  *   OAUTH_REDIRECT_BASE  – базовый URL callback'а, напр. https://bloomly.fun/api
  */
 
+import { isDevEnv } from '../../lib/env.js';
+
 import { randomBytes, createHash } from 'crypto'
 import prisma from '../../config/prisma.js'
 
@@ -121,7 +123,7 @@ interface StateEntry { provider: OAuthProvider; codeVerifier?: string; createdAt
 // Проверка в момент вызова, а не при загрузке модуля: dotenv в server.ts стартует позже импортов.
 export function isAllowedMobileRedirect(url: string): boolean {
   if (/^bloomly:\/\//i.test(url)) return true
-  return process.env.NODE_ENV !== 'production' && /^exp:\/\//i.test(url)
+  return isDevEnv() && /^exp:\/\//i.test(url)
 }
 const stateStore = new Map<string, StateEntry>()
 

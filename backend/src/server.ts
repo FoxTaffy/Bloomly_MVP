@@ -41,13 +41,14 @@ import { isAllowedByPrivacy } from './lib/privacy.js';
 import { getSetting } from './lib/settings.js';
 import { isAdult } from './lib/age.js';
 import { isModerator } from './lib/roles.js';
+import { isDevEnv } from './lib/env.js';
 
 dotenv.config();
 
 const jwtSecret = process.env.JWT_SECRET;
 if (!jwtSecret) {
-  if (process.env.NODE_ENV === 'production') {
-    console.error('[FATAL] JWT_SECRET env variable is not set. Refusing to start in production.');
+  if (!isDevEnv()) {
+    console.error('[FATAL] JWT_SECRET env variable is not set. Refusing to start outside development/test.');
     process.exit(1);
   }
   console.warn('[WARN] JWT_SECRET is not set. Using insecure fallback for development only.');
@@ -55,14 +56,14 @@ if (!jwtSecret) {
 
 const cookieSecret = process.env.COOKIE_SECRET;
 if (!cookieSecret) {
-  if (process.env.NODE_ENV === 'production') {
-    console.error('[FATAL] COOKIE_SECRET env variable is not set. Refusing to start in production.');
+  if (!isDevEnv()) {
+    console.error('[FATAL] COOKIE_SECRET env variable is not set. Refusing to start outside development/test.');
     process.exit(1);
   }
   console.warn('[WARN] COOKIE_SECRET is not set. Using insecure fallback for development only.');
 }
 
-if (!process.env.ALLOWED_ORIGINS && process.env.NODE_ENV === 'production') {
+if (!process.env.ALLOWED_ORIGINS && !isDevEnv()) {
   console.error('[FATAL] ALLOWED_ORIGINS env variable is not set. Refusing to start in production.');
   process.exit(1);
 }
@@ -109,7 +110,7 @@ fastify.addHook('onSend', (_request, reply, _payload, done) => {
   reply.header('X-XSS-Protection', '1; mode=block');
   reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  if (process.env.NODE_ENV === 'production') {
+  if (!isDevEnv()) {
     reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }
   done();
@@ -136,6 +137,13 @@ fastify.addHook('onRequest', async (request, reply) => {
 });
 
 fastify.register(websocket);
+
+// Сокет живёт дольше HTTP-запроса: без повторной проверки заморозка/бан не отключали бы уже
+// открытое соединение, и пользователь мог бы продолжать писать в чат.
+async function isAccountActive(userId: string): Promise<boolean> {
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { deleted_at: true, frozen_at: true } });
+  return !!u && !u.deleted_at && !u.frozen_at;
+}
 
 fastify.decorate(
   'authenticate',
@@ -284,6 +292,11 @@ fastify.register(async function (fastify) {
         if (msg?.type === 'auth' && msg?.token) {
           try {
             const payload = fastify.jwt.verify(msg.token) as { id: string }
+            if (!(await isAccountActive(payload.id))) {
+              connection.socket.send(JSON.stringify({ type: 'auth_err' }))
+              connection.socket.close()
+              return
+            }
             // If re-authing with a different ID (shouldn't happen), clean up old
             if (authedUserId && authedUserId !== payload.id) {
               markOffline(authedUserId, connection.socket)
@@ -324,6 +337,7 @@ fastify.register(async function (fastify) {
         if (msg?.type === 'message' && authedUserId) {
           const { conversationId, content, file_url, media_type, reply_to_id } = msg
           if (!conversationId || (!content && !file_url)) return
+          if (!(await isAccountActive(authedUserId))) { connection.socket.close(); return }
           try {
             await messageService.sendMessage({
               conversationId: conversationId as string,
@@ -343,6 +357,7 @@ fastify.register(async function (fastify) {
         if (msg?.type === 'group_message_send' && authedUserId) {
           const { groupId, content } = msg;
           if (!groupId || !content) return;
+          if (!(await isAccountActive(authedUserId))) { connection.socket.close(); return }
           try {
             const saved = await groupService.sendGroupMessage(groupId as string, authedUserId, (content as string).trim());
             const members = await prisma.groupMember.findMany({ where: { group_id: groupId as string }, select: { user_id: true } });

@@ -1035,7 +1035,7 @@ const vClickOutside = {
                       <BIcon name="Calendar" class="w-3 h-3 text-white/35" />{{ fmt(group.created_at) }}
                     </span>
                     <!-- Social links inline as icon chips -->
-                    <a v-for="(url, p) in (group.social_links as Record<string,string>)" :key="p" :href="safeHref(url)" target="_blank"
+                    <a v-for="(url, p) in (group.social_links as Record<string,string>)" :key="p" :href="safeHref(url)" target="_blank" rel="noopener noreferrer"
                       class="inline-flex items-center justify-center w-7 h-7 bg-brand-bg border border-brand-border rounded-lg hover:border-brand-accent/50 transition-colors">
                       <BIcon :name="socialIconMap[p as string] ?? 'Link'" class="w-3.5 h-3.5 text-white/50" />
                     </a>
@@ -1566,7 +1566,7 @@ const vClickOutside = {
                           </div>
                           <p v-if="sp.description" class="text-xs text-white/40 mt-0.5">{{ sp.description }}</p>
                         </div>
-                        <a v-if="sp.url" :href="safeHref(sp.url)" target="_blank"
+                        <a v-if="sp.url" :href="safeHref(sp.url)" target="_blank" rel="noopener noreferrer"
                           class="text-brand-success text-xs font-bold hover:underline flex-shrink-0 flex items-center gap-1">
                           {{ langStore.t.groupDetailWebsiteLinkLabel }} <BIcon name="ExternalLink" class="w-3 h-3" />
                         </a>
@@ -1617,7 +1617,7 @@ const vClickOutside = {
                       <p class="text-[11px] font-bold text-white/40 uppercase tracking-wider px-1">{{ langStore.t.groupDetailSocialLinksLabel }}</p>
                       <div class="grid grid-cols-2 gap-2">
                         <a v-for="(url, platform) in group.social_links" :key="platform"
-                          :href="url" target="_blank"
+                          :href="safeHref(url)" target="_blank" rel="noopener noreferrer"
                           class="flex items-center gap-2 px-3 py-2.5 bg-brand-bg border border-brand-border rounded-xl hover:border-brand-success/30 transition-all">
                           <BIcon :name="socialIconMap[platform as string] || 'Globe'" class="w-4 h-4 text-white/55 flex-shrink-0" />
                           <span class="text-xs font-semibold text-white/70 capitalize truncate">{{ platform }}</span>
@@ -2322,7 +2322,7 @@ const vClickOutside = {
                     <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.catNews }}</p>
                   </div>
                   <div class="px-2 pb-2 space-y-0.5">
-                    <a v-for="(url, platform) in group.social_links" :key="platform" :href="safeHref(url)" target="_blank"
+                    <a v-for="(url, platform) in group.social_links" :key="platform" :href="safeHref(url)" target="_blank" rel="noopener noreferrer"
                       class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all group/chan">
                       <BIcon :name="socialIconMap[platform as string] || 'Globe'" class="w-4 h-4 text-sky-400 flex-shrink-0" />
                       <p class="text-xs font-bold text-white/70 capitalize flex-1 group-hover/chan:text-white transition-colors">{{ platform }}</p>
@@ -2417,7 +2417,7 @@ const vClickOutside = {
                 </div>
                 <div class="px-3 pb-3 grid grid-cols-2 gap-2">
                   <a v-for="sp in (group.sponsors as any[])" :key="sp.name"
-                    :href="safeHref(sp.url)" target="_blank"
+                    :href="safeHref(sp.url)" target="_blank" rel="noopener noreferrer"
                     class="flex flex-col items-center gap-1.5 px-2 py-2.5 rounded-xl bg-brand-bg border border-brand-border hover:border-brand-accent/30 transition-all cursor-pointer group/sp">
                     <div class="w-10 h-10 rounded-xl overflow-hidden bg-brand-border/40 flex items-center justify-center flex-shrink-0">
                       <img v-if="sp.logo_url" :src="sp.logo_url" class="w-full h-full object-contain p-1" />

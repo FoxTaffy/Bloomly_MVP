@@ -760,33 +760,38 @@ export const messageService = {
     if (msg.deleted_at) throw Object.assign(new Error('Message deleted'), { statusCode: 400 });
     await this._assertParticipant(msg.conversation_id, userId);
 
-    const current = (msg.reactions as Record<string, string[]> | null) ?? {};
-    const next: Record<string, string[]> = { ...current };
-    const list = next[emoji] ? [...next[emoji]] : [];
-    const idx = list.indexOf(userId);
-    if (idx === -1) {
-      list.push(userId);
-    } else {
-      list.splice(idx, 1);
-    }
-    if (list.length === 0) {
-      delete next[emoji];
-    } else {
-      next[emoji] = list;
-    }
+    // Читаем и пишем реакции под блокировкой строки: без неё параллельные реакции перезаписывали друг друга
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Message" WHERE id = ${messageId}::uuid FOR UPDATE`;
+      const fresh = await tx.message.findUnique({ where: { id: messageId }, select: { reactions: true } });
+      const current = (fresh?.reactions as Record<string, string[]> | null) ?? {};
+      const next: Record<string, string[]> = { ...current };
+      const list = next[emoji] ? [...next[emoji]] : [];
+      const idx = list.indexOf(userId);
+      if (idx === -1) {
+        list.push(userId);
+      } else {
+        list.splice(idx, 1);
+      }
+      if (list.length === 0) {
+        delete next[emoji];
+      } else {
+        next[emoji] = list;
+      }
 
-    const updated = await prisma.message.update({
-      where: { id: messageId },
-      data: { reactions: Object.keys(next).length ? next : null as any },
-      include: {
-        sender: { select: senderSelect },
-        reply_to: {
-          select: {
-            id: true, text: true, type: true, file_url: true,
-            sender: { select: { id: true, username: true, display_name: true } },
+      return tx.message.update({
+        where: { id: messageId },
+        data: { reactions: Object.keys(next).length ? next : null as any },
+        include: {
+          sender: { select: senderSelect },
+          reply_to: {
+            select: {
+              id: true, text: true, type: true, file_url: true,
+              sender: { select: { id: true, username: true, display_name: true } },
+            },
           },
         },
-      },
+      });
     });
 
     const parts = await prisma.conversationParticipant.findMany({

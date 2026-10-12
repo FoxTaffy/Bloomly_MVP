@@ -4,6 +4,7 @@ import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
+import { safeHref } from '@/utils/safeHref'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
@@ -311,7 +312,7 @@ async function sendReply(ticketId: string) {
                   </p>
                   <p class="text-xs text-white/70 whitespace-pre-wrap">{{ m.body }}</p>
                   <div v-if="m.attachment_urls?.length" class="flex gap-2 mt-2 flex-wrap">
-                    <a v-for="(url, ai) in m.attachment_urls" :key="ai" :href="url" target="_blank" rel="noopener"
+                    <a v-for="(url, ai) in m.attachment_urls" :key="ai" :href="safeHref(url)" target="_blank" rel="noopener noreferrer"
                       class="w-16 h-16 rounded-lg overflow-hidden border border-white/[0.08] flex-shrink-0">
                       <img :src="url" class="w-full h-full object-cover" />
                     </a>

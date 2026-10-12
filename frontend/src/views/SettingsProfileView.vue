@@ -2390,6 +2390,7 @@ async function linkProvider(provider: string) {
   linkingProvider.value = provider
   try {
     const { data } = await api.get(`/auth/link-init/${provider}`)
+    sessionStorage.setItem('oauth_started', '1')
     window.location.href = data.data.url
   } catch (e: any) {
     showToast('error', e.response?.data?.error?.message ?? langStore.t.settingsProfileLinkError)

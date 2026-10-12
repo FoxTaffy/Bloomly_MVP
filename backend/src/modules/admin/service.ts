@@ -283,13 +283,13 @@ export const adminService = {
   },
 
   async deleteUser(userId: string) {
-    return prisma.user.update({ where: { id: userId }, data: { deleted_at: new Date() } });
+    return prisma.user.update({ where: { id: userId }, data: { deleted_at: new Date(), is_banned: true } });
   },
 
   async restoreUser(userId: string) {
     return prisma.user.update({
       where: { id: userId },
-      data: { deleted_at: null },
+      data: { deleted_at: null, is_banned: false },
       select: { id: true, username: true, display_name: true, email: true, role: true, badge_type: true, avatar_url: true, created_at: true, deleted_at: true },
     });
   },

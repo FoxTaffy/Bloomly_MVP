@@ -2,6 +2,13 @@ import prisma from '../../config/prisma.js';
 import { uploadRawToMinIO, recordMediaOwner, assertOwnedMedia } from '../media/service.js';
 import type { CreatePackInput, UpdatePackInput, GetPacksQuery } from './types.js';
 
+// Цвет обложки уходит в style-строку: допускаем только hex, иначе можно внедрить url() и лишние свойства
+function checkCoverColor(color: string | null | undefined): string | null | undefined {
+  if (color === undefined || color === null || color === '') return color === '' ? null : color;
+  if (!/^#[0-9a-f]{3,8}$/i.test(color)) throw Object.assign(new Error('Некорректный цвет обложки'), { statusCode: 400 });
+  return color;
+}
+
 // ── Telegram import helpers ───────────────────────────────────────────────
 const TG_API = (token: string) => `https://api.telegram.org/bot${token}`;
 const TG_FILE = (token: string, path: string) => `https://api.telegram.org/file/bot${token}/${path}`;
@@ -161,7 +168,7 @@ export const stickersService = {
         name:              input.name,
         description:       input.description,
         cover_url:         input.coverUrl,
-        cover_bg_color:    input.coverBgColor,
+        cover_bg_color:    checkCoverColor(input.coverBgColor),
         cover_sticker_idx: input.coverStickerIdx ?? null,
         stickers:          input.stickers     ?? [],
         nsfw_stickers:     input.nsfwStickers  ?? [],
@@ -189,7 +196,7 @@ export const stickersService = {
     if (input.name             !== undefined) data.name              = input.name;
     if (input.description      !== undefined) data.description       = input.description;
     if (input.coverUrl         !== undefined) data.cover_url         = input.coverUrl;
-    if (input.coverBgColor     !== undefined) data.cover_bg_color    = input.coverBgColor;
+    if (input.coverBgColor     !== undefined) data.cover_bg_color    = checkCoverColor(input.coverBgColor);
     if (input.coverStickerIdx  !== undefined) data.cover_sticker_idx = input.coverStickerIdx;
     if (input.stickers         !== undefined) data.stickers          = input.stickers;
     if (input.nsfwStickers     !== undefined) data.nsfw_stickers     = input.nsfwStickers;
