@@ -36,6 +36,16 @@ export async function authRoutes(fastify: FastifyInstance) {
           username: { type: 'string', minLength: 3, maxLength: 30, pattern: '^[a-zA-Z0-9_]+$' },
           email:    { type: 'string', format: 'email', maxLength: 254 },
           password: { type: 'string', minLength: 8, maxLength: 128 },
+          consent: {
+            type: 'object',
+            required: ['personalData', 'cookies'],
+            properties: {
+              personalData: { type: 'boolean' },
+              cookies: { type: 'boolean' },
+              marketingEmails: { type: 'boolean' },
+            },
+            additionalProperties: false,
+          },
         },
       },
     },

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { usePresence } from '@/composables/usePresence'
 import { useAuthStore } from '@/stores/auth'
@@ -16,8 +16,11 @@ usePresence()
 const auth  = useAuthStore()
 const route = useRoute()
 const langStore = useLangStore()
+const cookieConsent = ref(false)
 
 onMounted(() => {
+  const saved = localStorage.getItem('cookie_consent')
+  cookieConsent.value = saved === '1'
   if (auth.token) auth.fetchMe()
   langStore.detectLangFromIP()
 })
@@ -27,9 +30,25 @@ const NO_NAV_ROUTES = new Set(['login', 'auth', 'oauth-callback', 'onboarding', 
 const showMobileNav = computed(() =>
   auth.token && !NO_NAV_ROUTES.has(String(route.name ?? ''))
 )
+
+function acceptCookies() {
+  cookieConsent.value = true
+  localStorage.setItem('cookie_consent', '1')
+}
 </script>
 
 <template>
+  <div v-if="!cookieConsent && !route.meta?.hideCookieBanner" class="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-slate-950/95 px-4 py-3 backdrop-blur-sm">
+    <div class="mx-auto flex max-w-5xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div class="text-sm text-slate-200">
+        Мы используем cookie и аналогичные технологии для работы сервиса, безопасности и аналитики.
+        <RouterLink to="/privacy" class="text-brand-accent underline-offset-2 hover:underline">Подробнее в политике</RouterLink>.
+      </div>
+      <button type="button" @click="acceptCookies" class="rounded-xl bg-brand-accent px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
+        Принять
+      </button>
+    </div>
+  </div>
   <RouterView v-slot="{ Component }">
     <KeepAlive :include="['MainLayout']">
       <component :is="Component" />

@@ -40,6 +40,9 @@ const otpCode     = ref('')   // код подтверждения email при 
 const showPass    = ref(false)
 const showNewPass = ref(false)
 const remember    = ref(true)
+const consentPersonalData = ref(false)
+const consentCookies = ref(false)
+const consentMarketingEmails = ref(false)
 const mfaToken       = ref('')
 const twoFactorMethod = ref<'totp' | 'email' | null>(null)
 const twoFactorCode   = ref('')
@@ -163,6 +166,11 @@ function switchMode(next: Mode) {
   newPassword.value = ''; resetCode.value = ''; otpCode.value = ''
   showPass.value = false; showNewPass.value = false
   mfaToken.value = ''; twoFactorMethod.value = null; twoFactorCode.value = ''
+  if (next !== 'register') {
+    consentPersonalData.value = false
+    consentCookies.value = false
+    consentMarketingEmails.value = false
+  }
   failedLoginAttempts.value = 0
 }
 
@@ -191,7 +199,14 @@ async function onSubmit() {
       failedLoginAttempts.value = 0
       router.push({ name: 'home' })
     } else if (mode.value === 'register') {
-      await auth.register(email.value, username.value, password.value)
+      if (!consentPersonalData.value || !consentCookies.value) {
+        throw new Error('Для регистрации необходимо дать согласие на обработку персональных данных и использование cookie.')
+      }
+      await auth.register(email.value, username.value, password.value, {
+        personalData: consentPersonalData.value,
+        cookies: consentCookies.value,
+        marketingEmails: consentMarketingEmails.value,
+      })
       // Переходим на OTP-шаг (email не сбрасываем)
       mode.value = 'verify'
       auth.error = null
@@ -516,6 +531,27 @@ const features = computed(() => [
                     class="absolute right-4 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors">
                     <component :is="showPass ? EyeSlashIcon : EyeIcon" class="w-[18px] h-[18px]" />
                   </button>
+                </div>
+
+                <div v-if="mode === 'register'" class="space-y-2.5 rounded-2xl border border-white/10 bg-white/3 p-3 text-left">
+                  <label class="flex items-start gap-2.5 cursor-pointer text-xs text-white/75">
+                    <input v-model="consentPersonalData" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-white/20 bg-white/5 text-brand-accent focus:ring-brand-accent" required />
+                    <span>
+                      Я согласен на обработку моих персональных данных в соответствии с
+                      <RouterLink to="/privacy" class="text-brand-accent hover:underline">Политикой конфиденциальности</RouterLink>.
+                    </span>
+                  </label>
+                  <label class="flex items-start gap-2.5 cursor-pointer text-xs text-white/75">
+                    <input v-model="consentCookies" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-white/20 bg-white/5 text-brand-accent focus:ring-brand-accent" required />
+                    <span>
+                      Я согласен на использование cookie и аналогичных технологий, описанных в
+                      <RouterLink to="/privacy" class="text-brand-accent hover:underline">Политике использования cookie</RouterLink>.
+                    </span>
+                  </label>
+                  <label class="flex items-start gap-2.5 cursor-pointer text-xs text-white/65">
+                    <input v-model="consentMarketingEmails" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-white/20 bg-white/5 text-brand-accent focus:ring-brand-accent" />
+                    <span>Я хочу получать новости и предложения по email (необязательно).</span>
+                  </label>
                 </div>
 
                 <!-- Ссылка «Забыл пароль» (только login) -->

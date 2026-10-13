@@ -1,7 +1,14 @@
+export interface ConsentInput {
+  personalData?: boolean;
+  cookies?: boolean;
+  marketingEmails?: boolean;
+}
+
 export interface RegisterInput {
   email: string;
   username: string;
   password: string;
+  consent?: ConsentInput;
 }
 
 export interface LoginInput {

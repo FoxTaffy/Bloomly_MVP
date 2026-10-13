@@ -58,6 +58,22 @@ describe('auth: register → verify → login → refresh → logout', () => {
     expect(after.status).toBe(401);
   });
 
+  it('requires explicit personal-data consent and cookie consent before registration', async () => {
+    const noConsent = await api('POST', '/api/auth/register', { body: { username: 'alice2', email: 'alice2@test.local', password: PASSWORD } });
+    expect(noConsent.status).toBe(400);
+    expect(noConsent.json.error.code).toBe('REGISTRATION_ERROR');
+
+    const withConsent = await api('POST', '/api/auth/register', {
+      body: {
+        username: 'alice2',
+        email: 'alice2@test.local',
+        password: PASSWORD,
+        consent: { personalData: true, cookies: true, marketingEmails: false },
+      },
+    });
+    expect(withConsent.status).toBe(201);
+  });
+
   it('rejects garbage and missing refresh tokens', async () => {
     expect((await api('POST', '/api/auth/refresh')).status).toBe(401);
     expect((await api('POST', '/api/auth/refresh', { cookies: { refresh_token: 'nope' } })).status).toBe(401);

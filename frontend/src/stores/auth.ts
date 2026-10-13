@@ -123,11 +123,16 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function register(email: string, username: string, password: string): Promise<void> {
+  async function register(
+    email: string,
+    username: string,
+    password: string,
+    consent?: { personalData?: boolean; cookies?: boolean; marketingEmails?: boolean }
+  ): Promise<void> {
     isLoading.value = true
     error.value = null
     try {
-      const res = await api.post('/auth/register', { email, username, password })
+      const res = await api.post('/auth/register', { email, username, password, consent })
       const data = res.data
       if (!data.success) throw new Error(data.error?.message ?? 'Registration failed')
       // НЕ логиним автоматически — ждём подтверждения OTP

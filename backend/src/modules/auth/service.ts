@@ -126,6 +126,11 @@ export class AuthService {
     if (username.length > 30) throw new Error('Имя пользователя не может быть длиннее 30 символов');
     if (password.length < 8) throw new Error('Пароль должен содержать минимум 8 символов');
     if (password.length > 128) throw new Error('Пароль слишком длинный');
+
+    const consent = data.consent ?? {};
+    if (consent.personalData !== true) throw new Error('Необходимо согласие на обработку персональных данных');
+    if (consent.cookies !== true) throw new Error('Необходимо согласие на использование cookie и аналогичных технологий');
+
     const email = data.email.toLowerCase().trim();
     const hashedPassword = await bcrypt.hash(password, 10);
 

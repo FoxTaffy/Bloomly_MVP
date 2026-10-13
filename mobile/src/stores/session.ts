@@ -16,7 +16,12 @@ interface SessionState {
   hydrate: () => Promise<void>;
   setSession: (token: string, refreshToken: string | undefined, user: AuthUser) => Promise<void>;
   login: (email: string, password: string, remember?: boolean) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  register: (
+    username: string,
+    email: string,
+    password: string,
+    consent?: { personalData?: boolean; cookies?: boolean; marketingEmails?: boolean }
+  ) => Promise<void>;
   verifyEmail: (email: string, code: string, remember?: boolean) => Promise<void>;
   resendOtp: (email: string, purpose: 'register' | 'reset' | 'unfreeze') => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
@@ -60,8 +65,8 @@ export const useSession = create<SessionState>((set, get) => ({
     await get().setSession(token, refreshToken, user);
   },
 
-  register: async (username, email, password) => {
-    await api.post('/auth/register', { username, email, password });
+  register: async (username, email, password, consent) => {
+    await api.post('/auth/register', { username, email, password, consent });
   },
 
   verifyEmail: async (email, code, remember = true) => {
