@@ -13,7 +13,8 @@
     "db:backfill-tag-affinity": "node --loader ts-node/esm src/scripts/backfillTagAffinity.ts",
     "db:cleanup-orphaned-media": "node --loader ts-node/esm src/scripts/cleanupOrphanedMedia.ts",
     "db:cleanup-deleted-media": "node --loader ts-node/esm src/scripts/cleanupDeletedMedia.ts",
-    "db:migrate-legacy-private-media": "node --loader ts-node/esm src/scripts/migrateLegacyPrivateMedia.ts"
+    "db:migrate-legacy-private-media": "node --loader ts-node/esm src/scripts/migrateLegacyPrivateMedia.ts",
+    "db:release-unverified-accounts": "node --loader ts-node/esm src/scripts/releaseUnverifiedAccounts.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

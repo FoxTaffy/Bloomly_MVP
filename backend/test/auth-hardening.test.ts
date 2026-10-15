@@ -10,7 +10,7 @@ describe('auth: забаненный email не освобождается пр�
     const email = 'banned@test.local';
     await createUser({ email, username: 'banned_old', deleted_at: new Date(), is_banned: true, frozen_reason: '[AUTOMOD BAN] spam' });
 
-    const reg = await api('POST', '/api/auth/register', { body: { username: 'banned_new', email, password: PASSWORD } });
+    const reg = await api('POST', '/api/auth/register', { body: { username: 'banned_new', email, password: PASSWORD, consent: { personalData: true, cookies: true } } });
     expect(reg.status).toBe(400);
     expect(await prisma.user.count({ where: { email } })).toBe(1);
     expect(await prisma.user.count({ where: { username: 'banned_new' } })).toBe(0);
@@ -20,7 +20,7 @@ describe('auth: забаненный email не освобождается пр�
     const email = 'selfdel@test.local';
     await createUser({ email, username: 'selfdel_old', deleted_at: new Date(), is_banned: false });
 
-    const reg = await api('POST', '/api/auth/register', { body: { username: 'selfdel_new', email, password: PASSWORD } });
+    const reg = await api('POST', '/api/auth/register', { body: { username: 'selfdel_new', email, password: PASSWORD, consent: { personalData: true, cookies: true } } });
     expect(reg.status).toBe(201);
   });
 });

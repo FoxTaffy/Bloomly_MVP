@@ -48,7 +48,7 @@ describe('auth: resend-otp и лимиты', () => {
     for (let i = 0; i < 6; i++) {
       const res = await api('POST', '/api/auth/register', {
         ip,
-        body: { username: `spam_user_${i}`, email: `spam${i}@test.local`, password: 'Passw0rd!long' },
+        body: { username: `spam_user_${i}`, email: `spam${i}@test.local`, password: 'Passw0rd!long', consent: { personalData: true, cookies: true } },
       });
       statuses.push(res.status);
     }
