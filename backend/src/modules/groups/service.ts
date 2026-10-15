@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma.js';
 import { sanitizeDisplayText } from '../../lib/sanitizeText.js';
 import { containsToxicLanguage } from '../automod/service.js';
@@ -79,7 +80,8 @@ export const DEFAULT_TODO_COLUMNS = [
   { key: 'COLORING', label: 'Цвет', icon: 'Palette', color: '#8b5cf6' },
   { key: 'FINISHED', label: 'Готово', icon: 'CheckCircle2', color: '#10b981' },
 ];
-export interface TodoColumn { key: string; label: string; icon: string; color: string }
+// A type alias (not an interface) so it is assignable to Prisma's JSON input type.
+export type TodoColumn = { key: string; label: string; icon: string; color: string }
 
 const GROUP_SELECT = {
   id: true,
@@ -204,7 +206,7 @@ export const groupService = {
     const limit = Math.min(50, Math.max(1, parseInt(query.limit ?? '20', 10)));
     const skip = (page - 1) * limit;
 
-    const where: any = { deleted_at: null };
+    const where: Prisma.GroupWhereInput = { deleted_at: null };
     if (query.type) where.type = query.type;
     if (query.search) {
       where.OR = [
@@ -219,7 +221,7 @@ export const groupService = {
     ]);
 
     // Attach computed badge_level
-    const enriched = groups.map((g: any) => ({ ...g, badge_level: getGroupBadgeLevel(g.members_count) }));
+    const enriched = groups.map((g) => ({ ...g, badge_level: getGroupBadgeLevel(g.members_count) }));
 
     return { groups: enriched, total, page, limit };
   },
@@ -381,7 +383,7 @@ export const groupService = {
       ? await prisma.group.findUnique({ where: { id: groupId }, select: { avatar_url: true, banner_url: true, group_bg_url: true, owner_id: true } })
       : null;
 
-    const data: any = {};
+    const data: Prisma.GroupUpdateInput = {};
     if (input.name !== undefined) {
       const name = sanitizeDisplayText(input.name ?? '', 120);
       if (!name) throw new Error('Group name is required');
@@ -514,7 +516,7 @@ export const groupService = {
 
     // Best-effort: wipe the actual files from storage before removing the DB rows, so deleting
     // a group never leaves the media behind as orphaned MinIO objects.
-    const sponsors = Array.isArray(group.sponsors) ? (group.sponsors as any[]) : [];
+    const sponsors = Array.isArray(group.sponsors) ? (group.sponsors as Array<{ logo_url?: string | null } | null>) : [];
     const mediaUrls = [
       ...posts.flatMap((p) => [...p.media_urls, ...p.media_original_urls]),
       group.avatar_url,
@@ -555,8 +557,8 @@ export const groupService = {
         include: { group: { select: GROUP_LIST_SELECT } },
       });
       created = true;
-    } catch (err: any) {
-      if (err.code === 'P2002') {
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         membership = await prisma.groupMember.findUniqueOrThrow({
           where: { group_id_user_id: { group_id: groupId, user_id: userId } },
           include: { group: { select: GROUP_LIST_SELECT } },
@@ -612,7 +614,7 @@ export const groupService = {
 
   async getMembers(groupId: string, page = 1, limit = 30, viewerId: string | null = null) {
     const skip = (page - 1) * limit;
-    const where: any = { group_id: groupId };
+    const where: Prisma.GroupMemberWhereInput = { group_id: groupId };
     // Owner's "hide admins" / "hide members" settings apply to everyone below admin level.
     const viewerWeight = viewerId ? await groupService.getRoleWeight(groupId, viewerId) : 0;
     if (viewerWeight < 2) {
@@ -770,7 +772,7 @@ export const groupService = {
   },
 
   async updateEvent(eventId: string, input: UpdateEventInput) {
-    const data: any = {};
+    const data: Prisma.EventUpdateInput = {};
     if (input.title !== undefined) data.title = input.title;
     if (input.description !== undefined) data.description = input.description;
     if (input.bannerUrl !== undefined) data.banner_url = input.bannerUrl;
@@ -813,7 +815,7 @@ export const groupService = {
     const limit = Math.min(50, Math.max(1, parseInt(query.limit ?? '20', 10)));
     const skip = (page - 1) * limit;
 
-    const where: any = { group: { deleted_at: null } };
+    const where: Prisma.EventWhereInput = { group: { deleted_at: null } };
     if (query.groupId) where.group_id = query.groupId;
     if (query.status) where.status = query.status;
     if (query.upcoming) where.starts_at = { gt: new Date() };
@@ -822,7 +824,7 @@ export const groupService = {
     }
 
     // Sort: 'popular' = by attendee_count desc then nearest date, default = starts_at asc
-    const orderBy: any[] = query.sort === 'popular'
+    const orderBy: Prisma.EventOrderByWithRelationInput[] = query.sort === 'popular'
       ? [{ attendee_count: 'desc' }, { starts_at: 'asc' }]
       : [{ starts_at: 'asc' }];
 
@@ -850,7 +852,7 @@ export const groupService = {
   },
 
   async updateTicketTier(tierId: string, input: Partial<Omit<CreateTicketTierInput, 'eventId'>>) {
-    const data: any = {};
+    const data: Prisma.TicketTierUpdateInput = {};
     if (input.name !== undefined) data.name = sanitizeDisplayText(input.name ?? '', 100);
     if (input.price !== undefined) data.price = input.price;
     if (input.currency !== undefined) data.currency = input.currency;
@@ -926,7 +928,7 @@ export const groupService = {
 
   // ── Commission Info (Creative groups) ──────────────────────────────────────
   async upsertCommission(groupId: string, input: UpdateCommissionInput) {
-    const data: any = {};
+    const data: Omit<Prisma.CommissionInfoUncheckedCreateInput, 'group_id'> = {};
     if (input.status !== undefined) data.status = input.status;
     if (input.basePrices !== undefined) data.base_prices = input.basePrices;
     if (input.currency !== undefined) data.currency = input.currency;
@@ -1385,7 +1387,7 @@ export const groupService = {
   },
 
   async updateSubEvent(subEventId: string, input: UpdateSubEventInput) {
-    const data: any = {};
+    const data: Prisma.SubEventUpdateInput = {};
     if (input.title !== undefined) data.title = input.title;
     if (input.type !== undefined) data.type = input.type;
     if (input.speaker !== undefined) data.speaker = input.speaker;
@@ -1411,7 +1413,7 @@ export const groupService = {
   },
 
   async getGroupMessages(groupId: string, before?: string, limit = 50) {
-    const where: any = { group_id: groupId, deleted_at: null };
+    const where: Prisma.GroupMessageWhereInput = { group_id: groupId, deleted_at: null };
     if (before) where.created_at = { lt: new Date(before) };
     const messages = await prisma.groupMessage.findMany({
       where,
@@ -1461,7 +1463,7 @@ export const groupService = {
   // ── Discover ──────────────────────────────────────────────────────────────
   async discoverGroups(userId: string | null, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
-    const where: any = { deleted_at: null, is_public: true };
+    const where: Prisma.GroupWhereInput = { deleted_at: null, is_public: true };
     if (userId) {
       // Exclude groups where user is already a member
       where.members = { none: { user_id: userId } };
@@ -1506,7 +1508,7 @@ export const groupService = {
     const fallbackKey = clean[0].key;
 
     await prisma.$transaction([
-      prisma.group.update({ where: { id: groupId }, data: { todo_columns: clean as any } }),
+      prisma.group.update({ where: { id: groupId }, data: { todo_columns: clean } }),
       prisma.groupTodoItem.updateMany({
         where: { group_id: groupId, deleted_at: null, status: { notIn: validKeys } },
         data: { status: fallbackKey },
@@ -1550,7 +1552,7 @@ export const groupService = {
     // Пункт ищем только внутри своей группы: владелец группы A не должен править пункты группы B
     const owned = await prisma.groupTodoItem.findFirst({ where: { id: itemId, group_id: groupId, deleted_at: null }, select: { id: true } });
     if (!owned) throw Object.assign(new Error('Todo item not found'), { statusCode: 404 });
-    const update: any = {};
+    const update: Prisma.GroupTodoItemUpdateInput = {};
     if (data.title !== undefined) update.title = data.title.trim();
     if (data.description !== undefined) update.description = data.description?.trim() || null;
     if (data.status !== undefined) {
@@ -1633,7 +1635,7 @@ export const groupService = {
           customer_id: customerId,
           title: input.title.trim(),
           description: input.description?.trim() || null,
-          form_data: (input.formData ?? undefined) as any,
+          form_data: (input.formData ?? undefined) as Prisma.InputJsonValue | undefined,
           deadline_at: input.deadlineAt ? new Date(input.deadlineAt) : null,
           position: (last?.position ?? -1) + 1,
           conversation_id: conversation.id,

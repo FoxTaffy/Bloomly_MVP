@@ -1,11 +1,14 @@
 export interface JwtUser {
   id: string;
+  role?: string;
 }
 
 export type GroupType = 'event' | 'creative' | 'static' | 'news' | 'shop' | 'community' | 'brand';
 export type EventStatus = 'announced' | 'tickets_open' | 'sold_out' | 'active' | 'finished' | 'teaser';
 export type CommissionStatus = 'open' | 'closed' | 'waitlist';
-export type MemberRole = 'owner' | 'admin' | 'moderator' | 'member' | 'dealer' | 'volunteer' | 'guest_of_honor';
+export const MEMBER_ROLES = ['owner', 'admin', 'moderator', 'member', 'dealer', 'volunteer', 'guest_of_honor'] as const;
+export type MemberRole = typeof MEMBER_ROLES[number];
+export const isMemberRole = (v: unknown): v is MemberRole => (MEMBER_ROLES as readonly unknown[]).includes(v);
 
 export interface CreateGroupInput {
   name: string;
@@ -161,7 +164,9 @@ export interface UpdateSubEventInput {
   description?: string;
 }
 
-export type OrderStatus = 'WAITING' | 'SKETCH' | 'LINEART' | 'COLORING' | 'FINISHED';
+export const ORDER_STATUSES = ['WAITING', 'SKETCH', 'LINEART', 'COLORING', 'FINISHED'] as const;
+export type OrderStatus = typeof ORDER_STATUSES[number];
+export const isOrderStatus = (v: unknown): v is OrderStatus => (ORDER_STATUSES as readonly unknown[]).includes(v);
 
 export interface CreateOrderInput {
   title: string;

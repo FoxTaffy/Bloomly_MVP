@@ -9,7 +9,7 @@ import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import SoonBadge from '@/components/groups/SoonBadge.vue'
 import ImageCropModal from '@/components/shared/ImageCropModal.vue'
-import { useGroupsStore, type GroupMember, type CustomRole, type GroupPermission } from '@/stores/groups'
+import { useGroupsStore, type GroupMember, type CustomRole, type GroupPermission, type MemberRole } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useShopStore } from '@/stores/shop'
 import { useNsfwMode } from '@/composables/useNsfwMode'
@@ -112,7 +112,7 @@ const sections = computed(() => {
 const openSection = ref<string>('sec-general')
 
 // ── Members management ──────────────────────────────────────────────────────
-const MEMBER_ROLES = computed(() => [
+const MEMBER_ROLES = computed((): { value: MemberRole; label: string; color: string; iconPath: string }[] => [
   { value: 'admin',         label: langStore.t.roleAdmin,  color: '#3b82f6',  iconPath: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
   { value: 'moderator',     label: langStore.t.groupSettingsRoleModerator,       color: '#a78bfa', iconPath: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
   { value: 'member',        label: langStore.t.roleMember,         color: '#9ca3af', iconPath: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
@@ -156,12 +156,12 @@ async function loadMembers() {
   }
 }
 
-async function doSetRole(userId: string, role: string) {
+async function doSetRole(userId: string, role: MemberRole) {
   if (!group.value?.id) return
   memberSaving.value[userId] = true
   roleDropdownFor.value = null
   try {
-    const updated = await groupsStore.changeMemberRole(group.value.id, userId, role as any)
+    const updated = await groupsStore.changeMemberRole(group.value.id, userId, role)
     const idx = membersList.value.findIndex(m => m.user_id === userId)
     if (idx !== -1) membersList.value[idx] = { ...membersList.value[idx], role: updated.role }
     showToast('success', langStore.t.groupSettingsRoleUpdated)
