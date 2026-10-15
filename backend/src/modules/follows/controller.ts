@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { followsService } from './service.js';
 import { requestIsAdult } from '../../lib/age.js';
+import { resolveNsfwMode } from '../../lib/contentFilters.js';
 
 interface JwtUser { id: string; role: string }
 
@@ -79,14 +80,14 @@ export const getFollowCountsHandler = async (
 };
 
 export const getSubscriptionFeedHandler = async (
-  req: FastifyRequest<{ Querystring: { safeMode?: string; page?: string } }>,
+  req: FastifyRequest<{ Querystring: { safeMode?: string; nsfw?: string; page?: string } }>,
   reply: FastifyReply,
 ) => {
   try {
     const { id: userId } = req.user as JwtUser;
-    const safeMode = !requestIsAdult(req.user) || req.query.safeMode === 'true';
+    const nsfwMode = resolveNsfwMode({ nsfw: req.query.nsfw, safeMode: req.query.safeMode, isAdult: requestIsAdult(req.user) });
     const page    = Math.max(1, parseInt(req.query.page ?? '1', 10) || 1);
-    const posts = await followsService.getSubscriptionFeed(userId, safeMode, page);
+    const posts = await followsService.getSubscriptionFeed(userId, nsfwMode, page);
     return reply.send({ success: true, data: { posts }, error: null });
   } catch (e: any) {
     return reply.code(500).send({ success: false, data: null, error: { code: 'FEED_ERROR', message: e.message } });

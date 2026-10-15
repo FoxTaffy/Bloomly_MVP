@@ -428,7 +428,7 @@ async function deletePost() {
 
 // ── Click-outside directive ────────────────────────────────────────────────
 const vClickOutside = {
-  mounted(el: HTMLElement, binding: any) {
+  mounted(el: HTMLElement & { _clickOutside?: (e: Event) => void }, binding: any) {
     el._clickOutside = (e: Event) => {
       if (!el.contains(e.target as Node)) binding.value(e)
     }

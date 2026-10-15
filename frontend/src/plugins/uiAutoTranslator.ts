@@ -114,6 +114,9 @@ function flush() {
   flushT = setTimeout(() => drain(), 120)
 }
 
+// `lang` is reassigned while drain() awaits; reading it through a function keeps TS from narrowing it
+const currentLang = (): Lang => lang
+
 async function drain() {
   if (draining || lang === 'RU' || !queue.length) return
   draining = true
@@ -161,7 +164,7 @@ async function drain() {
   isTranslatingUI.value = false
 
   // New nodes may have appeared while draining
-  if (queue.length && lang !== 'RU') drain()
+  if (queue.length && currentLang() !== 'RU') drain()
 }
 
 // ─── DOM walker ───────────────────────────────────────────────────────────────

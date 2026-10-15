@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { invalidateFriendsCache } from '@/stores/friends'
 import { ref, computed, onMounted, watch, onUnmounted, onActivated, onDeactivated, reactive, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -57,7 +58,8 @@ const isLoadingPosts = ref(true)
 
 // Feed controls
 // nsfwMode=false (default): NSFW content is hidden. nsfwMode=true: NSFW is shown.
-const { nsfwEnabled: nsfwMode } = useNsfwMode()
+// nsfwMode ('hide' | 'blur' | 'show') is sent to every feed endpoint; nsfwEnabled ('show' only) drives UI bits.
+const { nsfwMode, nsfwEnabled } = useNsfwMode()
 const feedMode = ref<'for-you' | 'subscriptions' | 'trending' | 'news' | 'photos' | 'nsfw'>('for-you')
 const searchQuery = ref('')
 const selectedCategory = ref('')
@@ -283,20 +285,20 @@ const fetchPosts = async (loadMore = false) => {
     if (feedMode.value === 'for-you') {
       const params = new URLSearchParams()
       params.append('page', currentPage.value.toString())
-      if (!nsfwMode.value) params.append('safeMode', 'true')
+      params.append('nsfw', nsfwMode.value)
       const res = await api.get(`/posts/personalized?${params.toString()}`)
       if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
     } else if (feedMode.value === 'subscriptions') {
       const params = new URLSearchParams()
       params.append('page', currentPage.value.toString())
-      if (!nsfwMode.value) params.append('safeMode', 'true')
+      params.append('nsfw', nsfwMode.value)
       const res = await api.get(`/follows/feed?${params.toString()}`)
       if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
     } else if (feedMode.value === 'trending') {
       const params = new URLSearchParams()
       params.append('sort', 'hot')
       params.append('page', currentPage.value.toString())
-      if (!nsfwMode.value) params.append('safeMode', 'true')
+      params.append('nsfw', nsfwMode.value)
       if (selectedTag.value) params.append('tag', selectedTag.value)
       const res = await api.get(`/posts?${params.toString()}`)
       if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
@@ -304,7 +306,7 @@ const fetchPosts = async (loadMore = false) => {
       const params = new URLSearchParams()
       params.append('sort', 'new')
       params.append('page', currentPage.value.toString())
-      if (!nsfwMode.value) params.append('safeMode', 'true')
+      params.append('nsfw', nsfwMode.value)
       if (selectedTag.value) params.append('tag', selectedTag.value)
       const res = await api.get(`/posts?${params.toString()}`)
       if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
@@ -312,11 +314,11 @@ const fetchPosts = async (loadMore = false) => {
       const params = new URLSearchParams()
       params.append('hasMedia', 'true')
       params.append('page', currentPage.value.toString())
-      if (!nsfwMode.value) params.append('safeMode', 'true')
+      params.append('nsfw', nsfwMode.value)
       const res = await api.get(`/posts?${params.toString()}`)
       if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
     } else if (feedMode.value === 'nsfw') {
-      const res = await api.get(`/posts?safeMode=false&page=${currentPage.value}`)
+      const res = await api.get(`/posts?nsfw=show&page=${currentPage.value}`)
       if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
     } else {
       // fallback: general posts
@@ -326,16 +328,19 @@ const fetchPosts = async (loadMore = false) => {
       if (selectedTag.value) params.append('tag', selectedTag.value)
       params.append('sort', sortBy.value)
       params.append('page', currentPage.value.toString())
-      if (!nsfwMode.value) params.append('safeMode', 'true')
+      params.append('nsfw', nsfwMode.value)
       const res = await api.get(`/posts?${params.toString()}`)
       if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
     }
     
     // Отфильтровываем посты с удалёнными/null авторами — но не групповые (у них author
     // намеренно скрыт бэкендом через maskGroupAuthor, это не значит "автор удалён")
+    // «Есть ли ещё страницы» решаем по ответу сервера, а не по результату клиентской фильтрации:
+    // иначе страница, где все посты отсеялись, обрывает бесконечную прокрутку.
+    const serverPageWasEmpty = loadedPosts.length === 0
     loadedPosts = loadedPosts.filter((p: any) => p && (p.author || (p.groupPosts && p.groupPosts.length > 0)))
 
-    if (loadedPosts.length === 0) {
+    if (serverPageWasEmpty) {
       hasMorePosts.value = false;
     } else {
       if (loadMore) {
@@ -369,6 +374,8 @@ const handleScroll = () => {
 
 const selectedTag = ref('')
 watch([selectedCategory, sortBy, nsfwMode, feedMode, selectedTag], () => { fetchPosts() })
+// The NSFW tab only exists in 'show' mode — leaving that mode must not strand the user on it.
+watch(nsfwEnabled, (on) => { if (!on && feedMode.value === 'nsfw') feedMode.value = 'for-you' })
 
 // Notifications handled by AppHeader component
 
@@ -390,8 +397,22 @@ const fetchFollowStatusForPosts = async (loadedPosts: any[]) => {
 const toggleFollow = async (userId: string) => {
   try {
     const res = await api.post(`/follows/${userId}/toggle`)
-    if (res.data.success) followStatus[userId] = res.data.data.following
+    if (res.data.success) { followStatus[userId] = res.data.data.following; invalidateFriendsCache() }
   } catch {}
+}
+
+// Optimistic follow for the recommended list: flip immediately, roll back on failure.
+const followRecommended = async (userId: string) => {
+  const prev = !!followStatus[userId]
+  followStatus[userId] = !prev
+  try {
+    const res = await api.post(`/follows/${userId}/toggle`)
+    if (!res.data.success) throw new Error('follow failed')
+    followStatus[userId] = res.data.data.following
+    invalidateFriendsCache()
+  } catch {
+    followStatus[userId] = prev
+  }
 }
 
 // ── Active Ads ───────────────────────────────────────────────────────────────
@@ -414,13 +435,15 @@ const fetchActiveAds = async () => {
 
 // ── Recommended users (from DB) ──────────────────────────────────────────────
 const recommendedUsers = ref<any[]>([])
+const isLoadingRecommended = ref(true)
 // Скрываем AD-профили если NSFW выключен
 const visibleRecommendedUsers = computed(() =>
-  nsfwMode.value
+  nsfwEnabled.value
     ? recommendedUsers.value
     : recommendedUsers.value.filter((u: any) => u.role !== 'ad')
 )
 const fetchRecommendedUsers = async () => {
+  isLoadingRecommended.value = true
   try {
     const res = await api.get('/users/recommended')
     if (res.data.success) {
@@ -436,7 +459,11 @@ const fetchRecommendedUsers = async () => {
         fetchOnlineStatus(ids)
       }
     }
-  } catch {}
+  } catch {
+    recommendedUsers.value = []
+  } finally {
+    isLoadingRecommended.value = false
+  }
 }
 
 // ── Upcoming events (real from groups/events API) ──────────────────────────
@@ -509,7 +536,7 @@ const fetchTrendingTags = async () => {
   isFetchingTags.value = true
   try {
     const res = await api.get('/posts/trending-tags', {
-      params: { includeNsfw: nsfwMode.value ? 'true' : 'false' },
+      params: { includeNsfw: nsfwEnabled.value ? 'true' : 'false' },
     })
     if (res.data.success) trendingTags.value = res.data.data.tags
   } catch {} finally { isFetchingTags.value = false }
@@ -875,7 +902,7 @@ onDeactivated(() => {
     </div>
 
     <!-- Header -->
-    <AppHeader v-model:nsfwMode="nsfwMode" />
+    <AppHeader :nsfw-mode="nsfwEnabled" />
 
     <div class="max-w-7xl mx-auto flex pt-16 md:pt-24 px-3 md:px-4 gap-4 md:gap-8">
       <!-- Left Sidebar -->
@@ -934,7 +961,7 @@ onDeactivated(() => {
         <div
           class="bg-brand-card border rounded-3xl shadow-xl transition-colors"
           :class="showPostForm ? 'border-brand-accent/30' : 'border-brand-border'"
-          @dragenter.prevent="showPostForm = true; onFormDragEnter()"
+          @dragenter.prevent="showPostForm = true; onFormDragEnter($event)"
           @dragleave.prevent="onFormDragLeave"
           @dragover.prevent
           @drop="onFormDrop"
@@ -1285,7 +1312,7 @@ onDeactivated(() => {
             class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
             {{ langStore.t.feedPhoto }}
           </button>
-          <button v-if="nsfwMode" @click="feedMode = 'nsfw'; selectedTag = ''"
+          <button v-if="nsfwEnabled" @click="feedMode = 'nsfw'; selectedTag = ''"
             :class="feedMode === 'nsfw' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
             class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
             NSFW
@@ -1433,13 +1460,13 @@ onDeactivated(() => {
         </div>
 
         <!-- Recommended friends -->
-        <div>
+        <div v-if="isLoadingRecommended || visibleRecommendedUsers.length > 0">
           <div class="flex items-center justify-between mb-3">
             <h3 class="font-bold text-white text-sm">{{ langStore.t.recommendedFriends }}</h3>
           </div>
 
           <!-- Skeletons -->
-          <div v-if="visibleRecommendedUsers.length === 0" class="space-y-2">
+          <div v-if="isLoadingRecommended" class="space-y-2">
             <div v-for="n in 3" :key="n" class="flex items-center gap-3 px-1 animate-pulse">
               <div class="w-10 h-10 rounded-full bg-white/8 flex-shrink-0"></div>
               <div class="flex-1 space-y-1.5">
@@ -1484,13 +1511,13 @@ onDeactivated(() => {
 
               <!-- Follow button -->
               <button
-                @click.stop="toggleFollow(user.id)"
+                @click.stop.prevent="followRecommended(user.id)"
                 class="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all"
                 :class="followStatus[user.id]
                   ? 'border-brand-border text-white/55 hover:border-rose-500/40 hover:text-rose-400'
                   : 'border-brand-accent/50 text-brand-accent hover:bg-brand-accent hover:text-white hover:border-brand-accent'"
               >
-                {{ followStatus[user.id] ? 'Читаю' : 'Читать' }}
+                {{ followStatus[user.id] ? 'Вы подписаны' : 'Читать' }}
               </button>
             </router-link>
           </div>

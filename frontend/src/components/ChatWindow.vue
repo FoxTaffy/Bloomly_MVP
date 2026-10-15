@@ -1,8 +1,8 @@
 <template>
-  <div class="flex flex-col h-full bg-brand-bg overflow-hidden relative">
+  <div class="flex flex-col h-full bg-transparent overflow-hidden relative">
 
     <!-- ── Selection bar (replaces header while messages are selected) ──────── -->
-    <div v-if="selectionMode" class="flex items-center gap-3 px-4 py-3 border-b border-brand-border bg-brand-card flex-shrink-0">
+    <div v-if="selectionMode" class="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-brand-card/80 backdrop-blur-xl flex-shrink-0 z-10">
       <button @click="clearSelection" class="p-1.5 rounded-xl hover:bg-brand-bg text-white/55 hover:text-white transition-colors" :title="langStore.t.chatCancelSelectionTitle">
         <BIcon name="X" class="w-4 h-4" />
       </button>
@@ -16,7 +16,7 @@
     </div>
 
     <!-- ── Header ─────────────────────────────────────────────────────────── -->
-    <div v-else class="flex items-center gap-3 px-4 py-3 border-b border-brand-border bg-brand-card flex-shrink-0">
+    <div v-else class="flex items-center gap-3 px-3 sm:px-4 py-2.5 border-b border-white/[0.06] bg-brand-card/70 backdrop-blur-xl flex-shrink-0 z-10">
       <button @click="$emit('back')" class="sm:hidden p-1.5 rounded-xl hover:bg-brand-bg text-white/55 hover:text-white transition-colors">
         <BIcon name="ArrowLeft" class="w-4 h-4" />
       </button>
@@ -839,7 +839,7 @@
     </Transition>
 
     <!-- ── Message list ────────────────────────────────────────────────────── -->
-    <div ref="scrollEl" class="flex-1 overflow-y-auto min-h-0 px-4 py-4 space-y-1 relative" @scroll="onScroll" @click="onMsgListClick">
+    <div ref="scrollEl" class="chat-wallpaper flex-1 overflow-y-auto min-h-0 px-3 sm:px-5 py-4 space-y-0.5 relative" @scroll="onScroll" @click="onMsgListClick">
 
       <!-- Notes banner -->
       <div v-if="!conv?.is_group && !other" class="flex flex-col items-center gap-3 py-6 px-4 mb-2">
@@ -888,8 +888,8 @@
       <template v-else>
         <template v-for="(msg, idx) in displayList" :key="msg.id">
         <!-- Date divider -->
-        <div v-if="shouldShowDateDivider(idx)" class="flex items-center justify-center my-3 select-none">
-          <span class="px-3 py-1 rounded-full bg-brand-bg/70 backdrop-blur-sm border border-brand-accent/25 text-[10px] font-bold text-white/55 tracking-wide uppercase">
+        <div v-if="shouldShowDateDivider(idx)" class="sticky top-1 z-[5] flex items-center justify-center my-3 select-none">
+          <span class="px-3 py-1 rounded-full bg-brand-card/80 backdrop-blur-md border border-white/10 text-[10px] font-bold text-white/60 tracking-wide uppercase shadow-lg">
             {{ formatDateDivider(msg.created_at) }}
           </span>
         </div>
@@ -1207,8 +1207,8 @@
               :class="[
                 'relative px-3 py-[7px] rounded-2xl text-sm leading-relaxed break-words min-w-[60px] transition-shadow',
                 isMine(msg)
-                  ? 'bg-brand-accent text-white rounded-br-md'
-                  : 'bg-brand-card text-brand-offwhite border border-brand-border/60 rounded-bl-md shadow-sm',
+                  ? 'bg-gradient-to-br from-brand-accent to-[#3d56b8] text-white rounded-br-md shadow-[0_6px_18px_rgba(76,103,207,0.28)]'
+                  : 'bg-brand-card/90 text-brand-offwhite border border-white/[0.07] rounded-bl-md shadow-sm backdrop-blur-sm',
                 msg._sending ? 'opacity-60' : '',
                 translateMode && translations[msg.id] && !isMine(msg) ? 'border-brand-accent/40' : '',
               ]">
@@ -1359,7 +1359,7 @@
         <div class="w-6 h-6 flex-shrink-0">
           <img v-if="other?.avatar_url" :src="other.avatar_url" class="w-6 h-6 rounded-full object-cover border border-brand-border" @error="onAvatarError" />
         </div>
-        <div class="bg-brand-card border border-brand-border rounded-2xl rounded-bl-sm px-3 py-2.5 flex items-center gap-1">
+        <div class="bg-brand-card/90 border border-white/10 rounded-2xl rounded-bl-sm px-3 py-2.5 flex items-center gap-1 backdrop-blur-sm">
           <span class="w-1.5 h-1.5 rounded-full bg-brand-muted animate-bounce [animation-delay:-0.3s]" />
           <span class="w-1.5 h-1.5 rounded-full bg-brand-muted animate-bounce [animation-delay:-0.15s]" />
           <span class="w-1.5 h-1.5 rounded-full bg-brand-muted animate-bounce" />
@@ -1374,7 +1374,7 @@
     <Transition name="scroll-btn">
       <button v-if="showScrollDown" type="button"
         @click="scrollToBottom(true); unreadInChat = 0"
-        class="absolute right-4 bottom-[88px] z-20 w-10 h-10 rounded-full bg-brand-card border border-brand-border shadow-xl flex items-center justify-center text-white hover:bg-brand-accent hover:border-brand-accent active:scale-95 transition-all"
+        class="absolute right-4 bottom-[96px] z-20 w-10 h-10 rounded-full bg-brand-card/90 backdrop-blur-md border border-white/10 shadow-xl flex items-center justify-center text-white hover:bg-brand-accent hover:border-brand-accent active:scale-95 transition-all"
         :title="langStore.t.chatScrollDownTitle">
         <BIcon name="ChevronDown" class="w-5 h-5" />
         <span v-if="unreadInChat > 0"
@@ -1497,7 +1497,7 @@
                     :src="c.is_group ? c.avatar_url! : c.other_participants[0].user.avatar_url!"
                     class="w-full h-full object-cover" @error="onAvatarError" />
                   <div v-else class="w-full h-full flex items-center justify-center text-brand-accent text-xs font-bold">
-                    {{ (c.is_group ? c.name : (c.other_participants[0]?.user?.display_name || c.other_participants[0]?.user?.username) || '?')[0]?.toUpperCase() }}
+                    {{ ((c.is_group ? c.name : (c.other_participants[0]?.user?.display_name || c.other_participants[0]?.user?.username)) || '?')[0]?.toUpperCase() }}
                   </div>
                 </div>
                 <div class="flex-1 min-w-0">
@@ -1634,7 +1634,7 @@
     </Teleport>
     <!-- ── Order actions row (only in chats labeled "заказ") ────────────────── -->
     <div v-if="conv?.my_participant?.label === 'customer'"
-      class="px-3 pt-2.5 border-t border-brand-border bg-brand-card flex-shrink-0 flex items-center gap-2">
+      class="px-3 pt-2.5 border-t border-white/[0.06] bg-brand-card/80 backdrop-blur-xl flex-shrink-0 flex items-center gap-2">
       <button type="button" @click="showPaymentModal = true"
         class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-2xl bg-gradient-to-r from-brand-accent/15 to-brand-accent/5 border border-brand-accent/30 text-brand-accent text-xs font-bold hover:from-brand-accent/25 hover:to-brand-accent/10 transition-all active:scale-[0.98]">
         <span class="w-4 h-4 rounded-md bg-brand-accent/20 flex items-center justify-center">
@@ -1652,7 +1652,7 @@
     </div>
 
     <!-- ── Input ───────────────────────────────────────────────────────────── -->
-    <div class="px-3 py-3 border-t border-brand-border bg-brand-card flex-shrink-0 relative">
+    <div class="px-3 py-3 border-t border-white/[0.06] bg-brand-card/85 backdrop-blur-xl flex-shrink-0 relative">
       <!-- Tip quick-amount popover -->
       <Transition name="popover-up">
         <div v-if="showTipPicker" class="absolute bottom-full right-3 mb-2 z-50 bg-brand-card border border-brand-border rounded-2xl shadow-2xl p-3 w-56">
@@ -1691,37 +1691,18 @@
         </div>
       </Transition>
       <form @submit.prevent="submit" class="flex items-end gap-2">
-        <!-- Attachment button -->
         <button type="button" @click="fileInputEl?.click()"
           :disabled="isUploading || isRecording || pendingAttachments.length >= MAX_ATTACHMENTS"
-          class="flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center text-white/55 hover:text-brand-accent hover:bg-brand-bg transition-all disabled:opacity-40"
+          class="flex-shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center text-white/50 hover:text-brand-accent hover:bg-white/[0.06] transition-all disabled:opacity-40"
           :title="langStore.t.chatAttachMediaTitle">
           <BIcon v-if="isUploading" name="Loader2" class="w-4 h-4 animate-spin" />
-          <BIcon v-else name="Paperclip" class="w-4 h-4" />
+          <BIcon v-else name="Paperclip" class="w-4.5 h-4.5" />
         </button>
         <input ref="fileInputEl" type="file" multiple accept="image/*,video/*,audio/*" class="sr-only" @change="onFileChange" />
 
-        <!-- Emoji button -->
-        <button type="button"
-          @click="showEmojiPicker = !showEmojiPicker; showStickerPanel = false"
-          :class="['flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center transition-all',
-            showEmojiPicker ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/55 hover:text-brand-accent hover:bg-brand-bg']"
-          :title="langStore.t.chatEmojiTitle">
-          <BIcon name="Smile" class="w-5 h-5" />
-        </button>
-
-        <!-- Sticker button -->
-        <button type="button"
-          @click="showStickerPanel = !showStickerPanel; showEmojiPicker = false"
-          :class="['flex-shrink-0 w-10 h-10 rounded-2xl flex items-center justify-center transition-all',
-            showStickerPanel ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/55 hover:text-brand-accent hover:bg-brand-bg']"
-          :title="langStore.t.chatStickersTitle">
-          <BIcon name="Sticker" class="w-5 h-5" />
-        </button>
-
         <!-- Recording in progress bar (takes the place of the textarea row when recording) -->
         <button v-if="isRecording" type="button" @click="stopRecording"
-          class="flex-1 flex items-center gap-2 px-3 h-10 rounded-2xl bg-brand-error/15 border border-brand-error/40 text-brand-error hover:bg-brand-error/25 transition-all">
+          class="flex-1 flex items-center gap-2 px-3 h-11 rounded-[22px] bg-brand-error/15 border border-brand-error/40 text-brand-error hover:bg-brand-error/25 transition-all">
           <span class="w-2 h-2 rounded-full bg-brand-error animate-ping flex-shrink-0" />
           <span class="text-xs font-mono flex-1">{{ fmtRecording(recordingSeconds) }}</span>
           <span class="text-xs text-brand-error/70">{{ langStore.t.chatTapToSendHint }}</span>
@@ -2580,7 +2561,7 @@ const FWD_RE = /^↩️ Переслано от (.+?)\n/
 const STORY_REPLY_RE = /^\[story_reply:(\{[\s\S]*?\}|[^\]]*)\]\n?([\s\S]*)$/u
 
 /** Returns human-friendly short preview, stripping service tags */
-function previewMsgText(text: string | undefined, maxLen = 60): string {
+function previewMsgText(text: string | null | undefined, maxLen = 60): string {
   if (!text) return ''
   if (/^\[story_reply:/u.test(text)) return langStore.t.chatStoryReplyPreview
   return text.replace(FWD_RE, '').slice(0, maxLen)

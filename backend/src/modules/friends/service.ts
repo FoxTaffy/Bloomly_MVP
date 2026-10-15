@@ -49,12 +49,12 @@ export const friendsService = {
   /** Send a friend request from currentUserId to targetId */
   async sendRequest(requesterId: string, targetInput: string) {
     const addresseeId = await this._resolveTargetId(targetInput);
-    if (requesterId === addresseeId) throw new Error('Cannot send friend request to yourself');
+    if (requesterId === addresseeId) throw new Error('Нельзя отправить заявку самому себе');
 
     // Same block-awareness gap as messages/follows had: without this, a blocked user could
     // still friend-request their blocker (or vice versa) and route around the block entirely.
     if ((await isBlockedBy(addresseeId, requesterId)) || (await isBlockedBy(requesterId, addresseeId))) {
-      throw new Error('Cannot send friend request to this user');
+      throw new Error('Не удалось отправить заявку этому пользователю');
     }
 
     // Check if a friendship record already exists in either direction
@@ -68,17 +68,29 @@ export const friendsService = {
     });
 
     if (existing) {
-      if (existing.status === 'accepted') throw new Error('Already friends');
-      if (existing.status === 'pending') throw new Error('Friend request already sent');
+      if (existing.status === 'accepted') throw new Error('Вы уже друзья');
+      if (existing.status === 'pending') {
+        throw new Error(existing.requester_id === addresseeId
+          ? 'Этот пользователь уже отправил вам заявку — примите её'
+          : 'Заявка уже отправлена');
+      }
     }
 
-    const friendship = await prisma.friendship.create({
-      data: {
-        requester_id: requesterId,
-        addressee_id: addresseeId,
-        status: 'pending',
-      },
-    });
+    // Two concurrent requests (double click) can both pass the check above; the
+    // @@unique([requester_id, addressee_id]) index then rejects the second one with P2002.
+    let friendship;
+    try {
+      friendship = await prisma.friendship.create({
+        data: {
+          requester_id: requesterId,
+          addressee_id: addresseeId,
+          status: 'pending',
+        },
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') throw new Error('Заявка уже отправлена');
+      throw err;
+    }
 
     await notificationService.create({
       receiverId: addresseeId,
@@ -209,13 +221,22 @@ export const friendsService = {
     const followersSet = new Set(followerRows.map((r) => r.follower_id));
     const mutualIds = followingRows.map((r) => r.following_id).filter((id) => followersSet.has(id));
     if (!mutualIds.length) return [];
-    const users = await prisma.user.findMany({
-      where:   { id: { in: mutualIds }, deleted_at: null },
-      select:  FRIEND_USER_SELECT,
-    });
+    const [users, notifyRows] = await Promise.all([
+      prisma.user.findMany({
+        where:   { id: { in: mutualIds }, deleted_at: null },
+        select:  FRIEND_USER_SELECT,
+      }),
+      // Bell state for the whole list in one query (the card must not fetch it itself).
+      prisma.follow.findMany({
+        where:  { follower_id: userId, following_id: { in: mutualIds }, notify_posts: true },
+        select: { following_id: true },
+      }),
+    ]);
+    const notifySet = new Set(notifyRows.map((r) => r.following_id));
     return users
       .map((u) => ({
         ...u,
+        notify_posts: notifySet.has(u.id),
         online: onlineIds ? onlineIds.has(u.id) : false,
         device: onlineIds?.has(u.id) ? (deviceById?.get(u.id) ?? null) : null,
       }))
@@ -243,7 +264,8 @@ export const friendsService = {
       include: { follower: { select: FRIEND_USER_SELECT } },
       orderBy: { created_at: 'desc' },
     });
-    return rows.map((r) => r.follower);
+    // Non-mutual followers are not followed back, so there is no bell to ring.
+    return rows.map((r) => ({ ...r.follower, notify_posts: false }));
   },
 
   /** Following: people userId follows, excluding mutual friends */
@@ -254,7 +276,7 @@ export const friendsService = {
       include: { following: { select: FRIEND_USER_SELECT } },
       orderBy: { created_at: 'desc' },
     });
-    return rows.map((r) => r.following);
+    return rows.map((r) => ({ ...r.following, notify_posts: r.notify_posts }));
   },
 
   /** Get friendship status between two users */

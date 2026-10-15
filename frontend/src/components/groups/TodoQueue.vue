@@ -31,9 +31,13 @@ const STATUS_CONFIG: Record<TodoStatus, { label: string; colBg: string; headerCo
 }
 const STATUSES: TodoStatus[] = ['WAITING', 'SKETCH', 'LINEART', 'COLORING', 'FINISHED']
 
+function asTodoStatus(s: string): TodoStatus {
+  return (STATUSES as string[]).includes(s) ? (s as TodoStatus) : 'WAITING'
+}
+
 const byStatus = computed(() => {
   const map: Record<TodoStatus, ArtistQueueItem[]> = { WAITING: [], SKETCH: [], LINEART: [], COLORING: [], FINISHED: [] }
-  items.value.forEach(i => map[i.status].push(i))
+  items.value.forEach(i => map[asTodoStatus(i.status)].push(i))
   return map
 })
 
@@ -46,7 +50,7 @@ onMounted(load)
 
 function openEdit(item: ArtistQueueItem) {
   editingId.value  = item.id
-  formStatus.value = item.status
+  formStatus.value = asTodoStatus(item.status)
   form.value       = { title: item.title, description: item.description ?? '' }
   showModal.value  = true
 }
@@ -87,7 +91,7 @@ async function saveInline() {
 }
 
 async function moveNext(item: ArtistQueueItem) {
-  const idx = STATUSES.indexOf(item.status)
+  const idx = STATUSES.indexOf(asTodoStatus(item.status))
   if (idx >= STATUSES.length - 1) return
   const updated = await groupsStore.updateTodoItem(props.groupId, item.id, { status: STATUSES[idx + 1] })
   const i = items.value.findIndex(x => x.id === item.id)

@@ -8,6 +8,7 @@ import { useCollectionTranslate } from '@/composables/useAutoTranslate'
 import BIcon from './BIcon.vue'
 import StickerPanel from './StickerPanel.vue'
 import StickerRenderer from './StickerRenderer.vue'
+import SafeMedia from './SafeMedia.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 
 const props = defineProps<{ postId: string; commentsDisabled?: boolean }>()
@@ -576,8 +577,7 @@ const vClickOutside = {
                 <span class="text-white/55 text-xs ml-auto">{{ formatDate(comment.created_at) }}</span>
               </div>
               <div class="rounded-2xl overflow-hidden border border-brand-border/50 max-w-[280px] bg-black/20">
-                <video v-if="comment.type === 'video'" :src="comment.file_url" controls playsinline class="w-full h-auto max-h-72 object-contain" />
-                <img v-else :src="comment.file_url" class="w-full h-auto max-h-72 object-contain" />
+                <SafeMedia :src="comment.file_url" :kind="comment.type === 'video' ? 'video' : 'image'" class="w-full h-auto max-h-72 object-contain" />
               </div>
               <p v-if="comment.content" class="text-white/85 text-sm leading-relaxed mt-1.5 px-1">{{ getCommentText(comment.id, comment.content) }}</p>
             </template>
@@ -666,7 +666,7 @@ const vClickOutside = {
                   v-model="replyText"
                   @keydown.enter.prevent="submitReply"
                   @paste="onReplyPaste"
-                  :placeholder="`@${replyingTo.username}...`"
+                  :placeholder="`@${replyingTo?.username}...`"
                   autofocus
                   class="flex-1 bg-brand-bg border border-brand-border rounded-2xl px-3 py-1.5 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
                 />
@@ -730,8 +730,7 @@ const vClickOutside = {
                       <span class="text-white/55 text-[11px] ml-auto">{{ formatDate(reply.created_at) }}</span>
                     </div>
                     <div class="rounded-2xl overflow-hidden border border-brand-border/50 max-w-[240px] bg-black/20">
-                      <video v-if="reply.type === 'video'" :src="reply.file_url" controls playsinline class="w-full h-auto max-h-64 object-contain" />
-                      <img v-else :src="reply.file_url" class="w-full h-auto max-h-64 object-contain" />
+                      <SafeMedia :src="reply.file_url" :kind="reply.type === 'video' ? 'video' : 'image'" class="w-full h-auto max-h-64 object-contain" />
                     </div>
                     <p v-if="reply.content" class="text-white/85 text-sm leading-relaxed mt-1 px-1">{{ getCommentText(reply.id, reply.content) }}</p>
                   </template>

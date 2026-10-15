@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { invalidateFriendsCache } from '@/stores/friends'
 import { useLangStore } from '@/stores/lang'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 const langStore = useLangStore()
@@ -27,7 +28,8 @@ const router   = useRouter()
 const menuOpen = ref(false)
 const menuRef  = ref<HTMLElement | null>(null)
 
-const notifyActive  = ref(false)
+// Bell state comes with the list (friends/following endpoints) — the card never fetches it.
+const notifyActive  = ref(props.user.notify_posts ?? false)
 const notifyLoading = ref(false)
 
 const isFollowing   = ref(props.user.is_following ?? false)
@@ -65,13 +67,6 @@ function onOutside(e: MouseEvent) {
   if (menuRef.value && !menuRef.value.contains(e.target as Node)) menuOpen.value = false
 }
 
-async function fetchNotifyStatus() {
-  try {
-    const { data } = await api.get(`/users/${props.user.id}/notify-status`)
-    notifyActive.value = data.data?.notifyPosts ?? false
-  } catch { /* not following — ignore */ }
-}
-
 async function toggleNotify() {
   if (notifyLoading.value) return
   notifyLoading.value = true
@@ -89,6 +84,7 @@ async function toggleFollow() {
   try {
     const { data } = await api.post(`/follows/${props.user.id}/toggle`)
     isFollowing.value = data.data?.following ?? !isFollowing.value
+    invalidateFriendsCache()
     if (!isFollowing.value) notifyActive.value = false
   } catch { /* ignore */ } finally {
     followLoading.value = false
@@ -97,7 +93,6 @@ async function toggleFollow() {
 
 onMounted(() => {
   document.addEventListener('click', onOutside, true)
-  if (props.isFriend || isFollowing.value) fetchNotifyStatus()
 })
 onUnmounted(() => document.removeEventListener('click', onOutside, true))
 </script>

@@ -16,6 +16,8 @@ export const NOTIF_BADGE_ICON: Record<string, string> = {
   GROUP_JOIN:  'Users',
   MESSAGE:     'MessageCircle',
   GROUP_DM:    'Inbox',
+  FRIEND_REQUEST: 'UserPlus',
+  FRIEND_ACCEPT:  'UserCheck',
   automod_warn: 'ShieldAlert',
 }
 
@@ -33,6 +35,8 @@ export const NOTIF_BADGE_COLOR: Record<string, string> = {
   GROUP_JOIN:  'bg-emerald-500',
   MESSAGE:     'bg-sky-500',
   GROUP_DM:    'bg-brand-accent',
+  FRIEND_REQUEST: 'bg-violet-500',
+  FRIEND_ACCEPT:  'bg-violet-500',
   automod_warn: 'bg-amber-500',
 }
 

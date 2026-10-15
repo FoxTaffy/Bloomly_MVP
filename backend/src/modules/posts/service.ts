@@ -6,7 +6,8 @@ import { isTrustedMediaUrl, deleteFileByUrl, assertOwnedMedia } from '../media/s
 import { groupService } from '../groups/service.js';
 import { extractKeywords } from '../../lib/textKeywords.js';
 import { interestsToTerms } from '../../lib/interestTags.js';
-import { muteKeywordsWhere } from '../../lib/contentFilters.js';
+import { normalizeTag } from '../../lib/tagRules.js';
+import { muteKeywordsWhere, nsfwWhere, type NsfwMode } from '../../lib/contentFilters.js';
 import { analyzeContent } from '../automod/service.js';
 import type { CreatePostInput, GetPostsQuery } from './types.js';
 
@@ -392,7 +393,7 @@ export const postService = {
     const tags = Array.from(
       new Set(
         (input.tags ?? [])
-          .map((tag) => tag.trim().replace(/^#/, '').toLowerCase())
+          .map(normalizeTag)
           .filter(Boolean),
       ),
     );
@@ -485,12 +486,12 @@ export const postService = {
   },
 
   async getPosts(query: GetPostsQuery = {}, viewerId?: string) {
-    const { search, category, tag, sort = 'new', safeMode = false, hasMedia = false, page, limit } = query;
+    const { search, category, tag, sort = 'new', nsfwMode = 'hide', hasMedia = false, page, limit } = query;
     const pageNum = page ? Math.max(1, parseInt(page, 10)) : 1;
     const limitNum = limit ? Math.min(100, Math.max(1, parseInt(limit, 10))) : 20;
 
     const where: any = { deleted_at: null, is_archived: false, ...NOT_DELETED_GROUP_FILTER };
-    if (safeMode) where.is_nsfw = false;
+    Object.assign(where, nsfwWhere(nsfwMode));
     if (hasMedia) where.media_urls = { isEmpty: false };
 
     const blockerIds = await getBlockerIds(viewerId);
@@ -530,7 +531,7 @@ export const postService = {
     return (await filterByProfilePrivacy(posts, viewerId)).map(maskGroupAuthor);
   },
 
-  async searchPosts(query: string, safeMode: boolean = false, pageNum: number = 1, limitNum: number = 20, viewerId?: string) {
+  async searchPosts(query: string, nsfwMode: NsfwMode = 'hide', pageNum: number = 1, limitNum: number = 20, viewerId?: string) {
     const q = query.trim();
     if (!q) return [];
     const tagQuery = q.replace(/^#/, '');
@@ -545,7 +546,7 @@ export const postService = {
         { tags: { some: { tag: { name: { contains: tagQuery, mode: 'insensitive' } } } } },
       ],
     };
-    if (safeMode) where.is_nsfw = false;
+    Object.assign(where, nsfwWhere(nsfwMode));
 
     const blockerIds = await getBlockerIds(viewerId);
     if (blockerIds.length > 0) where.author_id = { notIn: blockerIds };
@@ -566,7 +567,7 @@ export const postService = {
     return (await filterByProfilePrivacy(posts, viewerId)).map(maskGroupAuthor);
   },
 
-  async getPersonalizedPosts(userId: string, safeMode: boolean = false, pageNum: number = 1, limitNum: number = 30) {
+  async getPersonalizedPosts(userId: string, nsfwMode: NsfwMode = 'hide', pageNum: number = 1, limitNum: number = 30) {
     const postInclude = {
       author: { select: AUTHOR_SELECT },
       rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
@@ -603,7 +604,7 @@ export const postService = {
       .slice(0, 3)
       .map(([cat]) => cat);
 
-    const nsfwFilter = safeMode ? { is_nsfw: false } : {};
+    const nsfwFilter = nsfwWhere(nsfwMode);
 
     // Fetched once up front so the mute-keywords filter can be baked into every query's `where`.
     const [affinity, user, bellFollows, bellGroups, blockerIds, notInterested] = await Promise.all([

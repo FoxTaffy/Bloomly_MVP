@@ -3,6 +3,7 @@ import { assertOwnedMedia } from '../media/service.js';
 import { groupService } from '../groups/service.js';
 import { postService } from './service.js';
 import { moderatePost } from '../automod/service.js';
+import { normalizeTag } from '../../lib/tagRules.js';
 
 const MAX_MEDIA_PER_POST = 20;
 const REPEAT_INTERVALS = ['daily', 'weekly', 'monthly'] as const;
@@ -33,7 +34,7 @@ async function validateContentAndMedia(ownerId: string, content: string, mediaUr
 
 function normalizeTags(tags?: string[]): string[] {
   return Array.from(
-    new Set((tags ?? []).map((t) => t.trim().replace(/^#/, '').toLowerCase()).filter(Boolean)),
+    new Set((tags ?? []).map(normalizeTag).filter(Boolean)),
   );
 }
 

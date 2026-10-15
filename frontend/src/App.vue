@@ -38,13 +38,20 @@ function acceptCookies() {
 </script>
 
 <template>
-  <div v-if="!cookieConsent && !route.meta?.hideCookieBanner" class="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-slate-950/95 px-4 py-3 backdrop-blur-sm">
-    <div class="mx-auto flex max-w-5xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <div class="text-sm text-slate-200">
+  <div
+    v-if="!cookieConsent && !route.meta?.hideCookieBanner"
+    class="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-slate-950/95 px-3 py-3 shadow-[0_-8px_32px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:px-4"
+  >
+    <div class="mx-auto flex max-w-5xl flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+      <div class="text-left text-sm leading-relaxed text-slate-200">
         Мы используем cookie и аналогичные технологии для работы сервиса, безопасности и аналитики.
         <RouterLink to="/privacy" class="text-brand-accent underline-offset-2 hover:underline">Подробнее в политике</RouterLink>.
       </div>
-      <button type="button" @click="acceptCookies" class="rounded-xl bg-brand-accent px-4 py-2 text-sm font-semibold text-white hover:opacity-90">
+      <button
+        type="button"
+        @click="acceptCookies"
+        class="min-h-[44px] rounded-xl bg-brand-accent px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-accent/20 transition-opacity hover:opacity-90 active:opacity-80 sm:min-w-[120px]"
+      >
         Принять
       </button>
     </div>

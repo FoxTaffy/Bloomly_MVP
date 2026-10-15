@@ -260,7 +260,7 @@ watch(() => props.src, async (newSrc) => {
     <!-- Waveform bars -->
     <div class="flex-1 flex flex-col gap-0.5">
       <div class="flex items-end gap-px h-7 cursor-pointer select-none"
-        @click="(e) => { const bar = Math.floor(e.offsetX / e.currentTarget.clientWidth * BARS); seekByBar(bar) }">
+        @click="(e) => { const bar = Math.floor(e.offsetX / (e.currentTarget as HTMLElement).clientWidth * BARS); seekByBar(bar) }">
         <div v-for="(h, i) in waveformBars" :key="i"
           class="flex-1 rounded-sm min-w-0 transition-colors"
           :style="{ height: (h * 100) + '%' }"

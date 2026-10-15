@@ -1,5 +1,4 @@
-/** Matches "#word" tokens in post text — letters (incl. Cyrillic), digits, underscore. */
-const HASHTAG_RE = /#([a-zA-Zа-яА-ЯёЁ0-9_]+)/g;
+import { HASHTAG_RE } from './tagRules'
 
 /** Extracts lowercase, deduplicated hashtag names written inline in post text (e.g. "...#furry #digitalart"). */
 export function extractHashtags(content: string): string[] {

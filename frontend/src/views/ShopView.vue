@@ -476,7 +476,7 @@ function openPack(pack: any) {
             </h2>
           </div>
 
-          <div v-if="stickerStore.loading" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div v-if="stickerStore.isLoading" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
             <div v-for="n in 8" :key="n"
               class="bg-brand-card border border-brand-border rounded-2xl overflow-hidden animate-pulse">
               <div class="w-full bg-brand-border" style="aspect-ratio: 4/3" />

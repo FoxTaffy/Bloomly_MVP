@@ -50,6 +50,9 @@ export async function adminRequestsHandler(request: FastifyRequest, reply: Fasti
     return reply.code(403).send({ success: false, error: { message: 'Forbidden' } });
   }
   const { status, page } = request.query as any;
+  if (status && !['pending', 'approved', 'rejected'].includes(status)) {
+    return reply.code(400).send({ success: false, error: { message: 'Invalid status' } });
+  }
   const data = await adminGetRequests(status, parseInt(page) || 1);
   return reply.send({ success: true, data });
 }

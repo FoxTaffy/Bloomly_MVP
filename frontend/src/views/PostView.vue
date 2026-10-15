@@ -7,7 +7,6 @@ import { useHead } from '@unhead/vue'
 import api from '@/api'
 import AppHeader from '@/components/AppHeader.vue'
 import PostCard from '@/components/PostCard.vue'
-import PostComments from '@/components/PostComments.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -136,10 +135,7 @@ onMounted(fetchPost)
 
       <!-- Post -->
       <div v-else-if="post" class="mt-6 space-y-4">
-        <PostCard :post="post" />
-        <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl p-5 md:p-6">
-          <PostComments :post-id="post.id" />
-        </div>
+        <PostCard :post="post" start-expanded />
       </div>
 
     </main>

@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import {
   createTicket, getMyTickets, getTicketForUser, addUserMessage,
-  adminGetTickets, adminReplyTicket,
+  adminGetTickets, adminReplyTicket, SUPPORT_TICKET_STATUSES,
 } from './service.js';
 import { isModerator } from '../../lib/roles.js';
 
@@ -59,6 +59,9 @@ export async function adminGetTicketsHandler(request: FastifyRequest, reply: Fas
     return reply.code(403).send({ success: false, error: { message: 'Forbidden' } });
   }
   const { status, type, page } = request.query as any;
+  if (status && !SUPPORT_TICKET_STATUSES.includes(status)) {
+    return reply.code(400).send({ success: false, error: { message: 'Invalid status' } });
+  }
   const data = await adminGetTickets(status, type, parseInt(page) || 1);
   return reply.send({ success: true, data });
 }
@@ -71,6 +74,10 @@ export async function adminReplyTicketHandler(request: FastifyRequest, reply: Fa
   }
   const { id } = request.params as any;
   const { status, admin_reply } = request.body as any;
+  if (status !== undefined && !SUPPORT_TICKET_STATUSES.includes(status)) {
+    return reply.code(400).send({ success: false, error: { message: 'Invalid status' } });
+  }
   const ticket = await adminReplyTicket(id, user.id, { status, adminReply: admin_reply });
+  if (!ticket) return reply.code(404).send({ success: false, error: { message: 'Ticket not found' } });
   return reply.send({ success: true, data: { ticket } });
 }

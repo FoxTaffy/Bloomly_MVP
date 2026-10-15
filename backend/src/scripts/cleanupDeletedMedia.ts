@@ -12,6 +12,7 @@
  *
  * Usage:
  *   npm run db:cleanup-deleted-media               # dry run, prints a report only
+ *   npm run db:cleanup-deleted-media -- --dry-run   # то же самое, явно
  *   npm run db:cleanup-deleted-media -- --execute   # actually deletes the files
  */
 import prisma from '../config/prisma.js';
@@ -50,6 +51,9 @@ async function collectDeletedMediaKeys(): Promise<{ keys: Set<string>; byModel: 
 
 async function main() {
   const execute = process.argv.includes('--execute');
+  if (execute && process.argv.includes('--dry-run')) {
+    throw new Error('--dry-run и --execute нельзя указывать вместе');
+  }
 
   console.log('Scanning soft-deleted rows for referenced media...');
   const { keys, byModel } = await collectDeletedMediaKeys();

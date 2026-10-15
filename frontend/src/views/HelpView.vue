@@ -39,7 +39,7 @@ const FAQ_ITEMS = computed(() => {
   return Array.from({ length: 10 }, (_, i) => ({
     q: t[`helpFaqQ${i + 1}`] as string,
     a: t[`helpFaqA${i + 1}`] as string,
-  }))
+  })).filter(item => item.q && item.a)
 })
 const openFaq = ref<number | null>(null)
 function toggleFaq(i: number) { openFaq.value = openFaq.value === i ? null : i }

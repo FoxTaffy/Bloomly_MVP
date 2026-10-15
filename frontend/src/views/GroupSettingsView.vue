@@ -3,18 +3,19 @@ import { rubricOptionsFor } from '@/lib/groupRubrics'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, onMounted, computed, reactive, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import SoonBadge from '@/components/groups/SoonBadge.vue'
 import ImageCropModal from '@/components/shared/ImageCropModal.vue'
-import { useGroupsStore, type GroupMember, type CustomRole } from '@/stores/groups'
+import { useGroupsStore, type GroupMember, type CustomRole, type GroupPermission } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useShopStore } from '@/stores/shop'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useConfirm } from '@/composables/useConfirm'
 import { readRawDataUrl, readScaledDataUrl } from '@/lib/utils'
+import { sanitizeTagInput } from '@/lib/tagRules'
 import api from '@/api'
 
 const route = useRoute()
@@ -205,6 +206,8 @@ const sortedMembers = computed(() => {
 const dropdownY = ref(0)
 const dropdownX = ref(0)
 
+const dropdownRight = computed(() => (typeof window !== 'undefined' ? window.innerWidth - dropdownX.value : 0))
+
 const DROPDOWN_WIDTH = 224 // w-56
 const DROPDOWN_MAX_HEIGHT = 340
 
@@ -245,7 +248,7 @@ const roleModalMode      = ref<'create' | 'edit'>('create')
 const editingRoleId      = ref<string | null>(null)
 const roleForm           = reactive({ name: '', color: '#a78bfa', icon: '🎖️', permissions: [] as string[] })
 
-const PERMISSIONS_LIST = computed(() => [
+const PERMISSIONS_LIST = computed<{ id: GroupPermission; label: string; iconPath: string; group: string }[]>(() => [
   { id: 'can_post',            label: langStore.t.groupSettingsPermCanPost,            iconPath: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z', group: langStore.t.groupSettingsSecContent },
   { id: 'can_comment',         label: langStore.t.groupSettingsPermCanComment,             iconPath: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z', group: langStore.t.groupSettingsSecContent },
   { id: 'can_invite',          label: langStore.t.groupSettingsPermCanInvite,      iconPath: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z', group: langStore.t.groupSettingsPermGroupParticipants },
@@ -549,15 +552,17 @@ const form = reactive({
   welcomeMsgText: '',
 })
 
-// Slug: авто-санитизация ввода
-watch(() => form.slug, (v) => {
-  const clean = v.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 60)
-  if (clean !== v) form.slug = clean
-})
+// Slug: санитизация только того, что ввёл пользователь (не при загрузке из БД)
+function onSlugInput(e: Event) {
+  const input = e.target as HTMLInputElement
+  form.slug = sanitizeTagInput(input.value).slice(0, 60)
+  input.value = form.slug
+}
 
 const settingsSlugError = computed((): string | null => {
   const s = form.slug
-  if (!s) return null
+  // Проверяем только изменённый slug: сохранённое значение не блокирует другие настройки
+  if (!s || s === savedForm.slug) return null
   if (s.length < 3) return langStore.t.groupSettingsSlugMin3
   if (/^[-_]/.test(s)) return langStore.t.groupSettingsSlugNoLeadingDash
   if (/[-_]$/.test(s)) return langStore.t.groupSettingsSlugNoTrailingDash
@@ -649,7 +654,7 @@ function resetForm() {
 
 const isDirty = computed(() => {
   return (
-    form.name !== savedForm.name || form.description !== savedForm.description ||
+    form.name !== savedForm.name || form.slug !== savedForm.slug || form.description !== savedForm.description ||
     form.aboutText !== savedForm.aboutText || form.accentColor !== savedForm.accentColor ||
     form.isPublic !== savedForm.isPublic || form.isNsfw !== savedForm.isNsfw ||
     form.rulesText !== savedForm.rulesText || form.contactPhone !== savedForm.contactPhone ||
@@ -1011,13 +1016,26 @@ function removePriceItem(i: number) { commForm.value.priceList.splice(i, 1) }
 const basePriceKeys = ['headshot', 'halfbody', 'fullbody', 'ref_sheet']
 const basePriceLabels = computed((): Record<string, string> => ({ headshot: langStore.t.groupSettingsPriceHeadshot, halfbody: langStore.t.groupSettingsPriceHalfbody, fullbody: langStore.t.groupSettingsPriceFullbody, ref_sheet: langStore.t.groupSettingsPriceRefSheet }))
 
+// ── Navigation guard (как в SettingsProfileView) ───────────────────────────
+onBeforeRouteLeave(async (_to, _from, next) => {
+  if (!isDirty.value) return next()
+  const leave = await confirmDialog(langStore.t.unsavedLeaveConfirm, { danger: true })
+  if (leave) return next()
+  unsavedWarning.value = true
+  shaking.value = true
+  setTimeout(() => { shaking.value = false }, 600)
+  setTimeout(() => { unsavedWarning.value = false }, 3000)
+  next(false)
+})
+
 // ── Save ────────────────────────────────────────────────────────────────────
 async function save() {
   if (!group.value) return
+  if (settingsSlugError.value) { showToast('error', settingsSlugError.value); return }
   saving.value = true
   const oldSlug = (group.value as any).slug
-  const newSlug = form.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
-  form.slug = newSlug || oldSlug
+  // Slug отправляем только если пользователь его изменил — сохранённое значение не перезаписываем
+  const slugChanged = form.slug !== savedForm.slug
   try {
     const socialLinks: Record<string, string> = {}
     if (form.socialTelegram.trim()) socialLinks.telegram = form.socialTelegram.trim()
@@ -1027,7 +1045,7 @@ async function save() {
     if (form.socialWebsite.trim()) socialLinks.website = form.socialWebsite.trim()
     await groupsStore.updateGroup(group.value.id, {
       name: form.name,
-      slug: form.slug,
+      slug: slugChanged ? form.slug : undefined,
       description: form.description,
       aboutText: form.aboutText,
       accentColor: form.accentColor,
@@ -1286,7 +1304,7 @@ async function deleteGroup() {
                       </label>
                       <div class="relative">
                         <span class="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-sm">@</span>
-                        <input v-model="form.slug"
+                        <input :value="form.slug" @input="onSlugInput"
                           class="field-input !pl-8 !pr-10 transition-colors"
                           :class="form.slug
                             ? (settingsSlugError ? '!border-brand-error focus:!border-brand-error' : '!border-brand-success focus:!border-brand-success')
@@ -3137,9 +3155,7 @@ async function deleteGroup() {
   <Teleport to="body">
     <div v-if="roleDropdownFor && roleDropdownMember"
       class="fixed z-[999] bg-brand-card border border-brand-border rounded-2xl shadow-2xl py-1.5 w-56"
-      :style="`top:${dropdownY}px;right:${
-        typeof window !== 'undefined' ? window.innerWidth - dropdownX : 0
-      }px`"
+      :style="`top:${dropdownY}px;right:${dropdownRight}px`"
       @click.stop>
       <div class="px-3 pb-1 pt-0.5 mb-1 border-b border-brand-border">
         <p class="text-xs font-semibold text-white/40">{{ langStore.t.groupSettingsChangeRole }}</p>

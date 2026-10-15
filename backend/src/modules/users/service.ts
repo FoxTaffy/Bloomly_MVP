@@ -2,7 +2,7 @@ import prisma from '../../config/prisma.js';
 import { deleteFileByUrl, isTrustedMediaUrl, assertOwnedMedia } from '../media/service.js';
 import { getUserBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
-import { isBlockedBy } from '../../lib/blocks.js';
+import { isBlockedBy, getBlockerIds } from '../../lib/blocks.js';
 import { sanitizeFields, sanitizeDisplayText } from '../../lib/sanitizeText.js';
 import { normalizeSafeLink, requireSafeLink } from '../../lib/safeLink.js';
 import sharp from 'sharp';
@@ -495,16 +495,12 @@ export const usersService = {
 
   async getRecommendedUsers(currentUserId: string, limit = 6) {
     // ── Build excluded set: self + already-following + blocked ───────────
-    const [followingRows, blockRows] = await Promise.all([
+    const [followingRows, blockedIds] = await Promise.all([
       prisma.follow.findMany({ where: { follower_id: currentUserId }, select: { following_id: true } }),
-      prisma.block.findMany({
-        where: { OR: [{ blocker_id: currentUserId }, { blocked_id: currentUserId }] },
-        select: { blocker_id: true, blocked_id: true },
-      }),
+      getBlockerIds(currentUserId), // both directions: users I blocked + users who blocked me
     ]);
     const myFollowingSet = new Set(followingRows.map((r) => r.following_id));
-    const excludeIds = new Set<string>([currentUserId, ...myFollowingSet]);
-    for (const b of blockRows) { excludeIds.add(b.blocker_id); excludeIds.add(b.blocked_id); }
+    const excludeIds = new Set<string>([currentUserId, ...myFollowingSet, ...blockedIds]);
 
     // ── Find my friends (mutual follows = both follow each other) ────────
     const followerRows = await prisma.follow.findMany({
@@ -558,7 +554,7 @@ export const usersService = {
         const filled = new Set(sorted.map((u) => u.id));
         filled.forEach((id) => excludeIds.add(id));
         const extras = await prisma.post.findMany({
-          where: { deleted_at: null, author_id: { notIn: Array.from(excludeIds) } },
+          where: { deleted_at: null, author: { deleted_at: null }, author_id: { notIn: Array.from(excludeIds) } },
           orderBy: { created_at: 'desc' },
           select: { author: { select: PUBLIC_SELECT } },
           distinct: ['author_id'],
@@ -570,7 +566,7 @@ export const usersService = {
 
     // ── Fallback: recently active users ──────────────────────────────────
     const active = await prisma.post.findMany({
-      where: { deleted_at: null, author_id: { notIn: Array.from(excludeIds) } },
+      where: { deleted_at: null, author: { deleted_at: null }, author_id: { notIn: Array.from(excludeIds) } },
       orderBy: { created_at: 'desc' },
       select: { author: { select: PUBLIC_SELECT } },
       distinct: ['author_id'],

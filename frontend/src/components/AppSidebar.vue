@@ -137,7 +137,6 @@ const navItems = computed(() => [
 const categoryItems = computed(() => [
   { key: 'shop',        icon: 'ShoppingBag', label: langStore.t.shop ?? 'Магазин', disabled: false, to: { name: 'shop' } },
   { key: 'dealers-den', icon: 'Tag',         label: langStore.t.dealersDen,  disabled: false, to: { name: 'dealers-den' } },
-  { key: 'automation',  icon: 'Zap',         label: 'Автоматизация',         disabled: false, to: { name: 'settings-profile', query: { section: 'sec-automation' } } },
   { key: 'scheduled-posts', icon: 'CalendarClock', label: 'Черновики и отложенные', disabled: false, to: { name: 'scheduled-posts' } },
   { key: 'gifts',       icon: 'Gift',        label: langStore.t.gifts,       disabled: true,  to: null as any },
   { key: 'help',        icon: 'CircleHelp',  label: langStore.t.help,        disabled: false, to: { name: 'help' } },

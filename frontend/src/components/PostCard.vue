@@ -276,6 +276,8 @@
                   style="vertical-align: middle; white-space: nowrap;"
                   @click.stop
                   @mouseenter="onMentionEnter(seg.username!, $event)"
+                  @touchstart.passive="resolveMention(seg.username!)"
+                  @focus="resolveMention(seg.username!)"
                   @mouseleave="onMentionLeave()"
                 >
                   <!-- Avatar or initials -->
@@ -469,11 +471,13 @@
           </span>
           <router-link
             v-for="tag in post.tags" :key="tag.tag?.id ?? tag.id"
+            v-slot="{ navigate, href }"
             :to="{ path: '/search', query: { q: tag.tag?.name ?? tag.name } }"
-            @click.stop
-            class="px-3 py-1 bg-brand-bg text-white/55 text-xs font-medium rounded-full border border-brand-border hover:bg-brand-border hover:text-white cursor-pointer transition-colors"
+            custom
           >
-            #{{ tag.tag?.name ?? tag.name }}
+            <a :href="href" @click="onTagClick($event, navigate)"
+              class="select-text px-3 py-1 bg-brand-bg text-white/55 text-xs font-medium rounded-full border border-brand-border hover:bg-brand-border hover:text-white cursor-pointer transition-colors"
+            >#{{ tag.tag?.name ?? tag.name }}</a>
           </router-link>
         </div>
       </div>
@@ -678,6 +682,7 @@
 </template>
 
 <script setup lang="ts">
+import { invalidateFriendsCache } from '@/stores/friends'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -757,6 +762,8 @@ const props = defineProps<{
   initialRepawed?: boolean
   initialFavourited?: boolean
   adMode?: boolean
+  /** Comments section open on mount — used by standalone post views so the card is the only comments block. */
+  startExpanded?: boolean
   /** True when the viewer is an owner/admin/moderator of this post's group — lets them moderate content they didn't author. */
   canModerate?: boolean
 }>()
@@ -771,6 +778,13 @@ const emit = defineEmits<{
 
 // ── Composables ───────────────────────────────────────────────────────────
 const router = useRouter()
+
+// Тег можно выделить мышью и касанием: переход на поиск только если выделенного текста нет
+function onTagClick(e: MouseEvent, navigate: (e: MouseEvent) => void) {
+  e.stopPropagation()
+  if (window.getSelection()?.toString()) { e.preventDefault(); return }
+  navigate(e)
+}
 const authStore = useAuthStore()
 const langStore = useLangStore()
 
@@ -801,7 +815,7 @@ watch(() => props.initialFavourited, (val) => { if (val !== undefined) localFavo
 const showMenu    = ref(false)
 const menuBtnRef  = ref<HTMLElement | null>(null)
 const menuPos     = ref({ top: '0px', right: '0px' })
-const isExpanded  = ref(false)
+const isExpanded  = ref(props.startExpanded ?? false)
 
 function toggleMenu(e: MouseEvent) {
   e.stopPropagation()
@@ -894,6 +908,7 @@ const hoveredMention = ref<string | null>(null)
 const mentionPopupPos = ref({ top: '0px', left: '0px' })
 
 function onMentionEnter(username: string, e: MouseEvent) {
+  resolveMention(username)
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
   hoveredMention.value = username
   const left = Math.max(0, Math.min(rect.left, window.innerWidth - 224))
@@ -909,19 +924,22 @@ function onMentionLeave() { hoveredMention.value = null }
 const mentionUsers = ref<Record<string, MentionUser | null>>({})
 const mentionGroups = ref<Record<string, MentionGroup | null>>({})
 
-async function loadMentionUsers() {
-  const content = props.post.content ?? ''
-  const usernames = [...new Set((content.match(/@(\w+)/g) ?? []).map((m: string) => m.slice(1)))]
-  for (const username of usernames) {
-    if (!(username in mentionUsers.value)) {
-      const user = await lookupMentionUser(username)
-      mentionUsers.value = { ...mentionUsers.value, [username]: user }
-      // If no user found, try group lookup
-      if (!user && !(username in mentionGroups.value)) {
-        const group = await lookupMentionGroup(username)
-        mentionGroups.value = { ...mentionGroups.value, [username]: group }
-      }
+// Resolved on user interaction (hover / touch / focus on the pill), never on mount:
+// a feed full of @mentions must not fire a /users/search per username on every page load.
+const mentionInFlight = new Set<string>()
+async function resolveMention(username: string) {
+  if (username in mentionUsers.value || mentionInFlight.has(username)) return
+  mentionInFlight.add(username)
+  try {
+    const user = await lookupMentionUser(username)
+    mentionUsers.value = { ...mentionUsers.value, [username]: user }
+    // If no user found, try group lookup
+    if (!user && !(username in mentionGroups.value)) {
+      const group = await lookupMentionGroup(username)
+      mentionGroups.value = { ...mentionGroups.value, [username]: group }
     }
+  } finally {
+    mentionInFlight.delete(username)
   }
 }
 
@@ -930,14 +948,12 @@ let viewObserver: IntersectionObserver | null = null
 let viewTimeoutId: ReturnType<typeof setTimeout> | undefined
 
 onMounted(() => {
-  loadMentionUsers()
   setupViewObserver()
 })
 onUnmounted(() => {
   clearTimeout(viewTimeoutId)
   viewObserver?.disconnect()
 })
-watch(() => props.post.content, () => { loadMentionUsers() })
 
 // ── View tracking ─────────────────────────────────────────────────────────
 // Only counted once a card has actually been ≥50% on-screen for 1s (mirrors
@@ -1142,12 +1158,12 @@ async function toggleFollow() {
   if (!authStore.isAuthenticated) return
   try {
     const r = await api.post(`/follows/${props.post.author.id}/toggle`)
-    if (r.data.success) localFollowing.value = r.data.data.following
+    if (r.data.success) { localFollowing.value = r.data.data.following; invalidateFriendsCache() }
   } catch {}
 }
 
-// Mentions are resolved eagerly on mount (loadMentionUsers), so by render
-// time we already know whether a mention points at a group or a user.
+// Mentions are resolved lazily (resolveMention on hover/touch/focus); until then
+// the pill links to the user profile.
 function mentionHref(username: string): string {
   const group = mentionGroups.value[username]
   if (group) return `/groups/${group.slug}`

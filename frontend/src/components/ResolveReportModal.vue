@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import api from '../api'
 import BIcon from './BIcon.vue'
 import MediaUpload from './MediaUpload.vue'
+import SafeMedia from './SafeMedia.vue'
 
 const props = defineProps<{ folder: any }>()
 const emit = defineEmits<{ close: []; resolved: [] }>()
@@ -102,7 +103,7 @@ const submit = async () => {
             <div>
               <p class="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">Фото-доказательство (опционально)</p>
               <div v-if="imageUrl" class="flex items-center gap-3 p-3 bg-white/[0.05] border border-white/[0.08] rounded-2xl">
-                <img :src="imageUrl" class="w-16 h-12 object-cover rounded-xl flex-shrink-0" />
+                <SafeMedia :src="imageUrl" class="w-16 h-12 object-cover rounded-xl flex-shrink-0" />
                 <span class="flex-1 text-xs text-white/45 truncate">Загружено</span>
                 <button @click="imageUrl = ''" class="w-7 h-7 rounded-full bg-white/[0.08] hover:bg-rose-500/20 flex items-center justify-center transition-all">
                   <BIcon name="X" class="w-3.5 h-3.5 text-white/60" />

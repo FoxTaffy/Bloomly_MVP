@@ -206,7 +206,7 @@
               class="w-full bg-brand-bg border border-brand-border rounded-xl pl-8 pr-4 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/50 transition-all"
               @input="debouncedSearchMaker"
               @focus="() => { if (makerQuery.length >= 2) showMakerDropdown = true }"
-              @blur="() => setTimeout(() => { showMakerDropdown = false }, 150)"
+              @blur="hideMakerDropdownSoon"
             />
             <div v-if="makerLoading" class="absolute right-3 top-1/2 -translate-y-1/2">
               <div class="w-3.5 h-3.5 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"></div>
@@ -394,6 +394,7 @@ interface MakerEntry {
 const makerQuery     = ref('')
 const makerLoading   = ref(false)
 const showMakerDropdown = ref(false)
+const hideMakerDropdownSoon = () => { setTimeout(() => { showMakerDropdown.value = false }, 150) }
 const selectedMaker  = ref<MakerEntry | null>(null)
 const makerResults   = ref<{
   groups: { id: string; name: string; slug: string; avatar_url: string | null; type: string }[]

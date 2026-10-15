@@ -1233,7 +1233,7 @@
                     <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ row.label }}</label>
                     <div class="grid grid-cols-3 gap-2">
                       <button
-                        v-for="opt in row.options" :key="opt.value"
+                        v-for="opt in row.options" :key="String(opt.value)"
                         type="button"
                         @click="(form as any)[row.field] = opt.value"
                         class="px-3 py-2.5 rounded-2xl text-xs font-bold border transition-all"
@@ -1316,19 +1316,6 @@
                       </span>
                     </div>
                   </div>
-                </div>
-              </section>
-
-              <!-- ── § AUTOMATION ─────────────────────────────────── -->
-              <section v-show="openSection === 'sec-automation'" id="sec-automation" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
-                <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3" style="background:linear-gradient(90deg,rgba(234,179,8,0.07) 0%,transparent 100%)">
-                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(234,179,8,0.18)">
-                    <BIcon name="Zap" class="w-4 h-4 text-brand-yellow" />
-                  </div>
-                  <h2 class="font-bold text-white text-sm">{{ langStore.t.secAutomation }}</h2>
-                </div>
-                <div class="p-6">
-                  <AutomationSettings />
                 </div>
               </section>
 
@@ -1967,7 +1954,6 @@ import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import FursonaSettings from '@/components/profile/FursonaSettings.vue'
-import AutomationSettings from '@/components/profile/AutomationSettings.vue'
 import FursuitSettings from '@/components/profile/FursuitSettings.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
 import DateInput from '@/components/DateInput.vue'
@@ -3262,7 +3248,6 @@ const sections = computed(() => [
   { id: 'sec-verification',  label: langStore.t.secVerification,  color: '#3b82f6', iconPath: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
   { id: 'sec-privacy',       label: langStore.t.secPrivacy,       color: '#ec4899', iconPath: 'M12 11c0-1.104.896-2 2-2s2 .896 2 2-.896 2-2 2-2-.896-2-2zm-6 0a6 6 0 1112 0 6 6 0 01-12 0zM3 21c0-3.314 4.03-6 9-6s9 2.686 9 6' },
   { id: 'sec-interests',     label: langStore.t.secInterests,     color: '#34d399', iconPath: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
-  { id: 'sec-automation',    label: langStore.t.secAutomation,    color: '#eab308', iconPath: 'M13 10V3L4 14h7v7l9-11h-7z' },
   { id: 'sec-lang',          label: langStore.t.secLang,          color: '#f59e0b', iconPath: 'M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' },
   { id: 'sec-security',      label: langStore.t.secSecurity,      color: '#10b981', iconPath: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
   { id: 'sec-billing',       label: langStore.t.secBilling,       color: '#4C67CF', iconPath: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
@@ -3270,10 +3255,10 @@ const sections = computed(() => [
 ])
 
 const lockedSettings = computed(() => [
-  { label: langStore.t.notifications ?? 'Notifications', d: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
+  { label: (langStore.t as Record<string, string | undefined>).notifications ?? 'Notifications', d: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
   { label: langStore.t.secSecurity, d: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
   { label: langStore.t.premium, d: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
-  { label: langStore.t.privacy ?? 'Privacy', d: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
+  { label: (langStore.t as Record<string, string | undefined>).privacy ?? 'Privacy', d: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
 ])
 
 const PRONOUN_MAP: Record<'he' | 'she' | 'they', Record<Lang, string>> = {

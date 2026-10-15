@@ -23,6 +23,7 @@ export interface User {
   onboarding_done?: boolean
   payment_region?: string | null
   is_adult?: boolean
+  country?: string | null
   two_factor_method?: 'totp' | 'email' | null
 }
 

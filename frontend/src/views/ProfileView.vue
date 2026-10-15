@@ -140,7 +140,7 @@
           <div class="w-16 h-16 rounded-2xl bg-brand-error/10 flex items-center justify-center mx-auto mb-4">
             <BIcon name="AlertCircle" class="w-8 h-8 text-brand-error" />
           </div>
-          <p class="text-brand-error font-bold text-lg mb-2">{{ langStore.t.errorLabel ?? 'Error' }}</p>
+          <p class="text-brand-error font-bold text-lg mb-2">{{ (langStore.t as Record<string, string | undefined>).errorLabel ?? 'Error' }}</p>
           <p class="text-white/55 text-sm mb-6">{{ error }}</p>
           <button @click="loadProfile" class="px-6 py-2.5 bg-brand-accent hover:bg-brand-accent-plus rounded-xl text-sm font-bold transition-all">{{ langStore.t.retryBtn }}</button>
         </div>
@@ -1362,7 +1362,7 @@
                     </div>
 
                     <!-- Posts empty → show repaws fallback, or CTA -->
-                    <template v-else-if="activeContentTab === 'posts' && tabPosts.filter((p: any) => p.id !== viewedProfile.pinned_post_id).length === 0 && !pinnedPost">
+                    <template v-else-if="activeContentTab === 'posts' && tabPosts.filter((p: any) => p.id !== viewedProfile?.pinned_post_id).length === 0 && !pinnedPost">
                       <template v-if="repawsFallback.length">
                         <div class="flex items-center gap-2 text-xs text-white/55 font-semibold mb-1 px-1">
                           <BIcon name="Repeat2" class="w-3.5 h-3.5 text-brand-accent" /> {{ langStore.t.profileNoPostsShowingRepaws }}
@@ -1381,7 +1381,7 @@
                       <div v-else class="py-14 text-center text-white/55">
                         <BIcon name="FileText" class="w-10 h-10 mx-auto mb-3 opacity-30" />
                         <p class="font-semibold text-sm mb-4">{{ langStore.t.noPostsLabel }}</p>
-                        <button v-if="isOwnProfile" @click="showPostForm = true; $nextTick(() => window.scrollTo({top: 0, behavior: 'smooth'}))"
+                        <button v-if="isOwnProfile" @click="showPostForm = true; $nextTick(scrollToTop)"
                           class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-accent hover:bg-brand-accent-plus text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-brand-accent/20">
                           <BIcon name="Plus" class="w-4 h-4" /> {{ langStore.t.profileCreateFirstPostBtn }}
                         </button>
@@ -1396,7 +1396,7 @@
 
                     <!-- Posts / repaws / archive list -->
                     <template v-else>
-                      <PostCard v-for="post in tabPosts.filter((p: any) => p.id !== viewedProfile.pinned_post_id)" :key="post.id"
+                      <PostCard v-for="post in tabPosts.filter((p: any) => p.id !== viewedProfile?.pinned_post_id)" :key="post.id"
                         :post="post" :is-own-profile="isOwnProfile"
                         :is-pinned-post-id="viewedProfile.pinned_post_id"
                         :show-repaw-label="activeContentTab === 'repaws'"
@@ -2132,7 +2132,7 @@
           class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all z-10">
           <BIcon name="X" class="w-5 h-5" />
         </button>
-        <img :src="viewedProfile?.banner_url" class="max-w-full max-h-[85vh] rounded-3xl object-contain shadow-2xl" />
+        <img :src="viewedProfile?.banner_url ?? undefined" class="max-w-full max-h-[85vh] rounded-3xl object-contain shadow-2xl" />
       </div>
     </Transition>
 
@@ -2447,6 +2447,7 @@
 </template>
 
 <script setup lang="ts">
+import { invalidateFriendsCache } from '@/stores/friends'
 import { safeHref } from '@/utils/safeHref'
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -3058,6 +3059,7 @@ const { nsfwEnabled: nsfwMode } = useNsfwMode()
 
 // ── Full post creator state ───────────────────────────────────────────────────
 const showPostForm = ref(false)
+const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
 
 // ── Edit modal ────────────────────────────────────────────────────────────────
 const showBadgesModal = ref(false)
@@ -3426,6 +3428,7 @@ function speciesEmoji(species: string): string {
   if (/rat|mouse|мышь|крыс/.test(s))           return '🐭'
   if (/squirrel|белк/.test(s))                 return '🐿️'
   if (/bovine|cow|бык|корова/.test(s))          return '🐄'
+  if (/goat|коз/.test(s))                      return '🐐'
   return '🐾'
 }
 
@@ -3665,7 +3668,7 @@ const specialAlbums = computed(() => {
   }
 
   // Альбом Фурсона
-  const fursonaUrls: { url: string }[] = []
+  const fursonaUrls: { url: string; postId?: string }[] = []
   // Посты помеченные как фурсона
   for (const post of filteredMediaPosts.value as any[]) {
     if (mediaPostLabels.value[post.id] === 'fursona') {
@@ -3675,7 +3678,7 @@ const specialAlbums = computed(() => {
   if (fursonaUrls.length) albums.push({ id: 'fursona', label: langStore.t.fursonaTab, emoji: '🐾', urls: fursonaUrls })
 
   // Альбом Фурсьют
-  const fursuitUrls: { url: string }[] = []
+  const fursuitUrls: { url: string; postId?: string }[] = []
   for (const suit of profileFursuits.value) {
     if (suit.image_url) fursuitUrls.push({ url: suit.image_url })
   }
@@ -3935,6 +3938,7 @@ async function toggleFollow() {
     const res = await api.post(`/follows/${viewedProfile.value.id}/toggle`, {})
     if (res.data.success) {
       relation.aFollowsB = res.data.data.following
+      invalidateFriendsCache()
       relation.friends = relation.aFollowsB && relation.bFollowsA
       if (viewedProfile.value._count) viewedProfile.value._count.followers += relation.aFollowsB ? 1 : -1
     }

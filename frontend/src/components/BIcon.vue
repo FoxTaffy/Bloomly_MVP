@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type HTMLAttributes } from 'vue'
 import { iconMap } from '@/lib/icons'
 
 const props = defineProps<{
   name: string
-  class?: string
+  class?: HTMLAttributes['class']
 }>()
 
 const iconComponent = computed(() => {

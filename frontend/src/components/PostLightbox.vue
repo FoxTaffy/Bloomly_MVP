@@ -182,12 +182,22 @@ const onWheel = (e: WheelEvent) => {
   else prev()
 }
 
-// Touch swipe support
+// Touch: горизонтальный свайп — навигация, свайп вниз — закрытие
 let touchStartX = 0
-const onTouchStart = (e: TouchEvent) => { touchStartX = e.touches[0].clientX }
+let touchStartY = 0
+let multiTouch = false
+const onTouchStart = (e: TouchEvent) => {
+  if (e.touches.length > 1) multiTouch = true
+  touchStartX = e.touches[0].clientX
+  touchStartY = e.touches[0].clientY
+}
 const onTouchEnd = (e: TouchEvent) => {
-  const diff = touchStartX - e.changedTouches[0].clientX
-  if (Math.abs(diff) > 50) diff > 0 ? next() : prev()
+  // Жест с несколькими пальцами (pinch) не считаем свайпом
+  if (multiTouch) { if (e.touches.length === 0) multiTouch = false; return }
+  const dx = touchStartX - e.changedTouches[0].clientX
+  const dy = e.changedTouches[0].clientY - touchStartY
+  if (dy > 100 && dy > Math.abs(dx) * 1.5) { emit('close'); return }
+  if (Math.abs(dx) > 50) dx > 0 ? next() : prev()
 }
 
 onMounted(() => {
@@ -214,7 +224,7 @@ onUnmounted(() => {
         @touchend.passive="onTouchEnd"
       >
         <!-- Top bar -->
-        <div class="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/70 to-transparent pointer-events-none">
+        <div class="lightbox-topbar absolute top-0 left-0 right-0 z-10 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent pointer-events-none">
           <div v-if="total > 1" class="px-3 py-1 rounded-full bg-black/60 border border-white/10 text-white text-sm font-bold backdrop-blur-sm pointer-events-auto">
             {{ current + 1 }}&thinsp;/&thinsp;{{ total }}
           </div>
@@ -249,9 +259,11 @@ onUnmounted(() => {
             <!-- Close -->
             <button
               @click="emit('close')"
-              class="w-9 h-9 rounded-full bg-black/60 border border-white/15 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/80 transition-colors"
+              class="w-11 h-11 rounded-full bg-black/70 border border-white/30 shadow-lg backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/85 transition-colors"
+              title="Закрыть (Esc)"
+              aria-label="Закрыть"
             >
-              <BIcon name="X" class="w-5 h-5" />
+              <BIcon name="X" class="w-6 h-6" />
             </button>
           </div>
         </div>
@@ -410,6 +422,10 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* Верхняя панель: отступ от выреза/чёлки (safe-area), на десктопе это 1rem / 0.75rem */
+.lightbox-topbar {
+  padding: calc(0.75rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right)) 0.75rem calc(1rem + env(safe-area-inset-left));
+}
 /* Медиа-обёртка в лайтбоксе */
 .lightbox-media-wrap {
   width: 100%;

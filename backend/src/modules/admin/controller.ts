@@ -6,7 +6,7 @@ import { notificationService } from '../notifications/service.js';
 import { usersService } from '../users/service.js';
 import { applyAction, getPendingAppeals, decideAppeal } from '../automod/service.js';
 import { getAllSettings, setSetting, type SettingKey } from '../../lib/settings.js';
-import { assertOwnedMedia } from '../media/service.js';
+import { assertOwnedMedia, findPrivateMediaRow, openPrivateObject } from '../media/service.js';
 
 interface JwtUser { id: string; role: string }
 
@@ -305,6 +305,40 @@ export const getReportsHandler = async (
   const limit = parseInt(req.query.limit || '30');
   const result = await adminService.getReports(req.query.status, page, limit);
   return reply.send({ success: true, data: result, error: null });
+};
+
+/**
+ * GET /api/admin/reports/evidence?url=… — фото из жалобы. Лежит в закрытом префиксе private/reports/,
+ * бакет напрямую его не отдаёт, поэтому читаем через API. Доступ: модератор, админ, владелец.
+ * Обычному пользователю — 403. Остальные закрытые папки здесь не отдаются (их правила не менялись).
+ * Подписанные ссылки не используем: файл отдаётся потоком, ссылка в БД остаётся прежней.
+ */
+export const getReportEvidenceHandler = async (
+  req: FastifyRequest<{ Querystring: { url?: string } }>,
+  reply: FastifyReply,
+) => {
+  if (!requireMod(req, reply)) return;
+  const url = req.query.url;
+  if (typeof url !== 'string' || url.length === 0 || url.length > 2048) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_URL', message: 'Некорректная ссылка' } });
+  }
+  const row = await findPrivateMediaRow(url);
+  if (!row || row.deleted_at || row.folder !== 'reports') {
+    return reply.code(404).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Файл не найден' } });
+  }
+  let opened;
+  try {
+    opened = await openPrivateObject(row.object_key);
+  } catch {
+    // Запись есть, а объекта в хранилище уже нет: фронт покажет заглушку
+    return reply.code(404).send({ success: false, data: null, error: { code: 'FILE_MISSING', message: 'Файл недоступен' } });
+  }
+  reply.header('Cache-Control', 'private, no-store');
+  reply.header('X-Content-Type-Options', 'nosniff');
+  reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+  reply.header('Content-Type', opened.contentType);
+  reply.header('Content-Length', opened.size);
+  return reply.send(opened.stream);
 };
 
 const MAX_REPORT_EVIDENCE_FILES = 5;

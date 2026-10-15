@@ -14,6 +14,7 @@ export interface FriendUser {
   birth_date: string | null
   deceased_at: string | null
   is_following?: boolean
+  notify_posts?: boolean
 }
 
 export interface FriendRequest {
@@ -46,6 +47,15 @@ export interface FriendStatus {
   isSentByMe?: boolean
 }
 
+// Lists are reused for CACHE_TTL_MS when the page is re-entered; mutations pass force=true
+// or call invalidateFriendsCache() (e.g. after a follow toggle made outside this store).
+const CACHE_TTL_MS = 60_000
+const loadedAt: Record<'friends' | 'followers' | 'following', number> = { friends: 0, followers: 0, following: 0 }
+const isFresh = (k: keyof typeof loadedAt) => Date.now() - loadedAt[k] < CACHE_TTL_MS
+export function invalidateFriendsCache() {
+  loadedAt.friends = loadedAt.followers = loadedAt.following = 0
+}
+
 // ── Store ─────────────────────────────────────────────────────────────────────
 export const useFriendsStore = defineStore('friends', () => {
   const friends        = ref<Friend[]>([])
@@ -61,7 +71,8 @@ export const useFriendsStore = defineStore('friends', () => {
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
-  async function loadFriends(filter?: 'online') {
+  async function loadFriends(filter?: 'online', force = false) {
+    if (!filter && !force && isFresh('friends')) return
     isLoading.value = true
     try {
       const { data } = await api.get<{ success: boolean; data: Friend[] }>(
@@ -69,12 +80,14 @@ export const useFriendsStore = defineStore('friends', () => {
         { params: filter ? { filter } : {} }
       )
       friends.value = data.data
+      if (!filter) loadedAt.friends = Date.now()
     } finally {
       isLoading.value = false
     }
   }
 
-  async function loadFollowers() {
+  async function loadFollowers(force = false) {
+    if (!force && isFresh('followers')) return
     const { data } = await api.get<{ success: boolean; data: FriendUser[] }>('/friends/followers')
     const list = data.data
     if (list.length) {
@@ -88,11 +101,14 @@ export const useFriendsStore = defineStore('friends', () => {
       } catch { /* leave is_following undefined — treated as false */ }
     }
     followers.value = list
+    loadedAt.followers = Date.now()
   }
 
-  async function loadFollowing() {
+  async function loadFollowing(force = false) {
+    if (!force && isFresh('following')) return
     const { data } = await api.get<{ success: boolean; data: FriendUser[] }>('/friends/following')
     following.value = data.data.map((u) => ({ ...u, is_following: true }))
+    loadedAt.following = Date.now()
   }
 
   async function loadRequests() {
@@ -131,7 +147,7 @@ export const useFriendsStore = defineStore('friends', () => {
     await api.post(`/friends/requests/${id}/accept`)
     await Promise.all([
       loadRequests(),
-      loadFriends(),
+      loadFriends(undefined, true),
     ])
   }
 

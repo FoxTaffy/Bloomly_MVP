@@ -83,7 +83,7 @@
                   <div class="min-w-0">
                     <h3 class="text-base font-bold text-white truncate">{{ pack.name }}</h3>
                     <p class="text-xs text-white/50 mt-0.5">
-                      by <span class="text-white/70 font-medium">{{ pack.author.display_name || pack.author.username }}</span>
+                      by <span class="text-white/70 font-medium">{{ pack.author?.display_name || pack.author?.username }}</span>
                       · {{ pack.stickers.length }} стикеров
                       · ❤️ {{ pack._count.userCollections }}
                     </p>

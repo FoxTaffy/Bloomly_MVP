@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import api from '../api'
+import { useAuthStore } from './auth'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 export type GroupType = 'event' | 'creative' | 'static' | 'news' | 'shop' | 'community' | 'brand'
@@ -90,6 +91,9 @@ export interface EventItem {
   location_name: string | null
   location_lat: number | null
   location_lng: number | null
+  // not returned by the backend today; the UI guards on them
+  location_address?: string | null
+  map_embed_url?: string | null
   starts_at: string
   ends_at: string
   status: EventStatus
@@ -334,6 +338,20 @@ export const useGroupsStore = defineStore('groups', () => {
       isLoading.value = false
     }
   }
+
+  // Владелец группы приходит копией объекта. Когда пользователь меняет свой ник,
+  // обновляем эту копию в уже загруженных группах, иначе ник устареет до перезагрузки.
+  function applyOwnUsername(userId: string, username: string) {
+    const patch = (owner: GroupOwner | undefined) => { if (owner?.id === userId) owner.username = username }
+    if (currentGroup.value) patch(currentGroup.value.owner)
+    groups.value.forEach(g => patch(g.owner))
+    myGroups.value.forEach(m => patch(m.group.owner))
+  }
+
+  const authStore = useAuthStore()
+  watch(() => authStore.user?.username, (username) => {
+    if (authStore.user && username) applyOwnUsername(authStore.user.id, username)
+  })
 
   async function loadMyGroups() {
     const { data } = await api.get('/groups/me')

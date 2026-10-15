@@ -34,7 +34,7 @@ const markAllRead = async () => {
   } catch {}
 }
 
-const AUTOMOD_TYPES = ['automod_warn', 'automod_freeze', 'automod_unfreeze', 'automod_ban', 'automod_clear_warns', 'admin_broadcast', 'avatar_frame_approved', 'avatar_frame_rejected']
+const AUTOMOD_TYPES = ['automod_warn', 'automod_freeze', 'automod_unfreeze', 'automod_ban', 'automod_clear_warns', 'automod_appeal_accepted', 'automod_appeal_rejected', 'admin_broadcast', 'avatar_frame_approved', 'avatar_frame_rejected']
 const isAutomodNotif = (n: any) => AUTOMOD_TYPES.includes(n.type)
 
 const automodMessage = (n: any) => {
@@ -45,6 +45,8 @@ const automodMessage = (n: any) => {
     case 'automod_unfreeze': return '🔓 Заморозка снята, аккаунт снова активен'
     case 'automod_ban': return `🚫 Аккаунт заблокирован${meta.reason ? ' — ' + meta.reason : ''}`
     case 'automod_clear_warns': return '✅ Предупреждения сброшены модератором'
+    case 'automod_appeal_accepted': return '✅ Апелляция одобрена'
+    case 'automod_appeal_rejected': return '❌ Апелляция отклонена'
     case 'admin_broadcast': return `📣 ${meta.title ?? ''}${meta.body ? ' — ' + meta.body : ''}`
     case 'avatar_frame_approved': return `🖼️ Рамка «${meta.name ?? ''}» одобрена и доступна в Ярмарке`
     case 'avatar_frame_rejected': return `🖼️ Рамка «${meta.name ?? ''}» отклонена${meta.reason ? ' — ' + meta.reason : ''}`
@@ -53,14 +55,19 @@ const automodMessage = (n: any) => {
 }
 
 const notifTypeLabel = (type: string) => {
-  if (isDenNotification(type)) return (langStore.t as any)[denNotificationKey(type)] ?? type
+  const t = langStore.t as any
+  if (isDenNotification(type)) return t[denNotificationKey(type)] ?? t.notifGeneric
+  const key = type.toUpperCase()
+  if (key === 'FRIEND_REQUEST') return t.notifFriendRequest
+  if (key === 'FRIEND_ACCEPT') return t.notifFriendAccept
   const map: Record<string, string> = {
     LIKE: 'поставил(а) + вашей публикации', COMMENT: 'прокомментировал(а) вашу публикацию',
     REPAW: 'поставил(а) RePaw вашей публикации', FOLLOW: 'подписался(ась) на вас',
     MENTION: 'упомянул(а) вас', FOLLOW_POST: 'опубликовал(а) новый пост', GROUP_POST: 'новый пост в сообществе',
     RELATIONSHIP_REQUEST: 'хочет быть вашим партнёром 💕', RELATIONSHIP_ACCEPTED: 'принял(а) ваш запрос в отношения ❤️',
   }
-  return map[type.toUpperCase()] ?? type
+  // Unknown type: neutral sentence in the UI language, never the raw type code.
+  return map[key] ?? t.notifGeneric
 }
 
 // ── Relationship request actions ──────────────────────────────────────────────

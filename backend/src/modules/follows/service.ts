@@ -2,6 +2,7 @@ import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { getBlockerIds, isBlockedBy } from '../../lib/blocks.js';
+import { nsfwWhere, type NsfwMode } from '../../lib/contentFilters.js';
 
 /** Throws a 403 unless the viewer is allowed to see userId's friends/followers list. */
 async function assertFriendsListVisible(userId: string, viewerId?: string) {
@@ -142,7 +143,7 @@ export const followsService = {
     return { aFollowsB: !!aFollowsB, bFollowsA: !!bFollowsA, friends: !!aFollowsB && !!bFollowsA };
   },
 
-  async getSubscriptionFeed(userId: string, safeMode = false, page = 1, limit = 30) {
+  async getSubscriptionFeed(userId: string, nsfwMode: NsfwMode = 'hide', page = 1, limit = 30) {
     const followingRows = await prisma.follow.findMany({
       where: { follower_id: userId },
       select: { following_id: true },
@@ -165,7 +166,7 @@ export const followsService = {
       where: {
         deleted_at:  null,
         author_id:   { in: authorIds },
-        ...(safeMode ? { is_nsfw: false } : {}),
+        ...nsfwWhere(nsfwMode),
       },
       orderBy: { created_at: 'desc' },
       skip,

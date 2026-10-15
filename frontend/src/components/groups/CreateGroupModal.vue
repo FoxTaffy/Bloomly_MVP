@@ -7,6 +7,7 @@ import type { GroupType } from '@/stores/groups'
 import api from '@/api'
 import { compressImageForUpload } from '@/lib/utils'
 import { GROUP_RUBRIC_OPTIONS, DEFAULT_RUBRIC } from '@/lib/groupRubrics'
+import { sanitizeTagInput } from '@/lib/tagRules'
 
 // ── Emit ─────────────────────────────────────────────────────────────────────
 export interface CreateGroupPayload {
@@ -57,12 +58,12 @@ const type = ref<GroupType>('community')
 const isPublic = ref(true)
 
 const autoSlug = computed(() =>
-  name.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '').slice(0, 60)
+  sanitizeTagInput(name.value.trim().replace(/\s+/g, '-')).slice(0, 60)
 )
 
 // Slug auto-sanitize: remove invalid chars, force lowercase, limit length
 watch(slug, (v) => {
-  const clean = v.toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 60)
+  const clean = sanitizeTagInput(v).slice(0, 60)
   if (clean !== v) slug.value = clean
 })
 

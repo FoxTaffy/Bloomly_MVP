@@ -15,7 +15,7 @@ import { onAvatarError } from '@/composables/useAvatarFallback'
 const router = useRouter()
 const langStore = useLangStore()
 const authStore = useAuthStore()
-const { nsfwEnabled: nsfwMode } = useNsfwMode()
+const { nsfwMode, nsfwEnabled } = useNsfwMode()
 
 const isVideoUrl = (url: string) => /\.(mp4|webm|mov|mkv|ogv)$/i.test(url.split('?')[0])
 
@@ -104,7 +104,7 @@ async function fetchPosts(reset = true) {
       limit: String(PAGE_SIZE),
       hasMedia: 'true',
     }
-    if (!nsfwMode.value) params.safeMode = 'true'
+    params.nsfw = nsfwMode.value
     if (selectedTag.value) params.tag = selectedTag.value
 
     const res = await api.get('/posts', { params })
@@ -128,7 +128,7 @@ const trendingTags   = ref<TrendingTag[]>([])
 async function fetchTrendingTags() {
   try {
     const res = await api.get('/posts/trending-tags', {
-      params: { includeNsfw: nsfwMode.value ? 'true' : 'false' },
+      params: { includeNsfw: nsfwEnabled.value ? 'true' : 'false' },
     })
     if (res.data.success) trendingTags.value = res.data.data.tags ?? []
   } catch {}

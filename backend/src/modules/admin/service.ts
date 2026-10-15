@@ -70,22 +70,30 @@ export const adminService = {
       SELECT role, COUNT(*)::bigint AS count FROM "User" WHERE deleted_at IS NULL GROUP BY role
     `;
 
-    // Registrations per month for the last 12 months — the frontend turns this
-    // into a cumulative "total registered" growth curve.
+    // Registrations / posts per month for the last 12 calendar months (current one included).
+    // Months with no rows are zero-filled so the frontend always gets 12 ordered points and
+    // can turn them into a cumulative "total" curve; `month` is the first day, as YYYY-MM-DD.
     type MonthRow = { month: Date; count: bigint };
-    const yearAgo = new Date(now.getTime() - 365 * 86_400_000);
+    const firstMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1));
     const [usersByMonth, postsByMonth] = await Promise.all([
       prisma.$queryRaw<MonthRow[]>`
         SELECT DATE_TRUNC('month', created_at) AS month, COUNT(*)::bigint AS count
-        FROM "User" WHERE deleted_at IS NULL AND created_at >= ${yearAgo}
+        FROM "User" WHERE deleted_at IS NULL AND created_at >= ${firstMonth}
         GROUP BY 1 ORDER BY 1
       `,
       prisma.$queryRaw<MonthRow[]>`
         SELECT DATE_TRUNC('month', created_at) AS month, COUNT(*)::bigint AS count
-        FROM "Post" WHERE deleted_at IS NULL AND created_at >= ${yearAgo}
+        FROM "Post" WHERE deleted_at IS NULL AND created_at >= ${firstMonth}
         GROUP BY 1 ORDER BY 1
       `,
     ]);
+    const fillMonths = (rows: MonthRow[]) => {
+      const byMonth = new Map(rows.map(r => [new Date(r.month).toISOString().slice(0, 7), Number(r.count)]));
+      return Array.from({ length: 12 }, (_, i) => {
+        const key = new Date(Date.UTC(firstMonth.getUTCFullYear(), firstMonth.getUTCMonth() + i, 1)).toISOString().slice(0, 10);
+        return { month: key, count: byMonth.get(key.slice(0, 7)) ?? 0 };
+      });
+    };
 
     // Posts / likes / comments per day for the last 7 days
     type DayCountRow = { day: Date; count: bigint };
@@ -134,8 +142,8 @@ export const adminService = {
       premiumSubscribers,
       postsHistory: postsHistory.map((r) => ({ day: r.day, count: Number(r.count) })),
       roleBreakdown: roleBreakdown.map((r) => ({ role: r.role, count: Number(r.count) })),
-      userGrowth: usersByMonth.map((r) => ({ month: r.month, count: Number(r.count) })),
-      postGrowth: postsByMonth.map((r) => ({ month: r.month, count: Number(r.count) })),
+      userGrowth: fillMonths(usersByMonth),
+      postGrowth: fillMonths(postsByMonth),
       weeklyActivity: {
         posts: fillDays(postsPerDay, 7),
         likes: fillDays(votesPerDay, 7),

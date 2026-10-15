@@ -1,3 +1,4 @@
+import type { NsfwMode } from '../../lib/contentFilters.js';
 export interface CreatePostInput {
   content: string;
   authorId: string;
@@ -23,14 +24,18 @@ export interface GetPostsQuery {
   category?: string;
   tag?: string;
   sort?: PostSortBy;
-  safeMode?: boolean;
+  safeMode?: string;
+  nsfw?: string;
+  /** Resolved by the controller from `nsfw`/`safeMode` + viewer age; the service never reads the raw params. */
+  nsfwMode?: NsfwMode;
   hasMedia?: boolean;
   page?: string;
   limit?: string;
 }
 
 export interface GetPersonalizedQuery {
-  safeMode?: boolean;
+  safeMode?: string;
+  nsfw?: string;
   page?: string;
   limit?: string;
 }

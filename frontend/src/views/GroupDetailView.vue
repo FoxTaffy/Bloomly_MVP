@@ -2,7 +2,7 @@
 import { safeHref } from '@/utils/safeHref'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 const langStore = useLangStore()
-import { ref, computed, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHead } from '@unhead/vue'
 import AppHeader from '@/components/AppHeader.vue'
@@ -184,7 +184,7 @@ const groupMediaUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
 
 // Archetype-aware composer config
 const archetypeComposer = computed(() => {
-  const t = group.value?.type
+  const t: string | undefined = group.value?.type
   if (t === 'news') return { postType: 'article', showTitle: true, placeholder: langStore.t.groupDetailArticlePlaceholder, label: langStore.t.groupDetailNewArticleLabel, icon: 'Newspaper' }
   if (t === 'artist') return { postType: 'artwork', showTitle: false, placeholder: langStore.t.groupDetailArtworkPlaceholder, label: langStore.t.groupDetailNewArtworkLabel, icon: 'Palette' }
   if (t === 'creative') return { postType: 'commission_update', showTitle: false, placeholder: langStore.t.groupDetailCommissionUpdatePlaceholder, label: langStore.t.groupDetailUpdateLabel, icon: 'Scissors' }
@@ -358,7 +358,8 @@ async function submitReview() {
   if (!group.value || !reviewText.value.trim() || reviewRating.value < 1 || reviewSubmitting.value) return
   reviewSubmitting.value = true
   try {
-    await groupsStore.rateGroup(group.value.id, reviewRating.value)
+    // FIXME: reviewRating is 1..5 stars but the API only accepts 1 | -1 (backend throws otherwise)
+    await groupsStore.rateGroup(group.value.id, reviewRating.value as 1 | -1)
     showReviewModal.value = false
     reviewDismissed.value = true
   } catch (e) { console.error('Review failed', e) }
@@ -366,11 +367,11 @@ async function submitReview() {
 }
 
 // ── About tab (inside the About tabs card) ──────────────────────────────
-const aboutTab = ref<'about' | 'rules' | 'faq' | 'nearest' | 'orders' | 'schedule' | 'prices' | 'queue' | 'reviews' | 'digest' | 'categories' | 'team' | 'market' | 'sponsors' | 'contacts'>('about')
+const aboutTab = ref<'about' | 'rules' | 'faq' | 'nearest' | 'orders' | 'schedule' | 'prices' | 'queue' | 'reviews' | 'digest' | 'categories' | 'team' | 'dealers-den' | 'sponsors' | 'contacts'>('about')
 
 const aboutNavs = computed(() => {
   const navs: { key: string; label: string; icon: string }[] = []
-  const t = group.value?.type
+  const t: string | undefined = group.value?.type
 
   if (t === 'event') {
     navs.push({ key: 'about', label: langStore.t.groupDetailAboutEvent, icon: 'Info' })
@@ -378,7 +379,7 @@ const aboutNavs = computed(() => {
     if (sched?.length) navs.push({ key: 'schedule', label: langStore.t.groupDetailScheduleNav, icon: 'Clock' })
     navs.push({ key: 'sponsors', label: langStore.t.groupDetailSponsorsNav, icon: 'Star' })
     navs.push({ key: 'contacts', label: langStore.t.groupDetailContactsNav, icon: 'MapPin' })
-    if (group.value?.events?.length > 1) navs.push({ key: 'nearest', label: langStore.t.groupDetailNearestNav, icon: 'CalendarCheck' })
+    if ((group.value?.events?.length ?? 0) > 1) navs.push({ key: 'nearest', label: langStore.t.groupDetailNearestNav, icon: 'CalendarCheck' })
   } else if (t === 'artist') {
     navs.push({ key: 'about', label: langStore.t.groupDetailAboutArtist, icon: 'Info' })
     navs.push({ key: 'prices', label: langStore.t.groupDetailPricesNavShort, icon: 'Tag' })
@@ -394,7 +395,7 @@ const aboutNavs = computed(() => {
     if ((group.value as any)?.commissionInfo)
       navs.push({ key: 'orders', label: langStore.t.groupDetailOrdersNav, icon: 'ClipboardList' })
     navs.push({ key: 'prices', label: langStore.t.groupDetailPricesNav, icon: 'Tag' })
-    navs.push({ key: 'market', label: langStore.t.groupDetailMarketNav, icon: 'ShoppingBag' })
+    navs.push({ key: 'dealers-den', label: langStore.t.groupDetailDealersDenNav, icon: 'ShoppingBag' })
   } else {
     navs.push({ key: 'about', label: langStore.t.groupDetailAboutGeneric, icon: 'Info' })
   }
@@ -403,6 +404,18 @@ const aboutNavs = computed(() => {
   if ((group.value?.faq as any[])?.length) navs.push({ key: 'faq', label: 'FAQ', icon: 'HelpCircle' })
   return navs
 })
+
+// Old tab key kept working: ?tab=market opens the Dealers' Den tab
+const ABOUT_TAB_ALIASES: Record<string, string> = { market: 'dealers-den' }
+watch(
+  () => [route.query.tab, aboutNavs.value.map(n => n.key).join(',')] as const,
+  ([tab]) => {
+    if (typeof tab !== 'string') return
+    const key = ABOUT_TAB_ALIASES[tab] ?? tab
+    if (aboutNavs.value.some(n => n.key === key)) aboutTab.value = key as typeof aboutTab.value
+  },
+  { immediate: true }
+)
 
 // ── Content tabs (floating pills like profile) ─────────────────────────
 const activeContentTab = ref<'posts' | 'media' | 'archive' | 'members' | 'events'>('posts')
@@ -553,6 +566,7 @@ async function load() {
 }
 const inboxCount = computed(() => (group.value ? messagesStore.groupInboxCounts[group.value.id] ?? 0 : 0))
 const showScrollTop = ref(false)
+function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }) }
 function handleScroll() { showScrollTop.value = window.scrollY > 500 }
 
 onMounted(() => {
@@ -635,6 +649,14 @@ async function shareGroup() {
 // the group). Admins/owner instead go to their shared inbox of everyone's threads.
 const dmLoading = ref(false)
 
+const dmToast = reactive({ show: false, message: '' })
+let dmToastTimer = 0
+function showDmError(message: string) {
+  clearTimeout(dmToastTimer)
+  Object.assign(dmToast, { show: true, message })
+  dmToastTimer = window.setTimeout(() => { dmToast.show = false }, 4000)
+}
+
 async function openGroupChatOrInbox() {
   if (!group.value) return
   if (isAdmin.value) {
@@ -645,7 +667,10 @@ async function openGroupChatOrInbox() {
   dmLoading.value = true
   try {
     const convId = await messagesStore.startGroupDm(group.value.id)
-    if (convId) router.push({ name: 'messages' })
+    if (!convId) throw new Error(langStore.t.groupSettingsErrorGeneric)
+    router.push({ name: 'messages' })
+  } catch (e: any) {
+    showDmError(e.response?.data?.error?.message || e.message || langStore.t.groupSettingsErrorGeneric)
   } finally {
     dmLoading.value = false
   }
@@ -670,6 +695,15 @@ async function loadMemberPreview() {
     if (data.success) memberPreview.value = data.data.members ?? []
   } catch {}
 }
+
+// Список участников грузится один раз: при смене своего ника обновляем его здесь же
+watch(() => authStore.user?.username, (username) => {
+  if (!authStore.user || !username) return
+  const uid = authStore.user.id
+  for (const m of [...memberPreview.value, ...allMembers.value]) {
+    if (m.user && (m.user.id ?? m.user_id) === uid) m.user.username = username
+  }
+})
 
 // ── Full member list modal ──────────────────────────────────────────────
 const showMembersModal = ref(false)
@@ -1359,7 +1393,7 @@ const vClickOutside = {
                         </div>
                       </div>
                     </template>
-                    <template v-else-if="group.type === 'artist'">
+                    <template v-else-if="(group.type as string) === 'artist'">
                       <div class="space-y-3">
                         <div class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl px-4 py-3">
                           <p class="text-[10px] text-white/30 uppercase tracking-wide mb-2 font-bold">{{ langStore.t.groupDetailBasicPricesHeader }}</p>
@@ -1518,33 +1552,11 @@ const vClickOutside = {
                     </template>
                   </div>
 
-                  <!-- Creative: Маркет готовых работ -->
-                  <div v-else-if="aboutTab === 'market'" class="space-y-3">
-                    <template v-if="(group as any).shopItems?.length">
-                      <div v-for="item in (group as any).shopItems" :key="item.id"
-                        class="flex items-center gap-3 bg-brand-bg border border-brand-border rounded-2xl overflow-hidden hover:border-brand-purple/40 transition-all cursor-pointer">
-                        <div class="w-20 h-20 flex-shrink-0 bg-brand-border/40 overflow-hidden">
-                          <img v-if="item.image_url" :src="item.image_url" class="w-full h-full object-cover" />
-                          <div v-else class="w-full h-full flex items-center justify-center"><BIcon name="Image" class="w-7 h-7 text-white/20" /></div>
-                        </div>
-                        <div class="flex-1 min-w-0 py-3">
-                          <p class="text-sm font-bold text-white truncate">{{ item.name }}</p>
-                          <p v-if="item.description" class="text-xs text-white/40 mt-0.5 line-clamp-2">{{ item.description }}</p>
-                          <p class="text-sm font-extrabold text-brand-purple mt-1">{{ item.price }} ₽</p>
-                        </div>
-                        <div class="pr-3 flex-shrink-0">
-                          <button class="px-4 py-2 rounded-xl text-xs font-bold text-white"
-                            :style="`background: ${group.accent_color || '#8B5CF6'}`">
-                            {{ langStore.t.groupDetailBuyBtn }}
-                          </button>
-                        </div>
-                      </div>
-                    </template>
-                    <div v-else class="py-10 text-center">
-                      <BIcon name="ShoppingBag" class="w-10 h-10 mx-auto mb-3 text-white/20" />
-                      <p class="text-white/40 text-sm font-semibold">{{ langStore.t.groupDetailMarketEmptyTitle }}</p>
-                      <p class="text-white/25 text-xs mt-1">{{ langStore.t.groupDetailMarketEmptyHint }}</p>
-                    </div>
+                  <!-- Creative: Dealers' Den (no group↔listing link in schema yet → empty state) -->
+                  <div v-else-if="aboutTab === 'dealers-den'" class="py-10 text-center">
+                    <BIcon name="ShoppingBag" class="w-10 h-10 mx-auto mb-3 text-white/20" />
+                    <p class="text-white/40 text-sm font-semibold">{{ langStore.t.groupDetailMarketEmptyTitle }}</p>
+                    <p class="text-white/25 text-xs mt-1">{{ langStore.t.groupDetailMarketEmptyHint }}</p>
                   </div>
 
                   <!-- Event: Спонсоры -->
@@ -2272,7 +2284,7 @@ const vClickOutside = {
                   <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
                     <BIcon name="Crown" class="w-3.5 h-3.5 text-brand-yellow" />
                     <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">
-                      {{ group.type === 'artist' ? langStore.t.groupDetailSubscriptionsLabel : langStore.t.groupDetailSupportStudioLabel }}
+                      {{ (group.type as string) === 'artist' ? langStore.t.groupDetailSubscriptionsLabel : langStore.t.groupDetailSupportStudioLabel }}
                     </p>
                   </div>
                   <div class="px-3 pb-3 space-y-2">
@@ -2655,7 +2667,7 @@ const vClickOutside = {
     <!-- Scroll to top button -->
     <Teleport to="body">
       <Transition name="slide-up">
-        <button v-if="showScrollTop" @click="window.scrollTo({ top: 0, behavior: 'smooth' })"
+        <button v-if="showScrollTop" @click="scrollToTop"
           class="fixed bottom-20 md:bottom-6 right-6 z-[210] w-11 h-11 rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110"
           style="background: linear-gradient(135deg,#CD83F5,#7C3AED)">
           <BIcon name="ArrowUp" class="w-5 h-5 text-white" />
@@ -2677,10 +2689,20 @@ const vClickOutside = {
       :group="group as any"
       @close="showDonateModal = false"
     />
+
+    <!-- Toast: errors from "Написать в группу" -->
+    <Transition name="dm-toast">
+      <div v-if="dmToast.show"
+        class="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl text-sm font-bold border backdrop-blur-lg pointer-events-none bg-brand-error/10 border-brand-error/30 text-brand-error">
+        {{ dmToast.message }}
+      </div>
+    </Transition>
   </div>
 </template>
 
 <style scoped>
+.dm-toast-enter-active, .dm-toast-leave-active { transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1); }
+.dm-toast-enter-from, .dm-toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(-20px) scale(0.88); }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }

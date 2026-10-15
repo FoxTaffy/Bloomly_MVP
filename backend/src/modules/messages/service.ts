@@ -1018,7 +1018,22 @@ export const messageService = {
       include: { participants: { include: { user: { select: senderSelect } } } },
     });
     if (existing && !existing.deleted_at) return { conversation: existing, alreadyExists: true };
-    if (existing) throw Object.assign(new Error('Conversation is no longer available'), { statusCode: 404 });
+    // (group_id, group_dm_user_id) is unique, so a soft-deleted thread would block creating a new one.
+    // Restore it instead of failing with 404 forever: the member gets back the same thread.
+    if (existing) {
+      const [conversation] = await prisma.$transaction([
+        prisma.conversation.update({
+          where: { id: existing.id },
+          data: { deleted_at: null },
+          include: { participants: { include: { user: { select: senderSelect } } } },
+        }),
+        prisma.conversationParticipant.updateMany({
+          where: { conversation_id: existing.id, user_id: userId },
+          data: { hidden_at: null },
+        }),
+      ]);
+      return { conversation, alreadyExists: true };
+    }
 
     const conversation = await prisma.conversation.create({
       data: {

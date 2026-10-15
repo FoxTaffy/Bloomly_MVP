@@ -12,6 +12,8 @@ import PostLightbox from '../components/PostLightbox.vue'
 import ResolveReportModal from '../components/ResolveReportModal.vue'
 import AdminEditUserModal from '../components/AdminEditUserModal.vue'
 import StickerPackDetailModal from '../components/StickerPackDetailModal.vue'
+import SafeMedia from '../components/SafeMedia.vue'
+import { fetchReportEvidence } from '@/composables/useReportEvidence'
 import { useConfirm } from '@/composables/useConfirm'
 import { verTypeIconUrl } from '@/lib/verificationIcons'
 
@@ -54,12 +56,25 @@ const commsViewMode = ref<'updates' | 'broadcasts'>('updates')
 // ── Stats ─────────────────────────────────────────────────────────────
 const stats = ref<any>(null)
 const isLoadingStats = ref(false)
+const statsError = ref(false)
 const fetchStats = async () => {
   isLoadingStats.value = true
+  statsError.value = false
   try {
     const res = await api.get('/admin/stats')
     if (res.data.success) stats.value = res.data.data
-  } catch {} finally { isLoadingStats.value = false }
+    else statsError.value = true
+  } catch { statsError.value = true } finally { isLoadingStats.value = false }
+}
+
+// Shared by the admin tabs below: a failed request must never wipe an already-loaded list,
+// it only surfaces a message. 429 (rate-limit) gets its own wording.
+const adminActionError = ref('')
+let adminActionErrorTimer: ReturnType<typeof setTimeout> | undefined
+const reportAdminError = (e: any) => {
+  adminActionError.value = e?.response?.status === 429 ? langStore.t.adminRateLimited : langStore.t.adminActionFailed
+  clearTimeout(adminActionErrorTimer)
+  adminActionErrorTimer = setTimeout(() => { adminActionError.value = '' }, 5000)
 }
 
 // ── Users ─────────────────────────────────────────────────────────────
@@ -405,27 +420,49 @@ const supportSenderLabel = (m: any) => {
   return `${langStore.t.adminSenderUser}${m.sender?.username ? ` (@${m.sender.username})` : ''}`
 }
 
+const supportLoadError = ref(false)
+const supportBusy = ref<Record<string, boolean>>({})
+let supportFetchSeq = 0
+
 const fetchSupportTickets = async () => {
+  const seq = ++supportFetchSeq
   isLoadingSupport.value = true
+  supportLoadError.value = false
   try {
     const res = await api.get('/support/admin/tickets', { params: { status: supportFilter.value || undefined } })
-    if (res.data.success) supportTickets.value = res.data.data.tickets
-  } catch {} finally { isLoadingSupport.value = false }
+    // Ignore stale responses (filter clicked again while this one was in flight)
+    if (seq === supportFetchSeq && res.data.success && Array.isArray(res.data.data?.tickets)) {
+      supportTickets.value = res.data.data.tickets
+    }
+  } catch { if (seq === supportFetchSeq) supportLoadError.value = true } finally {
+    if (seq === supportFetchSeq) isLoadingSupport.value = false
+  }
 }
 
 const replySupportTicket = async (ticketId: string, status?: string) => {
+  if (supportBusy.value[ticketId]) return
+  const idx = supportTickets.value.findIndex(t => t.id === ticketId)
+  if (idx === -1) return
   const reply = supportReplyDrafts.value[ticketId]?.trim()
+  const previous = supportTickets.value[idx]
+  supportBusy.value[ticketId] = true
+  // Optimistic status change; rolled back below if the request fails
+  if (status) supportTickets.value[idx] = { ...previous, status }
   try {
     const res = await api.patch(`/support/admin/tickets/${ticketId}`, {
       ...(status ? { status } : {}),
       ...(reply ? { admin_reply: reply } : {}),
     })
-    if (res.data.success) {
-      const idx = supportTickets.value.findIndex(t => t.id === ticketId)
-      if (idx !== -1) supportTickets.value[idx] = { ...supportTickets.value[idx], ...res.data.data.ticket }
-      delete supportReplyDrafts.value[ticketId]
-    }
-  } catch {}
+    const updated = res.data?.success ? res.data.data?.ticket : null
+    if (!updated) throw new Error('empty response')
+    const i = supportTickets.value.findIndex(t => t.id === ticketId)
+    if (i !== -1) supportTickets.value[i] = { ...supportTickets.value[i], ...updated }
+    delete supportReplyDrafts.value[ticketId]
+  } catch (e) {
+    const i = supportTickets.value.findIndex(t => t.id === ticketId)
+    if (i !== -1) supportTickets.value[i] = previous
+    reportAdminError(e)
+  } finally { delete supportBusy.value[ticketId] }
 }
 
 // ── Ads ────────────────────────────────────────────────────────────────
@@ -487,23 +524,39 @@ const reviewAd = async (adId: string, status: 'active' | 'rejected') => {
 const verRequests = ref<any[]>([])
 const verFilter = ref('pending')
 const isLoadingVer = ref(false)
+const verLoadError = ref(false)
+const verBusy = ref<Record<string, boolean>>({})
+let verFetchSeq = 0
 
 const fetchVerRequests = async () => {
+  const seq = ++verFetchSeq
   isLoadingVer.value = true
+  verLoadError.value = false
   try {
     const params: any = { page: 1 }
     if (verFilter.value) params.status = verFilter.value
     const res = await api.get('/verification/admin/requests', { params })
-    if (res.data.success) verRequests.value = res.data.data.requests
-  } catch {} finally { isLoadingVer.value = false }
+    if (seq === verFetchSeq && res.data.success && Array.isArray(res.data.data?.requests)) {
+      verRequests.value = res.data.data.requests
+    }
+  } catch { if (seq === verFetchSeq) verLoadError.value = true } finally {
+    if (seq === verFetchSeq) isLoadingVer.value = false
+  }
 }
 
 const reviewVerRequest = async (id: string, action: 'approve' | 'reject', reason?: string) => {
+  if (verBusy.value[id]) return
+  verBusy.value[id] = true
   try {
     await api.patch(`/verification/admin/requests/${id}`, { action, reason })
-    verRequests.value = verRequests.value.filter(r => r.id !== id)
-    // Could also re-fetch: fetchVerRequests()
-  } catch {}
+    if (verFilter.value === '') {
+      // "All" view keeps decided requests visible — just flip the status locally
+      const r = verRequests.value.find(r => r.id === id)
+      if (r) r.status = action === 'approve' ? 'approved' : 'rejected'
+    } else {
+      verRequests.value = verRequests.value.filter(r => r.id !== id)
+    }
+  } catch (e) { reportAdminError(e) } finally { delete verBusy.value[id] }
 }
 
 // `prompt()` cannot be called directly inside a template expression — Vue's compiler
@@ -517,6 +570,19 @@ const rejectVerRequest = (id: string) => {
 
 const evidenceLightbox = ref<{ images: string[]; start: number } | null>(null)
 const openEvidenceLightbox = (images: string[], start: number) => { evidenceLightbox.value = { images, start } }
+// Фото жалоб закрыты от прямого доступа: в просмотрщик отдаём blob-ссылки, недоступные файлы пропускаем
+const openReportEvidence = async (urls: string[], start: number) => {
+  const settled = await Promise.allSettled(urls.map((u) => fetchReportEvidence(u)))
+  const images: string[] = []
+  let startIndex = 0
+  settled.forEach((r, i) => {
+    if (r.status !== 'fulfilled') return
+    if (i === start) startIndex = images.length
+    images.push(r.value)
+  })
+  if (images.length === 0 || settled[start]?.status !== 'fulfilled') return
+  evidenceLightbox.value = { images, start: startIndex }
+}
 
 // ── Avatar frame submissions ─────────────────────────────────────────
 const frameSubmissions = ref<any[]>([])
@@ -1142,6 +1208,14 @@ const buildCumulative = (rows: { month: string; count: number }[] | undefined, e
   let running = endTotal - sum
   return rows.map(r => { running += r.count; return { month: r.month, total: running } })
 }
+// 'loading' | 'error' | 'empty' | 'ok' — one state per chart so the card never renders blank
+const growthState = (rows: { count: number }[] | undefined, total: number | undefined) => {
+  if (!stats.value) return isLoadingStats.value ? 'loading' : statsError.value ? 'error' : 'loading'
+  if (!rows?.length || (!total && !rows.some(r => r.count > 0))) return 'empty'
+  return 'ok'
+}
+const userGrowthState = computed(() => growthState(stats.value?.userGrowth, stats.value?.users?.total))
+const postGrowthState = computed(() => growthState(stats.value?.postGrowth, stats.value?.posts?.total))
 const userGrowthSeries = computed(() => buildCumulative(stats.value?.userGrowth, stats.value?.users.total ?? 0))
 const postGrowthSeries = computed(() => buildCumulative(stats.value?.postGrowth, stats.value?.posts.total ?? 0))
 const userGrowthMax = computed(() => Math.max(...userGrowthSeries.value.map(p => p.total), 1))
@@ -1372,6 +1446,10 @@ const totalPendingBadge = computed(() => {
 
       <!-- Page content -->
       <main class="flex-1 p-6 max-w-5xl mx-auto w-full">
+        <div v-if="adminActionError" role="alert"
+          class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl text-xs font-bold bg-rose-500/15 border border-rose-500/30 text-rose-300 shadow-lg shadow-black/40">
+          {{ adminActionError }}
+        </div>
       <div class="mb-6">
         <h1 class="text-2xl font-black text-white">{{ tabTitle[activeTab] ?? navItems.find(i=>i.tab===activeTab)?.label }}</h1>
         <p class="text-sm text-white/40 mt-0.5">{{ tabSubtitle[activeTab] }}</p>
@@ -1387,6 +1465,11 @@ const totalPendingBadge = computed(() => {
               <div v-for="n in 6" :key="n" class="h-28 rounded-2xl bg-white/5 animate-pulse" />
             </div>
             <div class="h-56 rounded-2xl bg-white/5 animate-pulse" />
+          </div>
+
+          <div v-else-if="statsError && !stats" class="flex flex-col items-center gap-3 py-20 text-white/30">
+            <p class="text-sm font-semibold">{{ langStore.t.adminLoadFailed }}</p>
+            <button @click="fetchStats" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/[0.08] text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
           </div>
 
           <template v-else-if="stats">
@@ -1431,6 +1514,7 @@ const totalPendingBadge = computed(() => {
               <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
                 <h3 class="font-extrabold text-white text-sm">{{ langStore.t.adminUserGrowthTitle }}</h3>
                 <p class="text-xs text-white/40 mt-0.5 mb-4">{{ langStore.t.adminUserGrowthSub }}</p>
+                <template v-if="userGrowthState === 'ok'">
                 <div class="relative">
                   <div v-if="activeGrowthTooltip && hoveredGrowthPoint?.chart === 'users'"
                     class="absolute z-10 -translate-x-1/2 -translate-y-full pointer-events-none flex flex-col items-center"
@@ -1470,10 +1554,23 @@ const totalPendingBadge = computed(() => {
                 <div class="flex justify-between mt-1">
                   <span v-for="(p, i) in userGrowthSeries" :key="i" class="text-[9px] text-white/25" :class="i % 2 === 1 ? 'hidden sm:inline' : ''">{{ formatMonthShort(p.month) }}</span>
                 </div>
+                </template>
+                <div v-else class="h-32 flex flex-col items-center justify-center gap-2 text-white/30">
+                  <div v-if="userGrowthState === 'loading'" class="w-full h-full rounded-xl bg-white/5 animate-pulse" />
+                  <template v-else-if="userGrowthState === 'error'">
+                    <p class="text-xs font-semibold">{{ langStore.t.adminLoadFailed }}</p>
+                    <button @click="fetchStats" class="px-3 py-1 rounded-lg text-xs font-bold bg-white/5 border border-white/[0.08] text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
+                  </template>
+                  <template v-else>
+                    <BIcon name="BarChart2" class="w-7 h-7 opacity-40" />
+                    <p class="text-xs font-semibold">{{ langStore.t.adminChartNoData }}</p>
+                  </template>
+                </div>
               </div>
               <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
                 <h3 class="font-extrabold text-white text-sm">{{ langStore.t.adminPostGrowthTitle }}</h3>
                 <p class="text-xs text-white/40 mt-0.5 mb-4">{{ langStore.t.adminPostGrowthSub }}</p>
+                <template v-if="postGrowthState === 'ok'">
                 <div class="relative">
                   <div v-if="activeGrowthTooltip && hoveredGrowthPoint?.chart === 'posts'"
                     class="absolute z-10 -translate-x-1/2 -translate-y-full pointer-events-none flex flex-col items-center"
@@ -1512,6 +1609,18 @@ const totalPendingBadge = computed(() => {
                 </div>
                 <div class="flex justify-between mt-1">
                   <span v-for="(p, i) in postGrowthSeries" :key="i" class="text-[9px] text-white/25" :class="i % 2 === 1 ? 'hidden sm:inline' : ''">{{ formatMonthShort(p.month) }}</span>
+                </div>
+                </template>
+                <div v-else class="h-32 flex flex-col items-center justify-center gap-2 text-white/30">
+                  <div v-if="postGrowthState === 'loading'" class="w-full h-full rounded-xl bg-white/5 animate-pulse" />
+                  <template v-else-if="postGrowthState === 'error'">
+                    <p class="text-xs font-semibold">{{ langStore.t.adminLoadFailed }}</p>
+                    <button @click="fetchStats" class="px-3 py-1 rounded-lg text-xs font-bold bg-white/5 border border-white/[0.08] text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
+                  </template>
+                  <template v-else>
+                    <BIcon name="BarChart2" class="w-7 h-7 opacity-40" />
+                    <p class="text-xs font-semibold">{{ langStore.t.adminChartNoData }}</p>
+                  </template>
                 </div>
               </div>
             </div>
@@ -2296,7 +2405,7 @@ const totalPendingBadge = computed(() => {
                         : folder.status === 'resolved'
                           ? 'bg-emerald-500/15 text-emerald-400'
                           : 'bg-white/5 text-white/30'">
-                      {{ { pending: langStore.t.reportStatusPending, resolved: langStore.t.reportStatusResolved, dismissed: langStore.t.reportStatusDismissed }[folder.status] }}
+                      {{ { pending: langStore.t.reportStatusPending, resolved: langStore.t.reportStatusResolved, dismissed: langStore.t.reportStatusDismissed }[folder.status as 'pending' | 'resolved' | 'dismissed'] }}
                     </span>
                     <span v-if="folder.count > 1"
                       class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400"
@@ -2310,10 +2419,11 @@ const totalPendingBadge = computed(() => {
 
                   <!-- Evidence attached by the reporter -->
                   <div v-if="folder.reports[0].evidence_urls?.length" class="flex gap-2 mt-2 flex-wrap">
-                    <a v-for="(url, ei) in folder.reports[0].evidence_urls" :key="ei" :href="safeHref(url)" target="_blank" rel="noopener noreferrer"
+                    <button v-for="(url, ei) in folder.reports[0].evidence_urls" :key="ei" type="button"
+                      @click="openReportEvidence(folder.reports[0].evidence_urls, ei)"
                       class="w-14 h-14 rounded-lg overflow-hidden border border-white/[0.08] flex-shrink-0">
-                      <img :src="url" class="w-full h-full object-cover" />
-                    </a>
+                      <SafeMedia :src="url" source="report-evidence" class="w-full h-full object-cover" />
+                    </button>
                   </div>
 
                   <!-- Subtitle: reporter + target -->
@@ -2422,6 +2532,10 @@ const totalPendingBadge = computed(() => {
                 </div>
               </div>
             </div>
+            <div v-else-if="supportLoadError && supportTickets.length === 0" class="flex flex-col items-center gap-3 py-16 text-white/30">
+              <p class="text-sm font-semibold">{{ langStore.t.adminLoadFailed }}</p>
+              <button @click="fetchSupportTickets" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/[0.08] text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
+            </div>
             <div v-else-if="supportTickets.length === 0"
               class="flex flex-col items-center gap-3 py-16 text-white/25">
               <BIcon name="LifeBuoy" class="w-10 h-10 opacity-40" />
@@ -2471,16 +2585,16 @@ const totalPendingBadge = computed(() => {
                       <input v-model="supportReplyDrafts[ticket.id]" type="text" :placeholder="langStore.t.adminReplyToUserPlaceholder"
                         class="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/[0.08] text-xs text-white placeholder-white/25 focus:outline-none focus:border-[#4C67CF]/40" />
                       <div class="flex gap-2 flex-shrink-0">
-                        <button @click="replySupportTicket(ticket.id, 'in_progress')"
-                          class="px-3 py-1.5 rounded-xl text-xs font-bold bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/20 transition-all">
+                        <button @click="replySupportTicket(ticket.id, 'in_progress')" :disabled="supportBusy[ticket.id]"
+                          class="disabled:opacity-50 disabled:pointer-events-none px-3 py-1.5 rounded-xl text-xs font-bold bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/20 transition-all">
                           {{ langStore.t.adminMarkInProgressBtn }}
                         </button>
-                        <button @click="replySupportTicket(ticket.id, 'resolved')"
-                          class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
+                        <button @click="replySupportTicket(ticket.id, 'resolved')" :disabled="supportBusy[ticket.id]"
+                          class="disabled:opacity-50 disabled:pointer-events-none px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
                           ✓ {{ langStore.t.adminMarkResolvedBtn }}
                         </button>
-                        <button @click="replySupportTicket(ticket.id, 'closed')"
-                          class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 border border-white/[0.08] text-white/40 hover:text-white transition-all">
+                        <button @click="replySupportTicket(ticket.id, 'closed')" :disabled="supportBusy[ticket.id]"
+                          class="disabled:opacity-50 disabled:pointer-events-none px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 border border-white/[0.08] text-white/40 hover:text-white transition-all">
                           {{ langStore.t.adminCloseBtn }}
                         </button>
                       </div>
@@ -2892,6 +3006,10 @@ const totalPendingBadge = computed(() => {
             <div v-if="isLoadingVer">
               <div v-for="n in 3" :key="n" class="h-28 rounded-3xl bg-white/5 animate-pulse" />
             </div>
+            <div v-else-if="verLoadError && verRequests.length === 0" class="flex flex-col items-center gap-3 py-20 text-white/30">
+              <p class="text-sm font-semibold">{{ langStore.t.adminLoadFailed }}</p>
+              <button @click="fetchVerRequests" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/[0.08] text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
+            </div>
             <div v-else-if="verRequests.length === 0"
               class="flex flex-col items-center gap-3 py-20 text-white/25">
               <BIcon name="BadgeCheck" class="w-10 h-10 opacity-40" />
@@ -2931,7 +3049,7 @@ const totalPendingBadge = computed(() => {
                           : req.status==='approved'
                             ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
                             : 'text-rose-400 bg-rose-500/10 border-rose-500/20'">
-                        {{ {pending: langStore.t.adminVerStatusPending, approved: langStore.t.adminVerStatusApproved, rejected: langStore.t.adminVerStatusRejected}[req.status] }}
+                        {{ {pending: langStore.t.adminVerStatusPending, approved: langStore.t.adminVerStatusApproved, rejected: langStore.t.adminVerStatusRejected}[req.status as 'pending' | 'approved' | 'rejected'] }}
                       </span>
                       <span class="text-[10px] text-white/25 whitespace-nowrap">{{ formatDate(req.created_at) }}</span>
                     </div>
@@ -2940,7 +3058,7 @@ const totalPendingBadge = computed(() => {
                   <div v-if="req.verification_type" class="mt-2.5">
                     <span class="text-xs font-bold pl-1.5 pr-2.5 py-1 rounded-full border inline-flex items-center gap-1.5"
                       :class="verTypeColors[req.verification_type] || 'text-blue-400 bg-blue-400/10 border-blue-400/20'">
-                      <BIcon :name="verTypeIcons[req.verification_type] || 'BadgeCheck'" class="w-3.5 h-3.5" />
+                      <img :src="verTypeIconUrl(req.verification_type)" :alt="req.verification_type" class="w-4 h-4 rounded-sm flex-shrink-0 object-cover" />
                       {{ verTypeLabels[req.verification_type] || req.verification_type }}
                     </span>
                   </div>
@@ -2979,12 +3097,12 @@ const totalPendingBadge = computed(() => {
 
                 <!-- Footer actions -->
                 <div v-if="req.status === 'pending'" class="mt-3 border-t border-white/[0.06] bg-white/[0.015] px-4 py-2.5 flex gap-2">
-                  <button @click="reviewVerRequest(req.id,'approve')"
-                    class="flex-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors flex items-center justify-center gap-1.5">
+                  <button @click="reviewVerRequest(req.id,'approve')" :disabled="verBusy[req.id]"
+                    class="disabled:opacity-50 disabled:pointer-events-none flex-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors flex items-center justify-center gap-1.5">
                     <BIcon name="Check" class="w-3.5 h-3.5" /> {{ langStore.t.adminApproveBtn }}
                   </button>
-                  <button @click="rejectVerRequest(req.id)"
-                    class="flex-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 transition-colors flex items-center justify-center gap-1.5">
+                  <button @click="rejectVerRequest(req.id)" :disabled="verBusy[req.id]"
+                    class="disabled:opacity-50 disabled:pointer-events-none flex-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 transition-colors flex items-center justify-center gap-1.5">
                     <BIcon name="X" class="w-3.5 h-3.5" /> {{ langStore.t.adminRejectBtn }}
                   </button>
                 </div>
@@ -3049,7 +3167,7 @@ const totalPendingBadge = computed(() => {
                         : fr.status==='approved'
                           ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
                           : 'text-rose-400 bg-rose-500/10 border-rose-500/20'">
-                      {{ {pending: langStore.t.adminVerStatusPending, approved: langStore.t.adminVerStatusApproved, rejected: langStore.t.adminVerStatusRejected}[fr.status] }}
+                      {{ {pending: langStore.t.adminVerStatusPending, approved: langStore.t.adminVerStatusApproved, rejected: langStore.t.adminVerStatusRejected}[fr.status as 'pending' | 'approved' | 'rejected'] }}
                     </span>
                     <span class="text-[10px] text-white/25 whitespace-nowrap">{{ formatDate(fr.created_at) }}</span>
                   </div>

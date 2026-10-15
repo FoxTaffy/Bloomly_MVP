@@ -4,6 +4,7 @@ import type { CreatePostInput, JwtUser, GetPostsQuery, GetPersonalizedQuery } fr
 import { moderatePost, moderateComment } from '../automod/service.js';
 import { isModerator, isAdmin } from '../../lib/roles.js';
 import { requestIsAdult } from '../../lib/age.js';
+import { resolveNsfwMode } from '../../lib/contentFilters.js';
 
 export const getTrendingTagsHandler = async (
   request: FastifyRequest<{ Querystring: { includeNsfw?: string } }>,
@@ -95,16 +96,16 @@ export const votePostHandler = async (
 };
 
 export const searchPostsHandler = async (
-  request: FastifyRequest<{ Querystring: { q?: string; safeMode?: string; page?: string; limit?: string } }>,
+  request: FastifyRequest<{ Querystring: { q?: string; safeMode?: string; nsfw?: string; page?: string; limit?: string } }>,
   reply: FastifyReply,
 ) => {
   try {
-    const { q = '', safeMode, page, limit } = request.query;
+    const { q = '', safeMode, nsfw, page, limit } = request.query;
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
-    const effectiveSafeMode = !requestIsAdult(request.user) || safeMode === 'true';
+    const nsfwMode = resolveNsfwMode({ nsfw, safeMode, isAdult: requestIsAdult(request.user) });
     const viewerId = (request.user as JwtUser | undefined)?.id;
-    const posts = await postService.searchPosts(q, effectiveSafeMode, pageNum, limitNum, viewerId);
+    const posts = await postService.searchPosts(q, nsfwMode, pageNum, limitNum, viewerId);
     return reply.send({ success: true, data: { posts }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to search posts';
@@ -122,12 +123,7 @@ export const getPostsHandler = async (
 ) => {
   try {
     const query = request.query;
-    if (typeof (query as any).safeMode === 'string') {
-      (query as any).safeMode = (query as any).safeMode === 'true';
-    }
-    if (!requestIsAdult(request.user)) {
-      (query as any).safeMode = true;
-    }
+    query.nsfwMode = resolveNsfwMode({ nsfw: query.nsfw, safeMode: query.safeMode, isAdult: requestIsAdult(request.user) });
     if (typeof (query as any).hasMedia === 'string') {
       (query as any).hasMedia = (query as any).hasMedia === 'true';
     }
@@ -150,11 +146,11 @@ export const getPersonalizedPostsHandler = async (
 ) => {
   try {
     const { id: userId } = request.user as JwtUser;
-    const safeMode = !requestIsAdult(request.user) || (request.query as any).safeMode === 'true';
+    const nsfwMode = resolveNsfwMode({ nsfw: (request.query as any).nsfw, safeMode: (request.query as any).safeMode, isAdult: requestIsAdult(request.user) });
     const pageNum = request.query.page ? parseInt(request.query.page as string, 10) : 1;
     const limitNum = request.query.limit ? parseInt(request.query.limit as string, 10) : 30;
 
-    const posts = await postService.getPersonalizedPosts(userId, safeMode, pageNum, limitNum);
+    const posts = await postService.getPersonalizedPosts(userId, nsfwMode, pageNum, limitNum);
     return reply.send({ success: true, data: { posts }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch personalized posts';

@@ -3,7 +3,7 @@ import {
   getStatsHandler, getUsersHandler, updateUserRoleHandler, updateUserSubscriptionHandler, updateUserProfileHandler, deleteUserHandler,
   getArchivedUsersHandler, getFrozenUsersHandler, restoreUserHandler,
   getPostsAdminHandler, deletePostAdminHandler,
-  getReportsHandler, submitReportHandler, resolveReportHandler, resolveReportsBatchHandler, resolveReportIssueHandler,
+  getReportsHandler, getReportEvidenceHandler, submitReportHandler, resolveReportHandler, resolveReportsBatchHandler, resolveReportIssueHandler,
   getAppealsHandler, decideAppealHandler,
   getAdsHandler, getActiveAdsHandler, submitAdHandler, reviewAdHandler, deleteAdHandler,
   trackImpressionHandler, trackClickHandler,
@@ -80,6 +80,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
   // Reports
   fastify.get('/reports',        auth, getReportsHandler as any);
+  fastify.get('/reports/evidence', auth, getReportEvidenceHandler as any);
   fastify.post('/reports',       { ...auth, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } } as RouteShorthandOptions, submitReportHandler as any);
   fastify.patch('/reports/:id',  auth, resolveReportHandler as any);
   fastify.patch('/reports/resolve-batch', auth, resolveReportsBatchHandler as any);

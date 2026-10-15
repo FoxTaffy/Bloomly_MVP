@@ -58,7 +58,7 @@ export function useGroupAdminTools() {
     if (!g) return []
     const gid = g.id
     const slug = (g as any).slug ?? g.id
-    const t = g.type
+    const t: string = g.type
 
     const go = (name: string, pageTab: string | undefined, query?: Record<string, string>) =>
       () => {

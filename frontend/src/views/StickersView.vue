@@ -523,7 +523,7 @@ async function toggleCollection(pack: StickerPack) {
               <!-- Name + author -->
               <div class="px-2.5 py-2">
                 <p class="text-xs font-bold text-white line-clamp-1 leading-tight">{{ pack.name }}</p>
-                <div class="flex items-center gap-1 mt-0.5">
+                <div v-if="pack.author" class="flex items-center gap-1 mt-0.5">
                   <img v-if="pack.author.avatar_url" :src="pack.author.avatar_url"
                     class="w-3 h-3 rounded-full object-cover opacity-60 flex-shrink-0" />
                   <span class="text-[9px] text-white/30 truncate">{{ pack.author.display_name ?? pack.author.username }}</span>
@@ -709,7 +709,7 @@ async function toggleCollection(pack: StickerPack) {
             <div class="px-3 py-2.5 flex items-center justify-between gap-2">
               <div class="min-w-0">
                 <p class="text-xs font-bold text-white line-clamp-1 leading-tight">{{ pack.name }}</p>
-                <div class="flex items-center gap-1 mt-1">
+                <div v-if="pack.author" class="flex items-center gap-1 mt-1">
                   <img v-if="pack.author.avatar_url" :src="pack.author.avatar_url"
                     class="w-3.5 h-3.5 rounded-full object-cover flex-shrink-0 opacity-70" />
                   <div v-else class="w-3.5 h-3.5 rounded-full bg-purple-500/25 flex items-center justify-center flex-shrink-0">

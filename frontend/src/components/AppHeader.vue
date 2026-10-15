@@ -12,7 +12,6 @@ import { useWarningModalStore } from '@/stores/warningModal'
 import api from '@/api'
 import BIcon from './BIcon.vue'
 import PostCard from './PostCard.vue'
-import PostComments from './PostComments.vue'
 import { isDenNotification, denNotificationKey, DEN_NOTIFICATION_ICONS } from '@/lib/denNotifications'
 
 const props = withDefaults(defineProps<{
@@ -54,7 +53,7 @@ function selectLang(code: typeof langOptions[number]['code']) {
 // instead of relying solely on the `nsfwMode` prop, since many pages render
 // <AppHeader> without wiring v-model:nsfwMode, which used to make the toggle
 // look permanently OFF/inconsistent even though the underlying flag was shared.
-const { nsfwEnabled, canUseNsfw, toggleNsfw: _nsfwToggle } = useNsfwMode()
+const { nsfwMode: nsfwFilterMode, nsfwEnabled, canUseNsfw, toggleNsfw: _nsfwToggle } = useNsfwMode()
 const toggleNsfw = () => {
   _nsfwToggle()
   emit('update:nsfwMode', nsfwEnabled.value)
@@ -160,16 +159,20 @@ const notifTypeLabel = (type: string, pronouns?: string | null) => {
     RELATIONSHIP_REQUEST:  { m: 'хочет быть вашим партнёром 💕',  f: 'хочет быть вашим партнёром 💕',  n: 'хочет быть вашим партнёром 💕' },
     RELATIONSHIP_ACCEPTED: { m: 'принял ваш запрос в отношения ❤️', f: 'приняла ваш запрос в отношения ❤️', n: 'принял(а) ваш запрос в отношения ❤️' },
   }
-  if (isDenNotification(type)) return (langStore.t as any)[denNotificationKey(type)] ?? type
+  const t = langStore.t as any
+  if (isDenNotification(type)) return t[denNotificationKey(type)] ?? t.notifGeneric
   const key = type.toUpperCase()
-  // These two use the localized translations dict (all 8 languages) rather than the hardcoded RU map above.
+  // These use the localized translations dict (all 8 languages) rather than the hardcoded RU map above.
   if (key === 'FOLLOW_POST' || key === 'GROUP_POST') {
     const base = key === 'FOLLOW_POST' ? 'notifFollowPost' : 'notifGroupPost'
     const suffix = isMale ? 'M' : isFemale ? 'F' : 'N'
-    return (langStore.t as any)[`${base}${suffix}`] ?? type
+    return t[`${base}${suffix}`] ?? t.notifGeneric
   }
+  if (key === 'FRIEND_REQUEST') return t.notifFriendRequest
+  if (key === 'FRIEND_ACCEPT') return t.notifFriendAccept
   const entry = genderMap[key]
-  if (!entry) return type
+  // Unknown type: neutral sentence in the UI language, never the raw type code.
+  if (!entry) return t.notifGeneric
   return isMale ? entry.m : isFemale ? entry.f : entry.n
 }
 
@@ -185,6 +188,8 @@ const notifBadgeIcon = (type: string) => {
     RELATIONSHIP_ACCEPTED: 'Heart',
     FOLLOW_POST: 'FileText',
     GROUP_POST: 'FileText',
+    FRIEND_REQUEST: 'UserPlus',
+    FRIEND_ACCEPT: 'UserCheck',
     automod_warn: 'ShieldAlert',
     automod_freeze: 'Snowflake',
     automod_unfreeze: 'Unlock',
@@ -206,6 +211,8 @@ const notifBadgeClass = (type: string) => {
     RELATIONSHIP_ACCEPTED: 'bg-pink-500 text-white',
     FOLLOW_POST: 'bg-violet-500 text-white',
     GROUP_POST: 'bg-brand-accent text-white',
+    FRIEND_REQUEST: 'bg-violet-500 text-white',
+    FRIEND_ACCEPT: 'bg-violet-500 text-white',
     automod_warn: 'bg-amber-500 text-white',
     automod_freeze: 'bg-sky-500 text-white',
     automod_unfreeze: 'bg-emerald-500 text-white',
@@ -217,7 +224,7 @@ const notifBadgeClass = (type: string) => {
 }
 
 // ── System (AutoMod / admin broadcast) notifications — no sender, full sentence instead of "X did Y" ──
-const AUTOMOD_TYPES = ['automod_warn', 'automod_freeze', 'automod_unfreeze', 'automod_ban', 'automod_clear_warns', 'admin_broadcast']
+const AUTOMOD_TYPES = ['automod_warn', 'automod_freeze', 'automod_unfreeze', 'automod_ban', 'automod_clear_warns', 'automod_appeal_accepted', 'automod_appeal_rejected', 'admin_broadcast', 'avatar_frame_approved', 'avatar_frame_rejected']
 const isAutomodNotif = (n: any) => AUTOMOD_TYPES.includes(n.type)
 
 const automodMessage = (n: any) => {
@@ -233,8 +240,16 @@ const automodMessage = (n: any) => {
       return `🚫 Аккаунт заблокирован${meta.reason ? ' — ' + meta.reason : ''}`
     case 'automod_clear_warns':
       return '✅ Предупреждения сброшены модератором'
+    case 'automod_appeal_accepted':
+      return '✅ Апелляция одобрена'
+    case 'automod_appeal_rejected':
+      return '❌ Апелляция отклонена'
     case 'admin_broadcast':
       return `📣 ${meta.title ?? ''}${meta.body ? ' — ' + meta.body : ''}`
+    case 'avatar_frame_approved':
+      return `🖼️ Рамка «${meta.name ?? ''}» одобрена и доступна в Ярмарке`
+    case 'avatar_frame_rejected':
+      return `🖼️ Рамка «${meta.name ?? ''}» отклонена${meta.reason ? ' — ' + meta.reason : ''}`
     default:
       return ''
   }
@@ -829,12 +844,13 @@ onUnmounted(() => {
       <!-- NSFW toggle (18+ only) -->
       <button v-if="canUseNsfw" @click="toggleNsfw"
         class="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 rounded-full border transition-all duration-200"
-        :class="nsfwEnabled ? 'bg-brand-error/15 border-brand-error/40 text-brand-error shadow-sm shadow-brand-error/20' : 'bg-brand-card border-brand-border text-white/55 hover:text-white'">
+        :title="nsfwFilterMode === 'hide' ? 'NSFW скрыт' : nsfwFilterMode === 'blur' ? 'NSFW размыт' : 'NSFW показан'"
+        :class="nsfwEnabled ? 'bg-brand-error/15 border-brand-error/40 text-brand-error shadow-sm shadow-brand-error/20' : nsfwFilterMode === 'blur' ? 'bg-brand-card border-brand-error/30 text-brand-error/70' : 'bg-brand-card border-brand-border text-white/55 hover:text-white'">
         <BIcon :name="nsfwEnabled ? 'Eye' : 'EyeOff'" class="h-4 w-4" />
-        <span class="text-xs font-bold hidden sm:block">NSFW</span>
+        <span class="text-xs font-bold hidden sm:block">NSFW<template v-if="nsfwFilterMode === 'blur'"> · размыт</template></span>
         <div class="relative w-7 h-3.5 flex-shrink-0 hidden sm:block">
-          <div class="w-7 h-3.5 rounded-full transition-colors" :class="nsfwEnabled ? 'bg-rose-500' : 'bg-white/20'"></div>
-          <div class="absolute top-0.5 h-2.5 w-2.5 bg-white rounded-full shadow transition-all" :class="nsfwEnabled ? 'left-[calc(100%-11px)]' : 'left-0.5'"></div>
+          <div class="w-7 h-3.5 rounded-full transition-colors" :class="nsfwEnabled ? 'bg-rose-500' : nsfwFilterMode === 'blur' ? 'bg-rose-500/50' : 'bg-white/20'"></div>
+          <div class="absolute top-0.5 h-2.5 w-2.5 bg-white rounded-full shadow transition-all" :class="nsfwEnabled ? 'left-[calc(100%-11px)]' : nsfwFilterMode === 'blur' ? 'left-[calc(50%-5px)]' : 'left-0.5'"></div>
         </div>
       </button>
 
@@ -894,10 +910,7 @@ onUnmounted(() => {
 
           <!-- Post + Comments -->
           <template v-else-if="postModal.data">
-            <PostCard :post="postModal.data" />
-            <div class="mt-3">
-              <PostComments :post-id="postModal.id" />
-            </div>
+            <PostCard :post="postModal.data" start-expanded />
           </template>
 
           <!-- Error -->

@@ -350,13 +350,11 @@ export const useMessagesStore = defineStore('messages', () => {
     } catch { /* silent */ }
   }
 
-  async function openConversation(targetUserId: string): Promise<string> {
-    const res = await api.post('/messages/conversations', { userId: targetUserId })
-    const raw = res.data.data.conversation
+  // Map raw Prisma data → proper Conversation shape (other_participants, my_participant, etc.)
+  function toConversation(raw: any): Conversation {
     const auth = useAuthStore()
     const myId = auth.user?.id
-    // Map raw Prisma data → proper Conversation shape (other_participants, my_participant, etc.)
-    const conv: Conversation = {
+    return {
       ...raw,
       my_participant: (() => {
         const me = (raw.participants ?? []).find((p: any) => p.user_id === myId)
@@ -370,10 +368,18 @@ export const useMessagesStore = defineStore('messages', () => {
       last_message: raw.last_message ?? null,
       pinned_message: raw.pinned_message ?? null,
     }
+  }
+
+  function upsertAndActivate(conv: Conversation): string {
     const idx = conversations.value.findIndex((c) => c.id === conv.id)
     if (idx === -1) conversations.value.unshift(conv)
     activeId.value = conv.id
     return conv.id
+  }
+
+  async function openConversation(targetUserId: string): Promise<string> {
+    const res = await api.post('/messages/conversations', { userId: targetUserId })
+    return upsertAndActivate(toConversation(res.data.data.conversation))
   }
 
   async function selectConversation(convId: string) {
@@ -652,13 +658,9 @@ export const useMessagesStore = defineStore('messages', () => {
   // Find-or-create my personal thread with a group, then make it the active conversation.
   async function startGroupDm(groupId: string): Promise<string | null> {
     const res = await api.post(`/groups/${groupId}/dm`)
-    const conversation = res.data.data?.conversation as Conversation | undefined
-    if (!conversation) return null
-    const idx = conversations.value.findIndex(c => c.id === conversation.id)
-    if (idx === -1) conversations.value.unshift(conversation)
-    else conversations.value[idx] = conversation
-    activeId.value = conversation.id
-    return conversation.id
+    const raw = res.data.data?.conversation
+    if (!raw) return null
+    return upsertAndActivate(toConversation(raw))
   }
 
   async function getGroupInbox(groupId: string): Promise<GroupInboxThread[]> {

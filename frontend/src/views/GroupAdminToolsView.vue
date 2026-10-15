@@ -48,7 +48,7 @@ const INBOX_TAB: ToolTab = { key: 'inbox', label: 'Обращения', icon: 'I
 const SCHEDULED_TAB: ToolTab = { key: 'scheduled', label: 'Отложенные', icon: 'CalendarClock', kind: 'scheduled' }
 
 const toolTabs = computed<ToolTab[]>(() => {
-  const t = group.value?.type
+  const t: string | undefined = group.value?.type
 
   if (t === 'event') return [
     OVERVIEW_TAB,

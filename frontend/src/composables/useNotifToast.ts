@@ -35,6 +35,14 @@ const typeLabel: Record<string, string> = {
   GROUP_JOIN:           'вступил(а) в ваше сообщество',
 }
 
+/** Localized label for friend-request notifications (keys live in the translations dict, all 8 languages). */
+function friendLabel(type: string): string | null {
+  const key = type.toUpperCase()
+  if (key !== 'FRIEND_REQUEST' && key !== 'FRIEND_ACCEPT') return null
+  const t = useLangStore().t as any
+  return key === 'FRIEND_REQUEST' ? t.notifFriendRequest ?? null : t.notifFriendAccept ?? null
+}
+
 /** Localized label for the two gender-aware "new post" notification types. */
 function subscriptionPostLabel(type: string, pronouns?: string | null): string | null {
   const key = type.toUpperCase()
@@ -68,8 +76,10 @@ export function useNotifToast() {
       message: isWarn
         ? `⚠️ Предупреждение ${notif.meta?.count ?? '?'} из ${notif.meta?.limit ?? 5}`
         : (subscriptionPostLabel(notif.type, sender.pronouns)
+          ?? friendLabel(notif.type)
           ?? typeLabel[String(notif.type).toUpperCase()]
-          ?? notif.type ?? ''),
+          // Unknown type: neutral sentence in the UI language, never the raw type code.
+          ?? (useLangStore().t as any).notifGeneric),
       postId: notif.post_id ?? undefined,
       meta: notif.meta,
       createdAt: new Date(),

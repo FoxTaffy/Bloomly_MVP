@@ -1,7 +1,7 @@
 <template>
-  <div class="flex flex-col h-full bg-brand-card w-full overflow-hidden">
+  <div class="flex flex-col h-full bg-transparent w-full overflow-hidden">
     <!-- Header -->
-    <div v-if="!hideHeader" class="flex items-center justify-between px-4 py-3 border-b border-brand-border flex-shrink-0">
+    <div v-if="!hideHeader" class="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] flex-shrink-0">
       <h2 class="font-bold text-white text-base">{{ langStore.t.messagesPageTitle }}</h2>
       <div class="flex items-center gap-1">
         <button @click="showCreateGroup = true"
@@ -18,43 +18,49 @@
     </div>
 
     <!-- Search -->
-    <div class="px-3 pt-2 pb-0 flex-shrink-0">
-      <div class="flex items-center gap-2 bg-brand-bg rounded-2xl px-3 py-2 border border-brand-border focus-within:border-brand-accent/50 transition-colors">
-        <BIcon name="Search" class="w-3.5 h-3.5 text-white/55 flex-shrink-0" />
+    <div class="px-3 pt-1 pb-0 flex-shrink-0">
+      <div class="flex items-center gap-2 bg-black/20 rounded-2xl px-3 py-2 border border-white/[0.06] focus-within:border-brand-accent/50 focus-within:bg-black/30 transition-colors">
+        <BIcon name="Search" class="w-3.5 h-3.5 text-white/40 flex-shrink-0" />
         <input v-model="search" type="text" :placeholder="langStore.t.convSearchPlaceholder"
-          class="bg-transparent text-sm text-white placeholder-brand-muted outline-none w-full" />
-        <button v-if="search" @click="search = ''" class="text-white/55 hover:text-white transition-colors">
+          class="bg-transparent text-sm text-white placeholder-white/30 outline-none w-full" />
+        <button v-if="search" @click="search = ''" class="text-white/40 hover:text-white transition-colors">
           <BIcon name="X" class="w-3.5 h-3.5" />
         </button>
       </div>
     </div>
 
-    <!-- Category tabs (hidden when convFilter is set) — compact, left-aligned, VK-style -->
-    <div v-if="!props.convFilter || props.convFilter === 'all'" class="flex-shrink-0 px-3 pt-2.5 pb-2 border-b border-brand-border overflow-x-auto">
-      <div class="flex items-center gap-1.5 w-max">
+    <!-- Category tabs -->
+    <div v-if="!props.convFilter || props.convFilter === 'all'" class="flex-shrink-0 px-3 pt-2.5 pb-2 overflow-x-auto">
+      <div class="flex items-center gap-1 w-max bg-black/20 p-1 rounded-2xl">
         <button @click="activeCategory = 'personal'"
-          :class="['flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-150',
-            activeCategory === 'personal' || activeCategory === 'all' ? 'bg-brand-accent text-white' : 'bg-brand-bg text-white/55 hover:text-white/85']">
+          :class="['flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-150',
+            activeCategory === 'personal' || activeCategory === 'all' ? 'bg-brand-accent text-white shadow-md shadow-brand-accent/20' : 'text-white/50 hover:text-white/85']">
           {{ langStore.t.tabPersonal }}
           <span v-if="categoryUnreadCount('personal')"
             :class="['min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center',
               activeCategory === 'personal' || activeCategory === 'all' ? 'bg-white/25 text-white' : 'bg-brand-accent/20 text-brand-accent']">{{ categoryUnreadCount('personal') }}</span>
         </button>
         <button @click="activeCategory = 'groups'"
-          :class="['flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-150',
-            activeCategory === 'groups' ? 'bg-brand-accent text-white' : 'bg-brand-bg text-white/55 hover:text-white/85']">
+          :class="['flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-150',
+            activeCategory === 'groups' ? 'bg-brand-accent text-white shadow-md shadow-brand-accent/20' : 'text-white/50 hover:text-white/85']">
           {{ langStore.t.tabGroups }}
           <span v-if="categoryUnreadCount('groups')"
             :class="['min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center',
               activeCategory === 'groups' ? 'bg-white/25 text-white' : 'bg-brand-accent/20 text-brand-accent']">{{ categoryUnreadCount('groups') }}</span>
         </button>
         <button @click="activeCategory = 'community'"
-          :class="['flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-150',
-            activeCategory === 'community' ? 'bg-brand-accent text-white' : 'bg-brand-bg text-white/55 hover:text-white/85']">
+          :class="['flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-150',
+            activeCategory === 'community' ? 'bg-brand-accent text-white shadow-md shadow-brand-accent/20' : 'text-white/50 hover:text-white/85']">
           {{ langStore.t.tabCommunity }}
           <span v-if="categoryUnreadCount('community')"
             :class="['min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center',
               activeCategory === 'community' ? 'bg-white/25 text-white' : 'bg-brand-accent/20 text-brand-accent']">{{ categoryUnreadCount('community') }}</span>
+        </button>
+        <button @click="unreadOnly = !unreadOnly"
+          :class="['flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-150',
+            unreadOnly ? 'bg-brand-pink/20 text-brand-pink' : 'text-white/40 hover:text-white/80']"
+          :title="langStore.t.unreadOnlyLabel">
+          <BIcon name="Mail" class="w-3.5 h-3.5" />
         </button>
       </div>
     </div>
@@ -86,8 +92,8 @@
           <span>{{ search ? langStore.t.convNothingFound : langStore.t.emptyNoConvs }}</span>
         </div>
         <button v-for="conv in filtered" :key="conv.id"
-        :class="['w-full flex items-center gap-3 px-3 py-3 transition-all duration-200 text-left border-b border-brand-border/30 last:border-0 relative group/conv',
-          activeId === conv.id ? 'bg-brand-accent/12 border-l-2 border-l-brand-accent pl-2' : 'hover:bg-brand-bg/60 border-l-2 border-l-transparent']"
+        :class="['w-[calc(100%-12px)] mx-1.5 mb-0.5 flex items-center gap-3 px-2.5 py-2.5 rounded-2xl transition-all duration-200 text-left relative group/conv',
+          activeId === conv.id ? 'bg-brand-accent/15 ring-1 ring-brand-accent/25' : 'hover:bg-white/[0.04]']"
         @click="$emit('select', conv.id)">
         <!-- Customer badge -->
         <div v-if="conv.my_participant?.label === 'customer'"
@@ -129,10 +135,14 @@
             </template>
             <template v-else>
               <img v-if="getOther(conv)?.avatar_url" :src="getOther(conv)!.avatar_url!" :alt="getOther(conv)?.username"
-                class="w-11 h-11 rounded-full object-cover ring-2 ring-brand-border group-hover/conv:ring-brand-accent/40 transition-all" @error="onAvatarError" />
-              <div v-else class="w-11 h-11 rounded-full bg-gradient-to-br from-brand-accent/30 to-brand-accent/10 ring-2 ring-brand-border group-hover/conv:ring-brand-accent/40 transition-all flex items-center justify-center text-brand-accent font-bold text-sm">
+                class="w-11 h-11 rounded-full object-cover ring-2 ring-white/10 group-hover/conv:ring-brand-accent/40 transition-all" @error="onAvatarError" />
+              <div v-else class="w-11 h-11 rounded-full bg-gradient-to-br from-brand-accent/30 to-brand-accent/10 ring-2 ring-white/10 group-hover/conv:ring-brand-accent/40 transition-all flex items-center justify-center text-brand-accent font-bold text-sm">
                 {{ (getOther(conv)?.display_name || getOther(conv)?.username || '?')[0].toUpperCase() }}
               </div>
+              <span
+                v-if="isConvOnline(conv)"
+                class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-brand-success border-2 border-brand-card shadow-[0_0_8px_rgba(102,199,112,0.7)]"
+              />
             </template>
           </template>
         </div>
@@ -154,8 +164,15 @@
             </span>
           </div>
           <div class="flex items-center justify-between gap-2 mt-0.5">
-            <p :class="['text-xs truncate flex items-center gap-1 min-w-0', isUnread(conv) ? 'text-brand-offwhite/70 font-medium' : 'text-white/50']">
-              <!-- Read-receipt check for our own last message -->
+            <p v-if="isConvTyping(conv)" class="text-xs truncate flex items-center gap-1 min-w-0 text-brand-accent font-medium italic">
+              <span class="inline-flex gap-0.5">
+                <span class="w-1 h-1 rounded-full bg-brand-accent animate-bounce [animation-delay:-0.3s]" />
+                <span class="w-1 h-1 rounded-full bg-brand-accent animate-bounce [animation-delay:-0.15s]" />
+                <span class="w-1 h-1 rounded-full bg-brand-accent animate-bounce" />
+              </span>
+              {{ langStore.t.chatTypingIndicator }}
+            </p>
+            <p v-else :class="['text-xs truncate flex items-center gap-1 min-w-0', isUnread(conv) ? 'text-brand-offwhite/80 font-medium' : 'text-white/45']">
               <BIcon v-if="conv.type !== 'community' && !conv.is_group && conv.last_message?.sender_id === auth.user?.id"
                 :name="isLastReadByOther(conv) ? 'CheckCheck' : 'Check'"
                 :class="['w-3.5 h-3.5 flex-shrink-0', isLastReadByOther(conv) ? 'text-brand-accent' : 'text-white/40']" />
@@ -277,18 +294,8 @@
       </button>
     </div>
 
-    <!-- Unread-only toggle -->
-    <div v-if="props.convFilter !== 'groups'"
-      class="flex-shrink-0 border-t border-brand-border px-4 py-2 flex items-center justify-between">
-      <span class="text-xs font-medium text-white/60">{{ langStore.t.unreadOnlyLabel }}</span>
-      <button type="button" role="switch" :aria-checked="unreadOnly" @click="unreadOnly = !unreadOnly"
-        :class="['relative w-9 h-5 rounded-full transition-colors duration-200 flex-shrink-0', unreadOnly ? 'bg-brand-accent' : 'bg-white/15']">
-        <span :class="['absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200', unreadOnly ? 'translate-x-4' : 'translate-x-0']" />
-      </button>
-    </div>
-
     <!-- Notes + Archive bar (hidden on groups-only tab) -->
-    <div v-if="props.convFilter !== 'groups'" class="flex-shrink-0 border-t border-brand-border px-2 py-1.5 flex items-center gap-1">
+    <div v-if="props.convFilter !== 'groups'" class="flex-shrink-0 border-t border-white/[0.06] px-2 py-1.5 flex items-center gap-1 bg-black/10">
       <button @click="openNotes"
         class="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl text-left hover:bg-brand-bg transition-colors group">
         <div class="w-7 h-7 rounded-full bg-brand-accent/15 flex items-center justify-center flex-shrink-0">
@@ -535,7 +542,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useLangStore } from '@/stores/lang'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 const langStore = useLangStore()
@@ -742,6 +749,41 @@ const filtered = computed(() => {
 function getOther(conv: Conversation): MsgSender | undefined {
   return conv.other_participants?.[0]?.user
 }
+
+const onlineMap = ref<Record<string, boolean>>({})
+let onlineTimer: ReturnType<typeof setInterval> | null = null
+
+async function fetchOnlineMap() {
+  const ids = store.conversations
+    .filter((c) => !c.is_group && c.type !== 'community')
+    .map((c) => getOther(c)?.id)
+    .filter((id): id is string => !!id)
+    .slice(0, 80)
+  if (!ids.length) return
+  try {
+    const res = await api.get(`/users/online?ids=${ids.join(',')}`)
+    onlineMap.value = res.data?.data ?? {}
+  } catch { /* silent */ }
+}
+
+function isConvOnline(conv: Conversation): boolean {
+  if (conv.is_group || conv.type === 'community' || isNotes(conv)) return false
+  const id = getOther(conv)?.id
+  return !!(id && onlineMap.value[id])
+}
+
+function isConvTyping(conv: Conversation): boolean {
+  return (store.typingUsers[conv.id] ?? []).length > 0
+}
+
+onMounted(() => {
+  fetchOnlineMap()
+  onlineTimer = setInterval(fetchOnlineMap, 30_000)
+})
+onUnmounted(() => {
+  if (onlineTimer) clearInterval(onlineTimer)
+})
+watch(() => store.conversations.length, () => { fetchOnlineMap() })
 function isNotes(conv: Conversation): boolean {
   return conv.type !== 'community' && !conv.is_group && (!conv.other_participants || conv.other_participants.length === 0)
 }

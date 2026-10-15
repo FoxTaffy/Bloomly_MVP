@@ -12,7 +12,7 @@ docker run --rm -v "$ROOT/frontend":/app -w /app "$IMG" \
   node --input-type=module -e 'import * as m from "lucide-vue-next"; console.log(Object.keys(m).join("\n"))' \
   | sort -u > "$TMP/lucide.txt"
 
-grep -rhoE "['\"\`][A-Z][A-Za-z0-9]+['\"\`]" "$ROOT/frontend/src" | tr -d "'\"\`" | sort -u > "$TMP/literals.txt"
+grep -rhoE "['\"\`][A-Z][A-Za-z0-9]*['\"\`]" "$ROOT/frontend/src" | tr -d "'\"\`" | sort -u > "$TMP/literals.txt"
 comm -12 "$TMP/literals.txt" "$TMP/lucide.txt" > "$TMP/used.txt"
 
 {

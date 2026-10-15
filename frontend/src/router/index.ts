@@ -191,7 +191,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/automation',
-    redirect: () => ({ name: 'settings-profile', query: { section: 'sec-automation' } }),
+    redirect: () => ({ name: 'settings-profile' }),
   },
   {
     path: '/help',

@@ -11,13 +11,22 @@
  *    moment before the DB row that will reference it is committed.
  *
  * Usage:
- *   npm run db:cleanup-orphaned-media            # dry run, prints a report only
- *   npm run db:cleanup-orphaned-media -- --execute  # actually deletes the orphaned objects
+ *   npm run db:cleanup-orphaned-media                 # dry run, prints a report only
+ *   npm run db:cleanup-orphaned-media -- --dry-run    # то же самое, явно
+ *   npm run db:cleanup-orphaned-media -- --execute    # actually deletes the orphaned objects
+ *
+ * Вложения комментариев (Comment.file_url) считаются используемыми всегда. Отчёт отдельно
+ * показывает комментарии, чей файл уже отсутствует в бакете (так выглядит «пустой» комментарий).
  */
+import { Prisma } from '@prisma/client';
 import prisma from '../config/prisma.js';
 import { listAllObjectKeys, deleteObjectKeys, urlToObjectKey } from '../modules/media/service.js';
 
 const SAFETY_BUFFER_MS = 24 * 60 * 60 * 1000;
+
+// Json-колонки, где может лежать ссылка на файл. Структура у них свободная, поэтому ищем
+// любые ссылки на наше хранилище по тексту, а не по конкретным полям.
+const JSON_URL_PATTERN = /https?:\/\/[^\s"'\\)]+/g;
 
 async function collectReferencedKeys(): Promise<Set<string>> {
   const keys = new Set<string>();
@@ -70,6 +79,27 @@ async function collectReferencedKeys(): Promise<Set<string>> {
   frames.forEach((f) => add(f.image_url));
   scheduledPosts.forEach((p) => { addAll(p.media_urls); addAll(p.media_original_urls); });
 
+  const addFromJson = (value: unknown) => {
+    if (value === null || value === undefined) return;
+    for (const match of JSON.stringify(value).match(JSON_URL_PATTERN) ?? []) add(match);
+  };
+  const [notifications, userStatuses, orders, bookings, eventsJson, groupsJson, listingsJson] = await Promise.all([
+    prisma.notification.findMany({ where: { meta: { not: Prisma.DbNull } }, select: { meta: true } }),
+    prisma.user.findMany({ where: { profile_status: { not: Prisma.DbNull } }, select: { profile_status: true } }),
+    prisma.order.findMany({ where: { form_data: { not: Prisma.DbNull } }, select: { form_data: true } }),
+    prisma.commissionBooking.findMany({ where: { form_data: { not: Prisma.DbNull } }, select: { form_data: true } }),
+    prisma.event.findMany({ select: { theme: true, schedule: true, faq: true, what_to_bring: true } }),
+    prisma.group.findMany({ select: { faq: true, schedule: true, what_to_bring: true, support_tiers: true, todo_columns: true } }),
+    prisma.dealerListing.findMany({ select: { commission_form_fields: true } }),
+  ]);
+  notifications.forEach((n) => addFromJson(n.meta));
+  userStatuses.forEach((u) => addFromJson(u.profile_status));
+  orders.forEach((o) => addFromJson(o.form_data));
+  bookings.forEach((b) => addFromJson(b.form_data));
+  eventsJson.forEach((e) => addFromJson(e));
+  groupsJson.forEach((g) => addFromJson(g));
+  listingsJson.forEach((l) => addFromJson(l.commission_form_fields));
+
   users.forEach((u) => { add(u.avatar_url); add(u.avatar_video_url); add(u.banner_url); add(u.fursona_photo_url); add(u.fursuit_photo_url); add(u.profile_bg_url); });
   posts.forEach((p) => { addAll(p.media_urls); addAll(p.media_original_urls); });
   stories.forEach((s) => { add(s.image_url); add(s.video_url); });
@@ -112,8 +142,23 @@ async function collectReferencedKeys(): Promise<Set<string>> {
   return keys;
 }
 
+/** Комментарии, у которых файл указан в БД, но в бакете его нет. Только чтение. */
+async function findCommentsWithMissingFiles(bucketKeys: Set<string>) {
+  const comments = await prisma.comment.findMany({
+    where: { file_url: { not: null } },
+    select: { id: true, post_id: true, file_url: true, deleted_at: true, created_at: true },
+  });
+  return comments.filter((c) => {
+    const key = urlToObjectKey(c.file_url);
+    return key !== null && !bucketKeys.has(key);
+  });
+}
+
 async function main() {
   const execute = process.argv.includes('--execute');
+  if (execute && process.argv.includes('--dry-run')) {
+    throw new Error('--dry-run и --execute нельзя указывать вместе');
+  }
 
   console.log('Listing all objects in the MinIO bucket...');
   const objects = await listAllObjectKeys();
@@ -122,6 +167,12 @@ async function main() {
   console.log('Collecting every referenced media URL from the database...');
   const referenced = await collectReferencedKeys();
   console.log(`Found ${referenced.size} referenced object keys.`);
+
+  const bucketKeys = new Set(objects.map((o) => o.key));
+  const brokenComments = await findCommentsWithMissingFiles(bucketKeys);
+  const liveBroken = brokenComments.filter((c) => c.deleted_at === null);
+  console.log(`\nКомментарии с файлом, которого нет в бакете: ${brokenComments.length} (из них не удалённых: ${liveBroken.length})`);
+  liveBroken.slice(0, 20).forEach((c) => console.log(`  comment ${c.id} (post ${c.post_id}, ${c.created_at.toISOString()}): ${c.file_url}`));
 
   const now = Date.now();
   const orphaned = objects.filter(
@@ -145,6 +196,19 @@ async function main() {
     .forEach(([folder, { count, bytes }]) => {
       console.log(`  ${folder}: ${count} objects, ${(bytes / 1024 / 1024).toFixed(1)} MB`);
     });
+
+  const commentKeys = new Set(
+    (await prisma.comment.findMany({ where: { file_url: { not: null } }, select: { file_url: true } }))
+      .map((c) => urlToObjectKey(c.file_url))
+      .filter((k): k is string => k !== null),
+  );
+  const commentHits = orphaned.filter((o) => commentKeys.has(o.key));
+  console.log(`\nФайлов комментариев среди помеченных к удалению: ${commentHits.length}`);
+  if (commentHits.length > 0) {
+    // Не должно случаться: Comment.file_url учитывается выше. Если случилось, удаление запрещаем.
+    commentHits.forEach((o) => console.error(`  ${o.key}`));
+    throw new Error('Файлы комментариев помечены как осиротевшие — остановка, ничего не удалено');
+  }
 
   console.log('\nSample (up to 20):');
   orphaned.slice(0, 20).forEach((o) => console.log(`  ${o.key}`));
