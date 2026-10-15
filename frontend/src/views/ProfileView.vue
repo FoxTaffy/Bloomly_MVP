@@ -2451,10 +2451,9 @@ import { invalidateFriendsCache } from '@/stores/friends'
 import { safeHref } from '@/utils/safeHref'
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useHead } from '@unhead/vue'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
-import { useUserStore, type UserProfile, type Fursona, type Fursuit } from '@/stores/user'
+import { useUserStore, type UserProfile, type Fursona } from '@/stores/user'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import PostComments from '@/components/PostComments.vue'
 import PostCard from '@/components/PostCard.vue'
@@ -2474,13 +2473,17 @@ import api from '@/api'
 import { compressImageForUpload } from '@/lib/utils'
 import { FAVORITE_CATEGORIES } from '@/lib/interests'
 import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
-import { extractHashtags, extractCommittedHashtags } from '@/lib/hashtags'
 import { onAvatarError } from '@/composables/useAvatarFallback'
-import { useTagSuggestions } from '@/composables/useTagSuggestions'
 import VerificationBadge from '@/components/VerificationBadge.vue'
 import { verTypeIconUrl } from '@/lib/verificationIcons'
 import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
 import * as fmt from '@/lib/format'
+import { speciesEmoji, websiteHref, socialUrl, isImage, shadeColor } from '@/lib/profileDisplay'
+import { useProfileSeo } from '@/composables/profile/useProfileSeo'
+import { useProfileStatus } from '@/composables/profile/useProfileStatus'
+import { useAvatarGallery } from '@/composables/profile/useAvatarGallery'
+import { useProfileFursonas } from '@/composables/profile/useProfileFursonas'
+import { useProfilePostComposer } from '@/composables/profile/useProfilePostComposer'
 import {
   User, Users, UserPlus, UserMinus, UserX, UsersRound,
   Bell, MessageSquare, Pencil, Pin, Trash2, MoreHorizontal,
@@ -2557,70 +2560,38 @@ const profileBgStyle = computed(() => {
   } catch { return {} }
 })
 
-// ── SEO ───────────────────────────────────────────────────────────────────────
-const BASE = 'https://bloomly.fun'
-useHead({
-  title: () => {
-    if (!viewedProfile.value) return 'Bloomly'
-    const name = viewedProfile.value.display_name || viewedProfile.value.username
-    return `${name} (@${viewedProfile.value.username}) — Bloomly`
+
+// ── Feature composables ───────────────────────────────────────────────────────
+useProfileSeo(viewedProfile, () => route.params.username)
+const {
+  profileStatus, showStatusEdit, statusSaving, statusEditEmoji, statusEditText, statusEditDuration,
+  statusEditColor, statusEditMusic, statusEmojiTab, statusShowMusicSearch, statusMusicQuery, statusMusicResults,
+  statusMusicLoading, statusPreviewAudioEl, isStatusMusicPlaying, statusPreviewVolume, toggleStatusMusicPreview, setStatusMusicVolume,
+  emojiCategories, statusBubbleColor, statusEditBubbleColor, statusBubbleGradient, statusEditBubbleGradient,
+  hasActiveStatus, statusDurations, statusColors, statusTimeRemaining, applyProfileStatus, saveProfileStatus,
+  openStatusEdit, clearProfileStatus, pickStatusColor, statusMusicError, onStatusMusicSearch, selectStatusTrack,
+} = useProfileStatus()
+const {
+  showAvatarViewer, showBannerViewer, avatarGallery, avatarGalleryIndex, avatarGalleryLoading, avatarGalleryRestoring,
+  openAvatarGallery, restoreGalleryAvatar, deleteGalleryAvatar,
+} = useAvatarGallery(viewedProfile)
+const {
+  profileFursonas, selectedFursonaId, profileFursona, speciesDisplay, speciesSummary, profileFursuits,
+  profileFursonaLoading, profileFursuitsLoading, makerGroupCache, loadProfileFursonas, loadProfileFursuits,
+  showFursonaRefViewer, selectedFursonaRef, fursonaSubTab, fursonaRefImages, activeFursonaRef, fursonaOtherCount,
+  fursonaViewTabs, fursonaRefPalette, selectFursonaRef, openFursonaRef,
+} = useProfileFursonas(viewedProfile)
+const {
+  newPostContent, newPostMediaUrls, newPostIsNsfw, newPostIsAiGenerated, newPostTags, newPostTagInput,
+  newPostVisibility, showProfileVisibilityMenu, isCreatingPost, profileMediaUploadRef, showProfileScheduleMenu, isSchedulingProfilePost,
+  addProfileTag, addProfileTagFromSuggestion, removeProfileTag, onProfileMediaUploaded, createPost, saveProfileScheduledPost,
+  tagSuggestions, showTagSuggestions, fetchTagSuggestions, clearTagSuggestions,
+} = useProfilePostComposer({
+  onCreated: (post) => {
+    tabPosts.value.unshift(post)
+    if (viewedProfile.value?._count) viewedProfile.value._count.posts++
   },
-  meta: [
-    { name: 'robots', content: 'index, follow' },
-    { name: 'description', content: () => {
-        if (!viewedProfile.value) return 'Bloomly — Creative Social Network.'
-        const name = viewedProfile.value.display_name || viewedProfile.value.username
-        return (viewedProfile.value.bio)
-          ? `${viewedProfile.value.bio.slice(0, 155)}…`
-          : `${name}'s profile on Bloomly — the creative social network.`
-      }
-    },
-    { property: 'og:type', content: 'profile' },
-    { property: 'og:site_name', content: 'Bloomly' },
-    { property: 'og:title', content: () => {
-        if (!viewedProfile.value) return 'Bloomly'
-        const name = viewedProfile.value.display_name || viewedProfile.value.username
-        return `${name} (@${viewedProfile.value.username})`
-      }
-    },
-    { property: 'og:description', content: () => {
-        if (!viewedProfile.value) return ''
-        const name = viewedProfile.value.display_name || viewedProfile.value.username
-        return viewedProfile.value.bio?.slice(0, 200) || `${name}'s profile on Bloomly.`
-      }
-    },
-    { property: 'og:image', content: () => viewedProfile.value?.avatar_url || `${BASE}/og-default.png` },
-    { property: 'og:url', content: () => `${BASE}/profile/${viewedProfile.value?.username || route.params.username}` },
-    { name: 'twitter:card', content: 'summary' },
-    { name: 'twitter:title', content: () => {
-        if (!viewedProfile.value) return 'Bloomly'
-        return `${viewedProfile.value.display_name || viewedProfile.value.username} (@${viewedProfile.value.username})`
-      }
-    },
-    { name: 'twitter:image', content: () => viewedProfile.value?.avatar_url || `${BASE}/og-default.png` },
-  ],
-  link: [
-    { rel: 'canonical', href: () => `${BASE}/profile/${viewedProfile.value?.username || route.params.username}` },
-  ],
-  script: [
-    {
-      type: 'application/ld+json',
-      innerHTML: () => {
-        if (!viewedProfile.value) return ''
-        const name = viewedProfile.value.display_name || viewedProfile.value.username
-        return JSON.stringify({
-          '@context': 'https://schema.org',
-          '@type': 'ProfilePage',
-          name,
-          url: `${BASE}/profile/${viewedProfile.value.username}`,
-          description: viewedProfile.value.bio || '',
-          ...(viewedProfile.value.avatar_url ? {
-            image: { '@type': 'ImageObject', url: viewedProfile.value.avatar_url },
-          } : {}),
-        })
-      },
-    },
-  ],
+  onScheduled: () => { showPostForm.value = false },
 })
 
 // ── Profile stories ───────────────────────────────────────────────────────────
@@ -2661,217 +2632,6 @@ const showFollowingModal = ref(false)
 const showGroupsModal    = ref(false)
 const followingLoading = ref(false)
 
-// ── Profile status (server-backed IG Notes-style bubble) ──────────────────────
-const profileStatus = reactive({ emoji: '', text: '', expiresAt: 0, color: '', music: null as null | { title: string; artist: string; artworkUrl: string; previewUrl: string } })
-const showStatusEdit = ref(false)
-const statusSaving = ref(false)
-const statusEditEmoji = ref('')
-const statusEditText = ref('')
-const statusEditDuration = ref(86400)
-const statusEditColor = ref('#4C67CF')
-const statusEditMusic = ref<null | { title: string; artist: string; artworkUrl: string; previewUrl: string }>(null)
-const statusEmojiTab = ref(0)
-const statusShowMusicSearch = ref(false)
-const statusMusicQuery = ref('')
-const statusMusicResults = ref<any[]>([])
-const statusMusicLoading = ref(false)
-const statusPreviewAudioEl = ref<HTMLAudioElement | null>(null)
-const isStatusMusicPlaying = ref(false)
-const statusPreviewVolume = ref(Number(localStorage.getItem('bloomly_status_preview_volume') ?? '0.7'))
-function toggleStatusMusicPreview() {
-  const url = profileStatus.music?.previewUrl
-  const audio = statusPreviewAudioEl.value
-  if (!url || !audio) return
-  if (isStatusMusicPlaying.value) {
-    audio.pause()
-    return
-  }
-  if (audio.src !== url) audio.src = url
-  audio.volume = statusPreviewVolume.value
-  audio.play().catch(() => {})
-}
-function setStatusMusicVolume(e: Event) {
-  const v = parseFloat((e.target as HTMLInputElement).value)
-  if (!isFinite(v)) return
-  statusPreviewVolume.value = v
-  if (statusPreviewAudioEl.value) statusPreviewAudioEl.value.volume = v
-  localStorage.setItem('bloomly_status_preview_volume', String(v))
-}
-// Stop any preview playing for the previous profile/track before it's replaced —
-// otherwise navigating to another user (or saving a new track on your own status)
-// leaves the old preview audio running silently while the play/pause icon flips
-// to reflect the new (unrelated) track.
-watch(() => profileStatus.music?.previewUrl, (next, prev) => {
-  if (next === prev) return
-  const audio = statusPreviewAudioEl.value
-  if (audio) audio.pause()
-  isStatusMusicPlaying.value = false
-})
-let statusMusicTimer: ReturnType<typeof setTimeout> | null = null
-
-const emojiCategories = [
-  { label: '😊', emojis: ['😊','😎','😴','😤','🥺','😂','🥰','😈','🤔','😭','🫶','💀','👀','🫠','🥳','😶'] },
-  { label: '🎮', emojis: ['🎨','🎮','🎵','📚','💻','🏃','✈️','🎬','🎲','🎸','🏋️','🎯','🎤','🧩','🛹','🎭'] },
-  { label: '🍕', emojis: ['🍕','🍔','🍜','🍣','☕','🧋','🍺','🎂','🍎','🥐','🍦','🌮','🍩','🥗','🫐','🧁'] },
-  { label: '🦊', emojis: ['🐾','🦊','🐱','🐶','🦄','🌙','⭐','🌈','🔥','🌿','🌊','🦋','🐺','🦁','🐼','🌸'] },
-  { label: '💎', emojis: ['💎','⚡','🔑','💡','🏆','💰','❤️','💜','🖤','✅','⚠️','🔴','🟡','🟢','💬','📌'] },
-]
-
-const statusBubbleColor = computed(() =>
-  profileStatus.color || (profileStatus.music ? '#c0392b' : '#4C67CF')
-)
-const statusEditBubbleColor = computed(() =>
-  statusEditColor.value || (statusEditMusic.value ? '#c0392b' : '#4C67CF')
-)
-
-/** Lighten (positive) or darken (negative) a #rrggbb hex color by a percent, for gradients/glows. */
-function shadeColor(hex: string, percent: number): string {
-  const clean = (hex || '#4C67CF').replace('#', '')
-  const num = parseInt(clean.length === 6 ? clean : '4C67CF', 16)
-  const amt = Math.round(2.55 * percent)
-  const r = Math.min(255, Math.max(0, (num >> 16) + amt))
-  const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amt))
-  const b = Math.min(255, Math.max(0, (num & 0x0000ff) + amt))
-  return '#' + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1)
-}
-const statusBubbleGradient = computed(() => `linear-gradient(135deg, ${shadeColor(statusBubbleColor.value, 16)}, ${shadeColor(statusBubbleColor.value, -20)})`)
-const statusEditBubbleGradient = computed(() => `linear-gradient(135deg, ${shadeColor(statusEditBubbleColor.value, 16)}, ${shadeColor(statusEditBubbleColor.value, -20)})`)
-// Ticks so statusTimeRemaining actually counts down and an expired status
-// disappears on its own instead of staying visible until the next page load.
-const statusNowTick = ref(Date.now())
-let statusNowTickInterval: ReturnType<typeof setInterval> | null = null
-const hasActiveStatus = computed(() => {
-  if (profileStatus.expiresAt && profileStatus.expiresAt <= statusNowTick.value) return false
-  return !!(profileStatus.text || profileStatus.emoji || profileStatus.music)
-})
-
-const statusDurations = computed(() => [
-  { label: `30${langStore.t.profileDurationMinuteShort}`, value: 1800 },
-  { label: `1${langStore.t.profileDurationHourShort}`, value: 3600 },
-  { label: `4${langStore.t.profileDurationHourShort}`, value: 14400 },
-  { label: `24${langStore.t.profileDurationHourShort}`, value: 86400 },
-  { label: `7${langStore.t.profileDurationDayShort}`, value: 604800 },
-  { label: '∞', value: 0 },
-])
-
-const statusColors = [
-  { value: '#4C67CF', dot: 'bg-brand-accent' },
-  { value: '#7c3aed', dot: 'bg-[#7c3aed]' },
-  { value: '#ec4899', dot: 'bg-[#ec4899]' },
-  { value: '#f97316', dot: 'bg-[#f97316]' },
-  { value: '#22c55e', dot: 'bg-[#22c55e]' },
-  { value: '#ef4444', dot: 'bg-[#ef4444]' },
-  { value: '#2c2c2e', dot: 'bg-[#2c2c2e] border border-white/20' },
-]
-
-const statusTimeRemaining = computed(() => {
-  if (!profileStatus.expiresAt) return ''
-  const diff = profileStatus.expiresAt - statusNowTick.value
-  if (diff <= 0) return ''
-  const h = Math.floor(diff / 3600000)
-  const m = Math.floor((diff % 3600000) / 60000)
-  if (h >= 24) return `${Math.floor(h / 24)}${langStore.t.profileDurationDayShort}`
-  if (h >= 1) return `${h}${langStore.t.profileDurationHourShort}`
-  return `${m}${langStore.t.profileDurationMinuteShort}`
-})
-
-/** Populate the reactive display state from whatever the API returned for this profile (own or someone else's). */
-function applyProfileStatus(status: any) {
-  profileStatus.emoji = ''; profileStatus.text = ''; profileStatus.expiresAt = 0; profileStatus.color = ''; profileStatus.music = null
-  if (!status) return
-  if (status.expiresAt && status.expiresAt < Date.now()) return
-  profileStatus.emoji = status.emoji ?? ''
-  profileStatus.text = status.text ?? ''
-  profileStatus.expiresAt = status.expiresAt ?? 0
-  profileStatus.color = status.color ?? ''
-  profileStatus.music = status.music ?? null
-}
-async function saveProfileStatus() {
-  if (statusSaving.value) return
-  statusSaving.value = true
-  const hasContent = !!(statusEditEmoji.value || statusEditText.value || statusEditMusic.value)
-  const expiresAt = hasContent && statusEditDuration.value > 0 ? Date.now() + statusEditDuration.value * 1000 : 0
-  const payload = {
-    emoji: statusEditEmoji.value,
-    text: statusEditText.value,
-    expiresAt,
-    color: statusEditColor.value,
-    music: statusEditMusic.value,
-  }
-  try {
-    await userStore.updateProfile({ profile_status: payload })
-    profileStatus.emoji = payload.emoji
-    profileStatus.text = payload.text
-    profileStatus.expiresAt = payload.expiresAt
-    profileStatus.color = payload.color
-    profileStatus.music = payload.music
-    showStatusEdit.value = false
-  } finally {
-    statusSaving.value = false
-  }
-}
-function openStatusEdit() {
-  statusEditEmoji.value = profileStatus.emoji
-  statusEditText.value = profileStatus.text
-  if (hasActiveStatus.value && profileStatus.expiresAt) {
-    // Preserve the current expiry instead of silently resetting a longer-lived
-    // status back down to the 24h default just because the editor was reopened.
-    const remainingMs = profileStatus.expiresAt - Date.now()
-    const bucket = statusDurations.value.map(d => d.value).filter(v => v > 0).find(v => v * 1000 >= remainingMs)
-    statusEditDuration.value = bucket ?? statusDurations.value[statusDurations.value.length - 2].value
-  } else if (hasActiveStatus.value) {
-    statusEditDuration.value = 0 // was set to "forever"
-  } else {
-    statusEditDuration.value = 86400
-  }
-  statusEditColor.value = profileStatus.color || '#4C67CF'
-  statusEditMusic.value = profileStatus.music
-  statusShowMusicSearch.value = !!profileStatus.music
-  statusMusicQuery.value = ''
-  statusMusicResults.value = []
-  showStatusEdit.value = true
-}
-async function clearProfileStatus() {
-  if (statusSaving.value) return
-  statusSaving.value = true
-  try {
-    await userStore.updateProfile({ profile_status: null })
-    profileStatus.emoji = ''; profileStatus.text = ''; profileStatus.expiresAt = 0; profileStatus.color = ''; profileStatus.music = null
-    statusEditEmoji.value = ''; statusEditText.value = ''
-    showStatusEdit.value = false
-  } finally {
-    statusSaving.value = false
-  }
-}
-function pickStatusColor(hex: string) {
-  statusEditColor.value = hex
-}
-const statusMusicError = ref(false)
-function onStatusMusicSearch() {
-  if (statusMusicTimer) clearTimeout(statusMusicTimer)
-  if (!statusMusicQuery.value.trim()) { statusMusicResults.value = []; statusMusicLoading.value = false; statusMusicError.value = false; return }
-  statusMusicLoading.value = true
-  statusMusicTimer = setTimeout(async () => {
-    try {
-      const res = await api.get('/users/music/search', { params: { q: statusMusicQuery.value.trim() } })
-      statusMusicResults.value = res.data?.data?.tracks ?? []
-      statusMusicError.value = false
-    } catch {
-      statusMusicResults.value = []
-      statusMusicError.value = true
-    } finally { statusMusicLoading.value = false }
-  }, 420)
-}
-function selectStatusTrack(track: any) {
-  statusEditMusic.value = {
-    title: track.title ?? '',
-    artist: track.artist ?? '',
-    artworkUrl: track.artworkUrl ?? '',
-    previewUrl: track.previewUrl ?? '',
-  }
-  statusMusicQuery.value = ''
-  statusMusicResults.value = []
-}
 
 
 const aboutTab = ref<AboutTab>('about')
@@ -2911,65 +2671,6 @@ function openAlbumOrLightbox(album: { label: string; emoji?: string; urls: { url
   }
 }
 
-// ── Fursona / fursuit для просматриваемого профиля ───────────────────────────
-// Up to 10 characters per user; `selectedFursonaId` drives which one the hero card shows.
-const profileFursonas = ref<Fursona[]>([])
-const selectedFursonaId = ref<string | null>(null)
-const profileFursona = computed(() =>
-  profileFursonas.value.find((f) => f.id === selectedFursonaId.value) ?? profileFursonas.value[0] ?? null
-)
-function speciesDisplay(sp: string): string {
-  return sp === 'Other' && profileFursona.value?.species_other ? profileFursona.value.species_other : sp
-}
-function speciesSummary(f: Fursona): string {
-  return f.species?.length ? speciesDisplay(f.species[0]) : ''
-}
-const profileFursuits = ref<Fursuit[]>([])
-const profileFursonaLoading = ref(false)
-const profileFursuitsLoading = ref(false)
-const makerGroupCache = ref<Record<string, { id: string; slug: string; name: string; avatar_url: string | null }>>({})
-
-
-async function loadProfileFursonas(userId: string) {
-  profileFursonaLoading.value = true
-  try {
-    const res = await api.get(`/users/${userId}/fursonas`)
-    profileFursonas.value = res.data.success ? (res.data.data.fursonas ?? []) : []
-    selectedFursonaId.value = profileFursonas.value.find((f) => f.is_primary)?.id ?? profileFursonas.value[0]?.id ?? null
-  } catch {
-    profileFursonas.value = []
-    selectedFursonaId.value = null
-  } finally {
-    profileFursonaLoading.value = false
-  }
-}
-
-watch(selectedFursonaId, async (id) => {
-  const userId = viewedProfile.value?.id
-  if (!id || !userId) { userStore.referenceImages = []; return }
-  await userStore.fetchReferenceImages(userId, id)
-})
-
-async function loadProfileFursuits(userId: string) {
-  profileFursuitsLoading.value = true
-  try {
-    const res = await api.get(`/users/${userId}/fursuits`)
-    if (res.data.success) profileFursuits.value = res.data.data.fursuits ?? []
-    else profileFursuits.value = []
-    // Resolve maker_ids → group info (for pill badges)
-    const uniqueIds = [...new Set(profileFursuits.value.filter(s => s.maker_id).map(s => s.maker_id!))]
-    await Promise.all(uniqueIds.map(async (id) => {
-      if (makerGroupCache.value[id]) return
-      try {
-        const gr = await api.get(`/groups/${id}`)
-        if (gr.data.success && gr.data.data.group) {
-          makerGroupCache.value[id] = gr.data.data.group
-        }
-      } catch { /* not a group or no access, skip */ }
-    }))
-  } catch { profileFursuits.value = [] }
-  finally { profileFursuitsLoading.value = false }
-}
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
 const lightboxUrl = ref<string>('')
@@ -3007,42 +2708,6 @@ const notifyPosts = ref(false)
 const notifyLoading = ref(false)
 const isTogglingFollow = ref(false)
 
-const newPostContent = ref('')
-const newPostMediaUrls = ref<string[]>([])
-const newPostIsNsfw = ref(false)
-const newPostIsAiGenerated = ref(false)
-const newPostTags = ref<string[]>([])
-const newPostTagInput = ref('')
-const { suggestions: tagSuggestions, showSuggestions: showTagSuggestions, fetchSuggestions: fetchTagSuggestions, clearSuggestions: clearTagSuggestions } = useTagSuggestions()
-
-// Auto-pick up "#hashtag"s the user writes directly in the post text (only once
-// they've finished typing the word, not on every keystroke of a partial one)
-watch(newPostContent, (content) => {
-  for (const tag of extractCommittedHashtags(content)) {
-    if (!newPostTags.value.includes(tag)) newPostTags.value.push(tag)
-  }
-})
-
-const newPostVisibility = ref('public')
-const showProfileVisibilityMenu = ref(false)
-const isCreatingPost = ref(false)
-const profileMediaUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
-const showProfileScheduleMenu = ref(false)
-const isSchedulingProfilePost = ref(false)
-
-function addProfileTag() {
-  const t = newPostTagInput.value.trim().replace(/^#/, '')
-  if (t && !newPostTags.value.includes(t)) newPostTags.value.push(t)
-  newPostTagInput.value = ''
-  clearTagSuggestions()
-}
-function addProfileTagFromSuggestion(name: string) {
-  const t = name.trim().toLowerCase()
-  if (t && !newPostTags.value.includes(t)) newPostTags.value.push(t)
-  newPostTagInput.value = ''
-  clearTagSuggestions()
-}
-function removeProfileTag(tag: string) { newPostTags.value = newPostTags.value.filter(t => t !== tag) }
 
 const partnerProfile = ref<{ id: string; username: string; display_name: string | null; avatar_url: string | null } | null>(null)
 
@@ -3086,82 +2751,7 @@ async function topupWallet(amount: number) {
     toppingUp.value = false
   }
 }
-const showAvatarViewer = ref(false)
-const showBannerViewer = ref(false)
 
-interface GalleryItem { url: string; video_url?: string | null; created_at: string; id?: string }
-const avatarGallery        = ref<GalleryItem[]>([])
-const avatarGalleryIndex   = ref(0)
-const avatarGalleryLoading = ref(false)
-const avatarGalleryRestoring = ref(false)
-
-async function openAvatarGallery() {
-  if (!viewedProfile.value?.avatar_url) return
-  showAvatarViewer.value = true
-  avatarGalleryIndex.value = 0
-  avatarGalleryLoading.value = true
-
-  const current: GalleryItem = { url: viewedProfile.value.avatar_url, video_url: viewedProfile.value.avatar_video_url, created_at: new Date().toISOString() }
-  avatarGallery.value = [current]
-
-  try {
-    const res = await api.get(`/users/${viewedProfile.value.id}/media-history?type=avatar`)
-    const history: GalleryItem[] = (res.data.data.history ?? []).filter((h: GalleryItem) => h.url !== current.url)
-    avatarGallery.value = [current, ...history]
-  } catch {
-    // show just current on error
-  } finally {
-    avatarGalleryLoading.value = false
-  }
-}
-
-async function restoreGalleryAvatar() {
-  const item = avatarGallery.value[avatarGalleryIndex.value]
-  if (!item?.id) return
-  avatarGalleryRestoring.value = true
-  try {
-    await api.post(`/users/me/avatar-history/${item.id}/restore`)
-    // Reload gallery from scratch after restore
-    if (viewedProfile.value) {
-      const res = await api.get(`/users/${viewedProfile.value.id}`)
-      viewedProfile.value = res.data.data.user
-    }
-    await openAvatarGallery()
-  } catch {
-    // silent
-  } finally {
-    avatarGalleryRestoring.value = false
-  }
-}
-
-async function deleteGalleryAvatar() {
-  const item = avatarGallery.value[avatarGalleryIndex.value]
-  if (!item?.id) return
-  try {
-    await api.delete(`/users/me/avatar-history/${item.id}`)
-    avatarGallery.value.splice(avatarGalleryIndex.value, 1)
-    if (avatarGalleryIndex.value >= avatarGallery.value.length) {
-      avatarGalleryIndex.value = Math.max(0, avatarGallery.value.length - 1)
-    }
-  } catch {
-    // silent
-  }
-}
-
-watch([showAvatarViewer, showBannerViewer], ([av, bv]) => {
-  document.body.style.overflow = (av || bv) ? 'hidden' : ''
-})
-
-function onGalleryKeydown(e: KeyboardEvent) {
-  if (!showAvatarViewer.value) return
-  if (e.key === 'ArrowLeft') avatarGalleryIndex.value = Math.max(0, avatarGalleryIndex.value - 1)
-  else if (e.key === 'ArrowRight') avatarGalleryIndex.value = Math.min(avatarGallery.value.length - 1, avatarGalleryIndex.value + 1)
-  else if (e.key === 'Escape') showAvatarViewer.value = false
-}
-
-const showFursonaRefViewer = ref(false)
-const selectedFursonaRef = ref('')
-const fursonaSubTab = ref<'info' | 'personality' | 'features'>('personality')
 
 function openEditModal(section: 'basics' | 'bio' | 'fursona' | 'fursuit' | 'contacts' | 'socials') {
   // Map profile section → settings section ID
@@ -3176,43 +2766,6 @@ function openEditModal(section: 'basics' | 'bio' | 'fursona' | 'fursuit' | 'cont
   router.push({ name: 'settings-profile', query: { section: sectionMap[section] ?? 'sec-basic' } })
 }
 
-const fursonaRefImages = computed(() =>
-  Array.from(new Set(userStore.referenceImages.map((r) => r.image_url).filter(Boolean))),
-)
-
-const activeFursonaRef = computed(() => selectedFursonaRef.value || fursonaRefImages.value[0] || '')
-const fursonaOtherCount = computed(() => Math.max(0, fursonaRefImages.value.length - 1))
-
-const fursonaViewTabs = computed(() => [
-  { key: 'personality' as const, label: langStore.t.profilePersonalityLabel, count: ((profileFursona.value?.likes?.length ?? 0) + (profileFursona.value?.dislikes?.length ?? 0)) },
-  { key: 'info' as const,        label: langStore.t.informationLabel },
-  { key: 'features' as const,    label: langStore.t.colorPaletteLabel, count: profileFursona.value?.colors?.length ?? 0 },
-])
-
-const fursonaRefPalette = computed(() =>
-  Array.from(new Set((profileFursona.value?.colors ?? []).filter((v) => /^#[0-9A-Fa-f]{6}$/.test(v)))),
-)
-
-function selectFursonaRef(url: string) {
-  selectedFursonaRef.value = url
-}
-
-function openFursonaRef(url?: string) {
-  const next = url ?? activeFursonaRef.value
-  if (!next) return
-  selectedFursonaRef.value = next
-  showFursonaRefViewer.value = true
-}
-
-watch(fursonaRefImages, (list) => {
-  if (!list.length) {
-    selectedFursonaRef.value = ''
-    return
-  }
-  if (!selectedFursonaRef.value || !list.includes(selectedFursonaRef.value)) {
-    selectedFursonaRef.value = list[0]
-  }
-})
 
 // ── Любимое (fixed favourite categories) ────────────────────────────────────
 const editingFavorite = ref<string | null>(null)
@@ -3391,47 +2944,7 @@ const accentStyle = computed(() => {
   return { backgroundColor: `${color}25`, borderColor: `${color}60`, color }
 })
 
-// ── Website: add protocol if missing so it doesn't resolve as a relative link ──
-function websiteHref(url: string): string {
-  return /^https?:\/\//i.test(url) ? url : `https://${url}`
-}
 
-// ── Fursona species emoji map ────────────────────────────────────────────────
-function speciesEmoji(species: string): string {
-  const s = (species ?? '').toLowerCase().trim()
-  if (/fox|лис/.test(s))                      return '🦊'
-  if (/wolf|волк/.test(s))                     return '🐺'
-  if (/cat|кот|кошк/.test(s))                  return '🐱'
-  if (/dragon|дракон/.test(s))                 return '🐲'
-  if (/raccoon|енот/.test(s))                  return '🦝'
-  if (/bear|медведь/.test(s))                  return '🐻'
-  if (/panda|панда/.test(s))                   return '🐼'
-  if (/rabbit|bunny|кролик|зайц/.test(s))     return '🐰'
-  if (/deer|олень/.test(s))                    return '🦌'
-  if (/dog|пёс|собак/.test(s))                 return '🐕'
-  if (/otter|выдр/.test(s))                    return '🦦'
-  if (/bird|птиц|raven|ворон/.test(s))         return '🦅'
-  if (/snake|змей|змея/.test(s))               return '🐍'
-  if (/bat|летучая/.test(s))                   return '🦇'
-  if (/skunk|скунс/.test(s))                   return '🦨'
-  if (/lion|лев/.test(s))                      return '🦁'
-  if (/tiger|тигр/.test(s))                    return '🐯'
-  if (/shark|акул/.test(s))                    return '🦈'
-  if (/horse|лошадь|конь|пони/.test(s))        return '🐴'
-  if (/frog|лягушк/.test(s))                   return '🐸'
-  if (/hyena|гиена/.test(s))                   return '🐾'
-  if (/cheetah|gepard|гепард/.test(s))         return '🐆'
-  if (/leopard|леопард/.test(s))               return '🐆'
-  if (/snow.*leopard|снежный/.test(s))         return '🐆'
-  if (/lynx|рысь/.test(s))                     return '🐈'
-  if (/ferret|хорек/.test(s))                  return '🐾'
-  if (/mink|норк/.test(s))                     return '🦦'
-  if (/rat|mouse|мышь|крыс/.test(s))           return '🐭'
-  if (/squirrel|белк/.test(s))                 return '🐿️'
-  if (/bovine|cow|бык|корова/.test(s))          return '🐄'
-  if (/goat|коз/.test(s))                      return '🐐'
-  return '🐾'
-}
 
 const accentStyleSubtle = computed(() => {
   const color = viewedProfile.value?.accent_color ?? '#4C67CF'
@@ -3582,17 +3095,6 @@ const activeSocialLinks = computed(() => {
   const sl = (viewedProfile.value as any)?.social_links ?? {}
   return socialNetworks.value.filter(n => sl[n.key])
 })
-function socialUrl(key: string, val: string) {
-  if (key === 'other') return val.startsWith('http') ? val : 'https://' + val
-  if (val.startsWith('http')) return val
-  // Discord хранит ник, а не ссылку: ссылки на профиль по нику нет
-  if (key === 'discord') return ''
-  const map: Record<string, string> = { telegram: 'https://t.me/', twitter: 'https://x.com/', instagram: 'https://instagram.com/', youtube: 'https://youtube.com/@', twitch: 'https://twitch.tv/', furaffinity: 'https://www.furaffinity.net/user/', vk: 'https://vk.com/', discord: '', github: 'https://github.com/' }
-  // Users may type the handle with or without a leading "@" — normalize so the
-  // built URL never ends up with none or a doubled "@" (e.g. youtube.com/@@handle).
-  const handle = val.replace(/^@+/, '')
-  return (map[key] ?? '') + handle
-}
 
 // ── NSFW age check ──────────────────────────────────────────────────────────
 const isNsfwAllowed = computed(() => {
@@ -3740,13 +3242,7 @@ const formatDate = (d: string) => fmt.formatRelativeShort(d, {
   locale: LANG_TO_LOCALE[langStore.currentLang],
 })
 
-function isImage(url: string) {
-  return /\.(jpe?g|png|gif|webp|avif|svg)(\?|$)/i.test(url)
-}
 
-function onProfileMediaUploaded(urls: string[]) {
-  newPostMediaUrls.value = urls
-}
 
 // ── Load profile ──────────────────────────────────────────────────────────────
 async function loadProfile() {
@@ -4036,70 +3532,6 @@ async function unpinPost() {
   } catch (e) { console.error('unpin failed', e) }
 }
 
-// ── Create post ───────────────────────────────────────────────────────────────
-async function createPost() {
-  if ((!newPostContent.value.trim() && newPostMediaUrls.value.length === 0) || isCreatingPost.value) return
-  // Catch a trailing "#hashtag" that was never followed by a space/newline before hitting send
-  for (const tag of extractHashtags(newPostContent.value)) {
-    if (!newPostTags.value.includes(tag)) newPostTags.value.push(tag)
-  }
-  isCreatingPost.value = true
-  try {
-    const res = await api.post('/posts', {
-      content: newPostContent.value.trim(),
-      isNsfw: newPostIsNsfw.value,
-      isAiGenerated: newPostIsAiGenerated.value,
-      mediaUrls: newPostMediaUrls.value,
-      tags: newPostTags.value,
-      visibility: newPostVisibility.value,
-    })
-    if (res.data.success) {
-      tabPosts.value.unshift(res.data.data.post)
-      newPostContent.value = ''
-      newPostMediaUrls.value = []
-      newPostIsNsfw.value = false
-      newPostIsAiGenerated.value = false
-      newPostTags.value = []
-      newPostTagInput.value = ''
-      newPostVisibility.value = 'public'
-      profileMediaUploadRef.value?.clearAll()
-      if (viewedProfile.value?._count) viewedProfile.value._count.posts++
-    }
-  } catch (e) { console.error('failed to create post', e) }
-  finally { isCreatingPost.value = false }
-}
-
-async function saveProfileScheduledPost(payload: { scheduledAt?: string; timezone?: string }) {
-  const content = newPostContent.value.trim()
-  if (!content && newPostMediaUrls.value.length === 0) return
-  for (const tag of extractHashtags(content)) {
-    if (!newPostTags.value.includes(tag)) newPostTags.value.push(tag)
-  }
-  isSchedulingProfilePost.value = true
-  try {
-    const res = await api.post('/posts/scheduled', {
-      content,
-      tags: newPostTags.value,
-      isNsfw: newPostIsNsfw.value,
-      isAiGenerated: newPostIsAiGenerated.value,
-      mediaUrls: newPostMediaUrls.value,
-      ...payload,
-    })
-    if (res.data.success) {
-      showPostForm.value = false
-      showProfileScheduleMenu.value = false
-      newPostContent.value = ''
-      newPostMediaUrls.value = []
-      newPostIsNsfw.value = false
-      newPostIsAiGenerated.value = false
-      newPostTags.value = []
-      newPostTagInput.value = ''
-      newPostVisibility.value = 'public'
-      profileMediaUploadRef.value?.clearAll()
-    }
-  } catch (e) { console.error('Failed to schedule post', e) }
-  finally { isSchedulingProfilePost.value = false }
-}
 
 function onPostDeleted(postId: string) {
   tabPosts.value = tabPosts.value.filter((p) => p.id !== postId)
@@ -4116,14 +3548,9 @@ function onPostUpdated(post: any) {
 onMounted(() => {
   loadProfile()
   window.addEventListener('keydown', onKeyDown)
-  window.addEventListener('keydown', onGalleryKeydown)
-  statusNowTickInterval = setInterval(() => { statusNowTick.value = Date.now() }, 30000)
 })
 onUnmounted(() => {
-  document.body.style.overflow = ''
   window.removeEventListener('keydown', onKeyDown)
-  window.removeEventListener('keydown', onGalleryKeydown)
-  if (statusNowTickInterval) clearInterval(statusNowTickInterval)
 })
 watch(() => route.params.username, () => { aboutTab.value = 'about'; activeContentTab.value = 'posts'; loadProfile() })
 // stories are loaded inside loadProfile via fetchProfileStories
