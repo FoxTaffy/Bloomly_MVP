@@ -9,6 +9,7 @@ import { isAdult } from '../../lib/age.js';
 import { createMfaToken, verifyMfaToken } from '../../lib/mfaToken.js';
 import type { RegisterInput, LoginInput, JwtPayload } from './types.js';
 import { isDevEnv } from '../../lib/env.js';
+import { presence } from '../realtime/presence.js';
 
 const authService = new AuthService();
 
@@ -141,8 +142,7 @@ async function issueRefreshToken(
 
 // ── Статистика ────────────────────────────────────────────────────────────────
 export const statsHandler = async (req: FastifyRequest, reply: FastifyReply) => {
-  const onlineMap: Map<string, Set<any>> | undefined = (req.server as any).onlineUsers
-  const online = onlineMap ? onlineMap.size : 0
+  const online = presence.onlineCount()
   const [users, posts] = await Promise.all([
     prisma.user.count({ where: { deleted_at: null } }),
     prisma.post.count({ where: { deleted_at: null } }),

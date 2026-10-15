@@ -7,7 +7,6 @@ import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
 import * as dotenv from 'dotenv';
 import { authRoutes } from './modules/auth/routes.js';
-import { parseDeviceName } from './modules/auth/device.util.js';
 import { postsRoutes } from './modules/posts/routes.js';
 import { usersRoutes } from './modules/users/routes.js';
 import { storiesRoutes } from './modules/stories/routes.js';
@@ -27,18 +26,15 @@ import { stickersRoutes } from './modules/stickers/routes.js';
 import { shopRoutes } from './modules/shop/routes.js';
 import { activitiesRoutes } from './modules/activities/routes.js';
 import { automodRoutes } from './modules/automod/routes.js';
-import { moderateGroupMessage } from './modules/automod/service.js';
 import { automationRoutes } from './modules/automation/routes.js';
 import { seoRoutes } from './modules/seo/routes.js';
 import { updatesRoutes } from './modules/updates/routes.js';
 import { bookmarksRoutes } from './modules/bookmarks/routes.js';
 import { supportRoutes } from './modules/support/routes.js';
 import { walletRoutes } from './modules/wallet/routes.js';
-import { messageService, messageSubscriptions } from './modules/messages/service.js';
-import { groupService } from './modules/groups/service.js';
+import { realtimeRoutes } from './modules/realtime/routes.js';
 import { initCronJobs } from './cron.js';
 import prisma from './config/prisma.js';
-import { isAllowedByPrivacy } from './lib/privacy.js';
 import { getSetting } from './lib/settings.js';
 import { isAdult } from './lib/age.js';
 import { isModerator } from './lib/roles.js';
@@ -139,13 +135,6 @@ fastify.addHook('onRequest', async (request, reply) => {
 
 fastify.register(websocket);
 
-// Сокет живёт дольше HTTP-запроса: без повторной проверки заморозка/бан не отключали бы уже
-// открытое соединение, и пользователь мог бы продолжать писать в чат.
-async function isAccountActive(userId: string): Promise<boolean> {
-  const u = await prisma.user.findUnique({ where: { id: userId }, select: { deleted_at: true, frozen_at: true } });
-  return !!u && !u.deleted_at && !u.frozen_at;
-}
-
 fastify.decorate(
   'authenticate',
   async (request: FastifyRequest, reply: FastifyReply) => {
@@ -241,178 +230,8 @@ fastify.register(walletRoutes,     { prefix: '/api/wallet' });
 // SEO: sitemap.xml and OG-proxy endpoints (no auth required, crawlers friendly)
 fastify.register(seoRoutes);
 
-// ── In-memory online status tracking ─────────────────────────────────────
-// Map per user of socket → device label ("Chrome · iPhone"), so multiple
-// browser tabs / devices work correctly and the UI can show what someone's on.
-const onlineUsers = new Map<string, Map<any, string>>()
-;(fastify as any).onlineUsers = onlineUsers
-
-// Remove entirely if map becomes empty
-function markOffline(userId: string, socket: any) {
-  const sockets = onlineUsers.get(userId)
-  if (!sockets) return
-  sockets.delete(socket)
-  if (sockets.size === 0) {
-    onlineUsers.delete(userId)
-    // Persist so "last seen" survives page reloads / server restarts, not just this session's memory
-    prisma.user.update({ where: { id: userId }, data: { last_seen_at: new Date() } }).catch(() => {})
-  }
-}
-
-fastify.register(async function (fastify) {
-  fastify.get('/api/', { websocket: true }, (connection, request) => {
-    let authedUserId: string | null = null
-    const deviceLabel = parseDeviceName(request.headers['user-agent'])
-
-    // Track message subscription cleanup function
-    let unsubscribeMessages: (() => void) | null = null
-
-    // Close unauthenticated connections after 30 seconds
-    const authTimeout = setTimeout(() => {
-      if (!authedUserId) {
-        connection.socket.send(JSON.stringify({ type: 'error', message: 'Authentication timeout' }))
-        connection.socket.close()
-      }
-    }, 30_000)
-
-    connection.socket.on('message', async (raw: Buffer) => {
-      try {
-        // Guard against excessively large WebSocket frames (prevent DoS)
-        if (raw.length > 65_536) {
-          connection.socket.send(JSON.stringify({ type: 'error', message: 'Message too large' }))
-          return
-        }
-
-        const msg = JSON.parse(raw.toString())
-
-        if (msg?.type === 'ping') {
-          connection.socket.send(JSON.stringify({ type: 'pong' }))
-          return
-        }
-
-        if (msg?.type === 'auth' && msg?.token) {
-          try {
-            const payload = fastify.jwt.verify(msg.token) as { id: string }
-            if (!(await isAccountActive(payload.id))) {
-              connection.socket.send(JSON.stringify({ type: 'auth_err' }))
-              connection.socket.close()
-              return
-            }
-            // If re-authing with a different ID (shouldn't happen), clean up old
-            if (authedUserId && authedUserId !== payload.id) {
-              markOffline(authedUserId, connection.socket)
-              if (unsubscribeMessages) { unsubscribeMessages(); unsubscribeMessages = null }
-            }
-            authedUserId = payload.id
-            if (!onlineUsers.has(authedUserId)) onlineUsers.set(authedUserId, new Map())
-            onlineUsers.get(authedUserId)!.set(connection.socket, deviceLabel)
-
-            // Subscribe to incoming messages for this user
-            unsubscribeMessages = messageSubscriptions.subscribe(authedUserId, (payload) => {
-              if (connection.socket.readyState === 1 /* OPEN */) {
-                connection.socket.send(payload)
-              }
-            })
-
-            connection.socket.send(JSON.stringify({ type: 'auth_ok' }))
-          } catch {
-            connection.socket.send(JSON.stringify({ type: 'auth_err' }))
-          }
-          return
-        }
-
-        // ── Typing indicator ──────────────────────────────────────────────
-        if (msg?.type === 'typing' && authedUserId) {
-          const { conversationId } = msg
-          if (!conversationId) return
-          try {
-            const others = await messageService.getOtherParticipantIds(conversationId as string, authedUserId)
-            for (const uid of others) {
-              messageSubscriptions.push(uid, { type: 'typing', conversationId, userId: authedUserId })
-            }
-          } catch { /* not a participant or conv not found */ }
-          return
-        }
-
-        // ── Client sends a chat message over WebSocket ────────────────────
-        if (msg?.type === 'message' && authedUserId) {
-          const { conversationId, content, file_url, media_type, reply_to_id } = msg
-          if (!conversationId || (!content && !file_url)) return
-          if (!(await isAccountActive(authedUserId))) { connection.socket.close(); return }
-          try {
-            await messageService.sendMessage({
-              conversationId: conversationId as string,
-              senderId: authedUserId,
-              content: (content as string) ?? '',
-              file_url: (file_url as string | undefined) ?? null,
-              media_type: (media_type as string | undefined) ?? undefined,
-              reply_to_id: (reply_to_id as string | undefined) ?? null,
-            })
-          } catch (e) {
-            connection.socket.send(JSON.stringify({ type: 'error', message: (e as Error).message }))
-          }
-          return
-        }
-
-        // ── Client sends a group chat message ──────────────────────────────────
-        if (msg?.type === 'group_message_send' && authedUserId) {
-          const { groupId, content } = msg;
-          if (!groupId || !content) return;
-          if (!(await isAccountActive(authedUserId))) { connection.socket.close(); return }
-          try {
-            await groupService.assertGroupMember(groupId as string, authedUserId);
-            const saved = await groupService.sendGroupMessage(groupId as string, authedUserId, (content as string).trim());
-            // fire-and-forget automod check, как в REST (sendGroupMessageHandler)
-            moderateGroupMessage(authedUserId).catch((err) => console.error('[AUTOMOD] moderateGroupMessage error:', err));
-            const members = await prisma.groupMember.findMany({ where: { group_id: groupId as string }, select: { user_id: true } });
-            for (const m of members) {
-              messageSubscriptions.push(m.user_id, { type: 'group_message', groupId, message: saved });
-            }
-          } catch (e) {
-            connection.socket.send(JSON.stringify({ type: 'error', message: (e as Error).message }));
-          }
-          return;
-        }
-      } catch { /* non-JSON frame — ignore */ }
-    })
-
-    connection.socket.on('close', () => {
-      clearTimeout(authTimeout)
-      if (authedUserId) markOffline(authedUserId, connection.socket)
-      if (unsubscribeMessages) { unsubscribeMessages(); unsubscribeMessages = null }
-    })
-    connection.socket.on('error', () => {})
-  })
-
-  // REST endpoint: GET /api/users/online?ids=id1,id2,...
-  fastify.get('/api/users/online', { onRequest: [fastify.tryAuthenticate] }, async (request, reply) => {
-    const ids = ((request.query as any).ids ?? '').split(',').filter(Boolean) as string[]
-    const viewerId = (request.user as { id: string } | undefined)?.id
-    const result: Record<string, boolean> = {}
-    // Sibling map, not nested under `data[id]` — keeps `data` a plain boolean
-    // map so existing `!!data[id]` online checks keep working untouched.
-    const deviceData: Record<string, string | null> = {}
-    const lastSeenData: Record<string, string | null> = {}
-    if (ids.length) {
-      const owners = await prisma.user.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, online_status_visibility: true, last_seen_at: true },
-      })
-      const visibilityById = new Map(owners.map((o) => [o.id, o.online_status_visibility]))
-      const lastSeenById = new Map(owners.map((o) => [o.id, o.last_seen_at]))
-      for (const id of ids) {
-        const sockets = onlineUsers.get(id)
-        const isOnline = !!sockets && sockets.size > 0
-        const visible = await isAllowedByPrivacy(visibilityById.get(id), id, viewerId)
-        const allowed = isOnline && visible
-        result[id] = allowed
-        deviceData[id] = allowed ? ([...sockets!.values()][0] ?? null) : null
-        lastSeenData[id] = (!isOnline && visible) ? (lastSeenById.get(id)?.toISOString() ?? null) : null
-      }
-    }
-    return reply.send({ success: true, data: result, deviceData, lastSeenData, error: null })
-  })
-})
+// WebSocket (/api/) и GET /api/users/online
+fastify.register(realtimeRoutes);
 
 fastify.get('/health', async () => ({
   success: true,
