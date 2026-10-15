@@ -13,7 +13,7 @@ describe('auth: register → verify → login → refresh → logout', () => {
 
   it('full happy path with refresh rotation', async () => {
     const email = 'alice@test.local';
-    const reg = await api('POST', '/api/auth/register', { body: { username: 'alice', email, password: PASSWORD } });
+    const reg = await api('POST', '/api/auth/register', { body: { username: 'alice', email, password: PASSWORD, consent: { personalData: true, cookies: true } } });
     expect(reg.status).toBe(201);
     expect(JSON.stringify(reg.json)).not.toContain('password');
 

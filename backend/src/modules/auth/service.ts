@@ -7,6 +7,7 @@ import prisma from '../../config/prisma.js';
 import { sendOtpEmail } from './email.service.js';
 import { encryptTotpSecret, decryptTotpSecret } from '../../lib/totpCrypto.js';
 import type { RegisterInput } from './types.js';
+import { classifyUnverified, releaseUnverified } from './unverifiedRelease.js';
 
 /** Криптографически стойкий 6-значный код */
 function genCode(): string {
@@ -59,6 +60,10 @@ async function resetFailures(userId: string) {
 }
 const OTP_WINDOW_MS = 15 * 60 * 1000;
 const OTP_LOCKED_MESSAGE = 'Слишком много попыток. Запросите новый код позже';
+// Один ответ на любой занятый email (подтверждён, ждёт кода, забанен): состояние аккаунта не раскрываем
+const EMAIL_UNAVAILABLE_MESSAGE = 'Не удалось зарегистрироваться с этим email. Если вы уже начали регистрацию, подтвердите почту или попробуйте позже';
+const REGISTRATION_PENDING_MESSAGE = 'Регистрация с этими данными уже начата, подождите 15 минут или подтвердите почту';
+const USERNAME_TAKEN_MESSAGE = 'Имя пользователя уже занято';
 
 /** Новый код не выдаём, пока попытки в окне не исчерпаны: иначе переотправка сбрасывала бы счётчик. */
 export class OtpLockedError extends Error {}
@@ -137,7 +142,7 @@ export class AuthService {
     // Забаненный аккаунт не освобождает email: иначе бан обходится повторной регистрацией.
     // Освобождаются только email/username самоудалённых аккаунтов.
     const bannedWithEmail = await prisma.user.findFirst({ where: { email, is_banned: true }, select: { id: true } });
-    if (bannedWithEmail) throw Object.assign(new Error('Не удалось зарегистрироваться с этим email'), { statusCode: 400 });
+    if (bannedWithEmail) throw Object.assign(new Error(EMAIL_UNAVAILABLE_MESSAGE), { statusCode: 400 });
 
     try {
       const user = await prisma.$transaction(async (tx) => {
@@ -150,6 +155,14 @@ export class AuthService {
           where: { username, deleted_at: { not: null }, is_banned: false },
           data: { username: username + suffix },
         });
+
+        // Брошенная неподтверждённая регистрация (опечатка в почте и т.п.) освобождает email и ник.
+        // Регистрацию, у которой ещё действует код, не трогаем: её владелец может сейчас вводить код.
+        const { releasable, pending } = await classifyUnverified(tx, { OR: [{ email }, { username }] }, OTP_WINDOW_MS);
+        for (const stale of releasable) await releaseUnverified(tx, stale);
+
+        if (await tx.user.findFirst({ where: { email }, select: { id: true } })) throw new Error(EMAIL_UNAVAILABLE_MESSAGE);
+        if (pending.some((p) => p.username === username)) throw new Error(REGISTRATION_PENDING_MESSAGE);
 
         const newUser = await tx.user.create({
           data: { email, username, password: hashedPassword, email_verified: false, likes: [], dislikes: [] },
@@ -168,8 +181,8 @@ export class AuthService {
     } catch (error: unknown) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         const fields = (error.meta?.target as string[]) ?? [];
-        if (fields.includes('email'))    throw new Error('Email уже зарегистрирован');
-        if (fields.includes('username')) throw new Error('Имя пользователя уже занято');
+        if (fields.includes('email'))    throw new Error(EMAIL_UNAVAILABLE_MESSAGE);
+        if (fields.includes('username')) throw new Error(USERNAME_TAKEN_MESSAGE);
         throw new Error('Пользователь с такими данными уже существует');
       }
       throw error;
@@ -180,7 +193,9 @@ export class AuthService {
   async verifyEmail(email: string, code: string) {
     const e = email.toLowerCase().trim();
     await verifyOtp(e, code, 'register');
-    await prisma.user.updateMany({ where: { email: e, deleted_at: null }, data: { email_verified: true } });
+    // Аккаунт мог быть освобождён как брошенная регистрация: тогда код подтверждать нечего
+    const updated = await prisma.user.updateMany({ where: { email: e, deleted_at: null }, data: { email_verified: true } });
+    if (updated.count === 0) throw new Error('Аккаунт не найден, зарегистрируйтесь заново');
   }
 
   /** Повторная отправка OTP */
