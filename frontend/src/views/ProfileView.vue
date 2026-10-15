@@ -158,7 +158,7 @@
         </div>
 
         <!-- Blocked profile stub (the profile owner has blocked the viewer) -->
-        <div v-else-if="(viewedProfile as any).is_blocked_by_user" class="mt-8 bg-brand-card border border-brand-border rounded-3xl p-12 text-center shadow-xl">
+        <div v-else-if="viewedProfile.is_blocked_by_user" class="mt-8 bg-brand-card border border-brand-border rounded-3xl p-12 text-center shadow-xl">
           <img :src="viewedProfile.avatar_url || '/icons/badges/NN.jpg'" class="w-20 h-20 rounded-full object-cover mx-auto mb-4 border-2 border-brand-border" @error="onAvatarError" />
           <p class="text-white font-bold text-lg mb-1">{{ viewedProfile.display_name || viewedProfile.username }}</p>
           <p class="text-white/45 text-sm mb-6">@{{ viewedProfile.username }}</p>
@@ -169,7 +169,7 @@
         </div>
 
         <!-- Private profile stub (viewer isn't allowed to see this profile) -->
-        <div v-else-if="(viewedProfile as any).is_private" class="mt-8 bg-brand-card border border-brand-border rounded-3xl p-12 text-center shadow-xl">
+        <div v-else-if="viewedProfile.is_private" class="mt-8 bg-brand-card border border-brand-border rounded-3xl p-12 text-center shadow-xl">
           <img :src="viewedProfile.avatar_url || '/icons/badges/NN.jpg'" class="w-20 h-20 rounded-full object-cover mx-auto mb-4 border-2 border-brand-border" @error="onAvatarError" />
           <p class="text-white font-bold text-lg mb-1">{{ viewedProfile.display_name || viewedProfile.username }}</p>
           <p class="text-white/45 text-sm mb-6">@{{ viewedProfile.username }}</p>
@@ -354,7 +354,7 @@
                         <span v-if="notifyLoading" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         <BIcon v-else :name="notifyPosts && relation.aFollowsB ? 'BellRing' : 'Bell'" class="w-4 h-4" />
                       </button>
-                      <button v-if="(viewedProfile as any).messages_privacy !== 'nobody'" @click="openChat" class="inline-flex items-center gap-2 px-4 py-2 border border-brand-border bg-brand-bg hover:border-brand-accent/60 text-brand-offwhite hover:text-brand-accent rounded-xl text-sm font-bold transition-all">
+                      <button v-if="viewedProfile.messages_privacy !== 'nobody'" @click="openChat" class="inline-flex items-center gap-2 px-4 py-2 border border-brand-border bg-brand-bg hover:border-brand-accent/60 text-brand-offwhite hover:text-brand-accent rounded-xl text-sm font-bold transition-all">
                         <BIcon name="MessageSquare" class="w-4 h-4" /> {{ langStore.t.messageBtn }}
                       </button>
                       <button @click="toggleFollow" :disabled="isTogglingFollow"
@@ -366,8 +366,8 @@
                         <span v-if="isMutual && !isTogglingFollow" class="text-[10px] font-bold ml-0.5 opacity-60">· {{ langStore.t.profileMutualLabel }}</span>
                       </button>
                       <!-- Donate button -->
-                      <a v-if="(viewedProfile as any).donate_url"
-                        :href="safeHref((viewedProfile as any).donate_url)"
+                      <a v-if="viewedProfile.donate_url"
+                        :href="safeHref(viewedProfile.donate_url)"
                         target="_blank" rel="noopener noreferrer"
                         class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/60">
                         <BIcon name="HeartHandshake" class="w-4 h-4" />
@@ -411,47 +411,47 @@
                     </template>
                   </div>
                 </div>
-                <ReportModal v-if="viewedProfile" v-model="showProfileReportModal" :target-id="(viewedProfile as any).id" target-type="user" />
+                <ReportModal v-if="viewedProfile" v-model="showProfileReportModal" :target-id="viewedProfile.id" target-type="user" />
 
                 <!-- Name row -->
                 <div class="mt-4">
                   <div class="flex items-center flex-wrap gap-2 mb-2">
                     <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white tracking-tight min-w-0 max-w-full break-words [overflow-wrap:anywhere]">{{ profileDisplayName }}</h1>
                     <!-- Deceased badge -->
-                    <span v-if="(viewedProfile as any)?.deceased_at"
+                    <span v-if="viewedProfile?.deceased_at"
                       class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 text-white/60 flex-shrink-0"
-                      :title="(viewedProfile as any)?.deceased_note || langStore.t.profileDeceasedMemoryLabel">
+                      :title="viewedProfile?.deceased_note || langStore.t.profileDeceasedMemoryLabel">
                       🪦
                     </span>
                     <!-- Frozen badge -->
-                    <span v-if="(viewedProfile as any)?.frozen_at"
+                    <span v-if="viewedProfile?.frozen_at"
                       class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-sky-500/15 text-sky-300 flex-shrink-0"
                       :title="langStore.t.profileFrozenAccountBadgeTitle">
                       🧊
                     </span>
                     <!-- Verification badge -->
-                    <VerificationBadge v-if="(viewedProfile as any)?.is_verified"
-                      :type="(viewedProfile as any)?.verification_type"
+                    <VerificationBadge v-if="viewedProfile?.is_verified"
+                      :type="viewedProfile?.verification_type"
                       icon-class="w-6 h-6 flex-shrink-0" />
                     <span v-if="badgePillLabel" class="inline-flex items-center justify-center w-7 h-7 rounded-lg" :class="badgePillClass" :title="badgePillLabel">
                       <component :is="badgePillIcon" class="w-4 h-4" />
                     </span>
                     <!-- Subscription tier badge -->
-                    <span v-if="(viewedProfile as any).subscription_tier && (viewedProfile as any).subscription_tier !== 'free'"
+                    <span v-if="viewedProfile.subscription_tier && viewedProfile.subscription_tier !== 'free'"
                       class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase tracking-widest border"
                       :class="{
-                        'bg-brand-accent/15 border-brand-accent/40 text-brand-accent': (viewedProfile as any).subscription_tier === 'lite',
-                        'bg-violet-500/15 border-violet-500/40 text-violet-300': (viewedProfile as any).subscription_tier === 'pro',
-                        'bg-amber-500/15 border-amber-500/40 text-amber-400': (viewedProfile as any).subscription_tier === 'business',
+                        'bg-brand-accent/15 border-brand-accent/40 text-brand-accent': viewedProfile.subscription_tier === 'lite',
+                        'bg-violet-500/15 border-violet-500/40 text-violet-300': viewedProfile.subscription_tier === 'pro',
+                        'bg-amber-500/15 border-amber-500/40 text-amber-400': viewedProfile.subscription_tier === 'business',
                       }">
                       <Sparkles class="w-2.5 h-2.5" />
-                      {{ (viewedProfile as any).subscription_tier === 'lite' ? 'Lite' : (viewedProfile as any).subscription_tier === 'pro' ? 'Pro' : 'Business' }}
+                      {{ viewedProfile.subscription_tier === 'lite' ? 'Lite' : viewedProfile.subscription_tier === 'pro' ? 'Pro' : 'Business' }}
                     </span>
                     <!-- Artist Badge -->
                     <AppBadge
-                      v-if="(viewedProfile as any).badge_level && (viewedProfile as any).badge_level !== 'none'"
+                      v-if="viewedProfile.badge_level && viewedProfile.badge_level !== 'none'"
                       type="user"
-                      :level="(viewedProfile as any).badge_level"
+                      :level="viewedProfile.badge_level"
                       size="sm"
                     />
                     <!-- Registration date badge -->
@@ -485,7 +485,7 @@
                     <span v-if="viewedProfile.job_title" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/65">
                       <BIcon name="Briefcase" class="w-3 h-3 text-white/40" />{{ viewedProfile.job_title }}
                     </span>
-                    <span v-if="viewedProfile.location || (viewedProfile as any).country" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/65">
+                    <span v-if="viewedProfile.location || viewedProfile.country" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/65">
                       <BIcon name="MapPin" class="w-3 h-3 text-white/40" />{{ placeStr }}
                     </span>
                     <a v-if="viewedProfile.website" :href="websiteHref(viewedProfile.website)" target="_blank" rel="noopener noreferrer"
@@ -645,14 +645,14 @@
                     </div>
 
                     <!-- Местоположение + сайт -->
-                    <div v-if="viewedProfile.location || (viewedProfile as any).country || viewedProfile.website"
+                    <div v-if="viewedProfile.location || viewedProfile.country || viewedProfile.website"
                       class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
                       <div class="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
                         <BIcon name="MapPin" class="w-4 h-4 text-white/50" />
                       </div>
                       <div class="min-w-0 flex-1">
                         <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">{{ langStore.t.locationCardLabel }}</p>
-                        <p class="text-sm text-white/80 font-semibold truncate">{{ [viewedProfile.location, (viewedProfile as any).country].filter(Boolean).join(', ') }}</p>
+                        <p class="text-sm text-white/80 font-semibold truncate">{{ [viewedProfile.location, viewedProfile.country].filter(Boolean).join(', ') }}</p>
                         <a v-if="viewedProfile.website" :href="websiteHref(viewedProfile.website)" target="_blank" rel="noopener noreferrer"
                           class="text-xs text-brand-accent hover:underline truncate block mt-0.5">{{ viewedProfile.website.replace(/^https?:\/\//, '') }}</a>
                       </div>
@@ -672,12 +672,12 @@
                   </div>
 
                   <!-- Artist since -->
-                  <div v-if="(viewedProfile as any).artist_since"
+                  <div v-if="viewedProfile.artist_since"
                     class="flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-amber-500/8 to-transparent border border-amber-500/20 rounded-2xl">
                     <BIcon name="Palette" class="w-4 h-4 text-amber-400 flex-shrink-0" />
                     <div>
                       <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">{{ langStore.t.artistSinceLabel }}</p>
-                      <p class="text-sm text-amber-300 font-bold">{{ new Date((viewedProfile as any).artist_since).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'long', year: 'numeric' }) }}</p>
+                      <p class="text-sm text-amber-300 font-bold">{{ new Date(viewedProfile.artist_since).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'long', year: 'numeric' }) }}</p>
                     </div>
                   </div>
 
@@ -702,14 +702,14 @@
                           <button v-else type="button" @click="openFavoriteEdit(cat.key)"
                             class="flex items-center gap-2 group/fav w-full text-left py-0.5">
                             <span class="text-[11px] text-white/40 w-20 flex-shrink-0">{{ cat.label }}</span>
-                            <span v-if="(viewedProfile as any)[cat.key]" class="text-xs font-semibold text-white/75">{{ (viewedProfile as any)[cat.key] }}</span>
+                            <span v-if="viewedProfile[cat.key]" class="text-xs font-semibold text-white/75">{{ viewedProfile[cat.key] }}</span>
                             <span v-else class="text-xs text-white/25 italic truncate">{{ cat.placeholder }}</span>
                             <BIcon name="Pencil" class="w-3 h-3 text-white/20 opacity-0 group-hover/fav:opacity-100 transition-opacity flex-shrink-0" />
                           </button>
                         </template>
-                        <div v-else-if="(viewedProfile as any)[cat.key]" class="flex items-center gap-2">
+                        <div v-else-if="viewedProfile[cat.key]" class="flex items-center gap-2">
                           <span class="text-[11px] text-white/40 w-20 flex-shrink-0">{{ cat.label }}</span>
-                          <span class="text-xs font-semibold text-white/75">{{ (viewedProfile as any)[cat.key] }}</span>
+                          <span class="text-xs font-semibold text-white/75">{{ viewedProfile[cat.key] }}</span>
                         </div>
                       </div>
                     </div>
@@ -1362,7 +1362,7 @@
                     </div>
 
                     <!-- Posts empty → show repaws fallback, or CTA -->
-                    <template v-else-if="activeContentTab === 'posts' && tabPosts.filter((p: any) => p.id !== viewedProfile?.pinned_post_id).length === 0 && !pinnedPost">
+                    <template v-else-if="activeContentTab === 'posts' && tabPosts.filter((p) => p.id !== viewedProfile?.pinned_post_id).length === 0 && !pinnedPost">
                       <template v-if="repawsFallback.length">
                         <div class="flex items-center gap-2 text-xs text-white/55 font-semibold mb-1 px-1">
                           <BIcon name="Repeat2" class="w-3.5 h-3.5 text-brand-accent" /> {{ langStore.t.profileNoPostsShowingRepaws }}
@@ -1371,7 +1371,7 @@
                           :post="post" :is-own-profile="isOwnProfile"
                           :is-pinned-post-id="viewedProfile.pinned_post_id"
                           :show-repaw-label="true"
-                          :group-context="(post as any).groupPosts?.[0]?.group ?? null"
+                          :group-context="post.groupPosts?.[0]?.group ?? null"
                           :ad-mode="false"
                           :initial-repawed="profilePostStatus[post.id]?.repawed ?? false"
                           :initial-favourited="profilePostStatus[post.id]?.favourited ?? false"
@@ -1396,11 +1396,11 @@
 
                     <!-- Posts / repaws / archive list -->
                     <template v-else>
-                      <PostCard v-for="post in tabPosts.filter((p: any) => p.id !== viewedProfile?.pinned_post_id)" :key="post.id"
+                      <PostCard v-for="post in tabPosts.filter((p) => p.id !== viewedProfile?.pinned_post_id)" :key="post.id"
                         :post="post" :is-own-profile="isOwnProfile"
                         :is-pinned-post-id="viewedProfile.pinned_post_id"
                         :show-repaw-label="activeContentTab === 'repaws'"
-                        :group-context="activeContentTab === 'repaws' ? ((post as any).groupPosts?.[0]?.group ?? null) : null"
+                        :group-context="activeContentTab === 'repaws' ? (post.groupPosts?.[0]?.group ?? null) : null"
                         :ad-mode="false"
                         :initial-repawed="profilePostStatus[post.id]?.repawed ?? false"
                         :initial-favourited="profilePostStatus[post.id]?.favourited ?? false"
@@ -1416,7 +1416,7 @@
                       <button v-for="f in (['all','photo','video'] as const)" :key="f" @click="mediaFilter = f"
                         class="px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all"
                         :class="mediaFilter === f ? 'bg-brand-accent border-brand-accent text-white' : 'border-brand-border text-white/55 hover:text-white'">
-                        {{ f === 'all' ? `${langStore.t.tabAll} · ${filteredMediaPosts.length}` : f === 'photo' ? `${langStore.t.feedPhoto} · ${tabPosts.filter((p: any) => isImage(p.media_urls?.[0] ?? '')).length}` : `${langStore.t.profileMediaFilterVideoLabel} · ${tabPosts.filter((p: any) => !isImage(p.media_urls?.[0] ?? '')).length}` }}
+                        {{ f === 'all' ? `${langStore.t.tabAll} · ${filteredMediaPosts.length}` : f === 'photo' ? `${langStore.t.feedPhoto} · ${tabPosts.filter((p) => isImage(p.media_urls?.[0] ?? '')).length}` : `${langStore.t.profileMediaFilterVideoLabel} · ${tabPosts.filter((p) => !isImage(p.media_urls?.[0] ?? '')).length}` }}
                       </button>
                       <div class="flex-1" />
                       <button @click.stop="mediaAlbumView = !mediaAlbumView"
@@ -1503,7 +1503,7 @@
                       <div v-else class="grid grid-cols-3 gap-1.5">
                         <div v-for="(post, idx) in filteredMediaPosts" :key="post.id"
                           class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-brand-border/60 hover:border-brand-accent/60 bg-brand-bg transition-all">
-                          <div @click.stop="openMediaLightbox(post.media_urls[0], filteredMediaPosts.map((p: any) => p.media_urls[0]), idx)"
+                          <div @click.stop="openMediaLightbox(post.media_urls[0], filteredMediaPosts.map((p) => p.media_urls[0]), idx)"
                             class="absolute inset-0">
                             <img v-if="isImage(post.media_urls[0])" :src="post.media_urls[0]" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                             <div v-else class="w-full h-full flex items-center justify-center bg-brand-bg/60">
@@ -1628,7 +1628,7 @@
 
                   <!-- STATS (Lite+) -->
                   <div v-else-if="activeContentTab === 'stats'">
-                    <div v-if="(authStore.user as any)?.subscription_tier === 'free'"
+                    <div v-if="authStore.user?.subscription_tier === 'free'"
                       class="py-14 text-center text-white/55">
                       <BIcon name="Lock" class="w-10 h-10 mx-auto mb-3 text-amber-400 opacity-70" />
                       <p class="font-semibold text-sm mb-1 text-white/80">{{ langStore.t.statsLockedMsg }}
@@ -1801,7 +1801,7 @@
                 </div>
                 <div class="flex items-baseline gap-1.5">
                   <span class="text-2xl font-extrabold text-white leading-none">
-                    {{ Number((viewedProfile as any)?.wallet?.balance ?? 0).toFixed(2) }}
+                    {{ Number(viewedProfile?.wallet?.balance ?? 0).toFixed(2) }}
                   </span>
                   <span class="text-xs font-semibold text-brand-accent-minus">Blooms</span>
                 </div>
@@ -1867,7 +1867,7 @@
                 </div>
                 <div v-if="activeSocialLinks.length" class="px-2 pb-2 space-y-0.5">
                   <a v-for="net in activeSocialLinks" :key="net.key"
-                    :href="safeHref(socialUrl(net.key, (viewedProfile as any).social_links[net.key]))" target="_blank" rel="noopener noreferrer"
+                    :href="safeHref(socialUrl(net.key, viewedProfile.social_links?.[net.key] ?? ''))" target="_blank" rel="noopener noreferrer"
                     class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all group">
                     <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                       :style="{ backgroundColor: net.color + '22' }">
@@ -1875,7 +1875,7 @@
                     </div>
                     <div class="min-w-0">
                       <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ net.label }}</p>
-                      <p class="text-xs text-brand-offwhite font-medium truncate group-hover:text-white">{{ (viewedProfile as any).social_links[net.key] }}</p>
+                      <p class="text-xs text-brand-offwhite font-medium truncate group-hover:text-white">{{ viewedProfile.social_links?.[net.key] }}</p>
                     </div>
                   </a>
                 </div>
@@ -2449,7 +2449,7 @@
 <script setup lang="ts">
 import { invalidateFriendsCache } from '@/stores/friends'
 import { safeHref } from '@/utils/safeHref'
-import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, reactive, type Component, type Directive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
@@ -2471,7 +2471,7 @@ import StoryViewer from '@/components/StoryViewer.vue'
 import ReportModal from '@/components/ReportModal.vue'
 import api from '@/api'
 import { compressImageForUpload } from '@/lib/utils'
-import { FAVORITE_CATEGORIES } from '@/lib/interests'
+import { FAVORITE_CATEGORIES, type FavoriteCategory } from '@/lib/interests'
 import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import VerificationBadge from '@/components/VerificationBadge.vue'
@@ -2510,6 +2510,8 @@ const primarySpeciesLabel = computed(() => {
 import { useMessagesStore } from '@/stores/messages'
 import { useGroupsStore, type SoonBadge as SoonBadgeType } from '@/stores/groups'
 import { useNsfwMode } from '@/composables/useNsfwMode'
+import type { Post } from '@/types/post'
+import { apiErrorMessage, apiErrorStatus } from '@/lib/apiError'
 import TrustScoreCard from '@/components/TrustScoreCard.vue'
 const messagesStore = useMessagesStore()
 const groupsStore = useGroupsStore()
@@ -2531,8 +2533,8 @@ async function openChat() {
     const convId = await messagesStore.openConversation(viewedProfile.value.id)
     messagesStore.activeId = convId
     router.push({ name: 'messages' })
-  } catch (e: any) {
-    messageErrorNotice.value = e?.response?.data?.error?.message === 'MESSAGES_DISABLED'
+  } catch (e) {
+    messageErrorNotice.value = apiErrorMessage(e) === 'MESSAGES_DISABLED'
       ? langStore.t.profileMessagesRestrictedError
       : langStore.t.profileChatStartFailedError
     setTimeout(() => { messageErrorNotice.value = null }, 4000)
@@ -2546,7 +2548,7 @@ const isLoading = ref(false)
 const error = ref<string | null>(null)
 
 const profileBgStyle = computed(() => {
-  const url = (viewedProfile.value as any)?.profile_bg_url as string | undefined
+  const url = viewedProfile.value?.profile_bg_url as string | undefined
   if (!url) return {}
   try {
     const parsed = new URL(url)
@@ -2636,17 +2638,20 @@ const followingLoading = ref(false)
 
 const aboutTab = ref<AboutTab>('about')
 const activeContentTab = ref<ContentTab>('posts')
-const tabPosts = ref<any[]>([])
-const repawsFallback = ref<any[]>([])
-const followers = ref<any[]>([])
-const following = ref<any[]>([])
+const tabPosts = ref<Post[]>([])
+const repawsFallback = ref<Post[]>([])
+// Rows of the followers / following / groups lists — only the fields this page reads are typed
+interface ProfileUserRow { id: string; username: string; display_name: string | null; avatar_url: string | null; [key: string]: unknown }
+interface ProfileGroupRow { id: string; slug: string; name: string; avatar_url: string | null; is_pinned?: boolean; [key: string]: unknown }
+const followers = ref<ProfileUserRow[]>([])
+const following = ref<ProfileUserRow[]>([])
 const friendsListRestricted = ref(false)
-const mutualGroups = ref<any[]>([])
+const mutualGroups = ref<ProfileGroupRow[]>([])
 const userHashtags = ref<{ name: string; count: number }[]>([])
 const isLoadingTab = ref(false)
 const profilePostStatus = reactive<Record<string, { repawed: boolean; favourited: boolean; userVote: 1 | -1 | 0 }>>({})
 const expandedMediaPost = ref<any | null>(null)
-const pinnedPost = ref<any | null>(null)
+const pinnedPost = ref<Post | null>(null)
 const mediaFilter = ref<'all' | 'photo' | 'video'>('all')
 const mediaAlbumView = ref(false)
 // postId → 'fursona' | 'fursuit' | null  (ярлыки для ручных альбомов)
@@ -2745,8 +2750,8 @@ async function topupWallet(amount: number) {
   try {
     await walletStore.topup(amount)
     showTopupPicker.value = false
-  } catch (e: any) {
-    alert(e.response?.data?.error?.message || langStore.t.profileWalletTopupFailedError)
+  } catch (e) {
+    alert(apiErrorMessage(e) || langStore.t.profileWalletTopupFailedError)
   } finally {
     toppingUp.value = false
   }
@@ -2772,19 +2777,19 @@ const editingFavorite = ref<string | null>(null)
 const favoriteDraft = ref('')
 
 const hasFavorites = computed(() =>
-  FAVORITE_CATEGORIES.some((cat) => !!(viewedProfile.value as any)?.[cat.key])
+  FAVORITE_CATEGORIES.some((cat) => !!viewedProfile.value?.[cat.key])
 )
 
-function openFavoriteEdit(key: string) {
-  favoriteDraft.value = (viewedProfile.value as any)?.[key] ?? ''
+function openFavoriteEdit(key: FavoriteCategory['key']) {
+  favoriteDraft.value = viewedProfile.value?.[key] ?? ''
   editingFavorite.value = key
 }
 
-async function saveFavorite(key: string) {
+async function saveFavorite(key: FavoriteCategory['key']) {
   if (!viewedProfile.value) return
   const value = favoriteDraft.value.trim() || null
-  await userStore.updateProfile({ [key]: value } as any)
-  ;(viewedProfile.value as any)[key] = value
+  await userStore.updateProfile({ [key]: value })
+  viewedProfile.value[key] = value
   editingFavorite.value = null
 }
 
@@ -2803,7 +2808,7 @@ async function onBannerFileChange(e: Event) {
     fd.append('file', await compressImageForUpload(file))
     const res = await api.post('/media/upload?folder=banners', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     if (res.data.success && res.data.data?.url) {
-      await userStore.updateProfile({ banner_url: res.data.data.url } as any)
+      await userStore.updateProfile({ banner_url: res.data.data.url })
       if (viewedProfile.value) viewedProfile.value.banner_url = res.data.data.url
     }
   } catch (err) { console.error('banner upload failed', err) }
@@ -2823,9 +2828,9 @@ async function onAvatarFileChange(e: Event) {
     const res = await api.post('/media/upload?folder=avatars', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     if (res.data.success && res.data.data?.url) {
       const videoUrl = res.data.data.videoUrl ?? null
-      await userStore.updateProfile({ avatar_url: res.data.data.url, avatar_video_url: videoUrl } as any)
-      if (viewedProfile.value) { viewedProfile.value.avatar_url = res.data.data.url; (viewedProfile.value as any).avatar_video_url = videoUrl }
-      if (authStore.user) { (authStore.user as any).avatar_url = res.data.data.url; (authStore.user as any).avatar_video_url = videoUrl }
+      await userStore.updateProfile({ avatar_url: res.data.data.url, avatar_video_url: videoUrl })
+      if (viewedProfile.value) { viewedProfile.value.avatar_url = res.data.data.url; viewedProfile.value.avatar_video_url = videoUrl }
+      if (authStore.user) { authStore.user.avatar_url = res.data.data.url; authStore.user.avatar_video_url = videoUrl }
     }
   } catch (err) { console.error('avatar upload failed', err) }
   finally {
@@ -2848,7 +2853,7 @@ watch(() => profileFursona.value?.id, () => {
   fursonaSubTab.value = fursonaHasPersonalityContent.value ? 'personality' : 'info'
 }, { immediate: true })
 const userGroupsCount    = ref(0)
-const userGroupsList     = ref<any[]>([])
+const userGroupsList     = ref<ProfileGroupRow[]>([])
 const userGroupsPinnedOnly = ref(false)
 const userGroupsHidden = ref(false)
 const groupsModalLoading = ref(false)
@@ -2896,7 +2901,7 @@ const profileBio = computed(() => {
 
 const ownAvatarSrc = computed(() => authStore.user?.avatar_url ?? '')
 
-const ownJobTitle = computed(() => (authStore.user as any)?.job_title ?? '')
+const ownJobTitle = computed(() => authStore.user?.job_title ?? '')
 
 const avatarSrc = computed(() => {
   const p = viewedProfile.value
@@ -2909,7 +2914,7 @@ const bannerStyle = computed(() => {
   if (!p) return {}
   if (p.banner_url) return { backgroundImage: `url('${String(p.banner_url).replace(/['"\\()\s]/g, encodeURIComponent)}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
   // Use theme accent if set, otherwise profile accent_color
-  const themeId = (p as any).profile_theme as string | undefined
+  const themeId = p.profile_theme as string | undefined
   const themeAccent = themeId && PROFILE_THEMES[themeId] ? PROFILE_THEMES[themeId].accent : null
   const color = themeAccent ?? p.accent_color ?? '#4C67CF'
   return { background: `linear-gradient(135deg, ${color}55, ${color}33)` }
@@ -2918,10 +2923,10 @@ const bannerStyle = computed(() => {
 const avatarRingStyle = computed(() => {
   const p = viewedProfile.value
   // Image-based frame takes over the avatar border entirely — no legacy CSS ring underneath it.
-  if ((p as any)?.equippedFrame) return {}
-  const frameId = (p as any)?.profile_frame as string | undefined
+  if (p?.equippedFrame) return {}
+  const frameId = p?.profile_frame as string | undefined
   // Theme accent for default_ring / no frame
-  const themeId = (p as any).profile_theme as string | undefined
+  const themeId = p?.profile_theme ?? undefined
   const themeAccent = themeId && PROFILE_THEMES[themeId] ? PROFILE_THEMES[themeId].accent : null
   const accentColor = themeAccent ?? p?.accent_color ?? '#4C67CF'
   const frameStyleMap: Record<string, Record<string, string>> = {
@@ -2937,7 +2942,7 @@ const avatarRingStyle = computed(() => {
   return { borderColor: `${accentColor}80` }
 })
 
-const equippedFrame = computed(() => (viewedProfile.value as any)?.equippedFrame ?? null)
+const equippedFrame = computed(() => viewedProfile.value?.equippedFrame ?? null)
 
 const accentStyle = computed(() => {
   const color = viewedProfile.value?.accent_color ?? '#4C67CF'
@@ -2952,7 +2957,7 @@ const accentStyleSubtle = computed(() => {
 })
 
 // Badge pill in banner
-const badgePillMap = computed<Record<string, { label: string; cls: string; icon: any }>>(() => ({
+const badgePillMap = computed<Record<string, { label: string; cls: string; icon: Component }>>(() => ({
   admin:      { label: langStore.t.roleAdmin,             cls: 'bg-amber-500/25 border border-amber-500/40 text-amber-300', icon: Crown },
   moderator:  { label: langStore.t.profileRoleModerator,  cls: 'bg-purple-500/25 border border-purple-500/40 text-purple-300', icon: Shield },
 }))
@@ -2998,21 +3003,21 @@ const aboutNavs = computed(() => {
     { key: 'about' as AboutTab,     label: langStore.t.aboutTab,    icon: User },
     { key: 'fursona' as AboutTab,   label: langStore.t.fursonaTab,  icon: Rabbit },
   ]
-  if ((viewedProfile.value as any)?.has_fursuit) {
+  if (viewedProfile.value?.has_fursuit) {
     navs.push({ key: 'fursuit' as AboutTab, label: langStore.t.fursuitTab, icon: PawPrint })
   }
   return navs
 })
 
 watch([aboutTab, viewedProfile], () => {
-  if (aboutTab.value === 'fursuit' && !(viewedProfile.value as any)?.has_fursuit) {
+  if (aboutTab.value === 'fursuit' && !viewedProfile.value?.has_fursuit) {
     aboutTab.value = 'about'
   }
 })
 
 // Content tabs
 const contentTabs = computed(() => {
-  const tabs: { key: ContentTab; label: string; icon: any; visible?: boolean }[] = [
+  const tabs: { key: ContentTab; label: string; icon: Component; visible?: boolean }[] = [
     { key: 'posts',     label: langStore.t.postsTab,     icon: FileText },
     { key: 'repaws',    label: langStore.t.repawsTab,    icon: Repeat2 },
     { key: 'media',     label: langStore.t.mediaTab,     icon: Image },
@@ -3032,7 +3037,7 @@ const profileStatsData = ref<{
   newFriendsLast30Days: number
   totalPosts: number
   totalViews: number
-  topPost: any | null
+  topPost: Post | null
 } | null>(null)
 
 const profileStats = computed(() => {
@@ -3046,13 +3051,13 @@ const profileStats = computed(() => {
 })
 
 const achievementBadges = computed(() => {
-  const badges: { key: string; label: string; desc: string; iconComp?: any; iconImg?: string; iconBg: string; iconColor: string }[] = []
+  const badges: { key: string; label: string; desc: string; iconComp?: Component; iconImg?: string; iconBg: string; iconColor: string }[] = []
   const p = viewedProfile.value
   if (!p) return badges
   if (p.role === 'admin')            badges.push({ key: 'admin',      label: langStore.t.roleAdmin,      desc: langStore.t.profileRoleAdminDesc,     iconComp: Crown,      iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
   if (p.role === 'moderator')        badges.push({ key: 'mod',        label: langStore.t.profileRoleModerator,           desc: langStore.t.profileRoleModeratorDesc,     iconComp: Shield,     iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
   // Verification type specific badges
-  const vt = (p as any).verification_type
+  const vt = p.verification_type
   if (vt === 'artist')         badges.push({ key: 'ver-artist',    label: langStore.t.verBadgeLabelArtist,       desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('artist'),       iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
   else if (vt === 'master')    badges.push({ key: 'ver-master',    label: langStore.t.verBadgeLabelMaster,       desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('master'),       iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
   else if (vt === 'fursuiter') badges.push({ key: 'ver-fursuiter', label: langStore.t.verBadgeLabelFursuiter,    desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('fursuiter'),    iconBg: 'bg-cyan-500/20',    iconColor: 'text-cyan-400' })
@@ -3062,7 +3067,7 @@ const achievementBadges = computed(() => {
   else if (vt === 'event')     badges.push({ key: 'ver-event',     label: langStore.t.verTypeEvent,              desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('event'),        iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' })
   else if (vt === 'photographer') badges.push({ key: 'ver-photographer', label: langStore.t.verBadgeLabelPhotographer, desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('photographer'), iconBg: 'bg-teal-500/20',    iconColor: 'text-teal-400' })
   else if (vt === 'programmer')   badges.push({ key: 'ver-programmer',   label: langStore.t.verBadgeLabelProgrammer,  desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('programmer'),   iconBg: 'bg-fuchsia-500/20', iconColor: 'text-fuchsia-400' })
-  else if (p.badge_type === 'verified' || (p as any).is_verified)   badges.push({ key: 'verified',   label: langStore.t.verBadgeLabelVerifiedPage, desc: langStore.t.verBadgeVerifiedAccountDesc, iconComp: BadgeCheck, iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
+  else if (p.badge_type === 'verified' || p.is_verified)   badges.push({ key: 'verified',   label: langStore.t.verBadgeLabelVerifiedPage, desc: langStore.t.verBadgeVerifiedAccountDesc, iconComp: BadgeCheck, iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
   if ((p._count?.posts ?? 0) >= 10)  badges.push({ key: 'active',     label: langStore.t.profileActiveAuthorBadgeLabel,      desc: langStore.t.profileActiveAuthorBadgeDesc,           iconComp: Flame,      iconBg: 'bg-red-500/20',     iconColor: 'text-red-400' })
   if ((p._count?.followers ?? 0) >= 50) badges.push({ key: 'popular', label: langStore.t.profilePopularBadgeLabel,          desc: langStore.t.profilePopularBadgeDesc,            iconComp: Sparkles,   iconBg: 'bg-yellow-500/20',  iconColor: 'text-yellow-400' })
   // Default badge for all
@@ -3092,14 +3097,14 @@ const socialNetworks = computed(() => [
   { key: 'other',       label: langStore.t.profileSocialOtherLabel, iconName: 'Globe',       color: '#6366f1' },
 ])
 const activeSocialLinks = computed(() => {
-  const sl = (viewedProfile.value as any)?.social_links ?? {}
+  const sl = viewedProfile.value?.social_links ?? {}
   return socialNetworks.value.filter(n => sl[n.key])
 })
 
 // ── NSFW age check ──────────────────────────────────────────────────────────
 const isNsfwAllowed = computed(() => {
-  const bd = (viewedProfile.value as any)?.birth_date
-    ?? (authStore.user as any)?.birth_date
+  const bd = viewedProfile.value?.birth_date
+    ?? authStore.user?.birth_date
   if (!bd) return true // unknown age → allow (server-side guard is separate)
   const birthYear = new Date(bd)
   const now = new Date()
@@ -3112,14 +3117,14 @@ const isNsfwAllowed = computed(() => {
 // ── Place string helper ───────────────────────────────────────────────────
 const placeStr = computed(() => {
   const loc = viewedProfile.value?.location
-  const ctr = (viewedProfile.value as any)?.country
+  const ctr = viewedProfile.value?.country
   if (loc && ctr) return `${loc}, ${ctr}`
   return loc || ctr || ''
 })
 
 // ── Together-since duration ───────────────────────────────────────────────
 const togetherSince = computed((): string | null => {
-  const since = (viewedProfile.value as any)?.relationship_since
+  const since = viewedProfile.value?.relationship_since
   if (!since) return null
   const start = new Date(since)
   const now   = new Date()
@@ -3137,15 +3142,15 @@ const togetherSince = computed((): string | null => {
 
 
 const filteredMediaPosts = computed(() => {
-  if (mediaFilter.value === 'photo') return tabPosts.value.filter((p: any) => isImage(p.media_urls?.[0] ?? ''))
-  if (mediaFilter.value === 'video') return tabPosts.value.filter((p: any) => !isImage(p.media_urls?.[0] ?? ''))
+  if (mediaFilter.value === 'photo') return tabPosts.value.filter((p) => isImage(p.media_urls?.[0] ?? ''))
+  if (mediaFilter.value === 'video') return tabPosts.value.filter((p) => !isImage(p.media_urls?.[0] ?? ''))
   return tabPosts.value
 })
 
 // ── Альбомы медиа (группировка по месяцу) ────────────────────────────────────
 const mediaAlbums = computed(() => {
   const map = new Map<string, { url: string; created_at: string; postId?: string }[]>()
-  for (const post of filteredMediaPosts.value as any[]) {
+  for (const post of filteredMediaPosts.value) {
     const dt = new Date(post.created_at)
     const label = dt.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'long', year: 'numeric' })
     if (!map.has(label)) map.set(label, [])
@@ -3173,7 +3178,7 @@ const specialAlbums = computed(() => {
   // Альбом Фурсона
   const fursonaUrls: { url: string; postId?: string }[] = []
   // Посты помеченные как фурсона
-  for (const post of filteredMediaPosts.value as any[]) {
+  for (const post of filteredMediaPosts.value) {
     if (mediaPostLabels.value[post.id] === 'fursona') {
       for (const url of (post.media_urls ?? [])) fursonaUrls.push({ url, postId: post.id })
     }
@@ -3185,7 +3190,7 @@ const specialAlbums = computed(() => {
   for (const suit of profileFursuits.value) {
     if (suit.image_url) fursuitUrls.push({ url: suit.image_url })
   }
-  for (const post of filteredMediaPosts.value as any[]) {
+  for (const post of filteredMediaPosts.value) {
     if (mediaPostLabels.value[post.id] === 'fursuit') {
       for (const url of (post.media_urls ?? [])) fursuitUrls.push({ url, postId: post.id })
     }
@@ -3222,7 +3227,7 @@ const joinDate = computed(() => {
 
 // ── Birth date, formatted per the owner's chosen public visibility ─────────
 const formattedBirthDate = computed(() => {
-  const p = viewedProfile.value as any
+  const p = viewedProfile.value
   if (!p?.birth_date) return null
   const bd = new Date(p.birth_date)
   const full = () => bd.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' })
@@ -3275,14 +3280,14 @@ async function loadProfile() {
         authStore.isAuthenticated && !isOwnProfile.value ? loadRelation(userId) : Promise.resolve(),
         authStore.isAuthenticated && !isOwnProfile.value ? checkUserBookmark() : Promise.resolve(),
         fetchOnlineStatus(userId),
-        (result as any).relationship_with ? loadPartnerProfile((result as any).relationship_with) : Promise.resolve(),
+        result.relationship_with ? loadPartnerProfile(result.relationship_with) : Promise.resolve(),
         loadProfileSoonBadges(userId),
         fetchProfileStories(userId),
         loadProfileFursonas(userId),
         loadProfileFursuits(userId),
       ])
       if (result.pinnedPost) pinnedPost.value = result.pinnedPost
-      applyProfileStatus((result as any).profile_status)
+      applyProfileStatus(result.profile_status)
       await loadTabData('posts')
     }
   } catch {
@@ -3296,8 +3301,8 @@ async function loadFriends(userId: string) {
   try {
     const res = await api.get(`/follows/${userId}/followers`)
     if (res.data.success) { followers.value = res.data.data.users; friendsListRestricted.value = false }
-  } catch (e: any) {
-    if (e?.response?.status === 403) { followers.value = []; friendsListRestricted.value = true }
+  } catch (e) {
+    if (apiErrorStatus(e) === 403) { followers.value = []; friendsListRestricted.value = true }
   }
 }
 
@@ -3306,8 +3311,8 @@ async function loadFollowingList(userId: string) {
   try {
     const res = await api.get(`/follows/${userId}/following`)
     if (res.data.success) { following.value = res.data.data.users; friendsListRestricted.value = false }
-  } catch (e: any) {
-    if (e?.response?.status === 403) { following.value = []; friendsListRestricted.value = true }
+  } catch (e) {
+    if (apiErrorStatus(e) === 403) { following.value = []; friendsListRestricted.value = true }
   } finally {
     followingLoading.value = false
   }
@@ -3400,14 +3405,14 @@ async function loadTabData(tab: string) {
       const res = await api.get(`/groups/common/${uid}`)
       if (res.data.success) mutualGroups.value = res.data.data.groups
     } else if (tab === 'stats') {
-      if ((authStore.user as any)?.subscription_tier !== 'free') {
+      if (authStore.user?.subscription_tier !== 'free') {
         const res = await api.get('/users/me/profile-stats')
         if (res.data.success) profileStatsData.value = res.data.data.stats
       }
     }
     // Fetch repaw/vote/favourite status for loaded posts
     if (['posts', 'repaws', 'media', 'archive', 'likes'].includes(tab) && authStore.isAuthenticated && tabPosts.value.length) {
-      const ids = tabPosts.value.map((p: any) => p.id).join(',')
+      const ids = tabPosts.value.map((p) => p.id).join(',')
       try {
         const st = await api.get(`/posts/status?ids=${ids}`)
         if (st.data.success) {
@@ -3483,7 +3488,7 @@ function toggleProfileMenu() {
 
 async function copyProfileLink() {
   try {
-    await navigator.clipboard.writeText(`${window.location.origin}/profile/${(viewedProfile.value as any)?.username}`)
+    await navigator.clipboard.writeText(`${window.location.origin}/profile/${viewedProfile.value?.username}`)
     profileLinkCopied.value = true
     setTimeout(() => { profileLinkCopied.value = false }, 2000)
   } catch { /* ignore */ }
@@ -3502,15 +3507,16 @@ async function blockProfileUser() {
 }
 
 // ── Click-outside directive ─────────────────────────────────────────────────
-const vClickOutside = {
-  mounted(el: HTMLElement, binding: any) {
-    ;(el as any)._clickOutside = (e: Event) => {
+type ClickOutsideEl = HTMLElement & { _clickOutside?: (e: Event) => void }
+const vClickOutside: Directive<ClickOutsideEl, (e: Event) => void> = {
+  mounted(el, binding) {
+    el._clickOutside = (e: Event) => {
       if (!el.contains(e.target as Node)) binding.value(e)
     }
-    document.addEventListener('click', (el as any)._clickOutside, true)
+    document.addEventListener('click', el._clickOutside, true)
   },
-  unmounted(el: HTMLElement) {
-    document.removeEventListener('click', (el as any)._clickOutside, true)
+  unmounted(el) {
+    if (el._clickOutside) document.removeEventListener('click', el._clickOutside, true)
   },
 }
 
@@ -3539,7 +3545,7 @@ function onPostDeleted(postId: string) {
   if (viewedProfile.value?._count) viewedProfile.value._count.posts = Math.max(0, viewedProfile.value._count.posts - 1)
 }
 
-function onPostUpdated(post: any) {
+function onPostUpdated(post: Post) {
   const idx = tabPosts.value.findIndex((p) => p.id === post.id)
   if (idx !== -1) tabPosts.value[idx] = { ...tabPosts.value[idx], ...post }
   if (pinnedPost.value?.id === post.id) pinnedPost.value = { ...pinnedPost.value, ...post }

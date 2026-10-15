@@ -25,6 +25,8 @@ export interface User {
   is_adult?: boolean
   country?: string | null
   two_factor_method?: 'totp' | 'email' | null
+  job_title?: string | null
+  birth_date?: string | null
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

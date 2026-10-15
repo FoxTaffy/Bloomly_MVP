@@ -1,11 +1,12 @@
 import { ref, watch } from 'vue'
 import api from '@/api'
 import type MediaUpload from '@/components/MediaUpload.vue'
+import type { Post } from '@/types/post'
 import { extractHashtags, extractCommittedHashtags } from '@/lib/hashtags'
 import { useTagSuggestions } from '@/composables/useTagSuggestions'
 
 /** Inline "new post" form on your own profile: text, media, tags, visibility, publish now or schedule. */
-export function useProfilePostComposer(opts: { onCreated: (post: any) => void; onScheduled: () => void }) {
+export function useProfilePostComposer(opts: { onCreated: (post: Post) => void; onScheduled: () => void }) {
   const { onCreated, onScheduled } = opts
 
   const newPostContent = ref('')

@@ -1,7 +1,9 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import api from '@/api'
 import { useLangStore } from '@/stores/lang'
-import { useUserStore } from '@/stores/user'
+import { useUserStore, type ProfileStatus } from '@/stores/user'
+
+type StatusTrack = NonNullable<ProfileStatus['music']>
 import { shadeColor } from '@/lib/profileDisplay'
 
 /** IG-Notes-style status bubble on a profile: display, music preview and the owner's editor. */
@@ -21,7 +23,7 @@ export function useProfileStatus() {
   const statusEmojiTab = ref(0)
   const statusShowMusicSearch = ref(false)
   const statusMusicQuery = ref('')
-  const statusMusicResults = ref<any[]>([])
+  const statusMusicResults = ref<StatusTrack[]>([])
   const statusMusicLoading = ref(false)
   const statusPreviewAudioEl = ref<HTMLAudioElement | null>(null)
   const isStatusMusicPlaying = ref(false)
@@ -115,7 +117,7 @@ export function useProfileStatus() {
   })
 
   /** Populate the reactive display state from whatever the API returned for this profile (own or someone else's). */
-  function applyProfileStatus(status: any) {
+  function applyProfileStatus(status: ProfileStatus | null | undefined) {
     profileStatus.emoji = ''; profileStatus.text = ''; profileStatus.expiresAt = 0; profileStatus.color = ''; profileStatus.music = null
     if (!status) return
     if (status.expiresAt && status.expiresAt < Date.now()) return
@@ -201,7 +203,7 @@ export function useProfileStatus() {
       } finally { statusMusicLoading.value = false }
     }, 420)
   }
-  function selectStatusTrack(track: any) {
+  function selectStatusTrack(track: Partial<StatusTrack>) {
     statusEditMusic.value = {
       title: track.title ?? '',
       artist: track.artist ?? '',

@@ -102,6 +102,8 @@ export interface ProfileStatus {
   music?: { title: string; artist: string; artworkUrl: string; previewUrl: string } | null
 }
 
+import type { EquippedFrame } from '@/components/AvatarFrameOverlay.vue'
+
 export interface UserProfile {
   id: string
   username: string
@@ -167,6 +169,15 @@ export interface UserProfile {
   groups_visibility?: string
   groups_pinned_only?: boolean
   is_private?: boolean
+  // Set instead of the full profile when the owner has blocked the viewer
+  is_blocked_by_user?: boolean
+  donate_url?: string | null
+  deceased_at?: string | null
+  deceased_note?: string | null
+  frozen_at?: string | null
+  equippedFrame?: EquippedFrame | null
+  // Only present on your own profile
+  wallet?: { balance: number | string } | null
 }
 
 export interface UpdateProfileInput {
@@ -174,6 +185,7 @@ export interface UpdateProfileInput {
   bio?: string
   avatar_url?: string
   banner_url?: string
+  avatar_video_url?: string | null
   status?: string
   profile_status?: ProfileStatus | null
   persona?: string
