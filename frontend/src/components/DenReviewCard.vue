@@ -37,13 +37,12 @@
 import { computed } from 'vue'
 import type { DenReview } from '../stores/dealersDen'
 import { onAvatarError } from '@/composables/useAvatarFallback'
+import * as fmt from '@/lib/format'
 
 const props = defineProps<{ review: DenReview }>()
 
 const initials = computed(() =>
   (props.review.reviewer.display_name || props.review.reviewer.username).slice(0, 2).toUpperCase()
 )
-const formattedDate = computed(() =>
-  new Date(props.review.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
-)
+const formattedDate = computed(() => fmt.formatDate(props.review.created_at, 'medium', 'ru-RU'))
 </script>

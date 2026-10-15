@@ -10,6 +10,7 @@ import StickerPanel from './StickerPanel.vue'
 import StickerRenderer from './StickerRenderer.vue'
 import SafeMedia from './SafeMedia.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
+import * as fmt from '@/lib/format'
 
 const props = defineProps<{ postId: string; commentsDisabled?: boolean }>()
 
@@ -217,15 +218,7 @@ onMounted(() => {
   if (auth.user && !groupsStore.myGroups.length) groupsStore.loadMyGroups().catch(() => {})
 })
 
-const formatDate = (d: string) => {
-  const date = new Date(d)
-  const now = new Date()
-  const diff = Math.floor((now.getTime() - date.getTime()) / 1000)
-  if (diff < 60) return `${diff}с`
-  if (diff < 3600) return `${Math.floor(diff / 60)}м`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}ч`
-  return `${Math.floor(diff / 86400)}д`
-}
+const formatDate = (d: string) => fmt.formatRelativeShort(d)
 
 /** groupId to attach when posting "as" a group — undefined when posting as yourself. */
 function entityGroupId(): string | undefined {

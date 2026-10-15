@@ -2480,6 +2480,7 @@ import { useTagSuggestions } from '@/composables/useTagSuggestions'
 import VerificationBadge from '@/components/VerificationBadge.vue'
 import { verTypeIconUrl } from '@/lib/verificationIcons'
 import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
+import * as fmt from '@/lib/format'
 import {
   User, Users, UserPlus, UserMinus, UserX, UsersRound,
   Bell, MessageSquare, Pencil, Pin, Trash2, MoreHorizontal,
@@ -3733,14 +3734,11 @@ const formattedBirthDate = computed(() => {
 })
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function formatDate(d: string) {
-  const date = new Date(d)
-  const diff = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (diff < 60) return `${diff}${langStore.t.profileSecAgoSuffix}`
-  if (diff < 3600) return `${Math.floor(diff / 60)}${langStore.t.profileMinAgoSuffix}`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}${langStore.t.profileHourAgoSuffix}`
-  return date.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'short' })
-}
+const formatDate = (d: string) => fmt.formatRelativeShort(d, {
+  suffixes: { s: langStore.t.profileSecAgoSuffix, m: langStore.t.profileMinAgoSuffix, h: langStore.t.profileHourAgoSuffix, d: '' },
+  maxDays: 1,
+  locale: LANG_TO_LOCALE[langStore.currentLang],
+})
 
 function isImage(url: string) {
   return /\.(jpe?g|png|gif|webp|avif|svg)(\?|$)/i.test(url)

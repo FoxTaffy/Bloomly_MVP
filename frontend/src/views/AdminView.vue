@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { safeHref } from '@/utils/safeHref'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
+import * as fmt from '@/lib/format'
 const langStore = useLangStore()
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
@@ -1160,8 +1161,8 @@ const switchCommsView = (mode: typeof commsViewMode.value) => {
   if (mode === 'broadcasts' && !broadcasts.value.length) fetchBroadcasts()
 }
 
-const formatNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
-const formatDate = (d: string) => new Date(d).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: '2-digit', month: '2-digit', year: '2-digit' })
+const formatNum = fmt.formatCompactNumber
+const formatDate = (d: string) => fmt.formatDate(d, 'numericShort', LANG_TO_LOCALE[langStore.currentLang])
 
 const navItems = computed(() => [
   { tab: 'overview'     as const, label: langStore.t.adminNavOverview,        icon: 'LayoutDashboard', color: '#4C67CF', group: null,                      badge: null, minRole: 'moderator' },

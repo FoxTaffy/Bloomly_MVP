@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import api from '../api'
 import BIcon from './BIcon.vue'
 import { useWarningModalStore } from '../stores/warningModal'
+import * as fmt from '@/lib/format'
 
 const store = useWarningModalStore()
 
@@ -59,7 +60,7 @@ const submitAppeal = async () => {
   } finally { isSubmittingAppeal.value = false }
 }
 
-const formatDate = (d?: string) => d ? new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' }) : ''
+const formatDate = (d?: string) => d ? fmt.formatDate(d, 'longPadded', 'ru-RU') : ''
 </script>
 
 <template>

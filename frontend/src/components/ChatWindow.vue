@@ -1976,6 +1976,7 @@ import { compressImageForUpload } from '@/lib/utils'
 import { wsClient } from '@/lib/wsClient'
 import { isEncrypted } from '@/lib/e2e'
 import { deviceKind } from '@/lib/deviceIcon'
+import * as fmt from '@/lib/format'
 
 const props = defineProps<{
   convId: string
@@ -2750,10 +2751,7 @@ function formatMoney(amount: number | undefined): string {
 function isOverdue(deadline: string | undefined): boolean {
   return !!deadline && new Date(deadline).getTime() < Date.now()
 }
-function formatDeadline(deadline: string | undefined): string {
-  if (!deadline) return ''
-  return new Date(deadline).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'long' })
-}
+const formatDeadline = (deadline: string | undefined) => deadline ? fmt.formatDate(deadline, 'dayMonth', LANG_TO_LOCALE[langStore.currentLang]) : ''
 const payingId = ref<string | null>(null)
 async function payOrder(msg: Message) {
   if (payingId.value) return

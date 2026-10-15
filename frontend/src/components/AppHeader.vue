@@ -13,6 +13,7 @@ import api from '@/api'
 import BIcon from './BIcon.vue'
 import PostCard from './PostCard.vue'
 import { isDenNotification, denNotificationKey, DEN_NOTIFICATION_ICONS } from '@/lib/denNotifications'
+import * as fmt from '@/lib/format'
 
 const props = withDefaults(defineProps<{
   showBack?: boolean
@@ -457,14 +458,7 @@ const onGlobalKeydown = (e: KeyboardEvent) => {
 // Ждём очистки сессии: иначе guard видит ещё живой токен и редиректит с /login обратно на главную
 const handleLogout = async () => { await auth.logout(); router.push({ name: 'login' }) }
 
-function formatDate(d: string) {
-  const date = new Date(d)
-  const diff = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (diff < 60) return `${diff}с`
-  if (diff < 3600) return `${Math.floor(diff / 60)}м`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}ч`
-  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
-}
+const formatDate = (d: string) => fmt.formatRelativeShort(d, { maxDays: 1, locale: 'ru-RU' })
 
 onMounted(() => {
   if (auth.isAuthenticated) {

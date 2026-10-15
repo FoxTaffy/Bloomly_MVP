@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useGroupsStore, type Order, type OrderStatus } from '@/stores/groups'
 import { useConfirm } from '@/composables/useConfirm'
 import BIcon from '@/components/BIcon.vue'
+import * as fmt from '@/lib/format'
 
 const props = defineProps<{ groupId: string; isAdmin: boolean; orders: Order[] }>()
 const emit = defineEmits<{
@@ -36,9 +37,7 @@ function deadlineState(order: Order): 'overdue' | 'soon' | null {
   return null
 }
 
-function formatDeadline(iso: string): string {
-  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
-}
+const formatDeadline = (iso: string) => fmt.formatDate(iso, 'short', 'ru-RU')
 
 async function moveNext(order: Order) {
   const idx = STATUSES.indexOf(order.status)

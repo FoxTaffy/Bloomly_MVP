@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useLangStore } from '@/stores/lang'
+import * as fmt from '@/lib/format'
 const langStore = useLangStore()
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -191,13 +192,7 @@ const KIND_META = computed<Record<string, { label: string; icon: string; color: 
 function isSoldOut(l: DealerListing) {
   return l.status === 'sold' || (l.quantity > 0 && l.quantity_sold >= l.quantity)
 }
-function formatPrice(price: string | number, currency: string) {
-  const n = parseFloat(String(price))
-  if (currency === 'RUB') return `${n.toLocaleString('ru-RU')} ₽`
-  if (currency === 'USD') return `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-  if (currency === 'EUR') return `€${n.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-  return `${n.toLocaleString()} ${currency}`
-}
+const formatPrice = fmt.formatPrice
 
 // ── Live auctions for ticker ────────────────────────────────────────────────────
 const liveAuctions = computed(() =>

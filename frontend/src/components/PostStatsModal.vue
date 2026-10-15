@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
+import * as fmt from '@/lib/format'
 
 const props = defineProps<{ postId: string }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -34,10 +35,7 @@ async function load() {
   }
 }
 
-const formattedDate = computed(() => {
-  if (!stats.value) return ''
-  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(stats.value.createdAt))
-})
+const formattedDate = computed(() => stats.value ? fmt.formatDate(stats.value.createdAt, 'long', 'ru-RU') : '')
 
 function goToSubscriptions() {
   emit('close')

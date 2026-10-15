@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
+import * as fmt from '@/lib/format'
 const langStore = useLangStore()
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -64,21 +65,11 @@ function isHot(iso: string | null | undefined) {
   return new Date(iso).getTime() - now.value < 7200000
 }
 
-function formatPrice(p: string | number, c: string) {
-  const n = parseFloat(String(p))
-  if (c === 'RUB') return `${n.toLocaleString('ru-RU')} ₽`
-  if (c === 'USD') return `$${n.toLocaleString('en-US')}`
-  if (c === 'EUR') return `€${n.toLocaleString()}`
-  return `${n.toLocaleString()} ${c}`
-}
+const formatPrice = fmt.formatPrice
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'long', year: 'numeric' })
-}
+const formatDate = (iso: string) => fmt.formatDate(iso, 'long', LANG_TO_LOCALE[langStore.currentLang])
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString(LANG_TO_LOCALE[langStore.currentLang], { hour: '2-digit', minute: '2-digit' })
-}
+const formatTime = (iso: string) => fmt.formatClock(iso, LANG_TO_LOCALE[langStore.currentLang])
 
 function isSoldOut(l: any) {
   return l.status === 'sold' || (l.quantity > 0 && l.quantity_sold >= l.quantity)

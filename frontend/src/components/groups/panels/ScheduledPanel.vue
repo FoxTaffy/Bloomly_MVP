@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
 import { utcToZonedParts, zonedTimeToUtcIso } from '@/lib/timezone'
+import * as fmt from '@/lib/format'
 
 interface ScheduledPost {
   id: string
@@ -44,12 +45,7 @@ async function fetchList() {
   finally { isLoading.value = false }
 }
 
-function formatScheduled(p: ScheduledPost): string {
-  if (!p.scheduled_at) return ''
-  const tz = p.timezone || 'UTC'
-  const { date, time } = utcToZonedParts(p.scheduled_at, tz)
-  return `${date} ${time} (${tz})`
-}
+const formatScheduled = fmt.formatScheduled
 
 async function publishNow(id: string) {
   if (busyIds.value.has(id)) return

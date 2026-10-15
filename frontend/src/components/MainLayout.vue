@@ -725,12 +725,9 @@ const sharePost = async (postId: string) => {
   } catch {}
 }
 
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString)
-  return new Intl.DateTimeFormat(langStore.currentLang === 'RU' ? 'ru-RU' : 'en-US', {
-    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
-  }).format(date)
-}
+const formatDate = (dateString: string) => new Intl.DateTimeFormat(langStore.currentLang === 'RU' ? 'ru-RU' : 'en-US', {
+  day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+}).format(new Date(dateString))
 
 // ── Stories ───────────────────────────────────────────────────────────────
 interface StoryItem {
