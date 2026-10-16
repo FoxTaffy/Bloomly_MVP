@@ -1,5 +1,6 @@
 import nodemailer, { Transporter } from 'nodemailer';
 import { isBridgeHost } from './mailTransport.js';
+import { logger } from '../../lib/logger.js';
 
 let transporter: Transporter | null = null;
 let configured = false;
@@ -33,7 +34,7 @@ export async function sendSupportEmail(
   const from = process.env.SUPPORT_EMAIL_ADDRESS || 'bloomly_support@pm.me';
 
   if (!t) {
-    console.log(`[SUPPORT_MAIL][NO_CONFIG] to=${to} subject="${subject}"`);
+    logger.info(`[SUPPORT_MAIL][NO_CONFIG] to=${to} subject="${subject}"`);
     return null;
   }
 

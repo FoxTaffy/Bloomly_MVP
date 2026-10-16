@@ -5,6 +5,7 @@ import { postService } from './service.js';
 import { moderatePost } from '../automod/service.js';
 import { normalizeTag } from '../../lib/tagRules.js';
 import { errMessage, errStatus } from '../../lib/httpErrors.js';
+import { logError } from '../../lib/logger.js';
 
 const MAX_MEDIA_PER_POST = 20;
 const REPEAT_INTERVALS = ['daily', 'weekly', 'monthly'] as const;
@@ -236,7 +237,7 @@ async function publishClaimedRow(row: Awaited<ReturnType<typeof prisma.scheduled
       });
 
   if (post) {
-    moderatePost(post.id, row.author_id, row.content).catch((err) => console.error('[AUTOMOD] scheduled post analyzePost error:', err));
+    moderatePost(post.id, row.author_id, row.content).catch(logError('[AUTOMOD] scheduled post analyzePost error'));
   }
 
   const interval = row.repeat_interval as RepeatInterval | null;

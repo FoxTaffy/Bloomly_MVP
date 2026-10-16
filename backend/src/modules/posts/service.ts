@@ -11,6 +11,7 @@ import { muteKeywordsWhere, nsfwWhere, type NsfwMode } from '../../lib/contentFi
 import { analyzeContent } from '../automod/service.js';
 import type { CreatePostInput, GetPostsQuery } from './types.js';
 import { errCode } from '../../lib/httpErrors.js';
+import { logError } from '../../lib/logger.js';
 
 const MAX_MEDIA_PER_POST = 20;
 
@@ -1271,7 +1272,7 @@ export const postService = {
     // Posts have no restore path, so the underlying files can be purged immediately
     // instead of leaking in S3 until the 30-day hard-delete cron finally drops the row.
     Promise.all([...post.media_urls, ...post.media_original_urls].map((url) => deleteFileByUrl(url, post.author_id)))
-      .catch((err) => console.error('[deletePost] media cleanup failed:', err));
+      .catch(logError('[deletePost] media cleanup failed'));
     return updated;
   },
 
@@ -1302,7 +1303,7 @@ export const postService = {
     }
     const updated = await prisma.comment.update({ where: { id: commentId }, data: { deleted_at: new Date() } });
     if (comment.file_url) {
-      deleteFileByUrl(comment.file_url, comment.author_id).catch((err) => console.error('[deleteComment] media cleanup failed:', err));
+      deleteFileByUrl(comment.file_url, comment.author_id).catch(logError('[deleteComment] media cleanup failed'));
     }
     return updated;
   },

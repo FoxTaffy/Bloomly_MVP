@@ -3,6 +3,7 @@ import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy } from '../../lib/blocks.js';
 import { deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import type { SendMessageInput, GetMessagesQuery } from './types.js';
+import { logError } from '../../lib/logger.js';
 
 // Group roles that answer the group's inbox (group DMs) on its behalf.
 const CHAT_STAFF_ROLES: readonly string[] = ['owner', 'admin', 'moderator'];
@@ -696,7 +697,7 @@ export const messageService = {
     // Messages have no restore/undelete path, so the attachment can be purged now
     // instead of leaking in S3 forever (there's no hard-delete cron for messages).
     if (msg.file_url) {
-      deleteFileByUrl(msg.file_url, msg.sender_id).catch((err) => console.error('[deleteMessage] media cleanup failed:', err));
+      deleteFileByUrl(msg.file_url, msg.sender_id).catch(logError('[deleteMessage] media cleanup failed'));
     }
 
     // Broadcast to all participants so the message disappears in real time for everyone

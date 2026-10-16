@@ -3,6 +3,7 @@ import { autoModLogs } from './logs.service.js';
 import { requireModerator, requireAdmin } from '../../lib/authHooks.js';
 import { analyzeContent, patrolSuspiciousActivity, submitAppeal, getOwnWarningLog } from './service.js';
 import { errMessage } from '../../lib/httpErrors.js';
+import { logError } from '../../lib/logger.js';
 
 export const getAutoModLogsHandler = async (
   req: FastifyRequest<{ Querystring: { page?: string; limit?: string; userId?: string; action?: string } }>,
@@ -46,9 +47,7 @@ export const runPatrolHandler = async (
   if (!requireAdmin(req, reply)) return;
 
   // fire-and-forget
-  patrolSuspiciousActivity().catch((err) =>
-    console.error('[AUTOMOD] Manual patrol error:', err),
-  );
+  patrolSuspiciousActivity().catch(logError('[AUTOMOD] Manual patrol error'));
 
   return reply.send({ success: true, data: { message: 'Patrol started' }, error: null });
 };

@@ -3,6 +3,7 @@ import { messageService } from './service.js';
 import { moderateMessage } from '../automod/service.js';
 import type { JwtUser, GetMessagesQuery } from './types.js';
 import { errMessage, errStatus } from '../../lib/httpErrors.js';
+import { logError } from '../../lib/logger.js';
 
 // ── Conversations ─────────────────────────────────────────────────────────────
 
@@ -108,7 +109,7 @@ export async function sendMessageHandler(
       metadata: cardType ? metadata : undefined,
       attachments: Array.isArray(attachments) ? attachments : undefined,
     });
-    moderateMessage(senderId).catch((err) => console.error('[AUTOMOD] moderateMessage error:', err));
+    moderateMessage(senderId).catch(logError('[AUTOMOD] moderateMessage error'));
     return reply.code(201).send({ success: true, data: { message }, error: null });
   } catch (e) {
     return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });

@@ -22,6 +22,7 @@ import type {
   CreateOrderInput,
   OrderStatus,
 } from './types.js';
+import { logError } from '../../lib/logger.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 // Group role hierarchy: owner > admin > moderator > everyone else (member/dealer/volunteer/guest_of_honor).
@@ -474,7 +475,7 @@ export const groupService = {
         input.groupBgUrl !== undefined && prevMedia.group_bg_url && prevMedia.group_bg_url !== input.groupBgUrl ? prevMedia.group_bg_url : null,
       ].filter((url): url is string => !!url);
       Promise.all(replaced.map((url) => deleteFileByUrl(url, prevMedia!.owner_id)))
-        .catch((err) => console.error('[group.update] media cleanup failed:', err));
+        .catch(logError('[group.update] media cleanup failed'));
     }
 
     return updated;

@@ -6,7 +6,7 @@ import { dealersDenService } from './modules/dealers-den/service.js';
 import { pollSupportInbox } from './modules/support/mailPoller.js';
 import { scheduledPostService } from './modules/posts/scheduledService.js';
 import { cleanupSoftDeletedRows, cleanupExpiredStories } from './jobs/cleanup.js';
-import { errMessage } from './lib/httpErrors.js';
+import { logger } from './lib/logger.js';
 
 interface CronJob {
   name: string;
@@ -22,7 +22,7 @@ const JOBS: CronJob[] = [
 
   { name: 'daily DB cleanup', schedule: '0 3 * * *', announce: true, run: async () => {
     await cleanupSoftDeletedRows();
-    console.log('[CRON] DB Cleanup completed successfully.');
+    logger.info('[CRON] DB Cleanup completed successfully.');
   } },
 
   { name: 'story cleanup', schedule: '30 3 * * *', announce: true, run: cleanupExpiredStories },
@@ -32,7 +32,7 @@ const JOBS: CronJob[] = [
   // Activity Engine: auto-ban overdue participants
   { name: 'activity auto-ban', schedule: '0 4 * * *', announce: true, run: async () => {
     const { bannedCount } = await activityService.autoProcessOverdue();
-    if (bannedCount > 0) console.log(`[CRON] Activity auto-ban: ${bannedCount} participant(s) added to blacklist`);
+    if (bannedCount > 0) logger.info(`[CRON] Activity auto-ban: ${bannedCount} participant(s) added to blacklist`);
   } },
 
   // Den disputes: auto-resolve unanswered disputes
@@ -47,21 +47,21 @@ const JOBS: CronJob[] = [
   // Scheduled posts: publish due drafts/scheduled posts (and roll recurring ones forward)
   { name: 'scheduled posts publish', schedule: '*/1 * * * *', run: async () => {
     const published = await scheduledPostService.publishDueOnes();
-    if (published > 0) console.log(`[CRON] Scheduled posts: published ${published} post(s)`);
+    if (published > 0) logger.info(`[CRON] Scheduled posts: published ${published} post(s)`);
   } },
 ];
 
 export function initCronJobs() {
-  console.log('[CRON] Initializing background tasks...');
+  logger.info('[CRON] Initializing background tasks...');
   for (const job of JOBS) {
     cron.schedule(job.schedule, async () => {
-      if (job.announce) console.log(`[CRON] Running ${job.name}...`);
+      if (job.announce) logger.info(`[CRON] Running ${job.name}...`);
       try {
         await job.run();
       } catch (err) {
-        console.error(`[CRON] ${job.name} failed:`, errMessage(err));
+        logger.error({ err }, `[CRON] ${job.name} failed`);
       }
     });
   }
-  console.log('[CRON] Background tasks initialized.');
+  logger.info('[CRON] Background tasks initialized.');
 }

@@ -38,29 +38,30 @@ import { realtimeRoutes } from './modules/realtime/routes.js';
 import { initCronJobs } from './cron.js';
 import { registerAuth } from './plugins/auth.js';
 import { isDevEnv } from './lib/env.js';
+import { logger } from './lib/logger.js';
 
 dotenv.config();
 
 const jwtSecret = process.env.JWT_SECRET;
 if (!jwtSecret) {
   if (!isDevEnv()) {
-    console.error('[FATAL] JWT_SECRET env variable is not set. Refusing to start outside development/test.');
+    logger.error('[FATAL] JWT_SECRET env variable is not set. Refusing to start outside development/test.');
     process.exit(1);
   }
-  console.warn('[WARN] JWT_SECRET is not set. Using insecure fallback for development only.');
+  logger.warn('[WARN] JWT_SECRET is not set. Using insecure fallback for development only.');
 }
 
 const cookieSecret = process.env.COOKIE_SECRET;
 if (!cookieSecret) {
   if (!isDevEnv()) {
-    console.error('[FATAL] COOKIE_SECRET env variable is not set. Refusing to start outside development/test.');
+    logger.error('[FATAL] COOKIE_SECRET env variable is not set. Refusing to start outside development/test.');
     process.exit(1);
   }
-  console.warn('[WARN] COOKIE_SECRET is not set. Using insecure fallback for development only.');
+  logger.warn('[WARN] COOKIE_SECRET is not set. Using insecure fallback for development only.');
 }
 
 if (!process.env.ALLOWED_ORIGINS && !isDevEnv()) {
-  console.error('[FATAL] ALLOWED_ORIGINS env variable is not set. Refusing to start in production.');
+  logger.error('[FATAL] ALLOWED_ORIGINS env variable is not set. Refusing to start in production.');
   process.exit(1);
 }
 
@@ -75,7 +76,8 @@ const MAX_UPLOAD_BYTES = 4_300 * 1024 * 1024;
 // docker-сеть). При trustProxy: true Fastify брал самый левый IP из заголовка, а его клиент
 // подставляет сам, что обходило rate-limit. TRUST_PROXY можно задать списком IP/CIDR.
 const fastify = Fastify({
-  logger: process.env.NODE_ENV !== 'test',
+  // Shared with background jobs (lib/logger.ts); silent under tests
+  logger,
   bodyLimit: MAX_UPLOAD_BYTES,
   trustProxy: process.env.TRUST_PROXY || 'loopback,uniquelocal',
 });

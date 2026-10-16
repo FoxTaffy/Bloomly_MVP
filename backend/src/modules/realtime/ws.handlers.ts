@@ -4,6 +4,7 @@ import { messageService, messageSubscriptions } from '../messages/service.js';
 import { groupService } from '../groups/service.js';
 import { moderateGroupMessage } from '../automod/service.js';
 import { presence } from './presence.js';
+import { logError } from '../../lib/logger.js';
 
 // Состояние одного WebSocket-соединения, общее для всех обработчиков.
 export interface WsConnection {
@@ -106,7 +107,7 @@ const groupMessageSend: WsHandler = async (_fastify, conn, msg) => {
     await groupService.assertGroupMember(groupId, userId);
     const saved = await groupService.sendGroupMessage(groupId, userId, content.trim());
     // fire-and-forget automod check, как в REST (sendGroupMessageHandler)
-    moderateGroupMessage(userId).catch((err) => console.error('[AUTOMOD] moderateGroupMessage error:', err));
+    moderateGroupMessage(userId).catch(logError('[AUTOMOD] moderateGroupMessage error'));
     const members = await prisma.groupMember.findMany({ where: { group_id: groupId }, select: { user_id: true } });
     for (const m of members) {
       messageSubscriptions.push(m.user_id, { type: 'group_message', groupId, message: saved });

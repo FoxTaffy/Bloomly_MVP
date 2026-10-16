@@ -11,6 +11,7 @@ import type { RegisterInput, LoginInput, JwtPayload } from './types.js';
 import { isDevEnv } from '../../lib/env.js';
 import { presence } from '../realtime/presence.js';
 import { errMessage, errStatus } from '../../lib/httpErrors.js';
+import { logger } from '../../lib/logger.js';
 
 const authService = new AuthService();
 
@@ -628,7 +629,7 @@ export const oauthCallbackHandler = async (
     // Токен во фрагменте: фрагмент не уходит на сервер и не попадает в access-лог nginx
     return reply.redirect(302, `${FRONTEND_URL()}/auth/callback#token=${token}`);
   } catch (e) {
-    console.error('[OAuth callback error]', e instanceof Error ? errMessage(e) : 'Unknown error');
+    logger.error({ err: e }, '[OAuth callback error]');
     return reply.redirect(302, `${FRONTEND_URL()}/auth?error=oauth_failed`);
   }
 };

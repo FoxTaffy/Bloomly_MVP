@@ -7,6 +7,7 @@ import { isModerator } from '../../lib/roles.js';
 import { isMemberRole, isOrderStatus } from './types.js';
 import { errMessage, errStatus } from '../../lib/httpErrors.js';
 import type { JwtUser, GetGroupsQuery, CreateGroupInput, UpdateGroupInput, CreateEventInput, UpdateEventInput, CreateTicketTierInput, UpdateCommissionInput, RateGroupInput, CreateGroupPostInput, RsvpEventInput, SubEventInput, UpdateSubEventInput, CreateOrderInput } from './types.js';
+import { logError } from '../../lib/logger.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function ok(reply: FastifyReply, data: unknown, code = 200) {
@@ -595,7 +596,7 @@ export const createGroupPostHandler = async (
     const post = await groupService.createGroupPost(request.params.id, userId, request.body);
     // fire-and-forget automod check (does not block the response) — same pipeline as personal posts
     if (post) {
-      moderatePost(post.id, userId, request.body.content ?? '').catch((err) => console.error('[AUTOMOD] analyzeGroupPost error:', err));
+      moderatePost(post.id, userId, request.body.content ?? '').catch(logError('[AUTOMOD] analyzeGroupPost error'));
     }
     return ok(reply, { post }, 201);
   } catch (e) {
@@ -793,7 +794,7 @@ export const sendGroupMessageHandler = async (
     await groupService.assertGroupMember(request.params.id, userId);
     const msg = await groupService.sendGroupMessage(request.params.id, userId, text.trim());
     // fire-and-forget automod check (does not block the response)
-    moderateGroupMessage(userId).catch((err) => console.error('[AUTOMOD] moderateGroupMessage error:', err));
+    moderateGroupMessage(userId).catch(logError('[AUTOMOD] moderateGroupMessage error'));
     return ok(reply, { message: msg }, 201);
   } catch (e) {
     return fail(reply, errStatus(e) ?? 400, 'SEND_MESSAGE_ERROR', errMessage(e));

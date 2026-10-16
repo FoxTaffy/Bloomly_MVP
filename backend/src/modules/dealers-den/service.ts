@@ -6,6 +6,7 @@ import { recalcDenTrust } from './trust.service.js';
 import { notificationService } from '../notifications/service.js';
 import { deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import { errCode } from '../../lib/httpErrors.js';
+import { logError } from '../../lib/logger.js';
 
 // Tags are matched case-insensitively (search lowercases its query), so store them lowercased.
 function normalizeTags(tags: string[] | undefined): string[] {
@@ -255,7 +256,7 @@ export const dealersDenService = {
     if (input.images !== undefined) {
       const removed = existing.images.filter((url) => !input.images!.includes(url));
       Promise.all(removed.map((url) => deleteFileByUrl(url, existing.seller_id)))
-        .catch((err) => console.error('[dealerListing.update] media cleanup failed:', err));
+        .catch(logError('[dealerListing.update] media cleanup failed'));
     }
 
     // Notify wishlist users on price drop, unless they already have an unread price-drop
@@ -298,7 +299,7 @@ export const dealersDenService = {
     // Listings have no restore path, so images can be purged now instead of
     // leaking in S3 forever (there's no hard-delete cron for listings either).
     Promise.all(existing.images.map((url) => deleteFileByUrl(url, sellerId)))
-      .catch((err) => console.error('[dealerListing.delete] media cleanup failed:', err));
+      .catch(logError('[dealerListing.delete] media cleanup failed'));
 
     // Avatar frames are a special case: once the artist deletes the listing, the source
     // art is gone (image gets purged above), so anyone still displaying it on their

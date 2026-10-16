@@ -1,5 +1,6 @@
 import prisma from '../config/prisma.js';
 import { purgeMediaUrl } from '../modules/media/service.js';
+import { logger } from '../lib/logger.js';
 
 /**
  * Hard-deletes rows soft-deleted more than 30 days ago (posts, comments and everything that
@@ -55,7 +56,7 @@ export async function cleanupSoftDeletedRows() {
 
   if (expiringMediaUrls.length > 0) {
     await Promise.all(expiringMediaUrls.map((url) => purgeMediaUrl(url)));
-    console.log(`[CRON] Purged ${expiringMediaUrls.length} S3 file(s) belonging to hard-deleted rows.`);
+    logger.info(`[CRON] Purged ${expiringMediaUrls.length} S3 file(s) belonging to hard-deleted rows.`);
   }
 }
 
@@ -81,6 +82,6 @@ export async function cleanupExpiredStories() {
     ]);
     const mediaUrls = expired.flatMap((s) => [s.image_url, s.video_url]).filter((u): u is string => !!u);
     await Promise.all(mediaUrls.map((url) => purgeMediaUrl(url)));
-    console.log(`[CRON] Story cleanup: removed ${expired.length} expired stor${expired.length === 1 ? 'y' : 'ies'}, purged ${mediaUrls.length} file(s).`);
+    logger.info(`[CRON] Story cleanup: removed ${expired.length} expired stor${expired.length === 1 ? 'y' : 'ies'}, purged ${mediaUrls.length} file(s).`);
   }
 }
