@@ -362,6 +362,78 @@ function maskGroupCommentAuthor(comment: any): any {
   return comment;
 }
 
+// ── Personalized feed helpers ────────────────────────────────────────────────
+
+const FEED_POST_INCLUDE = {
+  author: { select: AUTHOR_SELECT },
+  rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+  tags: { include: { tag: true } },
+  _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
+  groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true } } } },
+};
+
+/**
+ * The user's taste from their last 30 activity records: posts they just viewed (skipped by the
+ * feed) and their top-3 categories. Category score: LIKE = 3, VIEW scaled by how long they
+ * dwelled (same dwellFactor used to weigh tag affinity — a 20s read says more than a scroll-past).
+ */
+async function recentTaste(userId: string) {
+  const activities = await prisma.userActivity.findMany({
+    where: { user_id: userId },
+    orderBy: { created_at: 'desc' },
+    take: 30,
+    include: { post: { select: { category: true } } },
+  });
+  const viewedPostIds = activities.filter((a) => a.type === 'VIEW').map((a) => a.post_id);
+  const categoryScores: Record<string, number> = {};
+  for (const activity of activities) {
+    const category = activity.post?.category;
+    if (!category) continue;
+    const weight = activity.type === 'LIKE' ? 3 : dwellFactor(activity.duration ?? undefined);
+    categoryScores[category] = (categoryScores[category] || 0) + weight;
+  }
+  const topCategories = Object.entries(categoryScores).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([cat]) => cat);
+  return { viewedPostIds, topCategories };
+}
+
+/**
+ * For ranking a candidate pool: which posts the user has ever opened (PostView — the shallow
+ * last-30-activity skip only catches very recent repeats) and a "trending" score per post —
+ * a recent burst of engagement weighted like effort: like < comment < repaw (mirrors
+ * REPAW_MULTIPLIER's reasoning — a repost is a stronger signal than a like).
+ */
+async function seenAndTrending(userId: string, candidateIds: string[]) {
+  const trendingCutoff = new Date(Date.now() - TRENDING_WINDOW_HOURS * 3_600_000);
+  const [seenViews, recentVotes, recentComments, recentRepaws] = candidateIds.length > 0
+    ? await Promise.all([
+        prisma.postView.findMany({ where: { user_id: userId, post_id: { in: candidateIds } }, select: { post_id: true } }),
+        prisma.vote.groupBy({ by: ['post_id'], where: { post_id: { in: candidateIds }, value: 1, deleted_at: null, created_at: { gte: trendingCutoff } }, _count: { _all: true } }),
+        prisma.comment.groupBy({ by: ['post_id'], where: { post_id: { in: candidateIds }, deleted_at: null, created_at: { gte: trendingCutoff } }, _count: { _all: true } }),
+        prisma.repaw.groupBy({ by: ['post_id'], where: { post_id: { in: candidateIds }, created_at: { gte: trendingCutoff } }, _count: { _all: true } }),
+      ])
+    : [[], [], [], []];
+  const trendingMap = new Map<string, number>();
+  const bump = (rows: { post_id: string; _count: { _all: number } }[], weight: number) => {
+    for (const r of rows) trendingMap.set(r.post_id, (trendingMap.get(r.post_id) ?? 0) + r._count._all * weight);
+  };
+  bump(recentVotes, 1);
+  bump(recentComments, 1.5);
+  bump(recentRepaws, 2);
+  return { seenIds: new Set(seenViews.map((v) => v.post_id)), trendingMap };
+}
+
+/** Merges two lists taking `aRun` items from `a`, then `bRun` from `b`, until both run out. */
+export function interleave<T>(a: T[], aRun: number, b: T[], bRun: number): T[] {
+  const out: T[] = [];
+  let ai = 0;
+  let bi = 0;
+  while (ai < a.length || bi < b.length) {
+    for (let i = 0; i < aRun && ai < a.length; i++, ai++) out.push(a[ai]);
+    for (let i = 0; i < bRun && bi < b.length; i++, bi++) out.push(b[bi]);
+  }
+  return out;
+}
+
 export const postService = {
   async createPost(input: CreatePostInput) {
     const content = (input.content ?? '').trim();
@@ -570,42 +642,8 @@ export const postService = {
   },
 
   async getPersonalizedPosts(userId: string, nsfwMode: NsfwMode = 'hide', pageNum: number = 1, limitNum: number = 30) {
-    const postInclude = {
-      author: { select: AUTHOR_SELECT },
-      rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
-      tags: { include: { tag: true } },
-      _count: { select: { votes: true, repaws: true, comments: { where: { deleted_at: null } } } },
-      groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true } } } },
-    };
-
-    // Analyse last 30 activity records
-    const activities = await prisma.userActivity.findMany({
-      where: { user_id: userId },
-      orderBy: { created_at: 'desc' },
-      take: 30,
-      include: { post: { select: { category: true } } },
-    });
-
-    // Posts already seen
-    const viewedPostIds = activities
-      .filter((a) => a.type === 'VIEW')
-      .map((a) => a.post_id);
-
-    // Category scores: LIKE=3, VIEW scaled by how long they actually dwelled (same dwellFactor
-    // used to weigh tag affinity — a 20s read says more about taste than a 2s scroll-past).
-    const categoryScores: Record<string, number> = {};
-    for (const activity of activities) {
-      const category = activity.post?.category;
-      if (!category) continue;
-      const weight = activity.type === 'LIKE' ? 3 : dwellFactor(activity.duration ?? undefined);
-      categoryScores[category] = (categoryScores[category] || 0) + weight;
-    }
-
-    const topCategories = Object.entries(categoryScores)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([cat]) => cat);
-
+    const postInclude = FEED_POST_INCLUDE;
+    const { viewedPostIds, topCategories } = await recentTaste(userId);
     const nsfwFilter = nsfwWhere(nsfwMode);
 
     // Fetched once up front so the mute-keywords filter can be baked into every query's `where`.
@@ -622,6 +660,8 @@ export const postService = {
     // "Не интересно" is a hard exclusion — unlike the shallow viewed-post skip below, it never resurfaces.
     const hiddenPostIds = [...viewedPostIds, ...notInterested.map((n) => n.post_id)];
     const excludeIds = hiddenPostIds.length > 0 ? { notIn: hiddenPostIds } : undefined;
+    // Every feed query: live, unarchived, not hidden/seen, NSFW mode, muted words, blocks, live groups
+    const feedWhere = { deleted_at: null, is_archived: false, id: excludeIds, ...nsfwFilter, ...muteFilter, ...blockFilter, ...NOT_DELETED_GROUP_FILTER };
 
     // Posts from authors/groups the user rang the "bell" for (Follow/GroupMember.notify_posts).
     // Computed on every page (not just page 1) because the algorithmic pool below excludes all
@@ -638,7 +678,7 @@ export const postService = {
     let bellPosts: any[] = [];
     if (pageNum === 1 && bellOr.length > 0) {
       bellPosts = await prisma.post.findMany({
-        where: { deleted_at: null, is_archived: false, OR: bellOr, id: excludeIds, ...nsfwFilter, ...muteFilter, ...blockFilter, ...NOT_DELETED_GROUP_FILTER },
+        where: { ...feedWhere, OR: bellOr },
         orderBy: { created_at: 'desc' },
         take: BELL_FEED_LIMIT,
         include: postInclude,
@@ -656,7 +696,7 @@ export const postService = {
     if (topCategories.length > 0) {
       // 60% from favourite categories
       personalizedPosts = await prisma.post.findMany({
-        where: { deleted_at: null, is_archived: false, category: { in: topCategories }, id: excludeIds, ...nsfwFilter, ...muteFilter, ...blockFilter, ...bellExcludeFilter, ...NOT_DELETED_GROUP_FILTER },
+        where: { ...feedWhere, ...bellExcludeFilter, category: { in: topCategories } },
         orderBy: { rating: 'desc' },
         skip: pSkip,
         take: pLimit,
@@ -665,17 +705,7 @@ export const postService = {
 
       // 40% from other categories (discovery)
       discoverPosts = await prisma.post.findMany({
-        where: {
-          deleted_at: null,
-          is_archived: false,
-          OR: [{ category: { notIn: topCategories } }, { category: null }],
-          id: excludeIds,
-          ...nsfwFilter,
-          ...muteFilter,
-          ...blockFilter,
-          ...bellExcludeFilter,
-          ...NOT_DELETED_GROUP_FILTER,
-        },
+        where: { ...feedWhere, ...bellExcludeFilter, OR: [{ category: { notIn: topCategories } }, { category: null }] },
         orderBy: [{ rating: 'desc' }, { created_at: 'desc' }],
         skip: dSkip,
         take: dLimit,
@@ -684,7 +714,7 @@ export const postService = {
     } else {
       // No activity yet — show popular new content
       discoverPosts = await prisma.post.findMany({
-        where: { deleted_at: null, is_archived: false, id: excludeIds, ...nsfwFilter, ...muteFilter, ...blockFilter, ...bellExcludeFilter, ...NOT_DELETED_GROUP_FILTER },
+        where: { ...feedWhere, ...bellExcludeFilter },
         orderBy: [{ rating: 'desc' }, { created_at: 'desc' }],
         skip: (pageNum - 1) * limitNum,
         take: limitNum,
@@ -698,37 +728,12 @@ export const postService = {
     // PostView (the shallow last-30-activity exclusion above only catches very recent repeats)
     // so genuinely undiscovered posts get bucketed ahead of ones the user has already seen.
     const interestTerms = interestsToTerms(user?.interests ?? []);
-    const candidateIds = [...personalizedPosts, ...discoverPosts].map((p) => p.id);
-    const trendingCutoff = new Date(Date.now() - TRENDING_WINDOW_HOURS * 3_600_000);
-    const [seenViews, recentVotes, recentComments, recentRepaws] = candidateIds.length > 0
-      ? await Promise.all([
-          prisma.postView.findMany({ where: { user_id: userId, post_id: { in: candidateIds } }, select: { post_id: true } }),
-          prisma.vote.groupBy({ by: ['post_id'], where: { post_id: { in: candidateIds }, value: 1, deleted_at: null, created_at: { gte: trendingCutoff } }, _count: { _all: true } }),
-          prisma.comment.groupBy({ by: ['post_id'], where: { post_id: { in: candidateIds }, deleted_at: null, created_at: { gte: trendingCutoff } }, _count: { _all: true } }),
-          prisma.repaw.groupBy({ by: ['post_id'], where: { post_id: { in: candidateIds }, created_at: { gte: trendingCutoff } }, _count: { _all: true } }),
-        ])
-      : [[], [], [], []];
-    const seenIds = new Set(seenViews.map((v) => v.post_id));
-    // "Trending" = a recent burst of engagement, weighted like effort: like < comment < repaw
-    // (mirrors REPAW_MULTIPLIER's reasoning — a repost is a stronger signal than a like).
-    const trendingMap = new Map<string, number>();
-    const bumpTrending = (rows: { post_id: string; _count: { _all: number } }[], weight: number) => {
-      for (const r of rows) trendingMap.set(r.post_id, (trendingMap.get(r.post_id) ?? 0) + r._count._all * weight);
-    };
-    bumpTrending(recentVotes, 1);
-    bumpTrending(recentComments, 1.5);
-    bumpTrending(recentRepaws, 2);
+    const { seenIds, trendingMap } = await seenAndTrending(userId, [...personalizedPosts, ...discoverPosts].map((p) => p.id));
     personalizedPosts = rankByAffinity(personalizedPosts, affinity, interestTerms, seenIds, trendingMap);
     discoverPosts = rankByAffinity(discoverPosts, affinity, interestTerms, seenIds, trendingMap);
 
     // Interleave: 3 personalised → 2 discover
-    const result: any[] = [];
-    let pi = 0;
-    let di = 0;
-    while (pi < personalizedPosts.length || di < discoverPosts.length) {
-      for (let i = 0; i < 3 && pi < personalizedPosts.length; i++, pi++) result.push(personalizedPosts[pi]);
-      for (let i = 0; i < 2 && di < discoverPosts.length; i++, di++) result.push(discoverPosts[di]);
-    }
+    const result = interleave(personalizedPosts, 3, discoverPosts, 2);
 
     // Diversify across the whole page, bell pins included — otherwise a bell pin and the very
     // next personalized pick could still land back to back for the same author/group.
