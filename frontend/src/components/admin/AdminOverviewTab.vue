@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import BIcon from '@/components/BIcon.vue'
+import AdminStatisticsTab from './AdminStatisticsTab.vue'
 import { roleLabel, roleColor, formatNum, formatMonthShort } from './adminHelpers'
 import { useAdminContext, type UsersView } from './adminContext'
 
@@ -361,5 +362,12 @@ const modSnapshot = computed(() => stats.value ? [
         </div>
       </div>
     </template>
+
+    <!-- Statistics — merged from the former separate tab, same look -->
+    <div class="flex items-center gap-2 mt-10 mb-4">
+      <BIcon name="BarChart2" class="w-4 h-4 text-emerald-400" />
+      <h2 class="text-xs font-extrabold text-white/50 tracking-[0.15em] uppercase">{{ langStore.t.statsTab }}</h2>
+    </div>
+    <AdminStatisticsTab />
   </div>
 </template>

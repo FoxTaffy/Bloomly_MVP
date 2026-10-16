@@ -16,7 +16,6 @@ import AdminAdsTab from '@/components/admin/AdminAdsTab.vue'
 import AdminVerificationTab from '@/components/admin/AdminVerificationTab.vue'
 import AdminFramesTab from '@/components/admin/AdminFramesTab.vue'
 import AdminAutoModTab from '@/components/admin/AdminAutoModTab.vue'
-import AdminStatisticsTab from '@/components/admin/AdminStatisticsTab.vue'
 import AdminUpdatesTab from '@/components/admin/AdminUpdatesTab.vue'
 import AdminGroupsTab from '@/components/admin/AdminGroupsTab.vue'
 import AdminFinanceTab from '@/components/admin/AdminFinanceTab.vue'
@@ -62,7 +61,6 @@ const TAB_COMPONENTS: Record<AdminTab, Component> = {
   verification: AdminVerificationTab,
   frames: AdminFramesTab,
   automod: AdminAutoModTab,
-  statistics: AdminStatisticsTab,
   updates: AdminUpdatesTab,
   groups: AdminGroupsTab,
   finance: AdminFinanceTab,
@@ -83,7 +81,6 @@ const navItems = computed(() => [
   { tab: 'groups'       as const, label: langStore.t.adminNavGroupsEvents,   icon: 'LayoutGrid',      color: '#4C67CF', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'moderator' },
   { tab: 'finance'      as const, label: langStore.t.adminNavFinancePremium, icon: 'Wallet',          color: '#a78bfa', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'admin' },
   { tab: 'settings'     as const, label: langStore.t.adminNavLogsSettings,   icon: 'Settings',        color: '#94a3b8', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'admin' },
-  { tab: 'statistics'   as const, label: langStore.t.statsTab,               icon: 'BarChart2',       color: '#10b981', group: langStore.t.adminGroupAnalytics,  badge: null, minRole: 'admin' },
 ].filter(item => myRoleRank.value >= ROLE_RANK[item.minRole]))
 
 const navGroups = computed(() => {
@@ -110,7 +107,6 @@ const tabSubtitle = computed<Record<string, string>>(() => ({
   ads: langStore.t.adminTabSubAds,
   verification: langStore.t.adminTabSubVerification,
   automod: langStore.t.adminTabSubAutomod,
-  statistics: langStore.t.adminTabSubStatistics,
   updates: langStore.t.adminTabSubUpdates,
   groups: langStore.t.adminTabSubGroups,
   finance: langStore.t.adminTabSubFinance,
