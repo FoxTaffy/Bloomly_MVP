@@ -25,7 +25,7 @@ export const FOLDER_MAX_BYTES: Record<string, number> = {
   banners: 10 * MB,
   stickers: 100 * 1024,
   'avatar-frames': 5 * MB,
-  reports: 10 * MB,
+  reports: 50 * MB, // скриншоты и короткие видео к жалобам и обращениям
   verification: 10 * MB,
 };
 

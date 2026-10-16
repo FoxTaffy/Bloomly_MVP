@@ -312,8 +312,8 @@ const isPaywalled = computed(() =>
 
 type Seg = { type: 'text' | 'mention'; key: number; text: string; username?: string }
 const parsedContent = computed<Seg[]>(() =>
-  (props.post.content ?? '').split(/(@\w+)/g).map((part: string, i: number) =>
-    /^@\w+$/.test(part)
+  (props.post.content ?? '').split(/(@\w+(?:-\w+)*)/g).map((part: string, i: number) =>
+    /^@\w+(?:-\w+)*$/.test(part)
       ? { type: 'mention' as const, key: i, text: part, username: part.slice(1) }
       : { type: 'text' as const, key: i, text: part }
   )

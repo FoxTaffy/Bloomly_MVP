@@ -2,8 +2,8 @@
 import { ref, computed, watchEffect, onActivated } from 'vue'
 import { useLangStore } from '@/stores/lang'
 import api from '@/api'
-import { safeHref } from '@/utils/safeHref'
 import BIcon from '@/components/BIcon.vue'
+import TicketAttachments from '@/components/TicketAttachments.vue'
 import { formatDate } from './adminHelpers'
 import { useAdminContext } from './adminContext'
 
@@ -137,12 +137,7 @@ watchEffect(() => { badges.support = supportTickets.value.filter((t: any) => t.s
                     {{ supportSenderLabel(m) }}
                   </p>
                   <p class="text-xs text-white/70 whitespace-pre-wrap">{{ m.body }}</p>
-                  <div v-if="m.attachment_urls?.length" class="flex gap-2 mt-2 flex-wrap">
-                    <a v-for="(url, ai) in m.attachment_urls" :key="ai" :href="safeHref(url)" target="_blank" rel="noopener noreferrer"
-                      class="w-16 h-16 rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
-                      <img :src="url" class="w-full h-full object-cover" />
-                    </a>
-                  </div>
+                  <TicketAttachments :urls="m.attachment_urls" />
                 </div>
               </div>
 

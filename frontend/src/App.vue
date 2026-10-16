@@ -40,7 +40,8 @@ function acceptCookies() {
 <template>
   <div
     v-if="!cookieConsent && !route.meta?.hideCookieBanner"
-    class="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-slate-950/95 px-3 py-3 shadow-[0_-8px_32px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:px-4"
+    class="fixed inset-x-0 bottom-0 z-[300] border-t border-white/10 bg-slate-950/95 px-3 pt-3 shadow-[0_-8px_32px_rgba(0,0,0,0.35)] backdrop-blur-sm sm:px-4"
+    :style="{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }"
   >
     <div class="mx-auto flex max-w-5xl flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
       <div class="text-left text-sm leading-relaxed text-slate-200">

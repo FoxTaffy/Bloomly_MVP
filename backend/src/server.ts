@@ -33,6 +33,7 @@ import { seoRoutes } from './modules/seo/routes.js';
 import { updatesRoutes } from './modules/updates/routes.js';
 import { bookmarksRoutes } from './modules/bookmarks/routes.js';
 import { supportRoutes } from './modules/support/routes.js';
+import { albumRoutes } from './modules/albums/routes.js';
 import { walletRoutes } from './modules/wallet/routes.js';
 import { realtimeRoutes } from './modules/realtime/routes.js';
 import { initCronJobs } from './cron.js';
@@ -157,6 +158,7 @@ fastify.register(automationRoutes, { prefix: '/api/automation' });
 fastify.register(updatesRoutes,    { prefix: '/api/updates' });
 fastify.register(bookmarksRoutes,  { prefix: '/api/bookmarks' });
 fastify.register(supportRoutes,    { prefix: '/api/support' });
+fastify.register(albumRoutes,      { prefix: '/api/albums' });
 fastify.register(walletRoutes,     { prefix: '/api/wallet' });
 // SEO: sitemap.xml and OG-proxy endpoints (no auth required, crawlers friendly)
 fastify.register(seoRoutes);

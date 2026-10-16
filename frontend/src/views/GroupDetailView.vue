@@ -12,6 +12,7 @@ import BIcon from '@/components/BIcon.vue'
 import PostCard from '@/components/PostCard.vue'
 import MentionTextarea from '@/components/MentionTextarea.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
+import AlbumsPanel from '@/components/AlbumsPanel.vue'
 import AppBadge from '@/components/shared/AppBadge.vue'
 import ReportModal from '@/components/ReportModal.vue'
 import { useTagSuggestions } from '@/composables/useTagSuggestions'
@@ -293,6 +294,25 @@ const groupMediaFilter = ref<'all' | 'photo' | 'video'>('all')
 const groupMediaAlbumView = ref(false)
 const groupOpenAlbum = ref<{ label: string; urls: { url: string; postId?: string }[] } | null>(null)
 const expandedGroupMediaPost = ref<any | null>(null)
+const archivedGroupPosts = ref<any[]>([])
+const isLoadingArchive = ref(false)
+
+async function loadArchivedGroupPosts() {
+  if (!group.value?.id) return
+  isLoadingArchive.value = true
+  try {
+    const posts = await groupsStore.loadGroupPosts(group.value.id, 1, 100, false, true)
+    archivedGroupPosts.value = (posts || []).map((gp: any) => gp.post || gp)
+  } catch (e) { console.error('Failed to load archived group posts', e) }
+  finally { isLoadingArchive.value = false }
+}
+
+function onArchivedPostRemoved(postId: string) {
+  archivedGroupPosts.value = archivedGroupPosts.value.filter(p => p.id !== postId)
+  // Разархивированный пост должен вернуться в ленту
+  loadGroupPosts()
+}
+
 const groupMediaPostsList = ref<any[]>([])
 const isLoadingMedia = ref(false)
 const groupMediaLoaded = ref(false)
@@ -419,10 +439,11 @@ watch(
 )
 
 // ── Content tabs (floating pills like profile) ─────────────────────────
-const activeContentTab = ref<'posts' | 'media' | 'archive' | 'members' | 'events'>('posts')
+const activeContentTab = ref<'posts' | 'media' | 'archive' | 'posts_archive' | 'members' | 'events'>('posts')
 
 watch(activeContentTab, (val) => {
   if (val === 'media' && !groupMediaLoaded.value) loadGroupMediaPosts()
+  if (val === 'posts_archive') loadArchivedGroupPosts()
   if (val === 'members') openMembersTab()
   if (val === 'events') loadGroupEvents()
 })
@@ -437,6 +458,9 @@ const contentTabs = computed(() => {
   }
   if (group.value?.type === 'event' && pastEvents.value.length) {
     tabs.push({ key: 'archive', label: `${langStore.t.archiveBtn} (${pastEvents.value.length})`, icon: 'Archive' })
+  }
+  if (myRoleWeight.value >= 1) {
+    tabs.push({ key: 'posts_archive', label: langStore.t.archiveBtn, icon: 'Archive' })
   }
   tabs.push({ key: 'members', label: langStore.t.createStep2Title, icon: 'Users' })
   return tabs
@@ -1894,8 +1918,30 @@ const vClickOutside = {
                     </div>
                   </template>
 
+                  <!-- POSTS ARCHIVE (moderators) -->
+                  <template v-else-if="activeContentTab === 'posts_archive'">
+                    <div v-if="isLoadingArchive" class="flex justify-center py-10">
+                      <div class="w-6 h-6 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
+                    </div>
+                    <template v-else-if="archivedGroupPosts.length">
+                      <PostCard
+                        v-for="post in archivedGroupPosts"
+                        :key="post.id"
+                        :post="post"
+                        :group-context="group"
+                        :can-moderate="myRoleWeight >= 1"
+                        @deleted="onArchivedPostRemoved"
+                        @updated="onPostUpdated"
+                      />
+                    </template>
+                    <div v-else class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl p-8 text-center text-white/55 text-sm">
+                      {{ langStore.t.profileArchiveEmptyLabel }}
+                    </div>
+                  </template>
+
                   <!-- MEDIA -->
                   <template v-else-if="activeContentTab === 'media'">
+                    <AlbumsPanel :group-id="group.id" :can-create="myRoleWeight >= 1" />
                     <!-- Filter tabs -->
                     <div class="flex gap-2 mb-4 flex-wrap">
                       <button v-for="f in (['all','photo','video'] as const)" :key="f" @click="groupMediaFilter = f"

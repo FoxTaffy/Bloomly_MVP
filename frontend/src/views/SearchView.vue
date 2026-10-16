@@ -220,7 +220,7 @@ onMounted(fetchTrendingTags)
                 <p class="text-white/55 text-sm">Люди не найдены</p>
               </div>
               <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <PersonCard v-for="user in users" :key="user.id" :user="(user as any)" @message="handleMessage" />
+                <PersonCard v-for="user in users" :key="user.id" :user="(user as any)" :is-friend="!!(user as any).is_friend" @message="handleMessage" />
               </div>
             </template>
 

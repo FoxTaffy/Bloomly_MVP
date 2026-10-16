@@ -41,7 +41,7 @@ export async function translateText(text: string, targetLang: Lang): Promise<str
   // Extract @username mentions and replace with stable placeholders so the API
   // doesn't mangle them (capitalise, translate, or drop the @ prefix).
   const mentions: string[] = []
-  const textForApi = text.replace(/@\w+/g, (m) => {
+  const textForApi = text.replace(/@\w+(?:-\w+)*/g, (m) => {
     mentions.push(m)
     return `[M${mentions.length - 1}]`
   })

@@ -1170,7 +1170,7 @@ export const postService = {
     }
 
     // Notify @mentioned users in parallel (skipped if the mentioned user restricts who can mention them)
-    const mentions = content.match(/@(\w+)/g);
+    const mentions = content.match(/@\w+(?:-\w+)*/g);
     if (mentions) {
       const uniqueUsernames = [...new Set(mentions.map((m) => m.slice(1)))];
       await Promise.all(
@@ -1342,9 +1342,15 @@ export const postService = {
   },
 
   async toggleArchive(userId: string, postId: string) {
-    const post = await prisma.post.findUnique({ where: { id: postId, deleted_at: null }, select: { author_id: true, is_archived: true } });
+    const post = await prisma.post.findUnique({
+      where: { id: postId, deleted_at: null },
+      select: { author_id: true, is_archived: true, groupPosts: { select: { group_id: true }, take: 1 } },
+    });
     if (!post) throw new Error('Post not found');
-    if (post.author_id !== userId) throw new Error('Not authorized');
+    // Пост группы может архивировать и модерация группы, а не только автор
+    const groupId = post.groupPosts[0]?.group_id;
+    const allowed = post.author_id === userId || (!!groupId && await groupService.isAtLeastModerator(groupId, userId));
+    if (!allowed) throw new Error('Not authorized');
     const updated = await prisma.post.update({ where: { id: postId }, data: { is_archived: !post.is_archived } });
     return { archived: updated.is_archived };
   },

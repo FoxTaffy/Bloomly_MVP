@@ -488,7 +488,7 @@ export const upsertCommissionHandler = async (
 // ── Group posts ─────────────────────────────────────────────────────────────
 
 export const getGroupPostsHandler = async (
-  request: FastifyRequest<{ Params: { id: string }; Querystring: { page?: string; limit?: string; hasMedia?: string } }>,
+  request: FastifyRequest<{ Params: { id: string }; Querystring: { page?: string; limit?: string; hasMedia?: string; archived?: string } }>,
   reply: FastifyReply,
 ) => {
   try {
@@ -496,7 +496,12 @@ export const getGroupPostsHandler = async (
     const limit = parseInt(request.query.limit ?? '20', 10);
     const hasMedia = request.query.hasMedia === 'true';
     const viewerId = (request.user as JwtUser | undefined)?.id ?? null;
-    const posts = await groupService.getGroupPosts(request.params.id, page, limit, hasMedia, viewerId);
+    const archived = request.query.archived === 'true';
+    // Архив группы видят только модераторы, владелец и администраторы
+    if (archived && !(viewerId && await groupService.isAtLeastModerator(request.params.id, viewerId))) {
+      return fail(reply, 403, 'FORBIDDEN', 'Архив доступен только модераторам группы');
+    }
+    const posts = await groupService.getGroupPosts(request.params.id, page, limit, hasMedia, viewerId, archived);
     return ok(reply, { posts });
   } catch (e) {
     return fail(reply, 500, 'GROUP_POSTS_ERROR', errMessage(e));

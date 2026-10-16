@@ -37,7 +37,7 @@ const onInput = (e: Event) => {
 
   const cur = el.selectionStart
   const before = el.value.substring(0, cur)
-  const match = before.match(/@(\w*)$/)
+  const match = before.match(/@([\w-]*)$/)
 
   if (match) {
     mentionStartPos.value = cur - match[0].length

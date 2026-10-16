@@ -156,7 +156,7 @@
                 <BIcon name="BarChart2" class="w-4 h-4 text-brand-accent" /> Статистика
                 <BIcon name="Crown" class="w-3.5 h-3.5 text-brand-yellow ml-auto" />
               </button>
-              <button v-if="isOwn" @click="doToggleArchive" :disabled="isArchiving"
+              <button v-if="isOwn || canModerate" @click="doToggleArchive" :disabled="isArchiving"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-white hover:bg-white/5 disabled:opacity-50">
                 <BIcon :name="post.is_archived ? 'ArchiveRestore' : 'Archive'" class="w-4 h-4 text-brand-accent" />
                 {{ post.is_archived ? 'Разархивировать' : 'Архивировать' }}
@@ -274,7 +274,7 @@
                   class="mention-pill inline-flex items-center gap-1 pl-0.5 pr-2 py-0.5 bg-brand-accent/15 border border-brand-accent/30 text-brand-accent text-[13px] font-semibold cursor-pointer hover:bg-brand-accent/25 transition-all align-middle"
                   :class="mentionGroups[seg.username!] ? 'rounded-xl' : 'rounded-full'"
                   style="vertical-align: middle; white-space: nowrap;"
-                  @click.stop
+                  @click.stop="onMentionLeave()"
                   @mouseenter="onMentionEnter(seg.username!, $event)"
                   @touchstart.passive="resolveMention(seg.username!)"
                   @focus="resolveMention(seg.username!)"
@@ -683,7 +683,7 @@
 
 <script setup lang="ts">
 import { invalidateFriendsCache } from '@/stores/friends'
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, onDeactivated, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
@@ -909,6 +909,8 @@ const mentionPopupPos = ref({ top: '0px', left: '0px' })
 
 function onMentionEnter(username: string, e: MouseEvent) {
   resolveMention(username)
+  // На тач-экранах после тапа эмулируется mouseenter, а mouseleave не приходит — попап «залипал»
+  if (window.matchMedia?.('(hover: none)').matches) return
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
   hoveredMention.value = username
   const left = Math.max(0, Math.min(rect.left, window.innerWidth - 224))
@@ -918,6 +920,8 @@ function onMentionEnter(username: string, e: MouseEvent) {
   }
 }
 function onMentionLeave() { hoveredMention.value = null }
+onDeactivated(onMentionLeave)
+onBeforeUnmount(onMentionLeave)
 
 // ── Mention user data ──────────────────────────────────────────────────────
 // reactive map so template updates when data arrives
@@ -1052,8 +1056,8 @@ const gridExtraCount = computed(() =>
 type Seg = { type: 'text' | 'mention'; key: number; text: string; username?: string }
 
 function parseSegments(text: string): Seg[] {
-  return text.split(/(@\w+)/g).map((part: string, i: number) =>
-    /^@\w+$/.test(part)
+  return text.split(/(@\w+(?:-\w+)*)/g).map((part: string, i: number) =>
+    /^@\w+(?:-\w+)*$/.test(part)
       ? { type: 'mention' as const, key: i, text: part, username: part.slice(1) }
       : { type: 'text' as const, key: i, text: part }
   )

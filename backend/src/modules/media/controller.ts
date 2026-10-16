@@ -44,10 +44,11 @@ const ALLOWED_MIME_TYPES = new Set([
   'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/mp4',
 ]);
 
-// Evidence attached to a complaint/support ticket is a screenshot, not media —
-// keep it to still images so a "жалоба" can't be used to smuggle large video/audio.
+// Evidence attached to a complaint/support ticket: screenshots and short screen recordings
+// (сложные баги не показать картинкой). Аудио не принимаем.
 const REPORTS_ALLOWED_MIME_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif',
+  'video/mp4', 'video/webm', 'video/quicktime',
 ]);
 
 const ALLOWED_FOLDERS = ['posts', 'comments', 'avatars', 'banners', 'messages', 'backgrounds', 'stickers', 'reports', 'verification', 'avatar-frames'] as const;
@@ -128,7 +129,7 @@ async function openUpload(request: FastifyRequest, folder: Folder, maxBytes: num
   }
   if (!data) throw new UploadRejected(400, 'NO_FILE', 'No file uploaded');
   if (!isAllowedMime(data.mimetype, folder)) {
-    throw new UploadRejected(415, 'UNSUPPORTED_MEDIA_TYPE', folder === 'reports' ? 'К жалобе можно приложить только изображение' : 'File type not allowed');
+    throw new UploadRejected(415, 'UNSUPPORTED_MEDIA_TYPE', folder === 'reports' ? 'К жалобе можно приложить только изображение или видео' : 'File type not allowed');
   }
   return data;
 }

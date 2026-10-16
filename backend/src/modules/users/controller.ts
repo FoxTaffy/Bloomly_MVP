@@ -1,4 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import prisma from '../../config/prisma.js';
 import { usersService, withRedactedBirthDate } from './service.js';
 import { isAdult } from '../../lib/age.js';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput, JwtPayload } from './types.js';
@@ -56,8 +57,22 @@ export async function searchUsersHandler(
   reply: FastifyReply,
 ) {
   const { q = '', limit, page } = request.query as any;
-  const users = (await usersService.searchUsers(q, limit ? parseInt(limit, 10) : 8, page ? parseInt(page, 10) : 1))
+  const viewerId = (request.user as JwtPayload).id;
+  const found = (await usersService.searchUsers(q, limit ? parseInt(limit, 10) : 8, page ? parseInt(page, 10) : 1))
     .map(withRedactedBirthDate);
+  // Без статуса подписки карточки в поиске всегда рисовали кнопку «Подписаться», даже для друзей и подписок
+  const ids = found.map((u) => u.id);
+  const [following, followers] = await Promise.all([
+    prisma.follow.findMany({ where: { follower_id: viewerId, following_id: { in: ids } }, select: { following_id: true } }),
+    prisma.follow.findMany({ where: { following_id: viewerId, follower_id: { in: ids } }, select: { follower_id: true } }),
+  ]);
+  const followingSet = new Set(following.map((r) => r.following_id));
+  const followersSet = new Set(followers.map((r) => r.follower_id));
+  const users = found.map((u) => ({
+    ...u,
+    is_following: followingSet.has(u.id),
+    is_friend: followingSet.has(u.id) && followersSet.has(u.id),
+  }));
   return reply.send({ success: true, data: { users }, error: null });
 }
 

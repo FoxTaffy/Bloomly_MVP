@@ -54,7 +54,8 @@ describe('загрузка медиа', () => {
     expect(spoof.status).toBe(415);
     expect(spoof.json.error.message).toContain('не соответствует');
     expect((await upload(auth, 'stickers', { name: 'a.mp4', type: 'video/mp4', body: MP4 })).json.error.code).toBe('STICKER_FORMAT');
-    expect((await upload(auth, 'reports', { name: 'a.mp4', type: 'video/mp4', body: MP4 })).status).toBe(415);
+    // К обращениям и жалобам можно прикладывать видео, но не аудио
+    expect((await upload(auth, 'reports', { name: 'a.mp3', type: 'audio/mpeg', body: Buffer.alloc(64, 1) })).status).toBe(415);
     const empty = await upload(auth, 'posts', { name: 'a.png', type: 'image/png', body: Buffer.alloc(0) });
     expect(empty.status).toBe(400);
     expect(empty.json.error.code).toBe('NO_FILE');

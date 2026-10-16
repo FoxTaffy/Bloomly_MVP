@@ -354,11 +354,11 @@
                         <span v-if="notifyLoading" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         <BIcon v-else :name="notifyPosts && relation.aFollowsB ? 'BellRing' : 'Bell'" class="w-4 h-4" />
                       </button>
-                      <button v-if="viewedProfile.messages_privacy !== 'nobody'" @click="openChat" class="inline-flex items-center gap-2 px-4 py-2 border border-brand-border bg-brand-bg hover:border-brand-accent/60 text-brand-offwhite hover:text-brand-accent rounded-xl text-sm font-bold transition-all">
+                      <button v-if="viewedProfile.messages_privacy !== 'nobody'" @click="openChat" :disabled="isProfileBlocked" :title="isProfileBlocked ? langStore.t.profileBlockedByYouHint : undefined" class="inline-flex items-center gap-2 px-4 py-2 border border-brand-border bg-brand-bg hover:border-brand-accent/60 text-brand-offwhite hover:text-brand-accent rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:pointer-events-none">
                         <BIcon name="MessageSquare" class="w-4 h-4" /> {{ langStore.t.messageBtn }}
                       </button>
-                      <button @click="toggleFollow" :disabled="isTogglingFollow"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-50 shadow-sm"
+                      <button @click="toggleFollow" :disabled="isTogglingFollow || isProfileBlocked" :title="isProfileBlocked ? langStore.t.profileBlockedByYouHint : undefined"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:pointer-events-none shadow-sm"
                         :class="followBtnClass">
                         <span v-if="isTogglingFollow" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         <component v-else :is="followBtnIcon" class="w-4 h-4" />
@@ -401,9 +401,9 @@
                               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-amber-400 hover:bg-amber-500/10">
                               <BIcon name="Flag" class="w-4 h-4" /> {{ langStore.t.report }}
                             </button>
-                            <button @click="blockProfileUser" :disabled="isBlockingProfileUser"
+                            <button @click="toggleProfileBlock" :disabled="isBlockingProfileUser"
                               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 disabled:opacity-50">
-                              <BIcon name="UserX" class="w-4 h-4" /> {{ isBlockingProfileUser ? langStore.t.profileBlockingLabel : langStore.t.profileSendToBlacklistLabel }}
+                              <BIcon name="UserX" class="w-4 h-4" /> {{ isBlockingProfileUser ? langStore.t.profileBlockingLabel : (isProfileBlocked ? langStore.t.profileRemoveFromBlacklistLabel : langStore.t.profileSendToBlacklistLabel) }}
                             </button>
                           </div>
                         </Teleport>
@@ -1411,6 +1411,7 @@
 
                   <!-- MEDIA -->
                   <div v-else-if="activeContentTab === 'media'" @click="mediaTagTarget = null">
+                    <AlbumsPanel :user-id="viewedProfile.id" :can-create="isOwnProfile" @click.stop />
                     <!-- Панель фильтров + режим альбомов -->
                     <div class="flex items-center gap-2 mb-4 flex-wrap">
                       <button v-for="f in (['all','photo','video'] as const)" :key="f" @click="mediaFilter = f"
@@ -2459,6 +2460,7 @@ import PostComments from '@/components/PostComments.vue'
 import PostCard from '@/components/PostCard.vue'
 import MentionTextarea from '@/components/MentionTextarea.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
+import AlbumsPanel from '@/components/AlbumsPanel.vue'
 import PostScheduleMenu from '@/components/PostScheduleMenu.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
 import BIcon from '@/components/BIcon.vue'
@@ -3279,6 +3281,7 @@ async function loadProfile() {
         loadUserGroupsCount(userId),
         authStore.isAuthenticated && !isOwnProfile.value ? loadRelation(userId) : Promise.resolve(),
         authStore.isAuthenticated && !isOwnProfile.value ? checkUserBookmark() : Promise.resolve(),
+        loadProfileBlockStatus(userId),
         fetchOnlineStatus(userId),
         result.relationship_with ? loadPartnerProfile(result.relationship_with) : Promise.resolve(),
         loadProfileSoonBadges(userId),
@@ -3441,7 +3444,11 @@ async function toggleFollow() {
       relation.friends = relation.aFollowsB && relation.bFollowsA
       if (viewedProfile.value._count) viewedProfile.value._count.followers += relation.aFollowsB ? 1 : -1
     }
-  } catch (e) { console.error('follow toggle failed', e) }
+  } catch (e) {
+    console.error('follow toggle failed', e)
+    messageErrorNotice.value = apiErrorMessage(e) ?? null
+    setTimeout(() => { messageErrorNotice.value = null }, 4000)
+  }
   finally { isTogglingFollow.value = false }
 }
 
@@ -3495,14 +3502,34 @@ async function copyProfileLink() {
   showProfileMenu.value = false
 }
 
-async function blockProfileUser() {
+const isProfileBlocked = ref(false)
+
+async function loadProfileBlockStatus(userId: string) {
+  isProfileBlocked.value = false
+  if (!authStore.isAuthenticated || isOwnProfile.value) return
+  try {
+    const res = await api.get(`/users/${userId}/block-status`)
+    isProfileBlocked.value = !!res.data.data?.blocked
+  } catch { /* меню покажет «Отправить в ЧС» по умолчанию */ }
+}
+
+async function toggleProfileBlock() {
   if (!viewedProfile.value || isBlockingProfileUser.value) return
   isBlockingProfileUser.value = true
   showProfileMenu.value = false
   try {
-    await api.post(`/users/${viewedProfile.value.id}/block`)
-    router.push('/')
-  } catch (e) { console.error('block failed', e) }
+    if (isProfileBlocked.value) {
+      await api.delete(`/users/${viewedProfile.value.id}/block`)
+      isProfileBlocked.value = false
+    } else {
+      await api.post(`/users/${viewedProfile.value.id}/block`)
+      isProfileBlocked.value = true
+      // Остаёмся на профиле и подтверждаем результат — раньше редирект на главную выглядел как «ничего не случилось»
+      messageErrorNotice.value = langStore.t.profileBlacklistedNotice
+      setTimeout(() => { messageErrorNotice.value = null }, 3000)
+      await loadRelation(viewedProfile.value.id)
+    }
+  } catch (e) { console.error('block toggle failed', e) }
   finally { isBlockingProfileUser.value = false }
 }
 

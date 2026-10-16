@@ -199,9 +199,9 @@ const showVisibilityMenu = ref(false)
 // ── @mention helpers ─────────────────────────────────────────────────────────
 type MentionSegment = { type: 'text' | 'mention'; key: number; text: string; username?: string }
 const parseMentions = (content: string): MentionSegment[] => {
-  const parts = content.split(/(@\w+)/g)
+  const parts = content.split(/(@\w+(?:-\w+)*)/g)
   return parts.map((part, i) => {
-    if (/^@\w+$/.test(part)) return { type: 'mention', key: i, text: part, username: part.slice(1) }
+    if (/^@\w+(?:-\w+)*$/.test(part)) return { type: 'mention', key: i, text: part, username: part.slice(1) }
     return { type: 'text', key: i, text: part }
   })
 }

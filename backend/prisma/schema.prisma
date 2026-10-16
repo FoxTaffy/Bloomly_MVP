@@ -64,10 +64,10 @@ model User {
   profile_theme                  String?                   @db.VarChar(50)
   profile_bg_url                 String?
   profile_frame                  String?                   @db.VarChar(50)
-  profile_frame_id                String?                   @db.Uuid
-  equippedFrame                   AvatarFrame?              @relation("EquippedFrame", fields: [profile_frame_id], references: [id], onDelete: SetNull)
-  ownedAvatarFrames                UserAvatarFrame[]
-  createdAvatarFrames              AvatarFrame[]             @relation("AvatarFrameCreator")
+  profile_frame_id               String?                   @db.Uuid
+  equippedFrame                  AvatarFrame?              @relation("EquippedFrame", fields: [profile_frame_id], references: [id], onDelete: SetNull)
+  ownedAvatarFrames              UserAvatarFrame[]
+  createdAvatarFrames            AvatarFrame[]             @relation("AvatarFrameCreator")
   artist_since                   DateTime?                 @db.Timestamp(6)
   verification_type              String?                   @db.VarChar(30)
   adRequests                     Advertisement[]           @relation("AdRequester")
@@ -105,7 +105,7 @@ model User {
   wallet                         Wallet?
   groupTransactions              GroupTransaction[]
   conversationParticipants       ConversationParticipant[]
-  groupDmConversations           Conversation[]             @relation("GroupDmUser")
+  groupDmConversations           Conversation[]            @relation("GroupDmUser")
   sentMessages                   Message[]
   blocksGiven                    Block[]                   @relation("Blocker")
   blocksReceived                 Block[]                   @relation("Blocked")
@@ -181,6 +181,7 @@ model User {
   subscriptionPlans              SubscriptionPlan[]
   supportTickets                 SupportTicket[]           @relation("SupportTicketUser")
   supportTicketMessages          SupportTicketMessage[]    @relation("SupportTicketMessageSender")
+  albums                         Album[]
   two_factor_method              String?                   @db.VarChar(10)
   totp_secret                    String?
   totp_last_step                 Int?
@@ -191,14 +192,14 @@ model User {
   is_banned                      Boolean                   @default(false)
   // Automation settings (auto-follow-back, mute keywords, quiet hours, notify toggles)
   auto_follow_back               Boolean                   @default(false)
-  mute_keywords                   String[]                 @default([])
-  quiet_hours_enabled             Boolean                  @default(false)
-  quiet_hours_from                String                   @default("23:00") @db.VarChar(5)
-  quiet_hours_to                  String                   @default("08:00") @db.VarChar(5)
-  notify_new_fan                  Boolean                  @default(true)
-  notify_comment                  Boolean                  @default(true)
-  notify_repaw                    Boolean                  @default(false)
-  filter_spam                     Boolean                  @default(true)
+  mute_keywords                  String[]                  @default([])
+  quiet_hours_enabled            Boolean                   @default(false)
+  quiet_hours_from               String                    @default("23:00") @db.VarChar(5)
+  quiet_hours_to                 String                    @default("08:00") @db.VarChar(5)
+  notify_new_fan                 Boolean                   @default(true)
+  notify_comment                 Boolean                   @default(true)
+  notify_repaw                   Boolean                   @default(false)
+  filter_spam                    Boolean                   @default(true)
 }
 
 model PaymentMethod {
@@ -256,37 +257,37 @@ model EmailOtp {
 }
 
 model Post {
-  id                  String         @id @default(uuid()) @db.Uuid
+  id                  String              @id @default(uuid()) @db.Uuid
   content             String
-  author_id           String         @db.Uuid
-  rating              Int            @default(0)
-  is_nsfw             Boolean        @default(false)
-  is_announcement     Boolean        @default(false)
-  subscriber_only     Boolean        @default(false)
-  is_paid             Boolean        @default(false)
-  price               Decimal?       @db.Decimal(10, 2)
-  reward_for_user_id  String?        @db.Uuid
-  video_title         String?        @db.VarChar(255)
+  author_id           String              @db.Uuid
+  rating              Int                 @default(0)
+  is_nsfw             Boolean             @default(false)
+  is_announcement     Boolean             @default(false)
+  subscriber_only     Boolean             @default(false)
+  is_paid             Boolean             @default(false)
+  price               Decimal?            @db.Decimal(10, 2)
+  reward_for_user_id  String?             @db.Uuid
+  video_title         String?             @db.VarChar(255)
   video_description   String?
-  created_at          DateTime       @default(now())
-  updated_at          DateTime       @updatedAt
+  created_at          DateTime            @default(now())
+  updated_at          DateTime            @updatedAt
   deleted_at          DateTime?
   category            String?
-  title               String?        @db.VarChar(200)
-  post_type           String         @default("general") @db.VarChar(30)
-  media_urls          String[]       @default([])
-  media_original_urls String[]       @default([])
-  views_count         Int            @default(0)
-  is_archived         Boolean        @default(false)
-  comments_disabled   Boolean        @default(false)
-  is_ai_generated     Boolean        @default(false)
+  title               String?             @db.VarChar(200)
+  post_type           String              @default("general") @db.VarChar(30)
+  media_urls          String[]            @default([])
+  media_original_urls String[]            @default([])
+  views_count         Int                 @default(0)
+  is_archived         Boolean             @default(false)
+  comments_disabled   Boolean             @default(false)
+  is_ai_generated     Boolean             @default(false)
   comments            Comment[]
   favourites          Favourite[]
-  author              User           @relation("PostAuthor", fields: [author_id], references: [id])
-  rewardForUser       User?          @relation("PostRewardFor", fields: [reward_for_user_id], references: [id])
+  author              User                @relation("PostAuthor", fields: [author_id], references: [id])
+  rewardForUser       User?               @relation("PostRewardFor", fields: [reward_for_user_id], references: [id])
   tags                PostTag[]
   repaws              Repaw[]
-  pinnedBy            User[]         @relation("UserPinnedPost")
+  pinnedBy            User[]              @relation("UserPinnedPost")
   groupPosts          GroupPost[]
   activities          UserActivity[]
   votes               Vote[]
@@ -301,13 +302,13 @@ model Post {
 // Файл в хранилище и его владелец. Объекты без записи (загружены до введения учёта)
 // не имеют владельца: их нельзя прикреплять к новому контенту и удалять через API.
 model MediaObject {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  object_key  String    @unique @db.VarChar(255)
-  owner_id    String?   @db.Uuid
-  folder      String    @db.VarChar(40)
-  size_bytes  BigInt
-  created_at  DateTime  @default(now())
-  deleted_at  DateTime?
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  object_key String    @unique @db.VarChar(255)
+  owner_id   String?   @db.Uuid
+  folder     String    @db.VarChar(40)
+  size_bytes BigInt
+  created_at DateTime  @default(now())
+  deleted_at DateTime?
 
   owner User? @relation(fields: [owner_id], references: [id], onDelete: SetNull)
 
@@ -337,31 +338,31 @@ model PostNotInterested {
 /// postService.createPost / groupService.createGroupPost) only at publish time —
 /// see scheduledService.publishDueOnes.
 model ScheduledPost {
-  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  author_id            String    @db.Uuid
-  group_id             String?   @db.Uuid
-  content              String
-  media_urls           String[]  @default([])
-  media_original_urls  String[]  @default([])
-  is_nsfw              Boolean   @default(false)
-  is_ai_generated      Boolean   @default(false)
-  category             String?
-  tags                 String[]  @default([])
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  author_id           String    @db.Uuid
+  group_id            String?   @db.Uuid
+  content             String
+  media_urls          String[]  @default([])
+  media_original_urls String[]  @default([])
+  is_nsfw             Boolean   @default(false)
+  is_ai_generated     Boolean   @default(false)
+  category            String?
+  tags                String[]  @default([])
   /// draft | scheduled | published | failed
-  status               String    @default("scheduled") @db.VarChar(20)
-  scheduled_at         DateTime?
+  status              String    @default("scheduled") @db.VarChar(20)
+  scheduled_at        DateTime?
   /// IANA zone, display-only — scheduled_at is already stored as UTC
-  timezone             String?   @db.VarChar(64)
+  timezone            String?   @db.VarChar(64)
   /// null | daily | weekly | monthly
-  repeat_interval      String?   @db.VarChar(20)
-  repeat_until         DateTime?
-  occurrences_count    Int       @default(0)
-  last_error           String?
-  published_post_id    String?   @db.Uuid
-  created_at           DateTime  @default(now())
-  updated_at           DateTime  @updatedAt
+  repeat_interval     String?   @db.VarChar(20)
+  repeat_until        DateTime?
+  occurrences_count   Int       @default(0)
+  last_error          String?
+  published_post_id   String?   @db.Uuid
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
 
-  author User  @relation(fields: [author_id], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [author_id], references: [id], onDelete: Cascade)
   group  Group? @relation(fields: [group_id], references: [id], onDelete: Cascade)
 
   @@index([status, scheduled_at])
@@ -598,24 +599,24 @@ model Follow {
 }
 
 model Notification {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  receiver_id    String    @db.Uuid
-  sender_id      String?   @db.Uuid
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receiver_id     String    @db.Uuid
+  sender_id       String?   @db.Uuid
   /// Set when the action was taken "as" a group (mirrors Comment.group_id) — the sender's
   /// personal identity should be masked in favor of the group's name/avatar for display.
-  sender_group_id String?  @db.Uuid
-  type        String
-  post_id     String?   @db.Uuid
-  comment_id  String?   @db.Uuid
-  read        Boolean   @default(false)
-  created_at  DateTime  @default(now())
-  deleted_at  DateTime?
-  ref_id      String?   @db.Uuid
+  sender_group_id String?   @db.Uuid
+  type            String
+  post_id         String?   @db.Uuid
+  comment_id      String?   @db.Uuid
+  read            Boolean   @default(false)
+  created_at      DateTime  @default(now())
+  deleted_at      DateTime?
+  ref_id          String?   @db.Uuid
   /// Small structured payload for system notifications (e.g. AutoMod warn count/reason) — not used by social notifications
-  meta        Json?
-  receiver    User      @relation("NotificationReceiver", fields: [receiver_id], references: [id], onDelete: Cascade)
-  sender      User?     @relation("NotificationSender", fields: [sender_id], references: [id])
-  senderGroup Group?    @relation("NotificationSenderGroup", fields: [sender_group_id], references: [id])
+  meta            Json?
+  receiver        User      @relation("NotificationReceiver", fields: [receiver_id], references: [id], onDelete: Cascade)
+  sender          User?     @relation("NotificationSender", fields: [sender_id], references: [id])
+  senderGroup     Group?    @relation("NotificationSenderGroup", fields: [sender_group_id], references: [id])
 
   @@index([receiver_id])
   @@index([receiver_id, read], map: "Notification_receiver_read_idx")
@@ -657,23 +658,23 @@ model MediaHistory {
 }
 
 model Report {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  reporter_id String    @db.Uuid
-  target_type String
-  target_id   String    @db.Uuid
-  reason      String
-  status      String    @default("pending")
-  resolved_by String?   @db.Uuid
-  note        String?
-  priority    Int       @default(0)
-  ai_category String?   @db.VarChar(50)
-  ai_score    Float     @default(0)
-  evidence_urls String[] @default([])
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @default(now()) @updatedAt
-  deleted_at  DateTime?
-  reporter    User      @relation("ReportReporter", fields: [reporter_id], references: [id])
-  resolver    User?     @relation("ReportResolver", fields: [resolved_by], references: [id])
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reporter_id   String    @db.Uuid
+  target_type   String
+  target_id     String    @db.Uuid
+  reason        String
+  status        String    @default("pending")
+  resolved_by   String?   @db.Uuid
+  note          String?
+  priority      Int       @default(0)
+  ai_category   String?   @db.VarChar(50)
+  ai_score      Float     @default(0)
+  evidence_urls String[]  @default([])
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @default(now()) @updatedAt
+  deleted_at    DateTime?
+  reporter      User      @relation("ReportReporter", fields: [reporter_id], references: [id])
+  resolver      User?     @relation("ReportResolver", fields: [resolved_by], references: [id])
 
   @@index([status])
   @@index([priority(sort: Desc), status])
@@ -689,7 +690,7 @@ model AutoModLog {
   score              Float     @default(0)
   details            String?
   post_id            String?   @db.Uuid
-  image_url          String?   // evidence photo attached by a moderator when resolving a report with a warning
+  image_url          String? // evidence photo attached by a moderator when resolving a report with a warning
   appeal_status      String    @default("none") @db.VarChar(20) // 'none' | 'pending' | 'accepted' | 'rejected'
   appeal_text        String?
   appeal_created_at  DateTime?
@@ -740,22 +741,22 @@ model RelationshipRequest {
 // ── Messages ──────────────────────────────────────────────────────────────────
 
 model Conversation {
-  id           String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at   DateTime                  @default(now())
-  updated_at   DateTime                  @updatedAt
-  deleted_at   DateTime?
-  type         String                    @default("direct") @db.VarChar(20) // direct | group | community
-  is_group     Boolean                   @default(false) // kept for back-compat; type='group' ⇒ is_group=true. type='community' is a 1:1-style thread and stays false.
-  name         String?                   @db.VarChar(100)
-  avatar_url   String?
-  banner_url   String?
-  group_id          String?  @db.Uuid // set when type='community'; many conversations share the same group_id (one per group_dm_user_id)
-  group_dm_user_id  String?  @db.Uuid // set when type='community': the regular member's personal thread with the group; null on legacy shared group rooms
-  participants ConversationParticipant[]
-  messages     Message[]
-  keys         ConversationKey[]
-  group         Group? @relation("GroupCommunityChat", fields: [group_id], references: [id], onDelete: SetNull)
-  group_dm_user User?  @relation("GroupDmUser", fields: [group_dm_user_id], references: [id], onDelete: Cascade)
+  id               String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at       DateTime                  @default(now())
+  updated_at       DateTime                  @updatedAt
+  deleted_at       DateTime?
+  type             String                    @default("direct") @db.VarChar(20) // direct | group | community
+  is_group         Boolean                   @default(false) // kept for back-compat; type='group' ⇒ is_group=true. type='community' is a 1:1-style thread and stays false.
+  name             String?                   @db.VarChar(100)
+  avatar_url       String?
+  banner_url       String?
+  group_id         String?                   @db.Uuid // set when type='community'; many conversations share the same group_id (one per group_dm_user_id)
+  group_dm_user_id String?                   @db.Uuid // set when type='community': the regular member's personal thread with the group; null on legacy shared group rooms
+  participants     ConversationParticipant[]
+  messages         Message[]
+  keys             ConversationKey[]
+  group            Group?                    @relation("GroupCommunityChat", fields: [group_id], references: [id], onDelete: SetNull)
+  group_dm_user    User?                     @relation("GroupDmUser", fields: [group_dm_user_id], references: [id], onDelete: Cascade)
 
   pinned_message_id String?  @db.Uuid
   pinnedMessage     Message? @relation("ConvPinnedMessage", fields: [pinned_message_id], references: [id], onDelete: SetNull)
@@ -815,7 +816,7 @@ model ConversationParticipant {
   role                       String       @default("member") @db.VarChar(20)
   label                      String       @default("default") @db.VarChar(20) // default | customer
   personal_pinned_message_id String?      @db.Uuid
-  muted_until                DateTime?    // null = not muted; far-future = muted indefinitely
+  muted_until                DateTime? // null = not muted; far-future = muted indefinitely
   sound_muted                Boolean      @default(false) // sound off, but toast/badge still shown
   conversation               Conversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
   user                       User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
@@ -858,6 +859,7 @@ model Message {
 
 model Group {
   id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  albums       Album[]
   slug         String    @unique @db.VarChar(60)
   slug_aliases String[]  @default([]) // Old slugs kept for redirect
   name         String    @db.VarChar(120)
@@ -932,23 +934,23 @@ model Group {
   // Group balance — credited by member donations (Wallet-funded), spent by the owner outside the app for now
   balance Decimal @default(0.00) @db.Decimal(18, 2)
 
-  owner          User               @relation("GroupOwner", fields: [owner_id], references: [id], onDelete: Cascade)
-  members        GroupMember[]
-  events         Event[]
-  commissionInfo CommissionInfo?
-  posts          GroupPost[]
-  comments       Comment[]
-  ratings        GroupRating[]
-  groupMessages  GroupMessage[]
-  groupDmThreads Conversation[]     @relation("GroupCommunityChat")
-  activities     Activity[]
-  todoItems      GroupTodoItem[]
-  customRoles    GroupCustomRole[]
-  bookmarks      GroupBookmark[]
-  subscribers    GroupSubscriber[]
-  orders         Order[]
-  transactions   GroupTransaction[]
-  sentNotifications Notification[]  @relation("NotificationSenderGroup")
+  owner             User               @relation("GroupOwner", fields: [owner_id], references: [id], onDelete: Cascade)
+  members           GroupMember[]
+  events            Event[]
+  commissionInfo    CommissionInfo?
+  posts             GroupPost[]
+  comments          Comment[]
+  ratings           GroupRating[]
+  groupMessages     GroupMessage[]
+  groupDmThreads    Conversation[]     @relation("GroupCommunityChat")
+  activities        Activity[]
+  todoItems         GroupTodoItem[]
+  customRoles       GroupCustomRole[]
+  bookmarks         GroupBookmark[]
+  subscribers       GroupSubscriber[]
+  orders            Order[]
+  transactions      GroupTransaction[]
+  sentNotifications Notification[]     @relation("NotificationSenderGroup")
   scheduledPosts    ScheduledPost[]
 
   @@index([owner_id])
@@ -995,14 +997,14 @@ enum TodoStatus {
 }
 
 model GroupTodoItem {
-  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  group_id    String     @db.Uuid
-  title       String     @db.VarChar(200)
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  group_id    String    @db.Uuid
+  title       String    @db.VarChar(200)
   description String?
-  status      String     @default("WAITING") @db.VarChar(30) // key of a Group.todo_columns entry (or default stage)
-  position    Int        @default(0)
-  created_at  DateTime   @default(now())
-  updated_at  DateTime   @updatedAt
+  status      String    @default("WAITING") @db.VarChar(30) // key of a Group.todo_columns entry (or default stage)
+  position    Int       @default(0)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
   deleted_at  DateTime?
 
   group Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
@@ -1333,27 +1335,27 @@ model DealerListing {
 // ── Avatar Frames ─────────────────────────────────────────────────────────────
 
 model AvatarFrame {
-  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  listing_id        String?   @unique @db.Uuid
-  creator_id        String    @db.Uuid
-  name              String    @db.VarChar(120)
-  image_url         String
-  price             Decimal   @default(0) @db.Decimal(10, 2)
-  default_offset_x  Float     @default(0)
-  default_offset_y  Float     @default(0)
-  default_scale     Float     @default(1)
-  default_rotation  Float     @default(0)
-  status            String    @default("pending") @db.VarChar(20) // pending | approved | rejected
-  rejection_reason  String?
-  reviewed_by       String?   @db.Uuid
-  reviewed_at       DateTime? @db.Timestamp(6)
-  created_at        DateTime  @default(now()) @db.Timestamp(6)
-  deleted_at        DateTime? @db.Timestamp(6)
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  listing_id       String?   @unique @db.Uuid
+  creator_id       String    @db.Uuid
+  name             String    @db.VarChar(120)
+  image_url        String
+  price            Decimal   @default(0) @db.Decimal(10, 2)
+  default_offset_x Float     @default(0)
+  default_offset_y Float     @default(0)
+  default_scale    Float     @default(1)
+  default_rotation Float     @default(0)
+  status           String    @default("pending") @db.VarChar(20) // pending | approved | rejected
+  rejection_reason String?
+  reviewed_by      String?   @db.Uuid
+  reviewed_at      DateTime? @db.Timestamp(6)
+  created_at       DateTime  @default(now()) @db.Timestamp(6)
+  deleted_at       DateTime? @db.Timestamp(6)
 
-  creator      User              @relation("AvatarFrameCreator", fields: [creator_id], references: [id], onDelete: Cascade)
-  listing      DealerListing?    @relation(fields: [listing_id], references: [id], onDelete: SetNull)
-  owners       UserAvatarFrame[]
-  equippedBy   User[]            @relation("EquippedFrame")
+  creator    User              @relation("AvatarFrameCreator", fields: [creator_id], references: [id], onDelete: Cascade)
+  listing    DealerListing?    @relation(fields: [listing_id], references: [id], onDelete: SetNull)
+  owners     UserAvatarFrame[]
+  equippedBy User[]            @relation("EquippedFrame")
 
   @@index([status])
   @@index([creator_id])
@@ -1899,22 +1901,22 @@ model GroupBookmark {
 // ── Help Center: support tickets (bug reports / feedback / questions) ────────
 
 model SupportTicket {
-  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id           String?   @db.Uuid
-  type              String    @default("question") @db.VarChar(20) // bug, feedback, question, other
-  subject           String    @db.VarChar(150)
-  contact_email     String?   @db.VarChar(255)
-  status            String    @default("open") @db.VarChar(20) // open, in_progress, resolved, closed
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id          String?  @db.Uuid
+  type             String   @default("question") @db.VarChar(20) // bug, feedback, question, other
+  subject          String   @db.VarChar(150)
+  contact_email    String?  @db.VarChar(255)
+  status           String   @default("open") @db.VarChar(20) // open, in_progress, resolved, closed
   // 'app' = created from the in-app Help form; 'email' = created from an inbound message to the support mailbox.
-  source            String    @default("app") @db.VarChar(10)
+  source           String   @default("app") @db.VarChar(10)
   // Raw sender address for email-origin tickets (used as the reply-to target); distinct from contact_email.
-  external_email    String?   @db.VarChar(255)
+  external_email   String?  @db.VarChar(255)
   // Message-ID of the most recent inbound email in this thread, for In-Reply-To/References on outgoing replies.
-  email_message_id  String?   @db.VarChar(255)
-  created_at        DateTime  @default(now())
-  updated_at        DateTime  @default(now()) @updatedAt
+  email_message_id String?  @db.VarChar(255)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @default(now()) @updatedAt
 
-  user     User?                 @relation("SupportTicketUser", fields: [user_id], references: [id], onDelete: Cascade)
+  user     User?                  @relation("SupportTicketUser", fields: [user_id], references: [id], onDelete: Cascade)
   messages SupportTicketMessage[]
 
   @@index([user_id])
@@ -1936,4 +1938,36 @@ model SupportTicketMessage {
   sender User?         @relation("SupportTicketMessageSender", fields: [sender_user_id], references: [id])
 
   @@index([ticket_id])
+}
+
+/// Пользовательский альбом медиа: принадлежит либо профилю (user_id), либо группе (group_id).
+model Album {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String?  @db.Uuid
+  group_id    String?  @db.Uuid
+  title       String   @db.VarChar(80)
+  description String?  @db.VarChar(500)
+  // public | friends (профиль: взаимные подписки; группа: участники) | private (только владелец / модерация)
+  privacy     String   @default("public") @db.VarChar(10)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now()) @updatedAt
+
+  user  User?       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  group Group?      @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  items AlbumItem[]
+
+  @@index([user_id])
+  @@index([group_id])
+}
+
+model AlbumItem {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  album_id   String   @db.Uuid
+  media_url  String   @db.VarChar(1024)
+  position   Int
+  created_at DateTime @default(now())
+
+  album Album @relation(fields: [album_id], references: [id], onDelete: Cascade)
+
+  @@index([album_id, position])
 }

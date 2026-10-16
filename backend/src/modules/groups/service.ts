@@ -991,7 +991,7 @@ export const groupService = {
   },
 
   // ── Group posts ──────────────────────────────────────────────────────────
-  async getGroupPosts(groupId: string, page = 1, limit = 20, hasMedia = false, viewerId: string | null = null) {
+  async getGroupPosts(groupId: string, page = 1, limit = 20, hasMedia = false, viewerId: string | null = null, archived = false) {
     const skip = (page - 1) * limit;
     const hasSubscriberAccess = viewerId ? await groupService.hasSubscriberAccess(groupId, viewerId) : false;
     return prisma.groupPost.findMany({
@@ -1000,6 +1000,8 @@ export const groupService = {
         group: { deleted_at: null },
         post: {
           deleted_at: null,
+          // Архивные посты раньше не отфильтровывались и возвращались в ленту после обновления страницы
+          is_archived: archived,
           ...(hasSubscriberAccess ? {} : { subscriber_only: false }),
           ...(hasMedia ? { media_urls: { isEmpty: false } } : {}),
         },

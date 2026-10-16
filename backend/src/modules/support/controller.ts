@@ -4,6 +4,7 @@ import {
   adminGetTickets, adminReplyTicket, SUPPORT_TICKET_STATUSES,
 } from './service.js';
 import { isModerator } from '../../lib/roles.js';
+import { canReadPrivateMedia, findPrivateMediaRow, openPrivateObject } from '../media/service.js';
 import { errMessage, errStatus } from '../../lib/httpErrors.js';
 
 // POST /api/support/tickets
@@ -82,4 +83,33 @@ export async function adminReplyTicketHandler(request: FastifyRequest, reply: Fa
   const ticket = await adminReplyTicket(id, user.id, { status, adminReply: admin_reply });
   if (!ticket) return reply.code(404).send({ success: false, error: { message: 'Ticket not found' } });
   return reply.send({ success: true, data: { ticket } });
+}
+
+// GET /api/support/attachment?url=… — вложение обращения из закрытого префикса private/reports/.
+// Бакет его напрямую не отдаёт, поэтому раньше автор обращения не видел свои файлы.
+// Доступ: автор загрузки и модераторы (canReadPrivateMedia).
+export async function getAttachmentHandler(
+  request: FastifyRequest<{ Querystring: { url?: string } }>,
+  reply: FastifyReply,
+) {
+  const url = request.query.url;
+  if (typeof url !== 'string' || url.length === 0 || url.length > 2048) {
+    return reply.code(400).send({ success: false, error: { message: 'Некорректная ссылка' } });
+  }
+  const row = await findPrivateMediaRow(url);
+  if (!row || row.folder !== 'reports' || !canReadPrivateMedia(row, request.user)) {
+    return reply.code(404).send({ success: false, error: { message: 'Файл не найден' } });
+  }
+  let opened;
+  try {
+    opened = await openPrivateObject(row.object_key);
+  } catch {
+    return reply.code(404).send({ success: false, error: { message: 'Файл недоступен' } });
+  }
+  reply.header('Cache-Control', 'private, no-store');
+  reply.header('X-Content-Type-Options', 'nosniff');
+  reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
+  reply.header('Content-Type', opened.contentType);
+  reply.header('Content-Length', opened.size);
+  return reply.send(opened.stream);
 }

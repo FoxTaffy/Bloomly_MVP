@@ -46,13 +46,13 @@ function avatarInitial(name: string | null | undefined) {
       >
         {{ avatarInitial(friend.display_name || friend.username) }}
       </div>
-      <!-- Online indicator — shows the device icon when we know it -->
+      <!-- Online indicator: мобильный/планшет — заливная иконка девайса, ПК и неизвестный девайс — зелёный кружок -->
       <span
-        v-if="friend.online && deviceKind(friend.device)"
+        v-if="friend.online && deviceKind(friend.device) && deviceKind(friend.device) !== 'desktop'"
         :title="friend.device ?? undefined"
-        class="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-brand-card bg-brand-success flex items-center justify-center"
+        class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-brand-card flex items-center justify-center"
       >
-        <component :is="deviceIconFor[deviceKind(friend.device)!]" class="w-2 h-2 text-black/70" />
+        <component :is="deviceIconFor[deviceKind(friend.device)!]" class="w-4 h-4 text-brand-success fill-brand-success" />
       </span>
       <span
         v-else

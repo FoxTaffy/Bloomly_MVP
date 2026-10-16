@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } 
 import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
   createTicketHandler, getMyTicketsHandler, getMyTicketHandler, addTicketMessageHandler,
-  adminGetTicketsHandler, adminReplyTicketHandler,
+  adminGetTicketsHandler, adminReplyTicketHandler, getAttachmentHandler,
 } from './controller.js';
 
 export async function supportRoutes(fastify: FastifyInstance) {
@@ -13,6 +13,8 @@ export async function supportRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof getMyTicketsHandler>>('/tickets',      auth, getMyTicketsHandler);
   fastify.get<RouteGenericOf<typeof getMyTicketHandler>>('/tickets/:id',  auth, getMyTicketHandler);
   fastify.post<RouteGenericOf<typeof addTicketMessageHandler>>('/tickets/:id/messages', { ...auth, config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } } as RouteShorthandOptions, addTicketMessageHandler);
+
+  fastify.get<RouteGenericOf<typeof getAttachmentHandler>>('/attachment', auth, getAttachmentHandler);
 
   // Admin endpoints
   fastify.get<RouteGenericOf<typeof adminGetTicketsHandler>>('/admin/tickets',       auth, adminGetTicketsHandler);

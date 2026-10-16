@@ -514,8 +514,8 @@ export const useGroupsStore = defineStore('groups', () => {
 
   // ── Group Posts ───────────────────────────────────────────────────────────
 
-  async function loadGroupPosts(groupId: string, page = 1, limit = 20, hasMedia = false) {
-    const { data } = await api.get(`/groups/${groupId}/posts`, { params: { page, limit, hasMedia: hasMedia || undefined } })
+  async function loadGroupPosts(groupId: string, page = 1, limit = 20, hasMedia = false, archived = false) {
+    const { data } = await api.get(`/groups/${groupId}/posts`, { params: { page, limit, hasMedia: hasMedia || undefined, archived: archived || undefined } })
     return data.data.posts
   }
 
