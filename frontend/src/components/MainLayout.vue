@@ -84,7 +84,7 @@ const groupContextMap = reactive<Record<string, { id: string; slug: string; name
 
 // Admin/owner groups filtered for post-as selector
 const adminGroups = computed(() =>
-  groupsStore.myGroups.filter(m => ['owner', 'admin'].includes(m.role)).map(m => m.group)
+  groupsStore.managedGroups
 )
 
 const closeCreateModal = () => {

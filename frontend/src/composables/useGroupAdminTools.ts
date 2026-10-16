@@ -37,9 +37,7 @@ export function useGroupAdminTools() {
     if (!g) return null
 
     const isOwner = g.owner_id === auth.user.id
-    const isAdmin = groupsStore.myGroups.some(
-      m => m.group_id === g!.id && ['owner', 'admin'].includes(m.role)
-    )
+    const isAdmin = groupsStore.managesGroup(g.id)
     return (isOwner || isAdmin) ? g : null
   })
 

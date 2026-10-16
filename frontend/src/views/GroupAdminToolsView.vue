@@ -30,7 +30,7 @@ const group = computed(() => groupsStore.currentGroup)
 const isOwner = computed(() => group.value?.owner_id === authStore.user?.id)
 const isAdmin = computed(() => {
   if (isOwner.value) return true
-  return groupsStore.myGroups.some(m => m.group_id === group.value?.id && ['admin', 'owner'].includes(m.role))
+  return groupsStore.managesGroup(group.value?.id)
 })
 
 interface ToolTab {

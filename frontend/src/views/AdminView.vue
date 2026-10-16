@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth'
 import BIcon from '../components/BIcon.vue'
 import { createAdminContext, provideAdminContext, type AdminTab } from '@/components/admin/adminContext'
 import { ROLE_RANK, roleLabel, roleColor, formatNum } from '@/components/admin/adminHelpers'
+import { isModerator } from '@/lib/roles'
 import AdminOverviewTab from '@/components/admin/AdminOverviewTab.vue'
 import AdminUsersTab from '@/components/admin/AdminUsersTab.vue'
 import AdminPostsTab from '@/components/admin/AdminPostsTab.vue'
@@ -33,7 +34,7 @@ const { myRole, myRoleRank, activeTab, switchTab, badges, adminActionError, stat
 onMounted(async () => {
   await auth.fetchMe()
   const role = (auth.user as any)?.role
-  if (!role || (ROLE_RANK[role] ?? 0) < ROLE_RANK.moderator) {
+  if (!isModerator(role)) {
     router.replace({ name: 'home' })
   } else {
     fetchStats()

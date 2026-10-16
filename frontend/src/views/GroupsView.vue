@@ -88,9 +88,7 @@ const displayGroups = computed(() => {
   if (sidebarTab.value === 'my') {
     list = groupsStore.myGroups.map(m => m.group)
   } else if (sidebarTab.value === 'managed') {
-    list = groupsStore.myGroups
-      .filter(m => ['owner', 'admin'].includes(m.role))
-      .map(m => m.group)
+    list = groupsStore.managedGroups
   } else if (sidebarTab.value === 'trending') {
     list = groupsStore.trendingGroups
   } else {

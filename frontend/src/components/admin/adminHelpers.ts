@@ -2,8 +2,7 @@
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import * as fmt from '@/lib/format'
 
-// ── Staff role hierarchy: user < moderator < admin < owner ──────────────
-export const ROLE_RANK: Record<string, number> = { user: 0, moderator: 1, admin: 2, owner: 3 }
+export { ROLE_RANK } from '@/lib/roles'
 
 export const roleLabel = (role: string) => {
   const t = useLangStore().t

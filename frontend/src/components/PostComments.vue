@@ -26,7 +26,7 @@ const showEntityPicker = ref(false)
 const entityBtnRef = ref<HTMLElement | null>(null)
 const entityPickerPos = ref({ top: '0px', left: '0px' })
 const adminGroups = computed(() =>
-  groupsStore.myGroups.filter(m => ['owner', 'admin'].includes(m.role)).map(m => m.group)
+  groupsStore.managedGroups
 )
 function toggleEntityPicker() {
   if (!showEntityPicker.value && entityBtnRef.value) {

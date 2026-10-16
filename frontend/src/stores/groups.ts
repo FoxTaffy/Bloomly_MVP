@@ -9,6 +9,9 @@ export type EventStatus = 'announced' | 'tickets_open' | 'sold_out' | 'active' |
 
 export type MemberRole = 'owner' | 'admin' | 'moderator' | 'member' | 'dealer' | 'volunteer' | 'guest_of_honor'
 
+/** Owner or admin of a group: may manage it and post on its behalf. */
+export const isGroupManagerRole = (role: string) => role === 'owner' || role === 'admin'
+
 export interface GroupMember {
   group_id: string
   user_id: string
@@ -296,6 +299,11 @@ export const useGroupsStore = defineStore('groups', () => {
   const groups = ref<Group[]>([])
   const currentGroup = ref<Group | null>(null)
   const myGroups = ref<GroupMembership[]>([])
+  /** Groups I own or administer. */
+  const managedGroups = computed(() => myGroups.value.filter(m => isGroupManagerRole(m.role)).map(m => m.group))
+  /** Whether I own or administer the given group. */
+  const managesGroup = (groupId: string | null | undefined) =>
+    !!groupId && myGroups.value.some(m => m.group_id === groupId && isGroupManagerRole(m.role))
   const mySubscriptions = ref<string[]>([]) // group ids the user is subscribed to (notification-only)
   const events = ref<EventItem[]>([])
   const currentEvent = ref<EventItem | null>(null)
@@ -739,7 +747,7 @@ export const useGroupsStore = defineStore('groups', () => {
   }
 
   return {
-    groups, currentGroup, myGroups, mySubscriptions, events, currentEvent, mySoonBadges,
+    groups, currentGroup, myGroups, managedGroups, managesGroup, mySubscriptions, events, currentEvent, mySoonBadges,
     isLoading, total,
     trendingGroups, trendingTotal, isTrendingLoading,
     eventGroups, creativeGroups, staticGroups, newsGroups, shopGroups, communityGroups, brandGroups,

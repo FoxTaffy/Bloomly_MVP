@@ -4,6 +4,9 @@ import { isBlockedBy } from '../../lib/blocks.js';
 import { deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import type { SendMessageInput, GetMessagesQuery } from './types.js';
 
+// Group roles that answer the group's inbox (group DMs) on its behalf.
+const CHAT_STAFF_ROLES: readonly string[] = ['owner', 'admin', 'moderator'];
+
 // ── In-process real-time delivery ─────────────────────────────────────────────
 // Registered by server.ts when a WebSocket connection authenticates.
 type PushFn = (payload: string) => void;
@@ -1055,7 +1058,7 @@ export const messageService = {
    */
   async getGroupInbox(groupId: string, requesterId: string) {
     const role = await this._getGroupRole(groupId, requesterId);
-    if (!role || !['owner', 'admin', 'moderator'].includes(role)) {
+    if (!role || !CHAT_STAFF_ROLES.includes(role)) {
       throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
     }
 
@@ -1188,7 +1191,7 @@ export const messageService = {
     // member's personal thread with that group without being a participant on it.
     if (conv.group_id && conv.group_dm_user_id) {
       const role = await this._getGroupRole(conv.group_id, userId);
-      if (role && ['owner', 'admin', 'moderator'].includes(role)) return;
+      if (role && CHAT_STAFF_ROLES.includes(role)) return;
     }
 
     throw Object.assign(new Error('Not a participant'), { statusCode: 403 });
