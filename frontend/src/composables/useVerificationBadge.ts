@@ -1,7 +1,5 @@
-import type { translations } from '@/locales/translations'
+import type { Translation as T } from '@/locales/translations'
 import { verTypeIconUrl, VERIFICATION_ICON_TYPES } from '@/lib/verificationIcons'
-
-type T = (typeof translations)['RU']
 
 /** PNG badge icon URL for a verification type; null for generic/unknown types (falls back to a checkmark). */
 export function verificationBadgeIconUrl(verificationType?: string | null): string | null {
