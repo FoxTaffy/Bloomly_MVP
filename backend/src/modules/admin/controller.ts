@@ -117,6 +117,17 @@ export const updateUserRoleHandler = async (
   return reply.send({ success: true, data: { user }, error: null });
 };
 
+export const getSponsorsHandler = async (
+  req: FastifyRequest<{ Querystring: { page?: string; limit?: string; search?: string } }>,
+  reply: FastifyReply,
+) => {
+  if (!requireModerator(req, reply)) return;
+  const page  = parseInt(req.query.page  || '1');
+  const limit = parseInt(req.query.limit || '30');
+  const result = await adminService.getSponsors(page, limit, req.query.search);
+  return reply.send({ success: true, data: result, error: null });
+};
+
 export const updateUserSponsorHandler = async (
   req: FastifyRequest<{ Params: { id: string }; Body: { is_sponsor: boolean } }>,
   reply: FastifyReply,

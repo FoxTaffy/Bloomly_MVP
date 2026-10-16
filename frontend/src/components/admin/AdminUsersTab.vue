@@ -211,6 +211,39 @@ const onFrozenSearch = () => {
   frozenSearchDebounce = setTimeout(() => { frozenPage.value = 1; fetchFrozenUsers() }, 300)
 }
 
+// ── Sponsors ──────────────────────────────────────────────────────────
+const sponsorUsers = ref<any[]>([])
+const sponsorPage = ref(1)
+const sponsorTotal = ref(0)
+const sponsorSearch = ref('')
+const isLoadingSponsors = ref(false)
+let sponsorSearchDebounce: ReturnType<typeof setTimeout>
+
+const fetchSponsors = async () => {
+  isLoadingSponsors.value = true
+  try {
+    const res = await api.get('/admin/users/sponsors', { params: { page: sponsorPage.value, search: sponsorSearch.value || undefined } })
+    if (res.data.success) { sponsorUsers.value = res.data.data.users; sponsorTotal.value = res.data.data.total }
+  } catch {} finally { isLoadingSponsors.value = false }
+}
+
+const onSponsorSearch = () => {
+  clearTimeout(sponsorSearchDebounce)
+  sponsorSearchDebounce = setTimeout(() => { sponsorPage.value = 1; fetchSponsors() }, 300)
+}
+
+const revokeSponsor = async (userId: string) => {
+  try {
+    await api.patch(`/admin/users/${userId}/sponsor`, { is_sponsor: false })
+    sponsorUsers.value = sponsorUsers.value.filter(u => u.id !== userId)
+    sponsorTotal.value = Math.max(0, sponsorTotal.value - 1)
+    const u = users.value.find(x => x.id === userId)
+    if (u) u.is_sponsor = false
+  } catch (e) {
+    showActionError(apiErrorMessage(e) || 'Не удалось снять статус спонсора')
+  }
+}
+
 // ── Archived Users ────────────────────────────────────────────────────
 const archivedUsers = ref<any[]>([])
 const archivedPage = ref(1)
@@ -367,6 +400,7 @@ watch(usersViewMode, (mode) => {
   if (mode === 'team' && !staff.value.length) fetchStaff()
   if (mode === 'frozen' && !frozenUsers.value.length) fetchFrozenUsers()
   if (mode === 'archived' && !archivedUsers.value.length) fetchArchivedUsers()
+  if (mode === 'sponsors' && !sponsorUsers.value.length) fetchSponsors()
 }, { immediate: true })
 
 // Header search in AdminView jumps here with the query pre-filled
@@ -420,6 +454,13 @@ watchEffect(() => { badges.users = userTotal.value })
         <BIcon name="Ban" class="w-3.5 h-3.5" /> {{ langStore.t.adminNavBanned }}
         <span v-if="archivedTotal" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
           :class="usersViewMode === 'archived' ? 'bg-rose-400/20 text-rose-300' : 'bg-white/10 text-white/40'">{{ archivedTotal }}</span>
+      </button>
+      <button type="button" @click="switchUsersView('sponsors')"
+        class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+        :class="usersViewMode === 'sponsors' ? 'bg-violet-500/20 text-violet-300' : 'text-white/40 hover:text-white/70'">
+        <img src="/icons/badges/sponsor.png" alt="" class="w-3.5 h-3.5 object-contain" /> {{ langStore.t.adminNavSponsors }}
+        <span v-if="sponsorTotal" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+          :class="usersViewMode === 'sponsors' ? 'bg-violet-400/20 text-violet-200' : 'bg-white/10 text-white/40'">{{ sponsorTotal }}</span>
       </button>
     </div>
 
@@ -814,6 +855,62 @@ watchEffect(() => { badges.users = userTotal.value })
     </template>
 
     <!-- ── Banned accounts (merged in from the old separate tab) ──── -->
+    <template v-else-if="usersViewMode === 'sponsors'">
+    <div class="flex flex-wrap items-center gap-3 mb-5">
+      <div class="relative flex-1 max-w-sm">
+        <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+        <input v-model="sponsorSearch" @input="onSponsorSearch" type="text" :placeholder="langStore.t.adminSearchPlaceholderSponsors"
+          class="w-full bg-white/5 border border-white/[0.08] rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
+            outline-none focus:border-violet-500/40 focus:bg-white/[0.08] transition-all" />
+      </div>
+      <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/[0.08]">{{ sponsorTotal }}</span>
+    </div>
+
+    <div class="rounded-3xl border border-brand-border overflow-hidden" style="background:#1F223C">
+      <div v-if="isLoadingSponsors" class="divide-y divide-brand-border">
+        <div v-for="n in 4" :key="n" class="flex items-center gap-3 px-5 py-3.5 animate-pulse">
+          <div class="w-9 h-9 rounded-full bg-white/[0.08] flex-shrink-0" />
+          <div class="flex-1 space-y-2">
+            <div class="h-3 bg-white/[0.08] rounded-full w-32" /><div class="h-2 bg-white/5 rounded-full w-24" />
+          </div>
+        </div>
+      </div>
+      <div v-else-if="sponsorUsers.length === 0"
+        class="flex flex-col items-center gap-3 py-16 text-white/25">
+        <img src="/icons/badges/sponsor.png" alt="" class="w-10 h-10 object-contain opacity-40" />
+        <p class="text-sm font-semibold">{{ langStore.t.adminNoSponsors }}</p>
+      </div>
+      <div v-else class="divide-y divide-brand-border">
+        <div v-for="user in sponsorUsers" :key="user.id"
+          class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-all group">
+          <img v-if="user.avatar_url" :src="user.avatar_url"
+            class="w-9 h-9 rounded-full object-cover border border-white/10 flex-shrink-0" />
+          <div v-else class="w-9 h-9 rounded-full border border-violet-500/20 bg-violet-500/10 flex items-center justify-center text-xs font-bold text-violet-300 flex-shrink-0">
+            {{ (user.display_name || user.username || '?')[0].toUpperCase() }}
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-bold text-sm text-white truncate flex items-center gap-1.5 flex-wrap">
+              {{ user.display_name || user.username }}
+              <span class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border"
+                :style="`color:${roleColor(user.role)};border-color:${roleColor(user.role)}30;background:${roleColor(user.role)}12`">
+                {{ roleLabel(user.role) }}
+              </span>
+              <span v-if="user.frozen_at" class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/20">🧊 {{ langStore.t.adminNavFrozen }}</span>
+              <span v-if="user.deleted_at" class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-400 border border-rose-500/20">{{ langStore.t.adminNavBanned }}</span>
+            </p>
+            <p class="text-xs text-white/35 truncate">@{{ user.username }} · {{ user._count?.posts ?? 0 }} {{ langStore.t.posts }}</p>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button v-if="isAdminPlus" @click="revokeSponsor(user.id)" :title="langStore.t.adminSponsorTooltip"
+              class="w-8 h-8 rounded-xl bg-violet-500/10 border border-violet-500/15 hover:bg-violet-500/20 flex items-center justify-center transition-all">
+              <img src="/icons/badges/sponsor.png" alt="" class="w-5 h-5 object-contain" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    </template>
+
     <template v-else-if="usersViewMode === 'archived'">
     <div class="flex flex-wrap items-center gap-3 mb-5">
       <div class="relative flex-1 max-w-sm">

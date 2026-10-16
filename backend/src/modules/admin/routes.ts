@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
-  getStatsHandler, getUsersHandler, updateUserRoleHandler, updateUserSponsorHandler, updateUserSubscriptionHandler, updateUserProfileHandler, deleteUserHandler,
+  getStatsHandler, getUsersHandler, updateUserRoleHandler, getSponsorsHandler, updateUserSponsorHandler, updateUserSubscriptionHandler, updateUserProfileHandler, deleteUserHandler,
   getArchivedUsersHandler, getFrozenUsersHandler, restoreUserHandler,
   getPostsAdminHandler, deletePostAdminHandler,
   getReportsHandler, getReportEvidenceHandler, submitReportHandler, resolveReportHandler, resolveReportsBatchHandler, resolveReportIssueHandler,
@@ -43,6 +43,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof getArchivedUsersHandler>>('/users/archived',   auth, getArchivedUsersHandler);
   fastify.get<RouteGenericOf<typeof getFrozenUsersHandler>>('/users/frozen',     auth, getFrozenUsersHandler);
   fastify.patch<RouteGenericOf<typeof updateUserRoleHandler>>('/users/:id/role', auth, updateUserRoleHandler);
+  fastify.get<RouteGenericOf<typeof getSponsorsHandler>>('/users/sponsors', auth, getSponsorsHandler);
   fastify.patch<RouteGenericOf<typeof updateUserSponsorHandler>>('/users/:id/sponsor', auth, updateUserSponsorHandler);
   fastify.patch<RouteGenericOf<typeof updateUserSubscriptionHandler>>('/users/:id/subscription', auth, updateUserSubscriptionHandler);
   fastify.patch<RouteGenericOf<typeof updateUserProfileHandler>>('/users/:id/profile', {
