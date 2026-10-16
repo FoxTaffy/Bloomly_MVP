@@ -2,7 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { friendsService } from './service.js';
 import { presence } from '../realtime/presence.js';
 
-type AuthRequest = FastifyRequest & { user: { id: string } };
+type AuthRequest = FastifyRequest;
 
 export async function sendRequestHandler(req: AuthRequest, reply: FastifyReply) {
   const { targetId } = req.body as { targetId: string };

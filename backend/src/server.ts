@@ -1,3 +1,5 @@
+// Type augmentations (authenticate / tryAuthenticate decorators, JWT user) — must load first.
+import './types/fastify.js';
 import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';

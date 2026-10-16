@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
+import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
   createActivityHandler,
   getActivityHandler,
@@ -10,28 +11,22 @@ import {
   deleteActivityHandler,
 } from './controller.js';
 
-declare module 'fastify' {
-  interface FastifyInstance {
-    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  }
-}
-
 export async function activitiesRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
 
   // CRUD
-  fastify.post('/',          auth, createActivityHandler as any);
-  fastify.get('/:id',        auth, getActivityHandler as any);
-  fastify.delete('/:id',     auth, deleteActivityHandler as any);
+  fastify.post<RouteGenericOf<typeof createActivityHandler>>('/',          auth, createActivityHandler);
+  fastify.get<RouteGenericOf<typeof getActivityHandler>>('/:id',        auth, getActivityHandler);
+  fastify.delete<RouteGenericOf<typeof deleteActivityHandler>>('/:id',     auth, deleteActivityHandler);
 
   // Group activities
-  fastify.get('/group/:groupId', auth, listGroupActivitiesHandler as any);
+  fastify.get<RouteGenericOf<typeof listGroupActivitiesHandler>>('/group/:groupId', auth, listGroupActivitiesHandler);
 
   // Participation lifecycle
-  fastify.post('/:id/join',                              auth, joinActivityHandler as any);
-  fastify.post('/:id/withdraw',                          auth, withdrawActivityHandler as any);
-  fastify.patch('/:id/participants/:userId/status',      auth, updateParticipantStatusHandler as any);
+  fastify.post<RouteGenericOf<typeof joinActivityHandler>>('/:id/join',                              auth, joinActivityHandler);
+  fastify.post<RouteGenericOf<typeof withdrawActivityHandler>>('/:id/withdraw',                          auth, withdrawActivityHandler);
+  fastify.patch<RouteGenericOf<typeof updateParticipantStatusHandler>>('/:id/participants/:userId/status',      auth, updateParticipantStatusHandler);
 
   // TrustScore (public — no auth needed)
-  fastify.get('/trust/:userId', getTrustScoreHandler as any);
+  fastify.get<RouteGenericOf<typeof getTrustScoreHandler>>('/trust/:userId', getTrustScoreHandler);
 }

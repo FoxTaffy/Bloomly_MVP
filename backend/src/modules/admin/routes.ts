@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
+import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
   getStatsHandler, getUsersHandler, updateUserRoleHandler, updateUserSubscriptionHandler, updateUserProfileHandler, deleteUserHandler,
   getArchivedUsersHandler, getFrozenUsersHandler, restoreUserHandler,
@@ -17,38 +18,32 @@ import {
   getSettingsHandler, updateSettingHandler,
 } from './controller.js';
 
-declare module 'fastify' {
-  interface FastifyInstance {
-    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  }
-}
-
 export async function adminRoutes(fastify: FastifyInstance) {
   // Explicitly typed to avoid @fastify/websocket overload ambiguity
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
 
   // Stats
-  fastify.get('/stats', auth, getStatsHandler as any);
+  fastify.get<RouteGenericOf<typeof getStatsHandler>>('/stats', auth, getStatsHandler);
 
   // Team & roles
-  fastify.get('/staff',    auth, getStaffHandler as any);
-  fastify.post('/staff',  auth, promoteToStaffHandler as any);
+  fastify.get<RouteGenericOf<typeof getStaffHandler>>('/staff',    auth, getStaffHandler);
+  fastify.post<RouteGenericOf<typeof promoteToStaffHandler>>('/staff',  auth, promoteToStaffHandler);
 
   // Broadcasts
-  fastify.get('/broadcasts',  auth, getBroadcastsHandler as any);
-  fastify.post('/broadcasts', auth, sendBroadcastHandler as any);
+  fastify.get<RouteGenericOf<typeof getBroadcastsHandler>>('/broadcasts',  auth, getBroadcastsHandler);
+  fastify.post<RouteGenericOf<typeof sendBroadcastHandler>>('/broadcasts', auth, sendBroadcastHandler);
 
   // Site settings
-  fastify.get('/settings',   auth, getSettingsHandler as any);
-  fastify.patch('/settings', auth, updateSettingHandler as any);
+  fastify.get<RouteGenericOf<typeof getSettingsHandler>>('/settings',   auth, getSettingsHandler);
+  fastify.patch<RouteGenericOf<typeof updateSettingHandler>>('/settings', auth, updateSettingHandler);
 
   // Users
-  fastify.get('/users',            auth, getUsersHandler as any);
-  fastify.get('/users/archived',   auth, getArchivedUsersHandler as any);
-  fastify.get('/users/frozen',     auth, getFrozenUsersHandler as any);
-  fastify.patch('/users/:id/role', auth, updateUserRoleHandler as any);
-  fastify.patch('/users/:id/subscription', auth, updateUserSubscriptionHandler as any);
-  fastify.patch('/users/:id/profile', {
+  fastify.get<RouteGenericOf<typeof getUsersHandler>>('/users',            auth, getUsersHandler);
+  fastify.get<RouteGenericOf<typeof getArchivedUsersHandler>>('/users/archived',   auth, getArchivedUsersHandler);
+  fastify.get<RouteGenericOf<typeof getFrozenUsersHandler>>('/users/frozen',     auth, getFrozenUsersHandler);
+  fastify.patch<RouteGenericOf<typeof updateUserRoleHandler>>('/users/:id/role', auth, updateUserRoleHandler);
+  fastify.patch<RouteGenericOf<typeof updateUserSubscriptionHandler>>('/users/:id/subscription', auth, updateUserSubscriptionHandler);
+  fastify.patch<RouteGenericOf<typeof updateUserProfileHandler>>('/users/:id/profile', {
     schema: {
       body: {
         type: 'object',
@@ -67,59 +62,59 @@ export async function adminRoutes(fastify: FastifyInstance) {
       },
     },
     onRequest: [fastify.authenticate],
-  }, updateUserProfileHandler as any);
-  fastify.delete('/users/:id',     auth, deleteUserHandler as any);
-  fastify.post('/users/:id/restore', auth, restoreUserHandler as any);
-  fastify.post('/users/:id/deceased',   auth, markDeceasedHandler as any);
-  fastify.post('/users/:id/undeceased', auth, unmarkDeceasedHandler as any);
+  }, updateUserProfileHandler);
+  fastify.delete<RouteGenericOf<typeof deleteUserHandler>>('/users/:id',     auth, deleteUserHandler);
+  fastify.post<RouteGenericOf<typeof restoreUserHandler>>('/users/:id/restore', auth, restoreUserHandler);
+  fastify.post<RouteGenericOf<typeof markDeceasedHandler>>('/users/:id/deceased',   auth, markDeceasedHandler);
+  fastify.post<RouteGenericOf<typeof unmarkDeceasedHandler>>('/users/:id/undeceased', auth, unmarkDeceasedHandler);
 
   // Posts
-  fastify.get('/posts',           auth, getPostsAdminHandler as any);
-  fastify.delete('/posts/:id',    auth, deletePostAdminHandler as any);
-  fastify.patch('/posts/:id/pin', auth, togglePostPinHandler as any);
+  fastify.get<RouteGenericOf<typeof getPostsAdminHandler>>('/posts',           auth, getPostsAdminHandler);
+  fastify.delete<RouteGenericOf<typeof deletePostAdminHandler>>('/posts/:id',    auth, deletePostAdminHandler);
+  fastify.patch<RouteGenericOf<typeof togglePostPinHandler>>('/posts/:id/pin', auth, togglePostPinHandler);
 
   // Reports
-  fastify.get('/reports',        auth, getReportsHandler as any);
-  fastify.get('/reports/evidence', auth, getReportEvidenceHandler as any);
-  fastify.post('/reports',       { ...auth, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } } as RouteShorthandOptions, submitReportHandler as any);
-  fastify.patch('/reports/:id',  auth, resolveReportHandler as any);
-  fastify.patch('/reports/resolve-batch', auth, resolveReportsBatchHandler as any);
-  fastify.patch('/reports/resolve-issue', auth, resolveReportIssueHandler as any);
+  fastify.get<RouteGenericOf<typeof getReportsHandler>>('/reports',        auth, getReportsHandler);
+  fastify.get<RouteGenericOf<typeof getReportEvidenceHandler>>('/reports/evidence', auth, getReportEvidenceHandler);
+  fastify.post<RouteGenericOf<typeof submitReportHandler>>('/reports',       { ...auth, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } } as RouteShorthandOptions, submitReportHandler);
+  fastify.patch<RouteGenericOf<typeof resolveReportHandler>>('/reports/:id',  auth, resolveReportHandler);
+  fastify.patch<RouteGenericOf<typeof resolveReportsBatchHandler>>('/reports/resolve-batch', auth, resolveReportsBatchHandler);
+  fastify.patch<RouteGenericOf<typeof resolveReportIssueHandler>>('/reports/resolve-issue', auth, resolveReportIssueHandler);
 
   // Warning appeals
-  fastify.get('/appeals',        auth, getAppealsHandler as any);
-  fastify.patch('/appeals/:logId', auth, decideAppealHandler as any);
+  fastify.get<RouteGenericOf<typeof getAppealsHandler>>('/appeals',        auth, getAppealsHandler);
+  fastify.patch<RouteGenericOf<typeof decideAppealHandler>>('/appeals/:logId', auth, decideAppealHandler);
 
   // Ads
-  fastify.get('/ads',              auth, getAdsHandler as any);
-  fastify.get('/ads/active',       getActiveAdsHandler as any);
-  fastify.post('/ads',             { ...auth, config: { rateLimit: { max: 5, timeWindow: '1 hour' } } } as RouteShorthandOptions, submitAdHandler as any);
-  fastify.patch('/ads/:id/review', auth, reviewAdHandler as any);
-  fastify.delete('/ads/:id',       auth, deleteAdHandler as any);
-  fastify.post('/ads/:id/impression', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, trackImpressionHandler as any);
-  fastify.post('/ads/:id/click',      { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, trackClickHandler as any);
+  fastify.get<RouteGenericOf<typeof getAdsHandler>>('/ads',              auth, getAdsHandler);
+  fastify.get<RouteGenericOf<typeof getActiveAdsHandler>>('/ads/active',       getActiveAdsHandler);
+  fastify.post<RouteGenericOf<typeof submitAdHandler>>('/ads',             { ...auth, config: { rateLimit: { max: 5, timeWindow: '1 hour' } } } as RouteShorthandOptions, submitAdHandler);
+  fastify.patch<RouteGenericOf<typeof reviewAdHandler>>('/ads/:id/review', auth, reviewAdHandler);
+  fastify.delete<RouteGenericOf<typeof deleteAdHandler>>('/ads/:id',       auth, deleteAdHandler);
+  fastify.post<RouteGenericOf<typeof trackImpressionHandler>>('/ads/:id/impression', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, trackImpressionHandler);
+  fastify.post<RouteGenericOf<typeof trackClickHandler>>('/ads/:id/click',      { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, trackClickHandler);
 
   // Sticker Banners
-  fastify.get('/sticker-banners',        auth, getBannersHandler as any);   // admin: all
-  fastify.get('/sticker-banners/active', getActiveBannersHandler as any);   // public
-  fastify.post('/sticker-banners',       auth, createBannerHandler as any);
-  fastify.patch('/sticker-banners/:id',  auth, updateBannerHandler as any);
-  fastify.delete('/sticker-banners/:id', auth, deleteBannerHandler as any);
+  fastify.get<RouteGenericOf<typeof getBannersHandler>>('/sticker-banners',        auth, getBannersHandler);   // admin: all
+  fastify.get<RouteGenericOf<typeof getActiveBannersHandler>>('/sticker-banners/active', getActiveBannersHandler);   // public
+  fastify.post<RouteGenericOf<typeof createBannerHandler>>('/sticker-banners',       auth, createBannerHandler);
+  fastify.patch<RouteGenericOf<typeof updateBannerHandler>>('/sticker-banners/:id',  auth, updateBannerHandler);
+  fastify.delete<RouteGenericOf<typeof deleteBannerHandler>>('/sticker-banners/:id', auth, deleteBannerHandler);
 
   // AutoMod
-  fastify.get('/automod/logs',              auth, getAutoModLogsHandler as any);
-  fastify.post('/users/:id/unfreeze',       auth, unfreezeUserHandler as any);
-  fastify.post('/users/:id/freeze',         auth, freezeUserHandler as any);
-  fastify.post('/users/:id/clear-warns',    auth, clearWarnsHandler as any);
-  fastify.post('/users/:id/warn',           auth, warnUserHandler as any);
+  fastify.get<RouteGenericOf<typeof getAutoModLogsHandler>>('/automod/logs',              auth, getAutoModLogsHandler);
+  fastify.post<RouteGenericOf<typeof unfreezeUserHandler>>('/users/:id/unfreeze',       auth, unfreezeUserHandler);
+  fastify.post<RouteGenericOf<typeof freezeUserHandler>>('/users/:id/freeze',         auth, freezeUserHandler);
+  fastify.post<RouteGenericOf<typeof clearWarnsHandler>>('/users/:id/clear-warns',    auth, clearWarnsHandler);
+  fastify.post<RouteGenericOf<typeof warnUserHandler>>('/users/:id/warn',           auth, warnUserHandler);
 
   // Statistics
-  fastify.get('/stats/stickers', auth, getStickerStatsHandler as any);
-  fastify.get('/stats/stickers/:packId', auth, getStickerPackDetailHandler as any);
-  fastify.get('/stats/network',  auth, getNetworkStatsHandler as any);
+  fastify.get<RouteGenericOf<typeof getStickerStatsHandler>>('/stats/stickers', auth, getStickerStatsHandler);
+  fastify.get<RouteGenericOf<typeof getStickerPackDetailHandler>>('/stats/stickers/:packId', auth, getStickerPackDetailHandler);
+  fastify.get<RouteGenericOf<typeof getNetworkStatsHandler>>('/stats/network',  auth, getNetworkStatsHandler);
 
   // Groups & events / premium / infra overview
-  fastify.get('/groups-overview',  auth, getGroupsOverviewHandler as any);
-  fastify.get('/premium-overview', auth, getPremiumOverviewHandler as any);
-  fastify.get('/infra-overview',   auth, getInfraOverviewHandler as any);
+  fastify.get<RouteGenericOf<typeof getGroupsOverviewHandler>>('/groups-overview',  auth, getGroupsOverviewHandler);
+  fastify.get<RouteGenericOf<typeof getPremiumOverviewHandler>>('/premium-overview', auth, getPremiumOverviewHandler);
+  fastify.get<RouteGenericOf<typeof getInfraOverviewHandler>>('/infra-overview',   auth, getInfraOverviewHandler);
 }

@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
+import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
   getConversationsHandler,
   getConversationByIdHandler,
@@ -33,12 +34,6 @@ import {
   forwardMessageHandler,
 } from './controller.js';
 
-declare module 'fastify' {
-  interface FastifyInstance {
-    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  }
-}
-
 const getMessagesSchema = {
   querystring: {
     type: 'object',
@@ -53,47 +48,47 @@ export async function messagesRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
 
   // Conversations
-  fastify.get('/conversations', auth, getConversationsHandler as any);
-  fastify.post('/conversations', auth, getOrCreateConversationHandler as any);
-  fastify.get('/conversations/:id', auth, getConversationByIdHandler as any);
-  fastify.get('/conversations/unread', auth, getUnreadCountHandler as any);
-  fastify.get('/groups/inbox-counts', auth, getMyGroupInboxCountsHandler as any);
+  fastify.get<RouteGenericOf<typeof getConversationsHandler>>('/conversations', auth, getConversationsHandler);
+  fastify.post<RouteGenericOf<typeof getOrCreateConversationHandler>>('/conversations', auth, getOrCreateConversationHandler);
+  fastify.get<RouteGenericOf<typeof getConversationByIdHandler>>('/conversations/:id', auth, getConversationByIdHandler);
+  fastify.get<RouteGenericOf<typeof getUnreadCountHandler>>('/conversations/unread', auth, getUnreadCountHandler);
+  fastify.get<RouteGenericOf<typeof getMyGroupInboxCountsHandler>>('/groups/inbox-counts', auth, getMyGroupInboxCountsHandler);
 
   // Messages within a conversation
-  fastify.get('/conversations/:id/messages', { schema: getMessagesSchema, onRequest: [fastify.authenticate] }, getMessagesHandler as any);
-  fastify.post('/conversations/:id/messages', auth, sendMessageHandler as any);
-  fastify.post('/conversations/:id/read', auth, markReadHandler as any);
-  fastify.patch('/conversations/:id/archive', auth, setArchivedHandler as any);
-  fastify.patch('/conversations/:id/mute', auth, setMuteHandler as any);
-  fastify.patch('/conversations/:id/label', auth, setConversationLabelHandler as any);
-  fastify.delete('/conversations/:id', auth, deleteConversationHandler as any);
+  fastify.get<RouteGenericOf<typeof getMessagesHandler>>('/conversations/:id/messages', { schema: getMessagesSchema, onRequest: [fastify.authenticate] }, getMessagesHandler);
+  fastify.post<RouteGenericOf<typeof sendMessageHandler>>('/conversations/:id/messages', auth, sendMessageHandler);
+  fastify.post<RouteGenericOf<typeof markReadHandler>>('/conversations/:id/read', auth, markReadHandler);
+  fastify.patch<RouteGenericOf<typeof setArchivedHandler>>('/conversations/:id/archive', auth, setArchivedHandler);
+  fastify.patch<RouteGenericOf<typeof setMuteHandler>>('/conversations/:id/mute', auth, setMuteHandler);
+  fastify.patch<RouteGenericOf<typeof setConversationLabelHandler>>('/conversations/:id/label', auth, setConversationLabelHandler);
+  fastify.delete<RouteGenericOf<typeof deleteConversationHandler>>('/conversations/:id', auth, deleteConversationHandler);
 
   // Pin / unpin
-  fastify.put('/conversations/:id/pin',    auth, pinMessageHandler   as any);
-  fastify.delete('/conversations/:id/pin', auth, unpinMessageHandler  as any);
-  fastify.get('/conversations/:id/media-stats', auth, getMediaStatsHandler as any);
-  fastify.get('/conversations/:id/media', auth, getMediaMessagesHandler as any);
+  fastify.put<RouteGenericOf<typeof pinMessageHandler>>('/conversations/:id/pin',    auth, pinMessageHandler);
+  fastify.delete<RouteGenericOf<typeof unpinMessageHandler>>('/conversations/:id/pin', auth, unpinMessageHandler);
+  fastify.get<RouteGenericOf<typeof getMediaStatsHandler>>('/conversations/:id/media-stats', auth, getMediaStatsHandler);
+  fastify.get<RouteGenericOf<typeof getMediaMessagesHandler>>('/conversations/:id/media', auth, getMediaMessagesHandler);
 
   // Individual message actions
-  fastify.delete('/messages/:msgId', auth, deleteMessageHandler as any);
-  fastify.patch('/messages/:msgId', auth, editMessageHandler as any);
-  fastify.post('/messages/:msgId/reactions', auth, toggleReactionHandler as any);
-  fastify.post('/messages/:msgId/pay', auth, payMessageHandler as any);
+  fastify.delete<RouteGenericOf<typeof deleteMessageHandler>>('/messages/:msgId', auth, deleteMessageHandler);
+  fastify.patch<RouteGenericOf<typeof editMessageHandler>>('/messages/:msgId', auth, editMessageHandler);
+  fastify.post<RouteGenericOf<typeof toggleReactionHandler>>('/messages/:msgId/reactions', auth, toggleReactionHandler);
+  fastify.post<RouteGenericOf<typeof payMessageHandler>>('/messages/:msgId/pay', auth, payMessageHandler);
 
   // Group endpoints
-  fastify.post('/groups', auth, createGroupHandler as any);
-  fastify.patch('/conversations/:id/group', auth, updateGroupHandler as any);
-  fastify.get('/conversations/:id/members', auth, getGroupMembersHandler as any);
-  fastify.post('/conversations/:id/members', auth, addMemberHandler as any);
-  fastify.delete('/conversations/:id/members/:userId', auth, removeMemberHandler as any);
-  fastify.patch('/conversations/:id/members/:userId/role', auth, setMemberRoleHandler as any);
+  fastify.post<RouteGenericOf<typeof createGroupHandler>>('/groups', auth, createGroupHandler);
+  fastify.patch<RouteGenericOf<typeof updateGroupHandler>>('/conversations/:id/group', auth, updateGroupHandler);
+  fastify.get<RouteGenericOf<typeof getGroupMembersHandler>>('/conversations/:id/members', auth, getGroupMembersHandler);
+  fastify.post<RouteGenericOf<typeof addMemberHandler>>('/conversations/:id/members', auth, addMemberHandler);
+  fastify.delete<RouteGenericOf<typeof removeMemberHandler>>('/conversations/:id/members/:userId', auth, removeMemberHandler);
+  fastify.patch<RouteGenericOf<typeof setMemberRoleHandler>>('/conversations/:id/members/:userId/role', auth, setMemberRoleHandler);
 
   // E2EE key management
-  fastify.put('/keys', auth, registerPublicKeyHandler as any);
-  fastify.post('/keys/batch', auth, getPublicKeysHandler as any);
-  fastify.put('/conversations/:id/keys', auth, setConversationKeysHandler as any);
-  fastify.get('/conversations/:id/keys/me', auth, getMyConversationKeyHandler as any);
+  fastify.put<RouteGenericOf<typeof registerPublicKeyHandler>>('/keys', auth, registerPublicKeyHandler);
+  fastify.post<RouteGenericOf<typeof getPublicKeysHandler>>('/keys/batch', auth, getPublicKeysHandler);
+  fastify.put<RouteGenericOf<typeof setConversationKeysHandler>>('/conversations/:id/keys', auth, setConversationKeysHandler);
+  fastify.get<RouteGenericOf<typeof getMyConversationKeyHandler>>('/conversations/:id/keys/me', auth, getMyConversationKeyHandler);
 
   // Forward
-  fastify.post('/messages/:msgId/forward', auth, forwardMessageHandler as any);
+  fastify.post<RouteGenericOf<typeof forwardMessageHandler>>('/messages/:msgId/forward', auth, forwardMessageHandler);
 }

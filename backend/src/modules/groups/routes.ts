@@ -73,13 +73,6 @@ import {
 } from './controller.js';
 import { groupService } from './service.js';
 
-declare module 'fastify' {
-  interface FastifyInstance {
-    authenticate:    (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-    tryAuthenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  }
-}
-
 export async function groupsRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
 

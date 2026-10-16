@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
+import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
   getStatusHandler,
   getCriteriaHandler,
@@ -8,22 +9,16 @@ import {
   adminReviewHandler,
 } from './controller.js';
 
-declare module 'fastify' {
-  interface FastifyInstance {
-    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  }
-}
-
 export async function verificationRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
 
   // User endpoints
-  fastify.get('/status',        auth, getStatusHandler as any);
-  fastify.get('/criteria',      auth, getCriteriaHandler as any);
-  fastify.get('/completeness',  auth, getCompletenessHandler as any);
-  fastify.post('/request',      auth, requestHandler as any);
+  fastify.get<RouteGenericOf<typeof getStatusHandler>>('/status',        auth, getStatusHandler);
+  fastify.get<RouteGenericOf<typeof getCriteriaHandler>>('/criteria',      auth, getCriteriaHandler);
+  fastify.get<RouteGenericOf<typeof getCompletenessHandler>>('/completeness',  auth, getCompletenessHandler);
+  fastify.post<RouteGenericOf<typeof requestHandler>>('/request',      auth, requestHandler);
 
   // Admin endpoints
-  fastify.get('/admin/requests',       auth, adminRequestsHandler as any);
-  fastify.patch('/admin/requests/:id', auth, adminReviewHandler as any);
+  fastify.get<RouteGenericOf<typeof adminRequestsHandler>>('/admin/requests',       auth, adminRequestsHandler);
+  fastify.patch<RouteGenericOf<typeof adminReviewHandler>>('/admin/requests/:id', auth, adminReviewHandler);
 }
