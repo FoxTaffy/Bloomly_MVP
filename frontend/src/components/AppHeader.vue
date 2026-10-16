@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -267,8 +268,8 @@ const acceptRelationship = async (n: any) => {
     await api.post(`/relationships/${reqId}/accept`)
     n._relDone = 'accepted'
     unreadCount.value = Math.max(0, unreadCount.value - 1)
-  } catch (e: any) {
-    alert(e?.response?.data?.error?.message ?? 'Ошибка')
+  } catch (e) {
+    alert(apiErrorMessage(e) ?? 'Ошибка')
   } finally { relActionLoading.value[n.id] = false }
 }
 
@@ -279,8 +280,8 @@ const declineRelationship = async (n: any) => {
   try {
     await api.post(`/relationships/${reqId}/decline`)
     n._relDone = 'declined'
-  } catch (e: any) {
-    alert(e?.response?.data?.error?.message ?? 'Ошибка')
+  } catch (e) {
+    alert(apiErrorMessage(e) ?? 'Ошибка')
   } finally { relActionLoading.value[n.id] = false }
 }
 

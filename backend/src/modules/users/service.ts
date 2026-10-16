@@ -257,18 +257,18 @@ export const usersService = {
 
     // The frame image lives on AvatarFrame, but positioning is per-owner (UserAvatarFrame) —
     // merge this profile's own calibration in so viewers render it exactly as this user set it.
-    if ((raw as any).equippedFrame) {
+    if (raw.equippedFrame) {
       const calibration = await prisma.userAvatarFrame.findUnique({
         where: { user_id_frame_id: { user_id: raw.id, frame_id: (raw as any).profile_frame_id } },
         select: { offset_x: true, offset_y: true, scale: true, rotation: true },
       });
-      (raw as any).equippedFrame = { ...(raw as any).equippedFrame, ...(calibration ?? { offset_x: 0, offset_y: 0, scale: 1, rotation: 0 }) };
+      raw.equippedFrame = { ...raw.equippedFrame, ...(calibration ?? { offset_x: 0, offset_y: 0, scale: 1, rotation: 0 }) };
     }
 
     (raw as any).profile_status = liveProfileStatus((raw as any).profile_status);
 
     if (viewerId === raw.id) {
-      return { ...raw, badge_level: getUserBadgeLevel((raw as any).artist_since) };
+      return { ...raw, badge_level: getUserBadgeLevel(raw.artist_since) };
     }
 
     // Wallet balance is private financial data — never expose it to anyone but the owner.
@@ -287,7 +287,7 @@ export const usersService = {
     }
 
     // Whole-profile gate: return only an identity stub if the owner restricts who can view it
-    if (!(await isAllowedByPrivacy((raw as any).profile_visibility, raw.id, viewerId))) {
+    if (!(await isAllowedByPrivacy(raw.profile_visibility, raw.id, viewerId))) {
       return {
         id: raw.id,
         username: raw.username,
@@ -299,11 +299,11 @@ export const usersService = {
     }
 
     // Attach computed badge_level
-    const withBadge = { ...rawWithoutWallet, badge_level: getUserBadgeLevel((raw as any).artist_since) };
+    const withBadge = { ...rawWithoutWallet, badge_level: getUserBadgeLevel(raw.artist_since) };
 
-    const result = { ...withBadge, birth_date: redactBirthDate((raw as any).birth_date, (raw as any).birth_date_visibility) };
+    const result = { ...withBadge, birth_date: redactBirthDate(raw.birth_date, raw.birth_date_visibility) };
 
-    if (!(await isAllowedByPrivacy((raw as any).relationship_status_visibility, raw.id, viewerId))) {
+    if (!(await isAllowedByPrivacy(raw.relationship_status_visibility, raw.id, viewerId))) {
       return { ...result, relationship_status: null, relationship_with: null };
     }
 
@@ -451,7 +451,7 @@ export const usersService = {
     });
 
     const tierRank: Record<string, number> = { business: 3, pro: 2, lite: 1, free: 0 };
-    candidates.sort((a, b) => (tierRank[(b as any).subscription_tier] ?? 0) - (tierRank[(a as any).subscription_tier] ?? 0));
+    candidates.sort((a, b) => (tierRank[b.subscription_tier] ?? 0) - (tierRank[a.subscription_tier] ?? 0));
 
     return candidates.slice(skip, skip + limit);
   },
@@ -968,7 +968,7 @@ export const usersService = {
   },
 
   async createFursuit(userId: string, data: UpsertFursuitInput) {
-    await assertOwnedMedia((data as any).image_url, userId);
+    await assertOwnedMedia(data.image_url, userId);
     if (data.external_maker_links) data.external_maker_links = data.external_maker_links.map((l) => requireSafeLink(l, 'maker link')).filter((l): l is string => !!l);
     return prisma.fursuit.create({
       data: { user_id: userId, ...data },

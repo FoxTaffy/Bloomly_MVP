@@ -356,6 +356,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { reactive, ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useLangStore } from '@/stores/lang'
@@ -503,8 +504,8 @@ async function submitForm() {
       await userStore.createFursuit(payload)
     }
     closeForm()
-  } catch (e: any) {
-    formError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } catch (e) {
+    formError.value = apiErrorMessage(e) ?? errorMessage(e) ?? 'Error'
   } finally {
     saving.value = false
   }
@@ -514,8 +515,8 @@ async function handleDelete(id: string) {
   if (!(await confirmDialog(t.value.fursuitDeleteConfirm, { danger: true }))) return
   try {
     await userStore.deleteFursuit(id)
-  } catch (e: any) {
-    alert(e?.response?.data?.error?.message ?? 'Failed to delete fursuit')
+  } catch (e) {
+    alert(apiErrorMessage(e) ?? 'Failed to delete fursuit')
   }
 }
 </script>

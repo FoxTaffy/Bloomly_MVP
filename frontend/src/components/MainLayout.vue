@@ -420,7 +420,7 @@ const followRecommended = async (userId: string) => {
 // свою рекламу вместо чужой). На Lite/Pro реклама скрыта — это преимущество подписки.
 const activeAds = ref<any[]>([])
 const adSlotMode = computed<'ads' | 'offer' | 'hidden'>(() => {
-  const tier = (auth.user as any)?.subscription_tier ?? 'free'
+  const tier = auth.user?.subscription_tier ?? 'free'
   if (tier === 'lite' || tier === 'pro') return 'hidden'
   if (tier === 'business') return 'offer'
   return 'ads'
@@ -608,7 +608,7 @@ const createPost = async () => {
     showPostForm.value = false
     showVisibilityMenu.value = false
     shareToast.value = postAsEntity.value.type === 'group'
-      ? `Пост опубликован от имени «${(postAsEntity.value as any).name}»`
+      ? `Пост опубликован от имени «${postAsEntity.value.name}»`
       : 'Пост опубликован'
     setTimeout(() => { shareToast.value = '' }, 1800)
     await fetchTrendingTags()
@@ -747,7 +747,7 @@ const storyViewerStoryIdx = ref(0)
 const openStoryViewer = (story: StoryItem, group: StoryItem[]) => {
   // Build full groups list from the storiesBar data, keeping the same order
   // as the bar renders them.
-  const userGroups = (storiesBarRef.value as any)?.userStories as StoryItem[][] | undefined
+  const userGroups = storiesBarRef.value?.userStories as StoryItem[][] | undefined
   const allGroups: StoryItem[][] = []
   if (userGroups && userGroups.length) allGroups.push(...userGroups)
 
@@ -971,11 +971,11 @@ onDeactivated(() => {
           >
             <!-- Entity avatar -->
             <template v-if="postAsEntity.type === 'group'">
-              <img v-if="(postAsEntity as any).avatar_url" :src="(postAsEntity as any).avatar_url"
+              <img v-if="postAsEntity.avatar_url" :src="postAsEntity.avatar_url"
                 class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors"
                 @error="onAvatarError" />
               <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">
-                {{ ((postAsEntity as any).name || '?')[0].toUpperCase() }}
+                {{ (postAsEntity.name || '?')[0].toUpperCase() }}
               </div>
             </template>
             <template v-else>
@@ -983,7 +983,7 @@ onDeactivated(() => {
               <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
             </template>
             <span class="flex-1 flex items-center justify-between gap-2 min-w-0 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">
-              <span class="truncate">{{ postAsEntity.type === 'group' ? `${(postAsEntity as any).name}…` : langStore.t.whatsNew }}</span>
+              <span class="truncate">{{ postAsEntity.type === 'group' ? `${postAsEntity.name}…` : langStore.t.whatsNew }}</span>
               <span class="flex items-center gap-2 text-white/35 group-hover:text-white/60 transition-colors flex-shrink-0">
                 <BIcon name="ImagePlus" class="w-4 h-4" />
                 <BIcon name="Hash" class="w-4 h-4" />
@@ -1004,13 +1004,13 @@ onDeactivated(() => {
                   class="flex items-center gap-1 focus:outline-none group/av"
                 >
                   <template v-if="postAsEntity.type === 'group'">
-                    <img v-if="(postAsEntity as any).avatar_url" :src="(postAsEntity as any).avatar_url"
+                    <img v-if="postAsEntity.avatar_url" :src="postAsEntity.avatar_url"
                       class="w-10 h-10 rounded-xl border-2 object-cover transition-colors"
                       :class="showEntityPicker ? 'border-brand-accent' : 'border-brand-border group-hover/av:border-brand-accent/60'"
                       @error="onAvatarError" />
                     <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border flex items-center justify-center text-brand-accent font-bold bg-brand-accent/20 transition-colors"
                       :class="showEntityPicker ? 'border-brand-accent' : 'group-hover/av:border-brand-accent/60'">
-                      {{ ((postAsEntity as any).name || '?')[0].toUpperCase() }}
+                      {{ (postAsEntity.name || '?')[0].toUpperCase() }}
                     </div>
                   </template>
                   <template v-else>
@@ -1055,7 +1055,7 @@ onDeactivated(() => {
                     <!-- Admin groups -->
                     <button v-for="grp in adminGroups" :key="grp.id"
                       class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
-                      :class="postAsEntity.type === 'group' && (postAsEntity as any).id === grp.id ? 'text-brand-accent' : 'text-white'"
+                      :class="postAsEntity.type === 'group' && postAsEntity.id === grp.id ? 'text-brand-accent' : 'text-white'"
                       @click="postAsEntity = { type: 'group', id: grp.id, slug: grp.slug, name: grp.name, avatar_url: grp.avatar_url }; showEntityPicker = false">
                       <img v-if="grp.avatar_url" :src="grp.avatar_url" class="w-7 h-7 rounded-xl object-cover flex-shrink-0" @error="onAvatarError" />
                       <div v-else class="w-7 h-7 rounded-xl bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
@@ -1063,7 +1063,7 @@ onDeactivated(() => {
                       </div>
                       <span class="font-semibold truncate flex-1 text-left">{{ grp.name }}</span>
                       <span class="text-[9px] text-brand-accent/70 bg-brand-accent/10 border border-brand-accent/25 px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">{{ langStore.t.groups }}</span>
-                      <BIcon v-if="postAsEntity.type === 'group' && (postAsEntity as any).id === grp.id" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+                      <BIcon v-if="postAsEntity.type === 'group' && postAsEntity.id === grp.id" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
                     </button>
                   </div>
                 </Transition>

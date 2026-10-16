@@ -868,7 +868,7 @@ async function setLabel(conv: Conversation, label: string) {
     await api.patch(`/messages/conversations/${conv.id}/label`, { label })
     // Update local state
     const local = store.conversations.find((c) => c.id === conv.id)
-    if (local?.my_participant) (local.my_participant as any).label = label
+    if (local?.my_participant) local.my_participant.label = label
   } catch { /* silent */ }
 }
 

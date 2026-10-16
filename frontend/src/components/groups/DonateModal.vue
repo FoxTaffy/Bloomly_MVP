@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import BIcon from '@/components/BIcon.vue'
@@ -62,8 +63,8 @@ async function sendDonate() {
     await groupsStore.donateToGroup(props.group.id, finalAmount.value, donateMessage.value.trim() || undefined)
     await walletStore.fetchBalance()
     step.value = 'success'
-  } catch (e: any) {
-    donateError.value = e.response?.data?.error?.message || 'Не удалось отправить донат'
+  } catch (e) {
+    donateError.value = apiErrorMessage(e) || 'Не удалось отправить донат'
   } finally {
     sending.value = false
   }

@@ -396,13 +396,13 @@ const vClickOutside = {
         <button v-if="adminGroups.length" ref="entityBtnRef" @click.stop="toggleEntityPicker"
           class="flex items-center gap-0.5 focus:outline-none group/av">
           <template v-if="commentAsEntity.type === 'group'">
-            <img v-if="(commentAsEntity as any).avatar_url" :src="(commentAsEntity as any).avatar_url"
+            <img v-if="commentAsEntity.avatar_url" :src="commentAsEntity.avatar_url"
               class="w-8 h-8 rounded-xl border-2 object-cover transition-colors"
               :class="showEntityPicker ? 'border-brand-accent' : 'border-brand-border group-hover/av:border-brand-accent/60'"
               @error="onAvatarError" />
             <div v-else class="w-8 h-8 rounded-xl border-2 flex items-center justify-center text-brand-accent font-bold bg-brand-accent/20 text-xs transition-colors"
               :class="showEntityPicker ? 'border-brand-accent' : 'border-brand-border group-hover/av:border-brand-accent/60'">
-              {{ ((commentAsEntity as any).name || '?')[0].toUpperCase() }}
+              {{ (commentAsEntity.name || '?')[0].toUpperCase() }}
             </div>
           </template>
           <template v-else>
@@ -446,14 +446,14 @@ const vClickOutside = {
             <div class="h-px bg-brand-border mx-3 my-1" />
             <button v-for="grp in adminGroups" :key="grp.id"
               class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
-              :class="commentAsEntity.type === 'group' && (commentAsEntity as any).id === grp.id ? 'text-brand-accent' : 'text-white'"
+              :class="commentAsEntity.type === 'group' && commentAsEntity.id === grp.id ? 'text-brand-accent' : 'text-white'"
               @click="commentAsEntity = { type: 'group', id: grp.id, slug: grp.slug, name: grp.name, avatar_url: grp.avatar_url }; showEntityPicker = false">
               <img v-if="grp.avatar_url" :src="grp.avatar_url" class="w-7 h-7 rounded-xl object-cover flex-shrink-0" @error="onAvatarError" />
               <div v-else class="w-7 h-7 rounded-xl bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
                 {{ (grp.name || '?')[0].toUpperCase() }}
               </div>
               <span class="font-semibold truncate flex-1 text-left">{{ grp.name }}</span>
-              <BIcon v-if="commentAsEntity.type === 'group' && (commentAsEntity as any).id === grp.id" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+              <BIcon v-if="commentAsEntity.type === 'group' && commentAsEntity.id === grp.id" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
             </button>
           </div>
         </Transition>

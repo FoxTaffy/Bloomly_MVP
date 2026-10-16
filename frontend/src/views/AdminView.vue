@@ -33,7 +33,7 @@ const { myRole, myRoleRank, activeTab, switchTab, badges, adminActionError, stat
 // Guard: staff only (moderator and above)
 onMounted(async () => {
   await auth.fetchMe()
-  const role = (auth.user as any)?.role
+  const role = auth.user?.role
   if (!isModerator(role)) {
     router.replace({ name: 'home' })
   } else {
@@ -215,10 +215,10 @@ const totalPendingBadge = computed(() => {
           <img v-if="auth.user?.avatar_url" :src="auth.user.avatar_url" class="w-9 h-9 rounded-xl object-cover border border-brand-border flex-shrink-0" />
           <div v-else class="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0"
             :style="`background:${roleColor(myRole)}20;color:${roleColor(myRole)}`">
-            {{ ((auth.user as any)?.display_name || (auth.user as any)?.username || '?')[0].toUpperCase() }}
+            {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
           </div>
           <div class="min-w-0">
-            <p class="text-xs font-bold text-white truncate">{{ (auth.user as any)?.display_name || (auth.user as any)?.username }}</p>
+            <p class="text-xs font-bold text-white truncate">{{ auth.user?.display_name || auth.user?.username }}</p>
             <p class="text-[10px] font-bold" :style="`color:${roleColor(myRole)}`">{{ roleLabel(myRole) }}</p>
           </div>
         </div>

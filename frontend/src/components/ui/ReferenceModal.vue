@@ -62,6 +62,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, watch, onBeforeUnmount } from 'vue'
 import api from '@/api'
 
@@ -101,8 +102,8 @@ async function loadReference() {
     })
     const blob = new Blob([res.data], { type: 'image/jpeg' })
     blobUrl.value = URL.createObjectURL(blob)
-  } catch (e: any) {
-    error.value = e?.response?.data?.error?.message ?? 'Could not load reference image'
+  } catch (e) {
+    error.value = apiErrorMessage(e) ?? 'Could not load reference image'
   } finally {
     loading.value = false
   }

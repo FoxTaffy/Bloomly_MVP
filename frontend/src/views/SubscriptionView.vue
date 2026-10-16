@@ -26,7 +26,7 @@ const isEarlyUser = computed(() => {
   return new Date(created) < new Date(EARLY_USER_CUTOFF)
 })
 
-const currentTier = computed(() => (auth.user as any)?.subscription_tier ?? 'free')
+const currentTier = computed(() => auth.user?.subscription_tier ?? 'free')
 
 type Plan = {
   id:         string
@@ -141,7 +141,7 @@ function selectPlan(planId: string) {
 
 function onPaymentSuccess(planId: string) {
   if (auth.user) {
-    ;(auth.user as any).subscription_tier = planId
+    ;auth.user.subscription_tier = planId
     sessionStorage.setItem('auth_user', JSON.stringify(auth.user))
   }
 }

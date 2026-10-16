@@ -800,10 +800,10 @@
                   <!-- Plan badge -->
                   <router-link to="/subscriptions"
                     class="ml-auto text-[9px] font-extrabold uppercase tracking-wider px-2 py-1 rounded-full border transition-all hover:opacity-80"
-                    :class="(authStore.user as any)?.subscription_tier === 'pro' || (authStore.user as any)?.subscription_tier === 'business'
+                    :class="authStore.user?.subscription_tier === 'pro' || authStore.user?.subscription_tier === 'business'
                       ? 'text-brand-accent border-brand-accent/30 bg-brand-accent/5'
                       : 'text-amber-400 border-amber-400/30 bg-amber-400/5'">
-                    {{ (authStore.user as any)?.subscription_tier === 'free' ? langStore.t.settingsProfileLiteForThemes : (authStore.user as any)?.subscription_tier?.toUpperCase() }}
+                    {{ authStore.user?.subscription_tier === 'free' ? langStore.t.settingsProfileLiteForThemes : authStore.user?.subscription_tier?.toUpperCase() }}
                   </router-link>
                 </div>
 
@@ -815,7 +815,7 @@
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.profileThemeLabel }}</label>
                       <span class="text-[10px] text-amber-400 font-bold bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">Lite+</span>
                     </div>
-                    <div v-if="['free'].includes((authStore.user as any)?.subscription_tier ?? 'free')"
+                    <div v-if="['free'].includes(authStore.user?.subscription_tier ?? 'free')"
                       class="rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 flex items-center gap-3">
                       <BIcon name="Lock" class="w-4 h-4 text-amber-400 flex-shrink-0" />
                       <p class="text-xs text-white/55">{{ langStore.t.profileThemeLiteSub }} <router-link to="/subscriptions" class="text-amber-400 hover:underline font-bold">Lite</router-link>.</p>
@@ -847,7 +847,7 @@
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.avatarFrameLabel }}</label>
                       <span class="text-[10px] text-brand-accent font-bold bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Pro+</span>
                     </div>
-                    <div v-if="!['pro', 'business'].includes((authStore.user as any)?.subscription_tier ?? 'free')"
+                    <div v-if="!['pro', 'business'].includes(authStore.user?.subscription_tier ?? 'free')"
                       class="rounded-2xl border border-brand-accent/20 bg-brand-accent/5 px-4 py-3 flex items-center gap-3">
                       <BIcon name="Lock" class="w-4 h-4 text-brand-accent flex-shrink-0" />
                       <p class="text-xs text-white/55">{{ langStore.t.avatarFrameProSub }} <router-link to="/subscriptions" class="text-brand-accent hover:underline font-bold">Pro</router-link>.</p>
@@ -929,7 +929,7 @@
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.profileBgLabel }}</label>
                       <span class="text-[10px] text-brand-accent font-bold bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Pro+</span>
                     </div>
-                    <div v-if="!['pro', 'business'].includes((authStore.user as any)?.subscription_tier ?? 'free')"
+                    <div v-if="!['pro', 'business'].includes(authStore.user?.subscription_tier ?? 'free')"
                       class="rounded-2xl border border-brand-accent/20 bg-brand-accent/5 px-4 py-3 flex items-center gap-3">
                       <BIcon name="Lock" class="w-4 h-4 text-brand-accent flex-shrink-0" />
                       <p class="text-xs text-white/55">{{ langStore.t.customBgPro }} <router-link to="/subscriptions" class="text-brand-accent hover:underline font-bold">Pro</router-link>.</p>
@@ -1096,7 +1096,7 @@
                             <img :src="verTypeIconUrl(vt.id)" :alt="vt.id" class="absolute inset-0 w-full h-full object-cover" />
                             <div class="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 via-black/30 to-transparent px-3 pt-2.5 pb-6">
                               <span class="font-extrabold text-sm sm:text-base text-white leading-tight drop-shadow">
-                                {{ (langStore.t as any)[vt.titleKey] }}
+                                {{ langStore.t[vt.titleKey] }}
                               </span>
                             </div>
                             <div v-if="selectedVerType === vt.id"
@@ -1120,15 +1120,15 @@
                         <div class="bg-blue-500/5 border border-blue-500/15 rounded-2xl px-4 py-3 mb-3">
                           <p class="text-xs text-white/55">
                             <span class="text-blue-400 font-bold">{{ langStore.t.verRequirementsLabel }}</span>
-                            <span v-if="selectedVerType === 'artist'">{{ (langStore.t as any).verEvidenceDescArtist }}</span>
-                            <span v-else-if="selectedVerType === 'master'">{{ (langStore.t as any).verEvidenceDescMaster }} ({{ authStore.user?.id?.slice(0,8) }}).</span>
-                            <span v-else-if="selectedVerType === 'event'">{{ (langStore.t as any).verEvidenceDescEvent }}</span>
-                            <span v-else-if="selectedVerType === 'fursuiter'">{{ (langStore.t as any).verEvidenceDescFursuiter }}</span>
-                            <span v-else-if="selectedVerType === 'popular'">{{ (langStore.t as any).verEvidenceDescPopular }}</span>
-                            <span v-else-if="selectedVerType === 'writer'">{{ (langStore.t as any).verEvidenceDescWriter }}</span>
-                            <span v-else-if="selectedVerType === 'organizer'">{{ (langStore.t as any).verEvidenceDescOrganizer }}</span>
-                            <span v-else-if="selectedVerType === 'photographer'">{{ (langStore.t as any).verEvidenceDescPhotographer }} ({{ authStore.user?.id?.slice(0,8) }}).</span>
-                            <span v-else-if="selectedVerType === 'programmer'">{{ (langStore.t as any).verEvidenceDescProgrammer }} ({{ authStore.user?.id?.slice(0,8) }}).</span>
+                            <span v-if="selectedVerType === 'artist'">{{ langStore.t.verEvidenceDescArtist }}</span>
+                            <span v-else-if="selectedVerType === 'master'">{{ langStore.t.verEvidenceDescMaster }} ({{ authStore.user?.id?.slice(0,8) }}).</span>
+                            <span v-else-if="selectedVerType === 'event'">{{ langStore.t.verEvidenceDescEvent }}</span>
+                            <span v-else-if="selectedVerType === 'fursuiter'">{{ langStore.t.verEvidenceDescFursuiter }}</span>
+                            <span v-else-if="selectedVerType === 'popular'">{{ langStore.t.verEvidenceDescPopular }}</span>
+                            <span v-else-if="selectedVerType === 'writer'">{{ langStore.t.verEvidenceDescWriter }}</span>
+                            <span v-else-if="selectedVerType === 'organizer'">{{ langStore.t.verEvidenceDescOrganizer }}</span>
+                            <span v-else-if="selectedVerType === 'photographer'">{{ langStore.t.verEvidenceDescPhotographer }} ({{ authStore.user?.id?.slice(0,8) }}).</span>
+                            <span v-else-if="selectedVerType === 'programmer'">{{ langStore.t.verEvidenceDescProgrammer }} ({{ authStore.user?.id?.slice(0,8) }}).</span>
                           </p>
                         </div>
 
@@ -1136,11 +1136,11 @@
                         <div v-if="selectedVerType === 'popular'" class="mb-3 space-y-2">
                           <p class="text-xs font-bold text-white/70 flex items-center gap-1.5">
                             <BIcon name="Link" class="w-3.5 h-3.5 text-blue-400" />
-                            {{ (langStore.t as any).verLinksTitle }}
+                            {{ langStore.t.verLinksTitle }}
                           </p>
                           <div v-for="(_, i) in popularLinks" :key="i" class="flex items-center gap-2">
                             <input v-model="popularLinks[i]" type="url"
-                              :placeholder="(langStore.t as any).verLinkPlaceholder"
+                              :placeholder="langStore.t.verLinkPlaceholder"
                               class="flex-1 px-3 py-2 rounded-xl bg-brand-bg border border-brand-border text-sm text-white placeholder-white/30 focus:outline-none focus:border-blue-500/60 transition-colors" />
                             <button v-if="popularLinks.length > 1" type="button" @click="popularLinks.splice(i, 1)"
                               class="w-7 h-7 rounded-lg bg-white/5 hover:bg-rose-500/15 text-white/40 hover:text-rose-400 flex items-center justify-center transition-colors flex-shrink-0">
@@ -1149,7 +1149,7 @@
                           </div>
                           <button v-if="popularLinks.length < 5" type="button" @click="popularLinks.push('')"
                             class="text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1">
-                            {{ (langStore.t as any).verAddLinkBtn }}
+                            {{ langStore.t.verAddLinkBtn }}
                           </button>
                         </div>
 
@@ -1167,13 +1167,13 @@
                         <div v-if="selectedVerType !== 'popular'" class="mt-3">
                           <p class="text-xs font-bold text-white/70 flex items-center gap-1.5 mb-1.5">
                             <BIcon name="FileText" class="w-3.5 h-3.5 text-blue-400" />
-                            {{ (langStore.t as any).verEvidenceTextLabel }}
+                            {{ langStore.t.verEvidenceTextLabel }}
                             <span class="text-[10px] text-white/40 font-normal ml-1">{{ evidenceText.length }}/2000</span>
                           </p>
                           <textarea v-model="evidenceText" maxlength="2000" rows="3"
-                            :placeholder="(langStore.t as any).verEvidenceTextPlaceholder"
+                            :placeholder="langStore.t.verEvidenceTextPlaceholder"
                             class="w-full px-3 py-2 rounded-xl bg-brand-bg border border-brand-border text-sm text-white placeholder-white/30 focus:outline-none focus:border-blue-500/60 transition-colors resize-none"></textarea>
-                          <p class="text-[10px] text-white/40 mt-1">{{ (langStore.t as any).verEvidenceTextHint }}</p>
+                          <p class="text-[10px] text-white/40 mt-1">{{ langStore.t.verEvidenceTextHint }}</p>
                         </div>
                       </div>
 
@@ -1514,6 +1514,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
@@ -1565,14 +1566,14 @@ const langOptions = [
 ]
 
 // ── Payment region (used to pick alt payment methods when no card is saved) ──
-const paymentRegion = ref<string>((authStore.user as any)?.payment_region || 'GLOBAL')
+const paymentRegion = ref<string>(authStore.user?.payment_region || 'GLOBAL')
 
 async function setPaymentRegion(id: string) {
   const previous = paymentRegion.value
   paymentRegion.value = id
   try {
     await api.patch('/users/me', { payment_region: id })
-    if (authStore.user) (authStore.user as any).payment_region = id
+    if (authStore.user) authStore.user.payment_region = id
   } catch {
     paymentRegion.value = previous
     showToast('error', langStore.t.subToastError)
@@ -1641,8 +1642,8 @@ async function handleDeleteAccount() {
     await api.delete('/users/me/account')
     await authStore.logout()
     router.replace({ name: 'login' })
-  } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message ?? langStore.t.settingsProfileDeleteError)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) ?? langStore.t.settingsProfileDeleteError)
   } finally {
     isDeletingAccount.value = false
     showDeleteModal.value = false
@@ -1708,8 +1709,8 @@ async function applyHistoryAvatar(item: MediaHistoryItem) {
     savedForm.avatar_video_url = form.avatar_video_url
     showAvatarHistory.value = false
     await loadAvatarHistory()
-  } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message ?? langStore.t.settingsProfileAvatarRestoreError)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) ?? langStore.t.settingsProfileAvatarRestoreError)
   }
 }
 
@@ -2030,7 +2031,7 @@ onMounted(async () => {
   form.persona             = p.persona             ?? ''
   form.fursona_name        = p.fursona_name           ?? ''
   form.avatar_url          = p.avatar_url          ?? ''
-  form.avatar_video_url    = (p as any).avatar_video_url ?? ''
+  form.avatar_video_url    = p.avatar_video_url ?? ''
   form.banner_url          = p.banner_url          ?? ''
   form.accent_color        = p.accent_color        ?? '#4C97CF'
   form.website             = p.website             ?? ''
@@ -2042,30 +2043,30 @@ onMounted(async () => {
   form.country             = p.country             ?? ''
   form.fursona_color       = p.fursona_color        ?? ''
   form.fursona_photo_url   = p.fursona_photo_url    ?? ''
-  form.has_fursuit         = (p as any).has_fursuit        ?? false
-  form.fursuit_photo_url   = (p as any).fursuit_photo_url  ?? ''
-  form.fursuit_description = (p as any).fursuit_description ?? ''
-  form.fursuit_maker       = (p as any).fursuit_maker      ?? ''
+  form.has_fursuit         = p.has_fursuit        ?? false
+  form.fursuit_photo_url   = p.fursuit_photo_url  ?? ''
+  form.fursuit_description = p.fursuit_description ?? ''
+  form.fursuit_maker       = p.fursuit_maker      ?? ''
   form.birth_date          = p.birth_date ? p.birth_date.substring(0, 10) : ''
-  form.birth_date_visibility = (p as any).birth_date_visibility ?? 'hidden'
+  form.birth_date_visibility = p.birth_date_visibility ?? 'hidden'
   form.likes               = [...p.likes]
   form.dislikes            = [...p.dislikes]
-  form.profile_theme       = (p as any).profile_theme  ?? ''
-  form.profile_bg_url      = (p as any).profile_bg_url ?? ''
-  form.profile_frame       = (p as any).profile_frame  ?? ''
+  form.profile_theme       = p.profile_theme  ?? ''
+  form.profile_bg_url      = p.profile_bg_url ?? ''
+  form.profile_frame       = p.profile_frame  ?? ''
   form.profile_frame_id    = (p as any).profile_frame_id ?? null
-  form.social_links        = { ...((p as any).social_links ?? {}) }
-  form.donate_url          = (p as any).donate_url ?? ''
-  form.messages_privacy         = (p as any).messages_privacy         ?? 'everyone'
+  form.social_links        = { ...(p.social_links ?? {}) }
+  form.donate_url          = p.donate_url ?? ''
+  form.messages_privacy         = p.messages_privacy         ?? 'everyone'
   form.forward_identity_privacy = (p as any).forward_identity_privacy ?? 'everyone'
-  form.comments_privacy         = (p as any).comments_privacy         ?? 'everyone'
-  form.mentions_privacy         = (p as any).mentions_privacy         ?? 'everyone'
-  form.online_status_visibility = (p as any).online_status_visibility ?? 'everyone'
-  form.friends_list_visibility  = (p as any).friends_list_visibility  ?? 'everyone'
-  form.profile_visibility       = (p as any).profile_visibility       ?? 'everyone'
+  form.comments_privacy         = p.comments_privacy         ?? 'everyone'
+  form.mentions_privacy         = p.mentions_privacy         ?? 'everyone'
+  form.online_status_visibility = p.online_status_visibility ?? 'everyone'
+  form.friends_list_visibility  = p.friends_list_visibility  ?? 'everyone'
+  form.profile_visibility       = p.profile_visibility       ?? 'everyone'
   form.relationship_status_visibility = (p as any).relationship_status_visibility ?? 'everyone'
-  form.groups_visibility        = (p as any).groups_visibility        ?? 'everyone'
-  form.groups_pinned_only       = (p as any).groups_pinned_only       ?? false
+  form.groups_visibility        = p.groups_visibility        ?? 'everyone'
+  form.groups_pinned_only       = p.groups_pinned_only       ?? false
   paymentRegion.value           = (p as any).payment_region ?? 'GLOBAL'
   snapshotToSaved()
   loadTagInsights()
@@ -2345,8 +2346,8 @@ async function handleSubmit() {
       try {
         await api.post('/relationships/request', { toId: newPartner })
         showToast('success', langStore.t.settingsProfilePartnerRequestSent)
-      } catch (e: any) {
-        const msg = e?.response?.data?.error?.message ?? langStore.t.settingsProfileRequestSendError
+      } catch (e) {
+        const msg = apiErrorMessage(e) ?? langStore.t.settingsProfileRequestSendError
         showToast('error', msg)
         return
       }
@@ -2367,8 +2368,8 @@ async function handleSubmit() {
         savedForm.username = res.data.data.user.username
         form.username = res.data.data.user.username
       }
-    } catch (e: any) {
-      const msg = e?.response?.data?.error?.message ?? langStore.t.settingsProfileUsernameTaken
+    } catch (e) {
+      const msg = apiErrorMessage(e) ?? langStore.t.settingsProfileUsernameTaken
       showToast('error', msg)
       return
     }
@@ -2577,7 +2578,7 @@ async function requestVerification() {
       await fetchVerificationData()
     }
   } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message ?? e.response?.data?.error ?? langStore.t.settingsProfileVerificationSubmitError)
+    showToast('error', apiErrorMessage(e) ?? e.response?.data?.error ?? langStore.t.settingsProfileVerificationSubmitError)
   } finally { isRequestingVerification.value = false }
 }
 
@@ -2930,8 +2931,8 @@ async function selectSoonEvent(ev: EventItem) {
     soonDropOpen.value = false
     await loadMySoonSelection()
     showToast('success', `${langStore.t.settingsProfileSoonMarkedPrefix} «${ev.title}»`)
-  } catch (e: any) {
-    showToast('error', e?.response?.data?.error?.message ?? langStore.t.settingsProfileSoonSaveError)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) ?? langStore.t.settingsProfileSoonSaveError)
   } finally {
     soonSaving.value = false
   }
@@ -2944,8 +2945,8 @@ async function clearSoonSelection() {
     await groupsStore.toggleSoonBadge(mySoonEventId.value)
     mySoonEventId.value = null
     showToast('success', langStore.t.settingsProfileSoonLabelRemoved)
-  } catch (e: any) {
-    showToast('error', e?.response?.data?.error?.message ?? langStore.t.settingsProfileSoonSaveError)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) ?? langStore.t.settingsProfileSoonSaveError)
   } finally {
     soonSaving.value = false
   }

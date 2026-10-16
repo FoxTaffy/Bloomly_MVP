@@ -282,7 +282,7 @@ export async function getSellerReviewsHandler(req: FastifyRequest, reply: Fastif
 export async function deleteReviewHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const { reviewId } = req.params as { reviewId: string };
-  const userIsAdmin = isAdminRole((user as any).role);
+  const userIsAdmin = isAdminRole(user.role);
   try {
     await dealersDenService.deleteReview(reviewId, user.id, userIsAdmin);
     return reply.send({ success: true, data: { ok: true } });

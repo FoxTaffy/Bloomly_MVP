@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import BIcon from '@/components/BIcon.vue'
@@ -94,20 +95,20 @@ async function patchSettings(partial: Partial<AutoSettings>): Promise<boolean> {
   const body: Record<string, any> = {}
   for (const k of Object.keys(partial) as (keyof AutoSettings)[]) {
     const apiKey = API_KEY[k]
-    if (apiKey) body[apiKey] = (partial as any)[k]
+    if (apiKey) body[apiKey] = partial[k]
   }
   if (!Object.keys(body).length) return true
   try {
     await api.patch('/automation/me', body)
     return true
-  } catch (e: any) {
-    showToast(e?.response?.data?.error?.message || 'Не удалось сохранить')
+  } catch (e) {
+    showToast(apiErrorMessage(e) || 'Не удалось сохранить')
     return false
   }
 }
 
 function toggleProp(key: keyof AutoSettings) {
-  const next = !(s.value as any)[key]
+  const next = !s.value[key]
   ;(s.value as any)[key] = next
 
   if (key === 'filterNsfw') {

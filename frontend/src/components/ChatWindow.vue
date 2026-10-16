@@ -78,7 +78,7 @@
             </template>
             <template v-else>
               {{ other?.display_name || other?.username || langStore.t.chatInterlocutorFallback }}
-              <span v-if="(other as any)?.deceased_at" :title="langStore.t.chatRipTitle">🪦</span>
+              <span v-if="other?.deceased_at" :title="langStore.t.chatRipTitle">🪦</span>
             </template>
           </template>
         </p>
@@ -1586,7 +1586,7 @@ function isMine(msg: Message) {
 // Group helpers
 function getMsgSenderAvatar(msg: Message): string | null {
   if (!props.conv?.is_group) return props.other?.avatar_url ?? null
-  return (msg as any).sender?.avatar_url ?? null
+  return msg.sender?.avatar_url ?? null
 }
 
 function isSameAsPrev(idx: number): boolean {

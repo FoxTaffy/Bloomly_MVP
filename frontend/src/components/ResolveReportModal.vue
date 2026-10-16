@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, computed } from 'vue'
 import api from '../api'
 import BIcon from './BIcon.vue'
@@ -50,8 +51,8 @@ const submit = async () => {
     })
     emit('resolved')
     emit('close')
-  } catch (e: any) {
-    error.value = e?.response?.data?.error?.message ?? 'Не удалось решить жалобу'
+  } catch (e) {
+    error.value = apiErrorMessage(e) ?? 'Не удалось решить жалобу'
   } finally {
     isSubmitting.value = false
   }

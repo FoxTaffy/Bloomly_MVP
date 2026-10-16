@@ -11,3 +11,13 @@ export function apiErrorMessage(e: unknown): string | undefined {
 export function apiErrorStatus(e: unknown): number | undefined {
   return isAxiosError(e) ? e.response?.status : undefined
 }
+
+/** `error.code` from an API error response (e.g. 'EMAIL_TAKEN'). */
+export function apiErrorCode(e: unknown): string | undefined {
+  return isAxiosError(e) ? e.response?.data?.error?.code : undefined
+}
+
+/** `message` of a thrown Error (network failures, JS errors); undefined for anything else. */
+export function errorMessage(e: unknown): string | undefined {
+  return e instanceof Error ? e.message : undefined
+}

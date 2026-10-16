@@ -1,3 +1,4 @@
+import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAuthStore } from './auth'
@@ -264,8 +265,8 @@ export const useUserStore = defineStore('user', () => {
       const res = await api.get(`/users/${id}`)
       if (!res.data.success) throw new Error(res.data.error?.message ?? 'Failed to load profile')
       return res.data.data.user as UserProfile
-    } catch (e: any) {
-      error.value = e.response?.data?.error?.message ?? (e instanceof Error ? e.message : 'Connection error')
+    } catch (e) {
+      error.value = apiErrorMessage(e) ?? (errorMessage(e) ?? 'Connection error')
       return null
     } finally {
       isLoading.value = false
@@ -298,8 +299,8 @@ export const useUserStore = defineStore('user', () => {
         // Persist to sessionStorage so sidebar / AppHeader update immediately
         sessionStorage.setItem('auth_user', JSON.stringify(auth.user))
       }
-    } catch (e: any) {
-      error.value = e.response?.data?.error?.message ?? (e instanceof Error ? e.message : 'Connection error')
+    } catch (e) {
+      error.value = apiErrorMessage(e) ?? (errorMessage(e) ?? 'Connection error')
       throw e
     } finally {
       isLoading.value = false

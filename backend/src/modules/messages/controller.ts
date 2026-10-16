@@ -195,7 +195,7 @@ export async function deleteConversationHandler(
 ) {
   try {
     const { id: userId } = req.user as JwtUser;
-    const scope = (req.query as any).scope === 'all' ? 'all' : 'me';
+    const scope = req.query.scope === 'all' ? 'all' : 'me';
     await messageService.deleteConversation(req.params.id, userId, scope);
     return reply.send({ success: true, data: null, error: null });
   } catch (e) {
@@ -336,7 +336,7 @@ export async function unpinMessageHandler(
 ) {
   try {
     const { id: userId } = req.user as JwtUser;
-    const scope = (req.query as any).scope ?? 'all';
+    const scope = req.query.scope ?? 'all';
     await messageService.unpinMessage(req.params.id, userId, scope);
     return reply.send({ success: true, data: null, error: null });
   } catch (e) {

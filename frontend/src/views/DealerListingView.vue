@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '@/lib/apiError'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import * as fmt from '@/lib/format'
 const langStore = useLangStore()
@@ -40,8 +41,8 @@ onMounted(async () => {
       wishlistCount.value = listing.value.wishlist_count ?? 0
       if (listing.value.category === 'avatar_frame') await loadOwnedFrames()
     }
-  } catch (err: any) {
-    console.error('[DealerListingView] load error:', err?.message)
+  } catch (err) {
+    console.error('[DealerListingView] load error:', errorMessage(err))
   }
   ticker = setInterval(() => { now.value = Date.now() }, 1000)
 })

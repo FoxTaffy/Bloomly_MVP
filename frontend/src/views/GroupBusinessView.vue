@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
@@ -108,8 +109,8 @@ async function submitOrder() {
     createForm.title = ''
     createForm.description = ''
     createForm.deadlineAt = ''
-  } catch (e: any) {
-    createError.value = e?.response?.data?.error?.message || 'Не удалось оформить заказ'
+  } catch (e) {
+    createError.value = apiErrorMessage(e) || 'Не удалось оформить заказ'
   } finally {
     creating.value = false
   }

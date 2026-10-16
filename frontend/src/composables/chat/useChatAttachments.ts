@@ -1,3 +1,4 @@
+import { apiErrorMessage } from '@/lib/apiError'
 import { onUnmounted, reactive, ref, type Ref } from 'vue'
 import api from '@/api'
 import { useLangStore } from '@/stores/lang'
@@ -72,9 +73,9 @@ export function useChatAttachments(fileInputEl: Ref<HTMLInputElement | null>) {
         if (item.kind === 'video' && res.data?.data?.isSilentVideo) item.kind = 'gif'
         item.uploadedUrl = url
         item.progress = 100
-      } catch (err: any) {
+      } catch (err) {
         item.failed = true
-        uploadError.value = err?.response?.data?.error?.message || langStore.t.chatFileUploadFailedError
+        uploadError.value = apiErrorMessage(err) || langStore.t.chatFileUploadFailedError
         if (uploadErrorTimer) clearTimeout(uploadErrorTimer)
         uploadErrorTimer = setTimeout(() => { uploadError.value = null }, 4000)
         setTimeout(() => removePendingAttachment(item.id), 1500)

@@ -1,3 +1,4 @@
+import { apiErrorMessage } from '@/lib/apiError'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '../api'
@@ -59,8 +60,8 @@ export const useShopStore = defineStore('shop', () => {
       const idx = items.value.findIndex((i) => i.id === itemId)
       if (idx !== -1) items.value[idx] = { ...items.value[idx], owned: true }
       return { ok: true }
-    } catch (e: any) {
-      return { ok: false, error: e.response?.data?.error?.message ?? 'Ошибка покупки' }
+    } catch (e) {
+      return { ok: false, error: apiErrorMessage(e) ?? 'Ошибка покупки' }
     } finally {
       purchasing.value = null
     }

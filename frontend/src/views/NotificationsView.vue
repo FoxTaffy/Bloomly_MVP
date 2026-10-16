@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, onMounted, computed } from 'vue'
 import api from '@/api'
 import AppHeader from '@/components/AppHeader.vue'
@@ -81,8 +82,8 @@ const acceptRelationship = async (n: any) => {
   try {
     await api.post(`/relationships/${reqId}/accept`)
     n._relDone = 'accepted'
-  } catch (e: any) {
-    alert(e?.response?.data?.error?.message ?? 'Ошибка')
+  } catch (e) {
+    alert(apiErrorMessage(e) ?? 'Ошибка')
   } finally { relActionLoading.value[n.id] = false }
 }
 
@@ -93,8 +94,8 @@ const declineRelationship = async (n: any) => {
   try {
     await api.post(`/relationships/${reqId}/decline`)
     n._relDone = 'declined'
-  } catch (e: any) {
-    alert(e?.response?.data?.error?.message ?? 'Ошибка')
+  } catch (e) {
+    alert(apiErrorMessage(e) ?? 'Ошибка')
   } finally { relActionLoading.value[n.id] = false }
 }
 

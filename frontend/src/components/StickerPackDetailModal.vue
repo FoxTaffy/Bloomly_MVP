@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, computed, onMounted } from 'vue'
 import api from '../api'
 import BIcon from './BIcon.vue'
@@ -27,8 +28,8 @@ const fetchDetail = async () => {
     const res = await api.get(`/admin/stats/stickers/${props.packId}`)
     if (res.data.success) detail.value = res.data.data
     else error.value = 'Не удалось загрузить статистику пака'
-  } catch (e: any) {
-    error.value = e?.response?.data?.error?.message ?? 'Не удалось загрузить статистику пака'
+  } catch (e) {
+    error.value = apiErrorMessage(e) ?? 'Не удалось загрузить статистику пака'
   } finally {
     isLoading.value = false
   }

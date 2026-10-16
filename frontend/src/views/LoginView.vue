@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorCode, apiErrorMessage } from '@/lib/apiError'
 import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -226,7 +227,7 @@ async function onSubmit() {
       router.push({ name: 'home' })
     }
   } catch (e: any) {
-    const code = e?.response?.data?.error?.code
+    const code = apiErrorCode(e)
     // Email зарегистрирован, но не подтверждён → переводим на OTP-экран
     if (mode.value === 'login' && code === 'EMAIL_NOT_VERIFIED') {
       mode.value = 'verify'
@@ -234,12 +235,12 @@ async function onSubmit() {
       startResendTimer()
       auth.resendOtp(email.value, 'register').catch(() => {})
     } else if (mode.value === 'login' && code === 'ACCOUNT_FROZEN') {
-      blockedReason.value = e?.response?.data?.error?.message || ''
+      blockedReason.value = apiErrorMessage(e) || ''
       auth.error = null
       failedLoginAttempts.value = 0
       showFrozenModal.value = true
     } else if (mode.value === 'login' && code === 'ACCOUNT_BANNED') {
-      blockedReason.value = e?.response?.data?.error?.message || ''
+      blockedReason.value = apiErrorMessage(e) || ''
       auth.error = null
       failedLoginAttempts.value = 0
       showBannedModal.value = true

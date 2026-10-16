@@ -125,8 +125,8 @@ export const getPostsHandler = async (
   try {
     const query = request.query;
     query.nsfwMode = resolveNsfwMode({ nsfw: query.nsfw, safeMode: query.safeMode, isAdult: requestIsAdult(request.user) });
-    if (typeof (query as any).hasMedia === 'string') {
-      (query as any).hasMedia = (query as any).hasMedia === 'true';
+    if (typeof query.hasMedia === 'string') {
+      query.hasMedia = query.hasMedia === 'true';
     }
     const viewerId = (request.user as JwtUser | undefined)?.id;
     const posts = await postService.getPosts(query, viewerId);
@@ -147,7 +147,7 @@ export const getPersonalizedPostsHandler = async (
 ) => {
   try {
     const { id: userId } = request.user as JwtUser;
-    const nsfwMode = resolveNsfwMode({ nsfw: (request.query as any).nsfw, safeMode: (request.query as any).safeMode, isAdult: requestIsAdult(request.user) });
+    const nsfwMode = resolveNsfwMode({ nsfw: request.query.nsfw, safeMode: request.query.safeMode, isAdult: requestIsAdult(request.user) });
     const pageNum = request.query.page ? parseInt(request.query.page as string, 10) : 1;
     const limitNum = request.query.limit ? parseInt(request.query.limit as string, 10) : 30;
 

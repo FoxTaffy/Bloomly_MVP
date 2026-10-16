@@ -436,7 +436,7 @@ export const reviewAdHandler = async (
     startsAt: req.body.startsAt ? new Date(req.body.startsAt) : undefined,
     endsAt:   req.body.endsAt   ? new Date(req.body.endsAt)   : undefined,
   });
-  await logAdminAction(reviewerId, (ad as any).requester_id ?? reviewerId, req.body.status === 'active' ? 'approve_ad' : 'reject_ad', `Реклама "${ad.title}" ${req.body.status === 'active' ? 'одобрена' : 'отклонена'}`);
+  await logAdminAction(reviewerId, ad.requester_id ?? reviewerId, req.body.status === 'active' ? 'approve_ad' : 'reject_ad', `Реклама "${ad.title}" ${req.body.status === 'active' ? 'одобрена' : 'отклонена'}`);
   return reply.send({ success: true, data: { ad }, error: null });
 };
 

@@ -16,7 +16,7 @@ export function createAdminContext() {
   const auth = useAuthStore()
   const langStore = useLangStore()
 
-  const myRole = computed<string>(() => (auth.user as any)?.role ?? 'user')
+  const myRole = computed<string>(() => auth.user?.role ?? 'user')
   const myRoleRank = computed(() => ROLE_RANK[myRole.value] ?? 0)
   const isOwnerRole = computed(() => myRole.value === 'owner')
   const isAdminPlus = computed(() => myRoleRank.value >= ROLE_RANK.admin)

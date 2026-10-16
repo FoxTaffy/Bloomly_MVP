@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, computed } from 'vue'
 import api from '../api'
 import BIcon from './BIcon.vue'
@@ -48,8 +49,8 @@ const save = async () => {
     await api.patch(`/admin/users/${props.user.id}/profile`, patch)
     emit('saved', patch)
     emit('close')
-  } catch (e: any) {
-    error.value = e?.response?.data?.error?.message || 'Не удалось сохранить профиль'
+  } catch (e) {
+    error.value = apiErrorMessage(e) || 'Не удалось сохранить профиль'
   } finally {
     isSaving.value = false
   }

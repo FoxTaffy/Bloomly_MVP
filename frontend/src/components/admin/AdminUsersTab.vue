@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, computed, watch, watchEffect, onMounted, onBeforeUnmount, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { useLangStore } from '@/stores/lang'
@@ -114,8 +115,8 @@ const updateUserSubscription = async (userId: string, tier: string) => {
     await api.patch(`/admin/users/${userId}/subscription`, { tier })
     const u = users.value.find(u => u.id === userId)
     if (u) u.subscription_tier = tier
-  } catch (e: any) {
-    showActionError(e?.response?.data?.error?.message || 'Не удалось изменить подписку')
+  } catch (e) {
+    showActionError(apiErrorMessage(e) || 'Не удалось изменить подписку')
   }
 }
 
@@ -308,8 +309,8 @@ const inviteToStaff = async () => {
       showInviteForm.value = false
       inviteIdentifier.value = ''
     }
-  } catch (e: any) {
-    inviteError.value = e?.response?.data?.error?.message || langStore.t.userNotFound
+  } catch (e) {
+    inviteError.value = apiErrorMessage(e) || langStore.t.userNotFound
   } finally { isInviting.value = false }
 }
 

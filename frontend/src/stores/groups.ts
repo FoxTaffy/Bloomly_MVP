@@ -82,6 +82,16 @@ export interface Group {
   _count: { members: number; events: number; posts: number }
   events?: EventItem[]
   commissionInfo?: CommissionInfo | null
+  donations_enabled?: boolean
+  support_tiers?: SupportTier[]
+}
+
+/** Owner-configured support tier shown in the group sidebar (Group.support_tiers JSON). */
+export interface SupportTier {
+  emoji?: string
+  name: string
+  price: string | number
+  desc?: string
 }
 
 export interface EventItem {
@@ -741,7 +751,7 @@ export const useGroupsStore = defineStore('groups', () => {
     const { data } = await api.patch(`/groups/${groupId}/notify`)
     if (data.success) {
       const m = myGroups.value.find(m => m.group_id === groupId)
-      if (m) (m as any).notify_posts = data.data.notify_posts
+      if (m) m.notify_posts = data.data.notify_posts
     }
     return data.data as { notify_posts: boolean }
   }

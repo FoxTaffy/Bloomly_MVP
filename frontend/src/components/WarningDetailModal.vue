@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, computed, watch } from 'vue'
 import api from '../api'
 import BIcon from './BIcon.vue'
@@ -55,8 +56,8 @@ const submitAppeal = async () => {
     await api.post(`/automod/warnings/${logId.value}/appeal`, { text: appealDraft.value.trim() })
     appealStatus.value = 'pending'
     appealTextExisting.value = appealDraft.value.trim()
-  } catch (e: any) {
-    appealError.value = e?.response?.data?.error?.message ?? 'Не удалось отправить апелляцию'
+  } catch (e) {
+    appealError.value = apiErrorMessage(e) ?? 'Не удалось отправить апелляцию'
   } finally { isSubmittingAppeal.value = false }
 }
 

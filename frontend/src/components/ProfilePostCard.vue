@@ -19,7 +19,7 @@
                 :to="'/profile/' + post.author.username"
                 class="font-bold text-white hover:text-brand-accent transition-colors text-sm truncate"
               >{{ post.author.display_name || post.author.username }}</router-link>
-              <span v-if="(post.author as any).deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
+              <span v-if="post.author.deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
               <!-- Verification badge -->
               <VerificationBadge v-if="post.author.is_verified"
                 :type="post.author.verification_type"

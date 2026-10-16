@@ -1,3 +1,4 @@
+import { apiErrorMessage, apiErrorStatus, errorMessage } from '@/lib/apiError'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api, { setupApiAuth } from '../api'
@@ -88,8 +89,8 @@ export const useAuthStore = defineStore('auth', () => {
           saveUser(res.data.data.user)
           return true
         }
-      } catch (e: any) {
-        const confirmedDead = e?.response?.status === 401
+      } catch (e) {
+        const confirmedDead = apiErrorStatus(e) === 401
         if (confirmedDead) {
           clearUser()
           user.value = null
@@ -118,8 +119,8 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = data.data.token
       user.value  = data.data.user
       saveUser(data.data.user)
-    } catch (e: any) {
-      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+    } catch (e) {
+      error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
     } finally {
       isLoading.value = false
@@ -139,8 +140,8 @@ export const useAuthStore = defineStore('auth', () => {
       const data = res.data
       if (!data.success) throw new Error(data.error?.message ?? 'Registration failed')
       // НЕ логиним автоматически — ждём подтверждения OTP
-    } catch (e: any) {
-      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+    } catch (e) {
+      error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       isLoading.value = false
       throw e
     } finally {
@@ -158,8 +159,8 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = data.data.token
       user.value  = data.data.user
       saveUser(data.data.user)
-    } catch (e: any) {
-      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+    } catch (e) {
+      error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
     } finally {
       isLoading.value = false
@@ -171,8 +172,8 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     try {
       await api.post('/auth/resend-otp', { email, purpose })
-    } catch (e: any) {
-      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+    } catch (e) {
+      error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
     } finally {
       isLoading.value = false
@@ -199,8 +200,8 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     try {
       await api.post('/auth/unfreeze/request', { email })
-    } catch (e: any) {
-      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+    } catch (e) {
+      error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
     } finally {
       isLoading.value = false
@@ -218,8 +219,8 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = data.data.token
       user.value  = data.data.user
       saveUser(data.data.user)
-    } catch (e: any) {
-      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+    } catch (e) {
+      error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
     } finally {
       isLoading.value = false
@@ -231,8 +232,8 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     try {
       await api.post('/auth/forgot-password', { email })
-    } catch (e: any) {
-      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+    } catch (e) {
+      error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
     } finally {
       isLoading.value = false
@@ -246,8 +247,8 @@ export const useAuthStore = defineStore('auth', () => {
       const res = await api.post('/auth/reset-password', { email, code, password: newPassword })
       const data = res.data
       if (!data.success) throw new Error(data.error?.message ?? 'Reset failed')
-    } catch (e: any) {
-      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+    } catch (e) {
+      error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
     } finally {
       isLoading.value = false
@@ -260,8 +261,8 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     try {
       await api.post('/auth/change-email/request')
-    } catch (e: any) {
-      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+    } catch (e) {
+      error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
     } finally {
       isLoading.value = false
@@ -277,8 +278,8 @@ export const useAuthStore = defineStore('auth', () => {
       const data = res.data
       if (!data.success) throw new Error(data.error?.message ?? 'Change email failed')
       if (user.value) { user.value.email = data.data.email; saveUser(user.value) }
-    } catch (e: any) {
-      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+    } catch (e) {
+      error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
     } finally {
       isLoading.value = false
@@ -292,8 +293,8 @@ export const useAuthStore = defineStore('auth', () => {
       const res = await api.post('/auth/change-password', { currentPassword, newPassword })
       const data = res.data
       if (!data.success) throw new Error(data.error?.message ?? 'Change password failed')
-    } catch (e: any) {
-      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+    } catch (e) {
+      error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
     } finally {
       isLoading.value = false
@@ -345,8 +346,8 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = data.data.token
       user.value  = data.data.user
       saveUser(data.data.user)
-    } catch (e: any) {
-      error.value = e.response?.data?.error?.message || e.message || 'Connection error'
+    } catch (e) {
+      error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
     } finally {
       isLoading.value = false
@@ -368,8 +369,8 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = data.data.user
         saveUser(data.data.user)
       }
-    } catch (e: any) {
-      if (e?.response?.status === 401) logout()
+    } catch (e) {
+      if (apiErrorStatus(e) === 401) logout()
     }
   }
 

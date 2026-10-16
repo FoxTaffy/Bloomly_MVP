@@ -33,7 +33,7 @@ watch(() => props.open, (open) => {
   if (open && props.conv) {
     editGroupName.value   = props.conv.name ?? ''
     editGroupAvatar.value = props.conv.avatar_url ?? ''
-    editGroupBanner.value = (props.conv as any).banner_url ?? ''
+    editGroupBanner.value = props.conv.banner_url ?? ''
   }
 })
 

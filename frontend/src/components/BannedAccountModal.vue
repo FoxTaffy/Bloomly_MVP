@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import BIcon from './BIcon.vue'
@@ -38,8 +39,8 @@ async function downloadData() {
     a.remove()
     URL.revokeObjectURL(url)
     downloaded.value = true
-  } catch (e: any) {
-    downloadError.value = e?.response?.data?.error?.message || 'Не удалось скачать данные'
+  } catch (e) {
+    downloadError.value = apiErrorMessage(e) || 'Не удалось скачать данные'
   } finally {
     downloading.value = false
   }

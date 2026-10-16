@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorStatus } from '@/lib/apiError'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api'
@@ -28,8 +29,8 @@ async function load() {
   try {
     const r = await api.get(`/posts/${props.postId}/stats`)
     if (r.data.success) stats.value = r.data.data.stats
-  } catch (e: any) {
-    if (e?.response?.status === 402) proRequired.value = true
+  } catch (e) {
+    if (apiErrorStatus(e) === 402) proRequired.value = true
   } finally {
     loading.value = false
   }

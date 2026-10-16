@@ -116,7 +116,7 @@ export function highlightMatches(text: string, query: string): string {
 
 export interface AlbumFile { url: string; type: string }
 export function getAlbumFiles(msg: Message): AlbumFile[] {
-  const files = (msg.metadata as any)?.files
+  const files = msg.metadata?.files
   return Array.isArray(files) ? files : []
 }
 

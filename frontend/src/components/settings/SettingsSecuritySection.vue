@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/api'
@@ -34,8 +35,8 @@ async function submitChangePassword() {
     pwSuccess.value = langStore.t.passwordChangedMsg
     pwForm.current = ''; pwForm.next = ''; pwForm.confirm = ''
     setTimeout(() => { showChangePassword.value = false; pwSuccess.value = '' }, 2000)
-  } catch (e: any) {
-    pwError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } catch (e) {
+    pwError.value = apiErrorMessage(e) ?? errorMessage(e) ?? 'Error'
   } finally {
     pwSaving.value = false
   }
@@ -56,8 +57,8 @@ async function startForgotPassword() {
   try {
     await authStore.forgotPassword(authStore.user!.email)
     fpCodeSent.value = true
-  } catch (e: any) {
-    fpError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } catch (e) {
+    fpError.value = apiErrorMessage(e) ?? errorMessage(e) ?? 'Error'
   } finally {
     fpSending.value = false
   }
@@ -73,8 +74,8 @@ async function submitForgotPassword() {
     fpSuccess.value = langStore.t.passwordChangedMsg
     fpForm.code = ''; fpForm.next = ''; fpForm.confirm = ''
     setTimeout(() => { showForgotPassword.value = false; fpCodeSent.value = false; fpSuccess.value = '' }, 2000)
-  } catch (e: any) {
-    fpError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } catch (e) {
+    fpError.value = apiErrorMessage(e) ?? errorMessage(e) ?? 'Error'
   } finally {
     fpSaving.value = false
   }
@@ -95,8 +96,8 @@ async function startChangeEmail() {
   try {
     await authStore.requestEmailChange()
     ecCodeSent.value = true
-  } catch (e: any) {
-    ecError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } catch (e) {
+    ecError.value = apiErrorMessage(e) ?? errorMessage(e) ?? 'Error'
   } finally {
     ecSending.value = false
   }
@@ -114,8 +115,8 @@ async function submitChangeEmail() {
     ecSuccess.value = langStore.t.emailChangedMsg
     ecForm.code = ''; ecForm.newEmail = ''
     setTimeout(() => { showChangeEmail.value = false; ecCodeSent.value = false; ecSuccess.value = '' }, 2000)
-  } catch (e: any) {
-    ecError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } catch (e) {
+    ecError.value = apiErrorMessage(e) ?? errorMessage(e) ?? 'Error'
   } finally {
     ecSaving.value = false
   }
@@ -136,8 +137,8 @@ async function startTotpSetup() {
     const { secret, qrDataUrl } = await authStore.setupTotp()
     totpSecret.value = secret
     totpQr.value = qrDataUrl
-  } catch (e: any) {
-    totpError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } catch (e) {
+    totpError.value = apiErrorMessage(e) ?? errorMessage(e) ?? 'Error'
   }
 }
 
@@ -149,8 +150,8 @@ async function submitTotpConfirm() {
     totpSuccess.value = langStore.t.twoFactorEnabledMsg
     totpCode.value = ''
     setTimeout(() => { showTotpSetup.value = false; totpQr.value = ''; totpSecret.value = ''; totpSuccess.value = '' }, 2000)
-  } catch (e: any) {
-    totpError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } catch (e) {
+    totpError.value = apiErrorMessage(e) ?? errorMessage(e) ?? 'Error'
   } finally {
     totpSaving.value = false
   }
@@ -171,8 +172,8 @@ async function startEmail2fa() {
   try {
     await authStore.enableEmail2fa()
     email2faCodeSent.value = true
-  } catch (e: any) {
-    email2faError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } catch (e) {
+    email2faError.value = apiErrorMessage(e) ?? errorMessage(e) ?? 'Error'
   } finally {
     email2faSending.value = false
   }
@@ -186,8 +187,8 @@ async function submitEmail2fa() {
     email2faSuccess.value = langStore.t.twoFactorEnabledMsg
     email2faCode.value = ''
     setTimeout(() => { showEmail2fa.value = false; email2faCodeSent.value = false; email2faSuccess.value = '' }, 2000)
-  } catch (e: any) {
-    email2faError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } catch (e) {
+    email2faError.value = apiErrorMessage(e) ?? errorMessage(e) ?? 'Error'
   } finally {
     email2faSaving.value = false
   }
@@ -208,8 +209,8 @@ async function submitDisable2fa() {
     showDisable2fa.value = false
     showTotpSetup.value = false
     showEmail2fa.value = false
-  } catch (e: any) {
-    disable2faError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } catch (e) {
+    disable2faError.value = apiErrorMessage(e) ?? errorMessage(e) ?? 'Error'
   } finally {
     disable2faSaving.value = false
   }
@@ -256,8 +257,8 @@ async function linkProvider(provider: string) {
     const { data } = await api.get(`/auth/link-init/${provider}`)
     sessionStorage.setItem('oauth_started', '1')
     window.location.href = data.data.url
-  } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message ?? langStore.t.settingsProfileLinkError)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) ?? langStore.t.settingsProfileLinkError)
     linkingProvider.value = null
   }
 }
@@ -268,8 +269,8 @@ async function unlinkProvider(provider: string) {
     await api.delete(`/auth/linked-accounts/${provider}`)
     linkedAccounts.value = linkedAccounts.value.filter(p => p !== provider)
     showToast('success', langStore.t.settingsProfileUnlinkedSuccess)
-  } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message ?? langStore.t.settingsProfileUnlinkError)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) ?? langStore.t.settingsProfileUnlinkError)
   } finally {
     unlinkingProvider.value = null
   }
@@ -306,8 +307,8 @@ async function revokeSession(id: string) {
     await api.delete(`/auth/sessions/${id}`)
     sessions.value = sessions.value.filter(s => s.id !== id)
     showToast('success', langStore.t.revokeBtn)
-  } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message ?? langStore.t.settingsProfileGenericError)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) ?? langStore.t.settingsProfileGenericError)
   } finally {
     revokingSessionId.value = null
   }
@@ -320,8 +321,8 @@ async function revokeOtherSessions() {
     await api.delete('/auth/sessions/other')
     sessions.value = sessions.value.filter(s => s.current)
     showToast('success', langStore.t.revokeAllOthersBtn)
-  } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message ?? langStore.t.settingsProfileGenericError)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) ?? langStore.t.settingsProfileGenericError)
   } finally {
     revokingOthers.value = false
   }

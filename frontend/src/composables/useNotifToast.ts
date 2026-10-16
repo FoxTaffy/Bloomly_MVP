@@ -53,7 +53,7 @@ function subscriptionPostLabel(type: string, pronouns?: string | null): string |
   const isFemale = p.startsWith('она')
   const base = key === 'FOLLOW_POST' ? 'notifFollowPost' : 'notifGroupPost'
   const suffix = isMale ? 'M' : isFemale ? 'F' : 'N'
-  return (t as any)[`${base}${suffix}`] ?? null
+  return t[`${base}${suffix}`] ?? null
 }
 
 export function useNotifToast() {

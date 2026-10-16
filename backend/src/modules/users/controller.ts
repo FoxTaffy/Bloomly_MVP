@@ -185,7 +185,7 @@ export async function setPublicKeyHandler(
   reply: FastifyReply,
 ) {
   const payload = request.user as JwtPayload;
-  await usersService.setPublicKey(payload.id, (request.body as any).public_key);
+  await usersService.setPublicKey(payload.id, request.body.public_key);
   return reply.send({ success: true, data: null, error: null });
 }
 

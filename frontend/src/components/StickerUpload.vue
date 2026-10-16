@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 /**
  * StickerUpload — upload PNG stickers with Telegram-compatible rules:
  *   • Format: PNG with transparent background (alpha channel)
@@ -133,10 +134,10 @@ async function processFile(file: File) {
     set({ state: 'done', url, preview: objectUrl })
     emit('uploaded', url)
 
-  } catch (err: any) {
+  } catch (err) {
     const msg: string =
-      err?.response?.data?.error?.message ??
-      err?.message ??
+      apiErrorMessage(err) ??
+      errorMessage(err) ??
       'Ошибка загрузки'
     set({ state: 'error', error: msg })
   }

@@ -1042,7 +1042,7 @@ export const messageService = {
 
     return {
       ...conv,
-      pinned_message: (conv as any).pinnedMessage ?? null,
+      pinned_message: conv.pinnedMessage ?? null,
       my_participant: mine
         ? {
             archived: mine.archived, hidden_at: mine.hidden_at, last_read_at: mine.last_read_at,
@@ -1101,7 +1101,7 @@ export const messageService = {
     const msg = await prisma.message.findFirst({ where: { id: messageId, conversation_id: convId, deleted_at: null } });
     if (!msg) throw Object.assign(new Error('Message not found'), { statusCode: 404 });
     if (scope === 'all') {
-      await (prisma.conversation as any).update({ where: { id: convId }, data: { pinned_message_id: messageId } });
+      await prisma.conversation.update({ where: { id: convId }, data: { pinned_message_id: messageId } });
       // Broadcast system notification to all participants
       const actor = await prisma.user.findUnique({ where: { id: userId }, select: { display_name: true, username: true } });
       const actorName = actor?.display_name || actor?.username || '?';
@@ -1123,7 +1123,7 @@ export const messageService = {
   async unpinMessage(convId: string, userId: string, scope: 'all' | 'me') {
     await this._assertParticipant(convId, userId);
     if (scope === 'all') {
-      await (prisma.conversation as any).update({ where: { id: convId }, data: { pinned_message_id: null } });
+      await prisma.conversation.update({ where: { id: convId }, data: { pinned_message_id: null } });
     } else {
       await prisma.$executeRaw`UPDATE "ConversationParticipant" SET personal_pinned_message_id = NULL WHERE conversation_id = ${convId}::uuid AND user_id = ${userId}::uuid`;
     }
@@ -1224,7 +1224,7 @@ export const messageService = {
     }
     // Чужой уже выданный ключ не перезаписываем: иначе участник подменял бы ключ другому и
     // читал бы его переписку. Свой ключ обновлять можно.
-    const existing = await (prisma as any).conversationKey.findMany({
+    const existing = await prisma.conversationKey.findMany({
       where: { conversation_id: convId, user_id: { in: targetIds, not: callerId } },
       select: { user_id: true },
     });
@@ -1232,7 +1232,7 @@ export const messageService = {
       throw Object.assign(new Error('Ключи других участников нельзя перезаписать'), { statusCode: 403 });
     }
     const upserts = Object.entries(keys).map(([userId, encryptedKey]) =>
-      (prisma as any).conversationKey.upsert({
+      prisma.conversationKey.upsert({
         where: { conversation_id_user_id: { conversation_id: convId, user_id: userId } },
         create: { conversation_id: convId, user_id: userId, encrypted_key: encryptedKey },
         update: { encrypted_key: encryptedKey },
@@ -1244,7 +1244,7 @@ export const messageService = {
   /** Get the caller's encrypted conversation key for a given conversation. */
   async getMyConversationKey(convId: string, userId: string): Promise<string | null> {
     await this._assertParticipant(convId, userId);
-    const row = await (prisma as any).conversationKey.findUnique({
+    const row = await prisma.conversationKey.findUnique({
       where: { conversation_id_user_id: { conversation_id: convId, user_id: userId } },
     });
     return row?.encrypted_key ?? null;

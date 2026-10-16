@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import BIcon from './BIcon.vue'
@@ -82,8 +83,8 @@ async function confirm() {
   try {
     await auth.confirmUnfreeze(props.email, code.value, props.remember)
     emit('unfrozen')
-  } catch (e: any) {
-    localError.value = e?.response?.data?.error?.message || 'Неверный или устаревший код'
+  } catch (e) {
+    localError.value = apiErrorMessage(e) || 'Неверный или устаревший код'
   } finally {
     confirming.value = false
   }

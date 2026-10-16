@@ -56,7 +56,7 @@ async function initLottie() {
 
   if (!lottie) {
     const mod = await import('lottie-web')
-    lottie = (mod as any).default ?? mod
+    lottie = mod.default ?? mod
   }
 
   if (isTgs.value) {

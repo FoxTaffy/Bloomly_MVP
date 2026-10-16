@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '@/lib/apiError'
 import { ref, computed, onMounted, watch } from 'vue'
 import BIcon from '@/components/BIcon.vue'
 import { useGroupsStore, type GroupMember, type MemberRole } from '@/stores/groups'
@@ -85,8 +86,8 @@ async function loadMembers() {
   error.value = ''
   try {
     members.value = await groupsStore.fetchMembers(props.groupId)
-  } catch (e: any) {
-    error.value = e.message
+  } catch (e) {
+    error.value = errorMessage(e) ?? ''
   } finally {
     loading.value = false
   }
@@ -99,9 +100,9 @@ async function changeRole(member: GroupMember, newRole: MemberRole) {
   try {
     const updated = await groupsStore.changeMemberRole(props.groupId, member.user_id, newRole)
     const idx = members.value.findIndex(m => m.user_id === member.user_id)
-    if (idx !== -1) members.value[idx] = { ...members.value[idx], role: (updated as any).role ?? newRole }
-  } catch (e: any) {
-    alert('Ошибка: ' + e.message)
+    if (idx !== -1) members.value[idx] = { ...members.value[idx], role: updated.role ?? newRole }
+  } catch (e) {
+    alert('Ошибка: ' + errorMessage(e))
   } finally {
     changingRole.value = null
   }
@@ -115,8 +116,8 @@ async function kickMember(member: GroupMember) {
   try {
     await groupsStore.removeMember(props.groupId, member.user_id)
     members.value = members.value.filter(m => m.user_id !== member.user_id)
-  } catch (e: any) {
-    alert('Ошибка: ' + e.message)
+  } catch (e) {
+    alert('Ошибка: ' + errorMessage(e))
   } finally {
     removing.value = null
   }

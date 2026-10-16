@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { ref, onMounted, onUnmounted } from 'vue'
 import { X, Image, Plus } from 'lucide-vue-next'
 import api from '@/api'
@@ -190,9 +191,9 @@ const uploadFile = async (file: File, id: number) => {
     // actually tell the user something failed — this used to fail silently.
     const idx = previews.value.findIndex(p => p.id === id)
     if (idx !== -1) previews.value.splice(idx, 1)
-    const serverMessage = err?.response?.data?.error?.message
+    const serverMessage = apiErrorMessage(err)
     flashMessage(typeof serverMessage === 'string' && serverMessage ? serverMessage : 'Не удалось загрузить файл. Попробуйте ещё раз.')
-    console.error('Upload failed:', err?.response?.data ?? err?.message)
+    console.error('Upload failed:', err?.response?.data ?? errorMessage(err))
   }
 }
 

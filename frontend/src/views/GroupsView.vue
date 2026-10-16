@@ -135,7 +135,7 @@ async function loadStaticData() {
 
 const activeAds = ref<any[]>([])
 const adSlotMode = computed<'ads' | 'offer' | 'hidden'>(() => {
-  const tier = (authStore.user as any)?.subscription_tier ?? 'free'
+  const tier = authStore.user?.subscription_tier ?? 'free'
   if (tier === 'lite' || tier === 'pro') return 'hidden'
   if (tier === 'business') return 'offer'
   return 'ads'
