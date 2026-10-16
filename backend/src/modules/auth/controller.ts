@@ -1,9 +1,9 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { createHash, randomBytes } from 'crypto';
+import { randomBytes } from 'crypto';
 import { AuthService } from './service.js';
 import { buildOAuthUrl, handleOAuthCallback, findOrCreateOAuthUser, OAuthProvider } from './oauth.service.js';
 import { parseDeviceName, getClientIp } from './device.util.js';
-import prisma from '../../config/prisma.js';
+import { hashToken, authUsers, sessions, oauthAccounts } from './session.service.js';
 import { getSetting } from '../../lib/settings.js';
 import { isAdult } from '../../lib/age.js';
 import { createMfaToken, verifyMfaToken } from '../../lib/mfaToken.js';
@@ -39,26 +39,12 @@ async function validReplay(hash: string): Promise<RotationReplay | undefined> {
   pruneRotationReplays();
   const replay = recentRotations.get(hash);
   if (!replay) return undefined;
-  const current = await prisma.refreshToken.findUnique({
-    where: { token_hash: createHash('sha256').update(replay.refreshToken).digest('hex') },
-    select: { revoked: true, expires_at: true },
-  });
-  if (!current || current.revoked || current.expires_at < new Date()) {
+  if (!(await sessions.isAlive(hashToken(replay.refreshToken)))) {
     recentRotations.delete(hash);
     return undefined;
   }
   return replay;
 }
-
-// ── Вспомогательный селект полного профиля ────────────────────────────────────
-const FULL_USER_SELECT = {
-  id: true, username: true, email: true, role: true,
-  display_name: true, avatar_url: true, avatar_video_url: true, bio: true, status: true,
-  subscription_tier: true, profile_theme: true, profile_bg_url: true,
-  profile_frame: true, is_verified: true, verification_type: true,
-  badge_type: true, email_verified: true, onboarding_done: true,
-  payment_region: true, birth_date: true, two_factor_method: true,
-} as const;
 
 function withIsAdult<T extends { birth_date: Date | null }>(user: T): Omit<T, 'birth_date'> & { is_adult: boolean } {
   const { birth_date, ...rest } = user;
@@ -101,53 +87,52 @@ async function issueRefreshToken(
   rotateSessionId?: string,
   expectedHash?: string,
 ): Promise<string | null> {
-  const raw     = randomBytes(40).toString('hex');
-  const hash    = createHash('sha256').update(raw).digest('hex');
-  const ttlMs   = remember ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
-  const expiry  = new Date(Date.now() + ttlMs);
-  const userAgent  = request.headers['user-agent'];
-  const ipAddress  = getClientIp(request);
-  const data = {
-    token_hash: hash, expires_at: expiry, remember, revoked: false,
-    device_name: parseDeviceName(userAgent),
-    user_agent: userAgent ?? null,
-    ip_address: ipAddress ?? null,
-    last_used_at: new Date(),
+  const raw = randomBytes(40).toString('hex');
+  const ttlMs = remember ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+  const userAgent = request.headers['user-agent'];
+  const session = {
+    tokenHash: hashToken(raw),
+    expiresAt: new Date(Date.now() + ttlMs),
+    remember,
+    deviceName: parseDeviceName(userAgent),
+    userAgent: userAgent ?? null,
+    ipAddress: getClientIp(request) ?? null,
   };
 
   if (rotateSessionId) {
-    if (expectedHash) {
-      const result = await prisma.refreshToken.updateMany({
-        where: { id: rotateSessionId, token_hash: expectedHash },
-        data,
-      });
-      if (result.count === 0) return null; // lost the rotation race
-    } else {
-      await prisma.refreshToken.update({ where: { id: rotateSessionId }, data });
-    }
+    if (!(await sessions.rotate(rotateSessionId, session, expectedHash))) return null; // lost the rotation race
   } else {
-    await prisma.refreshToken.create({ data: { user_id: userId, ...data } });
+    await sessions.create(userId, session);
   }
 
-  const cookieOpts: Parameters<typeof reply.setCookie>[2] = {
+  setRefreshCookie(reply, raw, remember);
+  return raw;
+}
+
+// ── refresh_token cookie ──────────────────────────────────────────────────────
+// remember → persistent 30-day cookie; otherwise a session cookie.
+function setRefreshCookie(reply: FastifyReply, raw: string, remember: boolean) {
+  reply.setCookie('refresh_token', raw, {
     httpOnly: true,
     secure:   !isDevEnv(),
     sameSite: 'strict',
     path:     '/api/auth',
-  };
-  if (remember) cookieOpts.maxAge = 30 * 24 * 60 * 60;
+    ...(remember ? { maxAge: 30 * 24 * 60 * 60 } : {}),
+  });
+}
 
-  reply.setCookie('refresh_token', raw, cookieOpts);
-  return raw;
+function readRefreshCookie(request: FastifyRequest): string | undefined {
+  return request.cookies?.refresh_token;
+}
+
+function clearRefreshCookie(reply: FastifyReply) {
+  reply.clearCookie('refresh_token', { path: '/api/auth' });
 }
 
 // ── Статистика ────────────────────────────────────────────────────────────────
 export const statsHandler = async (req: FastifyRequest, reply: FastifyReply) => {
   const online = presence.onlineCount()
-  const [users, posts] = await Promise.all([
-    prisma.user.count({ where: { deleted_at: null } }),
-    prisma.post.count({ where: { deleted_at: null } }),
-  ])
+  const { users, posts } = await authUsers.countUsersAndPosts()
   return reply.send({ success: true, data: { users, posts, online }, error: null })
 }
 
@@ -181,10 +166,7 @@ export const verifyEmailHandler = async (
     const { email, code, remember = false } = request.body;
     await authService.verifyEmail(email, code);
 
-    const user = await prisma.user.findFirst({
-      where: { email: email.toLowerCase().trim(), deleted_at: null },
-      select: FULL_USER_SELECT,
-    });
+    const user = await authUsers.findFullByEmail(email);
     if (!user) return reply.code(400).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Пользователь не найден' } });
 
     const token = issueAccessToken(request, user.id, user.role);
@@ -247,10 +229,7 @@ export const confirmUnfreezeHandler = async (
     const { email, code, remember = false } = request.body;
     await authService.confirmUnfreeze(email, code);
 
-    const user = await prisma.user.findFirst({
-      where: { email: email.toLowerCase().trim(), deleted_at: null },
-      select: FULL_USER_SELECT,
-    });
+    const user = await authUsers.findFullByEmail(email);
     if (!user) return reply.code(400).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Пользователь не найден' } });
 
     const token = issueAccessToken(request, user.id, user.role);
@@ -315,7 +294,7 @@ export const loginHandler = async (
 
     const token = issueAccessToken(request, user.id, user.role);
     const refreshToken = await issueRefreshToken(request, reply, user.id, remember);
-    const fullUser = await prisma.user.findUnique({ where: { id: user.id }, select: FULL_USER_SELECT });
+    const fullUser = await authUsers.findFullById(user.id);
 
     return reply.send({
       success: true,
@@ -368,8 +347,8 @@ export const changePasswordHandler = async (
 ) => {
   try {
     const { id } = request.user as JwtPayload;
-    const raw = (request.cookies as any)?.refresh_token as string | undefined;
-    const currentTokenHash = raw ? createHash('sha256').update(raw).digest('hex') : undefined;
+    const raw = readRefreshCookie(request);
+    const currentTokenHash = raw ? hashToken(raw) : undefined;
     await authService.changePassword(id, request.body.currentPassword, request.body.newPassword, currentTokenHash);
     return reply.send({ success: true, data: { message: 'Пароль успешно изменён' }, error: null });
   } catch (e) {
@@ -487,12 +466,12 @@ export const loginVerify2faHandler = async (
 
     await authService.verifyLoginTwoFactor(userId, code);
 
-    const user = await prisma.user.findUnique({ where: { id: userId, deleted_at: null } });
+    const user = await authUsers.findActiveById(userId);
     if (!user) throw new Error('Пользователь не найден');
 
     const token = issueAccessToken(request, user.id, user.role);
     const refreshToken = await issueRefreshToken(request, reply, user.id, remember);
-    const fullUser = await prisma.user.findUnique({ where: { id: user.id }, select: FULL_USER_SELECT });
+    const fullUser = await authUsers.findFullById(user.id);
 
     return reply.send({
       success: true,
@@ -578,7 +557,7 @@ export const oauthCallbackHandler = async (
   if (error || !code || !state) {
     return reply.redirect(302, `${FRONTEND_URL()}/auth?error=oauth_denied`);
   }
-  const stateCookie = (request.cookies as any)?.[OAUTH_STATE_COOKIE] as string | undefined;
+  const stateCookie = request.cookies?.[OAUTH_STATE_COOKIE];
   reply.clearCookie(OAUTH_STATE_COOKIE, { path: '/api/auth' });
   if (!stateCookie || stateCookie !== state) {
     return reply.redirect(302, `${FRONTEND_URL()}/auth?error=oauth_denied`);
@@ -589,17 +568,9 @@ export const oauthCallbackHandler = async (
 
     // ── РЕЖИМ ПРИВЯЗКИ (пользователь уже залогинен) ───────────────────────────
     if (linkUserId) {
-      const conflict = await prisma.oAuthAccount.findUnique({
-        where: { provider_provider_id: { provider, provider_id: oauthUser.id } },
-      });
-      if (conflict && conflict.user_id !== linkUserId) {
+      if ((await oauthAccounts.link(linkUserId, provider, oauthUser.id)) === 'taken') {
         return reply.redirect(302, `${FRONTEND_URL()}/settings/profile?section=sec-security&error=already_taken`);
       }
-      await prisma.oAuthAccount.upsert({
-        where: { provider_provider_id: { provider, provider_id: oauthUser.id } },
-        create: { user_id: linkUserId, provider, provider_id: oauthUser.id },
-        update: {},
-      });
       return reply.redirect(302, `${FRONTEND_URL()}/settings/profile?section=sec-security&linked=${provider}`);
     }
 
@@ -675,10 +646,7 @@ export const getLinkedAccountsHandler = async (
   reply: FastifyReply,
 ) => {
   const { id } = request.user as JwtPayload;
-  const accounts = await prisma.oAuthAccount.findMany({
-    where: { user_id: id },
-    select: { provider: true, provider_id: true },
-  });
+  const accounts = await oauthAccounts.list(id);
   return reply.send({ success: true, data: { accounts }, error: null });
 };
 
@@ -690,19 +658,13 @@ export const unlinkAccountHandler = async (
   const { id } = request.user as JwtPayload;
   const provider = request.params.provider;
 
-  // Проверяем что останется хотя бы один способ входа
-  const [user, otherAccountsCount] = await Promise.all([
-    prisma.user.findUnique({ where: { id }, select: { password: true } }),
-    prisma.oAuthAccount.count({ where: { user_id: id, provider: { not: provider } } }),
-  ]);
-  if (!user?.password && otherAccountsCount === 0) {
+  // Должен остаться хотя бы один способ входа
+  if ((await oauthAccounts.unlink(id, provider)) === 'last_method') {
     return reply.code(400).send({
       success: false, data: null,
       error: { code: 'LAST_AUTH_METHOD', message: 'Нельзя отвязать единственный способ входа' },
     });
   }
-
-  await prisma.oAuthAccount.deleteMany({ where: { user_id: id, provider } });
   return reply.send({ success: true, data: null, error: null });
 };
 
@@ -713,13 +675,13 @@ export const refreshHandler = async (
   request: FastifyRequest<{ Body?: { refreshToken?: string } }>,
   reply: FastifyReply,
 ) => {
-  const raw = ((request.cookies as any)?.refresh_token as string | undefined) ?? request.body?.refreshToken;
+  const raw = readRefreshCookie(request) ?? request.body?.refreshToken;
   if (!raw) {
     return reply.code(401).send({ success: false, data: null, error: { code: 'NO_REFRESH_TOKEN', message: 'Refresh token not provided' } });
   }
 
-  const hash   = createHash('sha256').update(raw).digest('hex');
-  const record = await prisma.refreshToken.findUnique({ where: { token_hash: hash } });
+  const hash   = hashToken(raw);
+  const record = await sessions.findByHash(hash);
 
   // Ротация обновляет строку сессии на месте (см. issueRefreshToken), поэтому
   // старый hash после неё уже ни на что не смотрит в БД — record будет null,
@@ -730,14 +692,7 @@ export const refreshHandler = async (
   if (!record || record.revoked) {
     const replay = await validReplay(hash);
     if (replay) {
-      const cookieOpts: Parameters<typeof reply.setCookie>[2] = {
-        httpOnly: true,
-        secure:   !isDevEnv(),
-        sameSite: 'strict',
-        path:     '/api/auth',
-      };
-      if (record?.remember) cookieOpts.maxAge = 30 * 24 * 60 * 60;
-      reply.setCookie('refresh_token', replay.refreshToken, cookieOpts);
+      setRefreshCookie(reply, replay.refreshToken, !!record?.remember);
       return reply.send({
         success: true,
         data: { token: replay.token, user: replay.user, ...(isMobileClient(request) ? { refreshToken: replay.refreshToken } : {}) },
@@ -747,16 +702,13 @@ export const refreshHandler = async (
   }
 
   if (!record || record.revoked || record.expires_at < new Date()) {
-    reply.clearCookie('refresh_token', { path: '/api/auth' });
+    clearRefreshCookie(reply);
     return reply.code(401).send({ success: false, data: null, error: { code: 'INVALID_REFRESH_TOKEN', message: 'Refresh token invalid or expired' } });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: record.user_id, deleted_at: null },
-    select: FULL_USER_SELECT,
-  });
+  const user = await authUsers.findFullById(record.user_id);
   if (!user) {
-    reply.clearCookie('refresh_token', { path: '/api/auth' });
+    clearRefreshCookie(reply);
     return reply.code(401).send({ success: false, data: null, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
   }
 
@@ -777,21 +729,14 @@ export const refreshHandler = async (
     }
     const replay = await validReplay(hash);
     if (replay) {
-      const cookieOpts: Parameters<typeof reply.setCookie>[2] = {
-        httpOnly: true,
-        secure:   !isDevEnv(),
-        sameSite: 'strict',
-        path:     '/api/auth',
-      };
-      if (record.remember) cookieOpts.maxAge = 30 * 24 * 60 * 60;
-      reply.setCookie('refresh_token', replay.refreshToken, cookieOpts);
+      setRefreshCookie(reply, replay.refreshToken, record.remember);
       return reply.send({
         success: true,
         data: { token: replay.token, user: replay.user, ...(isMobileClient(request) ? { refreshToken: replay.refreshToken } : {}) },
         error: null,
       });
     }
-    reply.clearCookie('refresh_token', { path: '/api/auth' });
+    clearRefreshCookie(reply);
     return reply.code(401).send({ success: false, data: null, error: { code: 'INVALID_REFRESH_TOKEN', message: 'Refresh token invalid or expired' } });
   }
 
@@ -815,15 +760,11 @@ export const logoutHandler = async (
   request: FastifyRequest<{ Body?: { refreshToken?: string } }>,
   reply: FastifyReply,
 ) => {
-  const raw = ((request.cookies as any)?.refresh_token as string | undefined) ?? request.body?.refreshToken;
+  const raw = readRefreshCookie(request) ?? request.body?.refreshToken;
   if (raw) {
-    const hash = createHash('sha256').update(raw).digest('hex');
-    await prisma.refreshToken.updateMany({
-      where: { token_hash: hash, revoked: false },
-      data:  { revoked: true },
-    });
+    await sessions.revokeByHash(hashToken(raw));
   }
-  reply.clearCookie('refresh_token', { path: '/api/auth' });
+  clearRefreshCookie(reply);
   return reply.send({ success: true, data: null, error: null });
 };
 
@@ -833,22 +774,14 @@ export const listSessionsHandler = async (
   reply: FastifyReply,
 ) => {
   const { id } = request.user as JwtPayload;
-  const raw = (request.cookies as any)?.refresh_token as string | undefined;
-  const currentHash = raw ? createHash('sha256').update(raw).digest('hex') : null;
-
-  const sessions = await prisma.refreshToken.findMany({
-    where: { user_id: id, revoked: false, expires_at: { gt: new Date() } },
-    orderBy: { last_used_at: 'desc' },
-    select: {
-      id: true, device_name: true, ip_address: true,
-      created_at: true, last_used_at: true, token_hash: true,
-    },
-  });
+  const raw = readRefreshCookie(request);
+  const currentHash = raw ? hashToken(raw) : null;
+  const active = await sessions.listActive(id);
 
   return reply.send({
     success: true,
     data: {
-      sessions: sessions.map(({ token_hash, ...s }) => ({ ...s, current: token_hash === currentHash })),
+      sessions: active.map(({ token_hash, ...s }) => ({ ...s, current: token_hash === currentHash })),
     },
     error: null,
   });
@@ -862,16 +795,14 @@ export const revokeSessionHandler = async (
   const { id: userId } = request.user as JwtPayload;
   const { id: sessionId } = request.params;
 
-  const session = await prisma.refreshToken.findUnique({ where: { id: sessionId } });
-  if (!session || session.user_id !== userId) {
+  const revokedHash = await sessions.revokeOwn(userId, sessionId);
+  if (!revokedHash) {
     return reply.code(404).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Сессия не найдена' } });
   }
 
-  await prisma.refreshToken.update({ where: { id: sessionId }, data: { revoked: true } });
-
-  const raw = (request.cookies as any)?.refresh_token as string | undefined;
-  if (raw && createHash('sha256').update(raw).digest('hex') === session.token_hash) {
-    reply.clearCookie('refresh_token', { path: '/api/auth' });
+  const raw = readRefreshCookie(request);
+  if (raw && hashToken(raw) === revokedHash) {
+    clearRefreshCookie(reply);
   }
 
   return reply.send({ success: true, data: null, error: null });
@@ -883,16 +814,8 @@ export const revokeOtherSessionsHandler = async (
   reply: FastifyReply,
 ) => {
   const { id: userId } = request.user as JwtPayload;
-  const raw = (request.cookies as any)?.refresh_token as string | undefined;
-  const currentHash = raw ? createHash('sha256').update(raw).digest('hex') : null;
-
-  await prisma.refreshToken.updateMany({
-    where: {
-      user_id: userId, revoked: false,
-      ...(currentHash ? { token_hash: { not: currentHash } } : {}),
-    },
-    data: { revoked: true },
-  });
+  const raw = readRefreshCookie(request);
+  await sessions.revokeAllExcept(userId, raw ? hashToken(raw) : null);
 
   return reply.send({ success: true, data: null, error: null });
 };
