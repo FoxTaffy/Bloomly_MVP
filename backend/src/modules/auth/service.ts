@@ -7,7 +7,7 @@ import prisma from '../../config/prisma.js';
 import { sendOtpEmail } from './email.service.js';
 import { encryptTotpSecret, decryptTotpSecret } from '../../lib/totpCrypto.js';
 import type { RegisterInput } from './types.js';
-import { classifyUnverified, releaseUnverified } from './unverifiedRelease.js';
+import { classifyUnverified, freeDeletedUsername, releaseUnverified } from './unverifiedRelease.js';
 
 /** Криптографически стойкий 6-значный код */
 function genCode(): string {
@@ -151,10 +151,7 @@ export class AuthService {
           where: { email, deleted_at: { not: null }, is_banned: false },
           data: { email: email + suffix },
         });
-        await tx.user.updateMany({
-          where: { username, deleted_at: { not: null }, is_banned: false },
-          data: { username: username + suffix },
-        });
+        await freeDeletedUsername(tx, username);
 
         // Брошенная неподтверждённая регистрация (опечатка в почте и т.п.) освобождает email и ник.
         // Регистрацию, у которой ещё действует код, не трогаем: её владелец может сейчас вводить код.

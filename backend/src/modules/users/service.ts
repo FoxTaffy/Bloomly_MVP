@@ -6,6 +6,7 @@ import { isBlockedBy, getBlockerIds } from '../../lib/blocks.js';
 import { sanitizeFields, sanitizeDisplayText } from '../../lib/sanitizeText.js';
 import { normalizeSafeLink, requireSafeLink } from '../../lib/safeLink.js';
 import sharp from 'sharp';
+import { freeDeletedUsername } from '../auth/unverifiedRelease.js';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput } from './types.js';
 
 const MUSIC_MAX_BYTES = 15 * 1024 * 1024;
@@ -347,10 +348,14 @@ export const usersService = {
       select: { id: true },
     });
     if (existing) throw new Error('Этот никнейм уже занят');
-    return prisma.user.update({
-      where: { id, deleted_at: null },
-      data: { username },
-      select: { id: true, username: true },
+    return prisma.$transaction(async (tx) => {
+      // Ник удалённой записи (в том числе забаненной админом) освобождаем, иначе update упадёт на уникальном индексе
+      await freeDeletedUsername(tx, username);
+      return tx.user.update({
+        where: { id, deleted_at: null },
+        data: { username },
+        select: { id: true, username: true },
+      });
     });
   },
 

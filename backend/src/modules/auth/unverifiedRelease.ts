@@ -69,3 +69,15 @@ export async function releaseUnverified(db: Db, user: Candidate): Promise<boolea
   });
   return res.count === 1;
 }
+
+/**
+ * Освобождает ник удалённого аккаунта (самоудаление или бан админом): запись переименовывается
+ * с суффиксом _del_, бан и email остаются как есть. Email забаненного по-прежнему занят,
+ * поэтому обход бана повторной регистрацией не открывается.
+ */
+export async function freeDeletedUsername(db: Db, username: string) {
+  await db.user.updateMany({
+    where: { username, deleted_at: { not: null } },
+    data: { username: username + `_del_${Date.now()}` },
+  });
+}
