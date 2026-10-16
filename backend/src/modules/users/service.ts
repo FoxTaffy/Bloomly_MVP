@@ -156,6 +156,79 @@ const PUBLIC_SELECT = {
   payment_region:           true,
 } as const;
 
+// ── updateUser steps ────────────────────────────────────────────────────────
+
+/** "YYYY-MM-DD" (stored as midnight UTC) or a full ISO string; '' clears the field. */
+function parseDateInput(raw: string): Date | null {
+  if (!raw) return null;
+  return new Date(raw.length <= 10 ? `${raw}T00:00:00.000Z` : raw);
+}
+
+/** Strips Zalgo / zero-width / bidi-override tricks from the free-text profile fields. */
+function sanitizeProfileText(d: Record<string, any>) {
+  sanitizeFields(d, {
+    display_name: 50, bio: 300, status: 100, website: 200, location: 100, pronouns: 30,
+    job_title: 80, relationship_status: 50, country: 80,
+    fursona_name: 80, fursona_color: 50, fursona_gender: 50,
+    fav_food: 80, fav_animal: 80, fav_music: 80, fav_artist: 80, fav_film: 80,
+  });
+  const status = d.profile_status;
+  if (status) {
+    if (typeof status.text === 'string') status.text = sanitizeDisplayText(status.text, 60);
+    if (status.music) {
+      if (typeof status.music.title === 'string') status.music.title = sanitizeDisplayText(status.music.title, 200);
+      if (typeof status.music.artist === 'string') status.music.artist = sanitizeDisplayText(status.music.artist, 200);
+    }
+  }
+}
+
+/**
+ * New profile media must be the user's own uploads (only changed fields are checked, so saving
+ * a profile never breaks on files already set). A replaced avatar (+ its animated WebM) or
+ * banner is archived to the history gallery; the old files stay in storage for it.
+ */
+async function archiveReplacedMedia(id: string, d: Record<string, any>) {
+  const current = await prisma.user.findUnique({
+    where: { id, deleted_at: null },
+    select: { avatar_url: true, avatar_video_url: true, banner_url: true, profile_bg_url: true },
+  });
+  for (const field of ['avatar_url', 'avatar_video_url', 'banner_url', 'profile_bg_url'] as const) {
+    const next = d[field];
+    if (typeof next === 'string' && next && next !== current?.[field]) await assertOwnedMedia(next, id);
+  }
+  if (!current) return;
+
+  const changed = (field: 'avatar_url' | 'banner_url') =>
+    typeof d[field] === 'string' && d[field] && d[field] !== current[field] && current[field];
+  const historyEntries: { user_id: string; type: string; url: string; video_url?: string | null }[] = [];
+  if (changed('avatar_url')) historyEntries.push({ user_id: id, type: 'avatar', url: current.avatar_url!, video_url: current.avatar_video_url });
+  if (changed('banner_url')) historyEntries.push({ user_id: id, type: 'banner', url: current.banner_url! });
+  if (historyEntries.length > 0) await prisma.mediaHistory.createMany({ data: historyEntries });
+}
+
+/**
+ * Profile customization limits. Theme needs Lite+, preset frames and a custom background
+ * need Pro+ — but clearing back to the default is always allowed (e.g. after a downgrade).
+ * Image avatar frames come from the Dealers' Den, so equipping one only requires owning it.
+ */
+async function assertCustomizationAllowed(id: string, d: Record<string, any>) {
+  const wantsTheme = typeof d.profile_theme === 'string' && !['', 'default'].includes(d.profile_theme);
+  const wantsFrame = typeof d.profile_frame === 'string' && !['', 'none'].includes(d.profile_frame);
+  const wantsBg    = typeof d.profile_bg_url === 'string' && d.profile_bg_url !== '';
+  if (wantsTheme || wantsFrame || wantsBg) {
+    const tierUser = await prisma.user.findUnique({ where: { id, deleted_at: null }, select: { subscription_tier: true } });
+    const tier = tierUser?.subscription_tier ?? 'free';
+    if (wantsTheme && tier === 'free') throw Object.assign(new Error('LITE_REQUIRED'), { statusCode: 402 });
+    if ((wantsFrame || wantsBg) && !['pro', 'business'].includes(tier)) throw Object.assign(new Error('PRO_REQUIRED'), { statusCode: 402 });
+  }
+  if (d.profile_frame_id !== undefined && d.profile_frame_id !== null) {
+    const owns = await prisma.userAvatarFrame.findFirst({
+      where: { user_id: id, frame_id: d.profile_frame_id, frame: { deleted_at: null } },
+    });
+    if (!owns) throw new Error('FRAME_NOT_OWNED');
+  }
+}
+
 export const usersService = {
   /** Return a public profile, redacting birth_date per the owner's chosen visibility unless the viewer is the owner. */
   async getUserById(id: string, viewerId?: string) {
@@ -238,141 +311,31 @@ export const usersService = {
   },
 
   async updateUser(id: string, data: UpdateUserInput) {
-    // ── Strip Zalgo/zero-width/bidi-override tricks from free-text fields ───
-    sanitizeFields(data as Record<string, any>, {
-      display_name: 50,
-      bio: 300,
-      status: 100,
-      website: 200,
-      location: 100,
-      pronouns: 30,
-      job_title: 80,
-      relationship_status: 50,
-      country: 80,
-      fursona_name: 80,
-      fursona_color: 50,
-      fursona_gender: 50,
-      fav_food: 80,
-      fav_animal: 80,
-      fav_music: 80,
-      fav_artist: 80,
-      fav_film: 80,
-    });
-    if ((data as any).profile_status) {
-      const status = (data as any).profile_status;
-      if (typeof status.text === 'string') status.text = sanitizeDisplayText(status.text, 60);
-      if (status.music) {
-        if (typeof status.music.title === 'string') status.music.title = sanitizeDisplayText(status.music.title, 200);
-        if (typeof status.music.artist === 'string') status.music.artist = sanitizeDisplayText(status.music.artist, 200);
-      }
+    // Fields are validated/normalised in place before the single update below.
+    const d = data as Record<string, any>;
+    sanitizeProfileText(d);
+    await archiveReplacedMedia(id, d);
+
+    // artist_since: a past date; locked once the profile is verified
+    if (typeof d.artist_since === 'string') {
+      const since = parseDateInput(d.artist_since);
+      if (since && since.getTime() > Date.now()) throw new Error('artist_since cannot be in the future');
+      d.artist_since = since;
     }
-
-    // ── Fetch current media URLs before overwriting ─────────────────────
-    const current = await prisma.user.findUnique({
-      where: { id, deleted_at: null },
-      select: { avatar_url: true, avatar_video_url: true, banner_url: true, profile_bg_url: true },
-    });
-    // Новые файлы профиля — только загруженные самим пользователем. Проверяем лишь изменённые поля,
-    // чтобы сохранение профиля не ломалось на файлах, которые уже стоят.
-    for (const field of ['avatar_url', 'avatar_video_url', 'banner_url', 'profile_bg_url'] as const) {
-      const next = (data as any)[field];
-      if (typeof next === 'string' && next && next !== (current as any)?.[field]) await assertOwnedMedia(next, id);
-    }
-
-    if (current) {
-      const historyEntries: { user_id: string; type: string; url: string; video_url?: string | null }[] = [];
-
-      // If avatar is actually changing — archive current (+ its animated WebM, if any), keep files in MinIO for history gallery
-      const newAvatar = (data as any).avatar_url;
-      if (typeof newAvatar === 'string' && newAvatar && newAvatar !== current.avatar_url && current.avatar_url) {
-        historyEntries.push({ user_id: id, type: 'avatar', url: current.avatar_url, video_url: current.avatar_video_url });
-      }
-
-      // If banner is actually changing — archive current, keep file
-      const newBanner = (data as any).banner_url;
-      if (typeof newBanner === 'string' && newBanner && newBanner !== current.banner_url && current.banner_url) {
-        historyEntries.push({ user_id: id, type: 'banner', url: current.banner_url });
-      }
-
-      if (historyEntries.length > 0) {
-        await prisma.mediaHistory.createMany({ data: historyEntries });
-      }
-    }
-
-    // ── Normalise artist_since to a proper Date if it's a plain string ───────
-    if (typeof (data as any).artist_since === 'string') {
-      const raw = (data as any).artist_since as string;
-      if (raw) {
-        const d = new Date(raw.length <= 10 ? `${raw}T00:00:00.000Z` : raw);
-        if (d.getTime() > Date.now()) throw new Error('artist_since cannot be in the future');
-        (data as any).artist_since = d;
-      } else {
-        (data as any).artist_since = null;
-      }
-    }
-
-    // ── Security: verified users cannot change artist_since ─────────────────
-    if ((data as any).artist_since !== undefined) {
+    if (d.artist_since !== undefined) {
       const user = await prisma.user.findUnique({ where: { id }, select: { is_verified: true } });
       if (user?.is_verified) throw new Error('Verified users cannot change artist_since');
     }
 
-    // ── Security: subscription-tier-gated profile customization ─────────────
-    // Clearing back to the default/none is always allowed (e.g. after a downgrade);
-    // only setting a non-default value requires the matching tier.
-    const wantsTheme = typeof (data as any).profile_theme === 'string' && !['', 'default'].includes((data as any).profile_theme);
-    const wantsFrame = typeof (data as any).profile_frame === 'string' && !['', 'none'].includes((data as any).profile_frame);
-    const wantsBg    = typeof (data as any).profile_bg_url === 'string' && (data as any).profile_bg_url !== '';
-    if (wantsTheme || wantsFrame || wantsBg) {
-      const tierUser = await prisma.user.findUnique({ where: { id, deleted_at: null }, select: { subscription_tier: true } });
-      const tier = tierUser?.subscription_tier ?? 'free';
-      if (wantsTheme && tier === 'free') {
-        throw Object.assign(new Error('LITE_REQUIRED'), { statusCode: 402 });
-      }
-      if ((wantsFrame || wantsBg) && !['pro', 'business'].includes(tier)) {
-        throw Object.assign(new Error('PRO_REQUIRED'), { statusCode: 402 });
-      }
-    }
+    await assertCustomizationAllowed(id, d);
 
-    // ── Image-based avatar frames: ownership-gated, not tier-gated ───────────
-    // Unlike the legacy profile_frame presets above, these are acquired via
-    // Dealers' Den (free claim once approved), so equipping one just requires
-    // owning it — no subscription tier required.
-    if ((data as any).profile_frame_id !== undefined && (data as any).profile_frame_id !== null) {
-      const owns = await prisma.userAvatarFrame.findFirst({
-        where: { user_id: id, frame_id: (data as any).profile_frame_id, frame: { deleted_at: null } },
-      });
-      if (!owns) throw new Error('FRAME_NOT_OWNED');
-    }
-
-    // ── Normalise birth_date to a proper Date if it's a plain string ────────
-    if (typeof (data as any).birth_date === 'string') {
-      const raw = (data as any).birth_date as string;
-      if (raw) {
-        // Accept "YYYY-MM-DD" or full ISO — always store as midnight UTC
-        (data as any).birth_date = new Date(raw.length <= 10 ? `${raw}T00:00:00.000Z` : raw);
-      } else {
-        (data as any).birth_date = null;
-      }
-    }
-
-    // ── Normalise relationship_since to a proper Date if it's a plain string
-    if (typeof (data as any).relationship_since === 'string') {
-      const raw = (data as any).relationship_since as string;
-      if (raw) {
-        (data as any).relationship_since = new Date(raw.length <= 10 ? `${raw}T00:00:00.000Z` : raw);
-      } else {
-        (data as any).relationship_since = null;
-      }
-    }
-
-    if (data.social_links && typeof data.social_links === 'object') {
-      (data as any).social_links = cleanSocialLinks(data.social_links as Record<string, unknown>);
-    }
+    if (typeof d.birth_date === 'string') d.birth_date = parseDateInput(d.birth_date);
+    if (typeof d.relationship_since === 'string') d.relationship_since = parseDateInput(d.relationship_since);
+    if (d.social_links && typeof d.social_links === 'object') d.social_links = cleanSocialLinks(d.social_links);
 
     return prisma.user.update({
       where: { id, deleted_at: null },
-      data: data as any,
+      data: d,
       select: PUBLIC_SELECT,
     });
   },
