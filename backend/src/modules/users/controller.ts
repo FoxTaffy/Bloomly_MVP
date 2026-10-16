@@ -3,6 +3,7 @@ import { usersService, withRedactedBirthDate } from './service.js';
 import { isAdult } from '../../lib/age.js';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput, JwtPayload } from './types.js';
 import { isDevEnv } from '../../lib/env.js';
+import { errMessage, errStatus } from '../../lib/httpErrors.js';
 
 
 export async function getUserHandler(
@@ -82,8 +83,8 @@ export async function proxyMusicMediaHandler(
       .header('Cache-Control', 'public, max-age=86400, immutable')
       .header('X-Content-Type-Options', 'nosniff')
       .send(buffer);
-  } catch (e: any) {
-    return reply.code(e?.statusCode ?? 502).send();
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 502).send();
   }
 }
 
@@ -148,8 +149,8 @@ export async function blockUserHandler(
     const { id: userId } = req.user as JwtPayload;
     await usersService.blockUser(userId, req.params.id);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'BLOCK_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'BLOCK_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -161,8 +162,8 @@ export async function unblockUserHandler(
     const { id: userId } = req.user as JwtPayload;
     await usersService.unblockUser(userId, req.params.id);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'UNBLOCK_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'UNBLOCK_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -174,8 +175,8 @@ export async function getBlockStatusHandler(
     const { id: userId } = req.user as JwtPayload;
     const data = await usersService.getBlockStatus(userId, req.params.id);
     return reply.send({ success: true, data, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'BLOCK_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'BLOCK_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -204,9 +205,9 @@ export async function getProfileStatsHandler(
     const { id: userId } = request.user as JwtPayload;
     const stats = await usersService.getProfileStats(userId);
     return reply.send({ success: true, data: { stats }, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 500;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'PROFILE_STATS_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 500;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'PROFILE_STATS_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -224,9 +225,9 @@ export async function updateSubscriptionHandler(
     }
     const data = await usersService.updateSubscriptionTier(userId, tier);
     return reply.send({ success: true, data, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'SUBSCRIPTION_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'SUBSCRIPTION_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -247,9 +248,9 @@ export async function addPaymentMethodHandler(
     const { id: userId } = request.user as JwtPayload;
     const data = await usersService.addPaymentMethod(userId, request.body);
     return reply.send({ success: true, data, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'PAYMENT_METHOD_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'PAYMENT_METHOD_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -261,9 +262,9 @@ export async function deletePaymentMethodHandler(
     const { id: userId } = request.user as JwtPayload;
     const data = await usersService.deletePaymentMethod(userId, request.params.id);
     return reply.send({ success: true, data, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'PAYMENT_METHOD_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'PAYMENT_METHOD_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -275,9 +276,9 @@ export async function setDefaultPaymentMethodHandler(
     const { id: userId } = request.user as JwtPayload;
     const data = await usersService.setDefaultPaymentMethod(userId, request.params.id);
     return reply.send({ success: true, data, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'PAYMENT_METHOD_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'PAYMENT_METHOD_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -289,9 +290,9 @@ export async function notifyStatusHandler(
     const { id: userId } = request.user as JwtPayload;
     const data = await usersService.getNotifyStatus(userId, request.params.id);
     return reply.send({ success: true, data, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 500;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'NOTIFY_STATUS_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 500;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'NOTIFY_STATUS_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -303,9 +304,9 @@ export async function notifyToggleHandler(
     const { id: userId } = request.user as JwtPayload;
     const data = await usersService.toggleNotifyPosts(userId, request.params.id);
     return reply.send({ success: true, data, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'NOTIFY_TOGGLE_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'NOTIFY_TOGGLE_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -317,8 +318,8 @@ export async function deleteAccountHandler(
   try {
     await usersService.deleteAccount(userId);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    return reply.code(500).send({ success: false, data: null, error: { code: 'DELETE_ACCOUNT_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(500).send({ success: false, data: null, error: { code: 'DELETE_ACCOUNT_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -330,9 +331,9 @@ export async function deleteAvatarHistoryHandler(
     const { id: userId } = request.user as JwtPayload;
     await usersService.deleteAvatarHistoryItem(userId, request.params.historyId);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'HISTORY_DELETE_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'HISTORY_DELETE_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -344,9 +345,9 @@ export async function restoreAvatarHistoryHandler(
     const { id: userId } = request.user as JwtPayload;
     const data = await usersService.restoreAvatarFromHistory(userId, request.params.historyId);
     return reply.send({ success: true, data, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'HISTORY_RESTORE_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'HISTORY_RESTORE_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -356,7 +357,7 @@ export async function getFursonasHandler(
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) {
-  const viewer = (request as any).user as JwtPayload | undefined;
+  const viewer = request.user as JwtPayload | undefined;
   const fursonas = await usersService.getFursonas(request.params.id, viewer?.id);
   return reply.send({ success: true, data: { fursonas }, error: null });
 }
@@ -369,9 +370,9 @@ export async function createFursonaHandler(
   try {
     const fursona = await usersService.createFursona(userId, request.body);
     return reply.code(201).send({ success: true, data: { fursona }, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSONA_CREATE_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSONA_CREATE_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -383,9 +384,9 @@ export async function updateFursonaHandler(
   try {
     const fursona = await usersService.updateFursona(userId, request.params.fursonaId, request.body);
     return reply.send({ success: true, data: { fursona }, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSONA_UPDATE_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSONA_UPDATE_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -397,9 +398,9 @@ export async function deleteFursonaHandler(
   try {
     const result = await usersService.deleteFursona(userId, request.params.fursonaId);
     return reply.send({ success: true, data: result, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSONA_DELETE_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSONA_DELETE_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -411,9 +412,9 @@ export async function setPrimaryFursonaHandler(
   try {
     const result = await usersService.setPrimaryFursona(userId, request.params.fursonaId);
     return reply.send({ success: true, data: result, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSONA_PRIMARY_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSONA_PRIMARY_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -435,9 +436,9 @@ export async function addReferenceImageHandler(
   try {
     const referenceImage = await usersService.addReferenceImage(userId, request.params.fursonaId, request.body);
     return reply.code(201).send({ success: true, data: { referenceImage }, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'REFERENCE_CREATE_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'REFERENCE_CREATE_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -449,9 +450,9 @@ export async function updateReferenceImageHandler(
   try {
     const referenceImage = await usersService.updateReferenceImage(userId, request.params.fursonaId, request.params.refId, request.body);
     return reply.send({ success: true, data: { referenceImage }, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'REFERENCE_UPDATE_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'REFERENCE_UPDATE_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -463,9 +464,9 @@ export async function deleteReferenceImageHandler(
   try {
     await usersService.deleteReferenceImage(userId, request.params.fursonaId, request.params.refId);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'REFERENCE_DELETE_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'REFERENCE_DELETE_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -488,8 +489,8 @@ export async function getWatermarkedReferenceImageHandler(
       .header('Cache-Control', 'private, no-store')
       .header('X-Content-Type-Options', 'nosniff')
       .send(result.buffer);
-  } catch (e: any) {
-    return reply.code(500).send({ success: false, data: null, error: { code: 'REFERENCE_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(500).send({ success: false, data: null, error: { code: 'REFERENCE_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -511,8 +512,8 @@ export async function createFursuitHandler(
   try {
     const fursuit = await usersService.createFursuit(userId, request.body);
     return reply.code(201).send({ success: true, data: { fursuit }, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'FURSUIT_CREATE_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'FURSUIT_CREATE_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -524,9 +525,9 @@ export async function updateFursuitHandler(
   try {
     const fursuit = await usersService.updateFursuit(userId, request.params.fursuitId, request.body);
     return reply.send({ success: true, data: { fursuit }, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSUIT_UPDATE_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSUIT_UPDATE_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -538,8 +539,8 @@ export async function deleteFursuitHandler(
   try {
     await usersService.deleteFursuit(userId, request.params.fursuitId);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    const code = e.statusCode ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSUIT_DELETE_ERROR', message: e.message } });
+  } catch (e) {
+    const code = errStatus(e) ?? 400;
+    return reply.code(code).send({ success: false, data: null, error: { code: 'FURSUIT_DELETE_ERROR', message: errMessage(e) } });
   }
 }

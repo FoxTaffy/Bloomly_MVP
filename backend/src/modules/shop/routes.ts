@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import { listItems, getItem, purchaseItem, getMyItems } from './service.js';
+import { errMessage, errStatus } from '../../lib/httpErrors.js';
 
 const ok = (data: unknown) => ({ success: true, data, error: null });
 const err = (code: string, msg: string) => ({ success: false, data: null, error: { code, message: msg } });
@@ -33,9 +34,9 @@ export async function shopRoutes(fastify: FastifyInstance) {
     try {
       await purchaseItem(userId, id);
       reply.send(ok({ purchased: true }));
-    } catch (e: any) {
-      const status = e.statusCode ?? 400;
-      reply.status(status).send(err('PURCHASE_ERROR', e.message));
+    } catch (e) {
+      const status = errStatus(e) ?? 400;
+      reply.status(status).send(err('PURCHASE_ERROR', errMessage(e)));
     }
   });
 

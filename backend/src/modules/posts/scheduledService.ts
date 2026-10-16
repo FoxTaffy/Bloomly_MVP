@@ -4,6 +4,7 @@ import { groupService } from '../groups/service.js';
 import { postService } from './service.js';
 import { moderatePost } from '../automod/service.js';
 import { normalizeTag } from '../../lib/tagRules.js';
+import { errMessage, errStatus } from '../../lib/httpErrors.js';
 
 const MAX_MEDIA_PER_POST = 20;
 const REPEAT_INTERVALS = ['daily', 'weekly', 'monthly'] as const;
@@ -185,9 +186,9 @@ export const scheduledPostService = {
       try {
         await publishRow(row);
         published++;
-      } catch (err: any) {
+      } catch (err) {
         // 409 — строку уже публикует другой запуск: её статус трогать нельзя
-        if (err?.statusCode === 409) continue;
+        if (errStatus(err) === 409) continue;
       }
     }
     return published;
@@ -203,10 +204,10 @@ async function publishRow(row: Awaited<ReturnType<typeof prisma.scheduledPost.fi
   if (claim.count !== 1) throw Object.assign(new Error('Post is already being published'), { statusCode: 409 });
   try {
     return await publishClaimedRow(row);
-  } catch (err: any) {
+  } catch (err) {
     await prisma.scheduledPost.update({
       where: { id: row.id },
-      data: { status: 'failed', last_error: err?.message ?? 'Publish failed' },
+      data: { status: 'failed', last_error: errMessage(err) ?? 'Publish failed' },
     }).catch(() => {});
     throw err;
   }

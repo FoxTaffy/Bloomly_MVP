@@ -9,37 +9,38 @@ import {
 } from './service.js';
 import { isModerator } from '../../lib/roles.js';
 import prisma from '../../config/prisma.js';
+import { errMessage } from '../../lib/httpErrors.js';
 
 // GET /api/verification/status
 export async function getStatusHandler(request: FastifyRequest, reply: FastifyReply) {
-  const userId = (request.user as any).id;
+  const userId = request.user.id;
   const data = await getVerificationStatus(userId);
   return reply.send({ success: true, data });
 }
 
 // GET /api/verification/criteria
 export async function getCriteriaHandler(request: FastifyRequest, reply: FastifyReply) {
-  const userId = (request.user as any).id;
+  const userId = request.user.id;
   const criteria = await checkCriteria(userId);
   return reply.send({ success: true, data: criteria });
 }
 
 // GET /api/verification/completeness
 export async function getCompletenessHandler(request: FastifyRequest, reply: FastifyReply) {
-  const userId = (request.user as any).id;
+  const userId = request.user.id;
   const data = await getProfileCompleteness(userId);
   return reply.send({ success: true, data });
 }
 
 // POST /api/verification/request
 export async function requestHandler(request: FastifyRequest, reply: FastifyReply) {
-  const userId = (request.user as any).id;
+  const userId = request.user.id;
   const { verificationType, evidenceUrls, socialLinks, evidenceText } = request.body as any;
   try {
     const result = await requestVerification(userId, verificationType, evidenceUrls, socialLinks, evidenceText);
     return reply.send({ success: true, data: result });
-  } catch (err: any) {
-    return reply.code(400).send({ success: false, error: { message: err.message } });
+  } catch (err) {
+    return reply.code(400).send({ success: false, error: { message: errMessage(err) } });
   }
 }
 
@@ -79,7 +80,7 @@ export async function adminReviewHandler(request: FastifyRequest, reply: Fastify
       },
     }).catch(() => {});
     return reply.send({ success: true, data: result });
-  } catch (err: any) {
-    return reply.code(400).send({ success: false, error: { message: err.message } });
+  } catch (err) {
+    return reply.code(400).send({ success: false, error: { message: errMessage(err) } });
   }
 }

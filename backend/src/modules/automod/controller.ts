@@ -2,6 +2,7 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import prisma from '../../config/prisma.js';
 import { analyzeContent, patrolSuspiciousActivity, submitAppeal, getOwnWarningLog } from './service.js';
 import { isModerator, isAdmin } from '../../lib/roles.js';
+import { errMessage } from '../../lib/httpErrors.js';
 
 interface JwtUser { id: string; role: string }
 
@@ -165,7 +166,7 @@ export const submitAppealHandler = async (
   try {
     const log = await submitAppeal(req.params.logId, user.id, text);
     return reply.send({ success: true, data: { log }, error: null });
-  } catch (err: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'APPEAL_ERROR', message: err.message } });
+  } catch (err) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'APPEAL_ERROR', message: errMessage(err) } });
   }
 };

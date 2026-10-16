@@ -16,6 +16,7 @@ import {
   MESSAGE_LIMIT_BY_TIER, PLATFORM_MAX_UPLOAD_BYTES, STORAGE_QUOTA_BYTES_BY_TIER, STORAGE_TRACKED_FOLDERS,
   UPLOAD_TIMEOUT_MS, MULTIPART_OVERHEAD_BYTES,
 } from '../../config/uploads.js';
+import { errCode, errMessage } from '../../lib/httpErrors.js';
 
 // Счётчики активных загрузок на процесс. При нескольких инстансах лимит действует на каждый отдельно.
 const activeUploads = new Map<string, number>();
@@ -136,8 +137,8 @@ export const uploadFileHandler = async (
     let data;
     try {
       data = await request.file({ limits: { fileSize: maxBytes } });
-    } catch (err: any) {
-      if (err?.code === 'FST_REQ_FILE_TOO_LARGE') return tooLarge(reply, maxBytes);
+    } catch (err) {
+      if (errCode(err) === 'FST_REQ_FILE_TOO_LARGE') return tooLarge(reply, maxBytes);
       throw err;
     }
 
@@ -164,9 +165,9 @@ export const uploadFileHandler = async (
     const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
     try {
       await pipeline(data.file, createWriteStream(filePath), { signal: controller.signal });
-    } catch (err: any) {
-      if (err?.code === 'FST_REQ_FILE_TOO_LARGE') return tooLarge(reply, maxBytes);
-      if (err?.name === 'AbortError') {
+    } catch (err) {
+      if (errCode(err) === 'FST_REQ_FILE_TOO_LARGE') return tooLarge(reply, maxBytes);
+      if (err instanceof Error && err.name === 'AbortError') {
         return reply.code(408).send({
           success: false, data: null,
           error: { code: 'UPLOAD_TIMEOUT', message: 'Загрузка заняла слишком много времени' },
@@ -313,19 +314,19 @@ export const uploadFileHandler = async (
       }
       throw err;
     }
-  } catch (err: any) {
+  } catch (err) {
     if (err instanceof UploadValidationError) {
       return reply.code(422).send({
         success: false,
         data: null,
-        error: { code: err.code, message: err.message },
+        error: { code: errCode(err), message: errMessage(err) },
       });
     }
     (request.server as any).log.error({ err }, 'Media upload failed');
     return reply.code(500).send({
       success: false,
       data: null,
-      error: { code: 'UPLOAD_ERROR', message: err?.message ?? String(err) },
+      error: { code: 'UPLOAD_ERROR', message: errMessage(err) ?? String(err) },
     });
   } finally {
     releaseUploadSlot(userId);

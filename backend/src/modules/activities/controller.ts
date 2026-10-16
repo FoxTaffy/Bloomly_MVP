@@ -1,5 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { activityService, computeTrustScore } from './service.js';
+import { errMessage, errStatus } from '../../lib/httpErrors.js';
 
 interface JwtUser { id: string; role: string }
 
@@ -24,8 +25,8 @@ export async function createActivityHandler(req: FastifyRequest, reply: FastifyR
       group_id:         body.group_id,
     });
     return ok(reply, { activity }, 201);
-  } catch (e: any) {
-    return fail(reply, e.statusCode ?? 500, 'ACTIVITY_ERROR', e.message);
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 500, 'ACTIVITY_ERROR', errMessage(e));
   }
 }
 
@@ -39,8 +40,8 @@ export async function getActivityHandler(
     const { id: userId } = req.user as JwtUser;
     const activity = await activityService.getById(req.params.id, userId);
     return ok(reply, { activity });
-  } catch (e: any) {
-    return fail(reply, e.statusCode ?? 500, 'ACTIVITY_ERROR', e.message);
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 500, 'ACTIVITY_ERROR', errMessage(e));
   }
 }
 
@@ -53,8 +54,8 @@ export async function listGroupActivitiesHandler(
   try {
     const activities = await activityService.listForGroup(req.params.groupId);
     return ok(reply, { activities });
-  } catch (e: any) {
-    return fail(reply, e.statusCode ?? 500, 'ACTIVITY_ERROR', e.message);
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 500, 'ACTIVITY_ERROR', errMessage(e));
   }
 }
 
@@ -68,8 +69,8 @@ export async function joinActivityHandler(
     const { id: userId } = req.user as JwtUser;
     const participant = await activityService.join(req.params.id, userId);
     return ok(reply, { participant }, 201);
-  } catch (e: any) {
-    return fail(reply, e.statusCode ?? 400, 'ACTIVITY_ERROR', e.message);
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'ACTIVITY_ERROR', errMessage(e));
   }
 }
 
@@ -83,8 +84,8 @@ export async function withdrawActivityHandler(
     const { id: userId } = req.user as JwtUser;
     const result = await activityService.withdraw(req.params.id, userId);
     return ok(reply, result);
-  } catch (e: any) {
-    return fail(reply, e.statusCode ?? 400, 'ACTIVITY_ERROR', e.message);
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'ACTIVITY_ERROR', errMessage(e));
   }
 }
 
@@ -102,8 +103,8 @@ export async function updateParticipantStatusHandler(
       req.params.id, req.params.userId, requesterId, status,
     );
     return ok(reply, { participant });
-  } catch (e: any) {
-    return fail(reply, e.statusCode ?? 400, 'ACTIVITY_ERROR', e.message);
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'ACTIVITY_ERROR', errMessage(e));
   }
 }
 
@@ -116,8 +117,8 @@ export async function getTrustScoreHandler(
   try {
     const trust = await computeTrustScore(req.params.userId);
     return ok(reply, { trust });
-  } catch (e: any) {
-    return fail(reply, e.statusCode ?? 500, 'ACTIVITY_ERROR', e.message);
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 500, 'ACTIVITY_ERROR', errMessage(e));
   }
 }
 
@@ -131,7 +132,7 @@ export async function deleteActivityHandler(
     const { id: userId } = req.user as JwtUser;
     await activityService.deleteActivity(req.params.id, userId);
     return ok(reply, null);
-  } catch (e: any) {
-    return fail(reply, e.statusCode ?? 400, 'ACTIVITY_ERROR', e.message);
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'ACTIVITY_ERROR', errMessage(e));
   }
 }

@@ -5,6 +5,7 @@ import { messageService } from '../messages/service.js';
 import { moderatePost, moderateGroupMessage } from '../automod/service.js';
 import { isModerator } from '../../lib/roles.js';
 import { isMemberRole, isOrderStatus } from './types.js';
+import { errMessage, errStatus } from '../../lib/httpErrors.js';
 import type { JwtUser, GetGroupsQuery, CreateGroupInput, UpdateGroupInput, CreateEventInput, UpdateEventInput, CreateTicketTierInput, UpdateCommissionInput, RateGroupInput, CreateGroupPostInput, RsvpEventInput, SubEventInput, UpdateSubEventInput, CreateOrderInput } from './types.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -14,15 +15,6 @@ function ok(reply: FastifyReply, data: unknown, code = 200) {
 
 function fail(reply: FastifyReply, code: number, errCode: string, message: string) {
   return reply.code(code).send({ success: false, data: null, error: { code: errCode, message } });
-}
-
-// The service layer throws plain Errors, optionally carrying an HTTP `statusCode`.
-function errMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-function errStatus(e: unknown, fallback: number): number {
-  const status = (e as { statusCode?: unknown } | null)?.statusCode;
-  return typeof status === 'number' ? status : fallback;
 }
 
 async function requireGroupAdmin(request: FastifyRequest, reply: FastifyReply, groupId: string) {
@@ -252,7 +244,7 @@ export const setMemberRoleHandler = async (
     const member = await groupService.setMemberRole(request.params.id, requesterId, request.params.userId, role);
     return ok(reply, { member });
   } catch (e) {
-    const status = errStatus(e, /not authorized/i.test(errMessage(e)) ? 403 : 400);
+    const status = errStatus(e) ?? (/not authorized/i.test(errMessage(e)) ? 403 : 400);
     return fail(reply, status, 'SET_ROLE_ERROR', errMessage(e));
   }
 };
@@ -787,7 +779,7 @@ export const getGroupMessagesHandler = async (
     const messages = await groupService.getGroupMessages(request.params.id, request.query.before, limit);
     return ok(reply, { messages });
   } catch (e) {
-    return fail(reply, errStatus(e, 500), 'GET_MESSAGES_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GET_MESSAGES_ERROR', errMessage(e));
   }
 };
 
@@ -805,7 +797,7 @@ export const sendGroupMessageHandler = async (
     moderateGroupMessage(userId).catch((err) => console.error('[AUTOMOD] moderateGroupMessage error:', err));
     return ok(reply, { message: msg }, 201);
   } catch (e) {
-    return fail(reply, errStatus(e, 400), 'SEND_MESSAGE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'SEND_MESSAGE_ERROR', errMessage(e));
   }
 };
 
@@ -820,7 +812,7 @@ export const startGroupDmHandler = async (
     const result = await messageService.startGroupDm(request.params.id, userId);
     return ok(reply, result, result.alreadyExists ? 200 : 201);
   } catch (e) {
-    return fail(reply, errStatus(e, 500), 'START_DM_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'START_DM_ERROR', errMessage(e));
   }
 };
 
@@ -833,7 +825,7 @@ export const getGroupInboxHandler = async (
     const threads = await messageService.getGroupInbox(request.params.id, userId);
     return ok(reply, { threads });
   } catch (e) {
-    return fail(reply, errStatus(e, 500), 'GET_INBOX_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GET_INBOX_ERROR', errMessage(e));
   }
 };
 
@@ -893,7 +885,7 @@ export const createGroupTodoHandler = async (
     const item = await groupService.createTodoItem(request.params.id, { title, description, status });
     return ok(reply, { item }, 201);
   } catch (e) {
-    return fail(reply, errStatus(e, 500), 'CREATE_TODO_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'CREATE_TODO_ERROR', errMessage(e));
   }
 };
 
@@ -909,7 +901,7 @@ export const updateGroupTodoHandler = async (
     const item = await groupService.updateTodoItem(request.params.id, request.params.itemId, request.body);
     return ok(reply, { item });
   } catch (e) {
-    return fail(reply, errStatus(e, 500), 'UPDATE_TODO_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'UPDATE_TODO_ERROR', errMessage(e));
   }
 };
 
@@ -958,7 +950,7 @@ export const getOrdersHandler = async (
     const orders = await groupService.getOrders(request.params.id, userId);
     return ok(reply, { orders });
   } catch (e) {
-    return fail(reply, errStatus(e, 500), 'GET_ORDERS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GET_ORDERS_ERROR', errMessage(e));
   }
 };
 
@@ -971,7 +963,7 @@ export const createOrderHandler = async (
     const order = await groupService.createOrder(request.params.id, userId, request.body);
     return ok(reply, { order }, 201);
   } catch (e) {
-    return fail(reply, errStatus(e, 400), 'CREATE_ORDER_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'CREATE_ORDER_ERROR', errMessage(e));
   }
 };
 
@@ -986,7 +978,7 @@ export const updateOrderStatusHandler = async (
     const order = await groupService.updateOrderStatus(request.params.orderId, userId, status);
     return ok(reply, { order });
   } catch (e) {
-    return fail(reply, errStatus(e, 400), 'UPDATE_ORDER_STATUS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'UPDATE_ORDER_STATUS_ERROR', errMessage(e));
   }
 };
 
@@ -999,7 +991,7 @@ export const deleteOrderHandler = async (
     await groupService.deleteOrder(request.params.orderId, userId);
     return ok(reply, { success: true });
   } catch (e) {
-    return fail(reply, errStatus(e, 400), 'DELETE_ORDER_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'DELETE_ORDER_ERROR', errMessage(e));
   }
 };
 
@@ -1025,7 +1017,7 @@ export const donateToGroupHandler = async (
     const result = await groupService.donateToGroup(request.params.id, userId, Number(request.body.amount), request.body.message);
     return ok(reply, result);
   } catch (e) {
-    return fail(reply, errStatus(e, 400), 'DONATE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'DONATE_ERROR', errMessage(e));
   }
 };
 
@@ -1051,7 +1043,7 @@ export const getOrderConversationHandler = async (
     const conversationId = await groupService.getOrderConversation(request.params.orderId, userId);
     return ok(reply, { conversationId });
   } catch (e) {
-    return fail(reply, errStatus(e, 400), 'GET_ORDER_CONVERSATION_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'GET_ORDER_CONVERSATION_ERROR', errMessage(e));
   }
 };
 

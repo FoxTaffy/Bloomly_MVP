@@ -10,6 +10,7 @@ import { createMfaToken, verifyMfaToken } from '../../lib/mfaToken.js';
 import type { RegisterInput, LoginInput, JwtPayload } from './types.js';
 import { isDevEnv } from '../../lib/env.js';
 import { presence } from '../realtime/presence.js';
+import { errMessage, errStatus } from '../../lib/httpErrors.js';
 
 const authService = new AuthService();
 
@@ -193,8 +194,8 @@ export const verifyEmailHandler = async (
       data: { token, user: withIsAdult(user), ...(isMobileClient(request) ? { refreshToken } : {}) },
       error: null,
     });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'VERIFY_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'VERIFY_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -206,8 +207,8 @@ export const resendOtpHandler = async (
   try {
     await authService.resendOtp(request.body.email, request.body.purpose);
     return reply.send({ success: true, data: { message: 'Код отправлен повторно' }, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'RESEND_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'RESEND_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -220,8 +221,8 @@ export const exportDataHandler = async (
     const { email, password } = request.body;
     const data = await authService.exportUserData(email, password);
     return reply.send({ success: true, data, error: null });
-  } catch (e: any) {
-    return reply.code(401).send({ success: false, data: null, error: { code: 'EXPORT_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(401).send({ success: false, data: null, error: { code: 'EXPORT_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -259,8 +260,8 @@ export const confirmUnfreezeHandler = async (
       data: { token, user: withIsAdult(user), ...(isMobileClient(request) ? { refreshToken } : {}) },
       error: null,
     });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'UNFREEZE_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'UNFREEZE_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -355,8 +356,8 @@ export const resetPasswordHandler = async (
   try {
     await authService.resetPassword(request.body.email, request.body.code, request.body.password);
     return reply.send({ success: true, data: { message: 'Пароль успешно изменён' }, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'RESET_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'RESET_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -371,8 +372,8 @@ export const changePasswordHandler = async (
     const currentTokenHash = raw ? createHash('sha256').update(raw).digest('hex') : undefined;
     await authService.changePassword(id, request.body.currentPassword, request.body.newPassword, currentTokenHash);
     return reply.send({ success: true, data: { message: 'Пароль успешно изменён' }, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'CHANGE_PASSWORD_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'CHANGE_PASSWORD_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -385,8 +386,8 @@ export const requestEmailChangeHandler = async (
     const { id } = request.user as JwtPayload;
     await authService.requestEmailChange(id);
     return reply.send({ success: true, data: { message: 'Код отправлен на текущую почту' }, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'REQUEST_EMAIL_CHANGE_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'REQUEST_EMAIL_CHANGE_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -399,8 +400,8 @@ export const confirmEmailChangeHandler = async (
     const { code, newEmail } = request.body;
     const email = await authService.confirmEmailChange(id, code, newEmail);
     return reply.send({ success: true, data: { email }, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'CONFIRM_EMAIL_CHANGE_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'CONFIRM_EMAIL_CHANGE_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -410,8 +411,8 @@ export const totpSetupHandler = async (request: FastifyRequest, reply: FastifyRe
     const { id } = request.user as JwtPayload;
     const { secret, qrDataUrl } = await authService.setupTotp(id);
     return reply.send({ success: true, data: { secret, qrDataUrl }, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'TOTP_SETUP_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'TOTP_SETUP_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -423,8 +424,8 @@ export const totpConfirmHandler = async (
     const { id } = request.user as JwtPayload;
     await authService.confirmTotp(id, request.body.code);
     return reply.send({ success: true, data: { message: 'Приложение-аутентификатор подключено' }, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'TOTP_CONFIRM_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'TOTP_CONFIRM_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -434,8 +435,8 @@ export const email2faEnableHandler = async (request: FastifyRequest, reply: Fast
     const { id } = request.user as JwtPayload;
     await authService.enableEmail2fa(id);
     return reply.send({ success: true, data: { message: 'Код отправлен на почту' }, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'ENABLE_2FA_EMAIL_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'ENABLE_2FA_EMAIL_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -447,8 +448,8 @@ export const email2faConfirmHandler = async (
     const { id } = request.user as JwtPayload;
     await authService.confirmEmail2fa(id, request.body.code);
     return reply.send({ success: true, data: { message: 'Вход по коду с почты включён' }, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'CONFIRM_2FA_EMAIL_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'CONFIRM_2FA_EMAIL_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -461,8 +462,8 @@ export const disable2faHandler = async (
     const { id } = request.user as JwtPayload;
     await authService.disableTwoFactor(id, request.body.password);
     return reply.send({ success: true, data: { message: 'Двухфакторная аутентификация отключена' }, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'DISABLE_2FA_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'DISABLE_2FA_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -502,9 +503,9 @@ export const loginVerify2faHandler = async (
       },
       error: null,
     });
-  } catch (e: any) {
-    if (e?.statusCode === 429) return reply.code(429).send({ success: false, data: null, error: { code: 'ACCOUNT_LOCKED', message: e.message } });
-    return reply.code(400).send({ success: false, data: null, error: { code: 'MFA_VERIFY_ERROR', message: e.message } });
+  } catch (e) {
+    if (errStatus(e) === 429) return reply.code(429).send({ success: false, data: null, error: { code: 'ACCOUNT_LOCKED', message: errMessage(e) } });
+    return reply.code(400).send({ success: false, data: null, error: { code: 'MFA_VERIFY_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -522,8 +523,8 @@ export const loginResend2faHandler = async (
     }
     await authService.resendLoginTwoFactor(userId);
     return reply.send({ success: true, data: { message: 'Код отправлен повторно' }, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'MFA_RESEND_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'MFA_RESEND_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -559,8 +560,8 @@ export const oauthRedirectHandler = async (
     const { url, state } = buildOAuthUrl(provider, undefined, client, request.query.redirect);
     setOAuthStateCookie(reply, state);
     return reply.redirect(302, url);
-  } catch (e: any) {
-    return reply.code(500).send({ success: false, data: null, error: { code: 'OAUTH_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(500).send({ success: false, data: null, error: { code: 'OAUTH_ERROR', message: errMessage(e) } });
   }
 };
 
@@ -646,8 +647,8 @@ export const oauthCallbackHandler = async (
     }
     // Токен во фрагменте: фрагмент не уходит на сервер и не попадает в access-лог nginx
     return reply.redirect(302, `${FRONTEND_URL()}/auth/callback#token=${token}`);
-  } catch (e: any) {
-    console.error('[OAuth callback error]', e instanceof Error ? e.message : 'Unknown error');
+  } catch (e) {
+    console.error('[OAuth callback error]', e instanceof Error ? errMessage(e) : 'Unknown error');
     return reply.redirect(302, `${FRONTEND_URL()}/auth?error=oauth_failed`);
   }
 };

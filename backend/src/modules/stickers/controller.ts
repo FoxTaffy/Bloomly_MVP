@@ -3,12 +3,13 @@ import { stickersService } from './service.js';
 import type { GetPacksQuery, CreatePackInput, UpdatePackInput } from './types.js';
 import { isAdmin } from '../../lib/roles.js';
 import { requestIsAdult } from '../../lib/age.js';
+import { errCode, errMessage, errStatus } from '../../lib/httpErrors.js';
 
 export async function findByUrlHandler(req: FastifyRequest, reply: FastifyReply) {
   const { url } = req.query as { url?: string };
   if (!url) return reply.status(400).send({ success: false, data: null, error: { code: 'MISSING_URL', message: 'url query param required' } });
   try {
-    const userId = (req as any).user?.id as string | undefined;
+    const userId = req.user?.id;
     const result = await stickersService.findByUrl(url, userId);
     if (!result) return reply.send({ success: true, data: { found: false }, error: null });
     if (result.private) return reply.send({ success: true, data: { found: true, private: true }, error: null });
@@ -22,7 +23,7 @@ export async function findByUrlHandler(req: FastifyRequest, reply: FastifyReply)
 export async function listPacksHandler(req: FastifyRequest, reply: FastifyReply) {
   try {
     const query = req.query as GetPacksQuery;
-    if (!requestIsAdult((req as any).user)) {
+    if (!requestIsAdult(req.user)) {
       query.excludeNsfw = '1';
       query.nsfw = undefined;
     }
@@ -38,7 +39,7 @@ export async function getPackHandler(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as { id: string };
   try {
     // Черновик отдаём только автору; requesterId придёт из tryAuth, без токена — undefined
-    const requesterId = (req as any).user?.id as string | undefined;
+    const requesterId = req.user?.id;
     const pack = await stickersService.getById(id, requesterId);
     if (!pack) return reply.status(404).send({ error: 'Pack not found' });
     return reply.send({ data: { pack } });
@@ -49,7 +50,7 @@ export async function getPackHandler(req: FastifyRequest, reply: FastifyReply) {
 }
 
 export async function createPackHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string };
+  const user = req.user;
   const input = req.body as CreatePackInput;
   try {
     const pack = await stickersService.create(user.id, input);
@@ -61,7 +62,7 @@ export async function createPackHandler(req: FastifyRequest, reply: FastifyReply
 }
 
 export async function updatePackHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string };
+  const user = req.user;
   const { id } = req.params as { id: string };
   const input = req.body as UpdatePackInput;
   try {
@@ -75,7 +76,7 @@ export async function updatePackHandler(req: FastifyRequest, reply: FastifyReply
 }
 
 export async function deletePackHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string };
+  const user = req.user;
   const { id } = req.params as { id: string };
   try {
     const result = await stickersService.delete(id, user.id);
@@ -88,7 +89,7 @@ export async function deletePackHandler(req: FastifyRequest, reply: FastifyReply
 }
 
 export async function getMyPacksHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string };
+  const user = req.user;
   try {
     const packs = await stickersService.getMyPacks(user.id);
     return reply.send({ data: { packs } });
@@ -99,7 +100,7 @@ export async function getMyPacksHandler(req: FastifyRequest, reply: FastifyReply
 }
 
 export async function getCollectionHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string };
+  const user = req.user;
   try {
     const packs = await stickersService.getCollection(user.id);
     return reply.send({ data: { packs } });
@@ -110,21 +111,22 @@ export async function getCollectionHandler(req: FastifyRequest, reply: FastifyRe
 }
 
 export async function addToCollectionHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string };
+  const user = req.user;
   const { id } = req.params as { id: string };
   try {
     const result = await stickersService.addToCollection(user.id, id);
     if (!result) return reply.status(404).send({ error: 'Pack not found' });
     return reply.send({ data: { ok: true } });
-  } catch (err: any) {
-    if (err?.statusCode) return reply.status(err.statusCode).send({ error: err.message });
+  } catch (err) {
+    const status = errStatus(err);
+    if (status) return reply.status(status).send({ error: errMessage(err) });
     req.log.error(err);
     return reply.status(500).send({ error: 'Failed to add to collection' });
   }
 }
 
 export async function removeFromCollectionHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string };
+  const user = req.user;
   const { id } = req.params as { id: string };
   try {
     await stickersService.removeFromCollection(user.id, id);
@@ -136,7 +138,7 @@ export async function removeFromCollectionHandler(req: FastifyRequest, reply: Fa
 }
 
 export async function getPackStatsHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string; role?: string };
+  const user = req.user;
   const { id } = req.params as { id: string };
   const { period } = req.query as { period?: string };
   try {
@@ -155,7 +157,7 @@ export async function getPackStatsHandler(req: FastifyRequest, reply: FastifyRep
 }
 
 export async function checkCollectionHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string };
+  const user = req.user;
   const { id } = req.params as { id: string };
   try {
     const has = await stickersService.hasInCollection(user.id, id);
@@ -178,7 +180,7 @@ export async function usePackHandler(req: FastifyRequest, reply: FastifyReply) {
 }
 
 export async function trackUsageHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string };
+  const user = req.user;
   const { stickerUrl, packId } = req.body as { stickerUrl: string; packId?: string };
   if (!stickerUrl) return reply.status(400).send({ error: 'stickerUrl required' });
   try {
@@ -191,7 +193,7 @@ export async function trackUsageHandler(req: FastifyRequest, reply: FastifyReply
 }
 
 export async function getRecentUsedHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string };
+  const user = req.user;
   const { type, limit } = req.query as { type?: string; limit?: string };
   const lim = Math.min(60, parseInt(limit ?? '50', 10));
   try {
@@ -206,7 +208,7 @@ export async function getRecentUsedHandler(req: FastifyRequest, reply: FastifyRe
 }
 
 export async function getFavoritesHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string };
+  const user = req.user;
   try {
     const stickers = await stickersService.getFavoriteStickers(user.id);
     return reply.send({ data: { stickers } });
@@ -217,7 +219,7 @@ export async function getFavoritesHandler(req: FastifyRequest, reply: FastifyRep
 }
 
 export async function addFavoriteHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string };
+  const user = req.user;
   const { stickerUrl, packId } = req.body as { stickerUrl: string; packId?: string };
   if (!stickerUrl) return reply.status(400).send({ error: 'stickerUrl required' });
   try {
@@ -230,7 +232,7 @@ export async function addFavoriteHandler(req: FastifyRequest, reply: FastifyRepl
 }
 
 export async function removeFavoriteHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string };
+  const user = req.user;
   const { stickerUrl } = req.body as { stickerUrl: string };
   if (!stickerUrl) return reply.status(400).send({ error: 'stickerUrl required' });
   try {
@@ -243,7 +245,7 @@ export async function removeFavoriteHandler(req: FastifyRequest, reply: FastifyR
 }
 
 export async function addStickersToPackHandler(req: FastifyRequest, reply: FastifyReply) {
-  const user = (req as any).user as { id: string };
+  const user = req.user;
   const { id } = req.params as { id: string };
   const { urls } = req.body as { urls: string[] };
   if (!Array.isArray(urls) || urls.length === 0) return reply.status(400).send({ error: 'urls[] required' });
@@ -261,18 +263,18 @@ export async function importTelegramHandler(req: FastifyRequest, reply: FastifyR
   const { link, maxStickers } = req.body as { link: string; maxStickers?: number };
   if (!link) return reply.status(400).send({ error: 'link is required' });
   try {
-    const userId = (req as any).user.id as string;
+    const userId = req.user.id;
     const result = await stickersService.importFromTelegram(link, maxStickers, userId);
     return reply.send({ data: result });
-  } catch (err: any) {
-    if (err.code === 'NO_TOKEN') {
-      return reply.status(503).send({ error: err.message });
+  } catch (err) {
+    if (errCode(err) === 'NO_TOKEN') {
+      return reply.status(503).send({ error: errMessage(err) });
     }
-    if (err.code === 'BAD_INPUT') {
-      return reply.status(400).send({ error: err.message });
+    if (errCode(err) === 'BAD_INPUT') {
+      return reply.status(400).send({ error: errMessage(err) });
     }
     // Telegram API errors (pack not found, etc.)
-    const msg: string = err.message ?? String(err);
+    const msg: string = errMessage(err) ?? String(err);
     if (msg.includes('STICKERSET_INVALID') || msg.includes('StickerSet') || msg.includes('not found')) {
       return reply.status(404).send({ error: 'Стикерпак не найден. Проверьте ссылку и убедитесь, что пак публичный.' });
     }

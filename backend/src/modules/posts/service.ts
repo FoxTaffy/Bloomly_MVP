@@ -10,6 +10,7 @@ import { normalizeTag } from '../../lib/tagRules.js';
 import { muteKeywordsWhere, nsfwWhere, type NsfwMode } from '../../lib/contentFilters.js';
 import { analyzeContent } from '../automod/service.js';
 import type { CreatePostInput, GetPostsQuery } from './types.js';
+import { errCode } from '../../lib/httpErrors.js';
 
 const MAX_MEDIA_PER_POST = 20;
 
@@ -876,10 +877,10 @@ export const postService = {
           await tx.postNotInterested.create({
             data: { user_id: userId, post_id: postId, term_deltas: Object.fromEntries(deltas) },
           });
-        } catch (err: any) {
+        } catch (err) {
           // Lost a race to a concurrent identical request (unique violation) — undo the
           // redundant delta we just applied instead of double-counting it.
-          if (err?.code === 'P2002') {
+          if (errCode(err) === 'P2002') {
             await applyTermDeltas(tx, userId, negateDeltas(deltas), termSource, { likes: 0, dislikes: 0 });
             return { notInterested: true };
           }
@@ -891,9 +892,9 @@ export const postService = {
       if (!existing) return { notInterested: false };
       try {
         await tx.postNotInterested.delete({ where: { user_id_post_id: { user_id: userId, post_id: postId } } });
-      } catch (err: any) {
+      } catch (err) {
         // Already undone by a concurrent request — its reversal already ran, don't double-reverse.
-        if (err?.code === 'P2025') return { notInterested: false };
+        if (errCode(err) === 'P2025') return { notInterested: false };
         throw err;
       }
       if (existing.term_deltas) {
@@ -1328,8 +1329,8 @@ export const postService = {
         prisma.post.update({ where: { id: postId }, data: { views_count: { increment: 1 } } }),
       ]);
       return { counted: true };
-    } catch (err: any) {
-      if (err?.code !== 'P2002') throw err; // already viewed by this user — not an error
+    } catch (err) {
+      if (errCode(err) !== 'P2002') throw err; // already viewed by this user — not an error
       return { counted: false };
     }
   },

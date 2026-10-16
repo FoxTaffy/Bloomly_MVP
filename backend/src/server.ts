@@ -151,8 +151,8 @@ fastify.decorate(
       if (!dbUser || dbUser.deleted_at) {
         return reply.code(401).send({ success: false, data: null, error: { code: 'UNAUTHORIZED', message: 'User not found' } });
       }
-      (request.user as any).role = dbUser.role;
-      (request.user as any).is_adult = isAdult(dbUser.birth_date);
+      request.user.role = dbUser.role;
+      request.user.is_adult = isAdult(dbUser.birth_date);
       // Frozen accounts are force-logged-out on their very next authenticated request
       // (frontend's response interceptor catches ACCOUNT_FROZEN and clears the session).
       if (dbUser.frozen_at) {
@@ -179,13 +179,13 @@ fastify.decorate(
         select: { role: true, deleted_at: true, birth_date: true },
       });
       if (!dbUser || dbUser.deleted_at) {
-        (request as any).user = undefined;
+        (request as { user?: unknown }).user = undefined; // guest: no user on the request
       } else {
-        (request.user as any).role = dbUser.role;
-        (request.user as any).is_adult = isAdult(dbUser.birth_date);
+        request.user.role = dbUser.role;
+        request.user.is_adult = isAdult(dbUser.birth_date);
       }
     } catch {
-      (request as any).user = undefined;
+      (request as { user?: unknown }).user = undefined; // guest: no user on the request
     }
   },
 );

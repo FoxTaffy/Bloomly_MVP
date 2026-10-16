@@ -6,6 +6,7 @@ import { dealersDenService } from './modules/dealers-den/service.js';
 import { pollSupportInbox } from './modules/support/mailPoller.js';
 import { scheduledPostService } from './modules/posts/scheduledService.js';
 import { purgeMediaUrl } from './modules/media/service.js';
+import { errMessage } from './lib/httpErrors.js';
 
 export function initCronJobs() {
   console.log('[CRON] Initializing background tasks...');
@@ -71,8 +72,8 @@ export function initCronJobs() {
       }
 
       console.log('[CRON] DB Cleanup completed successfully.');
-    } catch (err: any) {
-      console.error('[CRON] Failed to run daily DB cleanup task:', err.message);
+    } catch (err) {
+      console.error('[CRON] Failed to run daily DB cleanup task:', errMessage(err));
     }
   });
 
@@ -80,8 +81,8 @@ export function initCronJobs() {
   cron.schedule('*/15 * * * *', async () => {
     try {
       await patrolSuspiciousActivity();
-    } catch (err: any) {
-      console.error('[CRON] AutoMod patrol error:', err.message);
+    } catch (err) {
+      console.error('[CRON] AutoMod patrol error:', errMessage(err));
     }
   });
 
@@ -93,8 +94,8 @@ export function initCronJobs() {
       if (bannedCount > 0) {
         console.log(`[CRON] Activity auto-ban: ${bannedCount} participant(s) added to blacklist`);
       }
-    } catch (err: any) {
-      console.error('[CRON] Activity auto-ban error:', err.message);
+    } catch (err) {
+      console.error('[CRON] Activity auto-ban error:', errMessage(err));
     }
   });
 
@@ -122,8 +123,8 @@ export function initCronJobs() {
         await Promise.all(mediaUrls.map((url) => purgeMediaUrl(url)));
         console.log(`[CRON] Story cleanup: removed ${expired.length} expired stor${expired.length === 1 ? 'y' : 'ies'}, purged ${mediaUrls.length} file(s).`);
       }
-    } catch (err: any) {
-      console.error('[CRON] Story cleanup error:', err.message);
+    } catch (err) {
+      console.error('[CRON] Story cleanup error:', errMessage(err));
     }
   });
 
@@ -131,8 +132,8 @@ export function initCronJobs() {
   cron.schedule('0 * * * *', async () => {
     try {
       await dealersDenService.autoResolveDisputes();
-    } catch (err: any) {
-      console.error('[CRON] autoResolveDisputes error:', err.message);
+    } catch (err) {
+      console.error('[CRON] autoResolveDisputes error:', errMessage(err));
     }
   });
 
@@ -140,8 +141,8 @@ export function initCronJobs() {
   cron.schedule('*/5 * * * *', async () => {
     try {
       await dealersDenService.closeExpiredAuctions();
-    } catch (err: any) {
-      console.error('[CRON] closeExpiredAuctions error:', err.message);
+    } catch (err) {
+      console.error('[CRON] closeExpiredAuctions error:', errMessage(err));
     }
   });
 
@@ -149,8 +150,8 @@ export function initCronJobs() {
   cron.schedule('*/1 * * * *', async () => {
     try {
       await pollSupportInbox();
-    } catch (err: any) {
-      console.error('[CRON] Support inbox poll error:', err.message);
+    } catch (err) {
+      console.error('[CRON] Support inbox poll error:', errMessage(err));
     }
   });
 
@@ -161,8 +162,8 @@ export function initCronJobs() {
       if (published > 0) {
         console.log(`[CRON] Scheduled posts: published ${published} post(s)`);
       }
-    } catch (err: any) {
-      console.error('[CRON] Scheduled posts publish error:', err.message);
+    } catch (err) {
+      console.error('[CRON] Scheduled posts publish error:', errMessage(err));
     }
   });
 

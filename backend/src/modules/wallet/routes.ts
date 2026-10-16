@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import { topupWallet, getWallet } from './service.js';
 import { isDevEnv } from '../../lib/env.js';
+import { errMessage, errStatus } from '../../lib/httpErrors.js';
 
 const ok = (data: unknown) => ({ success: true, data, error: null });
 const err = (code: string, msg: string) => ({ success: false, data: null, error: { code, message: msg } });
@@ -25,8 +26,8 @@ export async function walletRoutes(fastify: FastifyInstance) {
     try {
       const result = await topupWallet(userId, Number(amount));
       reply.send(ok(result));
-    } catch (e: any) {
-      reply.code(e.statusCode ?? 400).send(err('TOPUP_ERROR', e.message));
+    } catch (e) {
+      reply.code(errStatus(e) ?? 400).send(err('TOPUP_ERROR', errMessage(e)));
     }
   });
 }

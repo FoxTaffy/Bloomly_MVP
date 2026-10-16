@@ -17,6 +17,7 @@ import {
   STORAGE_TRACKED_FOLDERS,
 } from '../../config/uploads.js';
 import { isDevEnv } from '../../lib/env.js';
+import { errMessage } from '../../lib/httpErrors.js';
 
 const execFileAsync = promisify(execFile);
 const FFMPEG_TIMEOUT_MS = 90_000;
@@ -212,8 +213,8 @@ export async function uploadFile(
       }
       finalMimeType = 'image/webp';
       finalExt = '.webp';
-    } catch (err: any) {
-      console.error('Sharp failed to process image:', err.message);
+    } catch (err) {
+      console.error('Sharp failed to process image:', errMessage(err));
       // Раньше тут был fallback на исходный буфер: оригинал с EXIF/GPS и картинка сверх лимита
       // пикселей уходили в хранилище и отдавались всем. Теперь такой файл отклоняется.
       throw Object.assign(new Error('Не удалось обработать изображение'), { statusCode: 400 });
@@ -332,9 +333,9 @@ export async function convertGifAvatarToWebm(
       posterUrl: `${PUBLIC_URL}/${BUCKET}/${posterObject}`,
       videoUrl: `${PUBLIC_URL}/${BUCKET}/${videoObject}`,
     };
-  } catch (err: any) {
+  } catch (err) {
     if (err instanceof UploadValidationError) throw err;
-    throw new UploadValidationError('GIF_CONVERT_FAILED', `Не удалось обработать GIF: ${err?.message ?? String(err)}`);
+    throw new UploadValidationError('GIF_CONVERT_FAILED', `Не удалось обработать GIF: ${errMessage(err) ?? String(err)}`);
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }

@@ -7,6 +7,7 @@ import { usersService } from '../users/service.js';
 import { applyAction, getPendingAppeals, decideAppeal } from '../automod/service.js';
 import { getAllSettings, setSetting, type SettingKey } from '../../lib/settings.js';
 import { assertOwnedMedia, findPrivateMediaRow, openPrivateObject } from '../media/service.js';
+import { errCode, errMessage, errStatus } from '../../lib/httpErrors.js';
 
 interface JwtUser { id: string; role: string }
 
@@ -89,8 +90,8 @@ export const updateUserSubscriptionHandler = async (
     const user = await usersService.updateSubscriptionTier(req.params.id, req.body.tier, { skipPaymentCheck: true });
     await logAdminAction(actor.id, req.params.id, 'subscription_change', `Тариф изменён на "${req.body.tier}"`);
     return reply.send({ success: true, data: { user }, error: null });
-  } catch (err: any) {
-    return reply.code(err.statusCode || 400).send({ success: false, data: null, error: { code: 'INVALID_TIER', message: err.message } });
+  } catch (err) {
+    return reply.code(errStatus(err) || 400).send({ success: false, data: null, error: { code: 'INVALID_TIER', message: errMessage(err) } });
   }
 };
 
@@ -125,9 +126,9 @@ export const updateUserProfileHandler = async (
     const changed = [...Object.keys(data), ...(typeof username === 'string' ? ['username'] : [])];
     await logAdminAction(actor.id, req.params.id, 'profile_edit', `Профиль изменён администратором: ${changed.join(', ')}`);
     return reply.send({ success: true, data: { user }, error: null });
-  } catch (err: any) {
-    const taken = err?.message === 'Этот никнейм уже занят';
-    return reply.code(taken ? 409 : 400).send({ success: false, data: null, error: { code: taken ? 'USERNAME_TAKEN' : 'PROFILE_UPDATE_FAILED', message: err.message } });
+  } catch (err) {
+    const taken = errMessage(err) === 'Этот никнейм уже занят';
+    return reply.code(taken ? 409 : 400).send({ success: false, data: null, error: { code: taken ? 'USERNAME_TAKEN' : 'PROFILE_UPDATE_FAILED', message: errMessage(err) } });
   }
 };
 
@@ -165,8 +166,8 @@ export const promoteToStaffHandler = async (
     const user = await adminService.promoteToStaff(identifier.trim(), role);
     await logAdminAction(actor.id, user.id, 'role_change', `Добавлен(а) в команду с ролью "${role}"`);
     return reply.send({ success: true, data: { user }, error: null });
-  } catch (e: any) {
-    return reply.code(404).send({ success: false, data: null, error: { code: e.code ?? 'ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(404).send({ success: false, data: null, error: { code: errCode(e) ?? 'ERROR', message: errMessage(e) } });
   }
 };
 
@@ -419,8 +420,8 @@ export const decideAppealHandler = async (
   try {
     await decideAppeal(req.params.logId, actor.id, req.body.decision);
     return reply.send({ success: true, data: null, error: null });
-  } catch (err: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'APPEAL_ERROR', message: err.message } });
+  } catch (err) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'APPEAL_ERROR', message: errMessage(err) } });
   }
 };
 
@@ -453,8 +454,8 @@ export const submitAdHandler = async (
   try {
     const ad = await adminService.submitAd({ ...req.body, requesterId });
     return reply.code(201).send({ success: true, data: { ad }, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_AD_LINK', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_AD_LINK', message: errMessage(e) } });
   }
 };
 
@@ -514,8 +515,8 @@ export const createBannerHandler = async (req: FastifyRequest, reply: FastifyRep
   try {
     const banner = await adminService.createBanner(req.body as any);
     return reply.status(201).send({ success: true, data: { banner }, error: null });
-  } catch (err: any) {
-    if (err.code === 'LIMIT') return reply.status(400).send({ success: false, data: null, error: { code: 'LIMIT', message: err.message } });
+  } catch (err) {
+    if (errCode(err) === 'LIMIT') return reply.status(400).send({ success: false, data: null, error: { code: 'LIMIT', message: errMessage(err) } });
     return reply.status(500).send({ success: false, data: null, error: { code: 'ERROR', message: String(err) } });
   }
 };

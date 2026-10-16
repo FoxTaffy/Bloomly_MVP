@@ -8,7 +8,7 @@ export const getActiveUpdatesHandler = async (_req: FastifyRequest, reply: Fasti
 };
 
 export const getAllUpdatesHandler = async (req: FastifyRequest, reply: FastifyReply) => {
-  const role = (req.user as any)?.role;
+  const role = req.user?.role;
   if (!isAdmin(role)) {
     return reply.status(403).send({ success: false, error: 'Forbidden' });
   }
@@ -17,7 +17,7 @@ export const getAllUpdatesHandler = async (req: FastifyRequest, reply: FastifyRe
 };
 
 export const createUpdateHandler = async (req: FastifyRequest, reply: FastifyReply) => {
-  const role = (req.user as any)?.role;
+  const role = req.user?.role;
   if (!isAdmin(role)) {
     return reply.status(403).send({ success: false, error: 'Forbidden' });
   }
@@ -28,7 +28,7 @@ export const createUpdateHandler = async (req: FastifyRequest, reply: FastifyRep
 };
 
 export const deleteUpdateHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-  const role = (req.user as any)?.role;
+  const role = req.user?.role;
   if (!isAdmin(role)) {
     return reply.status(403).send({ success: false, error: 'Forbidden' });
   }
@@ -41,7 +41,7 @@ export const deleteUpdateHandler = async (req: FastifyRequest<{ Params: { id: st
 };
 
 export const toggleUpdateHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-  const role = (req.user as any)?.role;
+  const role = req.user?.role;
   if (!isAdmin(role)) {
     return reply.status(403).send({ success: false, error: 'Forbidden' });
   }
