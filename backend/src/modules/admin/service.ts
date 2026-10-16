@@ -182,7 +182,7 @@ export const adminService = {
     const orderClause = orderClauses[sortBy] ?? orderClauses.privilege;
 
     const rows = await prisma.$queryRaw<any[]>`
-      SELECT u.id, u.username, u.display_name, u.email, u.role, u.badge_type, u.avatar_url,
+      SELECT u.id, u.username, u.display_name, u.email, u.role, u.badge_type, u.is_sponsor, u.avatar_url,
              u.subscription_tier, u.created_at, u.deleted_at, u.frozen_at, u.warn_count,
              u.deceased_at, u.deceased_note,
              COALESCE(p.post_count, 0)::int AS post_count,
@@ -221,6 +221,14 @@ export const adminService = {
       where: { id: userId },
       data:  { role, ...(badgeType !== undefined ? { badge_type: badgeType } : {}) },
       select: { id: true, username: true, role: true, badge_type: true },
+    });
+  },
+
+  async setUserSponsor(userId: string, isSponsor: boolean) {
+    return prisma.user.update({
+      where: { id: userId },
+      data:  { is_sponsor: isSponsor },
+      select: { id: true, username: true, is_sponsor: true },
     });
   },
 

@@ -101,6 +101,16 @@ const updateUserRole = async (userId: string, role: string) => {
   } catch {}
 }
 
+const toggleUserSponsor = async (user: { id: string; is_sponsor?: boolean }) => {
+  const next = !user.is_sponsor
+  try {
+    await api.patch(`/admin/users/${user.id}/sponsor`, { is_sponsor: next })
+    user.is_sponsor = next
+  } catch (e) {
+    showActionError(apiErrorMessage(e) || 'Не удалось изменить статус спонсора')
+  }
+}
+
 // Short-lived error banner for per-user actions (tier change, profile edit) — previously these failed silently.
 const actionError = ref('')
 let actionErrorTimer: ReturnType<typeof setTimeout> | null = null
@@ -556,6 +566,12 @@ watchEffect(() => { badges.users = userTotal.value })
                 outline-none hover:bg-white/[0.08] focus:border-violet-400/50 cursor-pointer transition-all">
               {{ tierMenuOptions.find(o => o.value === (user.subscription_tier || 'free'))?.label }}
               <BIcon name="ChevronDown" :class="`w-3 h-3 text-white/35 transition-transform ${activeUserMenu === `tier-${user.id}` ? 'rotate-180' : ''}`" />
+            </button>
+            <button v-if="isAdminPlus" type="button" :title="langStore.t.adminSponsorTooltip"
+              @click="toggleUserSponsor(user)"
+              class="flex items-center justify-center rounded-full w-7 h-7 border cursor-pointer transition-all"
+              :class="user.is_sponsor ? 'bg-violet-400/20 border-violet-400/50' : 'bg-white/[0.06] border-transparent hover:bg-white/[0.08]'">
+              <img src="/icons/badges/sponsor.png" alt="" class="w-5 h-5 object-contain" :class="user.is_sponsor ? '' : 'opacity-40 grayscale'" />
             </button>
             <button v-if="isOwnerRole" type="button" data-user-menu
               @click="toggleUserMenu(`role-${user.id}`, $event)"

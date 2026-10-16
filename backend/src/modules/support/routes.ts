@@ -15,7 +15,7 @@ export async function supportRoutes(fastify: FastifyInstance) {
   fastify.post<RouteGenericOf<typeof addTicketMessageHandler>>('/tickets/:id/messages', { ...auth, config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } } as RouteShorthandOptions, addTicketMessageHandler);
 
   // Админка и «Помощь» грузят вложения пачкой: общий лимит давал 429 и ломал загрузку списка тикетов
-  fastify.get<RouteGenericOf<typeof getAttachmentHandler>>('/attachment', { ...auth, config: { rateLimit: { max: 600, timeWindow: '1 minute' } } } as RouteShorthandOptions, getAttachmentHandler);
+  fastify.get<RouteGenericOf<typeof getAttachmentHandler>>('/attachment', { ...auth, config: { rateLimit: false } } as RouteShorthandOptions, getAttachmentHandler);
 
   // Admin endpoints
   fastify.get<RouteGenericOf<typeof adminGetTicketsHandler>>('/admin/tickets',       auth, adminGetTicketsHandler);

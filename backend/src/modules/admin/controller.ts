@@ -117,6 +117,19 @@ export const updateUserRoleHandler = async (
   return reply.send({ success: true, data: { user }, error: null });
 };
 
+export const updateUserSponsorHandler = async (
+  req: FastifyRequest<{ Params: { id: string }; Body: { is_sponsor: boolean } }>,
+  reply: FastifyReply,
+) => {
+  if (!requireAdmin(req, reply)) return;
+  if (typeof req.body?.is_sponsor !== 'boolean') {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID', message: 'is_sponsor должен быть boolean' } });
+  }
+  const user = await adminService.setUserSponsor(req.params.id, req.body.is_sponsor);
+  await logAdminAction(req.user.id, req.params.id, 'sponsor_change', req.body.is_sponsor ? 'Выдан статус спонсора' : 'Статус спонсора снят');
+  return reply.send({ success: true, data: { user }, error: null });
+};
+
 export const getStaffHandler = async (req: FastifyRequest, reply: FastifyReply) => {
   if (!requireModerator(req, reply)) return;
   const staff = await adminService.getStaff();

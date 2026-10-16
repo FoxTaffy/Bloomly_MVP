@@ -112,6 +112,7 @@ model User {
   sentFriendRequests             Friendship[]              @relation("FriendshipRequester")
   receivedFriendRequests         Friendship[]              @relation("FriendshipAddressee")
   is_verified                    Boolean                   @default(false)
+  is_sponsor                     Boolean                   @default(false)
   verified_at                    DateTime?
   ownedGroups                    Group[]                   @relation("GroupOwner")
   groupMemberships               GroupMember[]

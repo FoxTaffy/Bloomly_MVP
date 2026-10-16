@@ -136,6 +136,7 @@ const PUBLIC_SELECT = {
   profile_frame_id:     true,
   equippedFrame:        { select: { id: true, image_url: true, name: true } },
   is_verified:          true,
+  is_sponsor:           true,
   verified_at:          true,
   verification_type:    true,
   deceased_at:          true,

@@ -3058,6 +3058,7 @@ const achievementBadges = computed(() => {
   if (!p) return badges
   if (p.role === 'admin')            badges.push({ key: 'admin',      label: langStore.t.roleAdmin,      desc: langStore.t.profileRoleAdminDesc,     iconComp: Crown,      iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
   if (p.role === 'moderator')        badges.push({ key: 'mod',        label: langStore.t.profileRoleModerator,           desc: langStore.t.profileRoleModeratorDesc,     iconComp: Shield,     iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
+  if (p.is_sponsor)                  badges.push({ key: 'sponsor',    label: langStore.t.sponsorBadgeLabel, desc: langStore.t.sponsorBadgeDesc, iconImg: '/icons/badges/sponsor.png', iconBg: 'bg-violet-500/20', iconColor: 'text-violet-300' })
   // Verification type specific badges
   const vt = p.verification_type
   if (vt === 'artist')         badges.push({ key: 'ver-artist',    label: langStore.t.verBadgeLabelArtist,       desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('artist'),       iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })

@@ -154,6 +154,7 @@ export interface UserProfile {
   profile_bg_url: string | null
   profile_frame: string | null
   is_verified: boolean
+  is_sponsor?: boolean
   verified_at: string | null
   verification_type: string | null
   artist_since: string | null
