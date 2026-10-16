@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import BIcon from './BIcon.vue'
-import { fetchReportEvidence, fetchSupportAttachment } from '../composables/useReportEvidence'
+import { fetchReportEvidence, fetchSupportAttachment, fetchVerificationEvidence } from '../composables/useReportEvidence'
 
 // Картинка или видео с заглушкой вместо пустого места, если файл недоступен
 // (удалён, нет прав, хранилище не ответило).
@@ -9,7 +9,7 @@ const props = withDefaults(defineProps<{
   src?: string | null
   kind?: 'image' | 'video'
   /** public — прямая ссылка; report-evidence — закрытое фото жалобы через API модераторов. */
-  source?: 'public' | 'report-evidence' | 'support-attachment'
+  source?: 'public' | 'report-evidence' | 'support-attachment' | 'verification-evidence'
   label?: string
 }>(), { kind: 'image', source: 'public', label: 'Файл недоступен' })
 
@@ -23,7 +23,10 @@ watch(() => [props.src, props.source], async () => {
   if (props.source === 'public') { resolved.value = props.src; return }
   const requested = props.src
   try {
-    const blobUrl = await (props.source === 'support-attachment' ? fetchSupportAttachment(requested) : fetchReportEvidence(requested))
+    const loader = props.source === 'support-attachment' ? fetchSupportAttachment
+      : props.source === 'verification-evidence' ? fetchVerificationEvidence
+      : fetchReportEvidence
+    const blobUrl = await loader(requested)
     if (props.src === requested) resolved.value = blobUrl
   } catch {
     if (props.src === requested) failed.value = true

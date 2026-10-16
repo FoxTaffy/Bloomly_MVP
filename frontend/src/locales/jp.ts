@@ -1017,6 +1017,8 @@ export const jp: Translation = {
   adminSubOutOf: '中',
   adminSubUsersGenitive: 'ユーザー',
   adminSearchPlaceholderGlobal: 'ユーザー、投稿、通報を検索…',
+  adminMenuOpen: 'メニューを開く',
+  adminMenuClose: 'メニューを閉じる',
   adminBellPendingReview: '確認待ち',
   adminRequiresAttention: '要確認',
   adminGeneralStats: '全体統計',

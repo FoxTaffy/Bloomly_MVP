@@ -19,6 +19,21 @@ export function fetchSupportAttachment(url: string): Promise<string> {
   return pending
 }
 
+const verificationCache = new Map<string, Promise<string>>()
+
+/** Документы верификации (private/verification/): модераторы читают через /media/private, прямой src даёт 403. */
+export function fetchVerificationEvidence(url: string): Promise<string> {
+  let pending = verificationCache.get(url)
+  if (!pending) {
+    pending = api
+      .get('/media/private', { params: { url }, responseType: 'blob' })
+      .then((res) => URL.createObjectURL(res.data as Blob))
+    pending.catch(() => verificationCache.delete(url))
+    verificationCache.set(url, pending)
+  }
+  return pending
+}
+
 export function fetchReportEvidence(url: string): Promise<string> {
   let pending = cache.get(url)
   if (!pending) {

@@ -1018,6 +1018,8 @@ export const en: Translation = {
   adminSubOutOf: 'of',
   adminSubUsersGenitive: 'users',
   adminSearchPlaceholderGlobal: 'Search users, posts, reports…',
+  adminMenuOpen: 'Open menu',
+  adminMenuClose: 'Close menu',
   adminBellPendingReview: 'Awaiting review',
   adminRequiresAttention: 'Needs attention',
   adminGeneralStats: 'General stats',

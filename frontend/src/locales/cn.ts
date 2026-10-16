@@ -1017,6 +1017,8 @@ export const cn: Translation = {
   adminSubOutOf: '共',
   adminSubUsersGenitive: '用户',
   adminSearchPlaceholderGlobal: '搜索用户、帖子、举报…',
+  adminMenuOpen: '打开菜单',
+  adminMenuClose: '关闭菜单',
   adminBellPendingReview: '待处理',
   adminRequiresAttention: '需要关注',
   adminGeneralStats: '总体统计',

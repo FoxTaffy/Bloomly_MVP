@@ -26,8 +26,8 @@ export function isEmojiOnlyText(text: string | undefined | null): boolean {
 }
 
 export const FWD_RE = /^↩️ Переслано от (.+?)\n/
-// Format v2 (JSON): [story_reply:{"img":...,"exp":...,"name":...,"ava":...}]\nreply
-// Format v1 (legacy pipe): [story_reply:IMAGE_URL|EXPIRES_AT|AUTHOR_NAME|AUTHOR_AVATAR]\nreply
+// Format v2 (JSON): story_reply:{"img":...,"exp":...,"name":...,"ava":...} + newline + reply
+// Format v1 (legacy pipe): story_reply:IMAGE_URL|EXPIRES_AT|AUTHOR_NAME|AUTHOR_AVATAR + newline + reply
 export const STORY_REPLY_RE = /^\[story_reply:(\{[\s\S]*?\}|[^\]]*)\]\n?([\s\S]*)$/u
 
 export interface StoryReplyMeta {

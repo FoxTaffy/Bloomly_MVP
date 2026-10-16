@@ -4,8 +4,10 @@ import { useRouter } from 'vue-router'
 import { useLangStore } from '@/stores/lang'
 import api from '@/api'
 import { verTypeIconUrl } from '@/lib/verificationIcons'
+import { fetchVerificationEvidence } from '@/composables/useReportEvidence'
 import BIcon from '@/components/BIcon.vue'
 import PostLightbox from '@/components/PostLightbox.vue'
+import SafeMedia from '@/components/SafeMedia.vue'
 import { formatDate } from './adminHelpers'
 import { useAdminContext } from './adminContext'
 
@@ -62,7 +64,19 @@ const rejectVerRequest = (id: string) => {
 }
 
 const evidenceLightbox = ref<{ images: string[]; start: number } | null>(null)
-const openEvidenceLightbox = (images: string[], start: number) => { evidenceLightbox.value = { images, start } }
+// Документы верификации закрыты от прямого доступа: в просмотрщик отдаём blob-ссылки, недоступные файлы пропускаем
+const openEvidenceLightbox = async (urls: string[], start: number) => {
+  const settled = await Promise.allSettled(urls.map((u) => fetchVerificationEvidence(u)))
+  const images: string[] = []
+  let startIndex = 0
+  settled.forEach((r, i) => {
+    if (r.status !== 'fulfilled') return
+    if (i === start) startIndex = images.length
+    images.push(r.value)
+  })
+  if (images.length === 0 || settled[start]?.status !== 'fulfilled') return
+  evidenceLightbox.value = { images, start: startIndex }
+}
 
 const verTypeLabels = computed<Record<string, string>>(() => ({
   artist: langStore.t.verTypeArtist,
@@ -190,7 +204,7 @@ watchEffect(() => { badges.verification = verRequests.value.filter((r: any) => r
               <button v-for="(url,i) in req.evidence_urls" :key="i"
                 @click="openEvidenceLightbox(req.evidence_urls, i)"
                 class="relative w-14 h-14 rounded-lg overflow-hidden border border-white/[0.08] hover:border-blue-500/40 transition-colors flex-shrink-0 group/ev">
-                <img :src="url" class="w-full h-full object-cover" />
+                <SafeMedia :src="url" source="verification-evidence" class="w-full h-full object-cover" />
                 <div class="absolute inset-0 bg-black/0 group-hover/ev:bg-black/20 transition-colors" />
               </button>
             </div>

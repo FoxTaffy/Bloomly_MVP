@@ -21,6 +21,7 @@ import AdminUpdatesTab from '@/components/admin/AdminUpdatesTab.vue'
 import AdminGroupsTab from '@/components/admin/AdminGroupsTab.vue'
 import AdminFinanceTab from '@/components/admin/AdminFinanceTab.vue'
 import AdminSettingsTab from '@/components/admin/AdminSettingsTab.vue'
+import AdminNavList from '@/components/admin/AdminNavList.vue'
 
 const langStore = useLangStore()
 const router = useRouter()
@@ -29,6 +30,13 @@ const auth = useAuthStore()
 const ctx = createAdminContext()
 provideAdminContext(ctx)
 const { myRole, myRoleRank, activeTab, switchTab, badges, adminActionError, stats, fetchStats, fetchStatistics, userSearchRequest } = ctx
+
+// Телефон: меню не помещается в строку, поэтому выезжает панелью поверх страницы
+const mobileNavOpen = ref(false)
+const pickTab = (tab: AdminTab) => {
+  switchTab(tab)
+  mobileNavOpen.value = false
+}
 
 // Guard: staff only (moderator and above)
 onMounted(async () => {
@@ -147,27 +155,8 @@ const totalPendingBadge = computed(() => {
       </div>
 
       <!-- Nav items -->
-      <nav class="flex-1 px-3 py-4 space-y-4 overflow-y-auto adm-scroll">
-        <div v-for="group in navGroups" :key="group.label ?? 'root'" class="space-y-0.5">
-          <p v-if="group.label" class="px-3 mb-1.5 text-[10px] font-extrabold text-white/25 tracking-[0.15em] uppercase">{{ group.label }}</p>
-          <button v-for="item in group.items" :key="item.tab" @click="switchTab(item.tab)"
-            class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 group relative"
-            :class="activeTab === item.tab
-              ? 'text-white bg-brand-accent/15'
-              : 'text-white/50 hover:text-white/80 hover:bg-white/5'">
-            <!-- Icon -->
-            <div class="relative w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-200"
-              :class="activeTab === item.tab ? 'bg-brand-accent/25' : 'group-hover:bg-white/5'">
-              <BIcon :name="item.icon" class="w-3.5 h-3.5 transition-all duration-200" :class="activeTab === item.tab ? 'text-brand-accent' : ''" />
-            </div>
-            <span class="relative flex-1 text-left text-[13px]">{{ item.label }}</span>
-            <!-- Badge for pending counts -->
-            <span v-if="item.badge" class="relative text-[10px] font-extrabold px-1.5 py-0.5 rounded-full"
-              :style="`background:${item.color}22;color:${item.color}`">
-              {{ item.badge }}
-            </span>
-          </button>
-        </div>
+      <nav class="flex-1 px-3 py-4 overflow-y-auto adm-scroll">
+        <AdminNavList :groups="navGroups" :active-tab="activeTab" @select="switchTab" />
       </nav>
 
       <!-- Footer -->
@@ -183,27 +172,24 @@ const totalPendingBadge = computed(() => {
     <div class="flex-1 md:ml-64 min-h-screen flex flex-col">
 
       <!-- Top bar -->
-      <header class="adm-header sticky top-0 z-20 bg-brand-bg/95 backdrop-blur-xl border-b border-brand-border px-6 py-3.5 flex items-center gap-4">
+      <header class="adm-header sticky top-0 z-20 bg-brand-bg/95 backdrop-blur-xl border-b border-brand-border px-4 md:px-6 py-3 md:py-3.5 flex items-center gap-2 md:gap-4">
+        <!-- Menu button: телефон -->
+        <button @click="mobileNavOpen = true" :aria-label="langStore.t.adminMenuOpen"
+          class="md:hidden w-10 h-10 rounded-xl bg-brand-bg border border-brand-border flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0">
+          <BIcon name="Menu" class="w-5 h-5" />
+        </button>
+
         <!-- Search -->
-        <div class="relative flex-1 max-w-xl">
+        <div class="relative flex-1 min-w-0 max-w-xl">
           <BIcon name="Search" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-          <input v-model="headerSearch" @keyup.enter="runHeaderSearch" type="text"
+          <input v-model="headerSearch" @keyup.enter="runHeaderSearch" type="search" enterkeyhint="search"
             :placeholder="langStore.t.adminSearchPlaceholderGlobal"
-            class="w-full bg-brand-bg border border-brand-border rounded-2xl pl-11 pr-4 py-2.5 text-sm text-white placeholder-white/25
+            class="w-full bg-brand-bg border border-brand-border rounded-2xl pl-11 pr-4 py-2.5 text-base md:text-sm text-white placeholder-white/25
               outline-none focus:border-brand-accent/50 transition-all" />
         </div>
 
-        <!-- Mobile nav -->
-        <div class="flex md:hidden gap-1 overflow-x-auto">
-          <button v-for="item in navItems" :key="item.tab" @click="switchTab(item.tab)"
-            :class="activeTab === item.tab ? 'bg-brand-accent/20 text-brand-accent border-brand-accent/30' : 'text-white/40 border-brand-border'"
-            class="w-9 h-9 flex-shrink-0 rounded-xl border flex items-center justify-center transition-all">
-            <BIcon :name="item.icon" class="w-4 h-4" />
-          </button>
-        </div>
-
         <!-- Bell -->
-        <button :title="langStore.t.adminBellPendingReview" class="relative hidden md:flex w-9 h-9 rounded-xl bg-brand-bg border border-brand-border items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0">
+        <button :title="langStore.t.adminBellPendingReview" class="relative flex w-10 h-10 md:w-9 md:h-9 rounded-xl bg-brand-bg border border-brand-border items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0">
           <BIcon name="Bell" class="w-4 h-4" />
           <span v-if="totalPendingBadge > 0" class="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-brand-error text-white text-[9px] font-extrabold flex items-center justify-center">
             {{ totalPendingBadge > 99 ? '99+' : totalPendingBadge }}
@@ -211,7 +197,7 @@ const totalPendingBadge = computed(() => {
         </button>
 
         <!-- My identity -->
-        <div class="hidden md:flex items-center gap-2.5 pl-3 border-l border-brand-border flex-shrink-0">
+        <div class="hidden lg:flex items-center gap-2.5 pl-3 border-l border-brand-border flex-shrink-0">
           <img v-if="auth.user?.avatar_url" :src="auth.user.avatar_url" class="w-9 h-9 rounded-xl object-cover border border-brand-border flex-shrink-0" />
           <div v-else class="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0"
             :style="`background:${roleColor(myRole)}20;color:${roleColor(myRole)}`">
@@ -225,13 +211,13 @@ const totalPendingBadge = computed(() => {
       </header>
 
       <!-- Page content -->
-      <main class="flex-1 p-6 max-w-5xl mx-auto w-full">
+      <main class="flex-1 p-4 md:p-6 max-w-5xl mx-auto w-full min-w-0">
         <div v-if="adminActionError" role="alert"
           class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl text-xs font-bold bg-rose-500/15 border border-rose-500/30 text-rose-300 shadow-lg shadow-black/40">
           {{ adminActionError }}
         </div>
-      <div class="mb-6">
-        <h1 class="text-2xl font-black text-white">{{ tabTitle[activeTab] ?? navItems.find(i=>i.tab===activeTab)?.label }}</h1>
+      <div class="mb-5 md:mb-6">
+        <h1 class="text-xl md:text-2xl font-black text-white">{{ tabTitle[activeTab] ?? navItems.find(i=>i.tab===activeTab)?.label }}</h1>
         <p class="text-sm text-white/40 mt-0.5">{{ tabSubtitle[activeTab] }}</p>
       </div>
       <Transition name="tab-fade" mode="out-in">
@@ -241,6 +227,33 @@ const totalPendingBadge = computed(() => {
       </Transition>
       </main>
     </div>
+
+    <!-- ═══════════════════ MOBILE MENU (drawer) ══════════════════════════ -->
+    <Transition name="drawer-fade">
+      <div v-if="mobileNavOpen" class="md:hidden fixed inset-0 z-40 bg-black/60" @click="mobileNavOpen = false" />
+    </Transition>
+    <Transition name="drawer-slide">
+      <aside v-if="mobileNavOpen" class="md:hidden fixed top-0 left-0 h-full w-72 max-w-[85vw] z-50 flex flex-col bg-brand-card border-r border-brand-border shadow-2xl shadow-black/50">
+        <div class="px-4 pt-5 pb-4 border-b border-brand-border flex items-center gap-2.5">
+          <img src="/bloomly.png?v=2" alt="Bloomly" class="w-8 h-8 object-contain" />
+          <p class="font-extrabold text-white text-lg tracking-tight leading-none">Bloomly</p>
+          <span class="text-[10px] font-extrabold px-2 py-1 rounded-full bg-brand-accent/15 text-brand-accent border border-brand-accent/25 tracking-[0.1em]">ADMIN</span>
+          <button @click="mobileNavOpen = false" :aria-label="langStore.t.adminMenuClose"
+            class="ml-auto w-9 h-9 rounded-xl flex items-center justify-center text-white/50 hover:text-white hover:bg-white/5">
+            <BIcon name="X" class="w-5 h-5" />
+          </button>
+        </div>
+        <nav class="flex-1 px-3 py-4 overflow-y-auto adm-scroll">
+          <AdminNavList :groups="navGroups" :active-tab="activeTab" @select="pickTab" />
+        </nav>
+        <div class="p-3 border-t border-brand-border">
+          <button @click="router.push({ name: 'home' })"
+            class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold text-white/40 hover:text-white/70 hover:bg-white/5 transition-all">
+            <BIcon name="ArrowLeft" class="w-3.5 h-3.5" /> {{ langStore.t.goHome }}
+          </button>
+        </div>
+      </aside>
+    </Transition>
   </div>
 </template>
 
@@ -249,6 +262,11 @@ const totalPendingBadge = computed(() => {
 .tab-fade-leave-active { transition: opacity 0.12s ease, transform 0.12s ease; }
 .tab-fade-enter-from { opacity: 0; transform: translateY(6px); }
 .tab-fade-leave-to { opacity: 0; transform: translateY(-4px); }
+
+.drawer-fade-enter-active, .drawer-fade-leave-active { transition: opacity 0.2s ease; }
+.drawer-fade-enter-from, .drawer-fade-leave-to { opacity: 0; }
+.drawer-slide-enter-active, .drawer-slide-leave-active { transition: transform 0.25s ease; }
+.drawer-slide-enter-from, .drawer-slide-leave-to { transform: translateX(-100%); }
 
 /* Slim, themed scrollbar for the sidebar nav */
 .adm-scroll::-webkit-scrollbar { width: 5px; }

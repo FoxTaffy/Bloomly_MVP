@@ -1019,6 +1019,8 @@ export const ru = {
   adminSubOutOf: 'из',
   adminSubUsersGenitive: 'пользователей',
   adminSearchPlaceholderGlobal: 'Поиск пользователей, постов, жалоб…',
+  adminMenuOpen: 'Открыть меню',
+  adminMenuClose: 'Закрыть меню',
   adminBellPendingReview: 'Ожидают рассмотрения',
   adminRequiresAttention: 'Требует внимания',
   adminGeneralStats: 'Общая статистика',

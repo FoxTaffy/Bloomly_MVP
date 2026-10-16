@@ -1013,6 +1013,8 @@ export const pt: Translation = {
   adminSubOutOf: 'de',
   adminSubUsersGenitive: 'usuários',
   adminSearchPlaceholderGlobal: 'Buscar usuários, publicações, denúncias…',
+  adminMenuOpen: 'Abrir menu',
+  adminMenuClose: 'Fechar menu',
   adminBellPendingReview: 'Aguardando revisão',
   adminRequiresAttention: 'Requer atenção',
   adminGeneralStats: 'Estatísticas gerais',
