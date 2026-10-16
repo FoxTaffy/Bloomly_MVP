@@ -19,6 +19,43 @@ function liveAdWhere(adId: string) {
   };
 }
 
+// ── Stats helpers ────────────────────────────────────────────────────────────
+
+type PeriodRow = { bucket: Date; count: bigint };
+type CountedTable = 'User' | 'Post' | 'Vote' | 'Comment';
+
+/** Live (not soft-deleted) rows created since `since`, counted per day or per calendar month. */
+function countByPeriod(table: CountedTable, unit: 'day' | 'month', since: Date) {
+  // Table names can't be bind parameters — only the fixed CountedTable values ever reach Prisma.raw.
+  return prisma.$queryRaw<PeriodRow[]>(Prisma.sql`
+    SELECT DATE_TRUNC(${unit}, created_at) AS bucket, COUNT(*)::bigint AS count
+    FROM ${Prisma.raw(`"${table}"`)}
+    WHERE deleted_at IS NULL AND created_at >= ${since}
+    GROUP BY 1 ORDER BY 1
+  `);
+}
+
+/**
+ * 12 monthly points starting at `firstMonth`, zero-filled, so the frontend can turn them into
+ * a cumulative "total" curve; `month` is the first day, as YYYY-MM-DD.
+ */
+function fillMonths(rows: PeriodRow[], firstMonth: Date) {
+  const byMonth = new Map(rows.map(r => [new Date(r.bucket).toISOString().slice(0, 7), Number(r.count)]));
+  return Array.from({ length: 12 }, (_, i) => {
+    const key = new Date(Date.UTC(firstMonth.getUTCFullYear(), firstMonth.getUTCMonth() + i, 1)).toISOString().slice(0, 10);
+    return { month: key, count: byMonth.get(key.slice(0, 7)) ?? 0 };
+  });
+}
+
+/** The last `days` days up to `now` as YYYY-MM-DD points, zero-filled. */
+function fillDays(rows: PeriodRow[], days: number, now: Date) {
+  const byDay = new Map(rows.map(r => [new Date(r.bucket).toISOString().slice(0, 10), Number(r.count)]));
+  return Array.from({ length: days }, (_, i) => {
+    const key = new Date(now.getTime() - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10);
+    return { day: key, count: byDay.get(key) ?? 0 };
+  });
+}
+
 export const adminService = {
   // ── Overview stats ────────────────────────────────────────────────────────
   async getStats() {
@@ -56,13 +93,7 @@ export const adminService = {
     ]);
 
     // Posts per day for last 14 days
-    type DayRow = { day: Date; count: bigint };
-    const postsHistory = await prisma.$queryRaw<DayRow[]>`
-      SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*)::bigint AS count
-      FROM "Post"
-      WHERE deleted_at IS NULL AND created_at >= ${new Date(now.getTime() - 14 * 86_400_000)}
-      GROUP BY 1 ORDER BY 1
-    `;
+    const postsHistory = await countByPeriod('Post', 'day', new Date(now.getTime() - 14 * 86_400_000));
 
     // Count users by role
     type RoleRow = { role: string; count: bigint };
@@ -73,44 +104,15 @@ export const adminService = {
     // Registrations / posts per month for the last 12 calendar months (current one included).
     // Months with no rows are zero-filled so the frontend always gets 12 ordered points and
     // can turn them into a cumulative "total" curve; `month` is the first day, as YYYY-MM-DD.
-    type MonthRow = { month: Date; count: bigint };
     const firstMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1));
-    const [usersByMonth, postsByMonth] = await Promise.all([
-      prisma.$queryRaw<MonthRow[]>`
-        SELECT DATE_TRUNC('month', created_at) AS month, COUNT(*)::bigint AS count
-        FROM "User" WHERE deleted_at IS NULL AND created_at >= ${firstMonth}
-        GROUP BY 1 ORDER BY 1
-      `,
-      prisma.$queryRaw<MonthRow[]>`
-        SELECT DATE_TRUNC('month', created_at) AS month, COUNT(*)::bigint AS count
-        FROM "Post" WHERE deleted_at IS NULL AND created_at >= ${firstMonth}
-        GROUP BY 1 ORDER BY 1
-      `,
-    ]);
-    const fillMonths = (rows: MonthRow[]) => {
-      const byMonth = new Map(rows.map(r => [new Date(r.month).toISOString().slice(0, 7), Number(r.count)]));
-      return Array.from({ length: 12 }, (_, i) => {
-        const key = new Date(Date.UTC(firstMonth.getUTCFullYear(), firstMonth.getUTCMonth() + i, 1)).toISOString().slice(0, 10);
-        return { month: key, count: byMonth.get(key.slice(0, 7)) ?? 0 };
-      });
-    };
-
-    // Posts / likes / comments per day for the last 7 days
-    type DayCountRow = { day: Date; count: bigint };
     const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
-    const [postsPerDay, votesPerDay, commentsPerDay] = await Promise.all([
-      prisma.$queryRaw<DayCountRow[]>`
-        SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*)::bigint AS count
-        FROM "Post" WHERE deleted_at IS NULL AND created_at >= ${sevenDaysAgo} GROUP BY 1 ORDER BY 1
-      `,
-      prisma.$queryRaw<DayCountRow[]>`
-        SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*)::bigint AS count
-        FROM "Vote" WHERE deleted_at IS NULL AND created_at >= ${sevenDaysAgo} GROUP BY 1 ORDER BY 1
-      `,
-      prisma.$queryRaw<DayCountRow[]>`
-        SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*)::bigint AS count
-        FROM "Comment" WHERE deleted_at IS NULL AND created_at >= ${sevenDaysAgo} GROUP BY 1 ORDER BY 1
-      `,
+    const [usersByMonth, postsByMonth, postsPerDay, votesPerDay, commentsPerDay] = await Promise.all([
+      countByPeriod('User', 'month', firstMonth),
+      countByPeriod('Post', 'month', firstMonth),
+      // Posts / likes / comments per day for the last 7 days
+      countByPeriod('Post', 'day', sevenDaysAgo),
+      countByPeriod('Vote', 'day', sevenDaysAgo),
+      countByPeriod('Comment', 'day', sevenDaysAgo),
     ]);
 
     // Reports grouped by AutoMod-assigned category (falls back to "other" for
@@ -122,15 +124,6 @@ export const adminService = {
       GROUP BY 1 ORDER BY 2 DESC
     `;
 
-    const fillDays = (rows: DayCountRow[], days: number) => {
-      const byDay = new Map(rows.map(r => [new Date(r.day).toISOString().slice(0, 10), Number(r.count)]));
-      return Array.from({ length: days }, (_, i) => {
-        const d = new Date(now.getTime() - (days - 1 - i) * 86_400_000);
-        const key = d.toISOString().slice(0, 10);
-        return { day: key, count: byDay.get(key) ?? 0 };
-      });
-    };
-
     return {
       users:   { total: totalUsers, today: newUsersDay, week: newUsersWeek, month: newUsersMonth },
       posts:   { total: totalPosts, today: newPostsDay, week: newPostsWeek },
@@ -140,14 +133,14 @@ export const adminService = {
       moderation: { pendingReports, pendingAds, frozenUsers, pendingVerification, autoModFlags24h },
       ads: { active: activeAds },
       premiumSubscribers,
-      postsHistory: postsHistory.map((r) => ({ day: r.day, count: Number(r.count) })),
+      postsHistory: postsHistory.map((r) => ({ day: r.bucket, count: Number(r.count) })),
       roleBreakdown: roleBreakdown.map((r) => ({ role: r.role, count: Number(r.count) })),
-      userGrowth: fillMonths(usersByMonth),
-      postGrowth: fillMonths(postsByMonth),
+      userGrowth: fillMonths(usersByMonth, firstMonth),
+      postGrowth: fillMonths(postsByMonth, firstMonth),
       weeklyActivity: {
-        posts: fillDays(postsPerDay, 7),
-        likes: fillDays(votesPerDay, 7),
-        comments: fillDays(commentsPerDay, 7),
+        posts: fillDays(postsPerDay, 7, now),
+        likes: fillDays(votesPerDay, 7, now),
+        comments: fillDays(commentsPerDay, 7, now),
       },
       reportsByCategory: reportsByCategory.map((r) => ({ category: r.category, count: Number(r.count) })),
     };
@@ -1012,130 +1005,94 @@ export const adminService = {
   },
 
   async getNetworkStats() {
-    // Users by species (Fursona.species array)
-    type SpeciesRow = { species: string; cnt: bigint };
-    const usersBySpecies = await prisma.$queryRaw<SpeciesRow[]>`
-      SELECT UNNEST(f.species) AS species, COUNT(*)::bigint AS cnt
-      FROM "Fursona" f
-      JOIN "User" u ON u.id = f.user_id
-      WHERE u.deleted_at IS NULL AND f.deleted_at IS NULL AND array_length(f.species, 1) > 0
-      GROUP BY 1
-      ORDER BY 2 DESC
-      LIMIT 20
-    `;
-
-    // Users by country
-    type CountryRow = { country: string; cnt: bigint };
-    const usersByCountry = await prisma.$queryRaw<CountryRow[]>`
-      SELECT COALESCE(NULLIF(country, ''), 'Не указана') AS country, COUNT(*)::bigint AS cnt
-      FROM "User"
-      WHERE deleted_at IS NULL
-      GROUP BY 1
-      ORDER BY 2 DESC
-      LIMIT 20
-    `;
-
-    // Users by age group
-    type AgeRow = { age_group: string; cnt: bigint };
-    const usersByAge = await prisma.$queryRaw<AgeRow[]>`
-      SELECT
-        CASE
-          WHEN EXTRACT(YEAR FROM AGE(birth_date)) BETWEEN 13 AND 17 THEN '13–17'
-          WHEN EXTRACT(YEAR FROM AGE(birth_date)) BETWEEN 18 AND 24 THEN '18–24'
-          WHEN EXTRACT(YEAR FROM AGE(birth_date)) BETWEEN 25 AND 34 THEN '25–34'
-          WHEN EXTRACT(YEAR FROM AGE(birth_date)) BETWEEN 35 AND 44 THEN '35–44'
-          WHEN EXTRACT(YEAR FROM AGE(birth_date)) >= 45            THEN '45+'
-          ELSE 'Не указан'
-        END AS age_group,
-        COUNT(*)::bigint AS cnt
-      FROM "User"
-      WHERE deleted_at IS NULL
-      GROUP BY 1
-      ORDER BY 2 DESC
-    `;
-
-    // Users by pronouns
-    type PronounRow = { pronouns: string; cnt: bigint };
-    const usersByPronoun = await prisma.$queryRaw<PronounRow[]>`
-      SELECT COALESCE(pronouns, 'Не указаны') AS pronouns, COUNT(*)::bigint AS cnt
-      FROM "User"
-      WHERE deleted_at IS NULL
-      GROUP BY 1
-      ORDER BY 2 DESC
-      LIMIT 10
-    `;
-
-    // New user registrations per day — last 30 days
-    type DayRow = { day: Date; cnt: bigint };
-    const registrationsHistory = await prisma.$queryRaw<DayRow[]>`
-      SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*)::bigint AS cnt
-      FROM "User"
-      WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL '30 days'
-      GROUP BY 1
-      ORDER BY 1
-    `;
-
-    // Posts per day — last 30 days
-    const postsHistory = await prisma.$queryRaw<DayRow[]>`
-      SELECT DATE_TRUNC('day', created_at) AS day, COUNT(*)::bigint AS cnt
-      FROM "Post"
-      WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL '30 days'
-      GROUP BY 1
-      ORDER BY 1
-    `;
-
-    // Top posting users
+    const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    type LabelRow = { label: string; cnt: bigint };
     type TopUserRow = { user_id: string; username: string | null; display_name: string | null; avatar_url: string | null; cnt: bigint };
-    const topPosters = await prisma.$queryRaw<TopUserRow[]>`
-      SELECT p.author_id AS user_id, u.username, u.display_name, u.avatar_url, COUNT(*)::bigint AS cnt
-      FROM "Post" p
-      JOIN "User" u ON u.id = p.author_id
-      WHERE p.deleted_at IS NULL AND u.deleted_at IS NULL
-      GROUP BY p.author_id, u.username, u.display_name, u.avatar_url
-      ORDER BY cnt DESC
-      LIMIT 10
-    `;
-
-    // Most followed users
-    type FollowRow = { user_id: string; username: string | null; display_name: string | null; avatar_url: string | null; cnt: bigint };
-    const mostFollowed = await prisma.$queryRaw<FollowRow[]>`
-      SELECT f.following_id AS user_id, u.username, u.display_name, u.avatar_url, COUNT(*)::bigint AS cnt
-      FROM "Follow" f
-      JOIN "User" u ON u.id = f.following_id
-      WHERE u.deleted_at IS NULL
-      GROUP BY f.following_id, u.username, u.display_name, u.avatar_url
-      ORDER BY cnt DESC
-      LIMIT 10
-    `;
-
-    // Groups by member count
     type GroupRow = { id: string; name: string; avatar_url: string | null; member_count: bigint };
-    const topGroups = await prisma.$queryRaw<GroupRow[]>`
-      SELECT g.id, g.name, g.avatar_url, COUNT(gm.user_id)::bigint AS member_count
-      FROM "Group" g
-      LEFT JOIN "GroupMember" gm ON gm.group_id = g.id
-      WHERE g.deleted_at IS NULL
-      GROUP BY g.id, g.name, g.avatar_url
-      ORDER BY member_count DESC
-      LIMIT 10
-    `;
 
-    const [totalUsers, totalGroups] = await Promise.all([
+    const [
+      usersBySpecies, usersByCountry, usersByAge, usersByPronoun,
+      registrationsHistory, postsHistory,
+      topPosters, mostFollowed, topGroups,
+      totalUsers, totalGroups,
+    ] = await Promise.all([
+      // Users by species (Fursona.species array)
+      prisma.$queryRaw<LabelRow[]>`
+        SELECT UNNEST(f.species) AS label, COUNT(*)::bigint AS cnt
+        FROM "Fursona" f
+        JOIN "User" u ON u.id = f.user_id
+        WHERE u.deleted_at IS NULL AND f.deleted_at IS NULL AND array_length(f.species, 1) > 0
+        GROUP BY 1 ORDER BY 2 DESC LIMIT 20
+      `,
+      prisma.$queryRaw<LabelRow[]>`
+        SELECT COALESCE(NULLIF(country, ''), 'Не указана') AS label, COUNT(*)::bigint AS cnt
+        FROM "User" WHERE deleted_at IS NULL
+        GROUP BY 1 ORDER BY 2 DESC LIMIT 20
+      `,
+      prisma.$queryRaw<LabelRow[]>`
+        SELECT
+          CASE
+            WHEN EXTRACT(YEAR FROM AGE(birth_date)) BETWEEN 13 AND 17 THEN '13–17'
+            WHEN EXTRACT(YEAR FROM AGE(birth_date)) BETWEEN 18 AND 24 THEN '18–24'
+            WHEN EXTRACT(YEAR FROM AGE(birth_date)) BETWEEN 25 AND 34 THEN '25–34'
+            WHEN EXTRACT(YEAR FROM AGE(birth_date)) BETWEEN 35 AND 44 THEN '35–44'
+            WHEN EXTRACT(YEAR FROM AGE(birth_date)) >= 45            THEN '45+'
+            ELSE 'Не указан'
+          END AS label,
+          COUNT(*)::bigint AS cnt
+        FROM "User" WHERE deleted_at IS NULL
+        GROUP BY 1 ORDER BY 2 DESC
+      `,
+      prisma.$queryRaw<LabelRow[]>`
+        SELECT COALESCE(pronouns, 'Не указаны') AS label, COUNT(*)::bigint AS cnt
+        FROM "User" WHERE deleted_at IS NULL
+        GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+      `,
+      countByPeriod('User', 'day', since30d),
+      countByPeriod('Post', 'day', since30d),
+      prisma.$queryRaw<TopUserRow[]>`
+        SELECT p.author_id AS user_id, u.username, u.display_name, u.avatar_url, COUNT(*)::bigint AS cnt
+        FROM "Post" p
+        JOIN "User" u ON u.id = p.author_id
+        WHERE p.deleted_at IS NULL AND u.deleted_at IS NULL
+        GROUP BY p.author_id, u.username, u.display_name, u.avatar_url
+        ORDER BY cnt DESC LIMIT 10
+      `,
+      prisma.$queryRaw<TopUserRow[]>`
+        SELECT f.following_id AS user_id, u.username, u.display_name, u.avatar_url, COUNT(*)::bigint AS cnt
+        FROM "Follow" f
+        JOIN "User" u ON u.id = f.following_id
+        WHERE u.deleted_at IS NULL
+        GROUP BY f.following_id, u.username, u.display_name, u.avatar_url
+        ORDER BY cnt DESC LIMIT 10
+      `,
+      prisma.$queryRaw<GroupRow[]>`
+        SELECT g.id, g.name, g.avatar_url, COUNT(gm.user_id)::bigint AS member_count
+        FROM "Group" g
+        LEFT JOIN "GroupMember" gm ON gm.group_id = g.id
+        WHERE g.deleted_at IS NULL
+        GROUP BY g.id, g.name, g.avatar_url
+        ORDER BY member_count DESC LIMIT 10
+      `,
       prisma.user.count({ where: { deleted_at: null } }),
       prisma.group.count({ where: { deleted_at: null } }),
     ]);
 
+    const labelled = (rows: LabelRow[]) => rows.map(r => ({ label: r.label, value: Number(r.cnt) }));
+    const daily = (rows: PeriodRow[]) => rows.map(r => ({ day: r.bucket, value: Number(r.count) }));
+    const userCard = (r: TopUserRow) => ({ userId: r.user_id, username: r.username, displayName: r.display_name, avatarUrl: r.avatar_url, count: Number(r.cnt) });
+
     return {
       totalUsers,
       totalGroups,
-      usersBySpecies: usersBySpecies.map(r => ({ label: r.species, value: Number(r.cnt) })),
-      usersByCountry: usersByCountry.map(r => ({ label: r.country, value: Number(r.cnt) })),
-      usersByAge:     usersByAge.map(r => ({ label: r.age_group, value: Number(r.cnt) })),
-      usersByPronoun: usersByPronoun.map(r => ({ label: r.pronouns, value: Number(r.cnt) })),
-      registrationsHistory: registrationsHistory.map(r => ({ day: r.day, value: Number(r.cnt) })),
-      postsHistory: postsHistory.map(r => ({ day: r.day, value: Number(r.cnt) })),
-      topPosters: topPosters.map(r => ({ userId: r.user_id, username: r.username, displayName: r.display_name, avatarUrl: r.avatar_url, count: Number(r.cnt) })),
-      mostFollowed: mostFollowed.map(r => ({ userId: r.user_id, username: r.username, displayName: r.display_name, avatarUrl: r.avatar_url, count: Number(r.cnt) })),
+      usersBySpecies: labelled(usersBySpecies),
+      usersByCountry: labelled(usersByCountry),
+      usersByAge:     labelled(usersByAge),
+      usersByPronoun: labelled(usersByPronoun),
+      registrationsHistory: daily(registrationsHistory),
+      postsHistory: daily(postsHistory),
+      topPosters: topPosters.map(userCard),
+      mostFollowed: mostFollowed.map(userCard),
       topGroups: topGroups.map(r => ({ id: r.id, name: r.name, avatarUrl: r.avatar_url, memberCount: Number(r.member_count) })),
     };
   },
