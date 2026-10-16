@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy } from '../../lib/blocks.js';
@@ -40,6 +41,17 @@ const senderSelect = {
   badge_type: true,
   deceased_at: true,
 } as const;
+
+// The message a reply points to, as shown in the quote above the bubble.
+const replyToSelect = {
+  select: {
+    id: true, text: true, type: true, file_url: true,
+    sender: { select: { id: true, username: true, display_name: true } },
+  },
+} as const;
+
+// Relations every message row is returned with.
+const messageInclude = { sender: { select: senderSelect }, reply_to: replyToSelect } as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -320,15 +332,7 @@ export const messageService = {
       },
       orderBy: { created_at: 'desc' },
       take: limit,
-      include: {
-        sender: { select: senderSelect },
-        reply_to: {
-          select: {
-            id: true, text: true, type: true, file_url: true,
-            sender: { select: { id: true, username: true, display_name: true } },
-          },
-        },
-      },
+      include: messageInclude,
     });
 
     return enrichWithForwardedSenders(messages, userId);
@@ -338,10 +342,54 @@ export const messageService = {
    * Send a message, persist it and broadcast to all conversation participants.
    */
   async sendMessage({ conversationId, senderId, content, encrypted_text, file_url, media_type, reply_to_id, type, metadata, attachments }: SendMessageInput) {
+    const conv = await this._assertCanSend(conversationId, senderId, [file_url, ...(attachments ?? []).map((a) => a.url)]);
+
+    const text = content?.trim() ?? '';
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+    if (!text && !encrypted_text && !file_url && !type && !hasAttachments) throw new Error('Message must have text or media');
+    const base = { conversation_id: conversationId, sender_id: senderId, text: text || null, reply_to_id: reply_to_id ?? null };
+
+    let data: Prisma.MessageUncheckedCreateInput;
+    if (hasAttachments && attachments!.length > 1) {
+      // Album: 2+ files sent together as one message (e.g. a photo + a video in the same bubble).
+      // A single-item `attachments` array is just treated as a normal file_url send below.
+      if (attachments!.length > MAX_ALBUM_FILES) {
+        throw Object.assign(new Error(`Album can have at most ${MAX_ALBUM_FILES} files`), { statusCode: 400 });
+      }
+      const files = attachments!.map((a) => ({ url: a.url, type: inferFileType(a.url, a.media_type) }));
+      data = { ...base, type: 'album', metadata: { files } };
+    } else if (type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share') {
+      // Card-style messages carry a structured metadata payload instead of a file.
+      data = { ...base, type, metadata: await this._validatedCardMetadata(type, metadata) };
+    } else {
+      // A lone `attachments` entry (no separate file_url given) is just a plain single-file send.
+      if (!file_url && hasAttachments) {
+        file_url = attachments![0].url;
+        media_type = attachments![0].media_type ?? media_type;
+      }
+      const msgType = media_type === 'sticker' ? 'sticker' : file_url ? inferFileType(file_url, media_type) : 'text';
+      data = { ...base, type: msgType, encrypted_text: encrypted_text ?? null, file_url: file_url ?? null };
+    }
+
+    const [message] = await prisma.$transaction([
+      prisma.message.create({ data, include: messageInclude }),
+      // bump conversation.updated_at so list ordering is correct
+      prisma.conversation.update({ where: { id: conversationId }, data: { updated_at: new Date() } }),
+    ]);
+    await this._broadcastNewMessage(conversationId, message);
+    await this._maybeSendGroupWelcome(conv, conversationId, senderId);
+    return message;
+  },
+
+  /**
+   * Everything that may stop a send: participation, ownership of attached files, the free
+   * tier's daily cap, and — in direct chats — blocks and the recipient's message privacy.
+   * Returns the conversation (needed for the group welcome auto-reply).
+   */
+  async _assertCanSend(conversationId: string, senderId: string, fileUrls: (string | null | undefined)[]) {
     await this._assertParticipant(conversationId, senderId);
     // Вложения — только файлы самого отправителя
-    await assertOwnedMedia(file_url, senderId);
-    for (const a of attachments ?? []) await assertOwnedMedia(a.url, senderId);
+    for (const url of fileUrls) await assertOwnedMedia(url, senderId);
 
     const sender = await prisma.user.findUnique({ where: { id: senderId }, select: { subscription_tier: true } });
     if ((sender?.subscription_tier ?? 'free') === 'free') {
@@ -359,160 +407,33 @@ export const messageService = {
       where: { id: conversationId },
       select: { type: true, group_id: true, group_dm_user_id: true, participants: { select: { user_id: true } } },
     });
-    if (conv?.type === 'direct') {
-      const recipientId = conv.participants.find((p: any) => p.user_id !== senderId)?.user_id;
-      if (recipientId) {
-        const recipient = await prisma.user.findUnique({
-          where: { id: recipientId },
-          select: { messages_privacy: true },
-        });
-        if ((await isBlockedBy(recipientId, senderId)) || (await isBlockedBy(senderId, recipientId))) {
-          throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
-        }
-        if (recipient && !(await isAllowedByPrivacy(recipient.messages_privacy, recipientId, senderId))) {
-          throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
-        }
+    const recipientId = conv?.type === 'direct' ? conv.participants.find((p) => p.user_id !== senderId)?.user_id : undefined;
+    if (recipientId) {
+      const recipient = await prisma.user.findUnique({ where: { id: recipientId }, select: { messages_privacy: true } });
+      if ((await isBlockedBy(recipientId, senderId)) || (await isBlockedBy(senderId, recipientId))) {
+        throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
+      }
+      if (recipient && !(await isAllowedByPrivacy(recipient.messages_privacy, recipientId, senderId))) {
+        throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
       }
     }
-
-    const text = content?.trim() ?? '';
-    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-    if (!text && !encrypted_text && !file_url && !type && !hasAttachments) throw new Error('Message must have text or media');
-
-    // Album: 2+ files sent together as one message (e.g. a photo + a video in the same bubble).
-    // A single-item `attachments` array is just treated as a normal file_url send below.
-    if (hasAttachments && attachments!.length > 1) {
-      if (attachments!.length > MAX_ALBUM_FILES) {
-        throw Object.assign(new Error(`Album can have at most ${MAX_ALBUM_FILES} files`), { statusCode: 400 });
-      }
-      const files = attachments!.map((a) => ({ url: a.url, type: inferFileType(a.url, a.media_type) }));
-      const [message] = await prisma.$transaction([
-        prisma.message.create({
-          data: {
-            conversation_id: conversationId,
-            sender_id: senderId,
-            text: text || null,
-            type: 'album',
-            reply_to_id: reply_to_id ?? null,
-            metadata: { files } as any,
-          },
-          include: {
-            sender: { select: senderSelect },
-            reply_to: {
-              select: {
-                id: true, text: true, type: true, file_url: true,
-                sender: { select: { id: true, username: true, display_name: true } },
-              },
-            },
-          },
-        }),
-        prisma.conversation.update({ where: { id: conversationId }, data: { updated_at: new Date() } }),
-      ]);
-      await this._broadcastNewMessage(conversationId, message);
-      await this._maybeSendGroupWelcome(conv, conversationId, senderId);
-      return message;
-    }
-
-    // Card-style messages (payment_request, tip, post_share, group_share) carry a
-    // structured metadata payload instead of being derived from file_url/media_type.
-    if (type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share') {
-      const meta = validateCardMetadata(type, metadata);
-      if (type === 'post_share') {
-        const post = await prisma.post.findUnique({ where: { id: meta.postId as string, deleted_at: null }, select: { id: true } });
-        if (!post) throw Object.assign(new Error('Post not found'), { statusCode: 404 });
-      }
-      if (type === 'group_share') {
-        const group = await prisma.group.findUnique({ where: { id: meta.groupId as string }, select: { id: true } });
-        if (!group) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
-      }
-      const [message] = await prisma.$transaction([
-        prisma.message.create({
-          data: {
-            conversation_id: conversationId,
-            sender_id: senderId,
-            text: text || null,
-            type,
-            reply_to_id: reply_to_id ?? null,
-            metadata: meta as any,
-          },
-          include: {
-            sender: { select: senderSelect },
-            reply_to: {
-              select: {
-                id: true, text: true, type: true, file_url: true,
-                sender: { select: { id: true, username: true, display_name: true } },
-              },
-            },
-          },
-        }),
-        prisma.conversation.update({ where: { id: conversationId }, data: { updated_at: new Date() } }),
-      ]);
-      await this._broadcastNewMessage(conversationId, message);
-      await this._maybeSendGroupWelcome(conv, conversationId, senderId);
-      return message;
-    }
-
-    // A lone `attachments` entry (no separate file_url given) is just a plain single-file send.
-    if (!file_url && hasAttachments) {
-      file_url = attachments![0].url;
-      media_type = attachments![0].media_type ?? media_type;
-    }
-
-    // Determine message type
-    let msgType: string = 'text';
-    if (media_type === 'sticker') {
-      msgType = 'sticker';
-    } else if (file_url) {
-      if (media_type === 'voice') {
-        msgType = 'voice';
-      } else if (media_type === 'gif') {
-        // Silent video (no audio track) — the uploader already determined this via
-        // ffprobe; must win over the extension check below so it renders as a gif,
-        // not a full video player.
-        msgType = 'gif';
-      } else if (/\.(?:mp4|webm|mov|avi|mkv)$/i.test(file_url)) {
-        msgType = 'video';
-      } else if (/\.(?:mp3|wav|ogg|m4a|flac|aac)$/i.test(file_url)) {
-        // Uploaded audio file (not a mic recording, which always arrives with
-        // media_type:'voice' above) — renders as a music player, not a voice bubble.
-        msgType = 'audio';
-      } else {
-        msgType = 'image';
-      }
-    }
-
-    const [message] = await prisma.$transaction([
-      prisma.message.create({
-        data: {
-          conversation_id: conversationId,
-          sender_id: senderId,
-          text: text || null,
-          encrypted_text: encrypted_text ?? null,
-          file_url: file_url ?? null,
-          type: msgType,
-          reply_to_id: reply_to_id ?? null,
-        },
-        include: {
-          sender: { select: senderSelect },
-          reply_to: {
-            select: {
-              id: true, text: true, type: true, file_url: true,
-              sender: { select: { id: true, username: true, display_name: true } },
-            },
-          },
-        },
-      }),
-      // bump conversation.updated_at so list ordering is correct
-      prisma.conversation.update({
-        where: { id: conversationId },
-        data: { updated_at: new Date() },
-      }),
-    ]);
-
-    await this._broadcastNewMessage(conversationId, message);
-    await this._maybeSendGroupWelcome(conv, conversationId, senderId);
-    return message;
+    return conv;
   },
+
+  /** Validates a card message payload and that the shared post / group exists. */
+  async _validatedCardMetadata(type: 'payment_request' | 'tip' | 'post_share' | 'group_share', metadata: unknown) {
+    const meta = validateCardMetadata(type, metadata);
+    if (type === 'post_share') {
+      const post = await prisma.post.findUnique({ where: { id: meta.postId as string, deleted_at: null }, select: { id: true } });
+      if (!post) throw Object.assign(new Error('Post not found'), { statusCode: 404 });
+    }
+    if (type === 'group_share') {
+      const group = await prisma.group.findUnique({ where: { id: meta.groupId as string }, select: { id: true } });
+      if (!group) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
+    }
+    return meta as Prisma.InputJsonValue;
+  },
+
 
   /**
    * If this was a member's first-ever message into their personal community
@@ -612,15 +533,7 @@ export const messageService = {
       const updated = await tx.message.update({
         where: { id: messageId },
         data: { metadata: nextMeta as any },
-        include: {
-          sender: { select: senderSelect },
-          reply_to: {
-            select: {
-              id: true, text: true, type: true, file_url: true,
-              sender: { select: { id: true, username: true, display_name: true } },
-            },
-          },
-        },
+        include: messageInclude,
       });
       const created = await tx.message.create({
         data: {
@@ -630,15 +543,7 @@ export const messageService = {
           reply_to_id: messageId,
           metadata: { amount: due, description: currentMeta.description } as any,
         },
-        include: {
-          sender: { select: senderSelect },
-          reply_to: {
-            select: {
-              id: true, text: true, type: true, file_url: true,
-              sender: { select: { id: true, username: true, display_name: true } },
-            },
-          },
-        },
+        include: messageInclude,
       });
       return { updatedRequest: updated, confirmation: created, dueAmount: due, meta: currentMeta };
     });
@@ -731,15 +636,7 @@ export const messageService = {
     const updated = await prisma.message.update({
       where: { id: messageId },
       data: { text: trimmed, edited_at: new Date() },
-      include: {
-        sender: { select: senderSelect },
-        reply_to: {
-          select: {
-            id: true, text: true, type: true, file_url: true,
-            sender: { select: { id: true, username: true, display_name: true } },
-          },
-        },
-      },
+      include: messageInclude,
     });
 
     // Broadcast update to all participants
@@ -786,15 +683,7 @@ export const messageService = {
       return tx.message.update({
         where: { id: messageId },
         data: { reactions: Object.keys(next).length ? next : null as any },
-        include: {
-          sender: { select: senderSelect },
-          reply_to: {
-            select: {
-              id: true, text: true, type: true, file_url: true,
-              sender: { select: { id: true, username: true, display_name: true } },
-            },
-          },
-        },
+        include: messageInclude,
       });
     });
 
