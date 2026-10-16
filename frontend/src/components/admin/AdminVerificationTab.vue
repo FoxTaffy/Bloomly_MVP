@@ -64,19 +64,26 @@ const rejectVerRequest = (id: string) => {
 }
 
 const evidenceLightbox = ref<{ images: string[]; start: number } | null>(null)
+// Загруженные документы лежат в закрытом префиксе private/: только они идут через API.
+// Ссылки на соцсети (тип «popular») — внешние, их показываем как ссылки, а не картинки.
+const isPrivateEvidence = (url: string) => url.includes('/private/')
+
 // Документы верификации закрыты от прямого доступа: в просмотрщик отдаём blob-ссылки, недоступные файлы пропускаем
 const openEvidenceLightbox = async (urls: string[], start: number) => {
-  const settled = await Promise.allSettled(urls.map((u) => fetchVerificationEvidence(u)))
+  const list = urls.filter(isPrivateEvidence)
+  const settled = await Promise.allSettled(list.map((u) => fetchVerificationEvidence(u)))
   const images: string[] = []
   let startIndex = 0
   settled.forEach((r, i) => {
     if (r.status !== 'fulfilled') return
-    if (i === start) startIndex = images.length
+    if (list[i] === urls[start]) startIndex = images.length
     images.push(r.value)
   })
-  if (images.length === 0 || settled[start]?.status !== 'fulfilled') return
+  if (images.length === 0 || settled[list.indexOf(urls[start])]?.status !== 'fulfilled') return
   evidenceLightbox.value = { images, start: startIndex }
 }
+
+const linkHost = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url } }
 
 const verTypeLabels = computed<Record<string, string>>(() => ({
   artist: langStore.t.verTypeArtist,
@@ -201,12 +208,19 @@ watchEffect(() => { badges.verification = verRequests.value.filter((r: any) => r
               <p class="text-sm text-white/75 whitespace-pre-line line-clamp-3 break-words">{{ req.evidence_text }}</p>
             </div>
             <div v-if="req.evidence_urls?.length" class="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
-              <button v-for="(url,i) in req.evidence_urls" :key="i"
-                @click="openEvidenceLightbox(req.evidence_urls, i)"
-                class="relative w-14 h-14 rounded-lg overflow-hidden border border-white/[0.08] hover:border-blue-500/40 transition-colors flex-shrink-0 group/ev">
-                <SafeMedia :src="url" source="verification-evidence" class="w-full h-full object-cover" />
-                <div class="absolute inset-0 bg-black/0 group-hover/ev:bg-black/20 transition-colors" />
-              </button>
+              <template v-for="(url,i) in req.evidence_urls" :key="i">
+                <button v-if="isPrivateEvidence(url)"
+                  @click="openEvidenceLightbox(req.evidence_urls, i)"
+                  class="relative w-14 h-14 rounded-lg overflow-hidden border border-white/[0.08] hover:border-blue-500/40 transition-colors flex-shrink-0 group/ev">
+                  <SafeMedia :src="url" source="verification-evidence" class="w-full h-full object-cover" />
+                  <div class="absolute inset-0 bg-black/0 group-hover/ev:bg-black/20 transition-colors" />
+                </button>
+                <a v-else :href="url" target="_blank" rel="noopener noreferrer"
+                  class="h-7 px-2 rounded-lg border border-white/[0.08] hover:border-blue-500/40 text-[11px] font-semibold text-blue-400 flex items-center gap-1 flex-shrink-0 max-w-[10rem]">
+                  <BIcon name="ExternalLink" class="w-3 h-3 flex-shrink-0" />
+                  <span class="truncate">{{ linkHost(url) }}</span>
+                </a>
+              </template>
             </div>
           </div>
           <p v-else class="px-4 mt-2 text-[11px] text-white/25">{{ langStore.t.adminNoEvidenceLabel }}</p>

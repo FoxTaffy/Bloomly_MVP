@@ -170,7 +170,7 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
     </div>
 
     <template v-if="adsViewMode === 'ads'">
-    <div class="flex items-center justify-between mb-5">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
       <p class="text-xs text-white/35 font-semibold">{{ ads.length }} {{ langStore.t.adminAdsCountSuffix }}</p>
       <button @click="showAdForm = !showAdForm"
         class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-lg text-white"
@@ -350,7 +350,7 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
     </template>
 
     <template v-else>
-    <div class="flex items-center justify-between mb-5">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
       <div>
         <p class="text-xs text-white/35 font-semibold">{{ banners.length }}/7 {{ langStore.t.adminBannersCountSuffix }}</p>
       </div>

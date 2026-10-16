@@ -443,7 +443,7 @@ watchEffect(() => { badges.users = userTotal.value })
       </div>
     </div>
 
-    <div class="flex items-center gap-3 mb-5">
+    <div class="flex flex-wrap items-center gap-3 mb-5">
       <div class="relative flex-1 max-w-sm">
         <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
         <input v-model="userSearch" @input="onUserSearch" type="text" :placeholder="langStore.t.adminSearchPlaceholderUsers"
@@ -494,10 +494,10 @@ watchEffect(() => { badges.users = userTotal.value })
       </div>
       <div v-else class="divide-y divide-brand-border">
         <div v-for="user in users" :key="user.id"
-          class="relative grid grid-cols-1 lg:grid-cols-[2.4fr_2fr_1.1fr_1.2fr_0.85fr_1.1fr_1.2fr] gap-2 lg:gap-3 items-center px-5 py-3 hover:bg-white/[0.03] transition-all group">
+          class="adm-user-row relative grid lg:grid-cols-[2.4fr_2fr_1.1fr_1.2fr_0.85fr_1.1fr_1.2fr] gap-2 lg:gap-3 items-center px-4 py-3.5 lg:px-5 lg:py-3 hover:bg-white/[0.03] transition-all group">
 
           <!-- Пользователь -->
-          <router-link :to="`/profile/${user.username}`" target="_blank" class="flex items-center gap-3 min-w-0 group/user">
+          <router-link :to="`/profile/${user.username}`" target="_blank" class="adm-u-user flex items-center gap-3 min-w-0 group/user">
             <div class="flex-shrink-0 relative">
               <img v-if="user.avatar_url" :src="user.avatar_url"
                 class="w-9 h-9 rounded-full object-cover border border-white/[0.06] group-hover/user:opacity-80 transition-opacity" />
@@ -520,10 +520,10 @@ watchEffect(() => { badges.users = userTotal.value })
           </router-link>
 
           <!-- Email -->
-          <p class="text-xs text-white/50 truncate">{{ user.email }}</p>
+          <p class="adm-u-email text-xs text-white/50 truncate">{{ user.email }}</p>
 
           <!-- Статус -->
-          <div class="flex items-center gap-1.5 flex-wrap">
+          <div class="adm-u-status flex items-center gap-1.5 flex-wrap">
             <span class="text-[10px] font-extrabold px-2 py-1 rounded-full flex-shrink-0"
               :style="`background:${userStatus(user).color}20;color:${userStatus(user).color}`">
               {{ userStatus(user).label }}
@@ -536,22 +536,22 @@ watchEffect(() => { badges.users = userTotal.value })
           </div>
 
           <!-- Регистрация -->
-          <p class="text-xs text-white/50">{{ formatDate(user.created_at) }}</p>
+          <p class="adm-u-date text-xs text-white/50" :data-label="langStore.t.adminColRegistered">{{ formatDate(user.created_at) }}</p>
 
           <!-- Постов -->
-          <p class="text-xs text-white/70 font-semibold">{{ user._count?.posts ?? 0 }}</p>
+          <p class="adm-u-posts text-xs text-white/70 font-semibold" :data-label="langStore.t.posts">{{ user._count?.posts ?? 0 }}</p>
 
           <!-- Подписчиков -->
-          <p class="text-xs text-white/70 font-semibold">{{ user._count?.followers ?? 0 }}</p>
+          <p class="adm-u-followers text-xs text-white/70 font-semibold" :data-label="langStore.t.followers">{{ user._count?.followers ?? 0 }}</p>
 
           <!-- Верификация -->
-          <p class="text-xs font-semibold flex items-center gap-1" :class="user.badge_type ? 'text-brand-warning' : 'text-white/30'">
+          <p class="adm-u-verified text-xs font-semibold flex items-center gap-1" :data-label="langStore.t.adminColVerification" :class="user.badge_type ? 'text-brand-warning' : 'text-white/30'">
             <BIcon v-if="user.badge_type" name="BadgeCheck" class="w-3.5 h-3.5" />
             {{ user.badge_type ? langStore.t.adminYesLabel : langStore.t.adminNoLabel }}
           </p>
 
           <!-- Действия — inline on mobile, floating overlay on hover at lg+ so it never fights the columns for space -->
-          <div class="flex items-center gap-1.5 flex-wrap lg:flex-nowrap flex-shrink-0 justify-start mt-1 lg:mt-0
+          <div class="adm-u-actions flex items-center gap-1.5 flex-wrap lg:flex-nowrap flex-shrink-0 justify-start mt-1 lg:mt-0
             static lg:absolute lg:right-4 lg:top-1/2 lg:-translate-y-1/2 lg:z-10
             opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:pointer-events-none lg:group-hover:pointer-events-auto
             transition-opacity lg:bg-[#0B1030]/95 lg:backdrop-blur-md lg:rounded-full lg:pl-3 lg:pr-2 lg:py-2 lg:shadow-xl lg:shadow-black/50 lg:border lg:border-white/10">
@@ -657,7 +657,7 @@ watchEffect(() => { badges.users = userTotal.value })
 
     <!-- ── Team & roles (merged in from the old separate tab) ─────── -->
     <template v-else-if="usersViewMode === 'team'">
-      <div class="flex items-center justify-between mb-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
         <p class="text-sm text-white/40">{{ langStore.t.adminTabSubTeam }}</p>
         <button v-if="isOwnerRole" @click="showInviteForm = !showInviteForm"
           class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold text-white shadow-lg transition-all"
@@ -744,7 +744,7 @@ watchEffect(() => { badges.users = userTotal.value })
     </template>
     <!-- ── Frozen accounts (merged in from the old separate tab) ──── -->
     <template v-else-if="usersViewMode === 'frozen'">
-    <div class="flex items-center gap-3 mb-5">
+    <div class="flex flex-wrap items-center gap-3 mb-5">
       <div class="relative flex-1 max-w-sm">
         <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
         <input v-model="frozenSearch" @input="onFrozenSearch" type="text" :placeholder="langStore.t.adminSearchPlaceholderFrozen"
@@ -815,7 +815,7 @@ watchEffect(() => { badges.users = userTotal.value })
 
     <!-- ── Banned accounts (merged in from the old separate tab) ──── -->
     <template v-else-if="usersViewMode === 'archived'">
-    <div class="flex items-center gap-3 mb-5">
+    <div class="flex flex-wrap items-center gap-3 mb-5">
       <div class="relative flex-1 max-w-sm">
         <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
         <input v-model="archivedSearch" @input="onArchivedSearch" type="text" :placeholder="langStore.t.adminSearchPlaceholderArchive"
@@ -879,3 +879,53 @@ watchEffect(() => { badges.users = userTotal.value })
 </template>
 
 <style scoped src="./admin-shared.css"></style>
+
+<style scoped>
+/* Телефон: строка пользователя — карточка. Разметка та же, что на десктопе, меняется только раскладка. */
+@media (max-width: 1023.98px) {
+  .adm-user-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-areas:
+      "user user user user"
+      "email email email email"
+      "status status status status"
+      "date posts followers verified"
+      "actions actions actions actions";
+  }
+  .adm-u-user { grid-area: user; }
+  .adm-u-email { grid-area: email; font-size: 0.75rem; }
+  .adm-u-status { grid-area: status; }
+  .adm-u-date { grid-area: date; }
+  .adm-u-posts { grid-area: posts; }
+  .adm-u-followers { grid-area: followers; }
+  .adm-u-verified { grid-area: verified; }
+  .adm-u-actions { grid-area: actions; margin-top: 0.25rem; }
+
+  /* Четыре числа — плашками с подписью сверху */
+  .adm-u-date, .adm-u-posts, .adm-u-followers, .adm-u-verified {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.125rem;
+    padding: 0.5rem 0.625rem;
+    border-radius: 0.75rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    min-width: 0;
+  }
+  .adm-u-date::before, .adm-u-posts::before, .adm-u-followers::before, .adm-u-verified::before {
+    content: attr(data-label);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .adm-u-date { font-size: 0.75rem; }
+  .adm-u-posts, .adm-u-followers, .adm-u-verified { font-size: 0.875rem; }
+}
+</style>
