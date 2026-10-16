@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
+import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
   listListingsHandler, getListingHandler, createListingHandler, updateListingHandler,
   deleteListingHandler, getMyListingsHandler, placeBidHandler, getBidsHandler,
@@ -12,93 +13,77 @@ import {
   getCurrentFairHandler, getFairHandler, applyToFairHandler,
   listFairsAdminHandler, createFairAdminHandler, updateFairParticipantAdminHandler,
 } from './controller.js';
-import { isAdmin as isAdminRole } from '../../lib/roles.js';
-
-declare module 'fastify' {
-  interface FastifyInstance {
-    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-    tryAuthenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  }
-}
-
-function requireAdminRole(req: FastifyRequest, reply: FastifyReply, done: () => void) {
-  const user = (req as any).user;
-  if (!user || !isAdminRole(user.role)) {
-    reply.status(403).send({ success: false, error: 'Admin only' });
-    return;
-  }
-  done();
-}
+import { requireAdminRole } from '../../lib/authHooks.js';
 
 export async function dealersDenRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
   const tryAuth: RouteShorthandOptions = { onRequest: [fastify.tryAuthenticate] };
-  const adminOnly: RouteShorthandOptions = { onRequest: [fastify.authenticate, requireAdminRole as any] };
+  const adminOnly: RouteShorthandOptions = { onRequest: [fastify.authenticate, requireAdminRole] };
 
   // ── Listings ──
-  fastify.get('/',              tryAuth, listListingsHandler as any);
-  fastify.get('/me',    auth,   getMyListingsHandler as any);
-  fastify.get('/:id',           tryAuth, getListingHandler as any);
-  fastify.post('/',     auth,   createListingHandler as any);
-  fastify.patch('/:id', { onRequest: [fastify.authenticate], config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, updateListingHandler as any);
-  fastify.delete('/:id', auth,  deleteListingHandler as any);
+  fastify.get<RouteGenericOf<typeof listListingsHandler>>('/',              tryAuth, listListingsHandler);
+  fastify.get<RouteGenericOf<typeof getMyListingsHandler>>('/me',    auth,   getMyListingsHandler);
+  fastify.get<RouteGenericOf<typeof getListingHandler>>('/:id',           tryAuth, getListingHandler);
+  fastify.post<RouteGenericOf<typeof createListingHandler>>('/',     auth,   createListingHandler);
+  fastify.patch<RouteGenericOf<typeof updateListingHandler>>('/:id', { onRequest: [fastify.authenticate], config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, updateListingHandler);
+  fastify.delete<RouteGenericOf<typeof deleteListingHandler>>('/:id', auth,  deleteListingHandler);
 
   // ── Auction / Raffle ──
-  fastify.post('/:id/bid',    auth, placeBidHandler as any);
-  fastify.get('/:id/bids',         getBidsHandler as any);
-  fastify.post('/:id/ticket', auth, buyRaffleTicketHandler as any);
-  fastify.post('/:id/draw',   auth, drawRaffleHandler as any);
+  fastify.post<RouteGenericOf<typeof placeBidHandler>>('/:id/bid',    auth, placeBidHandler);
+  fastify.get<RouteGenericOf<typeof getBidsHandler>>('/:id/bids',         getBidsHandler);
+  fastify.post<RouteGenericOf<typeof buyRaffleTicketHandler>>('/:id/ticket', auth, buyRaffleTicketHandler);
+  fastify.post<RouteGenericOf<typeof drawRaffleHandler>>('/:id/draw',   auth, drawRaffleHandler);
 
   // ── Comments ──
-  fastify.get('/:id/comments',         getCommentsHandler as any);
-  fastify.post('/:id/comments', auth,  addCommentHandler as any);
-  fastify.delete('/comments/:commentId', auth, deleteCommentHandler as any);
+  fastify.get<RouteGenericOf<typeof getCommentsHandler>>('/:id/comments',         getCommentsHandler);
+  fastify.post<RouteGenericOf<typeof addCommentHandler>>('/:id/comments', auth,  addCommentHandler);
+  fastify.delete<RouteGenericOf<typeof deleteCommentHandler>>('/comments/:commentId', auth, deleteCommentHandler);
 
   // ── Trust ──
-  fastify.get('/trust/:userId', getTrustHandler as any);
+  fastify.get<RouteGenericOf<typeof getTrustHandler>>('/trust/:userId', getTrustHandler);
 
   // ── Reviews ──
-  fastify.post('/:listingId/review',         auth, createReviewHandler as any);
-  fastify.get('/:listingId/reviews',               getListingReviewsHandler as any);
-  fastify.get('/seller/:userId/reviews',           getSellerReviewsHandler as any);
-  fastify.delete('/reviews/:reviewId',       auth, deleteReviewHandler as any);
+  fastify.post<RouteGenericOf<typeof createReviewHandler>>('/:listingId/review',         auth, createReviewHandler);
+  fastify.get<RouteGenericOf<typeof getListingReviewsHandler>>('/:listingId/reviews',               getListingReviewsHandler);
+  fastify.get<RouteGenericOf<typeof getSellerReviewsHandler>>('/seller/:userId/reviews',           getSellerReviewsHandler);
+  fastify.delete<RouteGenericOf<typeof deleteReviewHandler>>('/reviews/:reviewId',       auth, deleteReviewHandler);
 
   // ── Weekly Top ──
-  fastify.get('/tags/trending',           tryAuth, getTrendingTagsHandler as any);
-  fastify.get('/weekly-top',              getWeeklyTopHandler as any);
-  fastify.post('/weekly-top/recalc', adminOnly, recalcWeeklyTopHandler as any);
+  fastify.get<RouteGenericOf<typeof getTrendingTagsHandler>>('/tags/trending',           tryAuth, getTrendingTagsHandler);
+  fastify.get<RouteGenericOf<typeof getWeeklyTopHandler>>('/weekly-top',              getWeeklyTopHandler);
+  fastify.post<RouteGenericOf<typeof recalcWeeklyTopHandler>>('/weekly-top/recalc', adminOnly, recalcWeeklyTopHandler);
 
   // ── Wishlist ──
-  fastify.post('/:listingId/wishlist',   auth, addToWishlistHandler as any);
-  fastify.delete('/:listingId/wishlist', auth, removeFromWishlistHandler as any);
-  fastify.get('/wishlist/my',            auth, getMyWishlistHandler as any);
+  fastify.post<RouteGenericOf<typeof addToWishlistHandler>>('/:listingId/wishlist',   auth, addToWishlistHandler);
+  fastify.delete<RouteGenericOf<typeof removeFromWishlistHandler>>('/:listingId/wishlist', auth, removeFromWishlistHandler);
+  fastify.get<RouteGenericOf<typeof getMyWishlistHandler>>('/wishlist/my',            auth, getMyWishlistHandler);
 
   // ── Commission Bookings ──
-  fastify.post('/:listingId/booking',        auth, createBookingHandler as any);
-  fastify.get('/:listingId/bookings',        auth, getBookingsHandler as any);
-  fastify.patch('/bookings/:bookingId',      auth, updateBookingHandler as any);
-  fastify.delete('/bookings/:bookingId',     auth, cancelBookingHandler as any);
+  fastify.post<RouteGenericOf<typeof createBookingHandler>>('/:listingId/booking',        auth, createBookingHandler);
+  fastify.get<RouteGenericOf<typeof getBookingsHandler>>('/:listingId/bookings',        auth, getBookingsHandler);
+  fastify.patch<RouteGenericOf<typeof updateBookingHandler>>('/bookings/:bookingId',      auth, updateBookingHandler);
+  fastify.delete<RouteGenericOf<typeof cancelBookingHandler>>('/bookings/:bookingId',     auth, cancelBookingHandler);
 
   // ── Disputes ──
-  fastify.post('/:listingId/dispute',             auth, createDisputeHandler as any);
-  fastify.post('/disputes/:disputeId/reply',      auth, replyDisputeHandler as any);
-  fastify.get('/disputes/my',                     auth, getMyDisputesHandler as any);
+  fastify.post<RouteGenericOf<typeof createDisputeHandler>>('/:listingId/dispute',             auth, createDisputeHandler);
+  fastify.post<RouteGenericOf<typeof replyDisputeHandler>>('/disputes/:disputeId/reply',      auth, replyDisputeHandler);
+  fastify.get<RouteGenericOf<typeof getMyDisputesHandler>>('/disputes/my',                     auth, getMyDisputesHandler);
 
   // ── Seller page ──
-  fastify.get('/seller/:username', getSellerPageHandler as any);
+  fastify.get<RouteGenericOf<typeof getSellerPageHandler>>('/seller/:username', getSellerPageHandler);
 
   // ── Fairs ──
-  fastify.get('/fairs/current',                         getCurrentFairHandler as any);
-  fastify.get('/fairs/:fairId',                         getFairHandler as any);
-  fastify.post('/fairs/:fairId/apply',          auth,   applyToFairHandler as any);
+  fastify.get<RouteGenericOf<typeof getCurrentFairHandler>>('/fairs/current',                         getCurrentFairHandler);
+  fastify.get<RouteGenericOf<typeof getFairHandler>>('/fairs/:fairId',                         getFairHandler);
+  fastify.post<RouteGenericOf<typeof applyToFairHandler>>('/fairs/:fairId/apply',          auth,   applyToFairHandler);
 }
 
 export async function dealersDenAdminRoutes(fastify: FastifyInstance) {
-  const adminOnly: RouteShorthandOptions = { onRequest: [fastify.authenticate, requireAdminRole as any] };
+  const adminOnly: RouteShorthandOptions = { onRequest: [fastify.authenticate, requireAdminRole] };
 
-  fastify.get('/den-disputes',                              adminOnly, getAllDisputesHandler as any);
-  fastify.patch('/den-disputes/:disputeId/resolve',         adminOnly, resolveDisputeHandler as any);
-  fastify.get('/den-fairs',                                 adminOnly, listFairsAdminHandler as any);
-  fastify.post('/den-fairs',                                adminOnly, createFairAdminHandler as any);
-  fastify.patch('/den-fairs/:fairId/participants/:userId',  adminOnly, updateFairParticipantAdminHandler as any);
+  fastify.get<RouteGenericOf<typeof getAllDisputesHandler>>('/den-disputes',                              adminOnly, getAllDisputesHandler);
+  fastify.patch<RouteGenericOf<typeof resolveDisputeHandler>>('/den-disputes/:disputeId/resolve',         adminOnly, resolveDisputeHandler);
+  fastify.get<RouteGenericOf<typeof listFairsAdminHandler>>('/den-fairs',                                 adminOnly, listFairsAdminHandler);
+  fastify.post<RouteGenericOf<typeof createFairAdminHandler>>('/den-fairs',                                adminOnly, createFairAdminHandler);
+  fastify.patch<RouteGenericOf<typeof updateFairParticipantAdminHandler>>('/den-fairs/:fairId/participants/:userId',  adminOnly, updateFairParticipantAdminHandler);
 }

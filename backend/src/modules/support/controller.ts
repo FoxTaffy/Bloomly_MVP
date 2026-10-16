@@ -4,10 +4,11 @@ import {
   adminGetTickets, adminReplyTicket, SUPPORT_TICKET_STATUSES,
 } from './service.js';
 import { isModerator } from '../../lib/roles.js';
+import { errMessage, errStatus } from '../../lib/httpErrors.js';
 
 // POST /api/support/tickets
 export async function createTicketHandler(request: FastifyRequest, reply: FastifyReply) {
-  const userId = (request.user as any).id;
+  const userId = request.user.id;
   const { type, subject, message, contact_email, attachment_urls } = request.body as any;
   if (!subject?.trim() || !message?.trim()) {
     return reply.code(400).send({ success: false, error: { message: 'Заполните тему и сообщение' } });
@@ -17,22 +18,23 @@ export async function createTicketHandler(request: FastifyRequest, reply: Fastif
       type, subject, message, contactEmail: contact_email, attachmentUrls: attachment_urls,
     });
     return reply.code(201).send({ success: true, data: { ticket } });
-  } catch (e: any) {
-    if (!e?.statusCode) throw e;
-    return reply.code(e.statusCode).send({ success: false, error: { message: e.message } });
+  } catch (e) {
+    const status = errStatus(e);
+    if (!status) throw e;
+    return reply.code(status).send({ success: false, error: { message: errMessage(e) } });
   }
 }
 
 // GET /api/support/tickets
 export async function getMyTicketsHandler(request: FastifyRequest, reply: FastifyReply) {
-  const userId = (request.user as any).id;
+  const userId = request.user.id;
   const tickets = await getMyTickets(userId);
   return reply.send({ success: true, data: { tickets } });
 }
 
 // GET /api/support/tickets/:id
 export async function getMyTicketHandler(request: FastifyRequest, reply: FastifyReply) {
-  const userId = (request.user as any).id;
+  const userId = request.user.id;
   const { id } = request.params as any;
   const ticket = await getTicketForUser(userId, id);
   if (!ticket) return reply.code(404).send({ success: false, error: { message: 'Обращение не найдено' } });
@@ -41,7 +43,7 @@ export async function getMyTicketHandler(request: FastifyRequest, reply: Fastify
 
 // POST /api/support/tickets/:id/messages
 export async function addTicketMessageHandler(request: FastifyRequest, reply: FastifyReply) {
-  const userId = (request.user as any).id;
+  const userId = request.user.id;
   const { id } = request.params as any;
   const { message } = request.body as any;
   if (!message?.trim()) {

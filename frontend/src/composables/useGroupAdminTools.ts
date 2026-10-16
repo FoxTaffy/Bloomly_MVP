@@ -37,9 +37,7 @@ export function useGroupAdminTools() {
     if (!g) return null
 
     const isOwner = g.owner_id === auth.user.id
-    const isAdmin = groupsStore.myGroups.some(
-      m => m.group_id === g!.id && ['owner', 'admin'].includes(m.role)
-    )
+    const isAdmin = groupsStore.managesGroup(g.id)
     return (isOwner || isAdmin) ? g : null
   })
 
@@ -50,14 +48,14 @@ export function useGroupAdminTools() {
     const g = adminGroup.value
     if (!g) return false
     const slugOrId = route.params.slugOrId as string
-    return slugOrId === g.id || slugOrId === (g as any).slug
+    return slugOrId === g.id || slugOrId === g.slug
   })
 
   const adminTools = computed<AdminTool[]>(() => {
     const g = adminGroup.value
     if (!g) return []
     const gid = g.id
-    const slug = (g as any).slug ?? g.id
+    const slug = g.slug ?? g.id
     const t: string = g.type
 
     const go = (name: string, pageTab: string | undefined, query?: Record<string, string>) =>

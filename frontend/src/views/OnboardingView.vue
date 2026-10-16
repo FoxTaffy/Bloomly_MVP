@@ -387,6 +387,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, computed, onMounted } from 'vue'
@@ -544,8 +545,8 @@ async function saveProfile() {
 
     await new Promise((r) => setTimeout(r, 1200))
     router.push({ name: 'home' })
-  } catch (e: any) {
-    saveError.value = e.response?.data?.error?.message || e.message || langStore.t.onboardingSaveErrorGeneric
+  } catch (e) {
+    saveError.value = apiErrorMessage(e) || errorMessage(e) || langStore.t.onboardingSaveErrorGeneric
   } finally {
     isLoading.value = false
   }

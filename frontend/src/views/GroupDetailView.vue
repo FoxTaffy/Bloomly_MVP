@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { safeHref } from '@/utils/safeHref'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 const langStore = useLangStore()
@@ -56,7 +57,7 @@ const isMember = computed(() => !!membership.value)
 const isOwner = computed(() => group.value?.owner_id === authStore.user?.id)
 const isAdmin = computed(() => {
   if (isOwner.value) return true
-  return groupsStore.myGroups.some(m => m.group_id === group.value?.id && ['admin', 'owner'].includes(m.role))
+  return groupsStore.managesGroup(group.value?.id)
 })
 
 // ── Event lifecycle (event_date gates SOON + participation) ────────────────
@@ -85,7 +86,7 @@ useHead({
     { name: 'robots', content: 'index, follow' },
     { name: 'description', content: () => {
         if (!group.value) return 'Bloomly — Creative Social Network.'
-        const members = (group.value as any)._count?.members
+        const members = group.value._count?.members
         const suffix = members ? ` · ${members} members` : ''
         return group.value.description
           ? group.value.description.slice(0, 160)
@@ -100,30 +101,30 @@ useHead({
         return group.value.description?.slice(0, 200) || `${group.value.name} — a community on Bloomly.`
       }
     },
-    { property: 'og:image', content: () => (group.value as any)?.avatar_url || `${BASE}/og-default.png` },
-    { property: 'og:url', content: () => `${BASE}/groups/${(group.value as any)?.slug || group.value?.id || ''}` },
+    { property: 'og:image', content: () => group.value?.avatar_url || `${BASE}/og-default.png` },
+    { property: 'og:url', content: () => `${BASE}/groups/${group.value?.slug || group.value?.id || ''}` },
     { name: 'twitter:card', content: 'summary_large_image' },
     { name: 'twitter:title', content: () => group.value?.name || 'Bloomly' },
-    { name: 'twitter:image', content: () => (group.value as any)?.avatar_url || `${BASE}/og-default.png` },
+    { name: 'twitter:image', content: () => group.value?.avatar_url || `${BASE}/og-default.png` },
   ],
   link: [
-    { rel: 'canonical', href: () => `${BASE}/groups/${(group.value as any)?.slug || group.value?.id || ''}` },
+    { rel: 'canonical', href: () => `${BASE}/groups/${group.value?.slug || group.value?.id || ''}` },
   ],
   script: [
     {
       type: 'application/ld+json',
       innerHTML: () => {
         if (!group.value) return ''
-        const seg = (group.value as any).slug || group.value.id
-        const members = (group.value as any)._count?.members
+        const seg = group.value.slug || group.value.id
+        const members = group.value._count?.members
         return JSON.stringify({
           '@context': 'https://schema.org',
           '@type': 'Organization',
           name: group.value.name,
           url: `${BASE}/groups/${seg}`,
           description: group.value.description || '',
-          ...((group.value as any).avatar_url ? {
-            logo: { '@type': 'ImageObject', url: (group.value as any).avatar_url },
+          ...(group.value.avatar_url ? {
+            logo: { '@type': 'ImageObject', url: group.value.avatar_url },
           } : {}),
           ...(members ? { numberOfEmployees: members } : {}),
         })
@@ -375,7 +376,7 @@ const aboutNavs = computed(() => {
 
   if (t === 'event') {
     navs.push({ key: 'about', label: langStore.t.groupDetailAboutEvent, icon: 'Info' })
-    const sched = (activeEvent.value?.schedule || (group.value as any)?.schedule) as any[]
+    const sched = (activeEvent.value?.schedule || group.value?.schedule) as any[]
     if (sched?.length) navs.push({ key: 'schedule', label: langStore.t.groupDetailScheduleNav, icon: 'Clock' })
     navs.push({ key: 'sponsors', label: langStore.t.groupDetailSponsorsNav, icon: 'Star' })
     navs.push({ key: 'contacts', label: langStore.t.groupDetailContactsNav, icon: 'MapPin' })
@@ -392,7 +393,7 @@ const aboutNavs = computed(() => {
     navs.push({ key: 'team', label: langStore.t.groupDetailTeamNav, icon: 'Users' })
   } else if (t === 'creative') {
     navs.push({ key: 'about', label: langStore.t.groupDetailAboutCreative, icon: 'Info' })
-    if ((group.value as any)?.commissionInfo)
+    if (group.value?.commissionInfo)
       navs.push({ key: 'orders', label: langStore.t.groupDetailOrdersNav, icon: 'ClipboardList' })
     navs.push({ key: 'prices', label: langStore.t.groupDetailPricesNav, icon: 'Tag' })
     navs.push({ key: 'dealers-den', label: langStore.t.groupDetailDealersDenNav, icon: 'ShoppingBag' })
@@ -632,7 +633,7 @@ function toggleGroupMenu() { showGroupMenu.value = !showGroupMenu.value }
 function closeGroupMenu() { showGroupMenu.value = false }
 
 async function copyGroupLink() {
-  const slug = (group.value as any)?.slug || group.value?.id
+  const slug = group.value?.slug || group.value?.id
   await navigator.clipboard.writeText(`${location.origin}/groups/${slug}`).catch(() => {})
   showGroupMenu.value = false
 }
@@ -669,8 +670,8 @@ async function openGroupChatOrInbox() {
     const convId = await messagesStore.startGroupDm(group.value.id)
     if (!convId) throw new Error(langStore.t.groupSettingsErrorGeneric)
     router.push({ name: 'messages' })
-  } catch (e: any) {
-    showDmError(e.response?.data?.error?.message || e.message || langStore.t.groupSettingsErrorGeneric)
+  } catch (e) {
+    showDmError(apiErrorMessage(e) || errorMessage(e) || langStore.t.groupSettingsErrorGeneric)
   } finally {
     dmLoading.value = false
   }
@@ -865,7 +866,7 @@ const vClickOutside = {
                   <!-- Action buttons -->
                   <div class="flex items-center gap-2 pt-3 md:pt-4 pr-1 flex-wrap">
                     <!-- Donate button — visible when donations enabled, or to owner (with hint) -->
-                    <button v-if="(group as any).donations_enabled"
+                    <button v-if="group.donations_enabled"
                       @click="showDonateModal = true"
                       class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold transition-all border"
                       :style="`background: ${group.accent_color || '#4C67CF'}15; color: ${group.accent_color || '#4C67CF'}; border-color: ${group.accent_color || '#4C67CF'}30; box-shadow: 0 2px 12px ${group.accent_color || '#4C67CF'}15`"
@@ -1023,13 +1024,13 @@ const vClickOutside = {
                     <span v-if="group.is_nsfw" class="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase bg-brand-error/15 text-brand-error border border-brand-error/25">18+</span>
                     <!-- Group tier badge -->
                     <AppBadge
-                      v-if="(group as any).badge_level && (group as any).badge_level !== 'none'"
+                      v-if="group.badge_level && group.badge_level !== 'none'"
                       type="group"
-                      :level="(group as any).badge_level"
+                      :level="group.badge_level"
                       size="sm"
                     />
                     <!-- Verified badge -->
-                    <span v-if="(group as any).is_verified"
+                    <span v-if="group.is_verified"
                       class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase bg-sky-500/15 text-sky-400 border border-sky-500/25">
                       <BIcon name="BadgeCheck" class="w-3 h-3" /> {{ langStore.t.verBadgeGenericLabel }}
                     </span>
@@ -1253,11 +1254,11 @@ const vClickOutside = {
                         </div>
                         <div class="bg-brand-bg border border-brand-border rounded-2xl p-4 flex items-center justify-between">
                           <span class="text-white/60 text-sm">{{ langStore.t.groupDetailRushLabel }}</span>
-                          <span class="font-bold text-sm" :class="(group.commissionInfo as any).rush_slots > 0 ? 'text-brand-success' : 'text-brand-error'">{{ (group.commissionInfo as any).rush_slots || 0 }} {{ langStore.t.groupDetailSlotsUnit }}</span>
+                          <span class="font-bold text-sm" :class="group.commissionInfo.rush_slots > 0 ? 'text-brand-success' : 'text-brand-error'">{{ group.commissionInfo.rush_slots || 0 }} {{ langStore.t.groupDetailSlotsUnit }}</span>
                         </div>
                         <div class="bg-brand-bg border border-brand-border rounded-2xl p-4 flex items-center justify-between">
                           <span class="text-white/60 text-sm">{{ langStore.t.groupDetailTurnaroundLabel }}</span>
-                          <span class="text-white font-bold text-sm">{{ (group.commissionInfo as any).turnaround_days || '—' }}</span>
+                          <span class="text-white font-bold text-sm">{{ group.commissionInfo.turnaround_days || '—' }}</span>
                         </div>
                       </div>
                       <div>
@@ -2271,7 +2272,7 @@ const vClickOutside = {
                       <BIcon name="Zap" class="w-4 h-4 text-brand-yellow flex-shrink-0" />
                       <div class="min-w-0">
                         <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.groupDetailRushLabel }}</p>
-                        <p class="text-xs font-bold text-white">{{ (group.commissionInfo as any).rush_slots || 0 }} {{ langStore.t.groupDetailSlotsUnit }}</p>
+                        <p class="text-xs font-bold text-white">{{ group.commissionInfo.rush_slots || 0 }} {{ langStore.t.groupDetailSlotsUnit }}</p>
                       </div>
                     </div>
                   </div>
@@ -2279,7 +2280,7 @@ const vClickOutside = {
               </template>
 
               <!-- Support tiers (configured by owner in settings) -->
-              <template v-if="(group as any).support_tiers?.length">
+              <template v-if="group.support_tiers?.length">
                 <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                   <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
                     <BIcon name="Crown" class="w-3.5 h-3.5 text-brand-yellow" />
@@ -2288,7 +2289,7 @@ const vClickOutside = {
                     </p>
                   </div>
                   <div class="px-3 pb-3 space-y-2">
-                    <div v-for="tier in (group as any).support_tiers" :key="tier.name"
+                    <div v-for="tier in group.support_tiers" :key="tier.name"
                       class="flex items-center gap-2.5 px-3 py-2.5 rounded-2xl bg-brand-bg border border-brand-border hover:border-brand-yellow/30 transition-all cursor-pointer">
                       <span class="text-lg leading-none flex-shrink-0">{{ tier.emoji || '⭐' }}</span>
                       <div class="flex-1 min-w-0">
@@ -2375,7 +2376,7 @@ const vClickOutside = {
                       <p class="text-xs text-white/80">{{ fmt(group.created_at) }}</p>
                     </div>
                   </div>
-                  <div v-if="(group as any).type === 'event' && activeEvent" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
+                  <div v-if="group.type === 'event' && activeEvent" class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all">
                     <BIcon name="Users" class="w-4 h-4 text-brand-success flex-shrink-0" />
                     <div class="min-w-0">
                       <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ langStore.t.groupDetailGoingCountLabel }}</p>

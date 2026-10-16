@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { storiesService } from './service.js';
 import { moderateStory } from '../automod/service.js';
+import { logError } from '../../lib/logger.js';
 
 interface JwtUser { id: string; role: string }
 
@@ -32,7 +33,7 @@ export const createStoryHandler = async (
     const story = await storiesService.createStory(userId, image_url, video_url);
 
     // fire-and-forget automod check (does not block the response)
-    moderateStory(story.id, userId).catch((err) => console.error('[AUTOMOD] moderateStory error:', err));
+    moderateStory(story.id, userId).catch(logError('[AUTOMOD] moderateStory error'));
 
     return reply.code(201).send({ success: true, data: { story }, error: null });
   } catch (error: unknown) {

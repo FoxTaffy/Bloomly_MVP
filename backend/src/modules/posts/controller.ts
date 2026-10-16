@@ -5,6 +5,7 @@ import { moderatePost, moderateComment } from '../automod/service.js';
 import { isModerator, isAdmin } from '../../lib/roles.js';
 import { requestIsAdult } from '../../lib/age.js';
 import { resolveNsfwMode } from '../../lib/contentFilters.js';
+import { logError } from '../../lib/logger.js';
 
 export const getTrendingTagsHandler = async (
   request: FastifyRequest<{ Querystring: { includeNsfw?: string } }>,
@@ -46,7 +47,7 @@ export const createPostHandler = async (
     const post = await postService.createPost(input);
     // fire-and-forget automod check (does not block the response)
     if (post) {
-      moderatePost(post.id, authorId, content ?? '').catch((err) => console.error('[AUTOMOD] analyzePost error:', err));
+      moderatePost(post.id, authorId, content ?? '').catch(logError('[AUTOMOD] analyzePost error'));
     }
     return reply.code(201).send({ success: true, data: { post }, error: null });
   } catch (error: unknown) {
@@ -124,8 +125,8 @@ export const getPostsHandler = async (
   try {
     const query = request.query;
     query.nsfwMode = resolveNsfwMode({ nsfw: query.nsfw, safeMode: query.safeMode, isAdult: requestIsAdult(request.user) });
-    if (typeof (query as any).hasMedia === 'string') {
-      (query as any).hasMedia = (query as any).hasMedia === 'true';
+    if (typeof query.hasMedia === 'string') {
+      query.hasMedia = query.hasMedia === 'true';
     }
     const viewerId = (request.user as JwtUser | undefined)?.id;
     const posts = await postService.getPosts(query, viewerId);
@@ -146,7 +147,7 @@ export const getPersonalizedPostsHandler = async (
 ) => {
   try {
     const { id: userId } = request.user as JwtUser;
-    const nsfwMode = resolveNsfwMode({ nsfw: (request.query as any).nsfw, safeMode: (request.query as any).safeMode, isAdult: requestIsAdult(request.user) });
+    const nsfwMode = resolveNsfwMode({ nsfw: request.query.nsfw, safeMode: request.query.safeMode, isAdult: requestIsAdult(request.user) });
     const pageNum = request.query.page ? parseInt(request.query.page as string, 10) : 1;
     const limitNum = request.query.limit ? parseInt(request.query.limit as string, 10) : 30;
 
@@ -218,7 +219,7 @@ export const createCommentHandler = async (
     const { content, parentId, type, file_url, groupId } = request.body;
     const comment = await postService.createComment(userId, postId, content, parentId, type, file_url, groupId);
     // fire-and-forget automod burst check (does not block the response)
-    moderateComment(comment.id, userId).catch((err) => console.error('[AUTOMOD] moderateComment error:', err));
+    moderateComment(comment.id, userId).catch(logError('[AUTOMOD] moderateComment error'));
     return reply.code(201).send({ success: true, data: { comment }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to create comment';

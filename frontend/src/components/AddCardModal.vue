@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, computed } from 'vue'
 import { useLangStore } from '@/stores/lang'
 import { useAuthStore } from '@/stores/auth'
@@ -47,8 +48,8 @@ async function save() {
     })
     emit('added', res.data.data)
     emit('close')
-  } catch (e: any) {
-    errorMsg.value = e.response?.data?.error?.message || langStore.t.subToastError
+  } catch (e) {
+    errorMsg.value = apiErrorMessage(e) || langStore.t.subToastError
   } finally {
     sending.value = false
   }

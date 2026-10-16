@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isModerator } from '@/lib/roles'
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { maintenanceActive } from '@/api'
@@ -10,8 +11,7 @@ const auth = useAuthStore()
 
 // Moderator+ can use the whole site as normal during maintenance (mirrors the
 // backend's onRequest gate in server.ts, which lets the same roles through).
-const ROLE_RANK: Record<string, number> = { user: 0, moderator: 1, admin: 2, owner: 3 }
-const isStaff = computed(() => ROLE_RANK[(auth.user as any)?.role ?? 'user'] >= ROLE_RANK.moderator)
+const isStaff = computed(() => isModerator(auth.user?.role))
 
 const show = computed(() => maintenanceActive.value && !isStaff.value && route.name !== 'admin' && route.name !== 'login')
 </script>

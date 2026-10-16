@@ -1,25 +1,20 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
+import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
   createTicketHandler, getMyTicketsHandler, getMyTicketHandler, addTicketMessageHandler,
   adminGetTicketsHandler, adminReplyTicketHandler,
 } from './controller.js';
 
-declare module 'fastify' {
-  interface FastifyInstance {
-    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  }
-}
-
 export async function supportRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
 
   // User endpoints
-  fastify.post('/tickets', { ...auth, config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } } as RouteShorthandOptions, createTicketHandler as any);
-  fastify.get('/tickets',      auth, getMyTicketsHandler as any);
-  fastify.get('/tickets/:id',  auth, getMyTicketHandler as any);
-  fastify.post('/tickets/:id/messages', { ...auth, config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } } as RouteShorthandOptions, addTicketMessageHandler as any);
+  fastify.post<RouteGenericOf<typeof createTicketHandler>>('/tickets', { ...auth, config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } } as RouteShorthandOptions, createTicketHandler);
+  fastify.get<RouteGenericOf<typeof getMyTicketsHandler>>('/tickets',      auth, getMyTicketsHandler);
+  fastify.get<RouteGenericOf<typeof getMyTicketHandler>>('/tickets/:id',  auth, getMyTicketHandler);
+  fastify.post<RouteGenericOf<typeof addTicketMessageHandler>>('/tickets/:id/messages', { ...auth, config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } } as RouteShorthandOptions, addTicketMessageHandler);
 
   // Admin endpoints
-  fastify.get('/admin/tickets',       auth, adminGetTicketsHandler as any);
-  fastify.patch('/admin/tickets/:id', auth, adminReplyTicketHandler as any);
+  fastify.get<RouteGenericOf<typeof adminGetTicketsHandler>>('/admin/tickets',       auth, adminGetTicketsHandler);
+  fastify.patch<RouteGenericOf<typeof adminReplyTicketHandler>>('/admin/tickets/:id', auth, adminReplyTicketHandler);
 }

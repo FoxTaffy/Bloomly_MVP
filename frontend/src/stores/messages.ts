@@ -1,3 +1,4 @@
+import { apiErrorMessage } from '@/lib/apiError'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '@/api'
@@ -13,6 +14,7 @@ export interface MsgSender {
   avatar_url: string | null
   banner_url?: string | null
   badge_type?: string | null
+  deceased_at?: string | null
 }
 
 export interface Message {
@@ -160,14 +162,14 @@ export const useMessagesStore = defineStore('messages', () => {
     wsClient.connect()
 
     unsubWs = wsClient.on('new_message', (frame) => {
-      const msg = (frame as any).data as Message
+      const msg = frame.data as Message
       if (!msg?.conversation_id) return
       const convId = msg.conversation_id
       const auth = useAuthStore()
       const isOwn = msg.sender_id === auth.user?.id
       // Set only on messages inside a group's community/DM thread; customerId tells us whether
       // *we* are that member (our own thread) or group staff watching it via the shared inbox.
-      const groupDm = (frame as any).groupDm as
+      const groupDm = frame.groupDm as
         | { groupId: string; groupSlug: string; groupName: string | null; groupAvatarUrl: string | null; customerId: string }
         | null
       const isStaffSide = !!groupDm && groupDm.customerId !== auth.user?.id
@@ -261,7 +263,7 @@ export const useMessagesStore = defineStore('messages', () => {
     })
 
     unsubMessageUpdated = wsClient.on('message_updated', (frame) => {
-      const msg = (frame as any).data as Message
+      const msg = frame.data as Message
       if (!msg?.conversation_id || !msg?.id) return
       const list = messages.value[msg.conversation_id]
       if (!list) return
@@ -272,7 +274,7 @@ export const useMessagesStore = defineStore('messages', () => {
     })
 
     unsubMessageDeleted = wsClient.on('message_deleted', (frame) => {
-      const { id, conversation_id } = (frame as any).data as { id?: string; conversation_id?: string }
+      const { id, conversation_id } = frame.data as { id?: string; conversation_id?: string }
       if (!id || !conversation_id) return
       const list = messages.value[conversation_id]
       if (list) messages.value[conversation_id] = list.filter((m) => m.id !== id)
@@ -440,8 +442,8 @@ export const useMessagesStore = defineStore('messages', () => {
       deleted_at: null,
       sender: {
         id: auth.user?.id ?? '',
-        username: (auth.user as any)?.username ?? '',
-        display_name: (auth.user as any)?.display_name ?? null,
+        username: auth.user?.username ?? '',
+        display_name: auth.user?.display_name ?? null,
         avatar_url: auth.avatarUrl ?? null,
       },
       _sending: true,
@@ -466,10 +468,10 @@ export const useMessagesStore = defineStore('messages', () => {
         if (idx !== -1) list.splice(idx, 1, { ...msg, _sending: false })
         else if (!list.some((m) => m.id === msg.id)) list.push(msg)
       }
-    } catch (err: any) {
+    } catch (err) {
       const list = messages.value[convId]
       const idx = list?.findIndex((m) => m.id === tempId) ?? -1
-      const reason = err?.response?.data?.error?.message as string | undefined
+      const reason = apiErrorMessage(err) as string | undefined
       if (list && idx !== -1) list.splice(idx, 1, { ...list[idx], _sending: false, _failed: true, _failReason: reason })
     }
   }
@@ -633,7 +635,7 @@ export const useMessagesStore = defineStore('messages', () => {
     if (conv) {
       if (data.name !== undefined) conv.name = data.name
       if (data.avatar_url !== undefined) conv.avatar_url = data.avatar_url
-      if (data.banner_url !== undefined) (conv as any).banner_url = data.banner_url
+      if (data.banner_url !== undefined) conv.banner_url = data.banner_url
     }
   }
 

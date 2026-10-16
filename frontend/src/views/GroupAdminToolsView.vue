@@ -30,7 +30,7 @@ const group = computed(() => groupsStore.currentGroup)
 const isOwner = computed(() => group.value?.owner_id === authStore.user?.id)
 const isAdmin = computed(() => {
   if (isOwner.value) return true
-  return groupsStore.myGroups.some(m => m.group_id === group.value?.id && ['admin', 'owner'].includes(m.role))
+  return groupsStore.managesGroup(group.value?.id)
 })
 
 interface ToolTab {
@@ -131,7 +131,7 @@ const inboxCount = computed(() => (group.value ? messagesStore.groupInboxCounts[
 function openSettingsSection(tab: ToolTab) {
   router.push({
     name: 'group-settings',
-    params: { slugOrId: (group.value as any)?.slug ?? route.params.slugOrId },
+    params: { slugOrId: group.value?.slug ?? route.params.slugOrId },
     ...(tab.settingsSection ? { query: { section: tab.settingsSection } } : {}),
   })
 }
@@ -216,10 +216,10 @@ watch(() => route.params.slugOrId, load)
                 :group-id="group.id" />
 
               <OrdersPanel v-else-if="activeToolTab.kind === 'orders'"
-                :group-id="group.id" :group-slug="(group as any).slug ?? group.id" :business-enabled="group.business_enabled" />
+                :group-id="group.id" :group-slug="group.slug ?? group.id" :business-enabled="group.business_enabled" />
 
               <BalancePanel v-else-if="activeToolTab.kind === 'balance'"
-                :group-id="group.id" :group-slug="(group as any).slug ?? group.id" :donations-enabled="!!(group as any).donations_enabled" />
+                :group-id="group.id" :group-slug="group.slug ?? group.id" :donations-enabled="!!group.donations_enabled" />
 
               <InboxPanel v-else-if="activeToolTab.kind === 'inbox'"
                 :group-id="group.id" />

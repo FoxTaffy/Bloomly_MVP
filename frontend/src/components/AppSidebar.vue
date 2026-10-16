@@ -128,7 +128,7 @@ const navItems = computed(() => [
     disabled: false,
     to: { name: 'subscriptions' },
     badge: (() => {
-      const tier = (auth.user as any)?.subscription_tier ?? 'free'
+      const tier = auth.user?.subscription_tier ?? 'free'
       return tier !== 'free' ? tier.charAt(0).toUpperCase() + tier.slice(1) : undefined
     })(),
   },
@@ -353,14 +353,14 @@ const categoryItems = computed(() => [
       <h4 class="px-4 text-xs font-bold text-white/40 mb-2 uppercase tracking-wider">Админ-инструменты</h4>
       <nav class="space-y-1">
         <button
-          @click="router.push({ name: 'group-settings', params: { slugOrId: (adminGroup as any).slug } })"
+          @click="router.push({ name: 'group-settings', params: { slugOrId: adminGroup.slug } })"
           class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all text-white"
           style="background: linear-gradient(135deg, #6c47ff, #a855f7); box-shadow: 0 2px 10px #6c47ff30">
           <BIcon name="Settings" class="w-5 h-5" />
           <span class="flex-1 text-left">Настройки группы</span>
         </button>
         <button
-          @click="router.push({ name: 'group-admin-tools', params: { slugOrId: (adminGroup as any).slug } })"
+          @click="router.push({ name: 'group-admin-tools', params: { slugOrId: adminGroup.slug } })"
           class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-semibold transition-all text-white/65 hover:bg-brand-card/50 hover:text-white">
           <BIcon name="LayoutDashboard" class="w-5 h-5" />
           <span class="flex-1 text-left">Все инструменты</span>

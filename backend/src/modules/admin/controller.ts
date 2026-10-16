@@ -1,52 +1,24 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { adminService } from './service.js';
-import prisma from '../../config/prisma.js';
-import { ROLE_RANK, isModerator, isAdmin, isOwner, canModerateTarget } from '../../lib/roles.js';
+import { moderationService } from './moderation.service.js';
+import { autoModLogs, logStaffAction } from '../automod/logs.service.js';
+import { userLookup } from '../users/lookup.js';
+import { requireModerator, requireAdmin, requireOwner } from '../../lib/authHooks.js';
+import { ROLE_RANK, canModerateTarget } from '../../lib/roles.js';
 import { notificationService } from '../notifications/service.js';
 import { usersService } from '../users/service.js';
 import { applyAction, getPendingAppeals, decideAppeal } from '../automod/service.js';
 import { getAllSettings, setSetting, type SettingKey } from '../../lib/settings.js';
 import { assertOwnedMedia, findPrivateMediaRow, openPrivateObject } from '../media/service.js';
-
-interface JwtUser { id: string; role: string }
-
-// Moderator, admin or owner — day-to-day moderation endpoints.
-const requireMod = (req: FastifyRequest, reply: FastifyReply) => {
-  const user = req.user as JwtUser;
-  if (!isModerator(user.role)) {
-    reply.code(403).send({ success: false, data: null, error: { code: 'FORBIDDEN', message: 'Requires moderator role or higher' } });
-    return false;
-  }
-  return true;
-};
-
-// Admin or owner — operational endpoints not delegated to moderators (ads, banners, stats).
-const requireAdmin = (req: FastifyRequest, reply: FastifyReply) => {
-  const user = req.user as JwtUser;
-  if (!isAdmin(user.role)) {
-    reply.code(403).send({ success: false, data: null, error: { code: 'FORBIDDEN', message: 'Requires admin role or higher' } });
-    return false;
-  }
-  return true;
-};
-
-// Owner only — role management.
-const requireOwner = (req: FastifyRequest, reply: FastifyReply) => {
-  const user = req.user as JwtUser;
-  if (!isOwner(user.role)) {
-    reply.code(403).send({ success: false, data: null, error: { code: 'FORBIDDEN', message: 'Only the owner can manage roles' } });
-    return false;
-  }
-  return true;
-};
+import { errCode, errMessage, errStatus } from '../../lib/httpErrors.js';
 
 // Punitive actions (ban/freeze/warn) require the actor to outrank the target — otherwise
 // a moderator could ban/freeze another moderator, an admin, or even the owner.
 // Returns false (and already sent a 403) if the actor isn't allowed to act on this user;
 // a missing target is left to the underlying action to 404/no-op on as before.
 const requireCanModerate = async (req: FastifyRequest, reply: FastifyReply, targetUserId: string) => {
-  const actor = req.user as JwtUser;
-  const target = await prisma.user.findUnique({ where: { id: targetUserId }, select: { role: true } });
+  const actor = req.user;
+  const target = await moderationService.getRole(targetUserId);
   if (target && !canModerateTarget(actor.role, target.role)) {
     reply.code(403).send({ success: false, data: null, error: { code: 'FORBIDDEN', message: 'Недостаточно прав для действия над этим пользователем' } });
     return false;
@@ -59,10 +31,10 @@ const requireCanModerate = async (req: FastifyRequest, reply: FastifyReply, targ
 // the action was taken against; falls back to the actor's own id for actions
 // with no natural target (e.g. toggling a banner).
 const logAdminAction = (actorId: string, targetUserId: string, action: string, reason: string) =>
-  prisma.autoModLog.create({ data: { user_id: targetUserId, actor_id: actorId, action, reason, category: 'manual', score: 0 } }).catch(() => {});
+  logStaffAction(actorId, targetUserId, action, reason).catch(() => {});
 
 export const getStatsHandler = async (req: FastifyRequest, reply: FastifyReply) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   const stats = await adminService.getStats();
   return reply.send({ success: true, data: stats, error: null });
 };
@@ -71,7 +43,7 @@ export const getUsersHandler = async (
   req: FastifyRequest<{ Querystring: { page?: string; limit?: string; search?: string; sortBy?: string } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   const page  = parseInt(req.query.page  || '1');
   const limit = parseInt(req.query.limit || '30');
   const result = await adminService.getUsers(page, limit, req.query.search, req.query.sortBy);
@@ -83,14 +55,14 @@ export const updateUserSubscriptionHandler = async (
   reply: FastifyReply,
 ) => {
   if (!requireAdmin(req, reply)) return;
-  const actor = req.user as JwtUser;
+  const actor = req.user;
   try {
     // Staff-granted tiers are comps, not purchases — no saved card required.
     const user = await usersService.updateSubscriptionTier(req.params.id, req.body.tier, { skipPaymentCheck: true });
     await logAdminAction(actor.id, req.params.id, 'subscription_change', `Тариф изменён на "${req.body.tier}"`);
     return reply.send({ success: true, data: { user }, error: null });
-  } catch (err: any) {
-    return reply.code(err.statusCode || 400).send({ success: false, data: null, error: { code: 'INVALID_TIER', message: err.message } });
+  } catch (err) {
+    return reply.code(errStatus(err) || 400).send({ success: false, data: null, error: { code: 'INVALID_TIER', message: errMessage(err) } });
   }
 };
 
@@ -104,7 +76,7 @@ export const updateUserProfileHandler = async (
 ) => {
   if (!requireAdmin(req, reply)) return;
   if (!(await requireCanModerate(req, reply, req.params.id))) return;
-  const actor = req.user as JwtUser;
+  const actor = req.user;
 
   const data: Record<string, string> = {};
   for (const field of ADMIN_EDITABLE_PROFILE_FIELDS) {
@@ -125,9 +97,9 @@ export const updateUserProfileHandler = async (
     const changed = [...Object.keys(data), ...(typeof username === 'string' ? ['username'] : [])];
     await logAdminAction(actor.id, req.params.id, 'profile_edit', `Профиль изменён администратором: ${changed.join(', ')}`);
     return reply.send({ success: true, data: { user }, error: null });
-  } catch (err: any) {
-    const taken = err?.message === 'Этот никнейм уже занят';
-    return reply.code(taken ? 409 : 400).send({ success: false, data: null, error: { code: taken ? 'USERNAME_TAKEN' : 'PROFILE_UPDATE_FAILED', message: err.message } });
+  } catch (err) {
+    const taken = errMessage(err) === 'Этот никнейм уже занят';
+    return reply.code(taken ? 409 : 400).send({ success: false, data: null, error: { code: taken ? 'USERNAME_TAKEN' : 'PROFILE_UPDATE_FAILED', message: errMessage(err) } });
   }
 };
 
@@ -139,14 +111,14 @@ export const updateUserRoleHandler = async (
   if (!Object.keys(ROLE_RANK).includes(req.body.role)) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_ROLE', message: 'Неизвестная роль' } });
   }
-  const actor = req.user as JwtUser;
+  const actor = req.user;
   const user = await adminService.updateUserRole(req.params.id, req.body.role, req.body.badge_type);
   await logAdminAction(actor.id, req.params.id, 'role_change', `Роль изменена на "${req.body.role}"`);
   return reply.send({ success: true, data: { user }, error: null });
 };
 
 export const getStaffHandler = async (req: FastifyRequest, reply: FastifyReply) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   const staff = await adminService.getStaff();
   return reply.send({ success: true, data: { staff }, error: null });
 };
@@ -161,17 +133,17 @@ export const promoteToStaffHandler = async (
     return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID', message: 'identifier и role (moderator/admin/owner) обязательны' } });
   }
   try {
-    const actor = req.user as JwtUser;
+    const actor = req.user;
     const user = await adminService.promoteToStaff(identifier.trim(), role);
     await logAdminAction(actor.id, user.id, 'role_change', `Добавлен(а) в команду с ролью "${role}"`);
     return reply.send({ success: true, data: { user }, error: null });
-  } catch (e: any) {
-    return reply.code(404).send({ success: false, data: null, error: { code: e.code ?? 'ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(404).send({ success: false, data: null, error: { code: errCode(e) ?? 'ERROR', message: errMessage(e) } });
   }
 };
 
 export const getSettingsHandler = async (req: FastifyRequest, reply: FastifyReply) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   const settings = await getAllSettings();
   return reply.send({ success: true, data: { settings }, error: null });
 };
@@ -186,10 +158,8 @@ export const updateSettingHandler = async (
     return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID', message: 'Некорректный key/value' } });
   }
   await setSetting(key as SettingKey, value);
-  const actor = req.user as JwtUser;
-  await prisma.autoModLog.create({
-    data: { user_id: actor.id, actor_id: actor.id, action: 'settings_change', reason: `Настройка "${key}" изменена на ${value}`, category: 'manual', score: 0 },
-  });
+  const actor = req.user;
+  await logStaffAction(actor.id, actor.id, 'settings_change', `Настройка "${key}" изменена на ${value}`);
   const settings = await getAllSettings();
   return reply.send({ success: true, data: { settings }, error: null });
 };
@@ -203,7 +173,7 @@ export const sendBroadcastHandler = async (
   if (!title?.trim() || !body?.trim() || !['all', 'premium', 'new', 'staff'].includes(audience)) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID', message: 'title, body и audience обязательны' } });
   }
-  const actor = req.user as JwtUser;
+  const actor = req.user;
   const broadcast = await adminService.sendBroadcast(actor.id, title.trim(), body.trim(), audience);
   return reply.send({ success: true, data: { broadcast }, error: null });
 };
@@ -219,9 +189,9 @@ export const deleteUserHandler = async (
   reply: FastifyReply,
 ) => {
   // Banning/archiving is core moderator work — no admin-only gate here.
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   if (!(await requireCanModerate(req, reply, req.params.id))) return;
-  const actor = req.user as JwtUser;
+  const actor = req.user;
   await adminService.deleteUser(req.params.id);
   await notificationService.create({ receiverId: req.params.id, type: 'automod_ban' });
   await logAdminAction(actor.id, req.params.id, 'ban', 'Аккаунт заблокирован модератором');
@@ -232,7 +202,7 @@ export const getArchivedUsersHandler = async (
   req: FastifyRequest<{ Querystring: { page?: string; limit?: string; search?: string } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   const page  = parseInt(req.query.page  || '1');
   const limit = parseInt(req.query.limit || '30');
   const result = await adminService.getArchivedUsers(page, limit, req.query.search);
@@ -243,7 +213,7 @@ export const getFrozenUsersHandler = async (
   req: FastifyRequest<{ Querystring: { page?: string; limit?: string; search?: string } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   const page  = parseInt(req.query.page  || '1');
   const limit = parseInt(req.query.limit || '30');
   const result = await adminService.getFrozenUsers(page, limit, req.query.search);
@@ -254,10 +224,10 @@ export const restoreUserHandler = async (
   req: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   // Модератор не может снять бан с того, кого не может банить (иначе вернул бы админа/владельца)
   if (!(await requireCanModerate(req, reply, req.params.id))) return;
-  const actor = req.user as JwtUser;
+  const actor = req.user;
   const user = await adminService.restoreUser(req.params.id);
   await logAdminAction(actor.id, req.params.id, 'unban', 'Аккаунт разбанен модератором');
   return reply.send({ success: true, data: { user }, error: null });
@@ -267,7 +237,7 @@ export const getPostsAdminHandler = async (
   req: FastifyRequest<{ Querystring: { page?: string; limit?: string; search?: string; filter?: 'media' | 'nsfw' | 'announcement' } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   const page  = parseInt(req.query.page  || '1');
   const limit = parseInt(req.query.limit || '30');
   const result = await adminService.getPosts(page, limit, req.query.search, req.query.filter);
@@ -278,8 +248,8 @@ export const deletePostAdminHandler = async (
   req: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
-  const actor = req.user as JwtUser;
+  if (!requireModerator(req, reply)) return;
+  const actor = req.user;
   const post = await adminService.deletePost(req.params.id);
   await logAdminAction(actor.id, post.author_id, 'delete_post', 'Пост удалён модератором');
   return reply.send({ success: true, data: null, error: null });
@@ -289,8 +259,8 @@ export const togglePostPinHandler = async (
   req: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
-  const actor = req.user as JwtUser;
+  if (!requireModerator(req, reply)) return;
+  const actor = req.user;
   const post = await adminService.togglePostPin(req.params.id);
   await logAdminAction(actor.id, post.author_id, post.is_announcement ? 'pin_post' : 'unpin_post', post.is_announcement ? 'Пост закреплён' : 'Пост откреплён');
   return reply.send({ success: true, data: { post }, error: null });
@@ -300,7 +270,7 @@ export const getReportsHandler = async (
   req: FastifyRequest<{ Querystring: { status?: string; page?: string; limit?: string } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   const page  = parseInt(req.query.page  || '1');
   const limit = parseInt(req.query.limit || '30');
   const result = await adminService.getReports(req.query.status, page, limit);
@@ -317,7 +287,7 @@ export const getReportEvidenceHandler = async (
   req: FastifyRequest<{ Querystring: { url?: string } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   const url = req.query.url;
   if (typeof url !== 'string' || url.length === 0 || url.length > 2048) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_URL', message: 'Некорректная ссылка' } });
@@ -347,7 +317,7 @@ export const submitReportHandler = async (
   req: FastifyRequest<{ Body: { targetType: string; targetId: string; reason: string; evidenceUrls?: string[] } }>,
   reply: FastifyReply,
 ) => {
-  const { id: reporterId } = req.user as JwtUser;
+  const { id: reporterId } = req.user;
   const { targetType, targetId, reason, evidenceUrls } = req.body;
   // Only accept URLs our own upload endpoint produced, and only up to the cap —
   // a raw client can otherwise post an arbitrarily large/external array of "evidence".
@@ -364,8 +334,8 @@ export const resolveReportHandler = async (
   req: FastifyRequest<{ Params: { id: string }; Body: { status: 'reviewed' | 'dismissed'; note?: string } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
-  const { id: resolverId } = req.user as JwtUser;
+  if (!requireModerator(req, reply)) return;
+  const { id: resolverId } = req.user;
   const report = await adminService.resolveReport(req.params.id, resolverId, req.body.status, req.body.note);
   return reply.send({ success: true, data: { report }, error: null });
 };
@@ -374,8 +344,8 @@ export const resolveReportsBatchHandler = async (
   req: FastifyRequest<{ Body: { ids: string[]; status: 'reviewed' | 'dismissed'; note?: string } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
-  const { id: resolverId } = req.user as JwtUser;
+  if (!requireModerator(req, reply)) return;
+  const { id: resolverId } = req.user;
   const { ids, status, note } = req.body;
   await adminService.resolveReportsBatch(ids, resolverId, status, note);
   await logAdminAction(resolverId, resolverId, status === 'dismissed' ? 'dismiss_report' : 'resolve_report', `${status === 'dismissed' ? 'Отклонено' : 'Решено'} жалоб: ${ids.length}`);
@@ -389,8 +359,8 @@ export const resolveReportIssueHandler = async (
   } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
-  const { id: resolverId } = req.user as JwtUser;
+  if (!requireModerator(req, reply)) return;
+  const { id: resolverId } = req.user;
   const { ids, targetType, targetId, deleteContent, reason, category, imageUrl } = req.body;
   if (!reason?.trim()) {
     return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_INPUT', message: 'reason is required' } });
@@ -405,7 +375,7 @@ export const resolveReportIssueHandler = async (
 };
 
 export const getAppealsHandler = async (req: FastifyRequest, reply: FastifyReply) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   const appeals = await getPendingAppeals();
   return reply.send({ success: true, data: { appeals }, error: null });
 };
@@ -414,13 +384,13 @@ export const decideAppealHandler = async (
   req: FastifyRequest<{ Params: { logId: string }; Body: { decision: 'accepted' | 'rejected' } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
-  const actor = req.user as JwtUser;
+  if (!requireModerator(req, reply)) return;
+  const actor = req.user;
   try {
     await decideAppeal(req.params.logId, actor.id, req.body.decision);
     return reply.send({ success: true, data: null, error: null });
-  } catch (err: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'APPEAL_ERROR', message: err.message } });
+  } catch (err) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'APPEAL_ERROR', message: errMessage(err) } });
   }
 };
 
@@ -442,19 +412,17 @@ export const submitAdHandler = async (
   req: FastifyRequest<{ Body: { title: string; description?: string; imageUrl?: string; linkUrl: string; contactInfo?: string; priceLabel?: string } }>,
   reply: FastifyReply,
 ) => {
-  const requesterId = (req.user as JwtUser | undefined)?.id;
+  const requesterId = (req.user)?.id;
   // Placing ads is a Business-subscription perk — matches the "featAdCampaigns" pricing bullet.
-  const requester = requesterId
-    ? await prisma.user.findUnique({ where: { id: requesterId }, select: { subscription_tier: true } })
-    : null;
-  if (requester?.subscription_tier !== 'business') {
+  const tier = requesterId ? await userLookup.subscriptionTier(requesterId) : null;
+  if (tier !== 'business') {
     return reply.code(402).send({ success: false, data: null, error: { code: 'BUSINESS_REQUIRED', message: 'Placing ads requires a Business subscription' } });
   }
   try {
     const ad = await adminService.submitAd({ ...req.body, requesterId });
     return reply.code(201).send({ success: true, data: { ad }, error: null });
-  } catch (e: any) {
-    return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_AD_LINK', message: e.message } });
+  } catch (e) {
+    return reply.code(400).send({ success: false, data: null, error: { code: 'INVALID_AD_LINK', message: errMessage(e) } });
   }
 };
 
@@ -463,12 +431,12 @@ export const reviewAdHandler = async (
   reply: FastifyReply,
 ) => {
   if (!requireAdmin(req, reply)) return;
-  const { id: reviewerId } = req.user as JwtUser;
+  const { id: reviewerId } = req.user;
   const ad = await adminService.reviewAd(req.params.id, reviewerId, req.body.status, {
     startsAt: req.body.startsAt ? new Date(req.body.startsAt) : undefined,
     endsAt:   req.body.endsAt   ? new Date(req.body.endsAt)   : undefined,
   });
-  await logAdminAction(reviewerId, (ad as any).requester_id ?? reviewerId, req.body.status === 'active' ? 'approve_ad' : 'reject_ad', `Реклама "${ad.title}" ${req.body.status === 'active' ? 'одобрена' : 'отклонена'}`);
+  await logAdminAction(reviewerId, ad.requester_id ?? reviewerId, req.body.status === 'active' ? 'approve_ad' : 'reject_ad', `Реклама "${ad.title}" ${req.body.status === 'active' ? 'одобрена' : 'отклонена'}`);
   return reply.send({ success: true, data: { ad }, error: null });
 };
 
@@ -514,8 +482,8 @@ export const createBannerHandler = async (req: FastifyRequest, reply: FastifyRep
   try {
     const banner = await adminService.createBanner(req.body as any);
     return reply.status(201).send({ success: true, data: { banner }, error: null });
-  } catch (err: any) {
-    if (err.code === 'LIMIT') return reply.status(400).send({ success: false, data: null, error: { code: 'LIMIT', message: err.message } });
+  } catch (err) {
+    if (errCode(err) === 'LIMIT') return reply.status(400).send({ success: false, data: null, error: { code: 'LIMIT', message: errMessage(err) } });
     return reply.status(500).send({ success: false, data: null, error: { code: 'ERROR', message: String(err) } });
   }
 };
@@ -524,7 +492,7 @@ export const updateBannerHandler = async (req: FastifyRequest<{ Params: { id: st
   if (!requireAdmin(req, reply)) return;
   const banner = await adminService.updateBanner(req.params.id, req.body as any);
   if (typeof req.body?.is_active === 'boolean') {
-    const actor = req.user as JwtUser;
+    const actor = req.user;
     await logAdminAction(actor.id, actor.id, req.body.is_active ? 'activate_banner' : 'deactivate_banner', `Баннер "${banner.title}" ${req.body.is_active ? 'включён' : 'скрыт'}`);
   }
   return reply.send({ success: true, data: { banner }, error: null });
@@ -542,41 +510,19 @@ export const getAutoModLogsHandler = async (
   req: FastifyRequest<{ Querystring: { page?: string; userId?: string; action?: string; category?: string } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
-  const page  = Math.max(1, parseInt(req.query.page ?? '1', 10));
-  const limit = 50;
-  const skip  = (page - 1) * limit;
-  const where: Record<string, any> = {};
-  if (req.query.userId)   where.user_id  = req.query.userId;
-  if (req.query.action)   where.action   = req.query.action;
-  if (req.query.category) where.category = req.query.category;
-
-  const [logs, total] = await Promise.all([
-    prisma.autoModLog.findMany({
-      where,
-      include: {
-        user:  { select: { id: true, username: true, display_name: true, avatar_url: true } },
-        actor: { select: { id: true, username: true, display_name: true, avatar_url: true } },
-      },
-      orderBy: { created_at: 'desc' },
-      skip,
-      take: limit,
-    }),
-    prisma.autoModLog.count({ where }),
-  ]);
-  return reply.send({ success: true, data: { logs, total, page, pages: Math.ceil(total / limit) }, error: null });
+  if (!requireModerator(req, reply)) return;
+  const page = Math.max(1, parseInt(req.query.page ?? '1', 10));
+  const { userId, action, category } = req.query;
+  const { logs, total, pages } = await autoModLogs.list({ page, limit: 50, userId, action, category, withActor: true });
+  return reply.send({ success: true, data: { logs, total, page, pages }, error: null });
 };
 
 export const unfreezeUserHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   // Модератор не должен снимать заморозку, наложенную админом или владельцем
   if (!(await requireCanModerate(req, reply, req.params.id))) return;
-  const actor = req.user as JwtUser;
-  await prisma.user.update({ where: { id: req.params.id }, data: { frozen_at: null, frozen_reason: null } });
-  await prisma.autoModLog.create({
-    data: { user_id: req.params.id, actor_id: actor.id, action: 'unfreeze', reason: 'Разморожен вручную модератором', category: 'manual', score: 0 },
-  });
-  await notificationService.create({ receiverId: req.params.id, type: 'automod_unfreeze' });
+  const actor = req.user;
+  await moderationService.unfreeze(req.params.id, actor.id);
   return reply.send({ success: true, data: null, error: null });
 };
 
@@ -584,15 +530,11 @@ export const freezeUserHandler = async (
   req: FastifyRequest<{ Params: { id: string }; Body: { reason?: string } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   if (!(await requireCanModerate(req, reply, req.params.id))) return;
-  const actor = req.user as JwtUser;
+  const actor = req.user;
   const reason = req.body?.reason ?? 'Заморожен вручную модератором';
-  await prisma.user.update({ where: { id: req.params.id }, data: { frozen_at: new Date(), frozen_reason: reason } });
-  await prisma.autoModLog.create({
-    data: { user_id: req.params.id, actor_id: actor.id, action: 'freeze', reason, category: 'manual', score: 0 },
-  });
-  await notificationService.create({ receiverId: req.params.id, type: 'automod_freeze', meta: { reason } });
+  await moderationService.freeze(req.params.id, actor.id, reason);
   return reply.send({ success: true, data: null, error: null });
 };
 
@@ -600,17 +542,17 @@ export const markDeceasedHandler = async (
   req: FastifyRequest<{ Params: { id: string }; Body: { note?: string } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   if (!(await requireCanModerate(req, reply, req.params.id))) return;
   const note = req.body?.note ?? null;
-  await prisma.user.update({ where: { id: req.params.id }, data: { deceased_at: new Date(), deceased_note: note } });
+  await moderationService.setDeceased(req.params.id, note);
   return reply.send({ success: true, data: null, error: null });
 };
 
 export const unmarkDeceasedHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   if (!(await requireCanModerate(req, reply, req.params.id))) return;
-  await prisma.user.update({ where: { id: req.params.id }, data: { deceased_at: null, deceased_note: null } });
+  await moderationService.clearDeceased(req.params.id);
   return reply.send({ success: true, data: null, error: null });
 };
 
@@ -618,41 +560,37 @@ export const warnUserHandler = async (
   req: FastifyRequest<{ Params: { id: string }; Body: { reason?: string; postId?: string } }>,
   reply: FastifyReply,
 ) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   if (!(await requireCanModerate(req, reply, req.params.id))) return;
-  const actor = req.user as JwtUser;
+  const actor = req.user;
   const reason = req.body?.reason?.trim() || 'Предупреждение от модератора';
   await applyAction(req.params.id, 'warn', 'manual', reason, undefined, req.body?.postId, actor.id);
-  const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { warn_count: true, frozen_at: true } });
+  const user = await moderationService.getWarnState(req.params.id);
   return reply.send({ success: true, data: { warn_count: user?.warn_count ?? 0, frozen_at: user?.frozen_at ?? null }, error: null });
 };
 
 export const clearWarnsHandler = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   if (!(await requireCanModerate(req, reply, req.params.id))) return;
-  const actor = req.user as JwtUser;
-  await prisma.user.update({ where: { id: req.params.id }, data: { warn_count: 0 } });
-  await prisma.autoModLog.create({
-    data: { user_id: req.params.id, actor_id: actor.id, action: 'clear_warns', reason: 'Предупреждения сброшены модератором', category: 'manual', score: 0 },
-  });
-  await notificationService.create({ receiverId: req.params.id, type: 'automod_clear_warns' });
+  const actor = req.user;
+  await moderationService.clearWarns(req.params.id, actor.id);
   return reply.send({ success: true, data: null, error: null });
 };
 
 export const getInfraOverviewHandler = async (req: FastifyRequest, reply: FastifyReply) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   const data = await adminService.getInfraOverview();
   return reply.send({ success: true, data, error: null });
 };
 
 export const getGroupsOverviewHandler = async (req: FastifyRequest, reply: FastifyReply) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   const data = await adminService.getGroupsOverview();
   return reply.send({ success: true, data, error: null });
 };
 
 export const getPremiumOverviewHandler = async (req: FastifyRequest, reply: FastifyReply) => {
-  if (!requireMod(req, reply)) return;
+  if (!requireModerator(req, reply)) return;
   const data = await adminService.getPremiumOverview();
   return reply.send({ success: true, data, error: null });
 };

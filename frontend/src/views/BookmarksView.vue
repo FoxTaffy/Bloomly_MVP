@@ -120,7 +120,7 @@ async function assignLabel(postId: string, labelId: string | null) {
     await api.post(`/bookmarks/posts/${postId}/label`, { label_id: labelId })
     // Update local post label_id for immediate feedback
     const post = posts.value.find((p: any) => p.id === postId)
-    if (post) (post as any).label_id = labelId
+    if (post) post.label_id = labelId
     // Update label counts
     await fetchLabels()
     labelPickerPostId.value = null

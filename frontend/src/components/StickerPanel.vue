@@ -216,6 +216,7 @@ import BIcon from '@/components/BIcon.vue'
 import StickerRenderer from '@/components/StickerRenderer.vue'
 import { useStickersStore, type StickerPack } from '@/stores/stickers'
 import api from '@/api'
+import * as fmt from '@/lib/format'
 
 const emit = defineEmits<{
   (e: 'pick', url: string): void
@@ -263,12 +264,8 @@ function openPack(pack: StickerPack) {
   router.push({ name: 'sticker-pack', params: { id: pack.id } })
 }
 
-function formatPrice(price: string, currency: string): string {
-  const n = parseFloat(price)
-  if (currency === 'RUB') return n.toLocaleString('ru-RU') + ' ₽'
-  if (currency === 'USD') return '$' + n.toFixed(2)
-  return n.toFixed(2) + ' ' + currency
-}
+// RUB — целыми, остальные валюты — с копейками/центами
+const formatPrice = (price: string, currency: string) => fmt.formatPrice(price, currency, currency === 'RUB' ? undefined : 2)
 
 // ── Favourites & Frequent ──────────────────────────────────────────────────
 const favStickers     = computed(() => stickersStore.favoriteStickers)

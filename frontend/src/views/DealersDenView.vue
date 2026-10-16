@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { useLangStore } from '@/stores/lang'
+import * as fmt from '@/lib/format'
 const langStore = useLangStore()
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { isAdmin } from '@/lib/roles'
 import { useDealersDenStore, type DealerListing, type ListingKind } from '@/stores/dealersDen'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useConfirm } from '@/composables/useConfirm'
@@ -41,9 +43,9 @@ const canSell = computed(() => {
 // Avatar frames go through their own submission/approval flow (admins publish instantly,
 // artist-verified users go into a moderation queue) — narrower than general Den selling rights.
 const canSellFrames = computed(() => {
-  const u = auth.user as any
+  const u = auth.user
   if (!u) return false
-  return ['admin', 'owner'].includes(u.role) || (u.is_verified === true && u.verification_type === 'artist')
+  return isAdmin(u.role) || (u.is_verified === true && u.verification_type === 'artist')
 })
 const showFrameModal = ref(false)
 
@@ -191,13 +193,7 @@ const KIND_META = computed<Record<string, { label: string; icon: string; color: 
 function isSoldOut(l: DealerListing) {
   return l.status === 'sold' || (l.quantity > 0 && l.quantity_sold >= l.quantity)
 }
-function formatPrice(price: string | number, currency: string) {
-  const n = parseFloat(String(price))
-  if (currency === 'RUB') return `${n.toLocaleString('ru-RU')} ₽`
-  if (currency === 'USD') return `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-  if (currency === 'EUR') return `€${n.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-  return `${n.toLocaleString()} ${currency}`
-}
+const formatPrice = fmt.formatPrice
 
 // ── Live auctions for ticker ────────────────────────────────────────────────────
 const liveAuctions = computed(() =>

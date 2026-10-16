@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '@/lib/apiError'
 /**
  * TelegramImportModal — import a Telegram sticker pack into Bloomly.
  * Emits `imported` with { title, tg_name, sticker_urls } when successful,
@@ -45,7 +46,7 @@ async function doImport() {
   } catch (err: any) {
     error.value =
       err?.response?.data?.error ??
-      err?.message ??
+      errorMessage(err) ??
       'Произошла ошибка. Проверьте ссылку и попробуйте снова.'
     step.value = 'error'
   }

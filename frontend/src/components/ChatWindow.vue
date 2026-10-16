@@ -78,7 +78,7 @@
             </template>
             <template v-else>
               {{ other?.display_name || other?.username || langStore.t.chatInterlocutorFallback }}
-              <span v-if="(other as any)?.deceased_at" :title="langStore.t.chatRipTitle">🪦</span>
+              <span v-if="other?.deceased_at" :title="langStore.t.chatRipTitle">🪦</span>
             </template>
           </template>
         </p>
@@ -207,389 +207,17 @@
       </div>
     </div>
 
-    <!-- ── Group Info Modal (centered — same shell as the DM info / edit-group modals) ── -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="showMembersPanel" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md" @click.self="showMembersPanel = false">
-          <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden" style="max-height:90vh">
+    <ChatGroupInfoModal :open="showMembersPanel" :conv="conv" :my-role="myRole" :group="groupChat"
+      :media-stats="mediaStatsList" :media-stats-loading="mediaStatsLoading"
+      @close="showMembersPanel = false" @edit-group="showEditGroup = true; showMembersPanel = false"
+      @invite="showInvitePicker = true" @archive="showMembersPanel = false; archive()" @open-media="openMediaBrowser" />
+    <ChatDmInfoModal :open="showDmPanel" :conv="conv" :other="other" :is-group-dm="isGroupDm" :is-blocked="isBlocked"
+      :online="isPartnerOnline" :device="partnerDevice" :device-icon="partnerDeviceIcon" :last-seen-label="partnerLastSeenLabel"
+      :media-stats="mediaStatsList" :media-stats-loading="mediaStatsLoading"
+      @close="showDmPanel = false" @archive="showDmPanel = false; archive()" @block="showDmPanel = false; showBlockModal = true"
+      @delete="showDmPanel = false; showDeleteModal = true" @open-media="openMediaBrowser" />
 
-            <!-- Cover (colored banner behind avatar + name, plain card bg for the action row) -->
-            <div class="relative flex-shrink-0">
-              <div class="relative pt-4 pb-5 px-3 text-center overflow-hidden bg-gradient-to-br from-brand-accent/30 to-purple-900/40">
-                <img v-if="(conv as any)?.banner_url" :src="(conv as any).banner_url" class="absolute inset-0 w-full h-full object-cover" />
-                <div v-else-if="bannerCollage.length" class="absolute inset-0 flex">
-                  <div v-for="m in bannerCollage" :key="m.id" class="flex-1 h-full relative">
-                    <img v-if="m.avatar_url" :src="m.avatar_url" class="w-full h-full object-cover" />
-                    <div v-else class="w-full h-full bg-brand-accent/25 flex items-center justify-center text-brand-accent font-bold text-lg">
-                      {{ (m.display_name || m.username || '?')[0].toUpperCase() }}
-                    </div>
-                  </div>
-                </div>
-                <!-- Darken for legibility of the close/settings buttons, avatar ring and text -->
-                <div v-if="(conv as any)?.banner_url || bannerCollage.length" class="absolute inset-0 bg-black/30" />
-
-                <!-- Close button -->
-                <button @click="showMembersPanel = false"
-                  class="absolute top-3 left-3 w-8 h-8 rounded-xl bg-black/30 hover:bg-black/50 flex items-center justify-center text-white transition-all">
-                  <BIcon name="X" class="w-4 h-4" />
-                </button>
-                <!-- Settings (admin only) -->
-                <button v-if="myRole === 'admin'" @click="showEditGroup = true; showMembersPanel = false"
-                  class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-black/30 hover:bg-black/50 flex items-center justify-center text-white transition-all">
-                  <BIcon name="Settings" class="w-4 h-4" />
-                </button>
-                <!-- Avatar -->
-                <div class="relative w-20 h-20 rounded-2xl overflow-hidden shadow-xl mx-auto ring-2 ring-white/20">
-                  <img v-if="conv?.avatar_url" :src="conv.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
-                  <div v-else-if="bannerCollage.length" class="w-full h-full grid grid-cols-2">
-                    <div v-for="m in bannerCollage.slice(0, 4)" :key="m.id" class="relative">
-                      <img v-if="m.avatar_url" :src="m.avatar_url" class="w-full h-full object-cover" />
-                      <div v-else class="w-full h-full bg-brand-accent/25 flex items-center justify-center text-brand-accent font-bold">
-                        {{ (m.display_name || m.username || '?')[0].toUpperCase() }}
-                      </div>
-                    </div>
-                  </div>
-                  <div v-else class="w-full h-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-2xl">
-                    {{ (conv?.name ?? 'G')[0].toUpperCase() }}
-                  </div>
-                </div>
-                <h3 class="relative text-base font-bold text-white truncate mt-2.5 drop-shadow">{{ conv?.name || langStore.t.chatGroupFallbackName }}</h3>
-                <p class="relative text-xs text-white/70 mt-0.5 drop-shadow">{{ groupMembers.length }} {{ langStore.t.membersUnit }}</p>
-              </div>
-
-              <!-- Action row (plain card background) -->
-              <div class="flex justify-center gap-2 px-3 py-3">
-                <button v-if="conv?.group_id" @click="showInvitePicker = true"
-                  class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg text-white/60 hover:text-brand-accent hover:bg-brand-accent/10 transition-all text-xs font-semibold">
-                  <BIcon name="Send" class="w-4 h-4" />
-                  {{ langStore.t.chatInviteAction }}
-                </button>
-                <button v-if="myRole === 'admin'" @click="showAddMember = !showAddMember; addMemberSearch = ''; addMemberResults = []"
-                  :class="['flex flex-col items-center gap-1 px-4 py-2 rounded-2xl transition-all text-xs font-semibold',
-                    showAddMember ? 'bg-brand-accent/20 text-brand-accent' : 'bg-brand-bg text-white/60 hover:text-brand-accent hover:bg-brand-accent/10']">
-                  <BIcon name="UserPlus" class="w-4 h-4" />
-                  {{ langStore.t.addButton }}
-                </button>
-                <button @click="goToGroup(); showMembersPanel = false"
-                  class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg text-white/60 hover:text-brand-accent hover:bg-brand-accent/10 transition-all text-xs font-semibold">
-                  <BIcon name="Users2" class="w-4 h-4" />
-                  {{ langStore.t.contextGoToGroup }}
-                </button>
-                <button @click="showMembersPanel = false; archive()"
-                  class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg text-white/60 hover:text-white/90 hover:bg-brand-bg/80 transition-all text-xs font-semibold">
-                  <BIcon :name="conv?.my_participant?.archived ? 'ArchiveX' : 'Archive'" class="w-4 h-4" />
-                  {{ conv?.my_participant?.archived ? langStore.t.chatUnarchiveShort : langStore.t.archiveBtn }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Group link (real page, not a fake invite link) -->
-            <div v-if="conv?.group_id" class="flex items-center gap-2 px-4 py-2.5 border-t border-b border-brand-border flex-shrink-0">
-              <BIcon name="Link" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
-              <span class="flex-1 min-w-0 text-xs text-brand-accent truncate cursor-pointer hover:underline" @click="goToGroup(); showMembersPanel = false">
-                {{ groupPageUrl }}
-              </span>
-              <button @click="copyGroupLink" class="flex-shrink-0 text-white/40 hover:text-white transition-colors" :title="langStore.t.exportCopyLink">
-                <BIcon :name="groupLinkCopied ? 'Check' : 'Copy'" class="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <!-- Scrollable body: media list → participants header → search → member list (one continuous flow, no tabs) -->
-            <div class="flex-1 overflow-y-auto min-h-0">
-
-              <!-- Media stats list -->
-              <div v-if="mediaStatsLoading" class="flex items-center justify-center py-6 text-white/55 text-sm gap-2">
-                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> {{ langStore.t.loadingBtn }}
-              </div>
-              <button v-for="stat in mediaStatsList.filter((s) => s.count > 0)" :key="stat.key"
-                @click="openMediaBrowser(stat.key)"
-                class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-brand-bg/40 transition-colors text-left">
-                <BIcon :name="stat.icon" class="w-4 h-4 text-brand-accent flex-shrink-0" />
-                <span class="text-sm text-white/85">{{ stat.count }} {{ stat.label.toLowerCase() }}</span>
-                <BIcon name="ChevronRight" class="w-3.5 h-3.5 text-white/25 ml-auto flex-shrink-0" />
-              </button>
-
-              <!-- Participants header -->
-              <div class="flex items-center gap-2 px-4 py-3 mt-1 border-t border-brand-border">
-                <BIcon name="Users" class="w-3.5 h-3.5 text-white/40 flex-shrink-0" />
-                <span class="text-xs font-bold text-white/50 uppercase tracking-wide">
-                  {{ groupMembers.length }} {{ langStore.t.membersUnit }}{{ groupOnlineCount ? `, ${groupOnlineCount} ${langStore.t.chatOnlineNow}` : '' }}
-                </span>
-              </div>
-
-              <!-- Member search -->
-              <div class="px-3 pb-2">
-                <div class="flex items-center gap-2 bg-brand-bg rounded-2xl px-3 py-2">
-                  <BIcon name="Search" class="w-3.5 h-3.5 text-white/35 flex-shrink-0" />
-                  <input
-                    v-model="memberSearchQuery"
-                    type="text"
-                    :placeholder="langStore.t.chatSearchMembersPlaceholder"
-                    class="flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-none" />
-                  <button v-if="memberSearchQuery" @click="memberSearchQuery = ''" class="text-white/30 hover:text-white">
-                    <BIcon name="X" class="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              <!-- Add member (admin only) -->
-              <button v-if="myRole === 'admin' && !showAddMember" @click="showAddMember = true; addMemberSearch = ''; addMemberResults = []"
-                class="w-full flex items-center gap-3 px-4 py-2.5 text-brand-accent hover:bg-brand-bg/40 transition-colors text-left text-sm font-semibold">
-                <BIcon name="UserPlus" class="w-4 h-4 flex-shrink-0" />
-                {{ langStore.t.chatAddMembersAction }}
-              </button>
-
-              <!-- Add member search panel (admin only) -->
-              <Transition name="fade">
-                <div v-if="showAddMember && myRole === 'admin'" class="px-3 pt-1 pb-2 border-b border-brand-border/60">
-                  <div class="flex items-center gap-2 bg-brand-bg rounded-2xl px-3 py-2">
-                    <BIcon name="Search" class="w-3.5 h-3.5 text-white/35 flex-shrink-0" />
-                    <input
-                      v-model="addMemberSearch"
-                      @input="debouncedAddMemberSearch"
-                      type="text"
-                      :placeholder="langStore.t.chatSearchUsersPlaceholder"
-                      class="flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-none"
-                      autofocus />
-                    <button @click="showAddMember = false; addMemberSearch = ''; addMemberResults = []" class="text-white/30 hover:text-white">
-                      <BIcon name="X" class="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <!-- Search results -->
-                  <div v-if="addMemberResults.length" class="mt-1.5 space-y-0.5 max-h-48 overflow-y-auto">
-                    <button
-                      v-for="u in addMemberResults" :key="u.id"
-                      @click="doAddMember(u)"
-                      :disabled="groupMembers.some(m => m.user_id === u.id)"
-                      :class="['w-full flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors text-left',
-                        groupMembers.some(m => m.user_id === u.id)
-                          ? 'opacity-40 cursor-not-allowed'
-                          : 'hover:bg-brand-accent/10 cursor-pointer']"
-                    >
-                      <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover flex-shrink-0" @error="onAvatarError" />
-                      <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold flex-shrink-0">
-                        {{ (u.display_name || u.username || '?')[0].toUpperCase() }}
-                      </div>
-                      <div class="flex-1 min-w-0">
-                        <p class="text-sm text-white font-medium truncate">{{ u.display_name || u.username }}</p>
-                        <p class="text-[11px] text-white/40 truncate">@{{ u.username }}</p>
-                      </div>
-                      <BIcon
-                        :name="groupMembers.some(m => m.user_id === u.id) ? 'Check' : 'UserPlus'"
-                        :class="['w-3.5 h-3.5 flex-shrink-0', groupMembers.some(m => m.user_id === u.id) ? 'text-brand-accent' : 'text-white/40']" />
-                    </button>
-                  </div>
-                  <p v-else-if="addMemberSearch.length >= 2 && !addMemberLoading" class="text-center text-xs text-white/30 py-3">{{ langStore.t.chatNoOneFound }}</p>
-                  <p v-if="addMemberLoading" class="flex justify-center py-2">
-                    <BIcon name="Loader2" class="w-4 h-4 animate-spin text-white/40" />
-                  </p>
-                </div>
-              </Transition>
-
-              <!-- Member list -->
-              <p v-if="membersLoading" class="flex items-center justify-center py-8 text-white/55 text-sm gap-2">
-                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> {{ langStore.t.loadingBtn }}
-              </p>
-              <p v-else-if="!filteredGroupMembers.length" class="text-center text-xs text-white/30 py-6">{{ langStore.t.chatNoOneFound }}</p>
-              <router-link v-for="m in filteredGroupMembers" :key="m.user_id" :to="`/profile/${m.user?.username}`" class="flex items-center gap-3 px-4 py-2.5 hover:bg-brand-bg/40 transition-colors cursor-pointer">
-                <div class="relative flex-shrink-0">
-                  <img v-if="m.user?.avatar_url" :src="m.user.avatar_url" class="w-8 h-8 rounded-full object-cover" @error="onAvatarError" />
-                  <div v-else class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold">
-                    {{ (m.user?.display_name || m.user?.username || '?')[0].toUpperCase() }}
-                  </div>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm text-white font-medium truncate leading-tight">{{ m.user?.display_name || m.user?.username }}</p>
-                  <p class="text-xs truncate" :class="groupOnlineStatus[m.user_id] ? 'text-green-400' : 'text-white/45'">
-                    {{ groupOnlineStatus[m.user_id] ? langStore.t.chatOnlineNow : `@${m.user?.username}` }}
-                  </p>
-                </div>
-                <div class="flex items-center gap-1.5 flex-shrink-0">
-                  <span v-if="m.role === 'admin'" class="text-[9px] bg-brand-accent/15 text-brand-accent px-1.5 py-0.5 rounded-full border border-brand-accent/25 font-bold">{{ langStore.t.chatAdminBadge }}</span>
-                  <template v-if="myRole === 'admin' && m.user_id !== auth.user?.id">
-                    <button @click.stop="kickMember(m.user_id)" class="p-1 rounded-lg text-white/40 hover:text-brand-error transition-colors" :title="langStore.t.chatKickMemberTitle">
-                      <BIcon name="UserX" class="w-3.5 h-3.5" />
-                    </button>
-                    <button @click.stop="toggleMemberRole(m)" class="p-1 rounded-lg text-white/40 hover:text-brand-accent transition-colors" :title="m.role === 'admin' ? langStore.t.chatDemoteAdminTitle : langStore.t.chatPromoteAdminTitle">
-                      <BIcon :name="m.role === 'admin' ? 'ShieldOff' : 'ShieldCheck'" class="w-3.5 h-3.5" />
-                    </button>
-                  </template>
-                </div>
-              </router-link>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- ── DM Info Modal (centered) ──────────────────────────────────── -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="showDmPanel" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md" @click.self="showDmPanel = false">
-          <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden" style="max-height:90vh">
-            <!-- Cover (colored banner behind avatar + name, plain card bg for the action row) -->
-            <div class="relative flex-shrink-0">
-              <div class="relative pt-4 pb-5 px-5 text-center overflow-hidden bg-gradient-to-br from-brand-accent/30 to-purple-900/40">
-                <img v-if="other?.banner_url" :src="other.banner_url" class="absolute inset-0 w-full h-full object-cover" />
-                <div v-if="other?.banner_url" class="absolute inset-0 bg-black/30" />
-
-                <!-- Close button -->
-                <button @click="showDmPanel = false"
-                  class="absolute top-3 left-3 w-8 h-8 rounded-xl bg-black/30 hover:bg-black/50 flex items-center justify-center text-white transition-all">
-                  <BIcon name="X" class="w-4 h-4" />
-                </button>
-                <!-- Avatar -->
-                <div class="relative inline-block">
-                  <img v-if="other?.avatar_url" :src="other.avatar_url" :alt="other.username"
-                    class="w-20 h-20 rounded-full object-cover shadow-xl ring-2 ring-white/20" @error="onAvatarError" />
-                  <div v-else class="w-20 h-20 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-2xl shadow-xl ring-2 ring-white/20">
-                    {{ (other?.display_name || other?.username || '?')[0].toUpperCase() }}
-                  </div>
-                  <!-- Online dot -->
-                  <span v-if="isPartnerOnline && !partnerDeviceIcon" class="absolute bottom-1 right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-brand-card" />
-                  <span v-else-if="isPartnerOnline" :title="partnerDevice ?? undefined"
-                    class="absolute bottom-1 right-1 w-4.5 h-4.5 bg-green-500 rounded-full border-2 border-brand-card flex items-center justify-center">
-                    <BIcon :name="partnerDeviceIcon!" class="w-2.5 h-2.5 text-black/70" />
-                  </span>
-                </div>
-                <h3 class="relative text-base font-bold text-white truncate mt-2.5 flex items-center justify-center gap-1.5 drop-shadow">
-                  {{ other?.display_name || other?.username }}
-                  <span v-if="(other as any)?.deceased_at" :title="langStore.t.chatRipTitle">🪦</span>
-                </h3>
-                <p class="relative text-xs mt-0.5 flex items-center justify-center gap-1 drop-shadow" :class="isPartnerOnline ? 'text-green-400' : 'text-white/70'">
-                  {{ isPartnerOnline ? langStore.t.chatOnlineBulleted : `● ${partnerLastSeenLabel}` }}
-                  <BIcon v-if="isPartnerOnline && partnerDeviceIcon" :name="partnerDeviceIcon!" class="w-3 h-3" :title="partnerDevice ?? undefined" />
-                </p>
-              </div>
-
-              <!-- Quick actions (plain card background) -->
-              <div class="flex justify-center gap-2 px-5 py-3">
-                <router-link :to="`/profile/${other?.username}`" @click="showDmPanel = false"
-                  class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg hover:bg-brand-accent/10 text-white/60 hover:text-brand-accent transition-all text-xs font-semibold">
-                  <BIcon name="User" class="w-4 h-4" />
-                  {{ langStore.t.profile }}
-                </router-link>
-                <button v-if="!isGroupDm" @click="showDmPanel = false; archive()"
-                  class="flex flex-col items-center gap-1 px-4 py-2 rounded-2xl bg-brand-bg hover:bg-brand-bg/80 text-white/60 hover:text-white/90 transition-all text-xs font-semibold">
-                  <BIcon :name="conv?.my_participant?.archived ? 'ArchiveX' : 'Archive'" class="w-4 h-4" />
-                  {{ conv?.my_participant?.archived ? langStore.t.chatUnarchiveShort : langStore.t.archiveBtn }}
-                </button>
-                <button v-if="!isGroupDm" @click="showDmPanel = false; showBlockModal = true"
-                  :class="['flex flex-col items-center gap-1 px-4 py-2 rounded-2xl transition-all text-xs font-semibold',
-                    isBlocked ? 'bg-brand-accent/15 text-brand-accent hover:bg-brand-accent/25' : 'bg-brand-bg text-white/60 hover:text-brand-error hover:bg-brand-error/10']">
-                  <BIcon :name="isBlocked ? 'ShieldOff' : 'ShieldAlert'" class="w-4 h-4" />
-                  {{ isBlocked ? langStore.t.chatUnblockShort : langStore.t.chatBlockShort }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Username row (clicking anywhere in the row copies it, not just the icon) -->
-            <div class="flex items-center gap-2 px-5 py-2.5 border-t border-b border-brand-border flex-shrink-0 cursor-pointer hover:bg-brand-bg/40 transition-colors"
-              @click="copyUsername" :title="langStore.t.chatCopyTitle">
-              <span class="text-brand-accent font-bold text-xs flex-shrink-0">@</span>
-              <span class="flex-1 min-w-0 text-sm text-white/80 truncate">{{ other?.username }}</span>
-              <button class="flex-shrink-0 text-white/40 hover:text-white transition-colors">
-                <BIcon :name="usernameCopied ? 'Check' : 'Copy'" class="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <!-- Media stats list -->
-            <div class="flex-1 overflow-y-auto min-h-0 py-1">
-              <div v-if="mediaStatsLoading" class="flex items-center justify-center py-6 text-white/55 text-sm gap-2">
-                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> {{ langStore.t.loadingBtn }}
-              </div>
-              <p v-else-if="!mediaStatsList.some((s) => s.count > 0)" class="text-center text-xs text-white/30 py-6">{{ langStore.t.chatNoMediaLabel }}</p>
-              <button v-for="stat in mediaStatsList.filter((s) => s.count > 0)" :key="stat.key"
-                @click="openMediaBrowser(stat.key)"
-                class="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-brand-bg/40 transition-colors text-left">
-                <BIcon :name="stat.icon" class="w-4 h-4 text-brand-accent flex-shrink-0" />
-                <span class="text-sm text-white/85">{{ stat.count }} {{ stat.label.toLowerCase() }}</span>
-                <BIcon name="ChevronRight" class="w-3.5 h-3.5 text-white/25 ml-auto flex-shrink-0" />
-              </button>
-            </div>
-
-            <!-- Danger zone -->
-            <div class="px-5 py-3 flex-shrink-0 border-t border-brand-border">
-              <button @click="showDmPanel = false; showDeleteModal = true"
-                class="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm text-brand-error hover:bg-brand-error/10 transition-colors font-medium">
-                <BIcon name="Trash2" class="w-4 h-4" />
-                {{ langStore.t.contextDeleteConv }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- ── Media browser (opened from a media-stat row) ─────────────────── -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="mediaBrowserType" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md" @click.self="closeMediaBrowser">
-          <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden" style="max-height:90vh">
-            <!-- Header -->
-            <div class="flex items-center gap-2 px-2 py-3 border-b border-brand-border flex-shrink-0">
-              <button @click="closeMediaBrowser" class="w-8 h-8 rounded-xl hover:bg-brand-bg flex items-center justify-center text-white/70 hover:text-white transition-all flex-shrink-0">
-                <BIcon name="ArrowLeft" class="w-4 h-4" />
-              </button>
-              <h3 class="flex-1 min-w-0 text-sm font-bold text-white truncate">{{ MEDIA_TYPE_TITLES[mediaBrowserType] ?? '' }}</h3>
-              <button @click="closeMediaBrowser" class="w-8 h-8 rounded-xl hover:bg-brand-bg flex items-center justify-center text-white/70 hover:text-white transition-all flex-shrink-0">
-                <BIcon name="X" class="w-4 h-4" />
-              </button>
-            </div>
-
-            <!-- Body -->
-            <div class="flex-1 overflow-y-auto min-h-0" @scroll="onMediaBrowserScroll">
-              <p v-if="!mediaBrowserLoading && !mediaBrowserItems.length" class="text-center text-sm text-white/30 py-10">{{ langStore.t.chatNothingHere }}</p>
-
-              <template v-for="group in mediaBrowserGroups" :key="group.label">
-                <p class="px-4 pt-3 pb-1.5 text-xs font-bold text-white/40 uppercase tracking-wide">{{ group.label }}</p>
-
-                <!-- Photos / videos: grid -->
-                <div v-if="mediaBrowserType === 'image' || mediaBrowserType === 'video'" class="grid grid-cols-4 gap-0.5 px-0.5">
-                  <div v-for="m in group.items" :key="m.id" class="relative aspect-square cursor-pointer bg-black/30"
-                    @click="mediaBrowserType === 'image' ? openMediaBrowserImage(m.file_url!) : null">
-                    <img v-if="m.type === 'image'" :src="m.file_url!" class="w-full h-full object-cover" loading="lazy" />
-                    <video v-else :src="m.file_url!" class="w-full h-full object-cover" preload="metadata" />
-                    <div v-if="m.type === 'video'" class="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
-                      <BIcon name="Play" class="w-5 h-5 text-white drop-shadow" />
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Audio / voice: list with inline play -->
-                <div v-else-if="mediaBrowserType === 'audio' || mediaBrowserType === 'voice'">
-                  <div v-for="m in group.items" :key="m.id" class="flex items-center gap-3 px-4 py-2.5">
-                    <audio v-if="mediaBrowserPlayingId === m.id" :src="m.file_url!" autoplay @ended="mediaBrowserPlayingId = null" class="hidden" />
-                    <button @click="toggleMediaBrowserPlay(m.id)"
-                      class="flex-shrink-0 w-9 h-9 rounded-full bg-brand-accent/80 hover:bg-brand-accent flex items-center justify-center transition-all">
-                      <BIcon :name="mediaBrowserPlayingId === m.id ? 'Pause' : 'Play'" class="w-4 h-4 text-white" />
-                    </button>
-                    <div class="flex-1 min-w-0">
-                      <p class="text-sm text-white font-medium truncate">{{ m.sender?.display_name || m.sender?.username }}</p>
-                      <p class="text-xs text-white/45">{{ formatMsgTime(m.created_at) }}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Links: text list -->
-                <div v-else>
-                  <div v-for="m in group.items" :key="m.id" class="px-4 py-2.5">
-                    <p class="text-xs text-brand-accent font-semibold">{{ m.sender?.display_name || m.sender?.username }}</p>
-                    <p class="text-sm text-white/80 break-words">{{ m.text }}</p>
-                    <p class="text-xs text-white/40 mt-0.5">{{ formatMsgTime(m.created_at) }}</p>
-                  </div>
-                </div>
-              </template>
-
-              <div v-if="mediaBrowserLoading" class="flex items-center justify-center py-4 text-white/55 text-sm gap-2">
-                <BIcon name="Loader2" class="w-4 h-4 animate-spin" /> {{ langStore.t.loadingBtn }}
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
+    <ChatMediaBrowser :conv-id="convId" :type="mediaBrowserType" @close="mediaBrowserType = null" @open-image="openLightbox" />
     <!-- ── Pin scope modal ─────────────────────────────────────────────── -->
     <Teleport to="body">
       <Transition name="fade">
@@ -633,162 +261,9 @@
       </Transition>
     </Teleport>
 
-    <!-- ── Payment request modal (chat-only order card) ────────────────────── -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="showPaymentModal" class="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="closePaymentModal">
-          <div class="bg-brand-card border border-brand-border rounded-3xl p-5 w-full max-w-xs shadow-2xl">
-            <div class="flex items-center gap-2 mb-4">
-              <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-accent/30 to-brand-accent/10 ring-1 ring-brand-accent/30 flex items-center justify-center">
-                <BIcon name="CreditCard" class="w-4 h-4 text-brand-accent" />
-              </div>
-              <h3 class="text-base font-bold text-white">{{ langStore.t.chatPaymentRequestTitle }}</h3>
-            </div>
-            <div class="flex flex-col gap-3">
-              <div>
-                <label class="text-[11px] text-white/45 font-semibold">{{ langStore.t.chatAmountLabel }}</label>
-                <input v-model="paymentForm.amount" type="number" min="1" placeholder="3500"
-                  class="w-full mt-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/50" />
-              </div>
-              <div>
-                <label class="text-[11px] text-white/45 font-semibold">{{ langStore.t.fursuitDescLabel }}</label>
-                <input v-model="paymentForm.description" type="text" maxlength="300" :placeholder="langStore.t.chatDescPlaceholderExample"
-                  class="w-full mt-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/50" />
-              </div>
-              <div>
-                <label class="text-[11px] text-white/45 font-semibold">{{ langStore.t.chatPrepaymentLabel }}</label>
-                <input v-model="paymentForm.prepaymentPercent" type="number" min="1" max="100" placeholder="50"
-                  class="w-full mt-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/50" />
-              </div>
-              <div>
-                <label class="text-[11px] text-white/45 font-semibold">{{ langStore.t.chatDeadlineLabel }}</label>
-                <input v-model="paymentForm.deadline" type="date"
-                  class="w-full mt-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/50" />
-              </div>
-              <button type="button" @click="submitPaymentRequest" :disabled="!paymentForm.amount || sendingPayment"
-                class="w-full py-2.5 rounded-xl bg-brand-accent hover:bg-brand-accent-plus text-white text-sm font-semibold transition-all disabled:opacity-40 mt-1">
-                {{ sendingPayment ? langStore.t.chatSendingPaymentLabel : langStore.t.chatSendPaymentRequestBtn }}
-              </button>
-              <button type="button" @click="closePaymentModal" class="w-full py-1 text-sm text-white/45 hover:text-white transition-colors">
-                {{ langStore.t.cancel }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <!-- ── Edit Group Modal ────────────────────────────────────────────────── -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div v-if="showEditGroup" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md" @click.self="showEditGroup = false">
-          <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden" style="max-height:92vh">
-
-            <!-- ── Banner (click to change) ── -->
-            <input ref="groupBannerRef" type="file" accept="image/*" class="sr-only" @change="onGroupBannerChange" />
-            <input ref="groupAvatarRef" type="file" accept="image/*" class="sr-only" @change="onGroupAvatarChange" />
-            <div class="relative w-full h-32 cursor-pointer group flex-shrink-0" @click="groupBannerRef?.click()">
-              <div class="absolute inset-0 bg-gradient-to-br from-brand-accent/30 via-purple-900/40 to-brand-bg overflow-hidden">
-                <img v-if="editGroupBanner" :src="editGroupBanner" class="w-full h-full object-cover" />
-              </div>
-              <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
-                <div class="flex items-center gap-1.5 bg-black/60 px-3 py-1.5 rounded-xl text-xs text-white">
-                  <BIcon name="Image" class="w-3.5 h-3.5" />
-                  {{ editGroupBanner ? langStore.t.changeBanner : langStore.t.addBanner }}
-                </div>
-              </div>
-              <span v-if="uploadingGroupBanner" class="absolute inset-0 flex items-center justify-center bg-black/40">
-                <span class="w-7 h-7 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
-              </span>
-              <!-- Close button -->
-              <button @click.stop="showEditGroup = false" class="absolute top-3 right-3 w-7 h-7 rounded-xl bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-all">
-                <BIcon name="X" class="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <!-- ── Centered avatar ── -->
-            <div class="flex flex-col items-center -mt-8 pb-3 flex-shrink-0 px-5">
-              <div class="relative cursor-pointer group" @click="groupAvatarRef?.click()">
-                <div class="w-16 h-16 rounded-2xl border-[3px] border-brand-card bg-brand-bg overflow-hidden shadow-xl">
-                  <img v-if="editGroupAvatar" :src="editGroupAvatar" class="w-full h-full object-cover" />
-                  <div v-else class="w-full h-full flex items-center justify-center bg-brand-accent/20">
-                    <BIcon name="Camera" class="w-6 h-6 text-brand-accent/70" />
-                  </div>
-                </div>
-                <div class="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <BIcon name="Camera" class="w-5 h-5 text-white" />
-                </div>
-                <span v-if="uploadingGroupAvatar" class="absolute inset-0 rounded-2xl bg-black/60 flex items-center justify-center">
-                  <span class="w-5 h-5 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
-                </span>
-              </div>
-              <div class="flex gap-2 mt-2">
-                <button v-if="editGroupAvatar" @click="editGroupAvatar = ''"
-                  class="text-[10px] text-brand-error hover:underline">{{ langStore.t.removePhoto }}</button>
-                <button v-if="editGroupBanner" @click="editGroupBanner = ''"
-                  class="text-[10px] text-white/40 hover:text-white/60 hover:underline">{{ langStore.t.removeBanner }}</button>
-              </div>
-            </div>
-
-            <!-- ── Scrollable content ── -->
-            <div class="flex-1 overflow-y-auto min-h-0 px-5 pb-2 space-y-4">
-              <!-- Name card -->
-              <div class="bg-brand-bg rounded-2xl p-4 border border-brand-border/60">
-                <label class="block text-[11px] text-white/45 font-semibold uppercase tracking-wide mb-2">{{ langStore.t.groupNameLabel }}</label>
-                <input v-model="editGroupName" type="text" maxlength="100"
-                  :placeholder="langStore.t.groupNamePlaceholder"
-                  class="w-full bg-transparent text-sm text-white outline-none placeholder-white/30 border-b border-brand-border focus:border-brand-accent/60 pb-1 transition-colors" />
-              </div>
-
-              <!-- Members card -->
-              <div v-if="groupMembers.length" class="bg-brand-bg rounded-2xl p-4 border border-brand-border/60">
-                <p class="text-[11px] text-white/45 font-semibold uppercase tracking-wide mb-3">{{ langStore.t.createStep2Title }} · {{ groupMembers.length }}</p>
-                <div class="space-y-0.5 max-h-52 overflow-y-auto -mx-1">
-                  <div v-for="m in groupMembers" :key="m.user_id"
-                    class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-card/60 transition-colors">
-                    <img v-if="m.user?.avatar_url" :src="m.user.avatar_url" class="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-                    <div v-else class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold flex-shrink-0">
-                      {{ (m.user?.display_name || m.user?.username || '?')[0].toUpperCase() }}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <p class="text-sm text-white font-medium truncate leading-tight">{{ m.user?.display_name || m.user?.username }}</p>
-                      <p class="text-[11px] text-white/40 truncate">@{{ m.user?.username }}</p>
-                    </div>
-                    <div class="flex items-center gap-1 flex-shrink-0">
-                      <span v-if="m.role === 'admin'"
-                        class="text-[9px] bg-brand-accent/15 text-brand-accent px-1.5 py-0.5 rounded-full border border-brand-accent/25 font-bold">ADMIN</span>
-                      <template v-if="m.user_id !== auth.user?.id">
-                        <button @click="toggleMemberRole(m)" class="p-1 rounded-lg text-white/35 hover:text-brand-accent hover:bg-brand-accent/10 transition-colors"
-                          :title="m.role === 'admin' ? langStore.t.chatDemoteAdminTitle : langStore.t.chatPromoteAdminTitle">
-                          <BIcon :name="m.role === 'admin' ? 'ShieldOff' : 'ShieldCheck'" class="w-3.5 h-3.5" />
-                        </button>
-                        <button @click="kickMember(m.user_id)" class="p-1 rounded-lg text-white/35 hover:text-brand-error hover:bg-brand-error/10 transition-colors" :title="langStore.t.chatKickMemberTitle">
-                          <BIcon name="UserX" class="w-3.5 h-3.5" />
-                        </button>
-                      </template>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- ── Footer actions ── -->
-            <div class="flex items-center gap-2 px-5 py-4 border-t border-brand-border flex-shrink-0">
-              <button @click="showEditGroup = false"
-                class="flex-1 py-2.5 rounded-2xl border border-brand-border text-sm text-white/55 hover:text-white hover:bg-brand-bg/60 transition-all">
-                {{ langStore.t.cancel }}
-              </button>
-              <button @click="saveGroupEdit" :disabled="savingGroup"
-                class="flex-1 py-2.5 rounded-2xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus disabled:opacity-40 transition-all flex items-center justify-center gap-2 shadow-lg shadow-brand-accent/20">
-                <BIcon v-if="savingGroup" name="Loader2" class="w-3.5 h-3.5 animate-spin" />
-                {{ savingGroup ? langStore.t.chatSavingGroupLabel : langStore.t.groupSettingsSave }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
-
+    <ChatPaymentRequestModal :open="showPaymentModal" :conv-id="convId" @close="showPaymentModal = false" @sent="scrollToBottom(true)" />
+    <ChatEditGroupModal :open="showEditGroup" :conv-id="convId" :conv="conv" :members="groupMembers"
+      @close="showEditGroup = false" @toggle-role="toggleMemberRole" @kick="kickMember" />
     <!-- ── Inline search bar ───────────────────────────────────────────────── -->
     <Transition name="search-slide">
       <div v-if="showSearch" class="px-4 py-2 border-b border-brand-border bg-brand-card/60 flex-shrink-0">
@@ -1831,116 +1306,7 @@
     </div>
   </div>
 
-  <!-- ── In-chat story viewer ──────────────────────────────────────────────── -->
-  <Teleport to="body">
-    <Transition
-      enter-active-class="transition duration-250 ease-out"
-      enter-from-class="opacity-0 scale-95"
-      enter-to-class="opacity-100 scale-100"
-      leave-active-class="transition duration-200 ease-in"
-      leave-from-class="opacity-100 scale-100"
-      leave-to-class="opacity-0 scale-95"
-    >
-      <div
-        v-if="activeStoryCard"
-        class="fixed inset-0 z-[800] flex items-center justify-center bg-black/90 backdrop-blur-sm"
-        @click.self="activeStoryCard = null"
-      >
-        <!-- Story phone frame -->
-        <div
-          class="relative flex flex-col bg-black rounded-3xl overflow-hidden shadow-2xl ring-1 ring-white/10"
-          style="aspect-ratio:9/16; height:min(90vh,600px)"
-        >
-          <!-- Background blur -->
-          <div class="absolute inset-0 overflow-hidden">
-            <img
-              v-if="activeStoryCard.imageUrl"
-              :src="activeStoryCard.imageUrl"
-              class="w-full h-full object-cover scale-110 blur-2xl opacity-30 pointer-events-none"
-              aria-hidden="true"
-            />
-            <div class="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
-          </div>
-
-          <!-- Main image -->
-          <div class="flex-1 relative flex items-center justify-center overflow-hidden">
-            <img
-              v-if="activeStoryCard.imageUrl"
-              :src="activeStoryCard.imageUrl"
-              class="w-full h-full object-cover"
-              draggable="false"
-            />
-            <div v-else class="flex flex-col items-center gap-3 text-white/30">
-              <BIcon name="ImageOff" class="w-12 h-12" />
-              <span class="text-xs">{{ langStore.t.chatImageUnavailableLabel }}</span>
-            </div>
-          </div>
-
-          <!-- Top bar: author + expiry + close -->
-          <div class="absolute top-0 left-0 right-0 z-10 flex items-center gap-2.5 px-3 pt-3 pb-4 bg-gradient-to-b from-black/70 to-transparent">
-            <!-- Avatar -->
-            <div class="w-9 h-9 rounded-full overflow-hidden border-2 border-white/30 flex-shrink-0 bg-brand-accent/20">
-              <img
-                v-if="activeStoryCard.authorAvatar"
-                :src="activeStoryCard.authorAvatar"
-                class="w-full h-full object-cover"
-              />
-              <div v-else class="w-full h-full flex items-center justify-center text-sm font-bold text-white">
-                {{ (activeStoryCard.authorName || '?')[0].toUpperCase() }}
-              </div>
-            </div>
-            <!-- Name + expiry -->
-            <div class="flex-1 min-w-0">
-              <p class="text-sm font-bold text-white leading-tight truncate">
-                {{ activeStoryCard.authorName }}
-              </p>
-              <div class="flex items-center gap-1 text-[11px] text-white/55">
-                <BIcon name="Sparkles" class="w-3 h-3" />
-                <span>{{ langStore.t.story }}</span>
-                <span v-if="activeStoryCard.expiresAt" class="flex items-center gap-0.5 ml-1">
-                  <BIcon name="Clock" class="w-3 h-3" />
-                  {{
-                    (() => {
-                      const diff = Math.max(0, new Date(activeStoryCard.expiresAt).getTime() - Date.now())
-                      const h = Math.floor(diff / 3_600_000)
-                      const m = Math.floor((diff % 3_600_000) / 60_000)
-                      return h > 0 ? `${h}${langStore.t.chatHourAbbr} ${m}${langStore.t.chatMinuteAbbr}` : `${m}${langStore.t.chatMinuteAbbr}`
-                    })()
-                  }}
-                </span>
-              </div>
-            </div>
-            <!-- Close button -->
-            <button
-              @click="activeStoryCard = null"
-              class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors flex-shrink-0"
-            >
-              <BIcon name="X" class="w-5 h-5" />
-            </button>
-          </div>
-
-          <!-- Bottom: reply text if present -->
-          <div
-            v-if="activeStoryCard.replyText"
-            class="absolute bottom-0 left-0 right-0 z-10 px-4 pb-5 pt-8 bg-gradient-to-t from-black/80 to-transparent"
-          >
-            <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl px-4 py-3">
-              <p class="text-[10px] text-white/50 font-semibold uppercase tracking-wider mb-1">{{ langStore.t.chatReplyLabel }}</p>
-              <p class="text-sm text-white leading-snug">{{ activeStoryCard.replyText }}</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Close hint -->
-        <button
-          @click="activeStoryCard = null"
-          class="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-        >
-          <BIcon name="X" class="w-5 h-5" />
-        </button>
-      </div>
-    </Transition>
-  </Teleport>
+  <ChatStoryViewer :card="activeStoryCard" @close="activeStoryCard = null" />
 
   <!-- ── Reaction burst flourish (flying emoji on pick) ────────────────────── -->
   <Teleport to="body">
@@ -1953,12 +1319,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessagesStore, type Message, type MsgSender, type Conversation, type PinnedMessage } from '@/stores/messages'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
-import type { Lang } from '@/locales/translations'
 import BIcon from '@/components/BIcon.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
 import MiniPlayer from '@/components/MiniPlayer.vue'
@@ -1972,10 +1337,26 @@ import StickerRenderer from '@/components/StickerRenderer.vue'
 import StickerPackPreviewModal from '@/components/StickerPackPreviewModal.vue'
 import SpamSlowdownModal from '@/components/SpamSlowdownModal.vue'
 import api from '@/api'
-import { compressImageForUpload } from '@/lib/utils'
 import { wsClient } from '@/lib/wsClient'
 import { isEncrypted } from '@/lib/e2e'
-import { deviceKind } from '@/lib/deviceIcon'
+import * as fmt from '@/lib/format'
+import {
+  FWD_RE, STORY_REPLY_RE, type StoryReplyMeta, parseStoryReply, getStickerEmoji, isEmojiOnlyText, renderMentions, highlightMatches,
+  getDisplayText as displayTextOf, getAlbumFiles, isGifUrl, formatMoney, isOverdue, startOfDay,
+} from '@/lib/chatMessage'
+import { useChatTranslation } from '@/composables/chat/useChatTranslation'
+import { useVoiceRecorder } from '@/composables/chat/useVoiceRecorder'
+import { useChatAttachments, MAX_ATTACHMENTS } from '@/composables/chat/useChatAttachments'
+import { usePartnerPresence } from '@/composables/chat/usePartnerPresence'
+import { useMentionAutocomplete } from '@/composables/chat/useMentionAutocomplete'
+import { useChatMediaStats } from '@/composables/chat/useChatMediaStats'
+import ChatStoryViewer from '@/components/chat/ChatStoryViewer.vue'
+import ChatMediaBrowser from '@/components/chat/ChatMediaBrowser.vue'
+import ChatPaymentRequestModal from '@/components/chat/ChatPaymentRequestModal.vue'
+import ChatEditGroupModal from '@/components/chat/ChatEditGroupModal.vue'
+import ChatGroupInfoModal from '@/components/chat/ChatGroupInfoModal.vue'
+import ChatDmInfoModal from '@/components/chat/ChatDmInfoModal.vue'
+import { useGroupChatManagement } from '@/composables/chat/useGroupChatManagement'
 
 const props = defineProps<{
   convId: string
@@ -1989,11 +1370,6 @@ const auth  = useAuthStore()
 const router = useRouter()
 const langStore = useLangStore()
 
-// ── Language code mapping (app lang → MyMemory API lang) ────────────────────
-const LANG_TO_API: Record<Lang, string> = {
-  RU: 'ru', EN: 'en', JP: 'ja', CN: 'zh-CN', DE: 'de', FR: 'fr', ES: 'es', PT: 'pt',
-}
-
 // ── Refs ───────────────────────────────────────────────────────────────────────
 const draft       = ref('')
 const scrollEl    = ref<HTMLElement | null>(null)
@@ -2004,187 +1380,27 @@ const menuRef     = ref<HTMLElement | null>(null)
 const showMenu    = ref(false)
 const showSearch  = ref(false)
 const searchQuery = ref('')
-const translateMode    = ref(false)
-const translateLang    = ref(LANG_TO_API[langStore.currentLang] ?? 'ru')
-const translations     = ref<Record<string, string>>({})
-const translatingIds   = reactive(new Set<string>())
 const lightboxUrl      = ref<string | null>(null)
-// Online status
-const isPartnerOnline   = ref(false)
-const partnerLastSeenAt = ref<Date | null>(null)
-const partnerDevice     = ref<string | null>(null)
-const partnerLastSeenLabel = computed(() => {
-  if (!partnerLastSeenAt.value) return langStore.t.chatOfflineLabel
-  const seenAt = partnerLastSeenAt.value
-  const diff = Math.floor((Date.now() - seenAt.getTime()) / 60000)
-  if (diff < 1) return langStore.t.chatOnlineJustNow
-  if (diff < 60) return `${langStore.t.chatSeenPrefix} ${diff} ${langStore.t.chatMinAgoSuffix}`
-  const h = Math.floor(diff / 60)
-  if (h < 24) return `${langStore.t.chatSeenPrefix} ${h} ${langStore.t.chatHoursAgoSuffix}`
-  const now = new Date()
-  const locale = LANG_TO_LOCALE[langStore.currentLang]
-  const time = seenAt.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
-  const sameYear = seenAt.getFullYear() === now.getFullYear()
-  const date = seenAt.toLocaleDateString(locale, sameYear ? { day: 'numeric', month: 'long' } : { day: 'numeric', month: 'long', year: 'numeric' })
-  return `${langStore.t.chatSeenPrefix} ${date} ${langStore.t.chatSeenAtConnector} ${time}`
-})
-const partnerDeviceIcon = computed(() => {
-  const kind = deviceKind(partnerDevice.value)
-  return kind === 'mobile' ? 'Smartphone' : kind === 'tablet' ? 'Tablet' : kind === 'desktop' ? 'Monitor' : null
-})
-let onlineTimer: ReturnType<typeof setInterval> | null = null
-// Media — multiple attachments can be queued at once (e.g. a photo + a video sent together)
-interface PendingAttachment {
-  id: number
-  kind: 'image' | 'video' | 'gif' | 'audio' | 'file'
-  name: string
-  size: number
-  previewUrl: string | null
-  uploadedUrl: string | null
-  uploading: boolean
-  progress: number
-  failed: boolean
-}
-const MAX_ATTACHMENTS = 10
-const pendingAttachments = ref<PendingAttachment[]>([])
-let attachSeq = 0
-const voiceUploading = ref(false)
-const isUploading = computed(() => voiceUploading.value || pendingAttachments.value.some((a) => a.uploading))
-const uploadError       = ref<string | null>(null)
-let uploadErrorTimer: ReturnType<typeof setTimeout> | null = null
 // Lightbox
 const lightboxUrls = ref<string[]>([])
 const lightboxTypes = ref<string[]>([])
 const lightboxStart = ref(0)
 const stickerPackUrl = ref<string | null>(null)
-// Voice recording
-const isRecording     = ref(false)
-const recordingSeconds = ref(0)
-let mediaRecorder: MediaRecorder | null = null
-let recordTimer: ReturnType<typeof setInterval> | null = null
 // Legacy E2E messages — decryption removed, only used to show a placeholder for old ciphertext
 // Block/delete modals
 const showDeleteModal = ref(false)
 const showBlockModal  = ref(false)
 const isBlocked       = ref(false)
 const deleteScope     = ref<'me' | 'all'>('me')
-// @mention autocomplete
-const mentionQuery    = ref('')
-const mentionResults  = ref<Array<{ id: string; username: string; display_name: string | null; avatar_url: string | null }>>([])
-const mentionLoading  = ref(false)
-let   mentionTimer: ReturnType<typeof setTimeout> | null = null
 // Group conversation
 const showMembersPanel = ref(false)
 const showDmPanel      = ref(false)
-const mediaStatsData   = ref<Record<string, number>>({})
-const mediaStatsLoading = ref(false)
 const pinTarget        = ref<Message | null>(null)
 const showPinScopeModal = ref(false)
 const showPaymentModal = ref(false)
 const showTipPicker    = ref(false)
 const customTipAmount  = ref('')
-const sendingPayment   = ref(false)
-const paymentForm      = reactive({ amount: '', description: '', prepaymentPercent: '', deadline: '' })
-const showEditGroup    = ref(false)
-const editGroupName    = ref('')
-const editGroupAvatar  = ref('')
-const editGroupBanner  = ref('')
-const groupAvatarRef   = ref<HTMLInputElement | null>(null)
-const groupBannerRef   = ref<HTMLInputElement | null>(null)
-const uploadingGroupAvatar = ref(false)
-const uploadingGroupBanner = ref(false)
 
-async function onGroupAvatarChange(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  uploadingGroupAvatar.value = true
-  try {
-    const fd = new FormData()
-    const compressed = await compressImageForUpload(file)
-    fd.append('file', compressed, compressed.name)
-    const res = await api.post('/media/upload?folder=avatars', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-    editGroupAvatar.value = res.data.data.url
-  } catch (err) { console.error('Avatar upload failed:', err) }
-  finally { uploadingGroupAvatar.value = false; if (groupAvatarRef.value) groupAvatarRef.value.value = '' }
-}
-
-async function onGroupBannerChange(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  uploadingGroupBanner.value = true
-  try {
-    const fd = new FormData()
-    const compressed = await compressImageForUpload(file)
-    fd.append('file', compressed, compressed.name)
-    const res = await api.post('/media/upload?folder=banners', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-    editGroupBanner.value = res.data.data.url
-  } catch (err) { console.error('Banner upload failed:', err) }
-  finally { uploadingGroupBanner.value = false; if (groupBannerRef.value) groupBannerRef.value.value = '' }
-}
-const savingGroup      = ref(false)
-const groupMembers     = ref<Array<{ user_id: string; role: string; user: MsgSender }>>([])
-const membersLoading   = ref(false)
-// When the group has no custom banner, the banner is filled with a collage of member avatars.
-const bannerCollage = computed(() => groupMembers.value.slice(0, 8).map((m) => m.user))
-
-// Member search (within the info modal — separate from the admin "add member" search below)
-const memberSearchQuery = ref('')
-const filteredGroupMembers = computed(() => {
-  const q = memberSearchQuery.value.trim().toLowerCase()
-  if (!q) return groupMembers.value
-  return groupMembers.value.filter((m) =>
-    m.user?.username?.toLowerCase().includes(q) || m.user?.display_name?.toLowerCase().includes(q))
-})
-
-// Group page link (real URL — not a fake VK-style invite link)
-const groupPageUrl = computed(() => props.conv?.group_id ? `${location.host}/groups/${props.conv.group_id}` : '')
-const groupLinkCopied = ref(false)
-async function copyGroupLink() {
-  if (!props.conv?.group_id) return
-  try {
-    await navigator.clipboard.writeText(`${location.origin}/groups/${props.conv.group_id}`)
-    groupLinkCopied.value = true
-    setTimeout(() => { groupLinkCopied.value = false }, 1500)
-  } catch { /* clipboard blocked — silent */ }
-}
-
-const usernameCopied = ref(false)
-async function copyUsername() {
-  if (!props.other?.username) return
-  try {
-    await navigator.clipboard.writeText(props.other.username)
-    usernameCopied.value = true
-    setTimeout(() => { usernameCopied.value = false }, 1500)
-  } catch { /* clipboard blocked — silent */ }
-}
-
-// Add member
-const showAddMember     = ref(false)
-const addMemberSearch   = ref('')
-const addMemberResults  = ref<Array<{ id: string; username: string; display_name: string | null; avatar_url: string | null }>>([])
-const addMemberLoading  = ref(false)
-let addMemberTimer: ReturnType<typeof setTimeout> | null = null
-function debouncedAddMemberSearch() {
-  if (addMemberTimer) clearTimeout(addMemberTimer)
-  addMemberTimer = setTimeout(runAddMemberSearch, 300)
-}
-async function runAddMemberSearch() {
-  const q = addMemberSearch.value.trim()
-  if (q.length < 2) { addMemberResults.value = []; return }
-  addMemberLoading.value = true
-  try {
-    const res = await api.get(`/users/search?q=${encodeURIComponent(q)}&limit=10`)
-    addMemberResults.value = res.data.data.users ?? []
-  } catch { addMemberResults.value = [] }
-  finally { addMemberLoading.value = false }
-}
-async function doAddMember(u: { id: string; username: string; display_name: string | null; avatar_url: string | null }) {
-  if (groupMembers.value.some(m => m.user_id === u.id)) return
-  try {
-    await store.addGroupMember(props.convId, u.id)
-    groupMembers.value.push({ user_id: u.id, role: 'member', user: u as any })
-  } catch { /* silent */ }
-}
 // Emoji & sticker popovers
 const showEmojiPicker  = ref(false)
 const showStickerPanel = ref(false)
@@ -2311,6 +1527,25 @@ const myRole = computed(() => props.conv?.my_participant?.role ?? 'member')
 const isGroupDm = computed(() => props.conv?.type === 'community' && !!props.conv?.group_dm_user_id)
 const amGroupDmCustomer = computed(() => isGroupDm.value && props.conv?.group_dm_user_id === auth.user?.id)
 
+// ── Feature composables ───────────────────────────────────────────────────────
+const { translateMode, translateLang, translations, translatingIds, autoTranslateMissingMessages } = useChatTranslation(msgList, isMine)
+const { isRecording, recordingSeconds, voiceUploading, startRecording, stopRecording, fmtRecording } = useVoiceRecorder((url) => {
+  if (!store.checkSpamGate()) store.sendMessage(props.convId, '', url, 'voice')
+})
+const { pendingAttachments, uploadError, removePendingAttachment, clearAttachments, onFileChange, onPaste } = useChatAttachments(fileInputEl)
+const isUploading = computed(() => voiceUploading.value || pendingAttachments.value.some((a) => a.uploading))
+const { isPartnerOnline, partnerDevice, partnerLastSeenLabel, partnerDeviceIcon, fetchOnlineStatus, startPolling, resetPresence } = usePartnerPresence(() => props.other?.id)
+const { mentionResults, mentionLoading, detectMention, selectMention } = useMentionAutocomplete(draft, inputEl)
+const { mediaStatsList, mediaStatsLoading, loadMediaStats } = useChatMediaStats(() => props.convId)
+// Media browser modal (ChatMediaBrowser) — opened from a media-stat row
+const mediaBrowserType = ref<string | null>(null)
+const openMediaBrowser = (type: string) => { mediaBrowserType.value = type }
+const groupChat = useGroupChatManagement(() => props.convId, () => props.conv)
+const { groupMembers, memberSearchQuery, fetchGroupMembers, fetchGroupOnlineStatus, kickMember, toggleMemberRole } = groupChat
+// Edit-group modal (ChatEditGroupModal) refreshes the member list each time it opens
+const showEditGroup = ref(false)
+watch(showEditGroup, (open) => { if (open) fetchGroupMembers() })
+
 // ── Pin helpers ────────────────────────────────────────────────────────────────
 const currentPin = computed<PinnedMessage | null>(() => {
   const c = props.conv
@@ -2340,92 +1575,6 @@ async function doUnpin(scope: 'all' | 'me') {
   await store.unpinMessage(props.convId, scope)
 }
 
-// ── Media stats ──────────────────────────────────────────────────────────────
-const MEDIA_STAT_DEFS = computed(() => [
-  { key: 'image',  label: langStore.t.chatMediaLabelPhoto,  icon: 'Image' },
-  { key: 'video',  label: langStore.t.chatMediaLabelVideo,  icon: 'Video' },
-  { key: 'audio',  label: langStore.t.chatMediaLabelAudio,  icon: 'Music' },
-  { key: 'voice',  label: langStore.t.chatMediaLabelVoice,  icon: 'Mic' },
-  { key: 'file',   label: langStore.t.chatMediaLabelFiles,  icon: 'FileText' },
-  { key: 'link',   label: langStore.t.chatMediaLabelLinks,  icon: 'Link' },
-])
-const mediaStatsList = computed(() =>
-  MEDIA_STAT_DEFS.value.map(d => ({ ...d, count: mediaStatsData.value[d.key] ?? 0 }))
-)
-
-async function loadMediaStats() {
-  if (mediaStatsLoading.value) return
-  mediaStatsLoading.value = true
-  try { mediaStatsData.value = await store.getMediaStats(props.convId) } finally { mediaStatsLoading.value = false }
-}
-
-// ── Media browser (opened from a stat row: photo/video/audio/voice/links) ──────
-const MEDIA_TYPE_TITLES = computed<Record<string, string>>(() => ({
-  image: langStore.t.chatMediaTitlePhotos, video: langStore.t.chatMediaLabelVideo, audio: langStore.t.chatMediaTitleAudioFiles,
-  voice: langStore.t.chatMediaTitleVoiceMessages, link: langStore.t.chatMediaLabelLinks,
-}))
-const mediaBrowserType    = ref<string | null>(null)
-const mediaBrowserItems   = ref<Message[]>([])
-const mediaBrowserLoading = ref(false)
-const mediaBrowserHasMore = ref(true)
-const mediaBrowserPlayingId = ref<string | null>(null)
-
-async function openMediaBrowser(type: string) {
-  mediaBrowserType.value = type
-  mediaBrowserItems.value = []
-  mediaBrowserHasMore.value = true
-  mediaBrowserPlayingId.value = null
-  await loadMoreMediaBrowser()
-}
-function closeMediaBrowser() {
-  mediaBrowserType.value = null
-  mediaBrowserPlayingId.value = null
-}
-async function loadMoreMediaBrowser() {
-  if (!mediaBrowserType.value || mediaBrowserLoading.value || !mediaBrowserHasMore.value) return
-  mediaBrowserLoading.value = true
-  try {
-    const before = mediaBrowserItems.value.length
-      ? mediaBrowserItems.value[mediaBrowserItems.value.length - 1].created_at
-      : undefined
-    const batch = await store.getMediaMessages(props.convId, mediaBrowserType.value, before)
-    mediaBrowserItems.value.push(...batch)
-    if (batch.length < 60) mediaBrowserHasMore.value = false
-  } finally {
-    mediaBrowserLoading.value = false
-  }
-}
-function onMediaBrowserScroll(e: Event) {
-  const el = e.target as HTMLElement
-  if (el.scrollHeight - el.scrollTop - el.clientHeight < 150) loadMoreMediaBrowser()
-}
-function monthLabel(iso: string): string {
-  const d = new Date(iso)
-  const now = new Date()
-  const month = d.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'long' })
-  const capped = month.charAt(0).toUpperCase() + month.slice(1)
-  return d.getFullYear() === now.getFullYear() ? capped : `${capped} ${d.getFullYear()}`
-}
-const mediaBrowserGroups = computed(() => {
-  const groups: Array<{ label: string; items: Message[] }> = []
-  for (const m of mediaBrowserItems.value) {
-    const label = monthLabel(m.created_at)
-    const last = groups[groups.length - 1]
-    if (last && last.label === label) last.items.push(m)
-    else groups.push({ label, items: [m] })
-  }
-  return groups
-})
-function toggleMediaBrowserPlay(msgId: string) {
-  mediaBrowserPlayingId.value = mediaBrowserPlayingId.value === msgId ? null : msgId
-}
-function openMediaBrowserImage(url: string) {
-  const urls = mediaBrowserItems.value.map((m) => m.file_url).filter(Boolean) as string[]
-  lightboxUrls.value = urls
-  lightboxTypes.value = []
-  lightboxStart.value = Math.max(0, urls.indexOf(url))
-}
-
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function isMine(msg: Message) {
   // Staff viewing a member's group-DM thread: any reply from any admin/owner counts as
@@ -2437,7 +1586,7 @@ function isMine(msg: Message) {
 // Group helpers
 function getMsgSenderAvatar(msg: Message): string | null {
   if (!props.conv?.is_group) return props.other?.avatar_url ?? null
-  return (msg as any).sender?.avatar_url ?? null
+  return msg.sender?.avatar_url ?? null
 }
 
 function isSameAsPrev(idx: number): boolean {
@@ -2449,52 +1598,6 @@ const SENDER_COLORS = ['#4C67CF','#CF4C67','#67CF4C','#CF9B4C','#4CCFBE','#BE4CC
 function getSenderColor(userId: string): Record<string, string> {
   const idx = userId.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % SENDER_COLORS.length
   return { color: SENDER_COLORS[idx] }
-}
-
-// Group management
-async function fetchGroupMembers() {
-  if (!props.conv?.is_group) return
-  membersLoading.value = true
-  try { groupMembers.value = await store.getGroupMembers(props.convId) }
-  catch { /* silent */ }
-  finally { membersLoading.value = false }
-  fetchGroupOnlineStatus()
-}
-
-// Online status for every member — reuses the same batch endpoint the DM header uses.
-const groupOnlineStatus = ref<Record<string, boolean>>({})
-const groupOnlineCount = computed(() => Object.values(groupOnlineStatus.value).filter(Boolean).length)
-async function fetchGroupOnlineStatus() {
-  if (!groupMembers.value.length) return
-  try {
-    const ids = groupMembers.value.map((m) => m.user_id).join(',')
-    const res = await api.get(`/users/online?ids=${ids}`)
-    groupOnlineStatus.value = res.data?.data ?? {}
-  } catch { /* silent */ }
-}
-
-async function kickMember(userId: string) {
-  await store.removeGroupMember(props.convId, userId)
-  groupMembers.value = groupMembers.value.filter((m) => m.user_id !== userId)
-}
-
-async function toggleMemberRole(m: { user_id: string; role: string; user: MsgSender }) {
-  const newRole = m.role === 'admin' ? 'member' : 'admin'
-  await store.setGroupMemberRole(props.convId, m.user_id, newRole)
-  m.role = newRole
-}
-
-async function saveGroupEdit() {
-  savingGroup.value = true
-  try {
-    await store.updateGroup(props.convId, {
-      name: editGroupName.value,
-      avatar_url: editGroupAvatar.value || undefined,
-      banner_url: editGroupBanner.value || undefined,
-    })
-    showEditGroup.value = false
-  } catch { /* silent */ }
-  finally { savingGroup.value = false }
 }
 
 // Emoji & sticker actions
@@ -2532,97 +1635,11 @@ function isLastInGroup(idx: number) {
   return next.sender_id !== displayList.value[idx].sender_id
 }
 
-// @mention rendering
-const STICKER_MAP: Record<string, string> = {
-  'sticker:fluffy:f1': '🐻', 'sticker:fluffy:f2': '🐨', 'sticker:fluffy:f3': '🦥',
-  'sticker:fluffy:f4': '🐰', 'sticker:fluffy:f5': '🐼', 'sticker:fluffy:f6': '🦊',
-  'sticker:fluffy:f7': '🐯', 'sticker:fluffy:f8': '🐻‍❄️', 'sticker:fluffy:f9': '🐕',
-  'sticker:fluffy:f10': '🦝', 'sticker:fluffy:f11': '🦦', 'sticker:fluffy:f12': '🦜',
-  'sticker:fursona:fu1': '🦊', 'sticker:fursona:fu2': '🐺', 'sticker:fursona:fu3': '🐲',
-  'sticker:fursona:fu4': '🦄', 'sticker:fursona:fu5': '🐆', 'sticker:fursona:fu6': '😺',
-  'sticker:fursona:fu7': '🐅', 'sticker:fursona:fu8': '🦈',
-}
-function getStickerEmoji(key: string): string { return STICKER_MAP[key] ?? '🎭' }
-
-// Matches only emoji / ZWJ sequences / variation selectors / flag pairs / whitespace
-const EMOJI_ONLY_RE = /^[\p{Extended_Pictographic}‍️\u{1F1E6}-\u{1F1FF}\s]+$/u
-function isEmojiOnlyText(text: string | undefined | null): boolean {
-  if (!text) return false
-  const trimmed = text.trim()
-  if (!trimmed || !EMOJI_ONLY_RE.test(trimmed)) return false
-  const segmenter = (Intl as any).Segmenter ? new (Intl as any).Segmenter(undefined, { granularity: 'grapheme' }) : null
-  const count = segmenter ? Array.from(segmenter.segment(trimmed)).length : Array.from(trimmed).length
-  return count >= 1 && count <= 3
-}
-
-const FWD_RE = /^↩️ Переслано от (.+?)\n/
-// Format v2 (JSON): [story_reply:{"img":...,"exp":...,"name":...,"ava":...}]\nreply
-// Format v1 (legacy pipe): [story_reply:IMAGE_URL|EXPIRES_AT|AUTHOR_NAME|AUTHOR_AVATAR]\nreply
-const STORY_REPLY_RE = /^\[story_reply:(\{[\s\S]*?\}|[^\]]*)\]\n?([\s\S]*)$/u
-
 /** Returns human-friendly short preview, stripping service tags */
 function previewMsgText(text: string | null | undefined, maxLen = 60): string {
   if (!text) return ''
   if (/^\[story_reply:/u.test(text)) return langStore.t.chatStoryReplyPreview
   return text.replace(FWD_RE, '').slice(0, maxLen)
-}
-
-interface StoryReplyMeta {
-  imageUrl: string
-  expiresAt: string
-  authorName: string
-  authorAvatar: string
-  replyText: string
-  expired: boolean
-}
-
-// The template calls parseStoryReply(msg) up to a dozen times per story-reply row
-// (once per v-if/attribute binding). Regex + JSON.parse on every one of those, on
-// every re-render of the message list, adds up fast in long chats — so the parse
-// itself is cached per message; only the cheap expiry check re-runs on each call.
-const storyReplyCache = new Map<string, { fields: Omit<StoryReplyMeta, 'expired'>; forcedExpired: boolean } | null>()
-
-function parseStoryReply(msg: Message): StoryReplyMeta | null {
-  const cacheKey = `${msg.id}|${msg.text ?? ''}`
-  let cached = storyReplyCache.get(cacheKey)
-  if (cached === undefined) {
-    cached = parseStoryReplyUncached(msg)
-    storyReplyCache.set(cacheKey, cached)
-  }
-  if (!cached) return null
-  const expired = cached.forcedExpired || (cached.fields.expiresAt ? Date.now() > new Date(cached.fields.expiresAt).getTime() : false)
-  return { ...cached.fields, expired }
-}
-
-function parseStoryReplyUncached(msg: Message): { fields: Omit<StoryReplyMeta, 'expired'>; forcedExpired: boolean } | null {
-  const m = (msg.text || '').match(STORY_REPLY_RE)
-  if (!m) return null
-  const raw = m[1]
-  let imageUrl = '', expiresAt = '', authorName = '', authorAvatar = ''
-  if (raw.startsWith('{')) {
-    // v2 JSON format
-    try {
-      const j = JSON.parse(raw)
-      imageUrl    = j.img  ?? ''
-      expiresAt   = j.exp  ?? ''
-      authorName  = j.name ?? ''
-      authorAvatar = j.ava ?? ''
-    } catch {
-      // JSON malformed — show as expired card with fallback sender info
-      return {
-        fields: { imageUrl: '', expiresAt: '', authorName: msg.sender?.display_name || msg.sender?.username || '', authorAvatar: msg.sender?.avatar_url || '', replyText: '' },
-        forcedExpired: true,
-      }
-    }
-  } else {
-    // v1 pipe format (legacy fallback)
-    const parts = raw.split('|')
-    imageUrl     = parts[0] ?? ''
-    expiresAt    = parts[1] ?? ''
-    authorName   = parts[2] ?? ''
-    authorAvatar = parts[3] ?? ''
-  }
-  return { fields: { imageUrl, expiresAt, authorName, authorAvatar, replyText: m[2].trim() }, forcedExpired: false }
 }
 
 // ── In-chat story viewer ──────────────────────────────────────────────────────
@@ -2651,12 +1668,6 @@ function getMsgText(msg: Message): string {
     return getDisplayText(msg).replace(STORY_REPLY_RE, '$2')
   }
   return getDisplayText(msg).replace(FWD_RE, '').replace(STORY_REPLY_RE, '$2')
-}
-
-function renderMentions(text: string): string {
-  if (!text) return ''
-  const escaped = text.replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!))
-  return escaped.replace(/@([\w.-]+)/g, '<span class="mention-link text-brand-accent cursor-pointer hover:underline" data-username="$1">@$1</span>')
 }
 
 // @mention click delegation
@@ -2743,17 +1754,7 @@ function formatMsgTime(iso: string) {
 }
 
 // ── Order cards (chat-only payment request / tip) ──────────────────────────────
-function formatMoney(amount: number | undefined): string {
-  if (!amount && amount !== 0) return ''
-  return new Intl.NumberFormat('ru-RU').format(amount) + ' ₽'
-}
-function isOverdue(deadline: string | undefined): boolean {
-  return !!deadline && new Date(deadline).getTime() < Date.now()
-}
-function formatDeadline(deadline: string | undefined): string {
-  if (!deadline) return ''
-  return new Date(deadline).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'long' })
-}
+const formatDeadline = (deadline: string | undefined) => deadline ? fmt.formatDate(deadline, 'dayMonth', LANG_TO_LOCALE[langStore.currentLang]) : ''
 const payingId = ref<string | null>(null)
 async function payOrder(msg: Message) {
   if (payingId.value) return
@@ -2764,29 +1765,6 @@ async function payOrder(msg: Message) {
   payingId.value = null
 }
 
-function closePaymentModal() {
-  showPaymentModal.value = false
-  paymentForm.amount = ''
-  paymentForm.description = ''
-  paymentForm.prepaymentPercent = ''
-  paymentForm.deadline = ''
-}
-async function submitPaymentRequest() {
-  const amount = Number(paymentForm.amount)
-  if (!amount || amount <= 0 || sendingPayment.value) return
-  sendingPayment.value = true
-  try {
-    await store.sendPaymentRequest(props.convId, {
-      amount,
-      description: paymentForm.description.trim(),
-      prepaymentPercent: paymentForm.prepaymentPercent ? Number(paymentForm.prepaymentPercent) : undefined,
-      deadline: paymentForm.deadline || undefined,
-    })
-    closePaymentModal()
-    scrollToBottom(true)
-  } catch { /* silent */ }
-  sendingPayment.value = false
-}
 async function sendQuickTip(amount: number) {
   if (!amount || amount <= 0) return
   showTipPicker.value = false
@@ -2798,10 +1776,6 @@ async function sendQuickTip(amount: number) {
 }
 
 // ── Date dividers ─────────────────────────────────────────────────────────────
-function startOfDay(d: Date): number {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
-}
-
 function shouldShowDateDivider(idx: number): boolean {
   const cur = displayList.value[idx]
   if (!cur) return false
@@ -2885,32 +1859,23 @@ function cancelEdit() {
   resetTextarea()
 }
 
-function highlight(text: string): string {
-  if (!searchQuery.value) return text
-  const safeText = text.replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!))
-  const escapedQuery = searchQuery.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return safeText.replace(new RegExp(`(${escapedQuery})`, 'gi'), '<mark class="bg-brand-accent/30 text-white rounded px-0.5">$1</mark>')
-}
+const highlight = (text: string) => highlightMatches(text, searchQuery.value)
 
 function openStickerPack(url: string) {
   if (!url.startsWith('http')) return // legacy emoji sticker key — ignore
   stickerPackUrl.value = url
 }
 
+function openLightbox(urls: string[], start: number) {
+  lightboxUrls.value = urls
+  lightboxTypes.value = []
+  lightboxStart.value = start
+}
+
 function openImageLightbox(url: string) {
   lightboxUrls.value = mediaUrls.value.length ? mediaUrls.value : [url]
   lightboxTypes.value = mediaUrls.value.length ? mediaTypes.value : []
   lightboxStart.value = Math.max(0, lightboxUrls.value.indexOf(url))
-}
-
-interface AlbumFile { url: string; type: string }
-function getAlbumFiles(msg: Message): AlbumFile[] {
-  const files = (msg.metadata as any)?.files
-  return Array.isArray(files) ? files : []
-}
-
-function isGifUrl(url?: string | null): boolean {
-  return !!url && /\.gif(\?|$)/i.test(url)
 }
 
 /** Lightbox scoped to just this album's own images (not the whole conversation's media). */
@@ -2921,60 +1886,8 @@ function openAlbumImageLightbox(msg: Message, url: string) {
   lightboxStart.value = Math.max(0, lightboxUrls.value.indexOf(url))
 }
 
-function getDisplayText(msg: Message): string {
-  const text = msg.text
-  if (!text) return ''
-  // Legacy messages encrypted before E2E was removed — no key to decrypt them anymore
-  if (isEncrypted(text)) return langStore.t.encryptedMessagePreview
-  return text
-}
+const getDisplayText = (msg: Message) => displayTextOf(msg, langStore.t.encryptedMessagePreview)
 
-// ── Voice recording ─────────────────────────────────────────────────────────────
-async function startRecording() {
-  if (isRecording.value) return
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    const chunks: Blob[] = []
-    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg'
-    const mr = new MediaRecorder(stream, { mimeType })
-    mediaRecorder = mr
-    isRecording.value = true
-    recordingSeconds.value = 0
-    recordTimer = setInterval(() => { recordingSeconds.value++ }, 1000)
-    mr.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
-    mr.onstop = async () => {
-      stream.getTracks().forEach((t) => t.stop())
-      if (recordTimer) { clearInterval(recordTimer); recordTimer = null }
-      isRecording.value = false
-      const blob = new Blob(chunks, { type: mimeType })
-      if (blob.size < 500) return
-      voiceUploading.value = true
-      try {
-        const ext = mimeType.includes('webm') ? 'webm' : 'ogg'
-        const form = new FormData()
-        form.append('file', new File([blob], `voice.${ext}`, { type: mimeType }))
-        const res = await api.post('/media/upload?folder=messages', form, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        })
-        const url = res.data?.data?.url ?? null
-        if (url && !store.checkSpamGate()) store.sendMessage(props.convId, '', url, 'voice')
-      } catch {}
-      finally { voiceUploading.value = false }
-    }
-    mr.start(100)
-  } catch {
-    isRecording.value = false
-  }
-}
-
-function stopRecording() {
-  mediaRecorder?.stop()
-  mediaRecorder = null
-}
-
-function fmtRecording(s: number) {
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
 function scrollToBottom(smooth = false) {
   nextTick(() => { bottomEl.value?.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant' }) })
 }
@@ -3120,13 +2033,6 @@ function resetTextarea() {
 }
 
 // ── Media upload ───────────────────────────────────────────────────────────────
-function fileKind(file: File): 'image' | 'video' | 'audio' | 'file' {
-  if (file.type.startsWith('image/')) return 'image'
-  if (file.type.startsWith('video/')) return 'video'
-  if (file.type.startsWith('audio/')) return 'audio'
-  return 'file'
-}
-
 function formatFileSize(bytes: number): string {
   if (!bytes) return ''
   if (bytes < 1024) return `${bytes} ${langStore.t.chatByteUnit}`
@@ -3134,97 +2040,6 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} ${langStore.t.chatMbUnit}`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} ${langStore.t.chatGbUnit}`
 }
-
-/** Uploads one file as its own queued attachment slot; multiple can run concurrently. */
-function addPendingFile(file: File) {
-  if (pendingAttachments.value.length >= MAX_ATTACHMENTS) return
-  const kind = fileKind(file)
-  // Must be reactive() *before* pushing — mutating a plain object kept only via this
-  // outer `item` reference bypasses Vue's reactive array proxy entirely, so progress/
-  // uploading/uploadedUrl updates would never trigger a re-render (stuck at 0% forever).
-  const item = reactive<PendingAttachment>({
-    id: ++attachSeq,
-    kind,
-    name: file.name,
-    size: file.size,
-    previewUrl: (kind === 'image' || kind === 'video') ? URL.createObjectURL(file) : null,
-    uploadedUrl: null,
-    uploading: true,
-    progress: 0,
-    failed: false,
-  })
-  pendingAttachments.value.push(item)
-
-  ;(async () => {
-    try {
-      const form = new FormData()
-      form.append('file', file)
-      const res = await api.post('/media/upload?folder=messages', form, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: (ev: any) => {
-          item.progress = ev.total ? Math.round((ev.loaded / ev.total) * 100) : 50
-        },
-      })
-      const url = res.data?.data?.url ?? null
-      if (!url) throw new Error('no url')
-      // A video with no audio track behaves like a GIF — render it with the lightweight
-      // autoplay/pause UI instead of the full player (seek bar, volume, speed, etc).
-      if (item.kind === 'video' && res.data?.data?.isSilentVideo) item.kind = 'gif'
-      item.uploadedUrl = url
-      item.progress = 100
-    } catch (err: any) {
-      item.failed = true
-      const msg = err?.response?.data?.error?.message || langStore.t.chatFileUploadFailedError
-      uploadError.value = msg
-      if (uploadErrorTimer) clearTimeout(uploadErrorTimer)
-      uploadErrorTimer = setTimeout(() => { uploadError.value = null }, 4000)
-      setTimeout(() => removePendingAttachment(item.id), 1500)
-    } finally {
-      item.uploading = false
-    }
-  })()
-}
-
-function removePendingAttachment(id: number) {
-  const idx = pendingAttachments.value.findIndex((a) => a.id === id)
-  if (idx === -1) return
-  const [removed] = pendingAttachments.value.splice(idx, 1)
-  if (removed.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(removed.previewUrl)
-}
-
-function clearAttachments() {
-  for (const a of pendingAttachments.value) {
-    if (a.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(a.previewUrl)
-  }
-  pendingAttachments.value = []
-  if (fileInputEl.value) fileInputEl.value.value = ''
-}
-
-async function onFileChange(e: Event) {
-  const files = (e.target as HTMLInputElement).files
-  if (!files?.length) return
-  const room = MAX_ATTACHMENTS - pendingAttachments.value.length
-  for (const file of Array.from(files).slice(0, Math.max(0, room))) addPendingFile(file)
-  if (fileInputEl.value) fileInputEl.value.value = ''
-}
-
-/** Ctrl+V an image/file straight into the composer, same upload path as the attach button. */
-function onPaste(e: ClipboardEvent) {
-  const items = e.clipboardData?.items
-  if (!items) return
-  const files: File[] = []
-  for (const item of Array.from(items)) {
-    if (item.kind === 'file') {
-      const file = item.getAsFile()
-      if (file) files.push(file)
-    }
-  }
-  if (!files.length) return // no file on the clipboard — fall through to the browser's normal text paste
-  e.preventDefault()
-  const room = MAX_ATTACHMENTS - pendingAttachments.value.length
-  for (const file of files.slice(0, Math.max(0, room))) addPendingFile(file)
-}
-
 // ── Delete ──────────────────────────────────────────────────────────────────────
 async function deleteMsg(id: string) { await store.deleteMessage(id) }
 
@@ -3268,38 +2083,6 @@ async function toggleBlock() {
   showMenu.value = false
 }
 
-// ── @mention autocomplete ─────────────────────────────────────────────────────────
-function detectMention(text: string) {
-  const match = text.match(/@([\w.-]*)$/)
-  if (match && match[1].length >= 1) {
-    const q = match[1]
-    mentionQuery.value = q
-    if (mentionTimer) clearTimeout(mentionTimer)
-    mentionTimer = setTimeout(async () => {
-      mentionLoading.value = true
-      try {
-        const res = await api.get(`/users/search?q=${encodeURIComponent(q)}&limit=6`)
-        mentionResults.value = res.data?.data?.users ?? res.data?.data ?? []
-      } catch { mentionResults.value = [] }
-      finally { mentionLoading.value = false }
-    }, 300)
-  } else {
-    closeMention()
-  }
-}
-
-function closeMention() {
-  mentionQuery.value = ''
-  mentionResults.value = []
-  if (mentionTimer) { clearTimeout(mentionTimer); mentionTimer = null }
-}
-
-function selectMention(username: string) {
-  draft.value = draft.value.replace(/@[\w.-]*$/, `@${username} `)
-  closeMention()
-  nextTick(() => { inputEl.value?.focus() })
-}
-
 function goToProfile(username?: string) {
   if (username) router.push(`/profile/${username}`)
 }
@@ -3326,30 +2109,10 @@ function closeMenu(e: MouseEvent) {
   }
 }
 
-// ── Online status polling ──────────────────────────────────────────────────────
-async function fetchOnlineStatus() {
-  if (!props.other?.id) return
-  try {
-    const res = await api.get(`/users/online?ids=${props.other.id}`)
-    const wasOnline = isPartnerOnline.value
-    isPartnerOnline.value = !!res.data?.data?.[props.other.id]
-    partnerDevice.value = res.data?.deviceData?.[props.other.id] ?? null
-    if (isPartnerOnline.value) {
-      partnerLastSeenAt.value = null
-    } else if (wasOnline) {
-      partnerLastSeenAt.value = new Date()
-    } else {
-      const lastSeen = res.data?.lastSeenData?.[props.other.id]
-      partnerLastSeenAt.value = lastSeen ? new Date(lastSeen) : null
-    }
-  } catch { /* silent */ }
-}
-
 onMounted(() => {
   document.addEventListener('click', closeMenu)
   if (!props.conv?.is_group && !(isGroupDm.value && amGroupDmCustomer.value)) {
-    fetchOnlineStatus()
-    onlineTimer = setInterval(fetchOnlineStatus, 30_000)
+    startPolling()
     fetchBlockStatus()
   } else if (props.conv?.is_group) {
     fetchGroupMembers()
@@ -3357,31 +2120,15 @@ onMounted(() => {
 })
 onUnmounted(() => {
   document.removeEventListener('click', closeMenu)
-  if (onlineTimer) clearInterval(onlineTimer)
-  if (recordTimer) clearInterval(recordTimer)
-  if (mentionTimer) clearTimeout(mentionTimer)
-  if (uploadErrorTimer) clearTimeout(uploadErrorTimer)
-  for (const a of pendingAttachments.value) {
-    if (a.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(a.previewUrl)
-  }
-  mediaRecorder?.stop()
 })
 
 watch(() => props.other?.id, () => {
-  isPartnerOnline.value = false
-  partnerLastSeenAt.value = null
-  partnerDevice.value = null
+  resetPresence()
   if (!props.conv?.is_group && !(isGroupDm.value && amGroupDmCustomer.value)) {
     fetchOnlineStatus()
     fetchBlockStatus()
   }
 })
-
-watch(() => props.convId, () => {
-  groupMembers.value = []
-  if (props.conv?.is_group) fetchGroupMembers()
-})
-
 watch(showMembersPanel, (open) => {
   if (open) {
     memberSearchQuery.value = ''
@@ -3393,91 +2140,6 @@ watch(showMembersPanel, (open) => {
 
 watch(showDmPanel, (open) => {
   if (open) loadMediaStats()
-})
-
-watch(showEditGroup, (open) => {
-  if (open && props.conv) {
-    editGroupName.value   = props.conv.name ?? ''
-    editGroupAvatar.value = props.conv.avatar_url ?? ''
-    editGroupBanner.value = (props.conv as any).banner_url ?? ''
-    fetchGroupMembers()
-  }
-})
-
-// ── Translation ─────────────────────────────────────────────────────────────────
-// Sequential queue prevents hammering the free API
-const translateQueue: Array<() => Promise<void>> = []
-let translateRunning = false
-
-async function drainQueue() {
-  if (translateRunning) return
-  translateRunning = true
-  while (translateQueue.length) {
-    const task = translateQueue.shift()!
-    await task()
-  }
-  translateRunning = false
-}
-
-async function translateText(text: string): Promise<string | null> {
-  // Try with 'auto' source first, fall back to 'en'
-  const tryFetch = async (src: string) => {
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.slice(0, 300))}&langpair=${src}|${translateLang.value}`
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) })
-    const data = await res.json()
-    if (data?.responseStatus === 200) {
-      const t = data?.responseData?.translatedText
-      if (t && t.trim() && t.toLowerCase().trim() !== text.toLowerCase().trim()) return t as string
-    }
-    return null
-  }
-  try {
-    return await tryFetch('auto')
-  } catch {
-    try { return await tryFetch('en') } catch { return null }
-  }
-}
-
-function enqueueTranslation(msg: Message) {
-  if (isMine(msg) || !msg.text || translations.value[msg.id] || translatingIds.has(msg.id)) return
-  translatingIds.add(msg.id)
-  translateQueue.push(async () => {
-    try {
-      const result = await translateText(msg.text!)
-      if (result) {
-        translations.value = { ...translations.value, [msg.id]: result }
-      }
-    } finally {
-      translatingIds.delete(msg.id)
-    }
-  })
-  drainQueue()
-}
-
-async function autoTranslateMissingMessages() {
-  const toTranslate = msgList.value.filter(
-    (m) => !isMine(m) && m.text && !translations.value[m.id] && !translatingIds.has(m.id),
-  )
-  for (const msg of toTranslate) enqueueTranslation(msg)
-}
-
-// Watch for new incoming messages
-watch(() => msgList.value.length, (n, old) => {
-  if (!translateMode.value || n <= (old ?? 0)) return
-  const newMsgs = msgList.value.slice(old ?? 0)
-  for (const msg of newMsgs) enqueueTranslation(msg)
-})
-
-// Re-translate when language changes
-watch(translateLang, () => {
-  if (!translateMode.value) return
-  translations.value = {}
-  autoTranslateMissingMessages()
-})
-
-// Sync translateLang when user switches app language
-watch(() => langStore.currentLang, (newLang) => {
-  translateLang.value = LANG_TO_API[newLang] ?? 'ru'
 })
 </script>
 

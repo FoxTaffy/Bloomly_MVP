@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, computed, onMounted } from 'vue'
 import api from '../api'
 import BIcon from './BIcon.vue'
+import * as fmt from '@/lib/format'
 
 const props = defineProps<{ packId: string }>()
 const emit = defineEmits<{ close: [] }>()
@@ -10,7 +12,7 @@ const isLoading = ref(true)
 const error = ref('')
 const detail = ref<any>(null)
 
-const formatNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
+const formatNum = fmt.formatCompactNumber
 const barMax = (arr: { value: number }[]) => Math.max(...arr.map(x => x.value), 1)
 
 const cover = computed(() => {
@@ -26,8 +28,8 @@ const fetchDetail = async () => {
     const res = await api.get(`/admin/stats/stickers/${props.packId}`)
     if (res.data.success) detail.value = res.data.data
     else error.value = 'Не удалось загрузить статистику пака'
-  } catch (e: any) {
-    error.value = e?.response?.data?.error?.message ?? 'Не удалось загрузить статистику пака'
+  } catch (e) {
+    error.value = apiErrorMessage(e) ?? 'Не удалось загрузить статистику пака'
   } finally {
     isLoading.value = false
   }

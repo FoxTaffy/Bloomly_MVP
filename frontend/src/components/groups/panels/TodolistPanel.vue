@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import BIcon from '@/components/BIcon.vue'
 import { useGroupsStore, type ArtistQueueItem, type TodoColumn } from '@/stores/groups'
@@ -69,8 +70,8 @@ async function load() {
   error.value = ''
   try {
     items.value = await groupsStore.fetchTodoItems(props.groupId)
-  } catch (e: any) {
-    error.value = e.message
+  } catch (e) {
+    error.value = errorMessage(e) ?? ''
   } finally {
     loading.value = false
   }
@@ -89,8 +90,8 @@ async function addItem() {
     newTitle.value = ''
     newDesc.value = ''
     showAdd.value = false
-  } catch (e: any) {
-    alert('Ошибка: ' + e.message)
+  } catch (e) {
+    alert('Ошибка: ' + errorMessage(e))
   } finally {
     adding.value = false
   }
@@ -103,8 +104,8 @@ async function changeStatus(item: ArtistQueueItem, status: string) {
     await groupsStore.updateTodoItem(props.groupId, item.id, { status })
     const idx = items.value.findIndex(i => i.id === item.id)
     if (idx !== -1) items.value[idx] = { ...items.value[idx], status }
-  } catch (e: any) {
-    alert('Ошибка: ' + e.message)
+  } catch (e) {
+    alert('Ошибка: ' + errorMessage(e))
   } finally {
     savingStatus.value = null
   }
@@ -127,8 +128,8 @@ async function saveEdit(item: ArtistQueueItem) {
     const idx = items.value.findIndex(i => i.id === item.id)
     if (idx !== -1) items.value[idx] = { ...items.value[idx], title: editTitle.value.trim(), description: editDesc.value.trim() || null }
     editingId.value = null
-  } catch (e: any) {
-    alert('Ошибка: ' + e.message)
+  } catch (e) {
+    alert('Ошибка: ' + errorMessage(e))
   } finally {
     savingEdit.value = false
   }
@@ -142,8 +143,8 @@ async function deleteItem(item: ArtistQueueItem) {
     await groupsStore.deleteTodoItem(props.groupId, item.id)
     items.value = items.value.filter(i => i.id !== item.id)
     if (expandedId.value === item.id) expandedId.value = null
-  } catch (e: any) {
-    alert('Ошибка: ' + e.message)
+  } catch (e) {
+    alert('Ошибка: ' + errorMessage(e))
   } finally {
     deleting.value = null
   }
@@ -207,8 +208,8 @@ async function saveColumns() {
     todoColumns.value = await groupsStore.updateTodoColumns(props.groupId, clean)
     await load()
     showColumnManager.value = false
-  } catch (e: any) {
-    columnsError.value = e.response?.data?.error?.message || e.message || 'Ошибка сохранения'
+  } catch (e) {
+    columnsError.value = apiErrorMessage(e) || errorMessage(e) || 'Ошибка сохранения'
   } finally {
     savingColumns.value = false
   }

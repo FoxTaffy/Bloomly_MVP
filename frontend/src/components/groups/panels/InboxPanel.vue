@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import BIcon from '@/components/BIcon.vue'
@@ -24,8 +25,8 @@ async function load() {
   try {
     threads.value = await store.getGroupInbox(props.groupId)
     store.groupInboxCounts[props.groupId] = needsReplyCount.value
-  } catch (e: any) {
-    error.value = e.response?.data?.error?.message ?? e.message
+  } catch (e) {
+    error.value = apiErrorMessage(e) ?? errorMessage(e) ?? ''
   } finally {
     loading.value = false
   }

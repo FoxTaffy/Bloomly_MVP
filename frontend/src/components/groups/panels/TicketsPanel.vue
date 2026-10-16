@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '@/lib/apiError'
 import { ref, computed, onMounted, watch } from 'vue'
 import BIcon from '@/components/BIcon.vue'
 import { useGroupsStore, type EventItem, type TicketTier } from '@/stores/groups'
@@ -88,8 +89,8 @@ async function saveTier() {
       }
     }
     closeForm()
-  } catch (e: any) {
-    alert('Ошибка: ' + e.message)
+  } catch (e) {
+    alert('Ошибка: ' + errorMessage(e))
   } finally {
     saving.value = false
   }
@@ -102,8 +103,8 @@ async function deleteTier(tier: TicketTier) {
     await groupsStore.deleteTicketTier(tier.id)
     const ev = events.value.find(e => e.id === selectedEventId.value)
     if (ev?.tickets) ev.tickets = ev.tickets.filter(t => t.id !== tier.id)
-  } catch (e: any) {
-    alert('Ошибка: ' + e.message)
+  } catch (e) {
+    alert('Ошибка: ' + errorMessage(e))
   } finally {
     deleting.value = null
   }
@@ -127,8 +128,8 @@ async function load() {
     const result = await groupsStore.loadEvents({ groupId: props.groupId })
     events.value = result.events ?? []
     if (events.value.length) selectedEventId.value = events.value[0].id
-  } catch (e: any) {
-    error.value = e.message
+  } catch (e) {
+    error.value = errorMessage(e) ?? ''
   } finally {
     loading.value = false
   }

@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyReply, FastifyRequest, RouteShorthandOptions } from 'fastify';
+import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
   getStoriesHandler,
   createStoryHandler,
@@ -8,12 +9,6 @@ import {
   getStoryViewersHandler,
   voteStoryHandler,
 } from './controller.js';
-
-declare module 'fastify' {
-  interface FastifyInstance {
-    tryAuthenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  }
-}
 
 const UUID_PATTERN = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
 
@@ -66,35 +61,35 @@ export async function storiesRoutes(fastify: FastifyInstance) {
   const tryAuth: RouteShorthandOptions = { onRequest: [fastify.tryAuthenticate] };
 
   // GET /api/stories — active stories (last 24h)
-  fastify.get('/', tryAuth, getStoriesHandler as any);
+  fastify.get<RouteGenericOf<typeof getStoriesHandler>>('/', tryAuth, getStoriesHandler);
 
   // GET /api/stories/user/:userId — stories by user
-  fastify.get('/user/:userId', { ...tryAuth, schema: userIdParamSchema } as RouteShorthandOptions, getUserStoriesHandler as any);
+  fastify.get<RouteGenericOf<typeof getUserStoriesHandler>>('/user/:userId', { ...tryAuth, schema: userIdParamSchema } as RouteShorthandOptions, getUserStoriesHandler);
 
   // POST /api/stories — create story (auth required)
-  fastify.post('/', {
+  fastify.post<RouteGenericOf<typeof createStoryHandler>>('/', {
     ...auth,
     schema: createStorySchema,
     config: { rateLimit: { max: 10, timeWindow: '1 hour' } },
-  } as RouteShorthandOptions, createStoryHandler as any);
+  } as RouteShorthandOptions, createStoryHandler);
 
   // DELETE /api/stories/:id — soft-delete story (owner only)
-  fastify.delete('/:id', { ...auth, schema: idParamSchema } as RouteShorthandOptions, deleteStoryHandler as any);
+  fastify.delete<RouteGenericOf<typeof deleteStoryHandler>>('/:id', { ...auth, schema: idParamSchema } as RouteShorthandOptions, deleteStoryHandler);
 
   // POST /api/stories/:id/view — mark story as viewed by the current user
-  fastify.post('/:id/view', {
+  fastify.post<RouteGenericOf<typeof viewStoryHandler>>('/:id/view', {
     ...auth,
     schema: idParamSchema,
     config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
-  } as RouteShorthandOptions, viewStoryHandler as any);
+  } as RouteShorthandOptions, viewStoryHandler);
 
   // GET /api/stories/:id/viewers — list of viewers (owner only)
-  fastify.get('/:id/viewers', { ...auth, schema: idParamSchema } as RouteShorthandOptions, getStoryViewersHandler as any);
+  fastify.get<RouteGenericOf<typeof getStoryViewersHandler>>('/:id/viewers', { ...auth, schema: idParamSchema } as RouteShorthandOptions, getStoryViewersHandler);
 
   // POST /api/stories/:id/vote — thumbs up/down (toggle)
-  fastify.post('/:id/vote', {
+  fastify.post<RouteGenericOf<typeof voteStoryHandler>>('/:id/vote', {
     ...auth,
     schema: voteSchema,
     config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
-  } as RouteShorthandOptions, voteStoryHandler as any);
+  } as RouteShorthandOptions, voteStoryHandler);
 }

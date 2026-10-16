@@ -4,6 +4,7 @@ import { extname } from 'path';
 import prisma from '../../config/prisma.js';
 import { uploadRawToMinIO } from '../media/service.js';
 import { isBridgeHost } from './mailTransport.js';
+import { logger } from '../../lib/logger.js';
 
 const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -34,7 +35,7 @@ async function uploadAttachments(attachments: Attachment[] = []): Promise<string
       const url = await uploadRawToMinIO(att.content, ext, att.contentType || 'application/octet-stream', 'support');
       urls.push(url);
     } catch (err) {
-      console.error('[SUPPORT_MAIL] Failed to upload attachment:', err);
+      logger.error({ err }, '[SUPPORT_MAIL] Failed to upload attachment');
     }
   }
   return urls;
@@ -177,7 +178,7 @@ export async function pollSupportInbox(): Promise<void> {
         try {
           await processUid(client, uid);
         } catch (err) {
-          console.error('[SUPPORT_MAIL] Failed to process message uid', uid, err);
+          logger.error({ err, uid }, '[SUPPORT_MAIL] Failed to process message');
         }
         // Mark seen regardless of success — a message we can't parse would otherwise be retried forever.
         await client.messageFlagsAdd(String(uid), ['\\Seen'], { uid: true }).catch(() => {});

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorStatus } from '@/lib/apiError'
 import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, onMounted } from 'vue'
@@ -87,8 +88,8 @@ const fetchPost = async () => {
     } else {
       notFound.value = true
     }
-  } catch (e: any) {
-    if (e?.response?.status === 404 || e?.response?.status === 403) notFound.value = true
+  } catch (e) {
+    if (apiErrorStatus(e) === 404 || apiErrorStatus(e) === 403) notFound.value = true
   } finally {
     loading.value = false
   }

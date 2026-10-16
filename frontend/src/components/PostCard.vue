@@ -87,9 +87,9 @@
               </h4>
               <!-- Verification badge — only for user posts -->
               <template v-if="!effectiveGroupContext && post.author">
-                <span v-if="(post.author as any).deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
+                <span v-if="post.author.deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
                 <VerificationBadge v-if="post.author.is_verified"
-                  :type="(post.author as any).verification_type"
+                  :type="post.author.verification_type"
                   icon-class="w-4 h-4 flex-shrink-0" />
                 <!-- AD badge -->
                 <span v-if="post.author?.role === 'ad'"
@@ -1257,7 +1257,7 @@ async function toggleNotify() {
 
 function openStats() {
   showMenu.value = false
-  const tier = (authStore.user as any)?.subscription_tier
+  const tier = authStore.user?.subscription_tier
   if (tier === 'pro' || tier === 'business') {
     showStatsModal.value = true
   } else {

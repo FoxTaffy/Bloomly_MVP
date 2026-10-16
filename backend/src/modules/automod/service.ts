@@ -16,6 +16,7 @@ import prisma from '../../config/prisma.js';
 import { isModerator } from '../../lib/roles.js';
 import { notificationService } from '../notifications/service.js';
 import { getSetting } from '../../lib/settings.js';
+import { logger } from '../../lib/logger.js';
 
 // ── Thresholds (loosened further — AutoMod was flagging normal, active, or just
 //    chatty users as "suspicious"; these behavioral/rate checks now need a much
@@ -294,7 +295,7 @@ export async function applyAction(
   if (action === 'ban') {
     await prisma.user.update({ where: { id: userId }, data: { deleted_at: new Date(), is_banned: true, frozen_reason: `[AUTOMOD BAN] ${reason}` } });
     await notificationService.create({ receiverId: userId, type: 'automod_ban', postId, meta: { reason } });
-    console.log(`[AUTOMOD] BAN user=${userId} reason=${reason}`);
+    logger.info(`[AUTOMOD] BAN user=${userId} reason=${reason}`);
     return log.id;
   }
 
@@ -302,7 +303,7 @@ export async function applyAction(
     if (!user.frozen_at) {
       await prisma.user.update({ where: { id: userId }, data: { frozen_at: new Date(), frozen_reason: reason } });
       await notificationService.create({ receiverId: userId, type: 'automod_freeze', postId, meta: { reason } });
-      console.log(`[AUTOMOD] FREEZE user=${userId} reason=${reason}`);
+      logger.info(`[AUTOMOD] FREEZE user=${userId} reason=${reason}`);
     }
     return log.id;
   }
@@ -327,11 +328,11 @@ export async function applyAction(
           receiverId: userId, type: 'automod_freeze', postId,
           meta: { reason: `Аккаунт заморожен после ${newWarnCount} предупреждений` },
         });
-        console.log(`[AUTOMOD] FREEZE (warn limit) user=${userId}`);
+        logger.info(`[AUTOMOD] FREEZE (warn limit) user=${userId}`);
       }
     } else {
       await notificationService.create({ receiverId: userId, type: 'automod_warn', postId, meta: warnMeta });
-      console.log(`[AUTOMOD] WARN user=${userId} count=${newWarnCount} reason=${reason}`);
+      logger.info(`[AUTOMOD] WARN user=${userId} count=${newWarnCount} reason=${reason}`);
     }
     return log.id;
   }
@@ -342,7 +343,7 @@ export async function applyAction(
 export async function flagPost(postId: string, userId: string, category: string, reason: string): Promise<void> {
   await prisma.post.update({ where: { id: postId }, data: { deleted_at: new Date() } });
   await prisma.autoModLog.create({ data: { user_id: userId, action: 'flag_post', reason, category, score: 0, details: `post_id=${postId}`, post_id: postId } });
-  console.log(`[AUTOMOD] FLAG_POST post=${postId} user=${userId} reason=${reason}`);
+  logger.info(`[AUTOMOD] FLAG_POST post=${postId} user=${userId} reason=${reason}`);
 }
 
 // ── Appeals ────────────────────────────────────────────────────────────────
@@ -449,7 +450,7 @@ export async function moderateStory(storyId: string, userId: string): Promise<vo
     data: { deleted_at: new Date() },
   });
   await applyAction(userId, 'freeze', 'suspicious', rateCheck.reason, `story_id=${storyId}`, undefined);
-  console.log(`[AUTOMOD] STORY_BURST user=${userId} reason=${rateCheck.reason}`);
+  logger.info(`[AUTOMOD] STORY_BURST user=${userId} reason=${rateCheck.reason}`);
 }
 
 // ── Main entry: called on comment creation ────────────────────────────────────
@@ -470,7 +471,7 @@ export async function moderateComment(commentId: string, authorId: string): Prom
     data: { deleted_at: new Date() },
   });
   await applyAction(authorId, 'freeze', 'spam', rateCheck.reason, `comment_id=${commentId}`, undefined);
-  console.log(`[AUTOMOD] COMMENT_BURST user=${authorId} reason=${rateCheck.reason}`);
+  logger.info(`[AUTOMOD] COMMENT_BURST user=${authorId} reason=${rateCheck.reason}`);
 }
 
 // ── Main entry: called on message send ────────────────────────────────────────
@@ -497,10 +498,10 @@ export async function moderateMessage(senderId: string): Promise<void> {
 
   if (priorWarn) {
     await applyAction(senderId, 'freeze', 'spam', `Спам в сообщениях продолжился после предупреждения: ${rateCheck.reason}`, 'message_spam');
-    console.log(`[AUTOMOD] MESSAGE_SPAM_FREEZE user=${senderId} reason=${rateCheck.reason}`);
+    logger.info(`[AUTOMOD] MESSAGE_SPAM_FREEZE user=${senderId} reason=${rateCheck.reason}`);
   } else {
     await applyAction(senderId, 'warn', 'spam', `Спам в личных сообщениях: ${rateCheck.reason}. Если это повторится, аккаунт будет заморожен.`, 'message_spam');
-    console.log(`[AUTOMOD] MESSAGE_SPAM_WARN user=${senderId} reason=${rateCheck.reason}`);
+    logger.info(`[AUTOMOD] MESSAGE_SPAM_WARN user=${senderId} reason=${rateCheck.reason}`);
   }
 }
 
@@ -526,10 +527,10 @@ export async function moderateGroupMessage(senderId: string): Promise<void> {
 
   if (priorWarn) {
     await applyAction(senderId, 'freeze', 'spam', `Спам в групповом чате продолжился после предупреждения: ${rateCheck.reason}`, 'group_message_spam');
-    console.log(`[AUTOMOD] GROUP_MESSAGE_SPAM_FREEZE user=${senderId} reason=${rateCheck.reason}`);
+    logger.info(`[AUTOMOD] GROUP_MESSAGE_SPAM_FREEZE user=${senderId} reason=${rateCheck.reason}`);
   } else {
     await applyAction(senderId, 'warn', 'spam', `Спам в групповом чате: ${rateCheck.reason}. Если это повторится, аккаунт будет заморожен.`, 'group_message_spam');
-    console.log(`[AUTOMOD] GROUP_MESSAGE_SPAM_WARN user=${senderId} reason=${rateCheck.reason}`);
+    logger.info(`[AUTOMOD] GROUP_MESSAGE_SPAM_WARN user=${senderId} reason=${rateCheck.reason}`);
   }
 }
 
@@ -620,5 +621,5 @@ export async function patrolSuspiciousActivity(): Promise<void> {
     }
   }
 
-  console.log(`[AUTOMOD] Patrol done. HighPosters:${highPosters.length} HighStoryPosters:${highStoryPosters.length} ReportedUsers:${reportedUsers.length} PrioritizedReports:${pending.length}`);
+  logger.info(`[AUTOMOD] Patrol done. HighPosters:${highPosters.length} HighStoryPosters:${highStoryPosters.length} ReportedUsers:${reportedUsers.length} PrioritizedReports:${pending.length}`);
 }

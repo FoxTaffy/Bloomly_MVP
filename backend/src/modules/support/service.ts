@@ -1,6 +1,7 @@
 import prisma from '../../config/prisma.js';
 import { isTrustedMediaUrl } from '../media/service.js';
 import { sendSupportEmail } from './mail.service.js';
+import { logger, logError } from '../../lib/logger.js';
 
 const MAX_ATTACHMENT_FILES = 5;
 
@@ -61,7 +62,7 @@ export async function createTicket(userId: string, input: {
   const owner = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
   if (owner?.email) {
     sendSupportEmail(owner.email, `Обращение принято: ${ticket.subject}`, input.message.trim().slice(0, 3000))
-      .catch((err) => console.error('[SUPPORT_MAIL] Failed to send ack email:', err));
+      .catch(logError('[SUPPORT_MAIL] Failed to send ack email'));
   }
 
   return ticket;
@@ -136,7 +137,7 @@ export async function adminReplyTicket(ticketId: string, adminId: string, input:
           references: ticket.email_message_id ? [ticket.email_message_id] : undefined,
         });
       } catch (err) {
-        console.error('[SUPPORT_MAIL] Failed to send reply email:', err);
+        logger.error({ err }, '[SUPPORT_MAIL] Failed to send reply email');
       }
     }
     if (emailMessageId) statusUpdate.email_message_id = emailMessageId;

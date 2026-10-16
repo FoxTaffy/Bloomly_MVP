@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
@@ -22,7 +23,7 @@ const group = computed(() => groupsStore.currentGroup)
 const isOwner = computed(() => group.value?.owner_id === authStore.user?.id)
 const isAdmin = computed(() => {
   if (isOwner.value) return true
-  return groupsStore.myGroups.some(m => m.group_id === group.value?.id && ['admin', 'owner'].includes(m.role))
+  return groupsStore.managesGroup(group.value?.id)
 })
 
 const loading = ref(true)
@@ -108,8 +109,8 @@ async function submitOrder() {
     createForm.title = ''
     createForm.description = ''
     createForm.deadlineAt = ''
-  } catch (e: any) {
-    createError.value = e?.response?.data?.error?.message || 'Не удалось оформить заказ'
+  } catch (e) {
+    createError.value = apiErrorMessage(e) || 'Не удалось оформить заказ'
   } finally {
     creating.value = false
   }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -13,6 +14,7 @@ import api from '@/api'
 import BIcon from './BIcon.vue'
 import PostCard from './PostCard.vue'
 import { isDenNotification, denNotificationKey, DEN_NOTIFICATION_ICONS } from '@/lib/denNotifications'
+import * as fmt from '@/lib/format'
 
 const props = withDefaults(defineProps<{
   showBack?: boolean
@@ -266,8 +268,8 @@ const acceptRelationship = async (n: any) => {
     await api.post(`/relationships/${reqId}/accept`)
     n._relDone = 'accepted'
     unreadCount.value = Math.max(0, unreadCount.value - 1)
-  } catch (e: any) {
-    alert(e?.response?.data?.error?.message ?? 'Ошибка')
+  } catch (e) {
+    alert(apiErrorMessage(e) ?? 'Ошибка')
   } finally { relActionLoading.value[n.id] = false }
 }
 
@@ -278,8 +280,8 @@ const declineRelationship = async (n: any) => {
   try {
     await api.post(`/relationships/${reqId}/decline`)
     n._relDone = 'declined'
-  } catch (e: any) {
-    alert(e?.response?.data?.error?.message ?? 'Ошибка')
+  } catch (e) {
+    alert(apiErrorMessage(e) ?? 'Ошибка')
   } finally { relActionLoading.value[n.id] = false }
 }
 
@@ -457,14 +459,7 @@ const onGlobalKeydown = (e: KeyboardEvent) => {
 // Ждём очистки сессии: иначе guard видит ещё живой токен и редиректит с /login обратно на главную
 const handleLogout = async () => { await auth.logout(); router.push({ name: 'login' }) }
 
-function formatDate(d: string) {
-  const date = new Date(d)
-  const diff = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (diff < 60) return `${diff}с`
-  if (diff < 3600) return `${Math.floor(diff / 60)}м`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}ч`
-  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
-}
+const formatDate = (d: string) => fmt.formatRelativeShort(d, { maxDays: 1, locale: 'ru-RU' })
 
 onMounted(() => {
   if (auth.isAuthenticated) {

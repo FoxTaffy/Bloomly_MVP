@@ -79,6 +79,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useDealersDenStore } from '../stores/dealersDen'
 import { useAuthStore } from '../stores/auth'
+import * as fmt from '@/lib/format'
 
 const route  = useRoute()
 const store  = useDealersDenStore()
@@ -102,9 +103,7 @@ const statusLabel = computed(() => {
   return labels[fair.value?.status] ?? fair.value?.status
 })
 
-function formatDate(d: string) {
-  return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
-}
+const formatDate = (d: string) => fmt.formatDate(d, 'long', 'ru-RU')
 
 async function apply() {
   applying.value = true

@@ -2,6 +2,8 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { messageService } from './service.js';
 import { moderateMessage } from '../automod/service.js';
 import type { JwtUser, GetMessagesQuery } from './types.js';
+import { errMessage, errStatus } from '../../lib/httpErrors.js';
+import { logError } from '../../lib/logger.js';
 
 // ── Conversations ─────────────────────────────────────────────────────────────
 
@@ -13,8 +15,8 @@ export async function getConversationsHandler(req: FastifyRequest, reply: Fastif
     const label    = (req.query as any).label as string | undefined;
     const conversations = await messageService.getConversations(userId, archived, label);
     return reply.send({ success: true, data: { conversations }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -25,8 +27,8 @@ export async function getConversationByIdHandler(req: FastifyRequest, reply: Fas
     const conversation = await messageService.getConversationById(id, userId);
     if (!conversation) return reply.code(404).send({ success: false, data: null, error: { code: 'NOT_FOUND', message: 'Conversation not found' } });
     return reply.send({ success: true, data: { conversation }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -37,8 +39,8 @@ export async function getOrCreateConversationHandler(req: FastifyRequest, reply:
     if (!targetId) return reply.code(400).send({ success: false, data: null, error: { code: 'VALIDATION', message: 'userId is required' } });
     const conversation = await messageService.getOrCreateConversation(userId, targetId);
     return reply.code(200).send({ success: true, data: { conversation }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -47,8 +49,8 @@ export async function getUnreadCountHandler(req: FastifyRequest, reply: FastifyR
     const { id: userId } = req.user as JwtUser;
     const { total, personal, group } = await messageService.getUnreadCount(userId);
     return reply.send({ success: true, data: { count: total, personal, group }, error: null });
-  } catch (e: any) {
-    return reply.code(500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -57,8 +59,8 @@ export async function getMyGroupInboxCountsHandler(req: FastifyRequest, reply: F
     const { id: userId } = req.user as JwtUser;
     const counts = await messageService.getMyGroupInboxCounts(userId);
     return reply.send({ success: true, data: { counts }, error: null });
-  } catch (e: any) {
-    return reply.code(500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -76,8 +78,8 @@ export async function getMessagesHandler(
       limit,
     });
     return reply.send({ success: true, data: { messages }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -107,10 +109,10 @@ export async function sendMessageHandler(
       metadata: cardType ? metadata : undefined,
       attachments: Array.isArray(attachments) ? attachments : undefined,
     });
-    moderateMessage(senderId).catch((err) => console.error('[AUTOMOD] moderateMessage error:', err));
+    moderateMessage(senderId).catch(logError('[AUTOMOD] moderateMessage error'));
     return reply.code(201).send({ success: true, data: { message }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -122,8 +124,8 @@ export async function payMessageHandler(
     const { id: userId } = req.user as JwtUser;
     const result = await messageService.payPaymentRequest(req.params.msgId, userId);
     return reply.send({ success: true, data: result, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -135,8 +137,8 @@ export async function markReadHandler(
     const { id: userId } = req.user as JwtUser;
     await messageService.markRead(req.params.id, userId);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 500).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -148,8 +150,8 @@ export async function deleteMessageHandler(
     const { id: userId } = req.user as JwtUser;
     await messageService.deleteMessage(req.params.msgId, userId);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -165,8 +167,8 @@ export async function editMessageHandler(
     }
     const message = await messageService.editMessage(req.params.msgId, userId, text);
     return reply.send({ success: true, data: { message }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -182,8 +184,8 @@ export async function toggleReactionHandler(
     }
     const message = await messageService.toggleReaction(req.params.msgId, userId, emoji);
     return reply.send({ success: true, data: { message }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -193,11 +195,11 @@ export async function deleteConversationHandler(
 ) {
   try {
     const { id: userId } = req.user as JwtUser;
-    const scope = (req.query as any).scope === 'all' ? 'all' : 'me';
+    const scope = req.query.scope === 'all' ? 'all' : 'me';
     await messageService.deleteConversation(req.params.id, userId, scope);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -210,8 +212,8 @@ export async function setArchivedHandler(
     const { archived } = req.body;
     await messageService.setArchived(req.params.id, userId, archived);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -225,8 +227,8 @@ export async function setMuteHandler(
     const mutedUntil = muted_until === undefined ? undefined : (muted_until === null ? null : new Date(muted_until));
     await messageService.setMute(req.params.id, userId, mutedUntil, sound_muted);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -238,8 +240,8 @@ export async function createGroupHandler(req: FastifyRequest, reply: FastifyRepl
     const { name, userIds, avatar_url, banner_url } = req.body as { name: string; userIds: string[]; avatar_url?: string; banner_url?: string };
     const conversation = await messageService.createGroup(userId, name, userIds, { avatar_url, banner_url });
     return reply.code(201).send({ success: true, data: { conversation }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -252,8 +254,8 @@ export async function updateGroupHandler(
     const { name, avatar_url, banner_url } = req.body;
     await messageService.updateGroup(req.params.id, userId, { name, avatar_url, banner_url });
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -266,8 +268,8 @@ export async function addMemberHandler(
     const { userId: targetUserId } = req.body;
     const participant = await messageService.addMember(req.params.id, adminId, targetUserId);
     return reply.code(201).send({ success: true, data: { participant }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -279,8 +281,8 @@ export async function removeMemberHandler(
     const { id: adminId } = req.user as JwtUser;
     await messageService.removeMember(req.params.id, adminId, req.params.userId);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -293,8 +295,8 @@ export async function setMemberRoleHandler(
     const { role } = req.body;
     await messageService.setMemberRole(req.params.id, adminId, req.params.userId, role);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -306,8 +308,8 @@ export async function getGroupMembersHandler(
     const { id: userId } = req.user as JwtUser;
     const members = await messageService.getGroupMembers(req.params.id, userId);
     return reply.send({ success: true, data: { members }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -323,8 +325,8 @@ export async function pinMessageHandler(
     if (!messageId) return reply.code(400).send({ success: false, data: null, error: { code: 'VALIDATION', message: 'messageId is required' } });
     const msg = await messageService.pinMessage(req.params.id, userId, messageId, scope ?? 'all');
     return reply.send({ success: true, data: { message: msg }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'PIN_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'PIN_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -334,11 +336,11 @@ export async function unpinMessageHandler(
 ) {
   try {
     const { id: userId } = req.user as JwtUser;
-    const scope = (req.query as any).scope ?? 'all';
+    const scope = req.query.scope ?? 'all';
     await messageService.unpinMessage(req.params.id, userId, scope);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'PIN_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'PIN_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -350,8 +352,8 @@ export async function getMediaStatsHandler(
     const { id: userId } = req.user as JwtUser;
     const stats = await messageService.getMediaStats(req.params.id, userId);
     return reply.send({ success: true, data: { stats }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'STATS_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'STATS_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -364,8 +366,8 @@ export async function getMediaMessagesHandler(
     const { type, before, limit } = req.query;
     const messages = await messageService.getMediaMessages(req.params.id, userId, type, before, limit ? Number(limit) : undefined);
     return reply.send({ success: true, data: { messages }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'STATS_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'STATS_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -383,8 +385,8 @@ export async function setConversationLabelHandler(
     if (!label) return reply.code(400).send({ success: false, data: null, error: { code: 'VALIDATION', message: 'label is required' } });
     await messageService.setConversationLabel(req.params.id, userId, label);
     return reply.send({ success: true, data: { label }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'MSG_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -398,8 +400,8 @@ export async function registerPublicKeyHandler(req: FastifyRequest, reply: Fasti
     if (!publicKey) return reply.code(400).send({ success: false, data: null, error: { code: 'VALIDATION', message: 'publicKey is required' } });
     const result = await messageService.registerPublicKey(userId, publicKey);
     return reply.send({ success: true, data: result, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 500).send({ success: false, data: null, error: { code: 'KEY_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 500).send({ success: false, data: null, error: { code: 'KEY_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -412,8 +414,8 @@ export async function getPublicKeysHandler(req: FastifyRequest, reply: FastifyRe
     }
     const keys = await messageService.getPublicKeys(userIds);
     return reply.send({ success: true, data: { keys }, error: null });
-  } catch (e: any) {
-    return reply.code(500).send({ success: false, data: null, error: { code: 'KEY_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(500).send({ success: false, data: null, error: { code: 'KEY_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -427,8 +429,8 @@ export async function setConversationKeysHandler(req: FastifyRequest, reply: Fas
     }
     await messageService.setConversationKeys((req.params as any).id, userId, keys);
     return reply.send({ success: true, data: null, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'KEY_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'KEY_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -438,8 +440,8 @@ export async function getMyConversationKeyHandler(req: FastifyRequest, reply: Fa
     const { id: userId } = req.user as JwtUser;
     const encryptedKey = await messageService.getMyConversationKey((req.params as any).id, userId);
     return reply.send({ success: true, data: { encryptedKey }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'KEY_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'KEY_ERROR', message: errMessage(e) } });
   }
 }
 
@@ -458,8 +460,8 @@ export async function forwardMessageHandler(
     }
     const message = await messageService.forwardMessage(req.params.msgId, targetConversationId, senderId, encrypted_text, text);
     return reply.code(201).send({ success: true, data: { message }, error: null });
-  } catch (e: any) {
-    return reply.code(e.statusCode ?? 400).send({ success: false, data: null, error: { code: 'FORWARD_ERROR', message: e.message } });
+  } catch (e) {
+    return reply.code(errStatus(e) ?? 400).send({ success: false, data: null, error: { code: 'FORWARD_ERROR', message: errMessage(e) } });
   }
 }
 

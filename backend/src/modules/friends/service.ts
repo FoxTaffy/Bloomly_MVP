@@ -2,6 +2,7 @@ import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import { isBlockedBy } from '../../lib/blocks.js';
 import { redactBirthDate } from '../users/service.js';
+import { errCode } from '../../lib/httpErrors.js';
 
 /** Даты рождения друзей с учётом их настроек приватности. В общие ответы дата не попадает. */
 async function visibleBirthDates(userIds: string[]): Promise<Map<string, Date>> {
@@ -87,8 +88,8 @@ export const friendsService = {
           status: 'pending',
         },
       });
-    } catch (err: any) {
-      if (err?.code === 'P2002') throw new Error('Заявка уже отправлена');
+    } catch (err) {
+      if (errCode(err) === 'P2002') throw new Error('Заявка уже отправлена');
       throw err;
     }
 

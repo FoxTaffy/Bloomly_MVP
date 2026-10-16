@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useLangStore } from '@/stores/lang'
+import * as fmt from '@/lib/format'
 const langStore = useLangStore()
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -55,14 +56,9 @@ function isOwn() {
   return auth.user?.id === pack.value?.author_id
 }
 
-function formatPrice(price: string, currency: string) {
-  const n = parseFloat(price)
-  return n === 0 ? 'Бесплатно' : `${n.toLocaleString()} ${currency}`
-}
+const formatPrice = (price: string, currency: string) => parseFloat(price) === 0 ? 'Бесплатно' : fmt.formatPrice(price, currency)
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
-}
+const formatDate = (iso: string) => fmt.formatDate(iso, 'long', 'ru-RU')
 
 type PackTab = 'stickers' | 'stats'
 const activeTab = ref<PackTab>('stickers')

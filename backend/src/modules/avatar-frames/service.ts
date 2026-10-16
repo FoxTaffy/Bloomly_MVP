@@ -3,6 +3,7 @@ import { isAdmin as isAdminRole } from '../../lib/roles.js';
 import { notificationService } from '../notifications/service.js';
 import { deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import type { CreateAvatarFrameInput, CalibrationInput } from './types.js';
+import { logError } from '../../lib/logger.js';
 
 const FRAME_SELECT = {
   id: true,
@@ -184,7 +185,7 @@ export const avatarFramesService = {
     // A rejected frame is never claimable, so its uploaded art would otherwise sit
     // orphaned in storage forever (same cleanup dealersDenService.delete does on removal).
     if (action === 'reject') {
-      deleteFileByUrl(frame.image_url, frame.creator_id).catch((err) => console.error('[avatarFrames.adminReview] media cleanup failed:', err));
+      deleteFileByUrl(frame.image_url, frame.creator_id).catch(logError('[avatarFrames.adminReview] media cleanup failed'));
     }
 
     await notificationService.create({

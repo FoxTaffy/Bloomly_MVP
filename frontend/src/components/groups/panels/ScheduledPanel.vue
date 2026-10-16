@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { ref, computed, onMounted, watch } from 'vue'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
 import { utcToZonedParts, zonedTimeToUtcIso } from '@/lib/timezone'
+import * as fmt from '@/lib/format'
 
 interface ScheduledPost {
   id: string
@@ -44,12 +46,7 @@ async function fetchList() {
   finally { isLoading.value = false }
 }
 
-function formatScheduled(p: ScheduledPost): string {
-  if (!p.scheduled_at) return ''
-  const tz = p.timezone || 'UTC'
-  const { date, time } = utcToZonedParts(p.scheduled_at, tz)
-  return `${date} ${time} (${tz})`
-}
+const formatScheduled = fmt.formatScheduled
 
 async function publishNow(id: string) {
   if (busyIds.value.has(id)) return
@@ -57,8 +54,8 @@ async function publishNow(id: string) {
   try {
     const res = await api.post(`/posts/scheduled/${id}/publish-now`)
     if (res.data.success) posts.value = posts.value.filter(p => p.id !== id)
-  } catch (e: any) {
-    flashActionError(e?.response?.data?.error?.message || 'Не удалось опубликовать')
+  } catch (e) {
+    flashActionError(apiErrorMessage(e) || 'Не удалось опубликовать')
   } finally { busyIds.value.delete(id) }
 }
 
@@ -102,8 +99,8 @@ async function saveEdit(p: ScheduledPost) {
       if (idx !== -1) posts.value[idx] = res.data.data.post
       editingId.value = null
     }
-  } catch (e: any) {
-    editError.value = e?.response?.data?.error?.message || e?.message || 'Не удалось сохранить изменения'
+  } catch (e) {
+    editError.value = apiErrorMessage(e) || errorMessage(e) || 'Не удалось сохранить изменения'
   } finally {
     busyIds.value.delete(p.id)
   }
@@ -115,8 +112,8 @@ async function cancel(id: string) {
   try {
     await api.delete(`/posts/scheduled/${id}`)
     posts.value = posts.value.filter(p => p.id !== id)
-  } catch (e: any) {
-    flashActionError(e?.response?.data?.error?.message || 'Не удалось удалить')
+  } catch (e) {
+    flashActionError(apiErrorMessage(e) || 'Не удалось удалить')
   } finally { busyIds.value.delete(id) }
 }
 

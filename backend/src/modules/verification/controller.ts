@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { logStaffAction } from '../automod/logs.service.js';
 import {
   checkCriteria,
   getVerificationStatus,
@@ -8,38 +9,38 @@ import {
   getProfileCompleteness,
 } from './service.js';
 import { isModerator } from '../../lib/roles.js';
-import prisma from '../../config/prisma.js';
+import { errMessage } from '../../lib/httpErrors.js';
 
 // GET /api/verification/status
 export async function getStatusHandler(request: FastifyRequest, reply: FastifyReply) {
-  const userId = (request.user as any).id;
+  const userId = request.user.id;
   const data = await getVerificationStatus(userId);
   return reply.send({ success: true, data });
 }
 
 // GET /api/verification/criteria
 export async function getCriteriaHandler(request: FastifyRequest, reply: FastifyReply) {
-  const userId = (request.user as any).id;
+  const userId = request.user.id;
   const criteria = await checkCriteria(userId);
   return reply.send({ success: true, data: criteria });
 }
 
 // GET /api/verification/completeness
 export async function getCompletenessHandler(request: FastifyRequest, reply: FastifyReply) {
-  const userId = (request.user as any).id;
+  const userId = request.user.id;
   const data = await getProfileCompleteness(userId);
   return reply.send({ success: true, data });
 }
 
 // POST /api/verification/request
 export async function requestHandler(request: FastifyRequest, reply: FastifyReply) {
-  const userId = (request.user as any).id;
+  const userId = request.user.id;
   const { verificationType, evidenceUrls, socialLinks, evidenceText } = request.body as any;
   try {
     const result = await requestVerification(userId, verificationType, evidenceUrls, socialLinks, evidenceText);
     return reply.send({ success: true, data: result });
-  } catch (err: any) {
-    return reply.code(400).send({ success: false, error: { message: err.message } });
+  } catch (err) {
+    return reply.code(400).send({ success: false, error: { message: errMessage(err) } });
   }
 }
 
@@ -70,16 +71,14 @@ export async function adminReviewHandler(request: FastifyRequest, reply: Fastify
   }
   try {
     const result = await adminReviewRequest(id, action, user.id, reason);
-    await prisma.autoModLog.create({
-      data: {
-        user_id: (result as any).user_id ?? user.id, actor_id: user.id,
-        action: action === 'approve' ? 'verify_profile' : 'reject_verification',
-        reason: action === 'approve' ? 'Профиль верифицирован' : (reason || 'Заявка на верификацию отклонена'),
-        category: 'manual', score: 0,
-      },
-    }).catch(() => {});
+    await logStaffAction(
+      user.id,
+      result.user_id ?? user.id,
+      action === 'approve' ? 'verify_profile' : 'reject_verification',
+      action === 'approve' ? 'Профиль верифицирован' : (reason || 'Заявка на верификацию отклонена'),
+    ).catch(() => {});
     return reply.send({ success: true, data: result });
-  } catch (err: any) {
-    return reply.code(400).send({ success: false, error: { message: err.message } });
+  } catch (err) {
+    return reply.code(400).send({ success: false, error: { message: errMessage(err) } });
   }
 }

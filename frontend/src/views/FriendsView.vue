@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
@@ -115,8 +116,8 @@ async function handleSendRequest(targetId: string) {
     await friendsStore.sendRequest(targetId.trim())
     addSuccess.value = true; addInput.value = ''
     setTimeout(() => { addSuccess.value = false }, 3000)
-  } catch (e: any) {
-    addError.value = e?.response?.data?.error?.message ?? 'Ошибка'
+  } catch (e) {
+    addError.value = apiErrorMessage(e) ?? 'Ошибка'
   } finally { addLoading.value = false }
 }
 

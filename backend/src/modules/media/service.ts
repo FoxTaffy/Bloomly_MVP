@@ -17,6 +17,8 @@ import {
   STORAGE_TRACKED_FOLDERS,
 } from '../../config/uploads.js';
 import { isDevEnv } from '../../lib/env.js';
+import { errMessage } from '../../lib/httpErrors.js';
+import { logger } from '../../lib/logger.js';
 
 const execFileAsync = promisify(execFile);
 const FFMPEG_TIMEOUT_MS = 90_000;
@@ -26,10 +28,10 @@ const minioPassword = process.env.MINIO_ROOT_PASSWORD;
 // Запасного пароля в коде нет: публичный дефолт давал бы root-доступ к хранилищу.
 if (!minioPassword) {
   if (!isDevEnv()) {
-    console.error('[FATAL] MINIO_ROOT_PASSWORD env variable is not set. Refusing to start outside development/test.');
+    logger.error('[FATAL] MINIO_ROOT_PASSWORD env variable is not set. Refusing to start outside development/test.');
     process.exit(1);
   }
-  console.warn('[WARN] MINIO_ROOT_PASSWORD is not set. Storage requests will fail until it is configured.');
+  logger.warn('[WARN] MINIO_ROOT_PASSWORD is not set. Storage requests will fail until it is configured.');
 }
 
 const minioClient = new Minio.Client({
@@ -78,7 +80,7 @@ async function ensureBucket() {
 // bucketReady resolves when the bucket is confirmed available.
 const bucketReady: Promise<void> = ensureBucket().catch((err) => {
   // Без этой политики закрытые объекты остаются публично читаемыми, поэтому ошибка заметна.
-  console.error('[MEDIA] Не удалось настроить бакет и политику доступа:', err);
+  logger.error({ err }, '[MEDIA] Не удалось настроить бакет и политику доступа');
 }) as Promise<void>;
 
 export class UploadValidationError extends Error {
@@ -212,8 +214,8 @@ export async function uploadFile(
       }
       finalMimeType = 'image/webp';
       finalExt = '.webp';
-    } catch (err: any) {
-      console.error('Sharp failed to process image:', err.message);
+    } catch (err) {
+      logger.error({ err }, 'Sharp failed to process image');
       // Раньше тут был fallback на исходный буфер: оригинал с EXIF/GPS и картинка сверх лимита
       // пикселей уходили в хранилище и отдавались всем. Теперь такой файл отклоняется.
       throw Object.assign(new Error('Не удалось обработать изображение'), { statusCode: 400 });
@@ -332,9 +334,9 @@ export async function convertGifAvatarToWebm(
       posterUrl: `${PUBLIC_URL}/${BUCKET}/${posterObject}`,
       videoUrl: `${PUBLIC_URL}/${BUCKET}/${videoObject}`,
     };
-  } catch (err: any) {
+  } catch (err) {
     if (err instanceof UploadValidationError) throw err;
-    throw new UploadValidationError('GIF_CONVERT_FAILED', `Не удалось обработать GIF: ${err?.message ?? String(err)}`);
+    throw new UploadValidationError('GIF_CONVERT_FAILED', `Не удалось обработать GIF: ${errMessage(err) ?? String(err)}`);
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
@@ -450,7 +452,7 @@ export async function releaseStorage(userId: string, bytes: number): Promise<voi
     RETURNING prev.before AS before`;
   const before = rows[0]?.before;
   if (before !== undefined && before < BigInt(bytes)) {
-    console.warn(`[QUOTA] освобождено ${bytes} Б при учёте ${before} Б у пользователя ${userId}: учёт расходился`);
+    logger.warn(`[QUOTA] освобождено ${bytes} Б при учёте ${before} Б у пользователя ${userId}: учёт расходился`);
   }
 }
 

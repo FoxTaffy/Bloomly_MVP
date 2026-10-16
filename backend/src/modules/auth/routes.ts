@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
-  registerHandler, loginHandler, statsHandler,
+  registerHandler, loginHandler, statsHandler, meHandler,
   forgotPasswordHandler, resetPasswordHandler, changePasswordHandler,
   verifyEmailHandler, resendOtpHandler,
   requestUnfreezeHandler, confirmUnfreezeHandler, exportDataHandler,
@@ -14,14 +15,7 @@ import {
   listSessionsHandler, revokeSessionHandler, revokeOtherSessionsHandler,
 } from './controller.js';
 import type { JwtPayload } from './types.js';
-import prisma from '../../config/prisma.js';
 import { isAdult } from '../../lib/age.js';
-
-declare module 'fastify' {
-  interface FastifyInstance {
-    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  }
-}
 
 export async function authRoutes(fastify: FastifyInstance) {
   // ── Публичные ────────────────────────────────────────────────────────────────
@@ -186,7 +180,7 @@ export async function authRoutes(fastify: FastifyInstance) {
   // ── Привязка OAuth-аккаунтов (требует JWT) ────────────────────────────────────
   const auth: import('fastify').RouteShorthandOptions = { onRequest: [fastify.authenticate] };
 
-  fastify.post('/change-password', {
+  fastify.post<RouteGenericOf<typeof changePasswordHandler>>('/change-password', {
     onRequest: [fastify.authenticate],
     schema: {
       body: {
@@ -198,14 +192,14 @@ export async function authRoutes(fastify: FastifyInstance) {
       },
     },
     config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
-  }, changePasswordHandler as any);
+  }, changePasswordHandler);
 
-  fastify.post('/change-email/request', {
+  fastify.post<RouteGenericOf<typeof requestEmailChangeHandler>>('/change-email/request', {
     onRequest: [fastify.authenticate],
     config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
-  }, requestEmailChangeHandler as any);
+  }, requestEmailChangeHandler);
 
-  fastify.post('/change-email/confirm', {
+  fastify.post<RouteGenericOf<typeof confirmEmailChangeHandler>>('/change-email/confirm', {
     onRequest: [fastify.authenticate],
     schema: {
       body: {
@@ -217,70 +211,48 @@ export async function authRoutes(fastify: FastifyInstance) {
       },
     },
     config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
-  }, confirmEmailChangeHandler as any);
+  }, confirmEmailChangeHandler);
 
   // ── Двухфакторная аутентификация (требует JWT) ────────────────────────────────
-  fastify.post('/2fa/totp/setup', {
+  fastify.post<RouteGenericOf<typeof totpSetupHandler>>('/2fa/totp/setup', {
     onRequest: [fastify.authenticate],
     config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
-  }, totpSetupHandler as any);
+  }, totpSetupHandler);
 
-  fastify.post('/2fa/totp/confirm', {
+  fastify.post<RouteGenericOf<typeof totpConfirmHandler>>('/2fa/totp/confirm', {
     onRequest: [fastify.authenticate],
     schema: { body: { type: 'object', required: ['code'], properties: { code: { type: 'string', minLength: 6, maxLength: 6 } } } },
     config: { rateLimit: { max: 10, timeWindow: '15 minutes' } },
-  }, totpConfirmHandler as any);
+  }, totpConfirmHandler);
 
-  fastify.post('/2fa/email/enable', {
+  fastify.post<RouteGenericOf<typeof email2faEnableHandler>>('/2fa/email/enable', {
     onRequest: [fastify.authenticate],
     config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
-  }, email2faEnableHandler as any);
+  }, email2faEnableHandler);
 
-  fastify.post('/2fa/email/confirm', {
+  fastify.post<RouteGenericOf<typeof email2faConfirmHandler>>('/2fa/email/confirm', {
     onRequest: [fastify.authenticate],
     schema: { body: { type: 'object', required: ['code'], properties: { code: { type: 'string', minLength: 6, maxLength: 6 } } } },
     config: { rateLimit: { max: 10, timeWindow: '15 minutes' } },
-  }, email2faConfirmHandler as any);
+  }, email2faConfirmHandler);
 
-  fastify.post('/2fa/disable', {
+  fastify.post<RouteGenericOf<typeof disable2faHandler>>('/2fa/disable', {
     onRequest: [fastify.authenticate],
     schema: { body: { type: 'object', properties: { password: { type: 'string' } } } },
     config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
-  }, disable2faHandler as any);
+  }, disable2faHandler);
 
-  fastify.get('/link-init/:provider',          auth, linkInitHandler as any);
-  fastify.get('/linked-accounts',              auth, getLinkedAccountsHandler as any);
-  fastify.delete('/linked-accounts/:provider', auth, unlinkAccountHandler as any);
+  fastify.get<RouteGenericOf<typeof linkInitHandler>>('/link-init/:provider',          auth, linkInitHandler);
+  fastify.get<RouteGenericOf<typeof getLinkedAccountsHandler>>('/linked-accounts',              auth, getLinkedAccountsHandler);
+  fastify.delete<RouteGenericOf<typeof unlinkAccountHandler>>('/linked-accounts/:provider', auth, unlinkAccountHandler);
 
   // ── Активные сессии / устройства (требует JWT) ────────────────────────────────
-  fastify.get('/sessions',                auth, listSessionsHandler as any);
-  fastify.delete('/sessions/other',       auth, revokeOtherSessionsHandler as any);
-  fastify.delete('/sessions/:id',         auth, revokeSessionHandler as any);
+  fastify.get<RouteGenericOf<typeof listSessionsHandler>>('/sessions',                auth, listSessionsHandler);
+  fastify.delete<RouteGenericOf<typeof revokeOtherSessionsHandler>>('/sessions/other',       auth, revokeOtherSessionsHandler);
+  fastify.delete<RouteGenericOf<typeof revokeSessionHandler>>('/sessions/:id',         auth, revokeSessionHandler);
 
   // ── Профиль (требует JWT) ─────────────────────────────────────────────────────
-  fastify.get(
-    '/me',
-    { onRequest: [fastify.authenticate] },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const payload = request.user as JwtPayload;
-      const user = await prisma.user.findUnique({
-        where: { id: payload.id },
-        select: {
-          id: true, username: true, email: true, role: true,
-          display_name: true, avatar_url: true, avatar_video_url: true, bio: true, status: true,
-          subscription_tier: true, profile_theme: true, profile_bg_url: true,
-          profile_frame: true, is_verified: true, verification_type: true,
-          badge_type: true, email_verified: true, onboarding_done: true,
-          payment_region: true, birth_date: true, two_factor_method: true,
-        },
-      });
-      if (!user) {
-        return reply.code(401).send({ success: false, data: null, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
-      }
-      const { birth_date, ...publicUser } = user;
-      return reply.send({ success: true, data: { user: { ...publicUser, is_adult: isAdult(birth_date) } }, error: null });
-    },
-  );
+  fastify.get('/me', { onRequest: [fastify.authenticate] }, meHandler);
 
   // ── Token rotation ────────────────────────────────────────────────────────────
   fastify.post('/refresh', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, refreshHandler);

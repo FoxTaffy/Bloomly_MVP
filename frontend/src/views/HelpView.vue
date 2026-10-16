@@ -9,6 +9,7 @@ import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
 import api from '@/api'
+import * as fmt from '@/lib/format'
 
 const nsfwMode = useNsfwMode().nsfwEnabled
 const auth = useAuthStore()
@@ -132,7 +133,7 @@ const STATUS_LABEL = computed<Record<string, string>>(() => ({
   closed: langStore.t.helpStatusClosed,
 }))
 const STATUS_COLOR: Record<string, string> = { open: '#f59e0b', in_progress: '#38bdf8', resolved: '#10b981', closed: '#6b7280' }
-const formatDate = (d: string) => new Date(d).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' })
+const formatDate = (d: string) => fmt.formatDate(d, 'numeric')
 
 async function fetchTickets() {
   isLoadingTickets.value = true

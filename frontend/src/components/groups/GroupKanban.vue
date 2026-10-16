@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '@/lib/apiError'
 import { ref, computed, onMounted } from 'vue'
 import { useGroupsStore } from '@/stores/groups'
 import BIcon from '@/components/BIcon.vue'
@@ -27,8 +28,8 @@ const expandedPostId = ref<string | null>(null)
 onMounted(async () => {
   try {
     columns.value = await groupsStore.loadKanban(props.groupId)
-  } catch (e: any) {
-    error.value = e.message
+  } catch (e) {
+    error.value = errorMessage(e) ?? ''
   } finally {
     loading.value = false
   }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '@/lib/apiError'
 import { ref, onMounted, computed } from 'vue'
 import api from '@/api'
 import AppHeader from '@/components/AppHeader.vue'
@@ -9,6 +10,7 @@ import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useLangStore } from '@/stores/lang'
 import { isDenNotification, denNotificationKey } from '@/lib/denNotifications'
 import { notifBadgeIcon, notifBadgeColor } from '@/lib/notifVisuals'
+import * as fmt from '@/lib/format'
 
 const warningModal = useWarningModalStore()
 const langStore = useLangStore()
@@ -80,8 +82,8 @@ const acceptRelationship = async (n: any) => {
   try {
     await api.post(`/relationships/${reqId}/accept`)
     n._relDone = 'accepted'
-  } catch (e: any) {
-    alert(e?.response?.data?.error?.message ?? 'Ошибка')
+  } catch (e) {
+    alert(apiErrorMessage(e) ?? 'Ошибка')
   } finally { relActionLoading.value[n.id] = false }
 }
 
@@ -92,24 +94,12 @@ const declineRelationship = async (n: any) => {
   try {
     await api.post(`/relationships/${reqId}/decline`)
     n._relDone = 'declined'
-  } catch (e: any) {
-    alert(e?.response?.data?.error?.message ?? 'Ошибка')
+  } catch (e) {
+    alert(apiErrorMessage(e) ?? 'Ошибка')
   } finally { relActionLoading.value[n.id] = false }
 }
 
-const formatDate = (d: string) => {
-  const diffMs = Date.now() - new Date(d).getTime()
-  const diffSec = Math.max(1, Math.round(diffMs / 1000))
-  const diffMin = Math.round(diffSec / 60)
-  const diffHour = Math.round(diffMin / 60)
-  const diffDay = Math.round(diffHour / 24)
-
-  if (diffSec < 60) return `${diffSec}с`
-  if (diffMin < 60) return `${diffMin}м`
-  if (diffHour < 24) return `${diffHour}ч`
-  if (diffDay < 7) return `${diffDay}д`
-  return new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
-}
+const formatDate = (d: string) => fmt.formatRelativeShort(d, { maxDays: 7, datePreset: 'numericShort', locale: 'ru-RU' })
 
 // ── Display identity for a notification — real user, or the group it was sent "as" ──
 const identityIsGroup = (n: any): boolean => !!n.senderGroup

@@ -158,7 +158,7 @@
         </div>
 
         <!-- Blocked profile stub (the profile owner has blocked the viewer) -->
-        <div v-else-if="(viewedProfile as any).is_blocked_by_user" class="mt-8 bg-brand-card border border-brand-border rounded-3xl p-12 text-center shadow-xl">
+        <div v-else-if="viewedProfile.is_blocked_by_user" class="mt-8 bg-brand-card border border-brand-border rounded-3xl p-12 text-center shadow-xl">
           <img :src="viewedProfile.avatar_url || '/icons/badges/NN.jpg'" class="w-20 h-20 rounded-full object-cover mx-auto mb-4 border-2 border-brand-border" @error="onAvatarError" />
           <p class="text-white font-bold text-lg mb-1">{{ viewedProfile.display_name || viewedProfile.username }}</p>
           <p class="text-white/45 text-sm mb-6">@{{ viewedProfile.username }}</p>
@@ -169,7 +169,7 @@
         </div>
 
         <!-- Private profile stub (viewer isn't allowed to see this profile) -->
-        <div v-else-if="(viewedProfile as any).is_private" class="mt-8 bg-brand-card border border-brand-border rounded-3xl p-12 text-center shadow-xl">
+        <div v-else-if="viewedProfile.is_private" class="mt-8 bg-brand-card border border-brand-border rounded-3xl p-12 text-center shadow-xl">
           <img :src="viewedProfile.avatar_url || '/icons/badges/NN.jpg'" class="w-20 h-20 rounded-full object-cover mx-auto mb-4 border-2 border-brand-border" @error="onAvatarError" />
           <p class="text-white font-bold text-lg mb-1">{{ viewedProfile.display_name || viewedProfile.username }}</p>
           <p class="text-white/45 text-sm mb-6">@{{ viewedProfile.username }}</p>
@@ -354,7 +354,7 @@
                         <span v-if="notifyLoading" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         <BIcon v-else :name="notifyPosts && relation.aFollowsB ? 'BellRing' : 'Bell'" class="w-4 h-4" />
                       </button>
-                      <button v-if="(viewedProfile as any).messages_privacy !== 'nobody'" @click="openChat" class="inline-flex items-center gap-2 px-4 py-2 border border-brand-border bg-brand-bg hover:border-brand-accent/60 text-brand-offwhite hover:text-brand-accent rounded-xl text-sm font-bold transition-all">
+                      <button v-if="viewedProfile.messages_privacy !== 'nobody'" @click="openChat" class="inline-flex items-center gap-2 px-4 py-2 border border-brand-border bg-brand-bg hover:border-brand-accent/60 text-brand-offwhite hover:text-brand-accent rounded-xl text-sm font-bold transition-all">
                         <BIcon name="MessageSquare" class="w-4 h-4" /> {{ langStore.t.messageBtn }}
                       </button>
                       <button @click="toggleFollow" :disabled="isTogglingFollow"
@@ -366,8 +366,8 @@
                         <span v-if="isMutual && !isTogglingFollow" class="text-[10px] font-bold ml-0.5 opacity-60">· {{ langStore.t.profileMutualLabel }}</span>
                       </button>
                       <!-- Donate button -->
-                      <a v-if="(viewedProfile as any).donate_url"
-                        :href="safeHref((viewedProfile as any).donate_url)"
+                      <a v-if="viewedProfile.donate_url"
+                        :href="safeHref(viewedProfile.donate_url)"
                         target="_blank" rel="noopener noreferrer"
                         class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/60">
                         <BIcon name="HeartHandshake" class="w-4 h-4" />
@@ -411,47 +411,47 @@
                     </template>
                   </div>
                 </div>
-                <ReportModal v-if="viewedProfile" v-model="showProfileReportModal" :target-id="(viewedProfile as any).id" target-type="user" />
+                <ReportModal v-if="viewedProfile" v-model="showProfileReportModal" :target-id="viewedProfile.id" target-type="user" />
 
                 <!-- Name row -->
                 <div class="mt-4">
                   <div class="flex items-center flex-wrap gap-2 mb-2">
                     <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white tracking-tight min-w-0 max-w-full break-words [overflow-wrap:anywhere]">{{ profileDisplayName }}</h1>
                     <!-- Deceased badge -->
-                    <span v-if="(viewedProfile as any)?.deceased_at"
+                    <span v-if="viewedProfile?.deceased_at"
                       class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/10 text-white/60 flex-shrink-0"
-                      :title="(viewedProfile as any)?.deceased_note || langStore.t.profileDeceasedMemoryLabel">
+                      :title="viewedProfile?.deceased_note || langStore.t.profileDeceasedMemoryLabel">
                       🪦
                     </span>
                     <!-- Frozen badge -->
-                    <span v-if="(viewedProfile as any)?.frozen_at"
+                    <span v-if="viewedProfile?.frozen_at"
                       class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-sky-500/15 text-sky-300 flex-shrink-0"
                       :title="langStore.t.profileFrozenAccountBadgeTitle">
                       🧊
                     </span>
                     <!-- Verification badge -->
-                    <VerificationBadge v-if="(viewedProfile as any)?.is_verified"
-                      :type="(viewedProfile as any)?.verification_type"
+                    <VerificationBadge v-if="viewedProfile?.is_verified"
+                      :type="viewedProfile?.verification_type"
                       icon-class="w-6 h-6 flex-shrink-0" />
                     <span v-if="badgePillLabel" class="inline-flex items-center justify-center w-7 h-7 rounded-lg" :class="badgePillClass" :title="badgePillLabel">
                       <component :is="badgePillIcon" class="w-4 h-4" />
                     </span>
                     <!-- Subscription tier badge -->
-                    <span v-if="(viewedProfile as any).subscription_tier && (viewedProfile as any).subscription_tier !== 'free'"
+                    <span v-if="viewedProfile.subscription_tier && viewedProfile.subscription_tier !== 'free'"
                       class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase tracking-widest border"
                       :class="{
-                        'bg-brand-accent/15 border-brand-accent/40 text-brand-accent': (viewedProfile as any).subscription_tier === 'lite',
-                        'bg-violet-500/15 border-violet-500/40 text-violet-300': (viewedProfile as any).subscription_tier === 'pro',
-                        'bg-amber-500/15 border-amber-500/40 text-amber-400': (viewedProfile as any).subscription_tier === 'business',
+                        'bg-brand-accent/15 border-brand-accent/40 text-brand-accent': viewedProfile.subscription_tier === 'lite',
+                        'bg-violet-500/15 border-violet-500/40 text-violet-300': viewedProfile.subscription_tier === 'pro',
+                        'bg-amber-500/15 border-amber-500/40 text-amber-400': viewedProfile.subscription_tier === 'business',
                       }">
                       <Sparkles class="w-2.5 h-2.5" />
-                      {{ (viewedProfile as any).subscription_tier === 'lite' ? 'Lite' : (viewedProfile as any).subscription_tier === 'pro' ? 'Pro' : 'Business' }}
+                      {{ viewedProfile.subscription_tier === 'lite' ? 'Lite' : viewedProfile.subscription_tier === 'pro' ? 'Pro' : 'Business' }}
                     </span>
                     <!-- Artist Badge -->
                     <AppBadge
-                      v-if="(viewedProfile as any).badge_level && (viewedProfile as any).badge_level !== 'none'"
+                      v-if="viewedProfile.badge_level && viewedProfile.badge_level !== 'none'"
                       type="user"
-                      :level="(viewedProfile as any).badge_level"
+                      :level="viewedProfile.badge_level"
                       size="sm"
                     />
                     <!-- Registration date badge -->
@@ -485,7 +485,7 @@
                     <span v-if="viewedProfile.job_title" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/65">
                       <BIcon name="Briefcase" class="w-3 h-3 text-white/40" />{{ viewedProfile.job_title }}
                     </span>
-                    <span v-if="viewedProfile.location || (viewedProfile as any).country" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/65">
+                    <span v-if="viewedProfile.location || viewedProfile.country" class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-bg border border-brand-border rounded-lg text-xs font-medium text-white/65">
                       <BIcon name="MapPin" class="w-3 h-3 text-white/40" />{{ placeStr }}
                     </span>
                     <a v-if="viewedProfile.website" :href="websiteHref(viewedProfile.website)" target="_blank" rel="noopener noreferrer"
@@ -645,14 +645,14 @@
                     </div>
 
                     <!-- Местоположение + сайт -->
-                    <div v-if="viewedProfile.location || (viewedProfile as any).country || viewedProfile.website"
+                    <div v-if="viewedProfile.location || viewedProfile.country || viewedProfile.website"
                       class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl">
                       <div class="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
                         <BIcon name="MapPin" class="w-4 h-4 text-white/50" />
                       </div>
                       <div class="min-w-0 flex-1">
                         <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">{{ langStore.t.locationCardLabel }}</p>
-                        <p class="text-sm text-white/80 font-semibold truncate">{{ [viewedProfile.location, (viewedProfile as any).country].filter(Boolean).join(', ') }}</p>
+                        <p class="text-sm text-white/80 font-semibold truncate">{{ [viewedProfile.location, viewedProfile.country].filter(Boolean).join(', ') }}</p>
                         <a v-if="viewedProfile.website" :href="websiteHref(viewedProfile.website)" target="_blank" rel="noopener noreferrer"
                           class="text-xs text-brand-accent hover:underline truncate block mt-0.5">{{ viewedProfile.website.replace(/^https?:\/\//, '') }}</a>
                       </div>
@@ -672,12 +672,12 @@
                   </div>
 
                   <!-- Artist since -->
-                  <div v-if="(viewedProfile as any).artist_since"
+                  <div v-if="viewedProfile.artist_since"
                     class="flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-amber-500/8 to-transparent border border-amber-500/20 rounded-2xl">
                     <BIcon name="Palette" class="w-4 h-4 text-amber-400 flex-shrink-0" />
                     <div>
                       <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">{{ langStore.t.artistSinceLabel }}</p>
-                      <p class="text-sm text-amber-300 font-bold">{{ new Date((viewedProfile as any).artist_since).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'long', year: 'numeric' }) }}</p>
+                      <p class="text-sm text-amber-300 font-bold">{{ new Date(viewedProfile.artist_since).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'long', year: 'numeric' }) }}</p>
                     </div>
                   </div>
 
@@ -702,14 +702,14 @@
                           <button v-else type="button" @click="openFavoriteEdit(cat.key)"
                             class="flex items-center gap-2 group/fav w-full text-left py-0.5">
                             <span class="text-[11px] text-white/40 w-20 flex-shrink-0">{{ cat.label }}</span>
-                            <span v-if="(viewedProfile as any)[cat.key]" class="text-xs font-semibold text-white/75">{{ (viewedProfile as any)[cat.key] }}</span>
+                            <span v-if="viewedProfile[cat.key]" class="text-xs font-semibold text-white/75">{{ viewedProfile[cat.key] }}</span>
                             <span v-else class="text-xs text-white/25 italic truncate">{{ cat.placeholder }}</span>
                             <BIcon name="Pencil" class="w-3 h-3 text-white/20 opacity-0 group-hover/fav:opacity-100 transition-opacity flex-shrink-0" />
                           </button>
                         </template>
-                        <div v-else-if="(viewedProfile as any)[cat.key]" class="flex items-center gap-2">
+                        <div v-else-if="viewedProfile[cat.key]" class="flex items-center gap-2">
                           <span class="text-[11px] text-white/40 w-20 flex-shrink-0">{{ cat.label }}</span>
-                          <span class="text-xs font-semibold text-white/75">{{ (viewedProfile as any)[cat.key] }}</span>
+                          <span class="text-xs font-semibold text-white/75">{{ viewedProfile[cat.key] }}</span>
                         </div>
                       </div>
                     </div>
@@ -1362,7 +1362,7 @@
                     </div>
 
                     <!-- Posts empty → show repaws fallback, or CTA -->
-                    <template v-else-if="activeContentTab === 'posts' && tabPosts.filter((p: any) => p.id !== viewedProfile?.pinned_post_id).length === 0 && !pinnedPost">
+                    <template v-else-if="activeContentTab === 'posts' && tabPosts.filter((p) => p.id !== viewedProfile?.pinned_post_id).length === 0 && !pinnedPost">
                       <template v-if="repawsFallback.length">
                         <div class="flex items-center gap-2 text-xs text-white/55 font-semibold mb-1 px-1">
                           <BIcon name="Repeat2" class="w-3.5 h-3.5 text-brand-accent" /> {{ langStore.t.profileNoPostsShowingRepaws }}
@@ -1371,7 +1371,7 @@
                           :post="post" :is-own-profile="isOwnProfile"
                           :is-pinned-post-id="viewedProfile.pinned_post_id"
                           :show-repaw-label="true"
-                          :group-context="(post as any).groupPosts?.[0]?.group ?? null"
+                          :group-context="post.groupPosts?.[0]?.group ?? null"
                           :ad-mode="false"
                           :initial-repawed="profilePostStatus[post.id]?.repawed ?? false"
                           :initial-favourited="profilePostStatus[post.id]?.favourited ?? false"
@@ -1396,11 +1396,11 @@
 
                     <!-- Posts / repaws / archive list -->
                     <template v-else>
-                      <PostCard v-for="post in tabPosts.filter((p: any) => p.id !== viewedProfile?.pinned_post_id)" :key="post.id"
+                      <PostCard v-for="post in tabPosts.filter((p) => p.id !== viewedProfile?.pinned_post_id)" :key="post.id"
                         :post="post" :is-own-profile="isOwnProfile"
                         :is-pinned-post-id="viewedProfile.pinned_post_id"
                         :show-repaw-label="activeContentTab === 'repaws'"
-                        :group-context="activeContentTab === 'repaws' ? ((post as any).groupPosts?.[0]?.group ?? null) : null"
+                        :group-context="activeContentTab === 'repaws' ? (post.groupPosts?.[0]?.group ?? null) : null"
                         :ad-mode="false"
                         :initial-repawed="profilePostStatus[post.id]?.repawed ?? false"
                         :initial-favourited="profilePostStatus[post.id]?.favourited ?? false"
@@ -1416,7 +1416,7 @@
                       <button v-for="f in (['all','photo','video'] as const)" :key="f" @click="mediaFilter = f"
                         class="px-3.5 py-1.5 rounded-xl border text-xs font-bold transition-all"
                         :class="mediaFilter === f ? 'bg-brand-accent border-brand-accent text-white' : 'border-brand-border text-white/55 hover:text-white'">
-                        {{ f === 'all' ? `${langStore.t.tabAll} · ${filteredMediaPosts.length}` : f === 'photo' ? `${langStore.t.feedPhoto} · ${tabPosts.filter((p: any) => isImage(p.media_urls?.[0] ?? '')).length}` : `${langStore.t.profileMediaFilterVideoLabel} · ${tabPosts.filter((p: any) => !isImage(p.media_urls?.[0] ?? '')).length}` }}
+                        {{ f === 'all' ? `${langStore.t.tabAll} · ${filteredMediaPosts.length}` : f === 'photo' ? `${langStore.t.feedPhoto} · ${tabPosts.filter((p) => isImage(p.media_urls?.[0] ?? '')).length}` : `${langStore.t.profileMediaFilterVideoLabel} · ${tabPosts.filter((p) => !isImage(p.media_urls?.[0] ?? '')).length}` }}
                       </button>
                       <div class="flex-1" />
                       <button @click.stop="mediaAlbumView = !mediaAlbumView"
@@ -1503,7 +1503,7 @@
                       <div v-else class="grid grid-cols-3 gap-1.5">
                         <div v-for="(post, idx) in filteredMediaPosts" :key="post.id"
                           class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-brand-border/60 hover:border-brand-accent/60 bg-brand-bg transition-all">
-                          <div @click.stop="openMediaLightbox(post.media_urls[0], filteredMediaPosts.map((p: any) => p.media_urls[0]), idx)"
+                          <div @click.stop="openMediaLightbox(post.media_urls[0], filteredMediaPosts.map((p) => p.media_urls[0]), idx)"
                             class="absolute inset-0">
                             <img v-if="isImage(post.media_urls[0])" :src="post.media_urls[0]" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                             <div v-else class="w-full h-full flex items-center justify-center bg-brand-bg/60">
@@ -1628,7 +1628,7 @@
 
                   <!-- STATS (Lite+) -->
                   <div v-else-if="activeContentTab === 'stats'">
-                    <div v-if="(authStore.user as any)?.subscription_tier === 'free'"
+                    <div v-if="authStore.user?.subscription_tier === 'free'"
                       class="py-14 text-center text-white/55">
                       <BIcon name="Lock" class="w-10 h-10 mx-auto mb-3 text-amber-400 opacity-70" />
                       <p class="font-semibold text-sm mb-1 text-white/80">{{ langStore.t.statsLockedMsg }}
@@ -1801,7 +1801,7 @@
                 </div>
                 <div class="flex items-baseline gap-1.5">
                   <span class="text-2xl font-extrabold text-white leading-none">
-                    {{ Number((viewedProfile as any)?.wallet?.balance ?? 0).toFixed(2) }}
+                    {{ Number(viewedProfile?.wallet?.balance ?? 0).toFixed(2) }}
                   </span>
                   <span class="text-xs font-semibold text-brand-accent-minus">Blooms</span>
                 </div>
@@ -1867,7 +1867,7 @@
                 </div>
                 <div v-if="activeSocialLinks.length" class="px-2 pb-2 space-y-0.5">
                   <a v-for="net in activeSocialLinks" :key="net.key"
-                    :href="safeHref(socialUrl(net.key, (viewedProfile as any).social_links[net.key]))" target="_blank" rel="noopener noreferrer"
+                    :href="safeHref(socialUrl(net.key, viewedProfile.social_links?.[net.key] ?? ''))" target="_blank" rel="noopener noreferrer"
                     class="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-brand-bg transition-all group">
                     <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                       :style="{ backgroundColor: net.color + '22' }">
@@ -1875,7 +1875,7 @@
                     </div>
                     <div class="min-w-0">
                       <p class="text-[10px] text-white/55 uppercase tracking-wide">{{ net.label }}</p>
-                      <p class="text-xs text-brand-offwhite font-medium truncate group-hover:text-white">{{ (viewedProfile as any).social_links[net.key] }}</p>
+                      <p class="text-xs text-brand-offwhite font-medium truncate group-hover:text-white">{{ viewedProfile.social_links?.[net.key] }}</p>
                     </div>
                   </a>
                 </div>
@@ -2449,12 +2449,11 @@
 <script setup lang="ts">
 import { invalidateFriendsCache } from '@/stores/friends'
 import { safeHref } from '@/utils/safeHref'
-import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, reactive, type Component, type Directive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useHead } from '@unhead/vue'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
-import { useUserStore, type UserProfile, type Fursona, type Fursuit } from '@/stores/user'
+import { useUserStore, type UserProfile, type Fursona } from '@/stores/user'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import PostComments from '@/components/PostComments.vue'
 import PostCard from '@/components/PostCard.vue'
@@ -2472,14 +2471,19 @@ import StoryViewer from '@/components/StoryViewer.vue'
 import ReportModal from '@/components/ReportModal.vue'
 import api from '@/api'
 import { compressImageForUpload } from '@/lib/utils'
-import { FAVORITE_CATEGORIES } from '@/lib/interests'
+import { FAVORITE_CATEGORIES, type FavoriteCategory } from '@/lib/interests'
 import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
-import { extractHashtags, extractCommittedHashtags } from '@/lib/hashtags'
 import { onAvatarError } from '@/composables/useAvatarFallback'
-import { useTagSuggestions } from '@/composables/useTagSuggestions'
 import VerificationBadge from '@/components/VerificationBadge.vue'
 import { verTypeIconUrl } from '@/lib/verificationIcons'
 import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
+import * as fmt from '@/lib/format'
+import { speciesEmoji, websiteHref, socialUrl, isImage, shadeColor } from '@/lib/profileDisplay'
+import { useProfileSeo } from '@/composables/profile/useProfileSeo'
+import { useProfileStatus } from '@/composables/profile/useProfileStatus'
+import { useAvatarGallery } from '@/composables/profile/useAvatarGallery'
+import { useProfileFursonas } from '@/composables/profile/useProfileFursonas'
+import { useProfilePostComposer } from '@/composables/profile/useProfilePostComposer'
 import {
   User, Users, UserPlus, UserMinus, UserX, UsersRound,
   Bell, MessageSquare, Pencil, Pin, Trash2, MoreHorizontal,
@@ -2506,6 +2510,8 @@ const primarySpeciesLabel = computed(() => {
 import { useMessagesStore } from '@/stores/messages'
 import { useGroupsStore, type SoonBadge as SoonBadgeType } from '@/stores/groups'
 import { useNsfwMode } from '@/composables/useNsfwMode'
+import type { Post } from '@/types/post'
+import { apiErrorMessage, apiErrorStatus } from '@/lib/apiError'
 import TrustScoreCard from '@/components/TrustScoreCard.vue'
 const messagesStore = useMessagesStore()
 const groupsStore = useGroupsStore()
@@ -2527,8 +2533,8 @@ async function openChat() {
     const convId = await messagesStore.openConversation(viewedProfile.value.id)
     messagesStore.activeId = convId
     router.push({ name: 'messages' })
-  } catch (e: any) {
-    messageErrorNotice.value = e?.response?.data?.error?.message === 'MESSAGES_DISABLED'
+  } catch (e) {
+    messageErrorNotice.value = apiErrorMessage(e) === 'MESSAGES_DISABLED'
       ? langStore.t.profileMessagesRestrictedError
       : langStore.t.profileChatStartFailedError
     setTimeout(() => { messageErrorNotice.value = null }, 4000)
@@ -2542,7 +2548,7 @@ const isLoading = ref(false)
 const error = ref<string | null>(null)
 
 const profileBgStyle = computed(() => {
-  const url = (viewedProfile.value as any)?.profile_bg_url as string | undefined
+  const url = viewedProfile.value?.profile_bg_url as string | undefined
   if (!url) return {}
   try {
     const parsed = new URL(url)
@@ -2556,70 +2562,38 @@ const profileBgStyle = computed(() => {
   } catch { return {} }
 })
 
-// ── SEO ───────────────────────────────────────────────────────────────────────
-const BASE = 'https://bloomly.fun'
-useHead({
-  title: () => {
-    if (!viewedProfile.value) return 'Bloomly'
-    const name = viewedProfile.value.display_name || viewedProfile.value.username
-    return `${name} (@${viewedProfile.value.username}) — Bloomly`
+
+// ── Feature composables ───────────────────────────────────────────────────────
+useProfileSeo(viewedProfile, () => route.params.username)
+const {
+  profileStatus, showStatusEdit, statusSaving, statusEditEmoji, statusEditText, statusEditDuration,
+  statusEditColor, statusEditMusic, statusEmojiTab, statusShowMusicSearch, statusMusicQuery, statusMusicResults,
+  statusMusicLoading, statusPreviewAudioEl, isStatusMusicPlaying, statusPreviewVolume, toggleStatusMusicPreview, setStatusMusicVolume,
+  emojiCategories, statusBubbleColor, statusEditBubbleColor, statusBubbleGradient, statusEditBubbleGradient,
+  hasActiveStatus, statusDurations, statusColors, statusTimeRemaining, applyProfileStatus, saveProfileStatus,
+  openStatusEdit, clearProfileStatus, pickStatusColor, statusMusicError, onStatusMusicSearch, selectStatusTrack,
+} = useProfileStatus()
+const {
+  showAvatarViewer, showBannerViewer, avatarGallery, avatarGalleryIndex, avatarGalleryLoading, avatarGalleryRestoring,
+  openAvatarGallery, restoreGalleryAvatar, deleteGalleryAvatar,
+} = useAvatarGallery(viewedProfile)
+const {
+  profileFursonas, selectedFursonaId, profileFursona, speciesDisplay, speciesSummary, profileFursuits,
+  profileFursonaLoading, profileFursuitsLoading, makerGroupCache, loadProfileFursonas, loadProfileFursuits,
+  showFursonaRefViewer, selectedFursonaRef, fursonaSubTab, fursonaRefImages, activeFursonaRef, fursonaOtherCount,
+  fursonaViewTabs, fursonaRefPalette, selectFursonaRef, openFursonaRef,
+} = useProfileFursonas(viewedProfile)
+const {
+  newPostContent, newPostMediaUrls, newPostIsNsfw, newPostIsAiGenerated, newPostTags, newPostTagInput,
+  newPostVisibility, showProfileVisibilityMenu, isCreatingPost, profileMediaUploadRef, showProfileScheduleMenu, isSchedulingProfilePost,
+  addProfileTag, addProfileTagFromSuggestion, removeProfileTag, onProfileMediaUploaded, createPost, saveProfileScheduledPost,
+  tagSuggestions, showTagSuggestions, fetchTagSuggestions, clearTagSuggestions,
+} = useProfilePostComposer({
+  onCreated: (post) => {
+    tabPosts.value.unshift(post)
+    if (viewedProfile.value?._count) viewedProfile.value._count.posts++
   },
-  meta: [
-    { name: 'robots', content: 'index, follow' },
-    { name: 'description', content: () => {
-        if (!viewedProfile.value) return 'Bloomly — Creative Social Network.'
-        const name = viewedProfile.value.display_name || viewedProfile.value.username
-        return (viewedProfile.value.bio)
-          ? `${viewedProfile.value.bio.slice(0, 155)}…`
-          : `${name}'s profile on Bloomly — the creative social network.`
-      }
-    },
-    { property: 'og:type', content: 'profile' },
-    { property: 'og:site_name', content: 'Bloomly' },
-    { property: 'og:title', content: () => {
-        if (!viewedProfile.value) return 'Bloomly'
-        const name = viewedProfile.value.display_name || viewedProfile.value.username
-        return `${name} (@${viewedProfile.value.username})`
-      }
-    },
-    { property: 'og:description', content: () => {
-        if (!viewedProfile.value) return ''
-        const name = viewedProfile.value.display_name || viewedProfile.value.username
-        return viewedProfile.value.bio?.slice(0, 200) || `${name}'s profile on Bloomly.`
-      }
-    },
-    { property: 'og:image', content: () => viewedProfile.value?.avatar_url || `${BASE}/og-default.png` },
-    { property: 'og:url', content: () => `${BASE}/profile/${viewedProfile.value?.username || route.params.username}` },
-    { name: 'twitter:card', content: 'summary' },
-    { name: 'twitter:title', content: () => {
-        if (!viewedProfile.value) return 'Bloomly'
-        return `${viewedProfile.value.display_name || viewedProfile.value.username} (@${viewedProfile.value.username})`
-      }
-    },
-    { name: 'twitter:image', content: () => viewedProfile.value?.avatar_url || `${BASE}/og-default.png` },
-  ],
-  link: [
-    { rel: 'canonical', href: () => `${BASE}/profile/${viewedProfile.value?.username || route.params.username}` },
-  ],
-  script: [
-    {
-      type: 'application/ld+json',
-      innerHTML: () => {
-        if (!viewedProfile.value) return ''
-        const name = viewedProfile.value.display_name || viewedProfile.value.username
-        return JSON.stringify({
-          '@context': 'https://schema.org',
-          '@type': 'ProfilePage',
-          name,
-          url: `${BASE}/profile/${viewedProfile.value.username}`,
-          description: viewedProfile.value.bio || '',
-          ...(viewedProfile.value.avatar_url ? {
-            image: { '@type': 'ImageObject', url: viewedProfile.value.avatar_url },
-          } : {}),
-        })
-      },
-    },
-  ],
+  onScheduled: () => { showPostForm.value = false },
 })
 
 // ── Profile stories ───────────────────────────────────────────────────────────
@@ -2660,232 +2634,24 @@ const showFollowingModal = ref(false)
 const showGroupsModal    = ref(false)
 const followingLoading = ref(false)
 
-// ── Profile status (server-backed IG Notes-style bubble) ──────────────────────
-const profileStatus = reactive({ emoji: '', text: '', expiresAt: 0, color: '', music: null as null | { title: string; artist: string; artworkUrl: string; previewUrl: string } })
-const showStatusEdit = ref(false)
-const statusSaving = ref(false)
-const statusEditEmoji = ref('')
-const statusEditText = ref('')
-const statusEditDuration = ref(86400)
-const statusEditColor = ref('#4C67CF')
-const statusEditMusic = ref<null | { title: string; artist: string; artworkUrl: string; previewUrl: string }>(null)
-const statusEmojiTab = ref(0)
-const statusShowMusicSearch = ref(false)
-const statusMusicQuery = ref('')
-const statusMusicResults = ref<any[]>([])
-const statusMusicLoading = ref(false)
-const statusPreviewAudioEl = ref<HTMLAudioElement | null>(null)
-const isStatusMusicPlaying = ref(false)
-const statusPreviewVolume = ref(Number(localStorage.getItem('bloomly_status_preview_volume') ?? '0.7'))
-function toggleStatusMusicPreview() {
-  const url = profileStatus.music?.previewUrl
-  const audio = statusPreviewAudioEl.value
-  if (!url || !audio) return
-  if (isStatusMusicPlaying.value) {
-    audio.pause()
-    return
-  }
-  if (audio.src !== url) audio.src = url
-  audio.volume = statusPreviewVolume.value
-  audio.play().catch(() => {})
-}
-function setStatusMusicVolume(e: Event) {
-  const v = parseFloat((e.target as HTMLInputElement).value)
-  if (!isFinite(v)) return
-  statusPreviewVolume.value = v
-  if (statusPreviewAudioEl.value) statusPreviewAudioEl.value.volume = v
-  localStorage.setItem('bloomly_status_preview_volume', String(v))
-}
-// Stop any preview playing for the previous profile/track before it's replaced —
-// otherwise navigating to another user (or saving a new track on your own status)
-// leaves the old preview audio running silently while the play/pause icon flips
-// to reflect the new (unrelated) track.
-watch(() => profileStatus.music?.previewUrl, (next, prev) => {
-  if (next === prev) return
-  const audio = statusPreviewAudioEl.value
-  if (audio) audio.pause()
-  isStatusMusicPlaying.value = false
-})
-let statusMusicTimer: ReturnType<typeof setTimeout> | null = null
-
-const emojiCategories = [
-  { label: '😊', emojis: ['😊','😎','😴','😤','🥺','😂','🥰','😈','🤔','😭','🫶','💀','👀','🫠','🥳','😶'] },
-  { label: '🎮', emojis: ['🎨','🎮','🎵','📚','💻','🏃','✈️','🎬','🎲','🎸','🏋️','🎯','🎤','🧩','🛹','🎭'] },
-  { label: '🍕', emojis: ['🍕','🍔','🍜','🍣','☕','🧋','🍺','🎂','🍎','🥐','🍦','🌮','🍩','🥗','🫐','🧁'] },
-  { label: '🦊', emojis: ['🐾','🦊','🐱','🐶','🦄','🌙','⭐','🌈','🔥','🌿','🌊','🦋','🐺','🦁','🐼','🌸'] },
-  { label: '💎', emojis: ['💎','⚡','🔑','💡','🏆','💰','❤️','💜','🖤','✅','⚠️','🔴','🟡','🟢','💬','📌'] },
-]
-
-const statusBubbleColor = computed(() =>
-  profileStatus.color || (profileStatus.music ? '#c0392b' : '#4C67CF')
-)
-const statusEditBubbleColor = computed(() =>
-  statusEditColor.value || (statusEditMusic.value ? '#c0392b' : '#4C67CF')
-)
-
-/** Lighten (positive) or darken (negative) a #rrggbb hex color by a percent, for gradients/glows. */
-function shadeColor(hex: string, percent: number): string {
-  const clean = (hex || '#4C67CF').replace('#', '')
-  const num = parseInt(clean.length === 6 ? clean : '4C67CF', 16)
-  const amt = Math.round(2.55 * percent)
-  const r = Math.min(255, Math.max(0, (num >> 16) + amt))
-  const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amt))
-  const b = Math.min(255, Math.max(0, (num & 0x0000ff) + amt))
-  return '#' + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1)
-}
-const statusBubbleGradient = computed(() => `linear-gradient(135deg, ${shadeColor(statusBubbleColor.value, 16)}, ${shadeColor(statusBubbleColor.value, -20)})`)
-const statusEditBubbleGradient = computed(() => `linear-gradient(135deg, ${shadeColor(statusEditBubbleColor.value, 16)}, ${shadeColor(statusEditBubbleColor.value, -20)})`)
-// Ticks so statusTimeRemaining actually counts down and an expired status
-// disappears on its own instead of staying visible until the next page load.
-const statusNowTick = ref(Date.now())
-let statusNowTickInterval: ReturnType<typeof setInterval> | null = null
-const hasActiveStatus = computed(() => {
-  if (profileStatus.expiresAt && profileStatus.expiresAt <= statusNowTick.value) return false
-  return !!(profileStatus.text || profileStatus.emoji || profileStatus.music)
-})
-
-const statusDurations = computed(() => [
-  { label: `30${langStore.t.profileDurationMinuteShort}`, value: 1800 },
-  { label: `1${langStore.t.profileDurationHourShort}`, value: 3600 },
-  { label: `4${langStore.t.profileDurationHourShort}`, value: 14400 },
-  { label: `24${langStore.t.profileDurationHourShort}`, value: 86400 },
-  { label: `7${langStore.t.profileDurationDayShort}`, value: 604800 },
-  { label: '∞', value: 0 },
-])
-
-const statusColors = [
-  { value: '#4C67CF', dot: 'bg-brand-accent' },
-  { value: '#7c3aed', dot: 'bg-[#7c3aed]' },
-  { value: '#ec4899', dot: 'bg-[#ec4899]' },
-  { value: '#f97316', dot: 'bg-[#f97316]' },
-  { value: '#22c55e', dot: 'bg-[#22c55e]' },
-  { value: '#ef4444', dot: 'bg-[#ef4444]' },
-  { value: '#2c2c2e', dot: 'bg-[#2c2c2e] border border-white/20' },
-]
-
-const statusTimeRemaining = computed(() => {
-  if (!profileStatus.expiresAt) return ''
-  const diff = profileStatus.expiresAt - statusNowTick.value
-  if (diff <= 0) return ''
-  const h = Math.floor(diff / 3600000)
-  const m = Math.floor((diff % 3600000) / 60000)
-  if (h >= 24) return `${Math.floor(h / 24)}${langStore.t.profileDurationDayShort}`
-  if (h >= 1) return `${h}${langStore.t.profileDurationHourShort}`
-  return `${m}${langStore.t.profileDurationMinuteShort}`
-})
-
-/** Populate the reactive display state from whatever the API returned for this profile (own or someone else's). */
-function applyProfileStatus(status: any) {
-  profileStatus.emoji = ''; profileStatus.text = ''; profileStatus.expiresAt = 0; profileStatus.color = ''; profileStatus.music = null
-  if (!status) return
-  if (status.expiresAt && status.expiresAt < Date.now()) return
-  profileStatus.emoji = status.emoji ?? ''
-  profileStatus.text = status.text ?? ''
-  profileStatus.expiresAt = status.expiresAt ?? 0
-  profileStatus.color = status.color ?? ''
-  profileStatus.music = status.music ?? null
-}
-async function saveProfileStatus() {
-  if (statusSaving.value) return
-  statusSaving.value = true
-  const hasContent = !!(statusEditEmoji.value || statusEditText.value || statusEditMusic.value)
-  const expiresAt = hasContent && statusEditDuration.value > 0 ? Date.now() + statusEditDuration.value * 1000 : 0
-  const payload = {
-    emoji: statusEditEmoji.value,
-    text: statusEditText.value,
-    expiresAt,
-    color: statusEditColor.value,
-    music: statusEditMusic.value,
-  }
-  try {
-    await userStore.updateProfile({ profile_status: payload })
-    profileStatus.emoji = payload.emoji
-    profileStatus.text = payload.text
-    profileStatus.expiresAt = payload.expiresAt
-    profileStatus.color = payload.color
-    profileStatus.music = payload.music
-    showStatusEdit.value = false
-  } finally {
-    statusSaving.value = false
-  }
-}
-function openStatusEdit() {
-  statusEditEmoji.value = profileStatus.emoji
-  statusEditText.value = profileStatus.text
-  if (hasActiveStatus.value && profileStatus.expiresAt) {
-    // Preserve the current expiry instead of silently resetting a longer-lived
-    // status back down to the 24h default just because the editor was reopened.
-    const remainingMs = profileStatus.expiresAt - Date.now()
-    const bucket = statusDurations.value.map(d => d.value).filter(v => v > 0).find(v => v * 1000 >= remainingMs)
-    statusEditDuration.value = bucket ?? statusDurations.value[statusDurations.value.length - 2].value
-  } else if (hasActiveStatus.value) {
-    statusEditDuration.value = 0 // was set to "forever"
-  } else {
-    statusEditDuration.value = 86400
-  }
-  statusEditColor.value = profileStatus.color || '#4C67CF'
-  statusEditMusic.value = profileStatus.music
-  statusShowMusicSearch.value = !!profileStatus.music
-  statusMusicQuery.value = ''
-  statusMusicResults.value = []
-  showStatusEdit.value = true
-}
-async function clearProfileStatus() {
-  if (statusSaving.value) return
-  statusSaving.value = true
-  try {
-    await userStore.updateProfile({ profile_status: null })
-    profileStatus.emoji = ''; profileStatus.text = ''; profileStatus.expiresAt = 0; profileStatus.color = ''; profileStatus.music = null
-    statusEditEmoji.value = ''; statusEditText.value = ''
-    showStatusEdit.value = false
-  } finally {
-    statusSaving.value = false
-  }
-}
-function pickStatusColor(hex: string) {
-  statusEditColor.value = hex
-}
-const statusMusicError = ref(false)
-function onStatusMusicSearch() {
-  if (statusMusicTimer) clearTimeout(statusMusicTimer)
-  if (!statusMusicQuery.value.trim()) { statusMusicResults.value = []; statusMusicLoading.value = false; statusMusicError.value = false; return }
-  statusMusicLoading.value = true
-  statusMusicTimer = setTimeout(async () => {
-    try {
-      const res = await api.get('/users/music/search', { params: { q: statusMusicQuery.value.trim() } })
-      statusMusicResults.value = res.data?.data?.tracks ?? []
-      statusMusicError.value = false
-    } catch {
-      statusMusicResults.value = []
-      statusMusicError.value = true
-    } finally { statusMusicLoading.value = false }
-  }, 420)
-}
-function selectStatusTrack(track: any) {
-  statusEditMusic.value = {
-    title: track.title ?? '',
-    artist: track.artist ?? '',
-    artworkUrl: track.artworkUrl ?? '',
-    previewUrl: track.previewUrl ?? '',
-  }
-  statusMusicQuery.value = ''
-  statusMusicResults.value = []
-}
 
 
 const aboutTab = ref<AboutTab>('about')
 const activeContentTab = ref<ContentTab>('posts')
-const tabPosts = ref<any[]>([])
-const repawsFallback = ref<any[]>([])
-const followers = ref<any[]>([])
-const following = ref<any[]>([])
+const tabPosts = ref<Post[]>([])
+const repawsFallback = ref<Post[]>([])
+// Rows of the followers / following / groups lists — only the fields this page reads are typed
+interface ProfileUserRow { id: string; username: string; display_name: string | null; avatar_url: string | null; [key: string]: unknown }
+interface ProfileGroupRow { id: string; slug: string; name: string; avatar_url: string | null; is_pinned?: boolean; [key: string]: unknown }
+const followers = ref<ProfileUserRow[]>([])
+const following = ref<ProfileUserRow[]>([])
 const friendsListRestricted = ref(false)
-const mutualGroups = ref<any[]>([])
+const mutualGroups = ref<ProfileGroupRow[]>([])
 const userHashtags = ref<{ name: string; count: number }[]>([])
 const isLoadingTab = ref(false)
 const profilePostStatus = reactive<Record<string, { repawed: boolean; favourited: boolean; userVote: 1 | -1 | 0 }>>({})
 const expandedMediaPost = ref<any | null>(null)
-const pinnedPost = ref<any | null>(null)
+const pinnedPost = ref<Post | null>(null)
 const mediaFilter = ref<'all' | 'photo' | 'video'>('all')
 const mediaAlbumView = ref(false)
 // postId → 'fursona' | 'fursuit' | null  (ярлыки для ручных альбомов)
@@ -2910,65 +2676,6 @@ function openAlbumOrLightbox(album: { label: string; emoji?: string; urls: { url
   }
 }
 
-// ── Fursona / fursuit для просматриваемого профиля ───────────────────────────
-// Up to 10 characters per user; `selectedFursonaId` drives which one the hero card shows.
-const profileFursonas = ref<Fursona[]>([])
-const selectedFursonaId = ref<string | null>(null)
-const profileFursona = computed(() =>
-  profileFursonas.value.find((f) => f.id === selectedFursonaId.value) ?? profileFursonas.value[0] ?? null
-)
-function speciesDisplay(sp: string): string {
-  return sp === 'Other' && profileFursona.value?.species_other ? profileFursona.value.species_other : sp
-}
-function speciesSummary(f: Fursona): string {
-  return f.species?.length ? speciesDisplay(f.species[0]) : ''
-}
-const profileFursuits = ref<Fursuit[]>([])
-const profileFursonaLoading = ref(false)
-const profileFursuitsLoading = ref(false)
-const makerGroupCache = ref<Record<string, { id: string; slug: string; name: string; avatar_url: string | null }>>({})
-
-
-async function loadProfileFursonas(userId: string) {
-  profileFursonaLoading.value = true
-  try {
-    const res = await api.get(`/users/${userId}/fursonas`)
-    profileFursonas.value = res.data.success ? (res.data.data.fursonas ?? []) : []
-    selectedFursonaId.value = profileFursonas.value.find((f) => f.is_primary)?.id ?? profileFursonas.value[0]?.id ?? null
-  } catch {
-    profileFursonas.value = []
-    selectedFursonaId.value = null
-  } finally {
-    profileFursonaLoading.value = false
-  }
-}
-
-watch(selectedFursonaId, async (id) => {
-  const userId = viewedProfile.value?.id
-  if (!id || !userId) { userStore.referenceImages = []; return }
-  await userStore.fetchReferenceImages(userId, id)
-})
-
-async function loadProfileFursuits(userId: string) {
-  profileFursuitsLoading.value = true
-  try {
-    const res = await api.get(`/users/${userId}/fursuits`)
-    if (res.data.success) profileFursuits.value = res.data.data.fursuits ?? []
-    else profileFursuits.value = []
-    // Resolve maker_ids → group info (for pill badges)
-    const uniqueIds = [...new Set(profileFursuits.value.filter(s => s.maker_id).map(s => s.maker_id!))]
-    await Promise.all(uniqueIds.map(async (id) => {
-      if (makerGroupCache.value[id]) return
-      try {
-        const gr = await api.get(`/groups/${id}`)
-        if (gr.data.success && gr.data.data.group) {
-          makerGroupCache.value[id] = gr.data.data.group
-        }
-      } catch { /* not a group or no access, skip */ }
-    }))
-  } catch { profileFursuits.value = [] }
-  finally { profileFursuitsLoading.value = false }
-}
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
 const lightboxUrl = ref<string>('')
@@ -3006,42 +2713,6 @@ const notifyPosts = ref(false)
 const notifyLoading = ref(false)
 const isTogglingFollow = ref(false)
 
-const newPostContent = ref('')
-const newPostMediaUrls = ref<string[]>([])
-const newPostIsNsfw = ref(false)
-const newPostIsAiGenerated = ref(false)
-const newPostTags = ref<string[]>([])
-const newPostTagInput = ref('')
-const { suggestions: tagSuggestions, showSuggestions: showTagSuggestions, fetchSuggestions: fetchTagSuggestions, clearSuggestions: clearTagSuggestions } = useTagSuggestions()
-
-// Auto-pick up "#hashtag"s the user writes directly in the post text (only once
-// they've finished typing the word, not on every keystroke of a partial one)
-watch(newPostContent, (content) => {
-  for (const tag of extractCommittedHashtags(content)) {
-    if (!newPostTags.value.includes(tag)) newPostTags.value.push(tag)
-  }
-})
-
-const newPostVisibility = ref('public')
-const showProfileVisibilityMenu = ref(false)
-const isCreatingPost = ref(false)
-const profileMediaUploadRef = ref<InstanceType<typeof MediaUpload> | null>(null)
-const showProfileScheduleMenu = ref(false)
-const isSchedulingProfilePost = ref(false)
-
-function addProfileTag() {
-  const t = newPostTagInput.value.trim().replace(/^#/, '')
-  if (t && !newPostTags.value.includes(t)) newPostTags.value.push(t)
-  newPostTagInput.value = ''
-  clearTagSuggestions()
-}
-function addProfileTagFromSuggestion(name: string) {
-  const t = name.trim().toLowerCase()
-  if (t && !newPostTags.value.includes(t)) newPostTags.value.push(t)
-  newPostTagInput.value = ''
-  clearTagSuggestions()
-}
-function removeProfileTag(tag: string) { newPostTags.value = newPostTags.value.filter(t => t !== tag) }
 
 const partnerProfile = ref<{ id: string; username: string; display_name: string | null; avatar_url: string | null } | null>(null)
 
@@ -3079,88 +2750,13 @@ async function topupWallet(amount: number) {
   try {
     await walletStore.topup(amount)
     showTopupPicker.value = false
-  } catch (e: any) {
-    alert(e.response?.data?.error?.message || langStore.t.profileWalletTopupFailedError)
+  } catch (e) {
+    alert(apiErrorMessage(e) || langStore.t.profileWalletTopupFailedError)
   } finally {
     toppingUp.value = false
   }
 }
-const showAvatarViewer = ref(false)
-const showBannerViewer = ref(false)
 
-interface GalleryItem { url: string; video_url?: string | null; created_at: string; id?: string }
-const avatarGallery        = ref<GalleryItem[]>([])
-const avatarGalleryIndex   = ref(0)
-const avatarGalleryLoading = ref(false)
-const avatarGalleryRestoring = ref(false)
-
-async function openAvatarGallery() {
-  if (!viewedProfile.value?.avatar_url) return
-  showAvatarViewer.value = true
-  avatarGalleryIndex.value = 0
-  avatarGalleryLoading.value = true
-
-  const current: GalleryItem = { url: viewedProfile.value.avatar_url, video_url: viewedProfile.value.avatar_video_url, created_at: new Date().toISOString() }
-  avatarGallery.value = [current]
-
-  try {
-    const res = await api.get(`/users/${viewedProfile.value.id}/media-history?type=avatar`)
-    const history: GalleryItem[] = (res.data.data.history ?? []).filter((h: GalleryItem) => h.url !== current.url)
-    avatarGallery.value = [current, ...history]
-  } catch {
-    // show just current on error
-  } finally {
-    avatarGalleryLoading.value = false
-  }
-}
-
-async function restoreGalleryAvatar() {
-  const item = avatarGallery.value[avatarGalleryIndex.value]
-  if (!item?.id) return
-  avatarGalleryRestoring.value = true
-  try {
-    await api.post(`/users/me/avatar-history/${item.id}/restore`)
-    // Reload gallery from scratch after restore
-    if (viewedProfile.value) {
-      const res = await api.get(`/users/${viewedProfile.value.id}`)
-      viewedProfile.value = res.data.data.user
-    }
-    await openAvatarGallery()
-  } catch {
-    // silent
-  } finally {
-    avatarGalleryRestoring.value = false
-  }
-}
-
-async function deleteGalleryAvatar() {
-  const item = avatarGallery.value[avatarGalleryIndex.value]
-  if (!item?.id) return
-  try {
-    await api.delete(`/users/me/avatar-history/${item.id}`)
-    avatarGallery.value.splice(avatarGalleryIndex.value, 1)
-    if (avatarGalleryIndex.value >= avatarGallery.value.length) {
-      avatarGalleryIndex.value = Math.max(0, avatarGallery.value.length - 1)
-    }
-  } catch {
-    // silent
-  }
-}
-
-watch([showAvatarViewer, showBannerViewer], ([av, bv]) => {
-  document.body.style.overflow = (av || bv) ? 'hidden' : ''
-})
-
-function onGalleryKeydown(e: KeyboardEvent) {
-  if (!showAvatarViewer.value) return
-  if (e.key === 'ArrowLeft') avatarGalleryIndex.value = Math.max(0, avatarGalleryIndex.value - 1)
-  else if (e.key === 'ArrowRight') avatarGalleryIndex.value = Math.min(avatarGallery.value.length - 1, avatarGalleryIndex.value + 1)
-  else if (e.key === 'Escape') showAvatarViewer.value = false
-}
-
-const showFursonaRefViewer = ref(false)
-const selectedFursonaRef = ref('')
-const fursonaSubTab = ref<'info' | 'personality' | 'features'>('personality')
 
 function openEditModal(section: 'basics' | 'bio' | 'fursona' | 'fursuit' | 'contacts' | 'socials') {
   // Map profile section → settings section ID
@@ -3175,62 +2771,25 @@ function openEditModal(section: 'basics' | 'bio' | 'fursona' | 'fursuit' | 'cont
   router.push({ name: 'settings-profile', query: { section: sectionMap[section] ?? 'sec-basic' } })
 }
 
-const fursonaRefImages = computed(() =>
-  Array.from(new Set(userStore.referenceImages.map((r) => r.image_url).filter(Boolean))),
-)
-
-const activeFursonaRef = computed(() => selectedFursonaRef.value || fursonaRefImages.value[0] || '')
-const fursonaOtherCount = computed(() => Math.max(0, fursonaRefImages.value.length - 1))
-
-const fursonaViewTabs = computed(() => [
-  { key: 'personality' as const, label: langStore.t.profilePersonalityLabel, count: ((profileFursona.value?.likes?.length ?? 0) + (profileFursona.value?.dislikes?.length ?? 0)) },
-  { key: 'info' as const,        label: langStore.t.informationLabel },
-  { key: 'features' as const,    label: langStore.t.colorPaletteLabel, count: profileFursona.value?.colors?.length ?? 0 },
-])
-
-const fursonaRefPalette = computed(() =>
-  Array.from(new Set((profileFursona.value?.colors ?? []).filter((v) => /^#[0-9A-Fa-f]{6}$/.test(v)))),
-)
-
-function selectFursonaRef(url: string) {
-  selectedFursonaRef.value = url
-}
-
-function openFursonaRef(url?: string) {
-  const next = url ?? activeFursonaRef.value
-  if (!next) return
-  selectedFursonaRef.value = next
-  showFursonaRefViewer.value = true
-}
-
-watch(fursonaRefImages, (list) => {
-  if (!list.length) {
-    selectedFursonaRef.value = ''
-    return
-  }
-  if (!selectedFursonaRef.value || !list.includes(selectedFursonaRef.value)) {
-    selectedFursonaRef.value = list[0]
-  }
-})
 
 // ── Любимое (fixed favourite categories) ────────────────────────────────────
 const editingFavorite = ref<string | null>(null)
 const favoriteDraft = ref('')
 
 const hasFavorites = computed(() =>
-  FAVORITE_CATEGORIES.some((cat) => !!(viewedProfile.value as any)?.[cat.key])
+  FAVORITE_CATEGORIES.some((cat) => !!viewedProfile.value?.[cat.key])
 )
 
-function openFavoriteEdit(key: string) {
-  favoriteDraft.value = (viewedProfile.value as any)?.[key] ?? ''
+function openFavoriteEdit(key: FavoriteCategory['key']) {
+  favoriteDraft.value = viewedProfile.value?.[key] ?? ''
   editingFavorite.value = key
 }
 
-async function saveFavorite(key: string) {
+async function saveFavorite(key: FavoriteCategory['key']) {
   if (!viewedProfile.value) return
   const value = favoriteDraft.value.trim() || null
-  await userStore.updateProfile({ [key]: value } as any)
-  ;(viewedProfile.value as any)[key] = value
+  await userStore.updateProfile({ [key]: value })
+  viewedProfile.value[key] = value
   editingFavorite.value = null
 }
 
@@ -3249,7 +2808,7 @@ async function onBannerFileChange(e: Event) {
     fd.append('file', await compressImageForUpload(file))
     const res = await api.post('/media/upload?folder=banners', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     if (res.data.success && res.data.data?.url) {
-      await userStore.updateProfile({ banner_url: res.data.data.url } as any)
+      await userStore.updateProfile({ banner_url: res.data.data.url })
       if (viewedProfile.value) viewedProfile.value.banner_url = res.data.data.url
     }
   } catch (err) { console.error('banner upload failed', err) }
@@ -3269,9 +2828,9 @@ async function onAvatarFileChange(e: Event) {
     const res = await api.post('/media/upload?folder=avatars', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     if (res.data.success && res.data.data?.url) {
       const videoUrl = res.data.data.videoUrl ?? null
-      await userStore.updateProfile({ avatar_url: res.data.data.url, avatar_video_url: videoUrl } as any)
-      if (viewedProfile.value) { viewedProfile.value.avatar_url = res.data.data.url; (viewedProfile.value as any).avatar_video_url = videoUrl }
-      if (authStore.user) { (authStore.user as any).avatar_url = res.data.data.url; (authStore.user as any).avatar_video_url = videoUrl }
+      await userStore.updateProfile({ avatar_url: res.data.data.url, avatar_video_url: videoUrl })
+      if (viewedProfile.value) { viewedProfile.value.avatar_url = res.data.data.url; viewedProfile.value.avatar_video_url = videoUrl }
+      if (authStore.user) { authStore.user.avatar_url = res.data.data.url; authStore.user.avatar_video_url = videoUrl }
     }
   } catch (err) { console.error('avatar upload failed', err) }
   finally {
@@ -3294,7 +2853,7 @@ watch(() => profileFursona.value?.id, () => {
   fursonaSubTab.value = fursonaHasPersonalityContent.value ? 'personality' : 'info'
 }, { immediate: true })
 const userGroupsCount    = ref(0)
-const userGroupsList     = ref<any[]>([])
+const userGroupsList     = ref<ProfileGroupRow[]>([])
 const userGroupsPinnedOnly = ref(false)
 const userGroupsHidden = ref(false)
 const groupsModalLoading = ref(false)
@@ -3342,7 +2901,7 @@ const profileBio = computed(() => {
 
 const ownAvatarSrc = computed(() => authStore.user?.avatar_url ?? '')
 
-const ownJobTitle = computed(() => (authStore.user as any)?.job_title ?? '')
+const ownJobTitle = computed(() => authStore.user?.job_title ?? '')
 
 const avatarSrc = computed(() => {
   const p = viewedProfile.value
@@ -3355,7 +2914,7 @@ const bannerStyle = computed(() => {
   if (!p) return {}
   if (p.banner_url) return { backgroundImage: `url('${String(p.banner_url).replace(/['"\\()\s]/g, encodeURIComponent)}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
   // Use theme accent if set, otherwise profile accent_color
-  const themeId = (p as any).profile_theme as string | undefined
+  const themeId = p.profile_theme as string | undefined
   const themeAccent = themeId && PROFILE_THEMES[themeId] ? PROFILE_THEMES[themeId].accent : null
   const color = themeAccent ?? p.accent_color ?? '#4C67CF'
   return { background: `linear-gradient(135deg, ${color}55, ${color}33)` }
@@ -3364,10 +2923,10 @@ const bannerStyle = computed(() => {
 const avatarRingStyle = computed(() => {
   const p = viewedProfile.value
   // Image-based frame takes over the avatar border entirely — no legacy CSS ring underneath it.
-  if ((p as any)?.equippedFrame) return {}
-  const frameId = (p as any)?.profile_frame as string | undefined
+  if (p?.equippedFrame) return {}
+  const frameId = p?.profile_frame as string | undefined
   // Theme accent for default_ring / no frame
-  const themeId = (p as any).profile_theme as string | undefined
+  const themeId = p?.profile_theme ?? undefined
   const themeAccent = themeId && PROFILE_THEMES[themeId] ? PROFILE_THEMES[themeId].accent : null
   const accentColor = themeAccent ?? p?.accent_color ?? '#4C67CF'
   const frameStyleMap: Record<string, Record<string, string>> = {
@@ -3383,54 +2942,14 @@ const avatarRingStyle = computed(() => {
   return { borderColor: `${accentColor}80` }
 })
 
-const equippedFrame = computed(() => (viewedProfile.value as any)?.equippedFrame ?? null)
+const equippedFrame = computed(() => viewedProfile.value?.equippedFrame ?? null)
 
 const accentStyle = computed(() => {
   const color = viewedProfile.value?.accent_color ?? '#4C67CF'
   return { backgroundColor: `${color}25`, borderColor: `${color}60`, color }
 })
 
-// ── Website: add protocol if missing so it doesn't resolve as a relative link ──
-function websiteHref(url: string): string {
-  return /^https?:\/\//i.test(url) ? url : `https://${url}`
-}
 
-// ── Fursona species emoji map ────────────────────────────────────────────────
-function speciesEmoji(species: string): string {
-  const s = (species ?? '').toLowerCase().trim()
-  if (/fox|лис/.test(s))                      return '🦊'
-  if (/wolf|волк/.test(s))                     return '🐺'
-  if (/cat|кот|кошк/.test(s))                  return '🐱'
-  if (/dragon|дракон/.test(s))                 return '🐲'
-  if (/raccoon|енот/.test(s))                  return '🦝'
-  if (/bear|медведь/.test(s))                  return '🐻'
-  if (/panda|панда/.test(s))                   return '🐼'
-  if (/rabbit|bunny|кролик|зайц/.test(s))     return '🐰'
-  if (/deer|олень/.test(s))                    return '🦌'
-  if (/dog|пёс|собак/.test(s))                 return '🐕'
-  if (/otter|выдр/.test(s))                    return '🦦'
-  if (/bird|птиц|raven|ворон/.test(s))         return '🦅'
-  if (/snake|змей|змея/.test(s))               return '🐍'
-  if (/bat|летучая/.test(s))                   return '🦇'
-  if (/skunk|скунс/.test(s))                   return '🦨'
-  if (/lion|лев/.test(s))                      return '🦁'
-  if (/tiger|тигр/.test(s))                    return '🐯'
-  if (/shark|акул/.test(s))                    return '🦈'
-  if (/horse|лошадь|конь|пони/.test(s))        return '🐴'
-  if (/frog|лягушк/.test(s))                   return '🐸'
-  if (/hyena|гиена/.test(s))                   return '🐾'
-  if (/cheetah|gepard|гепард/.test(s))         return '🐆'
-  if (/leopard|леопард/.test(s))               return '🐆'
-  if (/snow.*leopard|снежный/.test(s))         return '🐆'
-  if (/lynx|рысь/.test(s))                     return '🐈'
-  if (/ferret|хорек/.test(s))                  return '🐾'
-  if (/mink|норк/.test(s))                     return '🦦'
-  if (/rat|mouse|мышь|крыс/.test(s))           return '🐭'
-  if (/squirrel|белк/.test(s))                 return '🐿️'
-  if (/bovine|cow|бык|корова/.test(s))          return '🐄'
-  if (/goat|коз/.test(s))                      return '🐐'
-  return '🐾'
-}
 
 const accentStyleSubtle = computed(() => {
   const color = viewedProfile.value?.accent_color ?? '#4C67CF'
@@ -3438,7 +2957,7 @@ const accentStyleSubtle = computed(() => {
 })
 
 // Badge pill in banner
-const badgePillMap = computed<Record<string, { label: string; cls: string; icon: any }>>(() => ({
+const badgePillMap = computed<Record<string, { label: string; cls: string; icon: Component }>>(() => ({
   admin:      { label: langStore.t.roleAdmin,             cls: 'bg-amber-500/25 border border-amber-500/40 text-amber-300', icon: Crown },
   moderator:  { label: langStore.t.profileRoleModerator,  cls: 'bg-purple-500/25 border border-purple-500/40 text-purple-300', icon: Shield },
 }))
@@ -3484,21 +3003,21 @@ const aboutNavs = computed(() => {
     { key: 'about' as AboutTab,     label: langStore.t.aboutTab,    icon: User },
     { key: 'fursona' as AboutTab,   label: langStore.t.fursonaTab,  icon: Rabbit },
   ]
-  if ((viewedProfile.value as any)?.has_fursuit) {
+  if (viewedProfile.value?.has_fursuit) {
     navs.push({ key: 'fursuit' as AboutTab, label: langStore.t.fursuitTab, icon: PawPrint })
   }
   return navs
 })
 
 watch([aboutTab, viewedProfile], () => {
-  if (aboutTab.value === 'fursuit' && !(viewedProfile.value as any)?.has_fursuit) {
+  if (aboutTab.value === 'fursuit' && !viewedProfile.value?.has_fursuit) {
     aboutTab.value = 'about'
   }
 })
 
 // Content tabs
 const contentTabs = computed(() => {
-  const tabs: { key: ContentTab; label: string; icon: any; visible?: boolean }[] = [
+  const tabs: { key: ContentTab; label: string; icon: Component; visible?: boolean }[] = [
     { key: 'posts',     label: langStore.t.postsTab,     icon: FileText },
     { key: 'repaws',    label: langStore.t.repawsTab,    icon: Repeat2 },
     { key: 'media',     label: langStore.t.mediaTab,     icon: Image },
@@ -3518,7 +3037,7 @@ const profileStatsData = ref<{
   newFriendsLast30Days: number
   totalPosts: number
   totalViews: number
-  topPost: any | null
+  topPost: Post | null
 } | null>(null)
 
 const profileStats = computed(() => {
@@ -3532,13 +3051,13 @@ const profileStats = computed(() => {
 })
 
 const achievementBadges = computed(() => {
-  const badges: { key: string; label: string; desc: string; iconComp?: any; iconImg?: string; iconBg: string; iconColor: string }[] = []
+  const badges: { key: string; label: string; desc: string; iconComp?: Component; iconImg?: string; iconBg: string; iconColor: string }[] = []
   const p = viewedProfile.value
   if (!p) return badges
   if (p.role === 'admin')            badges.push({ key: 'admin',      label: langStore.t.roleAdmin,      desc: langStore.t.profileRoleAdminDesc,     iconComp: Crown,      iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
   if (p.role === 'moderator')        badges.push({ key: 'mod',        label: langStore.t.profileRoleModerator,           desc: langStore.t.profileRoleModeratorDesc,     iconComp: Shield,     iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
   // Verification type specific badges
-  const vt = (p as any).verification_type
+  const vt = p.verification_type
   if (vt === 'artist')         badges.push({ key: 'ver-artist',    label: langStore.t.verBadgeLabelArtist,       desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('artist'),       iconBg: 'bg-purple-500/20',  iconColor: 'text-purple-400' })
   else if (vt === 'master')    badges.push({ key: 'ver-master',    label: langStore.t.verBadgeLabelMaster,       desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('master'),       iconBg: 'bg-amber-500/20',   iconColor: 'text-amber-400' })
   else if (vt === 'fursuiter') badges.push({ key: 'ver-fursuiter', label: langStore.t.verBadgeLabelFursuiter,    desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('fursuiter'),    iconBg: 'bg-cyan-500/20',    iconColor: 'text-cyan-400' })
@@ -3548,7 +3067,7 @@ const achievementBadges = computed(() => {
   else if (vt === 'event')     badges.push({ key: 'ver-event',     label: langStore.t.verTypeEvent,              desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('event'),        iconBg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' })
   else if (vt === 'photographer') badges.push({ key: 'ver-photographer', label: langStore.t.verBadgeLabelPhotographer, desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('photographer'), iconBg: 'bg-teal-500/20',    iconColor: 'text-teal-400' })
   else if (vt === 'programmer')   badges.push({ key: 'ver-programmer',   label: langStore.t.verBadgeLabelProgrammer,  desc: langStore.t.verBadgeModDesc, iconImg: verTypeIconUrl('programmer'),   iconBg: 'bg-fuchsia-500/20', iconColor: 'text-fuchsia-400' })
-  else if (p.badge_type === 'verified' || (p as any).is_verified)   badges.push({ key: 'verified',   label: langStore.t.verBadgeLabelVerifiedPage, desc: langStore.t.verBadgeVerifiedAccountDesc, iconComp: BadgeCheck, iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
+  else if (p.badge_type === 'verified' || p.is_verified)   badges.push({ key: 'verified',   label: langStore.t.verBadgeLabelVerifiedPage, desc: langStore.t.verBadgeVerifiedAccountDesc, iconComp: BadgeCheck, iconBg: 'bg-blue-500/20',    iconColor: 'text-blue-400' })
   if ((p._count?.posts ?? 0) >= 10)  badges.push({ key: 'active',     label: langStore.t.profileActiveAuthorBadgeLabel,      desc: langStore.t.profileActiveAuthorBadgeDesc,           iconComp: Flame,      iconBg: 'bg-red-500/20',     iconColor: 'text-red-400' })
   if ((p._count?.followers ?? 0) >= 50) badges.push({ key: 'popular', label: langStore.t.profilePopularBadgeLabel,          desc: langStore.t.profilePopularBadgeDesc,            iconComp: Sparkles,   iconBg: 'bg-yellow-500/20',  iconColor: 'text-yellow-400' })
   // Default badge for all
@@ -3578,25 +3097,14 @@ const socialNetworks = computed(() => [
   { key: 'other',       label: langStore.t.profileSocialOtherLabel, iconName: 'Globe',       color: '#6366f1' },
 ])
 const activeSocialLinks = computed(() => {
-  const sl = (viewedProfile.value as any)?.social_links ?? {}
+  const sl = viewedProfile.value?.social_links ?? {}
   return socialNetworks.value.filter(n => sl[n.key])
 })
-function socialUrl(key: string, val: string) {
-  if (key === 'other') return val.startsWith('http') ? val : 'https://' + val
-  if (val.startsWith('http')) return val
-  // Discord хранит ник, а не ссылку: ссылки на профиль по нику нет
-  if (key === 'discord') return ''
-  const map: Record<string, string> = { telegram: 'https://t.me/', twitter: 'https://x.com/', instagram: 'https://instagram.com/', youtube: 'https://youtube.com/@', twitch: 'https://twitch.tv/', furaffinity: 'https://www.furaffinity.net/user/', vk: 'https://vk.com/', discord: '', github: 'https://github.com/' }
-  // Users may type the handle with or without a leading "@" — normalize so the
-  // built URL never ends up with none or a doubled "@" (e.g. youtube.com/@@handle).
-  const handle = val.replace(/^@+/, '')
-  return (map[key] ?? '') + handle
-}
 
 // ── NSFW age check ──────────────────────────────────────────────────────────
 const isNsfwAllowed = computed(() => {
-  const bd = (viewedProfile.value as any)?.birth_date
-    ?? (authStore.user as any)?.birth_date
+  const bd = viewedProfile.value?.birth_date
+    ?? authStore.user?.birth_date
   if (!bd) return true // unknown age → allow (server-side guard is separate)
   const birthYear = new Date(bd)
   const now = new Date()
@@ -3609,14 +3117,14 @@ const isNsfwAllowed = computed(() => {
 // ── Place string helper ───────────────────────────────────────────────────
 const placeStr = computed(() => {
   const loc = viewedProfile.value?.location
-  const ctr = (viewedProfile.value as any)?.country
+  const ctr = viewedProfile.value?.country
   if (loc && ctr) return `${loc}, ${ctr}`
   return loc || ctr || ''
 })
 
 // ── Together-since duration ───────────────────────────────────────────────
 const togetherSince = computed((): string | null => {
-  const since = (viewedProfile.value as any)?.relationship_since
+  const since = viewedProfile.value?.relationship_since
   if (!since) return null
   const start = new Date(since)
   const now   = new Date()
@@ -3634,15 +3142,15 @@ const togetherSince = computed((): string | null => {
 
 
 const filteredMediaPosts = computed(() => {
-  if (mediaFilter.value === 'photo') return tabPosts.value.filter((p: any) => isImage(p.media_urls?.[0] ?? ''))
-  if (mediaFilter.value === 'video') return tabPosts.value.filter((p: any) => !isImage(p.media_urls?.[0] ?? ''))
+  if (mediaFilter.value === 'photo') return tabPosts.value.filter((p) => isImage(p.media_urls?.[0] ?? ''))
+  if (mediaFilter.value === 'video') return tabPosts.value.filter((p) => !isImage(p.media_urls?.[0] ?? ''))
   return tabPosts.value
 })
 
 // ── Альбомы медиа (группировка по месяцу) ────────────────────────────────────
 const mediaAlbums = computed(() => {
   const map = new Map<string, { url: string; created_at: string; postId?: string }[]>()
-  for (const post of filteredMediaPosts.value as any[]) {
+  for (const post of filteredMediaPosts.value) {
     const dt = new Date(post.created_at)
     const label = dt.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'long', year: 'numeric' })
     if (!map.has(label)) map.set(label, [])
@@ -3670,7 +3178,7 @@ const specialAlbums = computed(() => {
   // Альбом Фурсона
   const fursonaUrls: { url: string; postId?: string }[] = []
   // Посты помеченные как фурсона
-  for (const post of filteredMediaPosts.value as any[]) {
+  for (const post of filteredMediaPosts.value) {
     if (mediaPostLabels.value[post.id] === 'fursona') {
       for (const url of (post.media_urls ?? [])) fursonaUrls.push({ url, postId: post.id })
     }
@@ -3682,7 +3190,7 @@ const specialAlbums = computed(() => {
   for (const suit of profileFursuits.value) {
     if (suit.image_url) fursuitUrls.push({ url: suit.image_url })
   }
-  for (const post of filteredMediaPosts.value as any[]) {
+  for (const post of filteredMediaPosts.value) {
     if (mediaPostLabels.value[post.id] === 'fursuit') {
       for (const url of (post.media_urls ?? [])) fursuitUrls.push({ url, postId: post.id })
     }
@@ -3719,7 +3227,7 @@ const joinDate = computed(() => {
 
 // ── Birth date, formatted per the owner's chosen public visibility ─────────
 const formattedBirthDate = computed(() => {
-  const p = viewedProfile.value as any
+  const p = viewedProfile.value
   if (!p?.birth_date) return null
   const bd = new Date(p.birth_date)
   const full = () => bd.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' })
@@ -3733,22 +3241,13 @@ const formattedBirthDate = computed(() => {
 })
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function formatDate(d: string) {
-  const date = new Date(d)
-  const diff = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (diff < 60) return `${diff}${langStore.t.profileSecAgoSuffix}`
-  if (diff < 3600) return `${Math.floor(diff / 60)}${langStore.t.profileMinAgoSuffix}`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}${langStore.t.profileHourAgoSuffix}`
-  return date.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'short' })
-}
+const formatDate = (d: string) => fmt.formatRelativeShort(d, {
+  suffixes: { s: langStore.t.profileSecAgoSuffix, m: langStore.t.profileMinAgoSuffix, h: langStore.t.profileHourAgoSuffix, d: '' },
+  maxDays: 1,
+  locale: LANG_TO_LOCALE[langStore.currentLang],
+})
 
-function isImage(url: string) {
-  return /\.(jpe?g|png|gif|webp|avif|svg)(\?|$)/i.test(url)
-}
 
-function onProfileMediaUploaded(urls: string[]) {
-  newPostMediaUrls.value = urls
-}
 
 // ── Load profile ──────────────────────────────────────────────────────────────
 async function loadProfile() {
@@ -3781,14 +3280,14 @@ async function loadProfile() {
         authStore.isAuthenticated && !isOwnProfile.value ? loadRelation(userId) : Promise.resolve(),
         authStore.isAuthenticated && !isOwnProfile.value ? checkUserBookmark() : Promise.resolve(),
         fetchOnlineStatus(userId),
-        (result as any).relationship_with ? loadPartnerProfile((result as any).relationship_with) : Promise.resolve(),
+        result.relationship_with ? loadPartnerProfile(result.relationship_with) : Promise.resolve(),
         loadProfileSoonBadges(userId),
         fetchProfileStories(userId),
         loadProfileFursonas(userId),
         loadProfileFursuits(userId),
       ])
       if (result.pinnedPost) pinnedPost.value = result.pinnedPost
-      applyProfileStatus((result as any).profile_status)
+      applyProfileStatus(result.profile_status)
       await loadTabData('posts')
     }
   } catch {
@@ -3802,8 +3301,8 @@ async function loadFriends(userId: string) {
   try {
     const res = await api.get(`/follows/${userId}/followers`)
     if (res.data.success) { followers.value = res.data.data.users; friendsListRestricted.value = false }
-  } catch (e: any) {
-    if (e?.response?.status === 403) { followers.value = []; friendsListRestricted.value = true }
+  } catch (e) {
+    if (apiErrorStatus(e) === 403) { followers.value = []; friendsListRestricted.value = true }
   }
 }
 
@@ -3812,8 +3311,8 @@ async function loadFollowingList(userId: string) {
   try {
     const res = await api.get(`/follows/${userId}/following`)
     if (res.data.success) { following.value = res.data.data.users; friendsListRestricted.value = false }
-  } catch (e: any) {
-    if (e?.response?.status === 403) { following.value = []; friendsListRestricted.value = true }
+  } catch (e) {
+    if (apiErrorStatus(e) === 403) { following.value = []; friendsListRestricted.value = true }
   } finally {
     followingLoading.value = false
   }
@@ -3906,14 +3405,14 @@ async function loadTabData(tab: string) {
       const res = await api.get(`/groups/common/${uid}`)
       if (res.data.success) mutualGroups.value = res.data.data.groups
     } else if (tab === 'stats') {
-      if ((authStore.user as any)?.subscription_tier !== 'free') {
+      if (authStore.user?.subscription_tier !== 'free') {
         const res = await api.get('/users/me/profile-stats')
         if (res.data.success) profileStatsData.value = res.data.data.stats
       }
     }
     // Fetch repaw/vote/favourite status for loaded posts
     if (['posts', 'repaws', 'media', 'archive', 'likes'].includes(tab) && authStore.isAuthenticated && tabPosts.value.length) {
-      const ids = tabPosts.value.map((p: any) => p.id).join(',')
+      const ids = tabPosts.value.map((p) => p.id).join(',')
       try {
         const st = await api.get(`/posts/status?ids=${ids}`)
         if (st.data.success) {
@@ -3989,7 +3488,7 @@ function toggleProfileMenu() {
 
 async function copyProfileLink() {
   try {
-    await navigator.clipboard.writeText(`${window.location.origin}/profile/${(viewedProfile.value as any)?.username}`)
+    await navigator.clipboard.writeText(`${window.location.origin}/profile/${viewedProfile.value?.username}`)
     profileLinkCopied.value = true
     setTimeout(() => { profileLinkCopied.value = false }, 2000)
   } catch { /* ignore */ }
@@ -4008,15 +3507,16 @@ async function blockProfileUser() {
 }
 
 // ── Click-outside directive ─────────────────────────────────────────────────
-const vClickOutside = {
-  mounted(el: HTMLElement, binding: any) {
-    ;(el as any)._clickOutside = (e: Event) => {
+type ClickOutsideEl = HTMLElement & { _clickOutside?: (e: Event) => void }
+const vClickOutside: Directive<ClickOutsideEl, (e: Event) => void> = {
+  mounted(el, binding) {
+    el._clickOutside = (e: Event) => {
       if (!el.contains(e.target as Node)) binding.value(e)
     }
-    document.addEventListener('click', (el as any)._clickOutside, true)
+    document.addEventListener('click', el._clickOutside, true)
   },
-  unmounted(el: HTMLElement) {
-    document.removeEventListener('click', (el as any)._clickOutside, true)
+  unmounted(el) {
+    if (el._clickOutside) document.removeEventListener('click', el._clickOutside, true)
   },
 }
 
@@ -4038,70 +3538,6 @@ async function unpinPost() {
   } catch (e) { console.error('unpin failed', e) }
 }
 
-// ── Create post ───────────────────────────────────────────────────────────────
-async function createPost() {
-  if ((!newPostContent.value.trim() && newPostMediaUrls.value.length === 0) || isCreatingPost.value) return
-  // Catch a trailing "#hashtag" that was never followed by a space/newline before hitting send
-  for (const tag of extractHashtags(newPostContent.value)) {
-    if (!newPostTags.value.includes(tag)) newPostTags.value.push(tag)
-  }
-  isCreatingPost.value = true
-  try {
-    const res = await api.post('/posts', {
-      content: newPostContent.value.trim(),
-      isNsfw: newPostIsNsfw.value,
-      isAiGenerated: newPostIsAiGenerated.value,
-      mediaUrls: newPostMediaUrls.value,
-      tags: newPostTags.value,
-      visibility: newPostVisibility.value,
-    })
-    if (res.data.success) {
-      tabPosts.value.unshift(res.data.data.post)
-      newPostContent.value = ''
-      newPostMediaUrls.value = []
-      newPostIsNsfw.value = false
-      newPostIsAiGenerated.value = false
-      newPostTags.value = []
-      newPostTagInput.value = ''
-      newPostVisibility.value = 'public'
-      profileMediaUploadRef.value?.clearAll()
-      if (viewedProfile.value?._count) viewedProfile.value._count.posts++
-    }
-  } catch (e) { console.error('failed to create post', e) }
-  finally { isCreatingPost.value = false }
-}
-
-async function saveProfileScheduledPost(payload: { scheduledAt?: string; timezone?: string }) {
-  const content = newPostContent.value.trim()
-  if (!content && newPostMediaUrls.value.length === 0) return
-  for (const tag of extractHashtags(content)) {
-    if (!newPostTags.value.includes(tag)) newPostTags.value.push(tag)
-  }
-  isSchedulingProfilePost.value = true
-  try {
-    const res = await api.post('/posts/scheduled', {
-      content,
-      tags: newPostTags.value,
-      isNsfw: newPostIsNsfw.value,
-      isAiGenerated: newPostIsAiGenerated.value,
-      mediaUrls: newPostMediaUrls.value,
-      ...payload,
-    })
-    if (res.data.success) {
-      showPostForm.value = false
-      showProfileScheduleMenu.value = false
-      newPostContent.value = ''
-      newPostMediaUrls.value = []
-      newPostIsNsfw.value = false
-      newPostIsAiGenerated.value = false
-      newPostTags.value = []
-      newPostTagInput.value = ''
-      newPostVisibility.value = 'public'
-      profileMediaUploadRef.value?.clearAll()
-    }
-  } catch (e) { console.error('Failed to schedule post', e) }
-  finally { isSchedulingProfilePost.value = false }
-}
 
 function onPostDeleted(postId: string) {
   tabPosts.value = tabPosts.value.filter((p) => p.id !== postId)
@@ -4109,7 +3545,7 @@ function onPostDeleted(postId: string) {
   if (viewedProfile.value?._count) viewedProfile.value._count.posts = Math.max(0, viewedProfile.value._count.posts - 1)
 }
 
-function onPostUpdated(post: any) {
+function onPostUpdated(post: Post) {
   const idx = tabPosts.value.findIndex((p) => p.id === post.id)
   if (idx !== -1) tabPosts.value[idx] = { ...tabPosts.value[idx], ...post }
   if (pinnedPost.value?.id === post.id) pinnedPost.value = { ...pinnedPost.value, ...post }
@@ -4118,14 +3554,9 @@ function onPostUpdated(post: any) {
 onMounted(() => {
   loadProfile()
   window.addEventListener('keydown', onKeyDown)
-  window.addEventListener('keydown', onGalleryKeydown)
-  statusNowTickInterval = setInterval(() => { statusNowTick.value = Date.now() }, 30000)
 })
 onUnmounted(() => {
-  document.body.style.overflow = ''
   window.removeEventListener('keydown', onKeyDown)
-  window.removeEventListener('keydown', onGalleryKeydown)
-  if (statusNowTickInterval) clearInterval(statusNowTickInterval)
 })
 watch(() => route.params.username, () => { aboutTab.value = 'about'; activeContentTab.value = 'posts'; loadProfile() })
 // stories are loaded inside loadProfile via fetchProfileStories

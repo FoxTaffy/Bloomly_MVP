@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { apiErrorStatus } from '@/lib/apiError'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
+import * as fmt from '@/lib/format'
 
 const props = defineProps<{ postId: string }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -27,17 +29,14 @@ async function load() {
   try {
     const r = await api.get(`/posts/${props.postId}/stats`)
     if (r.data.success) stats.value = r.data.data.stats
-  } catch (e: any) {
-    if (e?.response?.status === 402) proRequired.value = true
+  } catch (e) {
+    if (apiErrorStatus(e) === 402) proRequired.value = true
   } finally {
     loading.value = false
   }
 }
 
-const formattedDate = computed(() => {
-  if (!stats.value) return ''
-  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(stats.value.createdAt))
-})
+const formattedDate = computed(() => stats.value ? fmt.formatDate(stats.value.createdAt, 'long', 'ru-RU') : '')
 
 function goToSubscriptions() {
   emit('close')

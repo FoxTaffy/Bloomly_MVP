@@ -1,4 +1,6 @@
-import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
+// Type augmentations (authenticate / tryAuthenticate decorators, JWT user) — must load first.
+import './types/fastify.js';
+import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import jwt from '@fastify/jwt';
@@ -7,7 +9,6 @@ import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
 import * as dotenv from 'dotenv';
 import { authRoutes } from './modules/auth/routes.js';
-import { parseDeviceName } from './modules/auth/device.util.js';
 import { postsRoutes } from './modules/posts/routes.js';
 import { usersRoutes } from './modules/users/routes.js';
 import { storiesRoutes } from './modules/stories/routes.js';
@@ -27,45 +28,40 @@ import { stickersRoutes } from './modules/stickers/routes.js';
 import { shopRoutes } from './modules/shop/routes.js';
 import { activitiesRoutes } from './modules/activities/routes.js';
 import { automodRoutes } from './modules/automod/routes.js';
-import { moderateGroupMessage } from './modules/automod/service.js';
 import { automationRoutes } from './modules/automation/routes.js';
 import { seoRoutes } from './modules/seo/routes.js';
 import { updatesRoutes } from './modules/updates/routes.js';
 import { bookmarksRoutes } from './modules/bookmarks/routes.js';
 import { supportRoutes } from './modules/support/routes.js';
 import { walletRoutes } from './modules/wallet/routes.js';
-import { messageService, messageSubscriptions } from './modules/messages/service.js';
-import { groupService } from './modules/groups/service.js';
+import { realtimeRoutes } from './modules/realtime/routes.js';
 import { initCronJobs } from './cron.js';
-import prisma from './config/prisma.js';
-import { isAllowedByPrivacy } from './lib/privacy.js';
-import { getSetting } from './lib/settings.js';
-import { isAdult } from './lib/age.js';
-import { isModerator } from './lib/roles.js';
+import { registerAuth } from './plugins/auth.js';
 import { isDevEnv } from './lib/env.js';
+import { logger } from './lib/logger.js';
 
 dotenv.config();
 
 const jwtSecret = process.env.JWT_SECRET;
 if (!jwtSecret) {
   if (!isDevEnv()) {
-    console.error('[FATAL] JWT_SECRET env variable is not set. Refusing to start outside development/test.');
+    logger.error('[FATAL] JWT_SECRET env variable is not set. Refusing to start outside development/test.');
     process.exit(1);
   }
-  console.warn('[WARN] JWT_SECRET is not set. Using insecure fallback for development only.');
+  logger.warn('[WARN] JWT_SECRET is not set. Using insecure fallback for development only.');
 }
 
 const cookieSecret = process.env.COOKIE_SECRET;
 if (!cookieSecret) {
   if (!isDevEnv()) {
-    console.error('[FATAL] COOKIE_SECRET env variable is not set. Refusing to start outside development/test.');
+    logger.error('[FATAL] COOKIE_SECRET env variable is not set. Refusing to start outside development/test.');
     process.exit(1);
   }
-  console.warn('[WARN] COOKIE_SECRET is not set. Using insecure fallback for development only.');
+  logger.warn('[WARN] COOKIE_SECRET is not set. Using insecure fallback for development only.');
 }
 
 if (!process.env.ALLOWED_ORIGINS && !isDevEnv()) {
-  console.error('[FATAL] ALLOWED_ORIGINS env variable is not set. Refusing to start in production.');
+  logger.error('[FATAL] ALLOWED_ORIGINS env variable is not set. Refusing to start in production.');
   process.exit(1);
 }
 
@@ -80,7 +76,8 @@ const MAX_UPLOAD_BYTES = 4_300 * 1024 * 1024;
 // docker-сеть). При trustProxy: true Fastify брал самый левый IP из заголовка, а его клиент
 // подставляет сам, что обходило rate-limit. TRUST_PROXY можно задать списком IP/CIDR.
 const fastify = Fastify({
-  logger: process.env.NODE_ENV !== 'test',
+  // Shared with background jobs (lib/logger.ts); silent under tests
+  logger,
   bodyLimit: MAX_UPLOAD_BYTES,
   trustProxy: process.env.TRUST_PROXY || 'loopback,uniquelocal',
 });
@@ -117,87 +114,10 @@ fastify.addHook('onSend', (_request, reply, _payload, done) => {
   done();
 });
 
-// Maintenance mode — toggled from the admin panel (SiteSetting). Auth and
-// admin routes stay open so staff can still log in and manage the platform;
-// staff (moderator+) are also let through everywhere else so they can use the
-// site normally while it's closed to regular users.
-fastify.addHook('onRequest', async (request, reply) => {
-  if (request.url.startsWith('/api/auth') || request.url.startsWith('/api/admin')) return;
-  if (!(await getSetting('maintenance_mode'))) return;
-
-  try {
-    await request.jwtVerify();
-    const payload = request.user as { id: string };
-    const dbUser = await prisma.user.findUnique({ where: { id: payload.id }, select: { role: true, deleted_at: true } });
-    if (dbUser && !dbUser.deleted_at && isModerator(dbUser.role)) return;
-  } catch {
-    // no/invalid token — fall through and block below
-  }
-
-  reply.code(503).send({ success: false, data: null, error: { code: 'MAINTENANCE', message: 'Платформа временно на обслуживании' } });
-});
+// Maintenance-mode gate + authenticate / tryAuthenticate decorators
+registerAuth(fastify);
 
 fastify.register(websocket);
-
-// Сокет живёт дольше HTTP-запроса: без повторной проверки заморозка/бан не отключали бы уже
-// открытое соединение, и пользователь мог бы продолжать писать в чат.
-async function isAccountActive(userId: string): Promise<boolean> {
-  const u = await prisma.user.findUnique({ where: { id: userId }, select: { deleted_at: true, frozen_at: true } });
-  return !!u && !u.deleted_at && !u.frozen_at;
-}
-
-fastify.decorate(
-  'authenticate',
-  async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      await request.jwtVerify();
-      // Always refresh role from DB so role changes take effect without re-login
-      const payload = request.user as { id: string; role: string };
-      const dbUser = await prisma.user.findUnique({
-        where: { id: payload.id },
-        select: { role: true, deleted_at: true, frozen_at: true, frozen_reason: true, birth_date: true },
-      });
-      if (!dbUser || dbUser.deleted_at) {
-        return reply.code(401).send({ success: false, data: null, error: { code: 'UNAUTHORIZED', message: 'User not found' } });
-      }
-      (request.user as any).role = dbUser.role;
-      (request.user as any).is_adult = isAdult(dbUser.birth_date);
-      // Frozen accounts are force-logged-out on their very next authenticated request
-      // (frontend's response interceptor catches ACCOUNT_FROZEN and clears the session).
-      if (dbUser.frozen_at) {
-        return reply.code(403).send({
-          success: false,
-          data: null,
-          error: { code: 'ACCOUNT_FROZEN', message: dbUser.frozen_reason || 'Аккаунт временно заморожен за подозрительную активность' },
-        });
-      }
-    } catch (err) {
-      reply.send(err);
-    }
-  },
-);
-
-fastify.decorate(
-  'tryAuthenticate',
-  async (request: FastifyRequest, _reply: FastifyReply) => {
-    try {
-      await request.jwtVerify();
-      const payload = request.user as { id: string; role: string };
-      const dbUser = await prisma.user.findUnique({
-        where: { id: payload.id },
-        select: { role: true, deleted_at: true, birth_date: true },
-      });
-      if (!dbUser || dbUser.deleted_at) {
-        (request as any).user = undefined;
-      } else {
-        (request.user as any).role = dbUser.role;
-        (request.user as any).is_adult = isAdult(dbUser.birth_date);
-      }
-    } catch {
-      (request as any).user = undefined;
-    }
-  },
-);
 
 fastify.setErrorHandler((error, _request, reply) => {
   const statusCode = error.statusCode ?? 500;
@@ -241,178 +161,8 @@ fastify.register(walletRoutes,     { prefix: '/api/wallet' });
 // SEO: sitemap.xml and OG-proxy endpoints (no auth required, crawlers friendly)
 fastify.register(seoRoutes);
 
-// ── In-memory online status tracking ─────────────────────────────────────
-// Map per user of socket → device label ("Chrome · iPhone"), so multiple
-// browser tabs / devices work correctly and the UI can show what someone's on.
-const onlineUsers = new Map<string, Map<any, string>>()
-;(fastify as any).onlineUsers = onlineUsers
-
-// Remove entirely if map becomes empty
-function markOffline(userId: string, socket: any) {
-  const sockets = onlineUsers.get(userId)
-  if (!sockets) return
-  sockets.delete(socket)
-  if (sockets.size === 0) {
-    onlineUsers.delete(userId)
-    // Persist so "last seen" survives page reloads / server restarts, not just this session's memory
-    prisma.user.update({ where: { id: userId }, data: { last_seen_at: new Date() } }).catch(() => {})
-  }
-}
-
-fastify.register(async function (fastify) {
-  fastify.get('/api/', { websocket: true }, (connection, request) => {
-    let authedUserId: string | null = null
-    const deviceLabel = parseDeviceName(request.headers['user-agent'])
-
-    // Track message subscription cleanup function
-    let unsubscribeMessages: (() => void) | null = null
-
-    // Close unauthenticated connections after 30 seconds
-    const authTimeout = setTimeout(() => {
-      if (!authedUserId) {
-        connection.socket.send(JSON.stringify({ type: 'error', message: 'Authentication timeout' }))
-        connection.socket.close()
-      }
-    }, 30_000)
-
-    connection.socket.on('message', async (raw: Buffer) => {
-      try {
-        // Guard against excessively large WebSocket frames (prevent DoS)
-        if (raw.length > 65_536) {
-          connection.socket.send(JSON.stringify({ type: 'error', message: 'Message too large' }))
-          return
-        }
-
-        const msg = JSON.parse(raw.toString())
-
-        if (msg?.type === 'ping') {
-          connection.socket.send(JSON.stringify({ type: 'pong' }))
-          return
-        }
-
-        if (msg?.type === 'auth' && msg?.token) {
-          try {
-            const payload = fastify.jwt.verify(msg.token) as { id: string }
-            if (!(await isAccountActive(payload.id))) {
-              connection.socket.send(JSON.stringify({ type: 'auth_err' }))
-              connection.socket.close()
-              return
-            }
-            // If re-authing with a different ID (shouldn't happen), clean up old
-            if (authedUserId && authedUserId !== payload.id) {
-              markOffline(authedUserId, connection.socket)
-              if (unsubscribeMessages) { unsubscribeMessages(); unsubscribeMessages = null }
-            }
-            authedUserId = payload.id
-            if (!onlineUsers.has(authedUserId)) onlineUsers.set(authedUserId, new Map())
-            onlineUsers.get(authedUserId)!.set(connection.socket, deviceLabel)
-
-            // Subscribe to incoming messages for this user
-            unsubscribeMessages = messageSubscriptions.subscribe(authedUserId, (payload) => {
-              if (connection.socket.readyState === 1 /* OPEN */) {
-                connection.socket.send(payload)
-              }
-            })
-
-            connection.socket.send(JSON.stringify({ type: 'auth_ok' }))
-          } catch {
-            connection.socket.send(JSON.stringify({ type: 'auth_err' }))
-          }
-          return
-        }
-
-        // ── Typing indicator ──────────────────────────────────────────────
-        if (msg?.type === 'typing' && authedUserId) {
-          const { conversationId } = msg
-          if (!conversationId) return
-          try {
-            const others = await messageService.getOtherParticipantIds(conversationId as string, authedUserId)
-            for (const uid of others) {
-              messageSubscriptions.push(uid, { type: 'typing', conversationId, userId: authedUserId })
-            }
-          } catch { /* not a participant or conv not found */ }
-          return
-        }
-
-        // ── Client sends a chat message over WebSocket ────────────────────
-        if (msg?.type === 'message' && authedUserId) {
-          const { conversationId, content, file_url, media_type, reply_to_id } = msg
-          if (!conversationId || (!content && !file_url)) return
-          if (!(await isAccountActive(authedUserId))) { connection.socket.close(); return }
-          try {
-            await messageService.sendMessage({
-              conversationId: conversationId as string,
-              senderId: authedUserId,
-              content: (content as string) ?? '',
-              file_url: (file_url as string | undefined) ?? null,
-              media_type: (media_type as string | undefined) ?? undefined,
-              reply_to_id: (reply_to_id as string | undefined) ?? null,
-            })
-          } catch (e) {
-            connection.socket.send(JSON.stringify({ type: 'error', message: (e as Error).message }))
-          }
-          return
-        }
-
-        // ── Client sends a group chat message ──────────────────────────────────
-        if (msg?.type === 'group_message_send' && authedUserId) {
-          const { groupId, content } = msg;
-          if (!groupId || !content) return;
-          if (!(await isAccountActive(authedUserId))) { connection.socket.close(); return }
-          try {
-            await groupService.assertGroupMember(groupId as string, authedUserId);
-            const saved = await groupService.sendGroupMessage(groupId as string, authedUserId, (content as string).trim());
-            // fire-and-forget automod check, как в REST (sendGroupMessageHandler)
-            moderateGroupMessage(authedUserId).catch((err) => console.error('[AUTOMOD] moderateGroupMessage error:', err));
-            const members = await prisma.groupMember.findMany({ where: { group_id: groupId as string }, select: { user_id: true } });
-            for (const m of members) {
-              messageSubscriptions.push(m.user_id, { type: 'group_message', groupId, message: saved });
-            }
-          } catch (e) {
-            connection.socket.send(JSON.stringify({ type: 'error', message: (e as Error).message }));
-          }
-          return;
-        }
-      } catch { /* non-JSON frame — ignore */ }
-    })
-
-    connection.socket.on('close', () => {
-      clearTimeout(authTimeout)
-      if (authedUserId) markOffline(authedUserId, connection.socket)
-      if (unsubscribeMessages) { unsubscribeMessages(); unsubscribeMessages = null }
-    })
-    connection.socket.on('error', () => {})
-  })
-
-  // REST endpoint: GET /api/users/online?ids=id1,id2,...
-  fastify.get('/api/users/online', { onRequest: [fastify.tryAuthenticate] }, async (request, reply) => {
-    const ids = ((request.query as any).ids ?? '').split(',').filter(Boolean) as string[]
-    const viewerId = (request.user as { id: string } | undefined)?.id
-    const result: Record<string, boolean> = {}
-    // Sibling map, not nested under `data[id]` — keeps `data` a plain boolean
-    // map so existing `!!data[id]` online checks keep working untouched.
-    const deviceData: Record<string, string | null> = {}
-    const lastSeenData: Record<string, string | null> = {}
-    if (ids.length) {
-      const owners = await prisma.user.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, online_status_visibility: true, last_seen_at: true },
-      })
-      const visibilityById = new Map(owners.map((o) => [o.id, o.online_status_visibility]))
-      const lastSeenById = new Map(owners.map((o) => [o.id, o.last_seen_at]))
-      for (const id of ids) {
-        const sockets = onlineUsers.get(id)
-        const isOnline = !!sockets && sockets.size > 0
-        const visible = await isAllowedByPrivacy(visibilityById.get(id), id, viewerId)
-        const allowed = isOnline && visible
-        result[id] = allowed
-        deviceData[id] = allowed ? ([...sockets!.values()][0] ?? null) : null
-        lastSeenData[id] = (!isOnline && visible) ? (lastSeenById.get(id)?.toISOString() ?? null) : null
-      }
-    }
-    return reply.send({ success: true, data: result, deviceData, lastSeenData, error: null })
-  })
-})
+// WebSocket (/api/) и GET /api/users/online
+fastify.register(realtimeRoutes);
 
 fastify.get('/health', async () => ({
   success: true,

@@ -151,6 +151,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorCode, apiErrorStatus } from '@/lib/apiError'
 import { ref, watch } from 'vue'
 import BIcon from './BIcon.vue'
 import MediaUpload from './MediaUpload.vue'
@@ -288,9 +289,9 @@ async function submit() {
     })
     sent.value = true
     setTimeout(() => close(), 2800)
-  } catch (e: any) {
-    const status = e?.response?.status
-    const code = e?.response?.data?.error?.code
+  } catch (e) {
+    const status = apiErrorStatus(e)
+    const code = apiErrorCode(e)
     if (code === 'ALREADY_REPORTED' || status === 409) {
       sendError.value = 'Вы уже отправляли жалобу на это — модераторы ещё не рассмотрели предыдущую.'
     } else if (status === 429) {

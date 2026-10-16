@@ -504,6 +504,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { reactive, ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useUserStore, FURSONA_SPECIES } from '@/stores/user'
 import { useLangStore } from '@/stores/lang'
@@ -754,8 +755,8 @@ async function onReferenceUploaded(urls: string[]) {
     processedRefUrls.add(url)
     try {
       await userStore.addReferenceImage(editingId.value, { image_url: url })
-    } catch (e: any) {
-      referenceError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+    } catch (e) {
+      referenceError.value = apiErrorMessage(e) ?? errorMessage(e) ?? 'Error'
     }
   }
   refUploadEl.value?.clearAll()
@@ -810,8 +811,8 @@ async function submitForm() {
       await nextTick()
       suppressDirty.value = false
     }
-  } catch (e: any) {
-    formError.value = e?.response?.data?.error?.message ?? e?.message ?? 'Error'
+  } catch (e) {
+    formError.value = apiErrorMessage(e) ?? errorMessage(e) ?? 'Error'
   } finally {
     saving.value = false
   }
@@ -820,8 +821,8 @@ async function submitForm() {
 async function handleSetPrimary(id: string) {
   try {
     await userStore.setPrimaryFursona(id)
-  } catch (e: any) {
-    alert(e?.response?.data?.error?.message ?? 'Failed to set primary character')
+  } catch (e) {
+    alert(apiErrorMessage(e) ?? 'Failed to set primary character')
   }
 }
 
@@ -829,8 +830,8 @@ async function handleDelete(id: string) {
   if (!(await confirmDialog(t.value.fursonaDeleteConfirm, { danger: true }))) return
   try {
     await userStore.deleteFursona(id)
-  } catch (e: any) {
-    alert(e?.response?.data?.error?.message ?? 'Failed to delete fursona')
+  } catch (e) {
+    alert(apiErrorMessage(e) ?? 'Failed to delete fursona')
   }
 }
 

@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
+import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
   listPacksHandler,
   getPackHandler,
@@ -22,40 +23,33 @@ import {
   getPackStatsHandler,
 } from './controller.js';
 
-declare module 'fastify' {
-  interface FastifyInstance {
-    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-    tryAuthenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  }
-}
-
 export async function stickersRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
   const tryAuth: RouteShorthandOptions = { onRequest: [fastify.tryAuthenticate] };
 
-  fastify.get('/',            tryAuth, listPacksHandler as any);
-  fastify.get('/find-by-url', auth, findByUrlHandler as any);
-  fastify.get('/:id',         tryAuth, getPackHandler   as any);
+  fastify.get<RouteGenericOf<typeof listPacksHandler>>('/',            tryAuth, listPacksHandler);
+  fastify.get<RouteGenericOf<typeof findByUrlHandler>>('/find-by-url', auth, findByUrlHandler);
+  fastify.get<RouteGenericOf<typeof getPackHandler>>('/:id',         tryAuth, getPackHandler);
 
-  fastify.post('/',      auth, createPackHandler            as any);
-  fastify.patch('/:id',  auth, updatePackHandler            as any);
-  fastify.delete('/:id', auth, deletePackHandler            as any);
-  fastify.get('/me/packs',      auth, getMyPacksHandler         as any);
-  fastify.get('/me/collection', auth, getCollectionHandler       as any);
-  fastify.post('/:id/collect',  auth, addToCollectionHandler     as any);
-  fastify.delete('/:id/collect',auth, removeFromCollectionHandler as any);
-  fastify.get('/:id/collected', auth, checkCollectionHandler     as any);
-  fastify.post('/:id/use',      auth, usePackHandler              as any);
-  fastify.get('/:id/stats',     auth, getPackStatsHandler         as any);
+  fastify.post<RouteGenericOf<typeof createPackHandler>>('/',      auth, createPackHandler);
+  fastify.patch<RouteGenericOf<typeof updatePackHandler>>('/:id',  auth, updatePackHandler);
+  fastify.delete<RouteGenericOf<typeof deletePackHandler>>('/:id', auth, deletePackHandler);
+  fastify.get<RouteGenericOf<typeof getMyPacksHandler>>('/me/packs',      auth, getMyPacksHandler);
+  fastify.get<RouteGenericOf<typeof getCollectionHandler>>('/me/collection', auth, getCollectionHandler);
+  fastify.post<RouteGenericOf<typeof addToCollectionHandler>>('/:id/collect',  auth, addToCollectionHandler);
+  fastify.delete<RouteGenericOf<typeof removeFromCollectionHandler>>('/:id/collect',auth, removeFromCollectionHandler);
+  fastify.get<RouteGenericOf<typeof checkCollectionHandler>>('/:id/collected', auth, checkCollectionHandler);
+  fastify.post<RouteGenericOf<typeof usePackHandler>>('/:id/use',      auth, usePackHandler);
+  fastify.get<RouteGenericOf<typeof getPackStatsHandler>>('/:id/stats',     auth, getPackStatsHandler);
 
-  fastify.post('/:id/stickers', auth, addStickersToPackHandler   as any);
+  fastify.post<RouteGenericOf<typeof addStickersToPackHandler>>('/:id/stickers', auth, addStickersToPackHandler);
 
-  fastify.post('/usage/track',  auth, trackUsageHandler     as any);
-  fastify.get('/usage/recent',  auth, getRecentUsedHandler   as any);
+  fastify.post<RouteGenericOf<typeof trackUsageHandler>>('/usage/track',  auth, trackUsageHandler);
+  fastify.get<RouteGenericOf<typeof getRecentUsedHandler>>('/usage/recent',  auth, getRecentUsedHandler);
 
-  fastify.get('/favorites',    auth, getFavoritesHandler     as any);
-  fastify.post('/favorites',   auth, addFavoriteHandler      as any);
-  fastify.delete('/favorites', auth, removeFavoriteHandler   as any);
+  fastify.get<RouteGenericOf<typeof getFavoritesHandler>>('/favorites',    auth, getFavoritesHandler);
+  fastify.post<RouteGenericOf<typeof addFavoriteHandler>>('/favorites',   auth, addFavoriteHandler);
+  fastify.delete<RouteGenericOf<typeof removeFavoriteHandler>>('/favorites', auth, removeFavoriteHandler);
 
-  fastify.post('/import/telegram', auth, importTelegramHandler as any);
+  fastify.post<RouteGenericOf<typeof importTelegramHandler>>('/import/telegram', auth, importTelegramHandler);
 }

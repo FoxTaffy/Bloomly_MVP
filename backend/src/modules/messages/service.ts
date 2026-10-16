@@ -1,8 +1,13 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy } from '../../lib/blocks.js';
 import { deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import type { SendMessageInput, GetMessagesQuery } from './types.js';
+import { logError } from '../../lib/logger.js';
+
+// Group roles that answer the group's inbox (group DMs) on its behalf.
+const CHAT_STAFF_ROLES: readonly string[] = ['owner', 'admin', 'moderator'];
 
 // ── In-process real-time delivery ─────────────────────────────────────────────
 // Registered by server.ts when a WebSocket connection authenticates.
@@ -36,6 +41,17 @@ const senderSelect = {
   badge_type: true,
   deceased_at: true,
 } as const;
+
+// The message a reply points to, as shown in the quote above the bubble.
+const replyToSelect = {
+  select: {
+    id: true, text: true, type: true, file_url: true,
+    sender: { select: { id: true, username: true, display_name: true } },
+  },
+} as const;
+
+// Relations every message row is returned with.
+const messageInclude = { sender: { select: senderSelect }, reply_to: replyToSelect } as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -316,15 +332,7 @@ export const messageService = {
       },
       orderBy: { created_at: 'desc' },
       take: limit,
-      include: {
-        sender: { select: senderSelect },
-        reply_to: {
-          select: {
-            id: true, text: true, type: true, file_url: true,
-            sender: { select: { id: true, username: true, display_name: true } },
-          },
-        },
-      },
+      include: messageInclude,
     });
 
     return enrichWithForwardedSenders(messages, userId);
@@ -334,10 +342,54 @@ export const messageService = {
    * Send a message, persist it and broadcast to all conversation participants.
    */
   async sendMessage({ conversationId, senderId, content, encrypted_text, file_url, media_type, reply_to_id, type, metadata, attachments }: SendMessageInput) {
+    const conv = await this._assertCanSend(conversationId, senderId, [file_url, ...(attachments ?? []).map((a) => a.url)]);
+
+    const text = content?.trim() ?? '';
+    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+    if (!text && !encrypted_text && !file_url && !type && !hasAttachments) throw new Error('Message must have text or media');
+    const base = { conversation_id: conversationId, sender_id: senderId, text: text || null, reply_to_id: reply_to_id ?? null };
+
+    let data: Prisma.MessageUncheckedCreateInput;
+    if (hasAttachments && attachments!.length > 1) {
+      // Album: 2+ files sent together as one message (e.g. a photo + a video in the same bubble).
+      // A single-item `attachments` array is just treated as a normal file_url send below.
+      if (attachments!.length > MAX_ALBUM_FILES) {
+        throw Object.assign(new Error(`Album can have at most ${MAX_ALBUM_FILES} files`), { statusCode: 400 });
+      }
+      const files = attachments!.map((a) => ({ url: a.url, type: inferFileType(a.url, a.media_type) }));
+      data = { ...base, type: 'album', metadata: { files } };
+    } else if (type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share') {
+      // Card-style messages carry a structured metadata payload instead of a file.
+      data = { ...base, type, metadata: await this._validatedCardMetadata(type, metadata) };
+    } else {
+      // A lone `attachments` entry (no separate file_url given) is just a plain single-file send.
+      if (!file_url && hasAttachments) {
+        file_url = attachments![0].url;
+        media_type = attachments![0].media_type ?? media_type;
+      }
+      const msgType = media_type === 'sticker' ? 'sticker' : file_url ? inferFileType(file_url, media_type) : 'text';
+      data = { ...base, type: msgType, encrypted_text: encrypted_text ?? null, file_url: file_url ?? null };
+    }
+
+    const [message] = await prisma.$transaction([
+      prisma.message.create({ data, include: messageInclude }),
+      // bump conversation.updated_at so list ordering is correct
+      prisma.conversation.update({ where: { id: conversationId }, data: { updated_at: new Date() } }),
+    ]);
+    await this._broadcastNewMessage(conversationId, message);
+    await this._maybeSendGroupWelcome(conv, conversationId, senderId);
+    return message;
+  },
+
+  /**
+   * Everything that may stop a send: participation, ownership of attached files, the free
+   * tier's daily cap, and — in direct chats — blocks and the recipient's message privacy.
+   * Returns the conversation (needed for the group welcome auto-reply).
+   */
+  async _assertCanSend(conversationId: string, senderId: string, fileUrls: (string | null | undefined)[]) {
     await this._assertParticipant(conversationId, senderId);
     // Вложения — только файлы самого отправителя
-    await assertOwnedMedia(file_url, senderId);
-    for (const a of attachments ?? []) await assertOwnedMedia(a.url, senderId);
+    for (const url of fileUrls) await assertOwnedMedia(url, senderId);
 
     const sender = await prisma.user.findUnique({ where: { id: senderId }, select: { subscription_tier: true } });
     if ((sender?.subscription_tier ?? 'free') === 'free') {
@@ -355,160 +407,33 @@ export const messageService = {
       where: { id: conversationId },
       select: { type: true, group_id: true, group_dm_user_id: true, participants: { select: { user_id: true } } },
     });
-    if (conv?.type === 'direct') {
-      const recipientId = conv.participants.find((p: any) => p.user_id !== senderId)?.user_id;
-      if (recipientId) {
-        const recipient = await prisma.user.findUnique({
-          where: { id: recipientId },
-          select: { messages_privacy: true },
-        });
-        if ((await isBlockedBy(recipientId, senderId)) || (await isBlockedBy(senderId, recipientId))) {
-          throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
-        }
-        if (recipient && !(await isAllowedByPrivacy(recipient.messages_privacy, recipientId, senderId))) {
-          throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
-        }
+    const recipientId = conv?.type === 'direct' ? conv.participants.find((p) => p.user_id !== senderId)?.user_id : undefined;
+    if (recipientId) {
+      const recipient = await prisma.user.findUnique({ where: { id: recipientId }, select: { messages_privacy: true } });
+      if ((await isBlockedBy(recipientId, senderId)) || (await isBlockedBy(senderId, recipientId))) {
+        throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
+      }
+      if (recipient && !(await isAllowedByPrivacy(recipient.messages_privacy, recipientId, senderId))) {
+        throw Object.assign(new Error('MESSAGES_DISABLED'), { statusCode: 403 });
       }
     }
-
-    const text = content?.trim() ?? '';
-    const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-    if (!text && !encrypted_text && !file_url && !type && !hasAttachments) throw new Error('Message must have text or media');
-
-    // Album: 2+ files sent together as one message (e.g. a photo + a video in the same bubble).
-    // A single-item `attachments` array is just treated as a normal file_url send below.
-    if (hasAttachments && attachments!.length > 1) {
-      if (attachments!.length > MAX_ALBUM_FILES) {
-        throw Object.assign(new Error(`Album can have at most ${MAX_ALBUM_FILES} files`), { statusCode: 400 });
-      }
-      const files = attachments!.map((a) => ({ url: a.url, type: inferFileType(a.url, a.media_type) }));
-      const [message] = await prisma.$transaction([
-        prisma.message.create({
-          data: {
-            conversation_id: conversationId,
-            sender_id: senderId,
-            text: text || null,
-            type: 'album',
-            reply_to_id: reply_to_id ?? null,
-            metadata: { files } as any,
-          },
-          include: {
-            sender: { select: senderSelect },
-            reply_to: {
-              select: {
-                id: true, text: true, type: true, file_url: true,
-                sender: { select: { id: true, username: true, display_name: true } },
-              },
-            },
-          },
-        }),
-        prisma.conversation.update({ where: { id: conversationId }, data: { updated_at: new Date() } }),
-      ]);
-      await this._broadcastNewMessage(conversationId, message);
-      await this._maybeSendGroupWelcome(conv, conversationId, senderId);
-      return message;
-    }
-
-    // Card-style messages (payment_request, tip, post_share, group_share) carry a
-    // structured metadata payload instead of being derived from file_url/media_type.
-    if (type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share') {
-      const meta = validateCardMetadata(type, metadata);
-      if (type === 'post_share') {
-        const post = await prisma.post.findUnique({ where: { id: meta.postId as string, deleted_at: null }, select: { id: true } });
-        if (!post) throw Object.assign(new Error('Post not found'), { statusCode: 404 });
-      }
-      if (type === 'group_share') {
-        const group = await prisma.group.findUnique({ where: { id: meta.groupId as string }, select: { id: true } });
-        if (!group) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
-      }
-      const [message] = await prisma.$transaction([
-        prisma.message.create({
-          data: {
-            conversation_id: conversationId,
-            sender_id: senderId,
-            text: text || null,
-            type,
-            reply_to_id: reply_to_id ?? null,
-            metadata: meta as any,
-          },
-          include: {
-            sender: { select: senderSelect },
-            reply_to: {
-              select: {
-                id: true, text: true, type: true, file_url: true,
-                sender: { select: { id: true, username: true, display_name: true } },
-              },
-            },
-          },
-        }),
-        prisma.conversation.update({ where: { id: conversationId }, data: { updated_at: new Date() } }),
-      ]);
-      await this._broadcastNewMessage(conversationId, message);
-      await this._maybeSendGroupWelcome(conv, conversationId, senderId);
-      return message;
-    }
-
-    // A lone `attachments` entry (no separate file_url given) is just a plain single-file send.
-    if (!file_url && hasAttachments) {
-      file_url = attachments![0].url;
-      media_type = attachments![0].media_type ?? media_type;
-    }
-
-    // Determine message type
-    let msgType: string = 'text';
-    if (media_type === 'sticker') {
-      msgType = 'sticker';
-    } else if (file_url) {
-      if (media_type === 'voice') {
-        msgType = 'voice';
-      } else if (media_type === 'gif') {
-        // Silent video (no audio track) — the uploader already determined this via
-        // ffprobe; must win over the extension check below so it renders as a gif,
-        // not a full video player.
-        msgType = 'gif';
-      } else if (/\.(?:mp4|webm|mov|avi|mkv)$/i.test(file_url)) {
-        msgType = 'video';
-      } else if (/\.(?:mp3|wav|ogg|m4a|flac|aac)$/i.test(file_url)) {
-        // Uploaded audio file (not a mic recording, which always arrives with
-        // media_type:'voice' above) — renders as a music player, not a voice bubble.
-        msgType = 'audio';
-      } else {
-        msgType = 'image';
-      }
-    }
-
-    const [message] = await prisma.$transaction([
-      prisma.message.create({
-        data: {
-          conversation_id: conversationId,
-          sender_id: senderId,
-          text: text || null,
-          encrypted_text: encrypted_text ?? null,
-          file_url: file_url ?? null,
-          type: msgType,
-          reply_to_id: reply_to_id ?? null,
-        },
-        include: {
-          sender: { select: senderSelect },
-          reply_to: {
-            select: {
-              id: true, text: true, type: true, file_url: true,
-              sender: { select: { id: true, username: true, display_name: true } },
-            },
-          },
-        },
-      }),
-      // bump conversation.updated_at so list ordering is correct
-      prisma.conversation.update({
-        where: { id: conversationId },
-        data: { updated_at: new Date() },
-      }),
-    ]);
-
-    await this._broadcastNewMessage(conversationId, message);
-    await this._maybeSendGroupWelcome(conv, conversationId, senderId);
-    return message;
+    return conv;
   },
+
+  /** Validates a card message payload and that the shared post / group exists. */
+  async _validatedCardMetadata(type: 'payment_request' | 'tip' | 'post_share' | 'group_share', metadata: unknown) {
+    const meta = validateCardMetadata(type, metadata);
+    if (type === 'post_share') {
+      const post = await prisma.post.findUnique({ where: { id: meta.postId as string, deleted_at: null }, select: { id: true } });
+      if (!post) throw Object.assign(new Error('Post not found'), { statusCode: 404 });
+    }
+    if (type === 'group_share') {
+      const group = await prisma.group.findUnique({ where: { id: meta.groupId as string }, select: { id: true } });
+      if (!group) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
+    }
+    return meta as Prisma.InputJsonValue;
+  },
+
 
   /**
    * If this was a member's first-ever message into their personal community
@@ -608,15 +533,7 @@ export const messageService = {
       const updated = await tx.message.update({
         where: { id: messageId },
         data: { metadata: nextMeta as any },
-        include: {
-          sender: { select: senderSelect },
-          reply_to: {
-            select: {
-              id: true, text: true, type: true, file_url: true,
-              sender: { select: { id: true, username: true, display_name: true } },
-            },
-          },
-        },
+        include: messageInclude,
       });
       const created = await tx.message.create({
         data: {
@@ -626,15 +543,7 @@ export const messageService = {
           reply_to_id: messageId,
           metadata: { amount: due, description: currentMeta.description } as any,
         },
-        include: {
-          sender: { select: senderSelect },
-          reply_to: {
-            select: {
-              id: true, text: true, type: true, file_url: true,
-              sender: { select: { id: true, username: true, display_name: true } },
-            },
-          },
-        },
+        include: messageInclude,
       });
       return { updatedRequest: updated, confirmation: created, dueAmount: due, meta: currentMeta };
     });
@@ -693,7 +602,7 @@ export const messageService = {
     // Messages have no restore/undelete path, so the attachment can be purged now
     // instead of leaking in S3 forever (there's no hard-delete cron for messages).
     if (msg.file_url) {
-      deleteFileByUrl(msg.file_url, msg.sender_id).catch((err) => console.error('[deleteMessage] media cleanup failed:', err));
+      deleteFileByUrl(msg.file_url, msg.sender_id).catch(logError('[deleteMessage] media cleanup failed'));
     }
 
     // Broadcast to all participants so the message disappears in real time for everyone
@@ -727,15 +636,7 @@ export const messageService = {
     const updated = await prisma.message.update({
       where: { id: messageId },
       data: { text: trimmed, edited_at: new Date() },
-      include: {
-        sender: { select: senderSelect },
-        reply_to: {
-          select: {
-            id: true, text: true, type: true, file_url: true,
-            sender: { select: { id: true, username: true, display_name: true } },
-          },
-        },
-      },
+      include: messageInclude,
     });
 
     // Broadcast update to all participants
@@ -782,15 +683,7 @@ export const messageService = {
       return tx.message.update({
         where: { id: messageId },
         data: { reactions: Object.keys(next).length ? next : null as any },
-        include: {
-          sender: { select: senderSelect },
-          reply_to: {
-            select: {
-              id: true, text: true, type: true, file_url: true,
-              sender: { select: { id: true, username: true, display_name: true } },
-            },
-          },
-        },
+        include: messageInclude,
       });
     });
 
@@ -1055,7 +948,7 @@ export const messageService = {
    */
   async getGroupInbox(groupId: string, requesterId: string) {
     const role = await this._getGroupRole(groupId, requesterId);
-    if (!role || !['owner', 'admin', 'moderator'].includes(role)) {
+    if (!role || !CHAT_STAFF_ROLES.includes(role)) {
       throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
     }
 
@@ -1149,7 +1042,7 @@ export const messageService = {
 
     return {
       ...conv,
-      pinned_message: (conv as any).pinnedMessage ?? null,
+      pinned_message: conv.pinnedMessage ?? null,
       my_participant: mine
         ? {
             archived: mine.archived, hidden_at: mine.hidden_at, last_read_at: mine.last_read_at,
@@ -1188,7 +1081,7 @@ export const messageService = {
     // member's personal thread with that group without being a participant on it.
     if (conv.group_id && conv.group_dm_user_id) {
       const role = await this._getGroupRole(conv.group_id, userId);
-      if (role && ['owner', 'admin', 'moderator'].includes(role)) return;
+      if (role && CHAT_STAFF_ROLES.includes(role)) return;
     }
 
     throw Object.assign(new Error('Not a participant'), { statusCode: 403 });
@@ -1208,7 +1101,7 @@ export const messageService = {
     const msg = await prisma.message.findFirst({ where: { id: messageId, conversation_id: convId, deleted_at: null } });
     if (!msg) throw Object.assign(new Error('Message not found'), { statusCode: 404 });
     if (scope === 'all') {
-      await (prisma.conversation as any).update({ where: { id: convId }, data: { pinned_message_id: messageId } });
+      await prisma.conversation.update({ where: { id: convId }, data: { pinned_message_id: messageId } });
       // Broadcast system notification to all participants
       const actor = await prisma.user.findUnique({ where: { id: userId }, select: { display_name: true, username: true } });
       const actorName = actor?.display_name || actor?.username || '?';
@@ -1230,7 +1123,7 @@ export const messageService = {
   async unpinMessage(convId: string, userId: string, scope: 'all' | 'me') {
     await this._assertParticipant(convId, userId);
     if (scope === 'all') {
-      await (prisma.conversation as any).update({ where: { id: convId }, data: { pinned_message_id: null } });
+      await prisma.conversation.update({ where: { id: convId }, data: { pinned_message_id: null } });
     } else {
       await prisma.$executeRaw`UPDATE "ConversationParticipant" SET personal_pinned_message_id = NULL WHERE conversation_id = ${convId}::uuid AND user_id = ${userId}::uuid`;
     }
@@ -1331,7 +1224,7 @@ export const messageService = {
     }
     // Чужой уже выданный ключ не перезаписываем: иначе участник подменял бы ключ другому и
     // читал бы его переписку. Свой ключ обновлять можно.
-    const existing = await (prisma as any).conversationKey.findMany({
+    const existing = await prisma.conversationKey.findMany({
       where: { conversation_id: convId, user_id: { in: targetIds, not: callerId } },
       select: { user_id: true },
     });
@@ -1339,7 +1232,7 @@ export const messageService = {
       throw Object.assign(new Error('Ключи других участников нельзя перезаписать'), { statusCode: 403 });
     }
     const upserts = Object.entries(keys).map(([userId, encryptedKey]) =>
-      (prisma as any).conversationKey.upsert({
+      prisma.conversationKey.upsert({
         where: { conversation_id_user_id: { conversation_id: convId, user_id: userId } },
         create: { conversation_id: convId, user_id: userId, encrypted_key: encryptedKey },
         update: { encrypted_key: encryptedKey },
@@ -1351,7 +1244,7 @@ export const messageService = {
   /** Get the caller's encrypted conversation key for a given conversation. */
   async getMyConversationKey(convId: string, userId: string): Promise<string | null> {
     await this._assertParticipant(convId, userId);
-    const row = await (prisma as any).conversationKey.findUnique({
+    const row = await prisma.conversationKey.findUnique({
       where: { conversation_id_user_id: { conversation_id: convId, user_id: userId } },
     });
     return row?.encrypted_key ?? null;

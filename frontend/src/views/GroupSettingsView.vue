@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorCode, apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { rubricOptionsFor } from '@/lib/groupRubrics'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 const langStore = useLangStore()
@@ -9,7 +10,7 @@ import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
 import SoonBadge from '@/components/groups/SoonBadge.vue'
 import ImageCropModal from '@/components/shared/ImageCropModal.vue'
-import { useGroupsStore, type GroupMember, type CustomRole, type GroupPermission } from '@/stores/groups'
+import { useGroupsStore, type GroupMember, type CustomRole, type GroupPermission, type MemberRole } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useShopStore } from '@/stores/shop'
 import { useNsfwMode } from '@/composables/useNsfwMode'
@@ -112,7 +113,7 @@ const sections = computed(() => {
 const openSection = ref<string>('sec-general')
 
 // ── Members management ──────────────────────────────────────────────────────
-const MEMBER_ROLES = computed(() => [
+const MEMBER_ROLES = computed((): { value: MemberRole; label: string; color: string; iconPath: string }[] => [
   { value: 'admin',         label: langStore.t.roleAdmin,  color: '#3b82f6',  iconPath: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
   { value: 'moderator',     label: langStore.t.groupSettingsRoleModerator,       color: '#a78bfa', iconPath: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
   { value: 'member',        label: langStore.t.roleMember,         color: '#9ca3af', iconPath: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
@@ -156,17 +157,17 @@ async function loadMembers() {
   }
 }
 
-async function doSetRole(userId: string, role: string) {
+async function doSetRole(userId: string, role: MemberRole) {
   if (!group.value?.id) return
   memberSaving.value[userId] = true
   roleDropdownFor.value = null
   try {
-    const updated = await groupsStore.changeMemberRole(group.value.id, userId, role as any)
+    const updated = await groupsStore.changeMemberRole(group.value.id, userId, role)
     const idx = membersList.value.findIndex(m => m.user_id === userId)
     if (idx !== -1) membersList.value[idx] = { ...membersList.value[idx], role: updated.role }
     showToast('success', langStore.t.groupSettingsRoleUpdated)
-  } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message || e.message || langStore.t.groupSettingsErrorGeneric)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) || errorMessage(e) || langStore.t.groupSettingsErrorGeneric)
   } finally {
     delete memberSaving.value[userId]
   }
@@ -179,8 +180,8 @@ async function doKickMember(userId: string) {
     await groupsStore.removeMember(group.value.id, userId)
     membersList.value = membersList.value.filter(m => m.user_id !== userId)
     showToast('success', langStore.t.groupSettingsMemberRemoved)
-  } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message || e.message || langStore.t.groupSettingsErrorGeneric)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) || errorMessage(e) || langStore.t.groupSettingsErrorGeneric)
   } finally {
     delete memberKicking.value[userId]
   }
@@ -312,8 +313,8 @@ async function saveRole() {
     }
     showRoleModal.value = false
     showToast('success', roleModalMode.value === 'create' ? langStore.t.groupSettingsRoleCreated : langStore.t.groupSettingsRoleUpdated)
-  } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message || langStore.t.groupSettingsErrorSavingRole)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) || langStore.t.groupSettingsErrorSavingRole)
   } finally { customRoleSaving.value = false }
 }
 
@@ -324,8 +325,8 @@ async function confirmDeleteRole(roleId: string) {
     await groupsStore.deleteCustomRole(group.value.id, roleId)
     customRolesList.value = customRolesList.value.filter(r => r.id !== roleId)
     showToast('success', langStore.t.groupSettingsRoleDeleted)
-  } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message || langStore.t.groupSettingsErrorGeneric)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) || langStore.t.groupSettingsErrorGeneric)
   } finally { deletingRoleId.value = null }
 }
 
@@ -334,7 +335,7 @@ const eventDateInput = ref('')
 const eventDateSaving = ref(false)
 const eventDateSaved = ref(false)
 
-watch(() => (group.value as any)?.event_date, (v) => {
+watch(() => group.value?.event_date, (v) => {
   eventDateInput.value = v ? String(v).substring(0, 16) : ''
 }, { immediate: true })
 
@@ -351,12 +352,12 @@ async function saveEventDate() {
     await api.patch(`/groups/${group.value.id}/event-date`, {
       eventDate: eventDateInput.value ? new Date(eventDateInput.value).toISOString() : null,
     })
-    await groupsStore.loadGroup((group.value as any).slug ?? (group.value as any).id)
+    await groupsStore.loadGroup(group.value.slug ?? group.value.id)
     eventDateSaved.value = true
     showToast('success', langStore.t.groupSettingsEventDateUpdated)
     setTimeout(() => { eventDateSaved.value = false }, 2000)
-  } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message || langStore.t.groupSettingsErrorSaving)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) || langStore.t.groupSettingsErrorSaving)
   } finally {
     eventDateSaving.value = false
   }
@@ -439,7 +440,7 @@ async function loadSoonBadges() {
   if (soonBadgesLoaded.value) return
   soonBadgesLoading.value = true
   try {
-    const events = (group.value as any)?.events ?? []
+    const events = group.value?.events ?? []
     const results = await Promise.all(
       events.map((ev: any) =>
         api.get(`/groups/events/${ev.id}`)
@@ -496,8 +497,8 @@ async function saveSoonEvent(eventId: string) {
     await loadSoonBadges()
     showToast('success', langStore.t.groupSettingsEventUpdated)
     setTimeout(() => { if (soonEditMap.value[eventId]) soonEditMap.value[eventId].saved = false }, 2000)
-  } catch (e: any) {
-    showToast('error', e.response?.data?.error?.message || langStore.t.groupSettingsErrorSaving)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) || langStore.t.groupSettingsErrorSaving)
   } finally {
     if (soonEditMap.value[eventId]) soonEditMap.value[eventId].saving = false
   }
@@ -762,12 +763,12 @@ async function saveNewTier(eventId: string) {
     })
     // Inject tier into the local group events
     if (group.value) {
-      const ev = (group.value as any).events?.find((e: any) => e.id === eventId)
+      const ev = group.value.events?.find((e: any) => e.id === eventId)
       if (ev) { if (!ev.tickets) ev.tickets = []; ev.tickets.push(tier) }
     }
     showNewTierForm.value = null
     showToast('success', langStore.t.groupSettingsTicketAdded)
-  } catch (e: any) { ticketError.value = e.message || langStore.t.groupSettingsErrorGeneric }
+  } catch (e) { ticketError.value = errorMessage(e) || langStore.t.groupSettingsErrorGeneric }
   finally { ticketSaving.value = false }
 }
 
@@ -785,7 +786,7 @@ async function saveEditTier(tierId: string, eventId: string) {
     })
     // Update local tier data
     if (group.value) {
-      const ev = (group.value as any).events?.find((e: any) => e.id === eventId)
+      const ev = group.value.events?.find((e: any) => e.id === eventId)
       if (ev?.tickets) {
         const idx = ev.tickets.findIndex((t: any) => t.id === tierId)
         if (idx !== -1) ev.tickets[idx] = { ...ev.tickets[idx], ...updated }
@@ -793,7 +794,7 @@ async function saveEditTier(tierId: string, eventId: string) {
     }
     editingTier.value = null
     showToast('success', langStore.t.groupSettingsTicketUpdated)
-  } catch (e: any) { ticketError.value = e.message || langStore.t.groupSettingsErrorGeneric }
+  } catch (e) { ticketError.value = errorMessage(e) || langStore.t.groupSettingsErrorGeneric }
   finally { ticketSaving.value = false }
 }
 
@@ -802,11 +803,11 @@ async function deleteTier(tierId: string, eventId: string) {
   try {
     await groupsStore.deleteTicketTier(tierId)
     if (group.value) {
-      const ev = (group.value as any).events?.find((e: any) => e.id === eventId)
+      const ev = group.value.events?.find((e: any) => e.id === eventId)
       if (ev?.tickets) ev.tickets = ev.tickets.filter((t: any) => t.id !== tierId)
     }
     showToast('success', langStore.t.groupSettingsTicketDeleted)
-  } catch (e: any) { showToast('error', e.message || langStore.t.groupSettingsErrorGeneric) }
+  } catch (e) { showToast('error', errorMessage(e) || langStore.t.groupSettingsErrorGeneric) }
 }
 
 // File inputs
@@ -951,12 +952,12 @@ async function load() {
   form.groupTheme = g.group_theme || ''
   form.hideAdmins = g.hide_admins ?? false
   form.hiddenMemberIds = JSON.parse(g.hidden_member_ids || '[]')
-  form.donationsEnabled = (g as any).donations_enabled ?? false
-  form.bankCardMasked = (g as any).bank_card_masked || ''
-  form.supportTiers = Array.isArray((g as any).support_tiers) ? (g as any).support_tiers : []
-  form.businessEnabled = (g as any).business_enabled ?? false
-  form.welcomeMsgEnabled = (g as any).welcome_msg_enabled ?? false
-  form.welcomeMsgText = (g as any).welcome_msg_text || ''
+  form.donationsEnabled = g.donations_enabled ?? false
+  form.bankCardMasked = g.bank_card_masked || ''
+  form.supportTiers = Array.isArray(g.support_tiers) ? g.support_tiers : []
+  form.businessEnabled = g.business_enabled ?? false
+  form.welcomeMsgEnabled = g.welcome_msg_enabled ?? false
+  form.welcomeMsgText = g.welcome_msg_text || ''
   if (g.commissionInfo) {
     const c = g.commissionInfo
     commForm.value.status = c.status || 'closed'
@@ -1033,7 +1034,7 @@ async function save() {
   if (!group.value) return
   if (settingsSlugError.value) { showToast('error', settingsSlugError.value); return }
   saving.value = true
-  const oldSlug = (group.value as any).slug
+  const oldSlug = group.value.slug
   // Slug отправляем только если пользователь его изменил — сохранённое значение не перезаписываем
   const slugChanged = form.slug !== savedForm.slug
   try {
@@ -1099,8 +1100,8 @@ async function save() {
     if (form.slug !== oldSlug) {
       await router.replace({ name: 'group-settings', params: { slugOrId: form.slug } })
     }
-  } catch (err: any) {
-    showToast('error', err.response?.data?.error?.message || langStore.t.groupSettingsErrorSaving)
+  } catch (err) {
+    showToast('error', apiErrorMessage(err) || langStore.t.groupSettingsErrorSaving)
   } finally { saving.value = false }
 }
 
@@ -1113,13 +1114,13 @@ async function deleteGroup() {
   try {
     await groupsStore.deleteGroup(group.value.id)
     router.push({ name: 'groups' })
-  } catch (err: any) {
+  } catch (err) {
     deleting.value = false
     showDeleteConfirm.value = false
-    const code = err.response?.data?.error?.code
+    const code = apiErrorCode(err)
     showToast('error', code === 'GROUP_HAS_FINANCIAL_HISTORY'
       ? langStore.t.groupSettingsDeleteGroupBlocked
-      : (err.response?.data?.error?.message || langStore.t.groupSettingsErrorSaving))
+      : (apiErrorMessage(err) || langStore.t.groupSettingsErrorSaving))
   }
 }
 </script>
@@ -1184,7 +1185,7 @@ async function deleteGroup() {
       <!-- ─── Settings area ────────────────────────────────────────── -->
       <main class="flex-1 min-w-0">
         <button class="flex items-center gap-2 text-white/40 hover:text-white/70 text-sm mb-4 transition-colors"
-          @click="router.push({ name: 'group-detail', params: { slugOrId: (group as any)?.slug ?? route.params.slugOrId } })">
+          @click="router.push({ name: 'group-detail', params: { slugOrId: group?.slug ?? route.params.slugOrId } })">
           <BIcon name="ArrowLeft" class="w-4 h-4" /> {{ langStore.t.groupSettingsBackToGroup }}
         </button>
 
@@ -1822,12 +1823,12 @@ async function deleteGroup() {
                   <div class="p-6 space-y-6">
 
                     <!-- No events notice -->
-                    <div v-if="!(group as any).events?.length" class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl p-6 text-center">
+                    <div v-if="!group.events?.length" class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl p-6 text-center">
                       <p class="text-white/50 text-sm">{{ langStore.t.groupSettingsCreateEventFirstTickets }}</p>
                     </div>
 
                     <!-- Per-event ticket management -->
-                    <div v-for="ev in (group as any).events || []" :key="ev.id" class="space-y-3">
+                    <div v-for="ev in group.events || []" :key="ev.id" class="space-y-3">
                       <!-- Event header -->
                       <div class="flex items-center justify-between">
                         <div>
@@ -1975,7 +1976,7 @@ async function deleteGroup() {
                       </div>
 
                       <!-- Divider between events -->
-                      <div v-if="(group as any).events?.length > 1" class="h-px bg-brand-border mt-2" />
+                      <div v-if="(group.events?.length ?? 0) > 1" class="h-px bg-brand-border mt-2" />
                     </div>
                   </div>
                 </section>
@@ -2024,7 +2025,7 @@ async function deleteGroup() {
                     </div>
 
                     <!-- No events notice -->
-                    <div v-if="!(group as any).events?.length" class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl p-8 text-center">
+                    <div v-if="!group.events?.length" class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl p-8 text-center">
                       <div class="text-3xl mb-3">🌟</div>
                       <p class="text-white/60 text-sm font-medium">{{ langStore.t.groupSettingsCreateEventFirst }}</p>
                       <p class="text-white/30 text-xs mt-1">{{ langStore.t.groupSettingsSoonAfterEvents }}</p>
@@ -2046,7 +2047,7 @@ async function deleteGroup() {
                           <p class="text-[10px] text-white/40 mt-0.5 font-medium uppercase tracking-wide">{{ langStore.t.groupSettingsWatching }}</p>
                         </div>
                         <div class="bg-brand-bg/60 border border-brand-border/60 rounded-2xl p-3.5 text-center">
-                          <p class="text-2xl font-black text-white">{{ (group as any).events?.length ?? 0 }}</p>
+                          <p class="text-2xl font-black text-white">{{ group.events?.length ?? 0 }}</p>
                           <p class="text-[10px] text-white/40 mt-0.5 font-medium uppercase tracking-wide">{{ langStore.t.groupSettingsEventsCount }}</p>
                         </div>
                         <div class="bg-brand-bg/60 border border-brand-border/60 rounded-2xl p-3.5 text-center">
@@ -2058,14 +2059,14 @@ async function deleteGroup() {
                       </div>
 
                       <!-- Per-event editor -->
-                      <div v-for="(ev, evIdx) in ((group as any).events || [])" :key="ev.id"
+                      <div v-for="(ev, evIdx) in (group.events || [])" :key="ev.id"
                         class="rounded-3xl border overflow-hidden transition-all"
                         :style="`border-color: ${EVENT_STATUSES.find(s=>s.value===computeEventStatus(ev))?.color || '#fbbf24'}33`">
 
                         <!-- Event header with banner -->
                         <div class="relative h-24 overflow-hidden">
                           <img v-if="ev.banner_url || (group as any)?.banner_url" :src="ev.banner_url || (group as any)?.banner_url" class="w-full h-full object-cover" />
-                          <div v-else class="w-full h-full" :style="`background: linear-gradient(135deg, ${(group as any).accent_color || '#4C67CF'}44, ${(group as any).accent_color || '#4C67CF'}11)`" />
+                          <div v-else class="w-full h-full" :style="`background: linear-gradient(135deg, ${group.accent_color || '#4C67CF'}44, ${group.accent_color || '#4C67CF'}11)`" />
                           <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
                           <!-- Status badge top-right -->
                           <div class="absolute top-2 right-2">
@@ -2194,7 +2195,7 @@ async function deleteGroup() {
                         </div>
 
                         <!-- Divider -->
-                        <div v-if="evIdx < ((group as any).events?.length ?? 0) - 1" class="h-0" />
+                        <div v-if="evIdx < (group.events?.length ?? 0) - 1" class="h-0" />
                       </div>
                     </template>
                   </div>
