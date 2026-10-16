@@ -13,6 +13,7 @@ export interface MsgSender {
   avatar_url: string | null
   banner_url?: string | null
   badge_type?: string | null
+  deceased_at?: string | null
 }
 
 export interface Message {
