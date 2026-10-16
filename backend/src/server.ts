@@ -122,6 +122,7 @@ fastify.register(websocket);
 
 fastify.setErrorHandler((error, _request, reply) => {
   const statusCode = error.statusCode ?? 500;
+  if (statusCode === 429) _request.log.warn({ code: error.code, msg: error.message, url: _request.url, ip: _request.ip }, 'rate limited');
   reply.code(statusCode).send({
     success: false,
     data: null,

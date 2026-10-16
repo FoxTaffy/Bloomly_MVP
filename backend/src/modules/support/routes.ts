@@ -6,18 +6,20 @@ import {
 } from './controller.js';
 
 export async function supportRoutes(fastify: FastifyInstance) {
-  const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
+  // Своя копия массива хуков на каждый маршрут: плагин лимитов дописывает хуки прямо в routeOptions.onRequest,
+  // и общий массив накапливал лимит создания тикета (5 за 10 мин) на всех маршрутах модуля.
+  const authFor = (): RouteShorthandOptions => ({ onRequest: [fastify.authenticate] });
 
   // User endpoints
-  fastify.post<RouteGenericOf<typeof createTicketHandler>>('/tickets', { ...auth, config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } } as RouteShorthandOptions, createTicketHandler);
-  fastify.get<RouteGenericOf<typeof getMyTicketsHandler>>('/tickets',      auth, getMyTicketsHandler);
-  fastify.get<RouteGenericOf<typeof getMyTicketHandler>>('/tickets/:id',  auth, getMyTicketHandler);
-  fastify.post<RouteGenericOf<typeof addTicketMessageHandler>>('/tickets/:id/messages', { ...auth, config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } } as RouteShorthandOptions, addTicketMessageHandler);
+  fastify.post<RouteGenericOf<typeof createTicketHandler>>('/tickets', { ...authFor(), config: { rateLimit: { max: 5, timeWindow: '10 minutes' } } } as RouteShorthandOptions, createTicketHandler);
+  fastify.get<RouteGenericOf<typeof getMyTicketsHandler>>('/tickets',      authFor(), getMyTicketsHandler);
+  fastify.get<RouteGenericOf<typeof getMyTicketHandler>>('/tickets/:id',  authFor(), getMyTicketHandler);
+  fastify.post<RouteGenericOf<typeof addTicketMessageHandler>>('/tickets/:id/messages', { ...authFor(), config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } } as RouteShorthandOptions, addTicketMessageHandler);
 
   // Админка и «Помощь» грузят вложения пачкой: общий лимит давал 429 и ломал загрузку списка тикетов
-  fastify.get<RouteGenericOf<typeof getAttachmentHandler>>('/attachment', { ...auth, config: { rateLimit: false } } as RouteShorthandOptions, getAttachmentHandler);
+  fastify.get<RouteGenericOf<typeof getAttachmentHandler>>('/attachment', { ...authFor(), config: { rateLimit: false } } as RouteShorthandOptions, getAttachmentHandler);
 
   // Admin endpoints
-  fastify.get<RouteGenericOf<typeof adminGetTicketsHandler>>('/admin/tickets',       auth, adminGetTicketsHandler);
-  fastify.patch<RouteGenericOf<typeof adminReplyTicketHandler>>('/admin/tickets/:id', auth, adminReplyTicketHandler);
+  fastify.get<RouteGenericOf<typeof adminGetTicketsHandler>>('/admin/tickets',       authFor(), adminGetTicketsHandler);
+  fastify.patch<RouteGenericOf<typeof adminReplyTicketHandler>>('/admin/tickets/:id', authFor(), adminReplyTicketHandler);
 }

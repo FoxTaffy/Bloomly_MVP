@@ -20,6 +20,7 @@ import {
 
 export async function adminRoutes(fastify: FastifyInstance) {
   // Explicitly typed to avoid @fastify/websocket overload ambiguity
+  // Общий массив onRequest: плагин лимитов дописывает свои хуки в routeOptions.onRequest, поэтому маршруты с config.rateLimit берут свой массив
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
 
   // Stats
@@ -77,7 +78,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   // Reports
   fastify.get<RouteGenericOf<typeof getReportsHandler>>('/reports',        auth, getReportsHandler);
   fastify.get<RouteGenericOf<typeof getReportEvidenceHandler>>('/reports/evidence', auth, getReportEvidenceHandler);
-  fastify.post<RouteGenericOf<typeof submitReportHandler>>('/reports',       { ...auth, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } } as RouteShorthandOptions, submitReportHandler);
+  fastify.post<RouteGenericOf<typeof submitReportHandler>>('/reports',       { onRequest: [fastify.authenticate], config: { rateLimit: { max: 10, timeWindow: '1 minute' } } } as RouteShorthandOptions, submitReportHandler);
   fastify.patch<RouteGenericOf<typeof resolveReportHandler>>('/reports/:id',  auth, resolveReportHandler);
   fastify.patch<RouteGenericOf<typeof resolveReportsBatchHandler>>('/reports/resolve-batch', auth, resolveReportsBatchHandler);
   fastify.patch<RouteGenericOf<typeof resolveReportIssueHandler>>('/reports/resolve-issue', auth, resolveReportIssueHandler);
@@ -89,7 +90,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   // Ads
   fastify.get<RouteGenericOf<typeof getAdsHandler>>('/ads',              auth, getAdsHandler);
   fastify.get<RouteGenericOf<typeof getActiveAdsHandler>>('/ads/active',       getActiveAdsHandler);
-  fastify.post<RouteGenericOf<typeof submitAdHandler>>('/ads',             { ...auth, config: { rateLimit: { max: 5, timeWindow: '1 hour' } } } as RouteShorthandOptions, submitAdHandler);
+  fastify.post<RouteGenericOf<typeof submitAdHandler>>('/ads',             { onRequest: [fastify.authenticate], config: { rateLimit: { max: 5, timeWindow: '1 hour' } } } as RouteShorthandOptions, submitAdHandler);
   fastify.patch<RouteGenericOf<typeof reviewAdHandler>>('/ads/:id/review', auth, reviewAdHandler);
   fastify.delete<RouteGenericOf<typeof deleteAdHandler>>('/ads/:id',       auth, deleteAdHandler);
   fastify.post<RouteGenericOf<typeof trackImpressionHandler>>('/ads/:id/impression', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, trackImpressionHandler);
