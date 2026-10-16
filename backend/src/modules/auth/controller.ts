@@ -136,6 +136,15 @@ export const statsHandler = async (req: FastifyRequest, reply: FastifyReply) => 
   return reply.send({ success: true, data: { users, posts, online }, error: null })
 }
 
+// ── Текущий пользователь ──────────────────────────────────────────────────────
+export const meHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+  const user = await authUsers.findFullById(request.user.id);
+  if (!user) {
+    return reply.code(401).send({ success: false, data: null, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+  }
+  return reply.send({ success: true, data: { user: withIsAdult(user) }, error: null });
+};
+
 // ── Регистрация (Step 1) ───────────────────────────────────────────────────────
 export const registerHandler = async (
   request: FastifyRequest<{ Body: RegisterInput }>,

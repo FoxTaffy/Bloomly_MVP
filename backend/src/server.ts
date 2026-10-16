@@ -1,6 +1,6 @@
 // Type augmentations (authenticate / tryAuthenticate decorators, JWT user) — must load first.
 import './types/fastify.js';
-import Fastify, { FastifyRequest, FastifyReply } from 'fastify';
+import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import jwt from '@fastify/jwt';
@@ -36,10 +36,7 @@ import { supportRoutes } from './modules/support/routes.js';
 import { walletRoutes } from './modules/wallet/routes.js';
 import { realtimeRoutes } from './modules/realtime/routes.js';
 import { initCronJobs } from './cron.js';
-import prisma from './config/prisma.js';
-import { getSetting } from './lib/settings.js';
-import { isAdult } from './lib/age.js';
-import { isModerator } from './lib/roles.js';
+import { registerAuth } from './plugins/auth.js';
 import { isDevEnv } from './lib/env.js';
 
 dotenv.config();
@@ -115,80 +112,10 @@ fastify.addHook('onSend', (_request, reply, _payload, done) => {
   done();
 });
 
-// Maintenance mode — toggled from the admin panel (SiteSetting). Auth and
-// admin routes stay open so staff can still log in and manage the platform;
-// staff (moderator+) are also let through everywhere else so they can use the
-// site normally while it's closed to regular users.
-fastify.addHook('onRequest', async (request, reply) => {
-  if (request.url.startsWith('/api/auth') || request.url.startsWith('/api/admin')) return;
-  if (!(await getSetting('maintenance_mode'))) return;
-
-  try {
-    await request.jwtVerify();
-    const payload = request.user as { id: string };
-    const dbUser = await prisma.user.findUnique({ where: { id: payload.id }, select: { role: true, deleted_at: true } });
-    if (dbUser && !dbUser.deleted_at && isModerator(dbUser.role)) return;
-  } catch {
-    // no/invalid token — fall through and block below
-  }
-
-  reply.code(503).send({ success: false, data: null, error: { code: 'MAINTENANCE', message: 'Платформа временно на обслуживании' } });
-});
+// Maintenance-mode gate + authenticate / tryAuthenticate decorators
+registerAuth(fastify);
 
 fastify.register(websocket);
-
-fastify.decorate(
-  'authenticate',
-  async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      await request.jwtVerify();
-      // Always refresh role from DB so role changes take effect without re-login
-      const payload = request.user as { id: string; role: string };
-      const dbUser = await prisma.user.findUnique({
-        where: { id: payload.id },
-        select: { role: true, deleted_at: true, frozen_at: true, frozen_reason: true, birth_date: true },
-      });
-      if (!dbUser || dbUser.deleted_at) {
-        return reply.code(401).send({ success: false, data: null, error: { code: 'UNAUTHORIZED', message: 'User not found' } });
-      }
-      request.user.role = dbUser.role;
-      request.user.is_adult = isAdult(dbUser.birth_date);
-      // Frozen accounts are force-logged-out on their very next authenticated request
-      // (frontend's response interceptor catches ACCOUNT_FROZEN and clears the session).
-      if (dbUser.frozen_at) {
-        return reply.code(403).send({
-          success: false,
-          data: null,
-          error: { code: 'ACCOUNT_FROZEN', message: dbUser.frozen_reason || 'Аккаунт временно заморожен за подозрительную активность' },
-        });
-      }
-    } catch (err) {
-      reply.send(err);
-    }
-  },
-);
-
-fastify.decorate(
-  'tryAuthenticate',
-  async (request: FastifyRequest, _reply: FastifyReply) => {
-    try {
-      await request.jwtVerify();
-      const payload = request.user as { id: string; role: string };
-      const dbUser = await prisma.user.findUnique({
-        where: { id: payload.id },
-        select: { role: true, deleted_at: true, birth_date: true },
-      });
-      if (!dbUser || dbUser.deleted_at) {
-        (request as { user?: unknown }).user = undefined; // guest: no user on the request
-      } else {
-        request.user.role = dbUser.role;
-        request.user.is_adult = isAdult(dbUser.birth_date);
-      }
-    } catch {
-      (request as { user?: unknown }).user = undefined; // guest: no user on the request
-    }
-  },
-);
 
 fastify.setErrorHandler((error, _request, reply) => {
   const statusCode = error.statusCode ?? 500;

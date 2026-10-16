@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
-  registerHandler, loginHandler, statsHandler,
+  registerHandler, loginHandler, statsHandler, meHandler,
   forgotPasswordHandler, resetPasswordHandler, changePasswordHandler,
   verifyEmailHandler, resendOtpHandler,
   requestUnfreezeHandler, confirmUnfreezeHandler, exportDataHandler,
@@ -15,7 +15,6 @@ import {
   listSessionsHandler, revokeSessionHandler, revokeOtherSessionsHandler,
 } from './controller.js';
 import type { JwtPayload } from './types.js';
-import prisma from '../../config/prisma.js';
 import { isAdult } from '../../lib/age.js';
 
 export async function authRoutes(fastify: FastifyInstance) {
@@ -253,29 +252,7 @@ export async function authRoutes(fastify: FastifyInstance) {
   fastify.delete<RouteGenericOf<typeof revokeSessionHandler>>('/sessions/:id',         auth, revokeSessionHandler);
 
   // ── Профиль (требует JWT) ─────────────────────────────────────────────────────
-  fastify.get(
-    '/me',
-    { onRequest: [fastify.authenticate] },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const payload = request.user as JwtPayload;
-      const user = await prisma.user.findUnique({
-        where: { id: payload.id },
-        select: {
-          id: true, username: true, email: true, role: true,
-          display_name: true, avatar_url: true, avatar_video_url: true, bio: true, status: true,
-          subscription_tier: true, profile_theme: true, profile_bg_url: true,
-          profile_frame: true, is_verified: true, verification_type: true,
-          badge_type: true, email_verified: true, onboarding_done: true,
-          payment_region: true, birth_date: true, two_factor_method: true,
-        },
-      });
-      if (!user) {
-        return reply.code(401).send({ success: false, data: null, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
-      }
-      const { birth_date, ...publicUser } = user;
-      return reply.send({ success: true, data: { user: { ...publicUser, is_adult: isAdult(birth_date) } }, error: null });
-    },
-  );
+  fastify.get('/me', { onRequest: [fastify.authenticate] }, meHandler);
 
   // ── Token rotation ────────────────────────────────────────────────────────────
   fastify.post('/refresh', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, refreshHandler);

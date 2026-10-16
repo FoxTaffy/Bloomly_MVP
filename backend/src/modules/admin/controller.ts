@@ -1,7 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { adminService } from './service.js';
-import { moderationService, logStaffAction } from './moderation.service.js';
-import { autoModLogs } from '../automod/logs.service.js';
+import { moderationService } from './moderation.service.js';
+import { autoModLogs, logStaffAction } from '../automod/logs.service.js';
+import { userLookup } from '../users/lookup.js';
 import { requireModerator, requireAdmin, requireOwner } from '../../lib/authHooks.js';
 import { ROLE_RANK, canModerateTarget } from '../../lib/roles.js';
 import { notificationService } from '../notifications/service.js';
@@ -413,10 +414,8 @@ export const submitAdHandler = async (
 ) => {
   const requesterId = (req.user)?.id;
   // Placing ads is a Business-subscription perk — matches the "featAdCampaigns" pricing bullet.
-  const requester = requesterId
-    ? await moderationService.getSubscriptionTier(requesterId)
-    : null;
-  if (requester?.subscription_tier !== 'business') {
+  const tier = requesterId ? await userLookup.subscriptionTier(requesterId) : null;
+  if (tier !== 'business') {
     return reply.code(402).send({ success: false, data: null, error: { code: 'BUSINESS_REQUIRED', message: 'Placing ads requires a Business subscription' } });
   }
   try {

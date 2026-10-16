@@ -1,6 +1,11 @@
 import type { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma.js';
 
+/** Appends a manual staff action to the audit log (category 'manual'). */
+export function logStaffAction(actorId: string, targetUserId: string, action: string, reason: string) {
+  return prisma.autoModLog.create({ data: { user_id: targetUserId, actor_id: actorId, action, reason, category: 'manual', score: 0 } });
+}
+
 const USER_BRIEF = { select: { id: true, username: true, display_name: true, avatar_url: true } } as const;
 
 export interface AutoModLogFilter {

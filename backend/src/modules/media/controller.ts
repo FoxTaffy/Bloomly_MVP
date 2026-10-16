@@ -1,4 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { userLookup } from '../users/lookup.js';
 import { createWriteStream } from 'fs';
 import { mkdtemp, open, readFile, rm, stat } from 'fs/promises';
 import os from 'os';
@@ -9,7 +10,6 @@ import {
   reserveStorage, releaseStorage, recordMediaOwner, removeObjectByUrl,
   canReadPrivateMedia, findPrivateMediaRow, openPrivateObject,
 } from './service.js';
-import prisma from '../../config/prisma.js';
 import { sniffMatches } from '../../lib/fileSniff.js';
 import {
   FOLDER_MAX_BYTES, IMAGE_MAX_BYTES, MAX_CONCURRENT_UPLOADS_GLOBAL, MAX_CONCURRENT_UPLOADS_PER_USER,
@@ -72,8 +72,7 @@ async function resolveUploadLimits(folder: Folder, userId: string): Promise<{
   const needsTierInfo = folder === 'messages' || STORAGE_TRACKED_FOLDERS.has(folder);
   if (!needsTierInfo) return { maxBytes: folderMax, storageQuotaBytes: null };
 
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { subscription_tier: true } });
-  const tier = user?.subscription_tier ?? 'free';
+  const tier = (await userLookup.subscriptionTier(userId)) ?? 'free';
   const maxBytes = folder === 'messages'
     ? Math.min(MESSAGE_LIMIT_BY_TIER[tier] ?? MESSAGE_LIMIT_BY_TIER.free, PLATFORM_MAX_UPLOAD_BYTES)
     : folderMax;

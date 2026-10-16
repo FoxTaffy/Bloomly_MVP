@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { logStaffAction } from '../automod/logs.service.js';
 import {
   checkCriteria,
   getVerificationStatus,
@@ -8,7 +9,6 @@ import {
   getProfileCompleteness,
 } from './service.js';
 import { isModerator } from '../../lib/roles.js';
-import prisma from '../../config/prisma.js';
 import { errMessage } from '../../lib/httpErrors.js';
 
 // GET /api/verification/status
@@ -71,14 +71,12 @@ export async function adminReviewHandler(request: FastifyRequest, reply: Fastify
   }
   try {
     const result = await adminReviewRequest(id, action, user.id, reason);
-    await prisma.autoModLog.create({
-      data: {
-        user_id: (result as any).user_id ?? user.id, actor_id: user.id,
-        action: action === 'approve' ? 'verify_profile' : 'reject_verification',
-        reason: action === 'approve' ? 'Профиль верифицирован' : (reason || 'Заявка на верификацию отклонена'),
-        category: 'manual', score: 0,
-      },
-    }).catch(() => {});
+    await logStaffAction(
+      user.id,
+      result.user_id ?? user.id,
+      action === 'approve' ? 'verify_profile' : 'reject_verification',
+      action === 'approve' ? 'Профиль верифицирован' : (reason || 'Заявка на верификацию отклонена'),
+    ).catch(() => {});
     return reply.send({ success: true, data: result });
   } catch (err) {
     return reply.code(400).send({ success: false, error: { message: errMessage(err) } });

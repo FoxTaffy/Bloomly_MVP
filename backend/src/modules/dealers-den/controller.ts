@@ -1,4 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { userLookup } from '../users/lookup.js';
 import { dealersDenService } from './service.js';
 import { fairService } from './fair.service.js';
 import type {
@@ -6,7 +7,6 @@ import type {
   CreateReviewInput, CreateBookingInput, UpdateBookingInput,
   CreateDisputeInput, ReplyDisputeInput, ResolveDisputeInput, CreateFairInput,
 } from './types.js';
-import prisma from '../../config/prisma.js';
 import { isAdmin as isAdminRole } from '../../lib/roles.js';
 import { requestIsAdult } from '../../lib/age.js';
 import { validateListingInput } from './validation.js';
@@ -45,7 +45,7 @@ export async function getListingHandler(req: FastifyRequest, reply: FastifyReply
 
 export async function createListingHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
-  const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { is_verified: true, verification_type: true, den_frozen: true } });
+  const dbUser = await userLookup.denSellerStatus(user.id);
   if (!dbUser?.is_verified || !['artist', 'master'].includes(dbUser.verification_type ?? '')) {
     return reply.status(403).send({ success: false, error: 'Только верифицированные художники и мастера могут создавать объявления' });
   }

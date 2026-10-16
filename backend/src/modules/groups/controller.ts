@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import prisma from '../../config/prisma.js';
+import { userLookup } from '../users/lookup.js';
 import { groupService } from './service.js';
 import { messageService } from '../messages/service.js';
 import { moderatePost, moderateGroupMessage } from '../automod/service.js';
@@ -92,8 +92,7 @@ export const updateGroupHandler = async (
     const touchesBusinessField = BUSINESS_TIER_FIELDS.some((f) => request.body[f] !== undefined && request.body[f] !== null && request.body[f] !== '');
     if (touchesBusinessField) {
       const { id: userId } = request.user as JwtUser;
-      const requester = await prisma.user.findUnique({ where: { id: userId }, select: { subscription_tier: true } });
-      if (requester?.subscription_tier !== 'business') {
+      if ((await userLookup.subscriptionTier(userId)) !== 'business') {
         return fail(reply, 402, 'BUSINESS_REQUIRED', 'Group customization requires a Business subscription');
       }
     }

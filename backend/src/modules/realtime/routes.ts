@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { parseDeviceName } from '../auth/device.util.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
-import prisma from '../../config/prisma.js';
+import { userLookup } from '../users/lookup.js';
 import { presence } from './presence.js';
 import { dispatch, detach, send, type WsConnection } from './ws.handlers.js';
 
@@ -54,10 +54,7 @@ export async function realtimeRoutes(fastify: FastifyInstance) {
     const deviceData: Record<string, string | null> = {};
     const lastSeenData: Record<string, string | null> = {};
     if (ids.length) {
-      const owners = await prisma.user.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, online_status_visibility: true, last_seen_at: true },
-      });
+      const owners = await userLookup.presenceSettings(ids);
       const visibilityById = new Map(owners.map((o) => [o.id, o.online_status_visibility]));
       const lastSeenById = new Map(owners.map((o) => [o.id, o.last_seen_at]));
       for (const id of ids) {

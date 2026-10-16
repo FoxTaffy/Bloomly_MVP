@@ -9,7 +9,7 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import prisma from '../../config/prisma.js'
+import { seoService } from './service.js'
 
 const BASE_URL = 'https://bloomly.fun'
 
@@ -85,28 +85,13 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
     ]
 
     // Публичные профили
-    const users = await prisma.user.findMany({
-      where: { deleted_at: null },
-      select: { username: true, updated_at: true },
-      orderBy: { updated_at: 'desc' },
-      take: 5000,
-    })
+    const users = await seoService.sitemapUsers()
 
     // Публичные посты (не NSFW, не удалённые)
-    const posts = await prisma.post.findMany({
-      where: { deleted_at: null, is_nsfw: false },
-      select: { id: true, updated_at: true },
-      orderBy: { updated_at: 'desc' },
-      take: 10000,
-    })
+    const posts = await seoService.sitemapPosts()
 
     // Публичные группы
-    const groups = await prisma.group.findMany({
-      where: { deleted_at: null },
-      select: { slug: true, id: true, updated_at: true },
-      orderBy: { updated_at: 'desc' },
-      take: 2000,
-    })
+    const groups = await seoService.sitemapGroups()
 
     const urls: string[] = [...staticUrls.map(({ loc, priority, changefreq }) =>
       `  <url>\n    <loc>${xmlEscape(loc)}</loc>\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>`
@@ -138,16 +123,7 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
   // ── OG Proxy: Post ───────────────────────────────────────────────────────
   fastify.get<{ Params: { id: string } }>('/og/post/:id', async (req, reply) => {
     const { id } = req.params
-    const post = await prisma.post.findFirst({
-      where: { id, deleted_at: null },
-      select: {
-        id: true,
-        content: true,
-        media_urls: true,
-        created_at: true,
-        author: { select: { display_name: true, username: true, avatar_url: true } },
-      },
-    })
+    const post = await seoService.postForOg(id)
 
     if (!post) {
       return reply.status(404).send('Not found')
@@ -171,10 +147,7 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
   // ── OG Proxy: Profile ────────────────────────────────────────────────────
   fastify.get<{ Params: { username: string } }>('/og/profile/:username', async (req, reply) => {
     const { username } = req.params
-    const user = await prisma.user.findFirst({
-      where: { username, deleted_at: null },
-      select: { display_name: true, username: true, bio: true, avatar_url: true },
-    })
+    const user = await seoService.profileForOg(username)
 
     if (!user) {
       return reply.status(404).send('Not found')
@@ -195,13 +168,7 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
   // ── OG Proxy: Group ──────────────────────────────────────────────────────
   fastify.get<{ Params: { slugOrId: string } }>('/og/group/:slugOrId', async (req, reply) => {
     const { slugOrId } = req.params
-    const group = await prisma.group.findFirst({
-      where: {
-        deleted_at: null,
-        OR: [{ slug: slugOrId }, { id: slugOrId }],
-      },
-      select: { id: true, slug: true, name: true, description: true, avatar_url: true, _count: { select: { members: true } } },
-    })
+    const group = await seoService.groupForOg(slugOrId)
 
     if (!group) {
       return reply.status(404).send('Not found')
