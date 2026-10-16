@@ -9,6 +9,9 @@ import { useLangStore } from '@/stores/lang'
 import AppHeader  from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon      from '@/components/BIcon.vue'
+import StickerPackEditor from '@/components/StickerPackEditor.vue'
+import { useConfirm } from '@/composables/useConfirm'
+import type { StickerPack } from '@/stores/stickers'
 
 const router       = useRouter()
 const auth         = useAuthStore()
@@ -16,6 +19,7 @@ const shopStore    = useShopStore()
 const stickerStore = useStickersStore()
 const langStore    = useLangStore()
 const { nsfwEnabled } = useNsfwMode()
+const { confirmDialog } = useConfirm()
 
 // ── Category ───────────────────────────────────────────────────────────────
 type CategoryKey = 'all' | 'theme' | 'background' | 'frame' | 'sticker_pack'
@@ -154,6 +158,38 @@ function fmtPrice(item: ShopItem) {
 
 function openPack(pack: any) {
   router.push({ name: 'sticker-pack', params: { id: pack.id } })
+}
+
+// ── Создание / редактирование пака ────────────────────────────────────────
+const showEditor  = ref(false)
+const editingPack = ref<StickerPack | null>(null)
+
+function openCreate() {
+  editingPack.value = null
+  showEditor.value = true
+}
+
+function openEdit(pack: StickerPack) {
+  editingPack.value = pack
+  showEditor.value = true
+}
+
+async function onPackSaved() {
+  stickerTab.value = 'my'
+  await Promise.all([stickerStore.loadMyPacks(), stickerStore.loadPacks()])
+}
+
+async function removePack(pack: StickerPack) {
+  if (!(await confirmDialog(`Удалить пак «${pack.name}»?`, { danger: true }))) return
+  await stickerStore.deletePack(pack.id)
+}
+
+const isOwnPack = (pack: StickerPack) => auth.user?.id === pack.author_id
+
+const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: string }> = {
+  own:    { label: 'Свой',           icon: 'Lock',  cls: 'text-white/70 bg-black/40 border-white/15' },
+  invite: { label: 'По приглашению', icon: 'Link2', cls: 'text-sky-300 bg-sky-500/20 border-sky-400/30' },
+  paid:   { label: '',               icon: 'Crown', cls: 'text-amber-300 bg-amber-500/20 border-amber-400/30' },
 }
 </script>
 
@@ -299,8 +335,8 @@ function openPack(pack: any) {
             </select>
           </div>
 
-          <div v-if="activeCategory === 'sticker_pack' && auth.user"
-            class="flex gap-1 self-start bg-brand-card rounded-2xl p-1 border border-brand-border">
+          <div v-if="activeCategory === 'sticker_pack' && auth.user" class="flex flex-wrap items-center gap-3">
+          <div class="flex gap-1 self-start bg-brand-card rounded-2xl p-1 border border-brand-border">
             <button v-for="t in ([
               { key: 'browse', label: 'Все паки' },
               { key: 'collection', label: 'Коллекция' },
@@ -312,6 +348,12 @@ function openPack(pack: any) {
               :class="stickerTab === t.key ? 'text-white shadow-md' : 'text-white/50 hover:text-white'"
               :style="stickerTab === t.key ? 'background: linear-gradient(135deg,#CD83F5,#7C3AED)' : ''">
               {{ t.label }}
+            </button>
+          </div>
+            <button @click="openCreate"
+              class="ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl text-sm font-bold text-white shadow-md shadow-brand-purple/25 hover:opacity-90 transition-all"
+              style="background: linear-gradient(135deg,#CD83F5,#7C3AED)">
+              <BIcon name="Plus" class="w-4 h-4" /> Добавить стикерпак
             </button>
           </div>
         </div>
@@ -542,6 +584,14 @@ function openPack(pack: any) {
                   <BIcon name="Smile" class="w-2.5 h-2.5" /> {{ pack.stickers?.length ?? 0 }} шт.
                 </span>
 
+                <!-- Top-right: тип публикации / цена -->
+                <span v-if="pack.visibility && VISIBILITY_BADGE[pack.visibility] && !(pack.in_collection)"
+                  class="absolute top-2 right-2 inline-flex items-center gap-1 text-[9px] font-extrabold border px-2 py-0.5 rounded-full backdrop-blur-sm"
+                  :class="VISIBILITY_BADGE[pack.visibility].cls">
+                  <BIcon :name="VISIBILITY_BADGE[pack.visibility].icon" class="w-2.5 h-2.5" />
+                  {{ pack.visibility === 'paid' ? `${parseFloat(pack.price)} ${pack.currency}` : VISIBILITY_BADGE[pack.visibility].label }}
+                </span>
+
                 <!-- Top-right: in collection -->
                 <span v-if="pack.in_collection" class="absolute top-2 right-2 inline-flex items-center gap-1 text-[9px] font-extrabold text-brand-success bg-brand-success/15 border border-brand-success/25 px-2 py-0.5 rounded-full backdrop-blur-sm">
                   <BIcon name="Check" class="w-2.5 h-2.5" /> Есть
@@ -576,6 +626,18 @@ function openPack(pack: any) {
                   </div>
                 </div>
 
+                <!-- Управление своим паком -->
+                <div v-if="isOwnPack(pack)" class="flex gap-1.5 mt-2">
+                  <button @click.stop="openEdit(pack)"
+                    class="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-xl text-[11px] font-bold bg-white/8 hover:bg-white/15 text-white/80 transition-all">
+                    <BIcon name="Pencil" class="w-3 h-3" /> Изменить
+                  </button>
+                  <button @click.stop="removePack(pack)" title="Удалить"
+                    class="w-8 inline-flex items-center justify-center rounded-xl bg-white/8 hover:bg-brand-error/25 text-white/60 hover:text-brand-error transition-all">
+                    <BIcon name="Trash2" class="w-3 h-3" />
+                  </button>
+                </div>
+
                 <!-- Hashtags -->
                 <div v-if="pack.tags?.length" class="flex flex-wrap gap-1 mt-1.5">
                   <span v-for="tag in pack.tags.slice(0, 5)" :key="tag"
@@ -599,6 +661,8 @@ function openPack(pack: any) {
 
       </main>
     </div>
+
+    <StickerPackEditor v-if="showEditor" :pack="editingPack" @close="showEditor = false" @saved="onPackSaved" />
   </div>
 </template>
 

@@ -1,269 +1,262 @@
 <script setup lang="ts">
 import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 /**
- * StickerUpload — upload PNG stickers with Telegram-compatible rules:
- *   • Format: PNG with transparent background (alpha channel)
- *   • Dimensions: exactly 512 × 512 px
- *   • Max file size: 100 KiB
+ * StickerUpload — загрузка стикеров по правилам Telegram:
+ *   • PNG или WEBP с прозрачным фоном
+ *   • одна сторона ровно 512 px, вторая — 512 px или меньше
+ *   • файл до 512 КБ
  *
- * Validates on the client before uploading; also trusts the server's 422 validation error.
- * Emits `uploaded(url)` for every successfully uploaded sticker.
+ * Источники: файлы с ПК, целая папка, drag-and-drop (в том числе папок), импорт из Telegram.
+ * Проверяет на клиенте до загрузки; сервер проверяет те же правила ещё раз.
+ * Эмитит `uploaded(url)` для каждого стикера строго в порядке выбора файлов.
  */
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import api from '@/api'
 import BIcon from '@/components/BIcon.vue'
 
 const emit = defineEmits<{
   (e: 'uploaded', url: string): void
-  (e: 'removed', url: string): void
+  (e: 'telegram'): void
 }>()
 
 const props = defineProps<{
-  modelValue?: string[]  // existing URLs (from store)
+  /** Сколько стикеров ещё можно добавить в пак */
+  remaining: number
 }>()
 
-// ── Types ─────────────────────────────────────────────────────────────────
-type StickerEntry = {
-  id:       string
-  name:     string
-  preview:  string           // object URL for local preview (data URL for completed)
-  state:    'validating' | 'uploading' | 'done' | 'error'
-  error?:   string
-  url?:     string           // final CDN URL (state === 'done')
-  sizeKb:   number
+const MAX_BYTES   = 512 * 1024
+const SIDE        = 512
+const CONCURRENCY = 3
+
+type Failure = { id: number; name: string; error: string }
+
+const filesInput  = ref<HTMLInputElement | null>(null)
+const folderInput = ref<HTMLInputElement | null>(null)
+const dragging    = ref(false)
+const busy        = ref(false)
+const progress    = ref({ done: 0, total: 0 })
+const failures    = ref<Failure[]>([])
+let failureId = 0
+
+const percent = computed(() => progress.value.total ? Math.round(progress.value.done / progress.value.total * 100) : 0)
+
+function fail(name: string, error: string) {
+  failures.value.push({ id: ++failureId, name, error })
 }
 
-const MAX_BYTES = 100 * 1024  // 100 KiB
-const DIM       = 512
+// ── Проверки ─────────────────────────────────────────────────────────────────
 
-const entries   = ref<StickerEntry[]>([])
-const fileInput = ref<HTMLInputElement | null>(null)
-const dragging  = ref(false)
+function isPng(b: Uint8Array)  { return b.length > 26 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 }
+function isWebp(b: Uint8Array) { return b.length > 30 && b[0] === 0x52 && b[1] === 0x49 && b[8] === 0x57 && b[9] === 0x45 }
+const tag = (b: Uint8Array, at: number) => String.fromCharCode(b[at], b[at + 1], b[at + 2], b[at + 3])
 
-// ── Helpers ──────────────────────────────────────────────────────────────
-
-function uid() {
-  return Math.random().toString(36).slice(2)
+/** PNG: цветовой тип 4 (серый+альфа) или 6 (RGBA). Индексированный PNG может иметь tRNS — отдаём серверу. */
+function pngAlphaState(b: Uint8Array): 'yes' | 'no' | 'maybe' {
+  const colour = b[25]
+  if (colour === 4 || colour === 6) return 'yes'
+  if (colour === 3) return 'maybe'
+  return 'no'
 }
 
-/** Read File as ArrayBuffer; returns buffer + object URL */
-function readFile(file: File): Promise<{ buffer: ArrayBuffer; objectUrl: string }> {
+/** WEBP: lossy без VP8X альфы не имеет; в VP8X есть флаг альфы; VP8L проверит сервер. */
+function webpAlphaState(b: Uint8Array): 'yes' | 'no' | 'maybe' {
+  const chunk = tag(b, 12)
+  if (chunk === 'VP8X') return (b[20] & 0x10) ? 'yes' : 'no'
+  if (chunk === 'VP8 ') return 'no'
+  return 'maybe'
+}
+
+function dimensions(file: File): Promise<{ w: number; h: number }> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve({ buffer: reader.result as ArrayBuffer, objectUrl: URL.createObjectURL(file) })
-    reader.onerror = reject
-    reader.readAsArrayBuffer(file)
-  })
-}
-
-/** Check PNG has alpha channel by reading colour-type byte at offset 25 */
-function pngHasAlpha(buffer: ArrayBuffer): boolean {
-  const view = new DataView(buffer)
-  // PNG signature: 8 bytes, then IHDR chunk: 4 len + 4 type + 13 data
-  // colour type byte is at offset 8+4+4+9 = 25
-  const colourType = view.getUint8(25)
-  // 4 = RGBA, 6 = RGBA, 2 = RGB, 3 = indexed, 0 = greyscale
-  return colourType === 4 || colourType === 6
-}
-
-/** Load image and return its natural dimensions */
-function getImageDimensions(objectUrl: string): Promise<{ w: number; h: number }> {
-  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
     const img = new Image()
-    img.onload  = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
-    img.onerror = reject
-    img.src = objectUrl
+    img.onload  = () => { URL.revokeObjectURL(url); resolve({ w: img.naturalWidth, h: img.naturalHeight }) }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Не удалось прочитать изображение')) }
+    img.src = url
   })
 }
 
-// ── Core process ──────────────────────────────────────────────────────────
-
-async function processFile(file: File) {
-  const id: string = uid()
-  const entry: StickerEntry = {
-    id,
-    name:    file.name,
-    preview: '',
-    state:   'validating',
-    sizeKb:  Math.round(file.size / 1024 * 10) / 10,
-  }
-  entries.value.push(entry)
-
-  const idx = entries.value.length - 1
-  const set = (patch: Partial<StickerEntry>) => { Object.assign(entries.value[idx], patch) }
-
-  // 1. Format
-  if (file.type !== 'image/png') {
-    URL.revokeObjectURL(entry.preview)
-    set({ state: 'error', error: 'Только PNG' })
-    return
-  }
-
-  // 2. Size
-  if (file.size > MAX_BYTES) {
-    set({ state: 'error', error: `Превышает 100 КБ (${entry.sizeKb} КБ)` })
-    return
-  }
-
+/** Возвращает текст ошибки или null, если файл подходит */
+async function validate(file: File): Promise<string | null> {
+  if (file.size > MAX_BYTES) return `Больше 512 КБ (${Math.round(file.size / 1024)} КБ)`
+  const head = new Uint8Array(await file.slice(0, 32).arrayBuffer())
+  let alpha: 'yes' | 'no' | 'maybe'
+  if (isPng(head))       alpha = pngAlphaState(head)
+  else if (isWebp(head)) alpha = webpAlphaState(head)
+  else return 'Нужен PNG или WEBP'
+  if (alpha === 'no') return 'Нет прозрачного фона'
   try {
-    const { buffer, objectUrl } = await readFile(file)
-    set({ preview: objectUrl })
+    const { w, h } = await dimensions(file)
+    if (Math.max(w, h) !== SIDE) return `Одна сторона должна быть 512 px (получено ${w}×${h})`
+  } catch (e) {
+    return errorMessage(e) ?? 'Не удалось прочитать изображение'
+  }
+  return null
+}
 
-    // 3. Alpha channel
-    if (!pngHasAlpha(buffer)) {
-      set({ state: 'error', error: 'Нет прозрачного фона (нужен PNG с альфа-каналом)' })
-      return
-    }
-
-    // 4. Dimensions
-    const { w, h } = await getImageDimensions(objectUrl)
-    if (w !== DIM || h !== DIM) {
-      set({ state: 'error', error: `Нужно 512×512 пикселей (получено ${w}×${h})` })
-      return
-    }
-
-    // 5. Upload
-    set({ state: 'uploading' })
-    const formData = new FormData()
-    formData.append('file', file)
-    const res = await api.post('/media/upload?folder=stickers', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-
-    const url: string = res.data.data.url
-    set({ state: 'done', url, preview: objectUrl })
-    emit('uploaded', url)
-
+async function uploadOne(file: File): Promise<string | null> {
+  const problem = await validate(file)
+  if (problem) { fail(file.name, problem); return null }
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await api.post('/media/upload?folder=stickers', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    return res.data.data.url as string
   } catch (err) {
-    const msg: string =
-      apiErrorMessage(err) ??
-      errorMessage(err) ??
-      'Ошибка загрузки'
-    set({ state: 'error', error: msg })
+    fail(file.name, apiErrorMessage(err) ?? errorMessage(err) ?? 'Ошибка загрузки')
+    return null
   }
 }
 
-// ── Event handlers ─────────────────────────────────────────────────────────
+// ── Основной поток ───────────────────────────────────────────────────────────
 
-function onFiles(files: FileList | null) {
-  if (!files) return
-  Array.from(files).forEach(processFile)
-  if (fileInput.value) fileInput.value.value = ''
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+
+async function processFiles(list: File[]) {
+  const files = list
+    .filter(f => /\.(png|webp)$/i.test(f.name) || f.type === 'image/png' || f.type === 'image/webp')
+    .sort((a, b) => collator.compare(a.webkitRelativePath || a.name, b.webkitRelativePath || b.name))
+
+  const skipped = list.length - files.length
+  if (skipped > 0) fail(`${skipped} файл(ов)`, 'Не PNG/WEBP — пропущено')
+  if (!files.length) return
+
+  let accepted = files
+  if (files.length > props.remaining) {
+    accepted = files.slice(0, Math.max(0, props.remaining))
+    fail(`${files.length - accepted.length} файл(ов)`, 'Лимит 120 стикеров в паке — не добавлено')
+  }
+  if (!accepted.length) return
+
+  busy.value = true
+  progress.value = { done: 0, total: accepted.length }
+  try {
+    for (let i = 0; i < accepted.length; i += CONCURRENCY) {
+      const batch = accepted.slice(i, i + CONCURRENCY)
+      const urls = await Promise.all(batch.map(async f => {
+        const u = await uploadOne(f)
+        progress.value.done++
+        return u
+      }))
+      urls.forEach(u => { if (u) emit('uploaded', u) })
+    }
+  } finally {
+    busy.value = false
+  }
 }
 
-function onDrop(e: DragEvent) {
+function onPick(input: HTMLInputElement | null) {
+  if (!input?.files) return
+  const files = Array.from(input.files)
+  input.value = ''
+  processFiles(files)
+}
+
+// ── Drag-and-drop (в том числе папки) ───────────────────────────────────────
+
+function readAllEntries(reader: any): Promise<any[]> {
+  return new Promise((resolve, reject) => {
+    const all: any[] = []
+    const next = () => reader.readEntries((batch: any[]) => {
+      if (!batch.length) return resolve(all)
+      all.push(...batch)
+      next()
+    }, reject)
+    next()
+  })
+}
+
+async function collect(entry: any, out: File[]) {
+  if (entry.isFile) {
+    const file: File = await new Promise((res, rej) => entry.file(res, rej))
+    // Относительный путь нужен для сортировки внутри папки
+    Object.defineProperty(file, 'webkitRelativePath', { value: entry.fullPath.replace(/^\//, '') })
+    out.push(file)
+  } else if (entry.isDirectory) {
+    for (const child of await readAllEntries(entry.createReader())) await collect(child, out)
+  }
+}
+
+async function onDrop(e: DragEvent) {
   dragging.value = false
-  onFiles(e.dataTransfer?.files ?? null)
-}
-
-function removeEntry(e: StickerEntry, i: number) {
-  if (e.url)     emit('removed', e.url)
-  if (e.preview) URL.revokeObjectURL(e.preview)
-  entries.value.splice(i, 1)
+  const items = Array.from(e.dataTransfer?.items ?? [])
+  const entries = items.map(i => (i as any).webkitGetAsEntry?.()).filter(Boolean)
+  if (entries.length) {
+    const out: File[] = []
+    for (const en of entries) await collect(en, out)
+    return processFiles(out)
+  }
+  processFiles(Array.from(e.dataTransfer?.files ?? []))
 }
 </script>
 
 <template>
   <div class="space-y-3">
-
     <!-- Drop zone -->
     <div
-      class="relative border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer select-none"
+      class="relative border-2 border-dashed rounded-2xl p-5 text-center transition-all select-none"
       :class="dragging
         ? 'border-brand-purple bg-brand-purple/10'
-        : 'border-brand-border hover:border-brand-purple/50 hover:bg-brand-purple/5 bg-brand-bg'"
-      @click="fileInput?.click()"
+        : 'border-brand-border bg-brand-bg'"
       @dragover.prevent="dragging = true"
       @dragleave.prevent="dragging = false"
       @drop.prevent="onDrop">
 
-      <BIcon name="Sticker" class="w-10 h-10 mx-auto mb-2" :class="dragging ? 'text-brand-purple' : 'text-white/30'" />
-      <p class="text-sm font-bold text-white/70 mb-1">
-        Перетащите PNG-стикеры или <span class="text-brand-purple underline">выберите файлы</span>
+      <BIcon name="Sticker" class="w-9 h-9 mx-auto mb-2" :class="dragging ? 'text-brand-purple' : 'text-white/30'" />
+      <p class="text-sm font-bold text-white/70 mb-3">Перетащите файлы или папку сюда</p>
+
+      <div class="flex flex-wrap gap-2 justify-center">
+        <button type="button" :disabled="busy || remaining <= 0" @click="filesInput?.click()"
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-brand-purple/15 border border-brand-purple/30 text-brand-purple hover:bg-brand-purple/25 disabled:opacity-40 transition-all">
+          <BIcon name="FileImage" class="w-3.5 h-3.5" /> Файлы с ПК
+        </button>
+        <button type="button" :disabled="busy || remaining <= 0" @click="folderInput?.click()"
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-brand-purple/15 border border-brand-purple/30 text-brand-purple hover:bg-brand-purple/25 disabled:opacity-40 transition-all">
+          <BIcon name="FolderOpen" class="w-3.5 h-3.5" /> Папка
+        </button>
+        <button type="button" :disabled="busy" @click="emit('telegram')"
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-sky-500/15 border border-sky-500/30 text-sky-300 hover:bg-sky-500/25 disabled:opacity-40 transition-all">
+          <BIcon name="Send" class="w-3.5 h-3.5" /> Импорт из Telegram
+        </button>
+      </div>
+
+      <div class="flex flex-wrap gap-1.5 justify-center mt-3 text-[11px] font-bold text-white/45">
+        <span class="px-2 py-0.5 rounded-full bg-white/5">PNG / WEBP</span>
+        <span class="px-2 py-0.5 rounded-full bg-white/5">сторона 512 px</span>
+        <span class="px-2 py-0.5 rounded-full bg-white/5">до 512 КБ</span>
+        <span class="px-2 py-0.5 rounded-full bg-white/5">прозрачный фон</span>
+      </div>
+      <p class="text-[11px] text-white/30 mt-2">
+        Как в Telegram: белая обводка и тень —
+        <a href="https://telegram.org/img/StickerExample.psd" target="_blank" rel="noopener" class="underline hover:text-white/60">пример PSD</a>
       </p>
 
-      <!-- Rules badge row -->
-      <div class="flex flex-wrap gap-2 justify-center mt-3">
-        <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-brand-purple/10 border border-brand-purple/20 text-brand-purple">
-          <BIcon name="FileImage" class="w-3 h-3" /> PNG
-        </span>
-        <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-brand-purple/10 border border-brand-purple/20 text-brand-purple">
-          <BIcon name="Maximize2" class="w-3 h-3" /> 512 × 512 px
-        </span>
-        <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-brand-purple/10 border border-brand-purple/20 text-brand-purple">
-          <BIcon name="Weight" class="w-3 h-3" /> до 100 КБ
-        </span>
-        <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-brand-purple/10 border border-brand-purple/20 text-brand-purple">
-          <BIcon name="Blend" class="w-3 h-3" /> прозрачный фон
-        </span>
-      </div>
-
-      <input
-        ref="fileInput"
-        type="file"
-        accept="image/png"
-        multiple
-        class="hidden"
-        @change="onFiles(($event.target as HTMLInputElement).files)" />
+      <input ref="filesInput" type="file" accept="image/png,image/webp" multiple class="hidden" @change="onPick(filesInput)" />
+      <input ref="folderInput" type="file" webkitdirectory multiple class="hidden" @change="onPick(folderInput)" />
     </div>
 
-    <!-- Sticker list -->
-    <div v-if="entries.length" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-      <div
-        v-for="(e, i) in entries"
-        :key="e.id"
-        class="relative rounded-2xl border overflow-hidden flex flex-col"
-        :class="{
-          'border-brand-border bg-white/5':   e.state === 'validating' || e.state === 'uploading',
-          'border-brand-success/40 bg-brand-success/5': e.state === 'done',
-          'border-brand-error/40 bg-brand-error/5':     e.state === 'error',
-        }">
-
-        <!-- Preview -->
-        <div class="relative bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiI+PHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiBmaWxsPSIjMjIyIi8+PHJlY3Qgd2lkdGg9IjgiIGhlaWdodD0iOCIgZmlsbD0iIzJhMmEyYSIvPjxyZWN0IHg9IjgiIHk9IjgiIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiMyYTJhMmEiLz48L3N2Zz4=')] aspect-square flex items-center justify-center">
-          <img
-            v-if="e.preview"
-            :src="e.preview"
-            :alt="e.name"
-            class="w-full h-full object-contain" />
-          <BIcon v-else name="ImageOff" class="w-10 h-10 text-white/20" />
-
-          <!-- State overlay -->
-          <div v-if="e.state === 'uploading'" class="absolute inset-0 bg-black/60 flex items-center justify-center">
-            <div class="w-6 h-6 border-2 border-brand-purple border-t-transparent rounded-full animate-spin" />
-          </div>
-
-          <!-- Status badge -->
-          <div class="absolute top-1.5 left-1.5">
-            <span v-if="e.state === 'done'" class="inline-flex items-center gap-0.5 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-brand-success text-white shadow">
-              <BIcon name="Check" class="w-2.5 h-2.5" /> ОК
-            </span>
-            <span v-else-if="e.state === 'error'" class="inline-flex items-center gap-0.5 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-brand-error text-white shadow">
-              <BIcon name="X" class="w-2.5 h-2.5" /> Ошибка
-            </span>
-            <span v-else class="inline-flex items-center gap-0.5 text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-black/50 text-white/70">
-              {{ e.state === 'uploading' ? 'Загрузка…' : 'Проверка…' }}
-            </span>
-          </div>
-
-          <!-- Remove -->
-          <button
-            class="absolute top-1.5 right-1.5 w-5 h-5 bg-black/70 hover:bg-brand-error rounded-full flex items-center justify-center transition-colors"
-            @click.stop="removeEntry(e, i)">
-            <BIcon name="X" class="w-3 h-3 text-white" />
-          </button>
-        </div>
-
-        <!-- Error message -->
-        <div v-if="e.state === 'error'" class="px-2 py-1.5 text-[11px] text-brand-error font-bold leading-snug">
-          {{ e.error }}
-        </div>
-        <!-- Size / name -->
-        <div v-else class="px-2 py-1.5 text-[11px] text-white/40 truncate leading-snug">
-          {{ e.name }} · {{ e.sizeKb }} КБ
-        </div>
+    <!-- Progress -->
+    <div v-if="busy" class="space-y-1.5">
+      <div class="flex justify-between text-xs font-bold text-white/55">
+        <span>Загрузка стикеров…</span>
+        <span class="tabular-nums">{{ progress.done }} / {{ progress.total }}</span>
+      </div>
+      <div class="h-1.5 rounded-full bg-white/10 overflow-hidden">
+        <div class="h-full rounded-full transition-all duration-200" :style="{ width: percent + '%', background: 'linear-gradient(90deg,#CD83F5,#7C3AED)' }" />
       </div>
     </div>
 
+    <!-- Failures -->
+    <div v-if="failures.length" class="rounded-2xl border border-brand-error/30 bg-brand-error/5 p-3 space-y-1.5">
+      <div class="flex items-center justify-between">
+        <p class="text-xs font-extrabold text-brand-error">Не загружено: {{ failures.length }}</p>
+        <button type="button" class="text-[11px] font-bold text-white/40 hover:text-white" @click="failures = []">Скрыть</button>
+      </div>
+      <ul class="max-h-28 overflow-y-auto space-y-1">
+        <li v-for="f in failures" :key="f.id" class="text-[11px] leading-snug text-white/60">
+          <span class="font-bold text-white/80 break-all">{{ f.name }}</span> — {{ f.error }}
+        </li>
+      </ul>
+    </div>
   </div>
 </template>

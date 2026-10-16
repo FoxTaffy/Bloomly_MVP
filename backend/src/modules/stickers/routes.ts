@@ -21,6 +21,9 @@ import {
   removeFavoriteHandler,
   addStickersToPackHandler,
   getPackStatsHandler,
+  purchasePackHandler,
+  getInvitePackHandler,
+  joinInviteHandler,
 } from './controller.js';
 
 export async function stickersRoutes(fastify: FastifyInstance) {
@@ -29,6 +32,8 @@ export async function stickersRoutes(fastify: FastifyInstance) {
 
   fastify.get<RouteGenericOf<typeof listPacksHandler>>('/',            tryAuth, listPacksHandler);
   fastify.get<RouteGenericOf<typeof findByUrlHandler>>('/find-by-url', auth, findByUrlHandler);
+  fastify.get<RouteGenericOf<typeof getInvitePackHandler>>('/invite/:code', tryAuth, getInvitePackHandler);
+  fastify.post<RouteGenericOf<typeof joinInviteHandler>>('/invite/:code/join', auth, joinInviteHandler);
   fastify.get<RouteGenericOf<typeof getPackHandler>>('/:id',         tryAuth, getPackHandler);
 
   fastify.post<RouteGenericOf<typeof createPackHandler>>('/',      auth, createPackHandler);
@@ -39,6 +44,7 @@ export async function stickersRoutes(fastify: FastifyInstance) {
   fastify.post<RouteGenericOf<typeof addToCollectionHandler>>('/:id/collect',  auth, addToCollectionHandler);
   fastify.delete<RouteGenericOf<typeof removeFromCollectionHandler>>('/:id/collect',auth, removeFromCollectionHandler);
   fastify.get<RouteGenericOf<typeof checkCollectionHandler>>('/:id/collected', auth, checkCollectionHandler);
+  fastify.post<RouteGenericOf<typeof purchasePackHandler>>('/:id/purchase', auth, purchasePackHandler);
   fastify.post<RouteGenericOf<typeof usePackHandler>>('/:id/use',      auth, usePackHandler);
   fastify.get<RouteGenericOf<typeof getPackStatsHandler>>('/:id/stats',     auth, getPackStatsHandler);
 

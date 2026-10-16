@@ -184,6 +184,12 @@ const routes: RouteRecordRaw[] = [
     redirect: '/shop',
   },
   {
+    path: '/stickers/invite/:code',
+    name: 'sticker-invite',
+    component: () => import('@/views/StickerPackView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/stickers/:id',
     name: 'sticker-pack',
     component: () => import('@/views/StickerPackView.vue'),

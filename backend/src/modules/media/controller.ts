@@ -167,8 +167,8 @@ async function validateContent(filePath: string, mimetype: string, folder: Folde
   if (!sniffMatches(await readHead(filePath), mimetype)) {
     throw new UploadRejected(415, 'UNSUPPORTED_MEDIA_TYPE', 'Содержимое файла не соответствует его типу');
   }
-  if (folder === 'stickers' && mimetype !== 'image/png') {
-    throw new UploadRejected(422, 'STICKER_FORMAT', 'Стикер должен быть в формате PNG');
+  if (folder === 'stickers' && mimetype !== 'image/png' && mimetype !== 'image/webp') {
+    throw new UploadRejected(422, 'STICKER_FORMAT', 'Стикер должен быть в формате PNG или WEBP');
   }
   // Frame art needs an alpha channel to overlay over an avatar — only PNG guarantees that here.
   if (folder === 'avatar-frames' && mimetype !== 'image/png') {

@@ -23,14 +23,22 @@ const loading   = ref(true)
 const toggling  = ref(false)
 const lightbox  = ref<string | null>(null)
 
+const inviteCode  = computed(() => (route.params.code as string | undefined) ?? null)
+const actionError = ref('')
+
 onMounted(async () => {
-  const id = route.params.id as string
   loading.value = true
   try {
-    pack.value = await store.loadPack(id)
-    if (auth.user) {
-      collected.value = await store.checkCollected(id)
+    if (inviteCode.value) {
+      pack.value = await store.loadInvitePack(inviteCode.value)
+    } else {
+      pack.value = await store.loadPack(route.params.id as string)
     }
+    if (auth.user && pack.value) {
+      collected.value = await store.checkCollected(pack.value.id)
+    }
+  } catch {
+    pack.value = null
   } finally {
     loading.value = false
   }
@@ -39,14 +47,23 @@ onMounted(async () => {
 async function toggleCollection() {
   if (!auth.user || !pack.value) return
   toggling.value = true
+  actionError.value = ''
   try {
     if (collected.value) {
       await store.removeFromCollection(pack.value.id)
       collected.value = false
+    } else if (inviteCode.value) {
+      await store.joinByInvite(inviteCode.value)
+      collected.value = true
+    } else if (pack.value.visibility === 'paid' && parseFloat(pack.value.price) > 0) {
+      await store.purchasePack(pack.value.id)
+      collected.value = true
     } else {
       await store.addToCollection(pack.value.id)
       collected.value = true
     }
+  } catch (err: any) {
+    actionError.value = err?.response?.data?.error ?? 'Не удалось выполнить действие'
   } finally {
     toggling.value = false
   }
@@ -230,6 +247,8 @@ const chartData = computed(() => {
                       {{ formatPrice(pack.price, pack.currency) }}
                     </span>
                     <span v-if="pack.is_nsfw" class="text-xs font-bold px-3 py-1 rounded-full border border-brand-error/30 text-brand-error bg-brand-error/10">18+</span>
+                    <span v-if="pack.visibility === 'own'" class="text-xs font-bold px-3 py-1 rounded-full border border-white/15 text-white/60 bg-white/5">Свой</span>
+                    <span v-if="pack.visibility === 'invite'" class="text-xs font-bold px-3 py-1 rounded-full border border-sky-400/30 text-sky-300 bg-sky-400/10">По приглашению</span>
                     <span v-if="pack.status === 'draft'" class="text-xs font-bold px-3 py-1 rounded-full border border-brand-warning/30 text-brand-warning bg-brand-warning/10">Черновик</span>
                   </div>
                   <h1 class="text-2xl font-extrabold text-white leading-tight">{{ pack.name }}</h1>
@@ -247,8 +266,9 @@ const chartData = computed(() => {
                       ? 'bg-brand-success/15 text-brand-success border border-brand-success/30 hover:bg-brand-error/15 hover:text-brand-error hover:border-brand-error/30'
                       : 'bg-brand-purple/80 hover:bg-brand-purple text-white shadow-md shadow-brand-purple/20'">
                     <BIcon :name="collected ? 'Check' : 'Plus'" class="w-4 h-4" />
-                    {{ toggling ? '…' : collected ? 'В коллекции' : 'Добавить' }}
+                    {{ toggling ? '…' : collected ? 'В коллекции' : pack.visibility === 'paid' ? `Купить за ${formatPrice(pack.price, pack.currency)}` : 'Добавить' }}
                   </button>
+                  <p v-if="actionError" class="text-xs font-bold text-brand-error max-w-[16rem]">{{ actionError }}</p>
                   <button
                     v-if="isOwn()"
                     @click="router.push({ name: 'shop' })"

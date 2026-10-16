@@ -12,6 +12,8 @@ export interface PackAuthor {
   verification_type: string | null
 }
 
+export type PackVisibility = 'own' | 'public' | 'invite' | 'paid'
+
 export interface StickerPack {
   id: string
   author_id: string
@@ -27,6 +29,8 @@ export interface StickerPack {
   tags: string[]
   is_nsfw: boolean
   hide_author: boolean
+  visibility: PackVisibility
+  invite_code: string | null
   status: 'published' | 'draft'
   downloads_count: number
   use_count: number
@@ -50,6 +54,8 @@ export interface CreatePackInput {
   tags?: string[]
   isNsfw?: boolean
   hideAuthor?: boolean
+  visibility?: PackVisibility
+  regenerateInvite?: boolean
   status?: 'published' | 'draft'
 }
 
@@ -220,6 +226,22 @@ export const useStickersStore = defineStore('stickers', () => {
     }
   }
 
+  async function purchasePack(packId: string) {
+    await api.post(`/stickers/${packId}/purchase`)
+    await loadMyCollection()
+  }
+
+  async function loadInvitePack(code: string) {
+    const { data } = await api.get(`/stickers/invite/${encodeURIComponent(code)}`)
+    return data.data.pack as StickerPack
+  }
+
+  async function joinByInvite(code: string) {
+    const { data } = await api.post(`/stickers/invite/${encodeURIComponent(code)}/join`)
+    await loadMyCollection()
+    return data.data.packId as string
+  }
+
   async function removeFromCollection(packId: string) {
     await api.delete(`/stickers/${packId}/collect`)
     myCollection.value = myCollection.value.filter(p => p.id !== packId)
@@ -268,6 +290,7 @@ export const useStickersStore = defineStore('stickers', () => {
     loadPacks, loadPack, loadMyPacks, loadMyCollection,
     createPack, updatePack, addStickersToPack, deletePack,
     addToCollection, removeFromCollection, checkCollected,
+    purchasePack, loadInvitePack, joinByInvite,
     importFromTelegram, findPackByUrl,
   }
 })

@@ -27,7 +27,7 @@ export async function listPacksHandler(req: FastifyRequest, reply: FastifyReply)
       query.excludeNsfw = '1';
       query.nsfw = undefined;
     }
-    const result = await stickersService.list(query);
+    const result = await stickersService.list(query, req.user?.id);
     return reply.send({ data: result });
   } catch (err) {
     req.log.error(err);
@@ -40,7 +40,8 @@ export async function getPackHandler(req: FastifyRequest, reply: FastifyReply) {
   try {
     // Черновик отдаём только автору; requesterId придёт из tryAuth, без токена — undefined
     const requesterId = req.user?.id;
-    const pack = await stickersService.getById(id, requesterId);
+    const { code } = req.query as { code?: string };
+    const pack = await stickersService.getById(id, requesterId, code);
     if (!pack) return reply.status(404).send({ error: 'Pack not found' });
     return reply.send({ data: { pack } });
   } catch (err) {
@@ -56,6 +57,8 @@ export async function createPackHandler(req: FastifyRequest, reply: FastifyReply
     const pack = await stickersService.create(user.id, input);
     return reply.status(201).send({ data: { pack } });
   } catch (err) {
+    const status = errStatus(err);
+    if (status) return reply.status(status).send({ error: errMessage(err) });
     req.log.error(err);
     return reply.status(500).send({ error: 'Failed to create sticker pack' });
   }
@@ -70,6 +73,8 @@ export async function updatePackHandler(req: FastifyRequest, reply: FastifyReply
     if (!pack) return reply.status(404).send({ error: 'Pack not found or not yours' });
     return reply.send({ data: { pack } });
   } catch (err) {
+    const status = errStatus(err);
+    if (status) return reply.status(status).send({ error: errMessage(err) });
     req.log.error(err);
     return reply.status(500).send({ error: 'Failed to update sticker pack' });
   }
@@ -114,7 +119,8 @@ export async function addToCollectionHandler(req: FastifyRequest, reply: Fastify
   const user = req.user;
   const { id } = req.params as { id: string };
   try {
-    const result = await stickersService.addToCollection(user.id, id);
+    const { code } = (req.body ?? {}) as { code?: string };
+    const result = await stickersService.addToCollection(user.id, id, code);
     if (!result) return reply.status(404).send({ error: 'Pack not found' });
     return reply.send({ data: { ok: true } });
   } catch (err) {
@@ -122,6 +128,44 @@ export async function addToCollectionHandler(req: FastifyRequest, reply: Fastify
     if (status) return reply.status(status).send({ error: errMessage(err) });
     req.log.error(err);
     return reply.status(500).send({ error: 'Failed to add to collection' });
+  }
+}
+
+export async function purchasePackHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = req.params as { id: string };
+  try {
+    const result = await stickersService.purchase(req.user.id, id);
+    if (!result) return reply.status(404).send({ error: 'Pack not found' });
+    return reply.send({ data: { ok: true } });
+  } catch (err) {
+    const status = errStatus(err);
+    if (status) return reply.status(status).send({ error: errMessage(err) });
+    req.log.error(err);
+    return reply.status(500).send({ error: 'Failed to purchase pack' });
+  }
+}
+
+export async function getInvitePackHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { code } = req.params as { code: string };
+  try {
+    const pack = await stickersService.getByInviteCode(code, req.user?.id);
+    if (!pack) return reply.status(404).send({ error: 'Приглашение недействительно' });
+    return reply.send({ data: { pack } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ error: 'Failed to load invite' });
+  }
+}
+
+export async function joinInviteHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { code } = req.params as { code: string };
+  try {
+    const packId = await stickersService.joinByInvite(req.user.id, code);
+    if (!packId) return reply.status(404).send({ error: 'Приглашение недействительно' });
+    return reply.send({ data: { ok: true, packId } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ error: 'Failed to join by invite' });
   }
 }
 
@@ -254,6 +298,8 @@ export async function addStickersToPackHandler(req: FastifyRequest, reply: Fasti
     if (!pack) return reply.status(404).send({ error: 'Pack not found or not yours' });
     return reply.send({ data: { pack } });
   } catch (err) {
+    const status = errStatus(err);
+    if (status) return reply.status(status).send({ error: errMessage(err) });
     req.log.error(err);
     return reply.status(500).send({ error: 'Failed to add stickers to pack' });
   }

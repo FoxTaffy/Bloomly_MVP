@@ -1,6 +1,64 @@
 import prisma from '../../config/prisma.js';
 import { uploadRawToMinIO, recordMediaOwner, assertOwnedMedia } from '../media/service.js';
-import type { CreatePackInput, UpdatePackInput, GetPacksQuery } from './types.js';
+import { randomBytes } from 'crypto';
+import type { CreatePackInput, UpdatePackInput, GetPacksQuery, PackVisibility } from './types.js';
+
+export const MAX_STICKERS_PER_PACK = 120; // как в Telegram
+const VISIBILITIES: readonly PackVisibility[] = ['own', 'public', 'invite', 'paid'];
+
+const httpError = (message: string, statusCode: number) => Object.assign(new Error(message), { statusCode });
+const newInviteCode = () => randomBytes(9).toString('base64url');
+
+async function isBusiness(userId: string): Promise<boolean> {
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { subscription_tier: true } });
+  return u?.subscription_tier === 'business';
+}
+
+/**
+ * Приводит видимость, цену и стикеры к допустимому виду.
+ * Платный пак доступен только с подпиской Business; у остальных видимостей цена всегда 0.
+ */
+async function normalizePolicy(
+  authorId: string,
+  next: { visibility: string; price: number; stickers: string[]; nsfw: number[]; coverIdx: number | null },
+) {
+  if (!VISIBILITIES.includes(next.visibility as PackVisibility)) throw httpError('Неизвестный тип публикации', 400);
+  if (next.stickers.length > MAX_STICKERS_PER_PACK) {
+    throw httpError(`В паке не может быть больше ${MAX_STICKERS_PER_PACK} стикеров`, 400);
+  }
+  if (next.visibility === 'paid') {
+    if (!(await isBusiness(authorId))) throw httpError('Платные паки доступны с подпиской Business', 402);
+    if (!(next.price > 0)) throw httpError('Укажите цену платного пака', 400);
+  }
+  const n = next.stickers.length;
+  return {
+    price: next.visibility === 'paid' ? next.price : 0,
+    nsfw: Array.from(new Set(next.nsfw.filter(i => Number.isInteger(i) && i >= 0 && i < n))),
+    coverIdx: next.coverIdx !== null && next.coverIdx >= 0 && next.coverIdx < n ? next.coverIdx : null,
+  };
+}
+
+/** Скрывает invite_code от всех, кроме автора */
+function redact<T extends { author_id?: string; invite_code?: string | null }>(pack: T, requesterId?: string): T {
+  if (!pack || pack.author_id === requesterId) return pack;
+  return { ...pack, invite_code: null };
+}
+
+/** Видит ли пользователь пак: свой/по приглашению — только автор и те, кто уже добавил его */
+async function canView(pack: { id: string; author_id: string; visibility: string; status: string }, requesterId?: string, code?: string, inviteCode?: string | null) {
+  if (pack.author_id === requesterId) return true;
+  if (pack.status === 'draft') return false;
+  if (pack.visibility === 'own') return false;
+  if (pack.visibility === 'invite') {
+    if (code && inviteCode && code === inviteCode) return true;
+    if (!requesterId) return false;
+    const row = await prisma.userStickerPack.findUnique({
+      where: { user_id_pack_id: { user_id: requesterId, pack_id: pack.id } }, select: { user_id: true },
+    });
+    return !!row;
+  }
+  return true;
+}
 
 // Цвет обложки уходит в style-строку: допускаем только hex, иначе можно внедрить url() и лишние свойства
 function checkCoverColor(color: string | null | undefined): string | null | undefined {
@@ -74,6 +132,8 @@ const PACK_SELECT = {
   tags: true,
   is_nsfw: true,
   hide_author: true,
+  visibility: true,
+  invite_code: true,
   status: true,
   downloads_count: true,
   use_count: true,
@@ -101,7 +161,7 @@ function maskAuthor(pack: any, requestingUserId?: string, isAdmin = false): any 
 
 export const stickersService = {
   // ── list ─────────────────────────────────────────────────────────────────
-  async list(query: GetPacksQuery) {
+  async list(query: GetPacksQuery, requesterId?: string) {
     const page  = Math.max(1, parseInt(query.page  ?? '1',  10));
     const limit = Math.min(50, Math.max(1, parseInt(query.limit ?? '24', 10)));
     const skip  = (page - 1) * limit;
@@ -115,6 +175,8 @@ export const stickersService = {
     }
 
     if (query.authorId) where.author_id = query.authorId;
+    // Свои паки и паки по приглашению не попадают в каталог; автор видит всё своё
+    if (!(query.authorId && query.authorId === requesterId)) where.visibility = { in: ['public', 'paid'] };
     if (query.free === '1') where.price = 0;
     if (query.nsfw === '1' || query.nsfw === 'true') where.is_nsfw = true;
     if (query.excludeNsfw === '1' || query.excludeNsfw === 'true') where.is_nsfw = false;
@@ -144,45 +206,64 @@ export const stickersService = {
       prisma.stickerPack.count({ where }),
     ]);
 
-    return { packs, total, page, limit };
+    return { packs: packs.map(p => redact(p, requesterId)), total, page, limit };
   },
 
   // ── get by id ─────────────────────────────────────────────────────────────
-  async getById(id: string, requesterId?: string) {
+  async getById(id: string, requesterId?: string, code?: string) {
     const pack = await prisma.stickerPack.findFirst({
       where: { id, deleted_at: null },
       select: PACK_SELECT,
     });
-    // Черновик не отдаём никому, кроме автора: раньше он читался по одному UUID
-    if (pack && pack.status === 'draft' && pack.author_id !== requesterId) return null;
-    return pack;
+    if (!pack) return null;
+    // Черновик, «свой» и пак по приглашению не отдаём посторонним: раньше всё читалось по одному UUID
+    if (!(await canView(pack, requesterId, code, pack.invite_code))) return null;
+    return redact(pack, requesterId);
+  },
+
+  // ── get by invite code ────────────────────────────────────────────────────
+  async getByInviteCode(code: string, requesterId?: string) {
+    const pack = await prisma.stickerPack.findFirst({
+      where: { invite_code: code, visibility: 'invite', status: 'published', deleted_at: null },
+      select: PACK_SELECT,
+    });
+    return pack ? redact(pack, requesterId) : null;
   },
 
   // ── create ────────────────────────────────────────────────────────────────
   async create(authorId: string, input: CreatePackInput) {
     await assertOwnedMedia(input.coverUrl, authorId);
     for (const url of input.stickers ?? []) await assertOwnedMedia(url, authorId);
-    return prisma.stickerPack.create({
+    const visibility = input.visibility ?? 'public';
+    const stickers = input.stickers ?? [];
+    const policy = await normalizePolicy(authorId, {
+      visibility, price: input.price ?? 0, stickers,
+      nsfw: input.nsfwStickers ?? [], coverIdx: input.coverStickerIdx ?? null,
+    });
+    const pack = await prisma.stickerPack.create({
       data: {
         author_id:         authorId,
         name:              input.name,
         description:       input.description,
         cover_url:         input.coverUrl,
         cover_bg_color:    checkCoverColor(input.coverBgColor),
-        cover_sticker_idx: input.coverStickerIdx ?? null,
-        stickers:          input.stickers     ?? [],
-        nsfw_stickers:     input.nsfwStickers  ?? [],
-        price:             input.price         ?? 0,
+        cover_sticker_idx: policy.coverIdx,
+        stickers,
+        nsfw_stickers:     policy.nsfw,
+        price:             policy.price,
         currency:          input.currency      ?? 'USD',
         tags:              input.tags          ?? [],
         is_nsfw:           input.isNsfw        ?? false,
         hide_author:       input.hideAuthor    ?? false,
+        visibility,
+        invite_code:       visibility === 'invite' ? newInviteCode() : null,
         status:            input.status        ?? 'published',
         downloads_count:   0,
         use_count:         0,
       },
       select: PACK_SELECT,
     });
+    return pack;
   },
 
   // ── update ────────────────────────────────────────────────────────────────
@@ -192,15 +273,32 @@ export const stickersService = {
     if (input.coverUrl && input.coverUrl !== existing.cover_url) await assertOwnedMedia(input.coverUrl, authorId);
     for (const url of input.stickers ?? []) if (!existing.stickers.includes(url)) await assertOwnedMedia(url, authorId);
 
-    const data: any = {};
+    const visibility = input.visibility ?? existing.visibility;
+    const stickers = input.stickers ?? existing.stickers;
+    const policy = await normalizePolicy(authorId, {
+      visibility,
+      price: input.price ?? Number(existing.price),
+      stickers,
+      nsfw: input.nsfwStickers ?? existing.nsfw_stickers,
+      coverIdx: input.coverStickerIdx !== undefined ? input.coverStickerIdx : existing.cover_sticker_idx,
+    });
+
+    const data: any = {
+      price: policy.price,
+      nsfw_stickers: policy.nsfw,
+      cover_sticker_idx: policy.coverIdx,
+      visibility,
+    };
+    if (visibility === 'invite') {
+      if (!existing.invite_code || input.regenerateInvite) data.invite_code = newInviteCode();
+    } else {
+      data.invite_code = null;
+    }
     if (input.name             !== undefined) data.name              = input.name;
     if (input.description      !== undefined) data.description       = input.description;
     if (input.coverUrl         !== undefined) data.cover_url         = input.coverUrl;
     if (input.coverBgColor     !== undefined) data.cover_bg_color    = checkCoverColor(input.coverBgColor);
-    if (input.coverStickerIdx  !== undefined) data.cover_sticker_idx = input.coverStickerIdx;
     if (input.stickers         !== undefined) data.stickers          = input.stickers;
-    if (input.nsfwStickers     !== undefined) data.nsfw_stickers     = input.nsfwStickers;
-    if (input.price            !== undefined) data.price             = input.price;
     if (input.currency         !== undefined) data.currency          = input.currency;
     if (input.tags             !== undefined) data.tags              = input.tags;
     if (input.isNsfw           !== undefined) data.is_nsfw           = input.isNsfw;
@@ -235,13 +333,20 @@ export const stickersService = {
   },
 
   // ── add to collection ─────────────────────────────────────────────────────
-  async addToCollection(userId: string, packId: string) {
+  async addToCollection(userId: string, packId: string, code?: string) {
     const pack = await prisma.stickerPack.findFirst({ where: { id: packId, deleted_at: null, status: 'published' } });
     if (!pack) return null;
-    // Платных паков пока нельзя купить: бесплатный сбор раздавал их всем
-    if (Number(pack.price) > 0 && pack.author_id !== userId) {
-      throw Object.assign(new Error('Платный пак нельзя добавить без покупки'), { statusCode: 402 });
+    const isAuthor = pack.author_id === userId;
+    if (!isAuthor) {
+      if (pack.visibility === 'own') return null;
+      if (pack.visibility === 'invite' && !(code && pack.invite_code && code === pack.invite_code)) return null;
+      // Платный пак добавляется только через покупку (purchase)
+      if (pack.visibility === 'paid' || Number(pack.price) > 0) throw httpError('Платный пак нужно купить', 402);
     }
+    return this._collect(userId, packId);
+  },
+
+  async _collect(userId: string, packId: string) {
     // Счётчик скачиваний растёт только при первом добавлении, а не на каждый повторный запрос
     const existing = await prisma.userStickerPack.findUnique({
       where: { user_id_pack_id: { user_id: userId, pack_id: packId } },
@@ -260,6 +365,49 @@ export const stickersService = {
         data:  { downloads_count: { increment: 1 } },
       }),
     ]);
+    return true;
+  },
+
+  // ── вход по приглашению ───────────────────────────────────────────────────
+  async joinByInvite(userId: string, code: string) {
+    const pack = await prisma.stickerPack.findFirst({
+      where: { invite_code: code, visibility: 'invite', status: 'published', deleted_at: null },
+      select: { id: true },
+    });
+    if (!pack) return null;
+    await this._collect(userId, pack.id);
+    return pack.id;
+  },
+
+  // ── покупка платного пака за баланс кошелька ──────────────────────────────
+  async purchase(userId: string, packId: string) {
+    const pack = await prisma.stickerPack.findFirst({
+      where: { id: packId, deleted_at: null, status: 'published', visibility: 'paid' },
+      select: { id: true, author_id: true, price: true },
+    });
+    if (!pack) return null;
+    if (pack.author_id === userId) return this._collect(userId, packId);
+    const already = await prisma.userStickerPack.findUnique({
+      where: { user_id_pack_id: { user_id: userId, pack_id: packId } }, select: { user_id: true },
+    });
+    if (already) return true;
+
+    // Баланс — Decimal; сравниваем и списываем в одном условии UPDATE, чтобы два параллельных платежа не увели кошелёк в минус
+    const price = Number(pack.price);
+    await prisma.$transaction(async (tx) => {
+      const debited = await tx.wallet.updateMany({
+        where: { user_id: userId, balance: { gte: price } },
+        data:  { balance: { decrement: price } },
+      });
+      if (debited.count === 0) throw httpError('Недостаточно средств на балансе', 402);
+      await tx.wallet.upsert({
+        where:  { user_id: pack.author_id },
+        create: { user_id: pack.author_id, balance: price },
+        update: { balance: { increment: price } },
+      });
+      await tx.userStickerPack.create({ data: { user_id: userId, pack_id: packId } });
+      await tx.stickerPack.update({ where: { id: packId }, data: { downloads_count: { increment: 1 } } });
+    });
     return true;
   },
 
@@ -324,7 +472,7 @@ export const stickersService = {
       select:  { pack_id: true, added_at: true, pack: { select: PACK_SELECT } },
       orderBy: { added_at: 'desc' },
     });
-    return rows.map(r => ({ ...r.pack, added_at: r.added_at }));
+    return rows.map(r => ({ ...redact(r.pack, userId), added_at: r.added_at }));
   },
 
   // ── find pack by sticker URL ─────────────────────────────────────────────
@@ -335,7 +483,7 @@ export const stickersService = {
     });
     if (!pack) return null;
     // If draft, only return full data to the author; otherwise mark as private
-    if (pack.status === 'draft' && pack.author_id !== requestingUserId) {
+    if (!(await canView(pack, requestingUserId, undefined, pack.invite_code))) {
       return { private: true as const, pack_id: pack.id, author_id: pack.author_id };
     }
     // Attach in_collection flag if user known
@@ -346,7 +494,7 @@ export const stickersService = {
       });
       in_collection = !!row;
     }
-    return { private: false as const, pack: { ...pack, in_collection } };
+    return { private: false as const, pack: { ...redact(pack, requestingUserId), in_collection } };
   },
 
   // ── check if user has pack ────────────────────────────────────────────────
@@ -420,7 +568,11 @@ export const stickersService = {
   async addStickersToPack(packId: string, authorId: string, urls: string[]) {
     const existing = await prisma.stickerPack.findFirst({ where: { id: packId, author_id: authorId, deleted_at: null } });
     if (!existing) return null;
+    for (const url of urls) if (!existing.stickers.includes(url)) await assertOwnedMedia(url, authorId);
     const merged = Array.from(new Set([...existing.stickers, ...urls]));
+    if (merged.length > MAX_STICKERS_PER_PACK) {
+      throw httpError(`В паке не может быть больше ${MAX_STICKERS_PER_PACK} стикеров`, 400);
+    }
     return prisma.stickerPack.update({
       where:  { id: packId },
       data:   { stickers: merged },
@@ -455,7 +607,7 @@ export const stickersService = {
       (s) => s.type === 'regular' && !s.is_animated && !s.is_video,
     );
 
-    const limited = candidates.slice(0, maxStickers);
+    const limited = candidates.slice(0, Math.min(maxStickers, MAX_STICKERS_PER_PACK));
 
     // Download + upload in batches of 5
     const urls = await batchProcess(limited, 5, (s) => downloadStickerUrl(token, s.file_id, ownerId));

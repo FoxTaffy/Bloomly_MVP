@@ -124,6 +124,9 @@ async function hasNoAudioStream(filePath: string): Promise<boolean> {
  * а размер ограничен IMAGE_MAX_BYTES на уровне контроллера. Видео и аудио сюда не попадают,
  * для них см. uploadStreamedFile.
  */
+/** Лимит файла стикера по правилам Telegram */
+export const STICKER_MAX_BYTES = 512 * 1024;
+
 export async function uploadFile(
   buffer: Buffer,
   originalName: string,
@@ -135,27 +138,30 @@ export async function uploadFile(
   await bucketReady;
 
   // ── Sticker validation (Telegram rules) ───────────────────────────────
+  // PNG или WEBP с прозрачным фоном, одна сторона ровно 512 px, другая не больше, файл до 512 КБ
   if (folder === 'stickers') {
-    if (mimeType !== 'image/png') {
-      throw new UploadValidationError('STICKER_FORMAT', 'Стикер должен быть в формате PNG');
+    if (mimeType !== 'image/png' && mimeType !== 'image/webp') {
+      throw new UploadValidationError('STICKER_FORMAT', 'Стикер должен быть в формате PNG или WEBP');
     }
-    if (buffer.length > 100 * 1024) {
-      throw new UploadValidationError('STICKER_SIZE', `Размер файла превышает 100 КБ (${(buffer.length / 1024).toFixed(1)} КБ)`);
+    if (buffer.length > STICKER_MAX_BYTES) {
+      throw new UploadValidationError('STICKER_SIZE', `Размер файла превышает 512 КБ (${(buffer.length / 1024).toFixed(1)} КБ)`);
     }
     const meta = await sharp(buffer, { limitInputPixels: IMAGE_MAX_PIXELS }).metadata();
-    if (meta.width !== 512 || meta.height !== 512) {
+    const w = meta.width ?? 0;
+    const h = meta.height ?? 0;
+    if (Math.max(w, h) !== 512 || Math.min(w, h) < 1) {
       throw new UploadValidationError(
         'STICKER_DIMENSIONS',
-        `Размер стикера должен быть 512×512 пикселей (получен ${meta.width}×${meta.height})`,
+        `Одна сторона стикера должна быть ровно 512 пикселей, вторая — 512 или меньше (получено ${w}×${h})`,
       );
     }
-    const hasAlpha = meta.hasAlpha ?? false;
-    if (!hasAlpha) {
-      throw new UploadValidationError('STICKER_ALPHA', 'Стикер должен иметь прозрачный фон (PNG с альфа-каналом)');
+    if (!(meta.hasAlpha ?? false)) {
+      throw new UploadValidationError('STICKER_ALPHA', 'Стикер должен иметь прозрачный фон (с альфа-каналом)');
     }
     // Store as-is: preserve transparency and exact pixel data
-    const objectName = objectKeyFor('stickers', '.png');
-    await minioClient.putObject(BUCKET, objectName, buffer, buffer.length, { 'Content-Type': 'image/png' });
+    const isWebp = mimeType === 'image/webp';
+    const objectName = objectKeyFor('stickers', isWebp ? '.webp' : '.png');
+    await minioClient.putObject(BUCKET, objectName, buffer, buffer.length, { 'Content-Type': mimeType });
     return { url: `${PUBLIC_URL}/${BUCKET}/${objectName}`, sizeBytes: buffer.length };
   }
 

@@ -1,3 +1,5 @@
+export type PackVisibility = 'own' | 'public' | 'invite' | 'paid';
+
 export interface CreatePackInput {
   name: string;
   description?: string;
@@ -11,10 +13,13 @@ export interface CreatePackInput {
   tags?: string[];
   isNsfw?: boolean
   hideAuthor?: boolean
+  visibility?: PackVisibility
   status?: 'published' | 'draft'
 }
 
-export interface UpdatePackInput extends Partial<CreatePackInput> {}
+export interface UpdatePackInput extends Partial<CreatePackInput> {
+  regenerateInvite?: boolean;
+}
 
 export interface GetPacksQuery {
   page?: string;
