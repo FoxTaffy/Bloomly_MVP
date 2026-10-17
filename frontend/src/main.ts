@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import { useLangStore } from './stores/lang'
 import { createHead } from '@unhead/vue/legacy'
 import './assets/style.css'
 import 'flag-icons/css/flag-icons.min.css'
@@ -13,8 +14,10 @@ app.directive('click-outside', clickOutside)
 
 // Порядок важен: Pinia должна быть до Router,
 // чтобы useAuthStore() внутри navigation guard работал корректно.
-app.use(createPinia())
+const pinia = createPinia()
+app.use(pinia)
 app.use(router)
 app.use(head)
 
-app.mount('#app')
+// Словарь выбранного языка грузится отдельным чанком — монтируем после него
+useLangStore(pinia).ready.finally(() => app.mount('#app'))

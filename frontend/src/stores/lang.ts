@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { translations, type Lang } from '../locales/translations'
+import { ref, computed, shallowRef } from 'vue'
+import { ru, isLang, loadTranslation, type Lang, type Translation } from '../locales/translations'
 
 /** Intl/toLocaleDateString locale for each UI language. */
 export const LANG_TO_LOCALE: Record<Lang, string> = {
@@ -24,15 +24,30 @@ export const DATE_FIELD_ORDER: Record<Lang, { order: DateField[]; separator: str
 })()
 
 export const useLangStore = defineStore('lang', () => {
-  const currentLang = ref<Lang>((localStorage.getItem('bloomly_lang') as Lang) || 'RU')
+  const saved = localStorage.getItem('bloomly_lang')
+  const currentLang = ref<Lang>(isLang(saved) ? saved : 'RU')
   const autoTranslateEnabled = ref<boolean>(localStorage.getItem('bloomly_auto_translate') === '1')
-  const autoTranslateLang = ref<Lang>((localStorage.getItem('bloomly_auto_translate_lang') as Lang) || currentLang.value)
+  const savedAuto = localStorage.getItem('bloomly_auto_translate_lang')
+  const autoTranslateLang = ref<Lang>(isLang(savedAuto) ? savedAuto : currentLang.value)
 
-  const t = computed(() => translations[currentLang.value])
+  // Загруженные словари. Пока выбранный язык грузится, показывается русский.
+  const loaded = shallowRef<Partial<Record<Lang, Translation>>>({ RU: ru })
+  const t = computed(() => loaded.value[currentLang.value] ?? ru)
 
-  function setLang(lang: Lang) {
-    currentLang.value = lang
+  async function ensureLoaded(lang: Lang) {
+    if (loaded.value[lang]) return
+    const dict = await loadTranslation(lang)
+    loaded.value = { ...loaded.value, [lang]: dict }
+  }
+
+  /** Словарь сохранённого языка; main.ts ждёт его перед монтированием, чтобы не мелькал русский. */
+  const ready: Promise<void> = ensureLoaded(currentLang.value).catch(() => {})
+
+  /** Язык переключается, когда его словарь уже загружен (без промежуточного русского). */
+  async function setLang(lang: Lang) {
     localStorage.setItem('bloomly_lang', lang)
+    try { await ensureLoaded(lang) } catch { return }
+    currentLang.value = lang
   }
 
   function setAutoTranslate(enabled: boolean) {
@@ -45,5 +60,5 @@ export const useLangStore = defineStore('lang', () => {
     localStorage.setItem('bloomly_auto_translate_lang', lang)
   }
 
-  return { currentLang, t, setLang, autoTranslateEnabled, autoTranslateLang, setAutoTranslate, setAutoTranslateLang }
+  return { currentLang, t, ready, setLang, autoTranslateEnabled, autoTranslateLang, setAutoTranslate, setAutoTranslateLang }
 })
