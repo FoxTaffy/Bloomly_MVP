@@ -238,6 +238,11 @@ const categoryItems = computed(() => [
                 <BIcon v-if="cat.disabled" name="Lock" class="w-3.5 h-3.5 opacity-60" />
               </component>
             </nav>
+          <div class="px-4 mt-1 flex flex-col gap-1.5 text-[11px] leading-tight text-white/35">
+            <router-link :to="{ name: 'support' }" class="hover:text-white/70 transition-colors" @click="mobileSidebar.close()">{{ langStore.t.supportProject }}</router-link>
+            <router-link :to="{ name: 'terms' }" class="hover:text-white/70 transition-colors" @click="mobileSidebar.close()">{{ langStore.t.legalTerms }}</router-link>
+            <router-link :to="{ name: 'privacy' }" class="hover:text-white/70 transition-colors" @click="mobileSidebar.close()">{{ langStore.t.legalPrivacy }}</router-link>
+          </div>
           </div>
 
           <slot name="extra" />
@@ -397,6 +402,13 @@ const categoryItems = computed(() => [
           <BIcon v-if="cat.disabled" name="Lock" class="w-3.5 h-3.5 opacity-60" />
         </component>
       </nav>
+    </div>
+
+    <!-- Footer links: support / legal -->
+    <div class="px-4 -mt-3 flex flex-col gap-1 text-[11px] leading-tight text-white/35">
+      <router-link :to="{ name: 'support' }" class="hover:text-white/70 transition-colors">{{ langStore.t.supportProject }}</router-link>
+      <router-link :to="{ name: 'terms' }" class="hover:text-white/70 transition-colors">{{ langStore.t.legalTerms }}</router-link>
+      <router-link :to="{ name: 'privacy' }" class="hover:text-white/70 transition-colors">{{ langStore.t.legalPrivacy }}</router-link>
     </div>
 
     <!-- Bottom slot (e.g. ad banners) -->

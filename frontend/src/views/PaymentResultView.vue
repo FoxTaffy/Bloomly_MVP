@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Сюда ЮMoney возвращает пользователя после оплаты (successURL = /payment/result?id=…).
+// Сюда ЮKassa возвращает пользователя после оплаты (successURL = /payment/result?id=…).
 // Возврат не означает зачисление: статус меняет только уведомление шлюза, поэтому опрашиваем сервер.
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
@@ -85,7 +85,10 @@ onUnmounted(() => { if (timer) clearTimeout(timer) })
           </div>
           <h1 class="text-xl font-extrabold">{{ langStore.t.payResultSuccessTitle }}</h1>
           <p v-if="payment?.purpose === 'wallet_topup'" class="text-sm text-white/60">
-            {{ langStore.t.payResultTopupDesc }} {{ Number(payment.amount).toFixed(0) }} Blooms
+            {{ langStore.t.payResultTopupDesc }} {{ payment.bc?.toFixed(2) }} Blooms
+          </p>
+          <p v-else-if="payment?.purpose === 'donation'" class="text-sm text-white/60">
+            {{ langStore.t.payResultDonationDesc }}
           </p>
           <p v-else-if="expiresLabel" class="text-sm text-white/60">
             {{ langStore.t.payResultSubDesc }} {{ expiresLabel }}

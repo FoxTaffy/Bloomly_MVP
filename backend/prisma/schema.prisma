@@ -237,19 +237,19 @@ model SubscriptionPlan {
   @@index([user_id])
 }
 
-/// Платёж: пополнение кошелька или оплата подписки. Через внешний шлюз (ЮMoney) или с баланса.
-/// Строка создаётся до редиректа на шлюз; id уходит в label и возвращается в уведомлении.
+/// Платёж: пополнение кошелька, оплата подписки или донат. Через внешний шлюз (ЮKassa) или с баланса.
+/// Строка создаётся до редиректа на шлюз; id уходит в metadata.payment_id и возвращается в API.
 model Payment {
   id                    String    @id @default(uuid()) @db.Uuid
   user_id               String    @db.Uuid
   provider              String    @db.VarChar(20) // yoomoney | wallet
-  purpose               String    @db.VarChar(20) // wallet_topup | subscription
+  purpose               String    @db.VarChar(20) // wallet_topup | subscription | donation
   // pending → succeeded | expired | review (деньги пришли, но что-то не сходится — разобрать вручную)
   status                String    @default("pending") @db.VarChar(20)
   amount                Decimal   @db.Decimal(18, 2) // к оплате плательщиком
   credited_amount       Decimal?  @db.Decimal(18, 2) // пришло на счёт после комиссии шлюза
   currency              String    @default("RUB") @db.VarChar(3)
-  method                String?   @db.VarChar(10) // AC — карта, PC — кошелёк ЮMoney
+  method                String?   @db.VarChar(10) // AC — карта, PC — ЮMoney
   tier                  String?   @db.VarChar(20)
   period                String?   @db.VarChar(10) // month | year
   provider_operation_id String?   @unique @db.VarChar(100)

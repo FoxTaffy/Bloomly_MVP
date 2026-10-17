@@ -87,15 +87,18 @@
                 </button>
               </div>
               <p class="text-xs font-bold text-white/55">{{ langStore.t.profileTopupPresetLabel }}</p>
-              <div class="grid grid-cols-3 gap-2">
-                <button v-for="amt in TOPUP_PRESETS" :key="amt" :disabled="toppingUp" @click="topupWallet(amt)"
-                  class="py-2 rounded-xl border border-brand-border bg-brand-card text-sm font-bold text-white hover:border-brand-accent/50 hover:text-brand-accent transition-all disabled:opacity-40">
-                  +{{ amt }}
+              <div class="grid grid-cols-2 gap-2">
+                <button v-for="pkg in topupPackages" :key="pkg.rub" :disabled="toppingUp" @click="topupWallet(pkg.rub)"
+                  class="relative py-3 rounded-xl border bg-brand-card text-center transition-all disabled:opacity-40 hover:border-brand-accent/60"
+                  :class="pkg.popular ? 'border-brand-accent shadow-[0_0_0_1px_rgba(76,103,207,.5)]' : 'border-brand-border'">
+                  <span v-if="pkg.popular" class="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-brand-accent text-[9px] font-extrabold uppercase tracking-wide text-white whitespace-nowrap">{{ langStore.t.topupPopular }}</span>
+                  <span class="block text-base font-extrabold text-white">{{ pkg.bc }} Blooms</span>
+                  <span class="block text-xs font-semibold text-white/50">{{ pkg.rub }} ₽</span>
                 </button>
               </div>
               <div v-if="paymentsStore.config?.enabled" class="flex gap-2">
                 <input v-model.number="customTopup" type="number" inputmode="numeric"
-                  :min="paymentsStore.config.topup.min" :max="paymentsStore.config.topup.max"
+                  :min="paymentsStore.config.topup.min" :max="paymentsStore.config.topup.max" :step="paymentsStore.config.topup.step"
                   :placeholder="`${langStore.t.profileTopupCustom} (${paymentsStore.config.topup.min}–${paymentsStore.config.topup.max})`"
                   class="flex-1 min-w-0 px-3 py-2 rounded-xl border border-brand-border bg-brand-card text-sm text-white placeholder-white/30 focus:outline-none focus:border-brand-accent/50" />
                 <button :disabled="toppingUp || !customTopupValid" @click="topupWallet(customTopup!)"
@@ -2723,7 +2726,8 @@ const showWalletModal = ref(false)
 const walletStore = useWalletStore()
 const showTopupPicker = ref(false)
 const toppingUp = ref(false)
-const TOPUP_PRESETS = [100, 500, 1000, 2500, 5000]
+const TOPUP_FALLBACK_PACKAGES = [100, 500, 1000, 2500, 5000].map((n) => ({ bc: n, rub: n, popular: false }))
+const topupPackages = computed(() => paymentsStore.config?.enabled ? paymentsStore.config.topup.packages : TOPUP_FALLBACK_PACKAGES)
 const paymentsStore = usePaymentsStore()
 const topupMethod = ref<'AC' | 'PC'>('AC')
 const customTopup = ref<number | null>(null)
@@ -2734,7 +2738,7 @@ const TOPUP_METHODS = computed(() => [
 const customTopupValid = computed(() => {
   const lim = paymentsStore.config?.topup
   const v = customTopup.value
-  return !!lim && Number.isInteger(v) && v! >= lim.min && v! <= lim.max
+  return !!lim && Number.isInteger(v) && v! >= lim.min && v! <= lim.max && v! % lim.step === 0
 })
 function openWalletModal() {
   showWalletModal.value = true
@@ -2747,7 +2751,7 @@ async function topupWallet(amount: number) {
   toppingUp.value = true
   try {
     if (paymentsStore.config?.enabled) {
-      // Уходим на форму ЮMoney; баланс пополнится по уведомлению, результат — на /payment/result
+      // Уходим на страницу оплаты ЮKassa; баланс пополнится по уведомлению, результат — на /payment/result
       await paymentsStore.startTopup(amount, topupMethod.value)
       return
     }

@@ -11,6 +11,7 @@ export interface PlanQuote {
   months: number
   perMonth: number
   amount: number
+  bcAmount?: number
   discounted: boolean
 }
 
@@ -18,17 +19,20 @@ export interface PaymentsConfig {
   enabled: boolean
   provider: string
   methods: PayMethod[]
-  topup: { min: number; max: number }
+  bcRate: number
+  topup: { min: number; max: number; step: number; packages: { bc: number; rub: number; popular?: boolean }[] }
+  donate: { min: number; max: number }
   plans: { tier: string; month: PlanQuote; year: PlanQuote }[]
   subscription: { tier: string; expiresAt: string | null }
 }
 
 export interface PaymentInfo {
   id: string
-  provider: 'yoomoney' | 'wallet'
-  purpose: 'wallet_topup' | 'subscription'
+  provider: 'yookassa' | 'wallet'
+  purpose: 'wallet_topup' | 'subscription' | 'donation'
   status: 'pending' | 'succeeded' | 'expired' | 'review'
   amount: string
+  bc: number | null
   currency: string
   method: string | null
   tier: string | null
@@ -37,7 +41,7 @@ export interface PaymentInfo {
   created_at: string
 }
 
-/** Уводит браузер на форму оплаты ЮMoney; вернётся на /payment/result?id=… */
+/** Уводит браузер на страницу оплаты ЮKassa; вернётся на /payment/result?id=… */
 function goToGateway(url: string) {
   window.location.href = url
 }
@@ -61,6 +65,11 @@ export const usePaymentsStore = defineStore('payments', () => {
     goToGateway(data.data.confirmationUrl)
   }
 
+  async function startDonation(amount: number, method: 'AC' | 'PC') {
+    const { data } = await api.post('/payments/donate', { amount, method })
+    goToGateway(data.data.confirmationUrl)
+  }
+
   /** Для wallet возвращает результат сразу; для шлюза — уводит на оплату и не возвращается. */
   async function startSubscription(tier: string, period: BillingPeriod, method: PayMethod) {
     const { data } = await api.post('/payments/subscription', { tier, period, method })
@@ -79,5 +88,5 @@ export const usePaymentsStore = defineStore('payments', () => {
     return data.data
   }
 
-  return { config, fetchConfig, quote, startTopup, startSubscription, getPayment, devConfirm }
+  return { config, fetchConfig, quote, startTopup, startDonation, startSubscription, getPayment, devConfirm }
 })

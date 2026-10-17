@@ -31,7 +31,8 @@ const gatewayEnabled = ref(false)
 // Пока сервер не ответил — показываем цену со страницы тарифов
 const perMonth = computed(() => quoteRes.value?.perMonth ?? props.price)
 const total    = computed(() => quoteRes.value?.amount ?? props.price * (props.period === 'year' ? 12 : 1))
-const canPayFromWallet = computed(() => walletStore.balance >= total.value)
+const totalBc  = computed(() => quoteRes.value?.bcAmount ?? Math.ceil((total.value / 90) * 100) / 100)
+const canPayFromWallet = computed(() => walletStore.balance >= totalBc.value)
 
 const METHODS = computed(() => [
   { id: 'AC' as const, icon: 'CreditCard', label: langStore.t.payMethodCard, disabled: !gatewayEnabled.value },
@@ -166,7 +167,7 @@ function close() {
                     <span class="text-sm font-bold text-white/85 flex-1">{{ m.label }}</span>
                     <span v-if="m.id === 'wallet'" class="text-xs font-mono"
                       :class="canPayFromWallet ? 'text-white/45' : 'text-brand-error/80'">
-                      {{ walletStore.balance.toFixed(0) }}
+                      {{ walletStore.balance.toFixed(2) }} / {{ totalBc.toFixed(2) }}
                     </span>
                     <BIcon v-if="method === m.id && !m.disabled" name="CheckCircle2" class="w-4 h-4 text-brand-accent flex-shrink-0" />
                   </button>

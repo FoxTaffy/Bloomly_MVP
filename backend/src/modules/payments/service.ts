@@ -1,10 +1,11 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma.js';
 import { logger } from '../../lib/logger.js';
-import { yoomoneyConfig, TOPUP_MIN, TOPUP_MAX, PENDING_TTL_MS } from './config.js';
-import { buildQuickpayUrl, verifyNotification, type YoomoneyMethod, type YoomoneyNotification } from './yoomoney.js';
+import { yookassaConfig, TOPUP_MIN, TOPUP_STEP, TOPUP_MAX, DONATE_MIN, DONATE_MAX, PENDING_TTL_MS } from './config.js';
+import { createYookassaPayment, fetchYookassaPayment, type PayMethod, type YookassaNotification } from './yookassa.js';
 import {
   PLAN_PRICES, PURCHASABLE_TIERS, PERIOD_MONTHS, isPaidTier, isEarlyUser, quote,
+  BC_RATE, TOPUP_PACKAGES, rubToBc, rubToBcCharge,
   type PaidTier, type BillingPeriod,
 } from './pricing.js';
 
@@ -13,6 +14,16 @@ type Tx = Prisma.TransactionClient;
 const httpError = (msg: string, statusCode: number) => Object.assign(new Error(msg), { statusCode });
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Для пополнения добавляем зачисленные BC (amount хранится в рублях). */
+const withBc = <T extends { purpose: string; amount: Prisma.Decimal }>(p: T) =>
+  ({ ...p, bc: p.purpose === 'wallet_topup' ? rubToBc(Number(p.amount)) : null });
+
+/** Цена подписки в рублях + эквивалент в BC для оплаты с баланса. */
+const quoteWithBc = (tier: PaidTier, period: BillingPeriod, early: boolean) => {
+  const q = quote(tier, period, early);
+  return { ...q, bcAmount: rubToBcCharge(q.amount) };
+};
 
 const PUBLIC_SELECT = {
   id: true, provider: true, purpose: true, status: true, amount: true, currency: true,
@@ -51,15 +62,42 @@ function parsePeriod(period: unknown): BillingPeriod {
   return period;
 }
 
-function parseMethod(method: unknown): YoomoneyMethod {
+function parseMethod(method: unknown): PayMethod {
   if (method !== 'AC' && method !== 'PC') throw httpError('INVALID_METHOD', 400);
   return method;
 }
 
 function requireGateway() {
-  const cfg = yoomoneyConfig();
+  const cfg = yookassaConfig();
   if (!cfg.enabled) throw httpError('PAYMENTS_DISABLED', 503);
   return cfg;
+}
+
+/** Создаёт платёж в ЮKassa и привязывает его id к нашей строке Payment. */
+async function openGatewayPayment(
+  cfg: ReturnType<typeof requireGateway>,
+  payment: { id: string; user_id: string }, amount: number, method: PayMethod, description: string,
+) {
+  const buyer = cfg.receipt.enabled
+    ? await prisma.user.findUnique({ where: { id: payment.user_id }, select: { email: true } })
+    : null;
+  try {
+    const remote = await createYookassaPayment({
+      paymentId: payment.id, amount, method, description,
+      returnUrl: `${cfg.returnUrl}?id=${payment.id}`,
+      customerEmail: buyer?.email,
+    });
+    const url = remote.confirmation?.confirmation_url;
+    if (!url) throw new Error('YooKassa: no confirmation_url');
+    await prisma.payment.update({ where: { id: payment.id }, data: { provider_operation_id: remote.id } });
+    return url;
+  } catch (e) {
+    await prisma.payment.updateMany({
+      where: { id: payment.id, status: 'pending' },
+      data: { status: 'expired', failure_reason: 'gateway create failed' },
+    });
+    throw e;
+  }
 }
 
 /**
@@ -116,11 +154,13 @@ async function fulfill(paymentId: string, extra: Prisma.PaymentUpdateManyMutatio
     if (p.purpose === 'wallet_topup') {
       await tx.wallet.upsert({
         where: { user_id: p.user_id },
-        update: { balance: { increment: p.amount } },
-        create: { user_id: p.user_id, balance: p.amount },
+        update: { balance: { increment: rubToBc(Number(p.amount)) } },
+        create: { user_id: p.user_id, balance: rubToBc(Number(p.amount)) },
       });
     } else if (p.purpose === 'subscription' && p.tier && isPaidTier(p.tier)) {
       await applySubscription(tx, p.user_id, p.tier, PERIOD_MONTHS[parsePeriod(p.period)]);
+    } else if (p.purpose === 'donation') {
+      // Донат — только фиксируем факт оплаты
     } else {
       throw new Error(`Payment ${p.id}: unknown purpose ${p.purpose}`);
     }
@@ -138,18 +178,20 @@ async function markReview(paymentId: string, reason: string, extra: Prisma.Payme
 
 export const paymentsService = {
   getConfig: async (userId: string) => {
-    const cfg = yoomoneyConfig();
+    const cfg = yookassaConfig();
     const user = await loadBuyer(userId);
     const early = isEarlyUser(user.created_at);
     return {
       enabled: cfg.enabled,
-      provider: 'yoomoney',
-      methods: ['AC', 'PC'] as YoomoneyMethod[],
-      topup: { min: TOPUP_MIN, max: TOPUP_MAX },
+      provider: 'yookassa',
+      methods: ['AC', 'PC'] as PayMethod[],
+      bcRate: BC_RATE,
+      topup: { min: TOPUP_MIN, max: TOPUP_MAX, step: TOPUP_STEP, packages: TOPUP_PACKAGES },
+      donate: { min: DONATE_MIN, max: DONATE_MAX },
       plans: PURCHASABLE_TIERS.map((tier) => ({
         tier,
-        month: quote(tier, 'month', early),
-        year: quote(tier, 'year', early),
+        month: quoteWithBc(tier, 'month', early),
+        year: quoteWithBc(tier, 'year', early),
       })),
       subscription: { tier: user.subscription_tier, expiresAt: user.subscription_expires_at },
     };
@@ -157,29 +199,38 @@ export const paymentsService = {
 
   quote: async (userId: string, tier: unknown, period: unknown) => {
     const user = await loadBuyer(userId);
-    return quote(parseTier(tier), parsePeriod(period), isEarlyUser(user.created_at));
+    return quoteWithBc(parseTier(tier), parsePeriod(period), isEarlyUser(user.created_at));
   },
 
   createTopup: async (userId: string, rawAmount: unknown, rawMethod: unknown) => {
     const cfg = requireGateway();
     const amount = Number(rawAmount);
-    if (!Number.isInteger(amount) || amount < TOPUP_MIN || amount > TOPUP_MAX) {
-      throw httpError(`Сумма — целое число от ${TOPUP_MIN} до ${TOPUP_MAX} ₽`, 400);
+    if (!Number.isInteger(amount) || amount < TOPUP_MIN || amount > TOPUP_MAX
+      || (amount % TOPUP_STEP !== 0 && !TOPUP_PACKAGES.some((p) => p.rub === amount))) {
+      throw httpError(`Сумма — от ${TOPUP_MIN} до ${TOPUP_MAX} ₽ с шагом ${TOPUP_STEP}`, 400);
     }
     const method = parseMethod(rawMethod ?? 'AC');
     await loadBuyer(userId);
     const payment = await prisma.payment.create({
-      data: { user_id: userId, provider: 'yoomoney', purpose: 'wallet_topup', amount, method },
+      data: { user_id: userId, provider: 'yookassa', purpose: 'wallet_topup', amount, method },
     });
-    return {
-      paymentId: payment.id,
-      amount,
-      confirmationUrl: buildQuickpayUrl({
-        baseUrl: cfg.quickpayUrl, receiver: cfg.receiver, amount, label: payment.id, method,
-        description: `Пополнение баланса Bloomly на ${amount} ₽`,
-        successUrl: `${cfg.returnUrl}?id=${payment.id}`,
-      }),
-    };
+    const confirmationUrl = await openGatewayPayment(cfg, payment, amount, method, `Пополнение баланса Bloomly: ${rubToBc(amount)} Blooms`);
+    return { paymentId: payment.id, amount, confirmationUrl };
+  },
+
+  createDonation: async (userId: string, rawAmount: unknown, rawMethod: unknown) => {
+    const cfg = requireGateway();
+    const amount = Number(rawAmount);
+    if (!Number.isInteger(amount) || amount < DONATE_MIN || amount > DONATE_MAX) {
+      throw httpError(`Сумма — целое число от ${DONATE_MIN} до ${DONATE_MAX} ₽`, 400);
+    }
+    const method = parseMethod(rawMethod ?? 'AC');
+    await loadBuyer(userId);
+    const payment = await prisma.payment.create({
+      data: { user_id: userId, provider: 'yookassa', purpose: 'donation', amount, method },
+    });
+    const confirmationUrl = await openGatewayPayment(cfg, payment, amount, method, `Поддержка проекта Bloomly — ${amount} ₽`);
+    return { paymentId: payment.id, amount, confirmationUrl };
   },
 
   createSubscription: async (userId: string, rawTier: unknown, rawPeriod: unknown, rawMethod: unknown) => {
@@ -191,11 +242,12 @@ export const paymentsService = {
     const label = `Подписка Bloomly ${tier[0].toUpperCase()}${tier.slice(1)} — ${period === 'year' ? '12 мес.' : '1 мес.'}`;
 
     if (rawMethod === 'wallet') {
+      const bcCharge = rubToBcCharge(q.amount);
       return prisma.$transaction(async (tx) => {
         // Условное списание: два параллельных запроса не уведут баланс в минус
         const debited = await tx.wallet.updateMany({
-          where: { user_id: userId, balance: { gte: q.amount } },
-          data: { balance: { decrement: q.amount } },
+          where: { user_id: userId, balance: { gte: bcCharge } },
+          data: { balance: { decrement: bcCharge } },
         });
         if (debited.count === 0) throw httpError('INSUFFICIENT_FUNDS', 402);
         const payment = await tx.payment.create({
@@ -212,33 +264,26 @@ export const paymentsService = {
     const cfg = requireGateway();
     const method = parseMethod(rawMethod);
     const payment = await prisma.payment.create({
-      data: { user_id: userId, provider: 'yoomoney', purpose: 'subscription', amount: q.amount, method, tier, period },
+      data: { user_id: userId, provider: 'yookassa', purpose: 'subscription', amount: q.amount, method, tier, period },
     });
-    return {
-      paymentId: payment.id,
-      status: 'pending' as const,
-      amount: q.amount,
-      confirmationUrl: buildQuickpayUrl({
-        baseUrl: cfg.quickpayUrl, receiver: cfg.receiver, amount: q.amount, label: payment.id, method,
-        description: label, successUrl: `${cfg.returnUrl}?id=${payment.id}`,
-      }),
-    };
+    const confirmationUrl = await openGatewayPayment(cfg, payment, q.amount, method, label);
+    return { paymentId: payment.id, status: 'pending' as const, amount: q.amount, confirmationUrl };
   },
 
   getPayment: async (userId: string, id: string) => {
     if (!UUID_RE.test(id)) throw httpError('Payment not found', 404);
     const payment = await prisma.payment.findFirst({ where: { id, user_id: userId }, select: PUBLIC_SELECT });
     if (!payment) throw httpError('Payment not found', 404);
-    return payment;
+    return withBc(payment);
   },
 
-  listMine: (userId: string) =>
-    prisma.payment.findMany({
+  listMine: async (userId: string) =>
+    (await prisma.payment.findMany({
       where: { user_id: userId, status: { in: ['succeeded', 'review'] } },
       orderBy: { created_at: 'desc' },
       take: 50,
       select: PUBLIC_SELECT,
-    }),
+    })).map(withBc),
 
   listAll: (status?: string) =>
     prisma.payment.findMany({
@@ -249,48 +294,46 @@ export const paymentsService = {
     }),
 
   /**
-   * HTTP-уведомление ЮMoney о входящем переводе. Должно быть идемпотентным:
-   * ЮMoney повторяет уведомление, пока не получит 200.
-   * Бросает 403 только при неверной подписи; всё остальное — 200 (повтор не поможет).
+   * Webhook ЮKassa (payment.succeeded / payment.canceled). Идемпотентен: ЮKassa повторяет доставку,
+   * пока не получит 200. Уведомление не подписано — по id достаём платёж из API и верим только ему.
+   * Бросает ошибку (→ 5xx, ЮKassa повторит) только если API недоступен.
    */
-  handleYoomoneyNotification: async (n: YoomoneyNotification) => {
-    const cfg = yoomoneyConfig();
-    if (!cfg.secret) throw httpError('PAYMENTS_DISABLED', 503);
-    if (!verifyNotification(n, cfg.secret)) {
-      logger.warn({ operation_id: n.operation_id, label: n.label }, '[payments] yoomoney notification: bad signature');
-      throw httpError('BAD_SIGNATURE', 403);
-    }
-    if (n.test_notification === 'true') return { handled: 'test' };
+  handleYookassaNotification: async (n: YookassaNotification) => {
+    const cfg = yookassaConfig();
+    if (!cfg.enabled) throw httpError('PAYMENTS_DISABLED', 503);
+    const remoteId = n.object?.id;
+    if (!remoteId || (n.event !== 'payment.succeeded' && n.event !== 'payment.canceled')) return { handled: 'ignored' };
 
-    const label = n.label ?? '';
-    if (!UUID_RE.test(label)) {
-      // Перевод на кошелёк не через нашу форму — не наш платёж
-      logger.warn({ operation_id: n.operation_id }, '[payments] yoomoney notification without our label');
-      return { handled: 'foreign' };
-    }
-    const payment = await prisma.payment.findUnique({ where: { id: label } });
-    if (!payment || payment.provider !== 'yoomoney') {
-      logger.warn({ label, operation_id: n.operation_id }, '[payments] yoomoney notification for unknown payment');
+    const payment = await prisma.payment.findUnique({ where: { provider_operation_id: remoteId } });
+    if (!payment || payment.provider !== 'yookassa') {
+      logger.warn({ remoteId }, '[payments] yookassa notification for unknown payment');
       return { handled: 'unknown' };
     }
     if (payment.status === 'succeeded' || payment.status === 'review') return { handled: 'duplicate' };
 
-    const paid = Number(n.withdraw_amount || n.amount);
-    const credited = Number(n.amount);
-    const { sha1_hash: _sig, ...raw } = n;
-    const extra: Prisma.PaymentUpdateManyMutationInput = {
-      provider_operation_id: n.operation_id || null,
-      credited_amount: Number.isFinite(credited) ? credited : null,
-      raw_notification: raw as Prisma.InputJsonValue,
-    };
-
-    if (n.currency !== '643') {
-      await markReview(payment.id, `unexpected currency ${n.currency}`, extra);
-      return { handled: 'review' };
+    const remote = await fetchYookassaPayment(remoteId);
+    if (remote.metadata?.payment_id !== payment.id) {
+      logger.warn({ remoteId, paymentId: payment.id }, '[payments] yookassa payment metadata mismatch');
+      return { handled: 'unknown' };
     }
-    if (n.unaccepted === 'true' || n.codepro === 'true') {
-      // Деньги заморожены (код протекции / лимит кошелька) — зачислить можно только после ручной проверки
-      await markReview(payment.id, 'funds not accepted yet (unaccepted/codepro)', extra);
+
+    if (remote.status === 'canceled') {
+      await prisma.payment.updateMany({
+        where: { id: payment.id, status: 'pending' },
+        data: { status: 'expired', failure_reason: `canceled: ${remote.cancellation_details?.reason ?? 'unknown'}`.slice(0, 200) },
+      });
+      return { handled: 'canceled' };
+    }
+    if (remote.status !== 'succeeded' || !remote.paid) return { handled: 'ignored' };
+
+    const paid = Number(remote.amount.value);
+    const credited = Number(remote.income_amount?.value);
+    const extra: Prisma.PaymentUpdateManyMutationInput = {
+      credited_amount: Number.isFinite(credited) ? credited : null,
+      raw_notification: remote as unknown as Prisma.InputJsonValue,
+    };
+    if (remote.amount.currency !== 'RUB') {
+      await markReview(payment.id, `unexpected currency ${remote.amount.currency}`, extra);
       return { handled: 'review' };
     }
     if (!Number.isFinite(paid) || paid + 0.001 < Number(payment.amount)) {
@@ -303,10 +346,10 @@ export const paymentsService = {
     return { handled: done ? 'succeeded' : 'duplicate' };
   },
 
-  /** Только dev/test: подтверждает платёж так, будто пришло уведомление от ЮMoney. */
+  /** Только dev/test: подтверждает платёж так, будто пришёл webhook от ЮKassa. */
   devConfirm: async (userId: string, id: string) => {
     const payment = await paymentsService.getPayment(userId, id);
-    await fulfill(payment.id, { provider_operation_id: `dev-${payment.id}` });
+    await fulfill(payment.id);
     return paymentsService.getPayment(userId, id);
   },
 

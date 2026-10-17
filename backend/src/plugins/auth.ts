@@ -17,7 +17,7 @@ export function registerAuth(fastify: FastifyInstance) {
   fastify.addHook('onRequest', async (request, reply) => {
     if (request.url.startsWith('/api/auth') || request.url.startsWith('/api/admin')) return;
     // Уведомления платёжного шлюза: деньги уже списаны, их нужно зачислить и во время обслуживания
-    if (request.url.startsWith('/api/payments/yoomoney/notify')) return;
+    if (request.url.startsWith('/api/payments/yookassa/notify')) return;
     if (!(await getSetting('maintenance_mode'))) return;
 
     try {

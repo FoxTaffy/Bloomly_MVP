@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import { paymentsService } from './service.js';
 import { devPaymentsAllowed } from './config.js';
-import type { YoomoneyNotification } from './yoomoney.js';
+import type { YookassaNotification } from './yookassa.js';
 import { isAdmin } from '../../lib/roles.js';
 import { errMessage, errStatus } from '../../lib/httpErrors.js';
 import { logger } from '../../lib/logger.js';
@@ -25,11 +25,6 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
     config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
   } as RouteShorthandOptions;
 
-  // ЮMoney шлёт уведомления формой (x-www-form-urlencoded). Парсер действует только внутри этого плагина.
-  fastify.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_req, body, done) => {
-    done(null, Object.fromEntries(new URLSearchParams(body as string)));
-  });
-
   // GET /api/payments/config — включена ли оплата, цены для этого пользователя, лимиты пополнения
   fastify.get('/config', auth, async (req: FastifyRequest, reply: FastifyReply) => {
     try { reply.send(ok(await paymentsService.getConfig(req.user.id))); }
@@ -48,6 +43,13 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
     const { amount, method } = (req.body ?? {}) as { amount?: unknown; method?: unknown };
     try { reply.send(ok(await paymentsService.createTopup(req.user.id, amount, method))); }
     catch (e) { fail(reply, e, 'TOPUP_ERROR'); }
+  });
+
+  // POST /api/payments/donate { amount, method: 'AC' | 'PC' } → { paymentId, confirmationUrl }
+  fastify.post('/donate', authLimited, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { amount, method } = (req.body ?? {}) as { amount?: unknown; method?: unknown };
+    try { reply.send(ok(await paymentsService.createDonation(req.user.id, amount, method))); }
+    catch (e) { fail(reply, e, 'DONATE_ERROR'); }
   });
 
   // POST /api/payments/subscription { tier, period: 'month' | 'year', method: 'AC' | 'PC' | 'wallet' }
@@ -84,17 +86,17 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
     catch (e) { fail(reply, e, 'PAYMENT_ERROR'); }
   });
 
-  // POST /api/payments/yoomoney/notify — HTTP-уведомления ЮMoney (без авторизации, проверяется sha1-подпись).
-  // Этот адрес указывается на https://yoomoney.ru/transfer/myservices/http-notification
-  fastify.post('/yoomoney/notify', { config: { rateLimit: { max: 300, timeWindow: '1 minute' } } } as RouteShorthandOptions,
+  // POST /api/payments/yookassa/notify — webhook ЮKassa (без авторизации; платёж перепроверяется через API).
+  // Адрес указывается в личном кабинете: Интеграция → HTTP-уведомления (события payment.succeeded, payment.canceled)
+  fastify.post('/yookassa/notify', { config: { rateLimit: { max: 300, timeWindow: '1 minute' } } } as RouteShorthandOptions,
     async (req: FastifyRequest, reply: FastifyReply) => {
       try {
-        await paymentsService.handleYoomoneyNotification((req.body ?? {}) as YoomoneyNotification);
+        await paymentsService.handleYookassaNotification((req.body ?? {}) as YookassaNotification);
         reply.code(200).send('OK');
       } catch (e) {
         const status = errStatus(e);
-        if (!status) logger.error({ err: e }, '[payments] yoomoney notification failed');
-        // 5xx → ЮMoney повторит уведомление позже
+        if (!status) logger.error({ err: e }, '[payments] yookassa notification failed');
+        // 5xx → ЮKassa повторит уведомление позже
         reply.code(status ?? 500).send(errMessage(e));
       }
     });

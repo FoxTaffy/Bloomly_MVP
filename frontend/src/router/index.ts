@@ -121,10 +121,16 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
-    // Возврат с формы оплаты ЮMoney
+    // Возврат со страницы оплаты ЮKassa
     path: '/payment/result',
     name: 'payment-result',
     component: () => import('@/views/PaymentResultView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/support',
+    name: 'support',
+    component: () => import('@/views/SupportView.vue'),
     meta: { requiresAuth: true },
   },
   {

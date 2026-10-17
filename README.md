@@ -302,26 +302,26 @@ SUPPORT_EMAIL_ADDRESS=
 SUPPORT_IMAP_HOST=  SUPPORT_IMAP_PORT=  SUPPORT_IMAP_USER=  SUPPORT_IMAP_PASS=
 SUPPORT_SMTP_HOST=  SUPPORT_SMTP_PORT=  SUPPORT_SMTP_USER=  SUPPORT_SMTP_PASS=
 
-# Оплата через ЮMoney (подписка и пополнение баланса). Пока пусто — оплата выключена
-YOOMONEY_RECEIVER=             # номер кошелька 41001…
-YOOMONEY_NOTIFICATION_SECRET=  # секрет HTTP-уведомлений
+# Оплата через ЮKassa (подписка, пополнение баланса, донаты). Пока пусто — оплата выключена
+YOOKASSA_SHOP_ID=     # идентификатор магазина
+YOOKASSA_SECRET_KEY=  # секретный ключ (live_… / test_…)
 ```
 
 </details>
 
 <details>
-<summary><b>Подключение ЮMoney</b></summary>
+<summary><b>Подключение ЮKassa</b></summary>
 
-1. В кошельке ЮMoney откройте [HTTP-уведомления](https://yoomoney.ru/transfer/myservices/http-notification):
-   - адрес: `https://<ваш-домен>/api/payments/yoomoney/notify` (только HTTPS);
-   - скопируйте «секрет» в `YOOMONEY_NOTIFICATION_SECRET`, номер кошелька — в `YOOMONEY_RECEIVER`;
-   - нажмите «Протестировать» — API ответит `200 OK` (тестовое уведомление ничего не зачисляет).
-2. Перезапустите backend. `GET /api/payments/config` должен вернуть `enabled: true`.
-3. Сделайте пробное пополнение на 50 ₽ и проверьте статус платежа в `GET /api/payments/admin?status=review`.
+1. В [личном кабинете ЮKassa](https://yookassa.ru/my) → «Интеграция» → «Ключи API» возьмите `shopId` и секретный ключ
+   и впишите их в `YOOKASSA_SHOP_ID` / `YOOKASSA_SECRET_KEY`.
+2. «Интеграция» → «HTTP-уведомления»: адрес `https://<ваш-домен>/api/payments/yookassa/notify`,
+   события `payment.succeeded` и `payment.canceled`.
+3. Перезапустите backend. `GET /api/payments/config` должен вернуть `enabled: true`.
+4. Сделайте пробный донат на странице `/support` и проверьте статус в `GET /api/payments/admin`.
 
-Как это работает: сервер создаёт `Payment` и уводит пользователя на форму Quickpay с `label = id платежа`.
-Зачисление — только по уведомлению с верной sha1-подписью; повторы идемпотентны. Если сумма меньше
-ожидаемой или деньги заморожены (`unaccepted`), платёж уходит в статус `review` для ручного разбора.
+Как это работает: сервер создаёт `Payment` и платёж в ЮKassa (`metadata.payment_id`), пользователя уводит на `confirmation_url`.
+Webhook не подписан, поэтому по id платёж перечитывается из API; зачисление — только если он `succeeded`,
+в рублях и на нужную сумму, повторы идемпотентны. Иначе платёж уходит в `review` для ручного разбора.
 Подписка — предоплаченный период (месяц/год), без автосписаний; истёкшие сбрасывает cron.
 Цены — `backend/src/modules/payments/pricing.ts` (держите в синхроне с `SubscriptionView.vue`).
 В dev оплату можно подтвердить без шлюза: `POST /api/payments/:id/dev-confirm`.
