@@ -12,6 +12,11 @@ import { useTagSynonyms } from '@/composables/useTagSynonyms'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { formatCount } from '@/lib/utils'
+import { useLangStore } from '@/stores/lang'
+import { useFriendsStore } from '@/stores/friends'
+
+const langStore    = useLangStore()
+const friendsStore = useFriendsStore()
 
 const { nsfwEnabled: nsfwMode } = useNsfwMode()
 
@@ -84,6 +89,14 @@ function onPostDeleted(id: string) { posts.value = posts.value.filter((p: any) =
 function onPostUpdated(p: any) { const idx = posts.value.findIndex((x: any) => x.id === p.id); if (idx !== -1) posts.value[idx] = p }
 
 function handleMessage(userId: string) { router.push({ name: 'messages', query: { userId } }) }
+async function handleRemoveFriend(userId: string) {
+  if (!window.confirm(langStore.t.confirmRemoveTitle)) return
+  try {
+    await friendsStore.removeFriend(userId)
+    const u = users.value.find((x) => x.id === userId)
+    if (u) u.is_friend = false
+  } catch { /* ignore */ }
+}
 
 // ── Popular hashtags — shown while there's nothing to search for yet ─────────
 const trendingTags = ref<Array<{ name: string; totalCount: number }>>([])
@@ -236,7 +249,7 @@ onMounted(fetchTrendingTags)
                 <p class="text-white/55 text-sm">Люди не найдены</p>
               </div>
               <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <PersonCard v-for="user in users" :key="user.id" :user="(user as any)" :is-friend="!!(user as any).is_friend" @message="handleMessage" />
+                <PersonCard v-for="user in users" :key="user.id" :user="(user as any)" :is-friend="!!(user as any).is_friend" @message="handleMessage" @remove="handleRemoveFriend" />
               </div>
             </template>
 

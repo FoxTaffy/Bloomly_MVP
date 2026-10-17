@@ -160,7 +160,10 @@ export const useFriendsStore = defineStore('friends', () => {
 
   async function removeFriend(friendId: string) {
     await api.delete(`/friends/${friendId}`)
-    friends.value = friends.value.filter((f) => f.id !== friendId)
+    // Бэкенд снимает и подписки в обе стороны
+    friends.value   = friends.value.filter((f) => f.id !== friendId)
+    followers.value = followers.value.filter((f) => f.id !== friendId)
+    following.value = following.value.filter((f) => f.id !== friendId)
   }
 
   async function getFriendStatus(userId: string): Promise<FriendStatus> {

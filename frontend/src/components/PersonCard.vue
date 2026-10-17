@@ -4,7 +4,7 @@ import { useLangStore } from '@/stores/lang'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 const langStore = useLangStore()
 import { useRouter } from 'vue-router'
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import BIcon from './BIcon.vue'
 import type { FriendUser } from '@/stores/friends'
 import api from '@/api'
@@ -65,6 +65,12 @@ function bannerGradient(id: string) {
 
 function openProfile() { menuOpen.value = false; router.push(`/profile/${props.user.username}`) }
 function removeFriend() { menuOpen.value = false; emit('remove', props.user.id) }
+
+// Родитель снял дружбу (бэкенд удаляет и подписки в обе стороны)
+watch(() => props.isFriend, (v) => {
+  isMutual.value = v
+  if (!v) { isFollowing.value = false; notifyActive.value = false }
+})
 
 function onOutside(e: MouseEvent) {
   if (menuRef.value && !menuRef.value.contains(e.target as Node)) menuOpen.value = false
@@ -243,9 +249,20 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
           <BIcon name="MessageCircle" class="w-4 h-4" />
           {{ langStore.t.msgBtnTitle }}
         </button>
+        <!-- Друг: «в друзьях», при наведении — удалить из друзей (через подтверждение) -->
+        <button
+          v-if="isMutual"
+          class="group/rm w-9 h-9 flex items-center justify-center rounded-xl transition-colors flex-shrink-0
+                 bg-brand-accent/20 text-brand-accent-minus hover:bg-brand-error/15 hover:text-brand-error"
+          :title="langStore.t.removeFriendTitle"
+          @click.stop.prevent="removeFriend"
+        >
+          <BIcon name="UserCheck" class="w-4 h-4 group-hover/rm:hidden" />
+          <BIcon name="UserMinus" class="w-4 h-4 hidden group-hover/rm:block" />
+        </button>
         <!-- Подписка / отписка -->
         <button
-          v-if="isFollowing || canFollow"
+          v-else-if="isFollowing || canFollow"
           :class="[
             'w-9 h-9 flex items-center justify-center rounded-xl transition-colors flex-shrink-0',
             isFollowing
@@ -256,8 +273,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
           :title="isFollowing ? langStore.t.unfollowBtnTitle : langStore.t.followBtnTitle"
           @click.stop.prevent="toggleFollow"
         >
-          <!-- Две галочки — взаимная подписка (друзья), одна — подписка только с моей стороны -->
-          <BIcon :name="isMutual ? 'CheckCheck' : isFollowing ? 'UserCheck' : 'UserPlus'" class="w-4 h-4" />
+          <BIcon :name="isFollowing ? 'UserCheck' : 'UserPlus'" class="w-4 h-4" />
         </button>
         <!-- Колокольчик уведомлений -->
         <button
