@@ -10,7 +10,7 @@
  * Идемпотентен: объект, уже существующий под private/, пропускается, а ссылки уже перенесённые
  * не находятся по старому URL.
  */
-import * as Minio from 'minio';
+import { ObjectStorage } from '../lib/objectStorage.js';
 import prisma from '../config/prisma.js';
 
 const LEGACY_FOLDERS = ['verification', 'reports', 'support'];
@@ -19,7 +19,7 @@ const EXECUTE = process.argv.includes('--execute');
 
 const BUCKET = process.env.MINIO_BUCKET || 'bloomly';
 const PUBLIC_URL = process.env.MINIO_PUBLIC_URL || 'https://bloomly.fun/s3';
-const client = new Minio.Client({
+const client = new ObjectStorage({
   endPoint: process.env.MINIO_ENDPOINT || 'minio',
   port: parseInt(process.env.MINIO_PORT || '9000'),
   useSSL: process.env.MINIO_USE_SSL === 'true',
@@ -34,12 +34,7 @@ const publicUrl = (key: string) => `${PUBLIC_URL}/${BUCKET}/${key}`;
 async function listLegacyObjects(): Promise<Obj[]> {
   const found: Obj[] = [];
   for (const folder of LEGACY_FOLDERS) {
-    await new Promise<void>((resolve, reject) => {
-      const stream = client.listObjectsV2(BUCKET, `${folder}/`, true);
-      stream.on('data', (o) => { if (o.name) found.push({ key: o.name, size: o.size ?? 0 }); });
-      stream.on('end', () => resolve());
-      stream.on('error', reject);
-    });
+    for await (const o of client.listObjects(BUCKET, `${folder}/`)) found.push({ key: o.key, size: o.size });
   }
   return found;
 }
@@ -95,7 +90,7 @@ async function main() {
     if (!EXECUTE) continue;
 
     if (!alreadyCopied) {
-      await client.copyObject(BUCKET, newKey, `/${BUCKET}/${obj.key}`, new Minio.CopyConditions());
+      await client.copyObject(BUCKET, newKey, obj.key);
     }
     // Переключаем ссылки только после успешного копирования, в одной транзакции с media_objects
     await prisma.$transaction(async (tx) => {

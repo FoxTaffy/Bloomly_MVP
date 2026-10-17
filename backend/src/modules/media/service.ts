@@ -1,4 +1,4 @@
-import * as Minio from 'minio';
+import { ObjectStorage } from '../../lib/objectStorage.js';
 import { randomUUID } from 'crypto';
 import path from 'path';
 import sharp from 'sharp';
@@ -34,7 +34,7 @@ if (!minioPassword) {
   logger.warn('[WARN] MINIO_ROOT_PASSWORD is not set. Storage requests will fail until it is configured.');
 }
 
-const minioClient = new Minio.Client({
+const minioClient = new ObjectStorage({
   endPoint:  process.env.MINIO_ENDPOINT  || 'minio',
   port:      parseInt(process.env.MINIO_PORT || '9000'),
   useSSL:    process.env.MINIO_USE_SSL === 'true',
@@ -395,23 +395,18 @@ export async function getStorageStats(): Promise<{ totalBytes: number; totalObje
   let totalBytes = 0;
   let totalObjects = 0;
 
-  await new Promise<void>((resolve, reject) => {
-    const stream = minioClient.listObjectsV2(BUCKET, '', true);
-    stream.on('data', (obj) => {
-      const size = obj.size ?? 0;
-      const parts = obj.name?.split('/') ?? [];
-      // Закрытые объекты лежат под private/<папка>/ — группируем по папке, а не по префиксу
-      const folder = parts[0] === PRIVATE_KEY_PREFIX.slice(0, -1) && parts[1] ? parts[1] : (parts[0] || 'other');
-      const entry = byFolder.get(folder) ?? { bytes: 0, count: 0 };
-      entry.bytes += size;
-      entry.count += 1;
-      byFolder.set(folder, entry);
-      totalBytes += size;
-      totalObjects += 1;
-    });
-    stream.on('end', () => resolve());
-    stream.on('error', reject);
-  });
+  for await (const obj of minioClient.listObjects(BUCKET)) {
+    const size = obj.size;
+    const parts = obj.key.split('/');
+    // Закрытые объекты лежат под private/<папка>/ — группируем по папке, а не по префиксу
+    const folder = parts[0] === PRIVATE_KEY_PREFIX.slice(0, -1) && parts[1] ? parts[1] : (parts[0] || 'other');
+    const entry = byFolder.get(folder) ?? { bytes: 0, count: 0 };
+    entry.bytes += size;
+    entry.count += 1;
+    byFolder.set(folder, entry);
+    totalBytes += size;
+    totalObjects += 1;
+  }
 
   return {
     totalBytes, totalObjects,
@@ -661,14 +656,7 @@ export async function openPrivateObject(key: string): Promise<{ stream: Readable
 export async function listAllObjectKeys(): Promise<{ key: string; size: number; lastModified: Date }[]> {
   await bucketReady;
   const objects: { key: string; size: number; lastModified: Date }[] = [];
-  await new Promise<void>((resolve, reject) => {
-    const stream = minioClient.listObjectsV2(BUCKET, '', true);
-    stream.on('data', (obj) => {
-      if (obj.name) objects.push({ key: obj.name, size: obj.size ?? 0, lastModified: obj.lastModified ?? new Date(0) });
-    });
-    stream.on('end', () => resolve());
-    stream.on('error', reject);
-  });
+  for await (const obj of minioClient.listObjects(BUCKET)) objects.push(obj);
   return objects;
 }
 
