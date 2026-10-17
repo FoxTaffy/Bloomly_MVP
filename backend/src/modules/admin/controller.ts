@@ -3,6 +3,7 @@ import { adminService } from './service.js';
 import { moderationService } from './moderation.service.js';
 import { autoModLogs, logStaffAction } from '../automod/logs.service.js';
 import { userLookup } from '../users/lookup.js';
+import { getFinanceReport } from './finance.service.js';
 import { requireModerator, requireAdmin, requireOwner } from '../../lib/authHooks.js';
 import { ROLE_RANK, canModerateTarget } from '../../lib/roles.js';
 import { notificationService } from '../notifications/service.js';
@@ -616,6 +617,12 @@ export const getGroupsOverviewHandler = async (req: FastifyRequest, reply: Fasti
 export const getPremiumOverviewHandler = async (req: FastifyRequest, reply: FastifyReply) => {
   if (!requireModerator(req, reply)) return;
   const data = await adminService.getPremiumOverview();
+  return reply.send({ success: true, data, error: null });
+};
+
+export const getFinanceReportHandler = async (req: FastifyRequest<{ Querystring: { days?: string } }>, reply: FastifyReply) => {
+  if (!requireAdmin(req, reply)) return;
+  const data = await getFinanceReport(Number(req.query.days) || 30);
   return reply.send({ success: true, data, error: null });
 };
 
