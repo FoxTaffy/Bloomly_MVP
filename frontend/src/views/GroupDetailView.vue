@@ -2142,7 +2142,7 @@ const vClickOutside = {
             <!-- / CENTER COLUMN -->
 
             <!-- ── RIGHT SIDEBAR (same structure as ProfileView) ────── -->
-            <div class="hidden xl:flex flex-col gap-3 w-60 flex-shrink-0 sticky top-24 self-start">
+            <div class="hidden xl:flex flex-col gap-3 w-60 flex-shrink-0 sticky top-24 self-start max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-hide overscroll-contain">
 
               <!-- Stats -->
               <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">

@@ -281,7 +281,7 @@ const categoryItems = computed(() => [
   </Teleport>
 
   <!-- ── Desktop sidebar ────────────────────────────────────────── -->
-  <aside class="w-64 hidden lg:block sticky top-24 self-start space-y-6 flex-shrink-0">
+  <aside class="w-64 hidden lg:block sticky top-24 self-start space-y-6 flex-shrink-0 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-hide overscroll-contain">
 
     <!-- User profile block -->
     <router-link

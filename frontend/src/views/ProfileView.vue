@@ -1658,7 +1658,7 @@
             </Teleport>
 
             <!-- ── RIGHT SIDEBAR ────────────────────────────────────────── -->
-            <div class="hidden xl:flex flex-col gap-3 w-72 flex-shrink-0 sticky top-24 self-start">
+            <div class="hidden xl:flex flex-col gap-3 w-72 flex-shrink-0 sticky top-24 self-start max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-hide overscroll-contain">
 
               <!-- Stats: 3-column grid, clicks open modals -->
               <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
