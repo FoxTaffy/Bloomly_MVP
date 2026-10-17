@@ -105,8 +105,10 @@
       <p v-else class="text-sm text-white/85 leading-relaxed mb-3 whitespace-pre-wrap break-words">
         <template v-for="seg in parsedContent" :key="seg.key">
           <span v-if="seg.type === 'text'">{{ seg.text }}</span>
+          <a v-else-if="seg.type === 'url'" :href="seg.href" target="_blank" rel="noopener noreferrer nofollow ugc"
+            class="text-brand-accent hover:underline break-all" @click.stop>{{ seg.text }}</a>
           <span v-else
-            @click.stop="goToUser(seg.username!)"
+            @click.stop="goToUser(seg.username)"
             class="inline-flex items-center px-1.5 py-0.5 bg-brand-accent/15 border border-brand-accent/25 rounded-md text-brand-accent text-xs font-semibold cursor-pointer hover:bg-brand-accent/25 transition-all align-baseline"
           >{{ seg.text }}</span>
         </template>
@@ -245,6 +247,7 @@ import { useNsfwMode } from '@/composables/useNsfwMode'
 import VerificationBadge from '@/components/VerificationBadge.vue'
 import api from '@/api'
 import PostComments from '@/components/PostComments.vue'
+import { parsePostSegments, type PostSeg } from '@/lib/postText'
 import CustomPlayer from '@/components/CustomPlayer.vue'
 import {
   ThumbsUp, ThumbsDown, Repeat2, MessageCircle, Pin, PinOff,
@@ -310,14 +313,8 @@ const isPaywalled = computed(() =>
   (props.post.subscriber_only || props.post.is_paid) && !isOwn.value
 )
 
-type Seg = { type: 'text' | 'mention'; key: number; text: string; username?: string }
-const parsedContent = computed<Seg[]>(() =>
-  (props.post.content ?? '').split(/(@\w+(?:-\w+)*)/g).map((part: string, i: number) =>
-    /^@\w+(?:-\w+)*$/.test(part)
-      ? { type: 'mention' as const, key: i, text: part, username: part.slice(1) }
-      : { type: 'text' as const, key: i, text: part }
-  )
-)
+type Seg = PostSeg
+const parsedContent = computed<Seg[]>(() => parsePostSegments(props.post.content ?? ''))
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 /** Generate avatar URL with size hint (icon=24, sm=36, md=64, lg=128) */
