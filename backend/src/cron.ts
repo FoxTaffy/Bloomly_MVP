@@ -57,6 +57,12 @@ const JOBS: CronJob[] = [
     if (expired > 0) logger.info(`[CRON] Subscriptions: ${expired} expired → free`);
   } },
 
+  // Автопродление подписок: списание с привязанной карты/ЮMoney за сутки до конца периода
+  { name: 'subscription renewal', schedule: '5,35 * * * *', run: async () => {
+    const renewed = await paymentsService.renewSubscriptions();
+    if (renewed > 0) logger.info(`[CRON] Subscriptions: ${renewed} auto-renewed`);
+  } },
+
   // Брошенные платежи (не дошли до оплаты за сутки) → expired
   { name: 'stale payments', schedule: '15 * * * *', run: () => paymentsService.expireStalePayments() },
 ];

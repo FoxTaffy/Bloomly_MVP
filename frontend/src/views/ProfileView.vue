@@ -79,13 +79,6 @@
 
             <!-- Top-up preset picker -->
             <div v-if="showTopupPicker" class="bg-brand-bg border border-brand-border rounded-2xl p-4 space-y-3">
-              <div v-if="paymentsStore.config?.enabled" class="grid grid-cols-2 gap-1 p-1 rounded-xl bg-brand-card border border-brand-border">
-                <button v-for="m in TOPUP_METHODS" :key="m.id" @click="topupMethod = m.id"
-                  class="flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold transition-all"
-                  :class="topupMethod === m.id ? 'bg-brand-accent/20 text-white' : 'text-white/45 hover:text-white'">
-                  <BIcon :name="m.icon" class="w-3.5 h-3.5" /> {{ m.label }}
-                </button>
-              </div>
               <p class="text-xs font-bold text-white/55">{{ langStore.t.profileTopupPresetLabel }}</p>
               <div class="grid grid-cols-2 gap-2">
                 <button v-for="pkg in topupPackages" :key="pkg.rub" :disabled="toppingUp" @click="topupWallet(pkg.rub)"
@@ -2729,12 +2722,7 @@ const toppingUp = ref(false)
 const TOPUP_FALLBACK_PACKAGES = [100, 500, 1000, 2500, 5000].map((n) => ({ bc: n, rub: n, popular: false }))
 const topupPackages = computed(() => paymentsStore.config?.enabled ? paymentsStore.config.topup.packages : TOPUP_FALLBACK_PACKAGES)
 const paymentsStore = usePaymentsStore()
-const topupMethod = ref<'AC' | 'PC'>('AC')
 const customTopup = ref<number | null>(null)
-const TOPUP_METHODS = computed(() => [
-  { id: 'AC' as const, icon: 'CreditCard', label: langStore.t.payMethodCard },
-  { id: 'PC' as const, icon: 'Wallet', label: langStore.t.payMethodYoomoney },
-])
 const customTopupValid = computed(() => {
   const lim = paymentsStore.config?.topup
   const v = customTopup.value
@@ -2752,7 +2740,7 @@ async function topupWallet(amount: number) {
   try {
     if (paymentsStore.config?.enabled) {
       // Уходим на страницу оплаты ЮKassa; баланс пополнится по уведомлению, результат — на /payment/result
-      await paymentsStore.startTopup(amount, topupMethod.value)
+      await paymentsStore.startTopup(amount, 'AC')
       return
     }
     // Шлюз не подключён — демо-пополнение (сервер разрешает его только в dev)

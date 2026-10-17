@@ -17,31 +17,36 @@ export interface PlanQuote {
 
 export interface PaymentsConfig {
   enabled: boolean
+  /** В ЮKassa подключены автоплатежи: можно привязать карту и включить автопродление */
+  recurring: boolean
   provider: string
   methods: PayMethod[]
   bcRate: number
   topup: { min: number; max: number; step: number; packages: { bc: number; rub: number; popular?: boolean }[] }
   donate: { min: number; max: number }
   plans: { tier: string; month: PlanQuote; year: PlanQuote }[]
-  subscription: { tier: string; expiresAt: string | null }
+  subscription: { tier: string; expiresAt: string | null; period: BillingPeriod | null; autoRenew: boolean }
+  /** Есть привязанная через ЮKassa карта/кошелёк — по нему идёт автопродление */
+  hasSavedMethod: boolean
 }
 
 export interface PaymentInfo {
   id: string
   provider: 'yookassa' | 'wallet'
-  purpose: 'wallet_topup' | 'subscription' | 'donation'
-  status: 'pending' | 'succeeded' | 'expired' | 'review'
+  purpose: 'wallet_topup' | 'subscription' | 'donation' | 'card_binding'
+  status: 'pending' | 'succeeded' | 'expired' | 'review' | 'refunded'
   amount: string
   bc: number | null
   currency: string
   method: string | null
   tier: string | null
   period: BillingPeriod | null
+  recurring: boolean
   paid_at: string | null
   created_at: string
 }
 
-/** Уводит браузер на страницу оплаты ЮKassa; вернётся на /payment/result?id=… */
+/** Уводит браузер на страницу оплаты ЮKassa; после оплаты ЮKassa вернёт на /payment/result?id=… */
 function goToGateway(url: string) {
   window.location.href = url
 }
@@ -70,10 +75,21 @@ export const usePaymentsStore = defineStore('payments', () => {
     goToGateway(data.data.confirmationUrl)
   }
 
-  /** Для wallet возвращает результат сразу; для шлюза — уводит на оплату и не возвращается. */
-  async function startSubscription(tier: string, period: BillingPeriod, method: PayMethod) {
-    const { data } = await api.post('/payments/subscription', { tier, period, method })
-    const res = data.data as { paymentId: string; status: 'pending' | 'succeeded'; confirmationUrl?: string; subscription?: { tier: string; expiresAt: string } }
+  /** Привязка карты/ЮMoney: проверочный 1 ₽ на странице ЮKassa, потом возврат. */
+  async function startCardBinding() {
+    const { data } = await api.post('/payments/card-binding')
+    goToGateway(data.data.confirmationUrl)
+  }
+
+  async function setAutoRenew(enabled: boolean) {
+    await api.patch('/payments/auto-renew', { enabled })
+    if (config.value) config.value.subscription.autoRenew = enabled
+  }
+
+  /** Для wallet возвращает результат сразу; для шлюза — уводит на страницу оплаты. */
+  async function startSubscription(tier: string, period: BillingPeriod, method: PayMethod, autoRenew = false) {
+    const { data } = await api.post('/payments/subscription', { tier, period, method, autoRenew })
+    const res = data.data as { paymentId: string; status: 'pending' | 'succeeded'; amount: number; confirmationUrl?: string; subscription?: { tier: string; expiresAt: string } }
     if (res.confirmationUrl) goToGateway(res.confirmationUrl)
     return res
   }
@@ -88,5 +104,5 @@ export const usePaymentsStore = defineStore('payments', () => {
     return data.data
   }
 
-  return { config, fetchConfig, quote, startTopup, startDonation, startSubscription, getPayment, devConfirm }
+  return { config, fetchConfig, quote, startTopup, startDonation, startSubscription, startCardBinding, setAutoRenew, getPayment, devConfirm }
 })

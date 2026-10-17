@@ -52,11 +52,24 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
     catch (e) { fail(reply, e, 'DONATE_ERROR'); }
   });
 
-  // POST /api/payments/subscription { tier, period: 'month' | 'year', method: 'AC' | 'PC' | 'wallet' }
+  // POST /api/payments/subscription { tier, period: 'month' | 'year', method: 'AC' | 'PC' | 'wallet', autoRenew?: boolean }
   fastify.post('/subscription', authLimited, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { tier, period, method } = (req.body ?? {}) as { tier?: unknown; period?: unknown; method?: unknown };
-    try { reply.send(ok(await paymentsService.createSubscription(req.user.id, tier, period, method))); }
+    const { tier, period, method, autoRenew } = (req.body ?? {}) as { tier?: unknown; period?: unknown; method?: unknown; autoRenew?: unknown };
+    try { reply.send(ok(await paymentsService.createSubscription(req.user.id, tier, period, method, autoRenew))); }
     catch (e) { fail(reply, e, 'SUBSCRIPTION_PAYMENT_ERROR'); }
+  });
+
+  // POST /api/payments/card-binding → { paymentId, token, returnUrl } — привязка карты/ЮMoney (1 ₽, возвращается)
+  fastify.post('/card-binding', authLimited, async (req: FastifyRequest, reply: FastifyReply) => {
+    try { reply.send(ok(await paymentsService.createCardBinding(req.user.id))); }
+    catch (e) { fail(reply, e, 'CARD_BINDING_ERROR'); }
+  });
+
+  // PATCH /api/payments/auto-renew { enabled: boolean }
+  fastify.patch('/auto-renew', authLimited, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { enabled } = (req.body ?? {}) as { enabled?: unknown };
+    try { reply.send(ok(await paymentsService.setAutoRenew(req.user.id, enabled))); }
+    catch (e) { fail(reply, e, 'AUTO_RENEW_ERROR'); }
   });
 
   // GET /api/payments — история успешных платежей текущего пользователя

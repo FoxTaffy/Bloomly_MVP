@@ -260,20 +260,6 @@ export async function listPaymentMethodsHandler(
   return reply.send({ success: true, data, error: null });
 }
 
-export async function addPaymentMethodHandler(
-  request: FastifyRequest<{ Body: { cardNumber: string; expMonth: number; expYear: number; holderName: string; setDefault?: boolean } }>,
-  reply: FastifyReply,
-) {
-  try {
-    const { id: userId } = request.user as JwtPayload;
-    const data = await usersService.addPaymentMethod(userId, request.body);
-    return reply.send({ success: true, data, error: null });
-  } catch (e) {
-    const code = errStatus(e) ?? 400;
-    return reply.code(code).send({ success: false, data: null, error: { code: 'PAYMENT_METHOD_ERROR', message: errMessage(e) } });
-  }
-}
-
 export async function deletePaymentMethodHandler(
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply,

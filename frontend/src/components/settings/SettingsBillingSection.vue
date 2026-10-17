@@ -1,22 +1,62 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import api from '@/api'
-import { useLangStore } from '@/stores/lang'
+import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
+import { usePaymentsStore } from '@/stores/payments'
 import { useConfirm } from '@/composables/useConfirm'
+import { apiErrorCode } from '@/lib/apiError'
 import { cardBrandInfo } from '@/lib/cardBrand'
 import type { PaymentMethod } from '@/types/paymentMethod'
-import AddCardModal from '@/components/AddCardModal.vue'
 
-// "Billing" settings: saved payment cards (add, delete, make default).
+// «Способы оплаты»: карты/ЮMoney, привязанные через ЮKassa (привязка, удаление, основной) и автопродление подписки.
 const emit = defineEmits<{ (e: 'toast', type: 'success' | 'error', message: string): void }>()
 const langStore = useLangStore()
+const payments = usePaymentsStore()
 const { confirmDialog } = useConfirm()
 const showToast = (type: 'success' | 'error', message: string) => emit('toast', type, message)
 
 // ── Saved payment methods (billing tab) ──────────────────────────────────────
 const paymentMethods        = ref<PaymentMethod[]>([])
 const paymentMethodsLoading = ref(true)
-const showAddCardModal      = ref(false)
+const binding               = ref(false)
+const togglingAutoRenew     = ref(false)
+
+const sub = computed(() => payments.config?.subscription ?? null)
+const canBind = computed(() => !!payments.config?.recurring)
+const hasPaidPeriod = computed(() => !!sub.value?.expiresAt && sub.value.tier !== 'free')
+const nextChargeLabel = computed(() => {
+  if (!sub.value?.expiresAt) return ''
+  // Списание — за сутки до конца периода (RENEW_AHEAD_MS на сервере)
+  const d = new Date(new Date(sub.value.expiresAt).getTime() - 24 * 3600_000)
+  return d.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'long', year: 'numeric' })
+})
+
+const methodLabel = (m: PaymentMethod) =>
+  m.type === 'yoo_money' ? langStore.t.billingMethodYoomoney : cardBrandInfo(m.brand).label
+const methodColor = (m: PaymentMethod) => (m.type === 'yoo_money' ? '#8B3FFD' : cardBrandInfo(m.brand).color)
+
+async function bindMethod() {
+  if (binding.value) return
+  binding.value = true
+  try {
+    await payments.startCardBinding() // уводит на страницу ЮKassa
+  } catch (e) {
+    showToast('error', apiErrorCode(e) === 'PAYMENTS_DISABLED' ? langStore.t.payGatewayDisabled : langStore.t.subToastError)
+    binding.value = false
+  }
+}
+
+async function toggleAutoRenew() {
+  if (!sub.value || togglingAutoRenew.value) return
+  togglingAutoRenew.value = true
+  try {
+    await payments.setAutoRenew(!sub.value.autoRenew)
+  } catch {
+    showToast('error', langStore.t.subToastError)
+  } finally {
+    togglingAutoRenew.value = false
+  }
+}
 const deletingMethodId      = ref<string | null>(null)
 const settingDefaultId      = ref<string | null>(null)
 
@@ -32,17 +72,14 @@ async function loadPaymentMethods() {
   }
 }
 
-function onCardAdded(method: PaymentMethod) {
-  if (method.is_default) paymentMethods.value.forEach(m => { m.is_default = false })
-  paymentMethods.value.unshift(method)
-}
-
 async function deletePaymentMethod(id: string) {
   if (!(await confirmDialog(langStore.t.billingDeleteConfirm, { danger: true }))) return
   deletingMethodId.value = id
   try {
     await api.delete(`/users/me/payment-methods/${id}`)
     paymentMethods.value = paymentMethods.value.filter(m => m.id !== id)
+    // Сервер мог выключить автопродление (не осталось способов) и сменить основной
+    await Promise.all([loadPaymentMethods(), payments.fetchConfig().catch(() => {})])
   } catch {
     showToast('error', langStore.t.subToastError)
   } finally {
@@ -62,7 +99,10 @@ async function makeDefaultPaymentMethod(id: string) {
   }
 }
 
-onMounted(loadPaymentMethods)
+onMounted(() => {
+  loadPaymentMethods()
+  payments.fetchConfig().catch(() => {})
+})
 </script>
 
 <template>
@@ -77,14 +117,15 @@ onMounted(loadPaymentMethods)
         <h2 class="font-bold text-white text-sm">{{ langStore.t.secBillingTitle }}</h2>
       </div>
       <button
-        v-if="paymentMethods.length"
+        v-if="paymentMethods.length && canBind"
         type="button"
-        @click="showAddCardModal = true"
-        class="px-3 py-1.5 rounded-xl text-xs font-bold text-white border border-brand-border hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all active:scale-95 flex-shrink-0"
-      >{{ langStore.t.billingAddCard }}</button>
+        @click="bindMethod"
+        :disabled="binding"
+        class="disabled:opacity-50 px-3 py-1.5 rounded-xl text-xs font-bold text-white border border-brand-border hover:border-white/20 bg-white/5 hover:bg-white/10 transition-all active:scale-95 flex-shrink-0"
+      >{{ langStore.t.billingBindMethod }}</button>
     </div>
 
-    <div class="p-6">
+    <div class="p-6 space-y-5">
       <div v-if="paymentMethodsLoading" class="flex justify-center py-6">
         <span class="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin"></span>
       </div>
@@ -96,11 +137,15 @@ onMounted(loadPaymentMethods)
         <p class="text-sm font-semibold text-white/70">{{ langStore.t.billingNoCards }}</p>
         <p class="text-xs text-white/40 mt-1 max-w-xs mx-auto">{{ langStore.t.billingNoCardsHint }}</p>
         <button
+          v-if="canBind"
           type="button"
-          @click="showAddCardModal = true"
-          class="mt-4 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all active:scale-95 hover:brightness-110"
+          @click="bindMethod"
+          :disabled="binding"
+          class="disabled:opacity-50 mt-4 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all active:scale-95 hover:brightness-110"
           style="background: linear-gradient(135deg, #4C67CF 0%, #7C6FDB 55%, #CD83F5 100%);"
-        >{{ langStore.t.billingAddCard }}</button>
+        >{{ langStore.t.billingBindMethod }}</button>
+        <p v-if="canBind" class="text-[11px] text-white/30 mt-2">{{ langStore.t.billingBindHint }}</p>
+        <p v-else class="text-[11px] text-white/30 mt-3">{{ langStore.t.payGatewayDisabled }}</p>
       </div>
 
       <div v-else class="space-y-2">
@@ -110,12 +155,14 @@ onMounted(loadPaymentMethods)
           :class="m.is_default ? 'border-brand-accent/40 bg-brand-accent/5' : 'border-brand-border bg-brand-bg/40'"
         >
           <span class="px-2 py-1 rounded-lg text-[10px] font-black tracking-wide flex-shrink-0"
-            :style="`background:${cardBrandInfo(m.brand).color}22; color:${cardBrandInfo(m.brand).color}`">
-            {{ cardBrandInfo(m.brand).label }}
+            :style="`background:${methodColor(m)}22; color:${methodColor(m)}`">
+            {{ methodLabel(m) }}
           </span>
           <div class="min-w-0 flex-1">
-            <p class="font-mono text-sm text-white/85">•••• {{ m.last4 }}</p>
-            <p class="text-xs text-white/35 truncate">{{ m.holder_name }} · {{ String(m.exp_month).padStart(2, '0') }}/{{ String(m.exp_year).slice(-2) }}</p>
+            <p class="font-mono text-sm text-white/85">{{ m.last4 ? `•••• ${m.last4}` : m.title }}</p>
+            <p v-if="m.exp_month && m.exp_year" class="text-xs text-white/35 truncate">
+              {{ String(m.exp_month).padStart(2, '0') }}/{{ String(m.exp_year).slice(-2) }}
+            </p>
           </div>
           <span v-if="m.is_default" class="px-2.5 py-1 rounded-lg text-[10px] font-bold flex-shrink-0" style="background:rgba(16,185,129,0.15);color:#34d399">
             {{ langStore.t.billingDefaultBadge }}
@@ -138,12 +185,31 @@ onMounted(loadPaymentMethods)
           </button>
         </div>
       </div>
-    </div>
 
-  <AddCardModal
-    v-if="showAddCardModal"
-    @close="showAddCardModal = false"
-    @added="onCardAdded"
-  />
+      <!-- Автопродление подписки -->
+      <div v-if="!paymentMethodsLoading && sub && canBind" class="flex items-center gap-3 p-4 rounded-2xl border border-brand-border bg-brand-bg/40">
+        <BIcon name="RefreshCw" class="w-4 h-4 text-white/50 flex-shrink-0" />
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-bold text-white/85">{{ langStore.t.billingAutoRenewTitle }}</p>
+          <p class="text-xs text-white/40 mt-0.5">
+            <template v-if="!hasPaidPeriod">{{ langStore.t.billingAutoRenewNoSub }}</template>
+            <template v-else-if="!paymentMethods.length">{{ langStore.t.billingAutoRenewNoMethod }}</template>
+            <template v-else-if="sub.autoRenew">{{ langStore.t.billingAutoRenewNext }}: {{ nextChargeLabel }}</template>
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          :aria-checked="sub.autoRenew"
+          :aria-label="langStore.t.billingAutoRenewTitle"
+          :disabled="togglingAutoRenew || (!sub.autoRenew && (!hasPaidPeriod || !paymentMethods.length))"
+          @click="toggleAutoRenew"
+          class="w-10 h-6 rounded-full p-0.5 flex items-center transition-colors flex-shrink-0 disabled:opacity-40"
+          :class="sub.autoRenew ? 'bg-brand-success' : 'bg-brand-muted'"
+        >
+          <span class="w-5 h-5 rounded-full bg-white shadow-md transition-transform" :class="sub.autoRenew ? 'translate-x-4' : 'translate-x-0'" />
+        </button>
+      </div>
+    </div>
   </section>
 </template>
