@@ -7,7 +7,7 @@ import {
   setPublicKeyHandler, getPublicKeyHandler,
   notifyStatusHandler, notifyToggleHandler,
   updateSubscriptionHandler, deleteAccountHandler, getProfileStatsHandler,
-  listPaymentMethodsHandler, addPaymentMethodHandler, deletePaymentMethodHandler, setDefaultPaymentMethodHandler,
+  listPaymentMethodsHandler, deletePaymentMethodHandler, setDefaultPaymentMethodHandler,
   deleteAvatarHistoryHandler, restoreAvatarHistoryHandler,
   getFursonasHandler, createFursonaHandler, updateFursonaHandler, deleteFursonaHandler, setPrimaryFursonaHandler,
   getReferenceImagesHandler, addReferenceImageHandler, updateReferenceImageHandler, deleteReferenceImageHandler, getWatermarkedReferenceImageHandler,
@@ -76,24 +76,7 @@ export async function usersRoutes(fastify: FastifyInstance) {
   // GET /api/users/me/payment-methods
   fastify.get<RouteGenericOf<typeof listPaymentMethodsHandler>>('/me/payment-methods', auth, listPaymentMethodsHandler);
 
-  // POST /api/users/me/payment-methods — save a (masked) card
-  fastify.post<RouteGenericOf<typeof addPaymentMethodHandler>>('/me/payment-methods', {
-    schema: {
-      body: {
-        type: 'object',
-        required: ['cardNumber', 'expMonth', 'expYear', 'holderName'],
-        properties: {
-          cardNumber: { type: 'string', minLength: 12, maxLength: 23 },
-          expMonth: { type: 'integer', minimum: 1, maximum: 12 },
-          expYear: { type: 'integer', minimum: 2024, maximum: 2100 },
-          holderName: { type: 'string', minLength: 2, maxLength: 60 },
-          setDefault: { type: 'boolean' },
-        },
-        additionalProperties: false,
-      },
-    },
-    onRequest: [fastify.authenticate],
-  }, addPaymentMethodHandler);
+  // Привязка новой карты — POST /api/payments/card-binding (через ЮKassa, номер карты к нам не попадает)
 
   // DELETE /api/users/me/payment-methods/:id
   fastify.delete<RouteGenericOf<typeof deletePaymentMethodHandler>>('/me/payment-methods/:id', auth, deletePaymentMethodHandler);

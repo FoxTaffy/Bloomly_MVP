@@ -128,6 +128,13 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    // Оплата: виджет ЮKassa на нашей странице
+    path: '/checkout/:id',
+    name: 'checkout',
+    component: () => import('@/views/CheckoutView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/support',
     name: 'support',
     component: () => import('@/views/SupportView.vue'),

@@ -3,7 +3,6 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { usePresence } from '@/composables/usePresence'
 import { useAuthStore } from '@/stores/auth'
-import { useLangStore } from '@/stores/lang'
 import MobileBottomNav from '@/components/MobileBottomNav.vue'
 import NotifToastContainer from '@/components/NotifToastContainer.vue'
 import UpdateAnnouncementModal from '@/components/UpdateAnnouncementModal.vue'
@@ -16,14 +15,12 @@ usePresence()
 
 const auth  = useAuthStore()
 const route = useRoute()
-const langStore = useLangStore()
 const cookieConsent = ref(false)
 
 onMounted(() => {
   const saved = localStorage.getItem('cookie_consent')
   cookieConsent.value = saved === '1'
   if (auth.token) auth.fetchMe()
-  langStore.detectLangFromIP()
 })
 
 const NO_NAV_ROUTES = new Set(['login', 'auth', 'oauth-callback', 'onboarding', 'admin'])
