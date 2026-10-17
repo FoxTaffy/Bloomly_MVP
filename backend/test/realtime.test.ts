@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import WebSocket from 'ws';
-import { api, createUser, getApp, resetDb } from './helpers.js';
+import { api, createUser, getApp, resetDb, prisma } from './helpers.js';
+import { messageSubscriptions } from '../src/modules/messages/service.js';
+import { notificationService } from '../src/modules/notifications/service.js';
 
 let wsUrl = '';
 
@@ -90,5 +92,56 @@ describe('realtime websocket', () => {
     frozen.send({ type: 'auth', token });
     await frozen.next('auth_err');
     await frozen.closed();
+  });
+
+  it('повторная авторизация не дублирует доставку сообщения', async () => {
+    const user = await createUser();
+    const c = await connect();
+    for (let i = 0; i < 3; i++) {
+      c.send({ type: 'auth', token: user.token });
+      await c.next('auth_ok');
+    }
+    messageSubscriptions.push(user.user.id, { type: 'audit_probe' });
+    await c.next('audit_probe');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(c.inbox.filter(message => message.type === 'audit_probe')).toHaveLength(0);
+    c.ws.close(); await c.closed();
+  });
+
+  it('после заморозки открытый сокет прекращает доставку приватных данных', async () => {
+    const user = await createUser(); const c = await connect();
+    c.send({ type: 'auth', token: user.token }); await c.next('auth_ok');
+    await prisma.user.update({ where: { id: user.user.id }, data: { frozen_at: new Date() } });
+    messageSubscriptions.push(user.user.id, { type: 'private_probe' });
+    await Promise.race([c.closed(), new Promise((_, reject) => setTimeout(() => reject(new Error('Frozen socket remained open')), 2000))]);
+    expect(c.inbox.some(message => message.type === 'private_probe')).toBe(false);
+  });
+
+  it('сокет закрывается после истечения JWT', async () => {
+    const user = await createUser(); const c = await connect();
+    const token = (await getApp()).jwt.sign({ id: user.user.id, role: 'user' }, { expiresIn: '2s' });
+    c.send({ type: 'auth', token }); await c.next('auth_ok');
+    await Promise.race([c.closed(), new Promise((_, reject) => setTimeout(() => reject(new Error('Expired socket remained open')), 3000))]);
+  });
+
+  it('слишком большой кадр отсекается транспортом до JSON-разбора', async () => {
+    const c = await connect();
+    c.send({ type: 'ping', oversized: 'a'.repeat(128 * 1024) });
+    await Promise.race([c.closed(), new Promise((_, reject) => setTimeout(() => reject(new Error('Oversized frame accepted')), 2000))]);
+  });
+
+  it('SSE прекращает доставку после заморозки аккаунта', async () => {
+    const user = await createUser();
+    const controller = new AbortController();
+    const response = await fetch(wsUrl.replace(/^ws/, 'http') + `notifications/stream?token=${user.token}`, { signal: controller.signal });
+    expect(response.status).toBe(200);
+    const reader = response.body!.getReader();
+    try {
+      await reader.read();
+      await prisma.user.update({ where: { id: user.user.id }, data: { frozen_at: new Date() } });
+      notificationService.push(user.user.id, { type: 'private_probe' });
+      const next = await Promise.race([reader.read(), new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Frozen SSE remained open')), 2000))]);
+      expect(next.done).toBe(true);
+    } finally { await reader.cancel().catch(() => {}); controller.abort(); }
   });
 });

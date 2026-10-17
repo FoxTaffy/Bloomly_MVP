@@ -72,6 +72,7 @@ function referencesOf(parsed: { inReplyTo?: string; references?: string | string
 
 async function processUid(client: ImapFlow, uid: number) {
   const download = await client.download(String(uid), undefined, { uid: true });
+  if (!download.content) return;
   const parsed = await simpleParser(download.content);
 
   const fromAddr = parsed.from?.value?.[0]?.address?.toLowerCase();

@@ -384,7 +384,7 @@ const followStatus = reactive<Record<string, boolean>>({})
 
 const fetchFollowStatusForPosts = async (loadedPosts: any[]) => {
   if (!auth.user) return
-  const authorIds = [...new Set(loadedPosts.map((p: any) => p.author.id).filter((id: string) => id !== auth.user?.id))]
+  const authorIds = [...new Set(loadedPosts.map((p: any) => p.author?.id).filter((id: string | undefined): id is string => !!id && id !== auth.user?.id))]
   if (!authorIds.length) return
   try {
     const res = await api.get(`/follows/check-bulk?ids=${authorIds.join(',')}`)

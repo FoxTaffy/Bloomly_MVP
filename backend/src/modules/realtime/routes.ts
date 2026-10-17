@@ -10,9 +10,9 @@ const AUTH_TIMEOUT_MS = 30_000;
 
 // WebSocket (/api/) и онлайн-статусы. Регистрируется без префикса: пути абсолютные.
 export async function realtimeRoutes(fastify: FastifyInstance) {
-  fastify.get('/api/', { websocket: true }, (connection, request) => {
+  fastify.get('/api/', { websocket: true }, (socket, request) => {
     const conn: WsConnection = {
-      socket: connection.socket,
+      socket,
       deviceLabel: parseDeviceName(request.headers['user-agent']),
       userId: null,
       unsubscribe: null,
@@ -22,26 +22,36 @@ export async function realtimeRoutes(fastify: FastifyInstance) {
     const authTimeout = setTimeout(() => {
       if (!conn.userId) {
         send(conn, { type: 'error', message: 'Authentication timeout' });
-        connection.socket.close();
+        socket.close();
       }
     }, AUTH_TIMEOUT_MS);
 
-    connection.socket.on('message', async (raw: Buffer) => {
+    let pendingFrames = 0;
+    let queue = Promise.resolve();
+    let windowStart = Date.now();
+    let frames = 0;
+    socket.on('message', (raw: Buffer) => {
       // Guard against excessively large WebSocket frames (prevent DoS)
       if (raw.length > MAX_FRAME_BYTES) {
         send(conn, { type: 'error', message: 'Message too large' });
         return;
       }
-      try {
-        await dispatch(fastify, conn, JSON.parse(raw.toString()));
-      } catch { /* non-JSON frame — ignore */ }
+      if (Date.now() - windowStart >= 60_000) { windowStart = Date.now(); frames = 0; }
+      if (++frames > 240 || ++pendingFrames > 32) { detach(conn); socket.close(1008, 'Too many messages'); return; }
+      queue = queue.then(async () => {
+        if (socket.readyState !== 1) return;
+        try {
+          await dispatch(fastify, conn, JSON.parse(raw.toString()));
+          if (conn.userId) clearTimeout(authTimeout);
+        } catch { /* malformed JSON or invalid operation */ }
+      }).finally(() => { pendingFrames--; });
     });
 
-    connection.socket.on('close', () => {
+    socket.on('close', () => {
       clearTimeout(authTimeout);
       detach(conn);
     });
-    connection.socket.on('error', () => {});
+    socket.on('error', () => {});
   });
 
   // REST endpoint: GET /api/users/online?ids=id1,id2,...

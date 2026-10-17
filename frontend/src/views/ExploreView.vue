@@ -262,11 +262,15 @@ onMounted(() => {
 
               <!-- Bottom gradient overlay: author always visible, stats fade in on hover -->
               <div class="absolute inset-x-0 bottom-0 p-2.5 pt-9 flex items-end justify-between gap-2 bg-gradient-to-t from-black/85 via-black/25 to-transparent">
-                <div class="flex items-center gap-1.5 min-w-0 cursor-pointer" @click.stop="goToProfile(tile.post.author.username)">
+                <div v-if="tile.post.author" class="flex items-center gap-1.5 min-w-0 cursor-pointer" @click.stop="goToProfile(tile.post.author.username)">
                   <img :src="tile.post.author.avatar_url || '/default-avatar.png'" @error="onAvatarError"
                     class="w-6 h-6 rounded-full object-cover border border-white/20 flex-shrink-0" />
                   <span class="text-xs font-bold text-white truncate hover:text-brand-accent transition-colors">{{ tile.post.author.display_name || tile.post.author.username }}</span>
                 </div>
+                <router-link v-else-if="tile.post.groupPosts?.[0]?.group" :to="`/groups/${tile.post.groupPosts[0].group.slug}`" @click.stop class="flex items-center gap-1.5 min-w-0">
+                  <img :src="tile.post.groupPosts[0].group.avatar_url || '/default-avatar.png'" @error="onAvatarError" class="w-6 h-6 rounded-full object-cover" />
+                  <span class="text-xs font-bold text-white truncate">{{ tile.post.groupPosts[0].group.name }}</span>
+                </router-link>
                 <div class="flex items-center gap-2 flex-shrink-0 text-white/85 opacity-0 group-hover:opacity-100 transition-opacity">
                   <span v-if="tile.post._count?.comments" class="flex items-center gap-0.5 text-[11px] font-bold">
                     <BIcon name="MessageSquare" class="w-3.5 h-3.5" />

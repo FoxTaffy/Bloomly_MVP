@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BIcon from '@/components/BIcon.vue'
 import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

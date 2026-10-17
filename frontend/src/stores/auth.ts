@@ -93,6 +93,7 @@ export const useAuthStore = defineStore('auth', () => {
       } catch (e) {
         const confirmedDead = apiErrorStatus(e) === 401
         if (confirmedDead) {
+          token.value = null
           clearUser()
           user.value = null
           return false

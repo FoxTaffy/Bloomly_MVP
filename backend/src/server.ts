@@ -42,6 +42,7 @@ import { initCronJobs } from './cron.js';
 import { registerAuth } from './plugins/auth.js';
 import { isDevEnv } from './lib/env.js';
 import { logger } from './lib/logger.js';
+import { registerErrorHandling } from './plugins/errors.js';
 
 dotenv.config();
 
@@ -80,8 +81,8 @@ const MAX_UPLOAD_BYTES = 4_300 * 1024 * 1024;
 // подставляет сам, что обходило rate-limit. TRUST_PROXY можно задать списком IP/CIDR.
 const fastify = Fastify({
   // Shared with background jobs (lib/logger.ts); silent under tests
-  logger,
-  bodyLimit: MAX_UPLOAD_BYTES,
+  loggerInstance: logger,
+  bodyLimit: 1024 * 1024,
   trustProxy: process.env.TRUST_PROXY || 'loopback,uniquelocal',
 });
 
@@ -92,7 +93,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 fastify.register(cors, { origin: allowedOrigins, credentials: true });
 fastify.register(cookie, { secret: cookieSecret || 'bloomly_cookie_secret_dev' });
 fastify.register(jwt, { secret: jwtSecret || 'bloomly_secret_dev_only' });
-fastify.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES } });
+fastify.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 10, parts: 12, fieldSize: 16 * 1024, headerPairs: 100 } });
 // This is the fallback for every route that doesn't set its own `config.rateLimit`
 // (auth, reports, ads, etc. already have tight per-route limits — see their routes.ts).
 // A single active session easily fires 8-10 parallel GET requests per page load plus a
@@ -120,20 +121,9 @@ fastify.addHook('onSend', (_request, reply, _payload, done) => {
 // Maintenance-mode gate + authenticate / tryAuthenticate decorators
 registerAuth(fastify);
 
-fastify.register(websocket);
+fastify.register(websocket, { options: { maxPayload: 65_536 } });
 
-fastify.setErrorHandler((error, _request, reply) => {
-  const statusCode = error.statusCode ?? 500;
-  if (statusCode === 429) _request.log.warn({ code: error.code, msg: error.message, url: _request.url, ip: _request.ip }, 'rate limited');
-  reply.code(statusCode).send({
-    success: false,
-    data: null,
-    error: {
-      code: error.code || 'SERVER_ERROR',
-      message: error.message,
-    },
-  });
-});
+registerErrorHandling(fastify);
 
 fastify.register(authRoutes, { prefix: '/api/auth' });
 fastify.register(postsRoutes, { prefix: '/api/posts' });

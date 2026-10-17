@@ -116,7 +116,7 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>`
 
     reply.header('Content-Type', 'application/xml; charset=utf-8')
-    reply.header('Cache-Control', 'public, max-age=3600')
+    reply.header('Cache-Control', 'private, no-store')
     return reply.send(xml)
   })
 
@@ -140,7 +140,7 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
     const url = `${BASE_URL}/post/${post.id}`
 
     reply.header('Content-Type', 'text/html; charset=utf-8')
-    reply.header('Cache-Control', 'public, max-age=600')
+    reply.header('Cache-Control', 'private, no-store')
     return reply.send(buildOgHtml({ title, description, image, url, type: 'article', redirectUrl: url }))
   })
 
@@ -161,7 +161,7 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
     const url = `${BASE_URL}/profile/${user.username}`
 
     reply.header('Content-Type', 'text/html; charset=utf-8')
-    reply.header('Cache-Control', 'public, max-age=600')
+    reply.header('Cache-Control', 'private, no-store')
     return reply.send(buildOgHtml({ title, description, image: user.avatar_url ?? undefined, url, type: 'profile', redirectUrl: url }))
   })
 
@@ -182,7 +182,7 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
     const url = `${BASE_URL}/groups/${seg}`
 
     reply.header('Content-Type', 'text/html; charset=utf-8')
-    reply.header('Cache-Control', 'public, max-age=600')
+    reply.header('Cache-Control', 'private, no-store')
     return reply.send(buildOgHtml({ title: group.name, description, image: group.avatar_url ?? undefined, url, redirectUrl: url }))
   })
 }

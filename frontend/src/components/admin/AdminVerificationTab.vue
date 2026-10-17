@@ -10,6 +10,7 @@ import PostLightbox from '@/components/PostLightbox.vue'
 import SafeMedia from '@/components/SafeMedia.vue'
 import { formatDate } from './adminHelpers'
 import { useAdminContext } from './adminContext'
+import { isVideoUrl } from '@/lib/mediaType'
 
 const langStore = useLangStore()
 const router = useRouter()
@@ -59,11 +60,12 @@ const reviewVerRequest = async (id: string, action: 'approve' | 'reject', reason
 // it), so a bare `prompt(...)` in `@click` silently resolves to `undefined` and
 // "Отклонить" appeared to do nothing. Calling it from a plain script function works.
 const rejectVerRequest = (id: string) => {
-  const reason = window.prompt(langStore.t.adminReasonPromptLabel) || undefined
-  reviewVerRequest(id, 'reject', reason)
+  const reason = window.prompt(langStore.t.adminReasonPromptLabel)
+  if (reason === null) return
+  reviewVerRequest(id, 'reject', reason || undefined)
 }
 
-const evidenceLightbox = ref<{ images: string[]; start: number } | null>(null)
+const evidenceLightbox = ref<{ images: string[]; types: string[]; start: number } | null>(null)
 // Загруженные документы лежат в закрытом префиксе private/: только они идут через API.
 // Ссылки на соцсети (тип «popular») — внешние, их показываем как ссылки, а не картинки.
 const isPrivateEvidence = (url: string) => url.includes('/private/')
@@ -73,14 +75,16 @@ const openEvidenceLightbox = async (urls: string[], start: number) => {
   const list = urls.filter(isPrivateEvidence)
   const settled = await Promise.allSettled(list.map((u) => fetchVerificationEvidence(u)))
   const images: string[] = []
+  const types: string[] = []
   let startIndex = 0
   settled.forEach((r, i) => {
     if (r.status !== 'fulfilled') return
     if (list[i] === urls[start]) startIndex = images.length
     images.push(r.value)
+    types.push(isVideoUrl(list[i]) ? 'video' : 'image')
   })
   if (images.length === 0 || settled[list.indexOf(urls[start])]?.status !== 'fulfilled') return
-  evidenceLightbox.value = { images, start: startIndex }
+  evidenceLightbox.value = { images, types, start: startIndex }
 }
 
 const linkHost = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url } }
@@ -205,14 +209,14 @@ watchEffect(() => { badges.verification = verRequests.value.filter((r: any) => r
           <!-- Evidence -->
           <div v-if="req.evidence_urls?.length || req.evidence_text" class="px-4 mt-2.5 flex flex-col gap-2 min-w-0">
             <div v-if="req.evidence_text" class="min-w-0">
-              <p class="text-sm text-white/75 whitespace-pre-line line-clamp-3 break-words">{{ req.evidence_text }}</p>
+              <p class="text-sm text-white/75 whitespace-pre-line break-words">{{ req.evidence_text }}</p>
             </div>
             <div v-if="req.evidence_urls?.length" class="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
               <template v-for="(url,i) in req.evidence_urls" :key="i">
                 <button v-if="isPrivateEvidence(url)"
                   @click="openEvidenceLightbox(req.evidence_urls, i)"
                   class="relative w-14 h-14 rounded-lg overflow-hidden border border-white/[0.08] hover:border-blue-500/40 transition-colors flex-shrink-0 group/ev">
-                  <SafeMedia :src="url" source="verification-evidence" class="w-full h-full object-cover" />
+                  <SafeMedia :src="url" :kind="isVideoUrl(url) ? 'video' : 'image'" source="verification-evidence" class="w-full h-full object-cover pointer-events-none" />
                   <div class="absolute inset-0 bg-black/0 group-hover/ev:bg-black/20 transition-colors" />
                 </button>
                 <a v-else :href="url" target="_blank" rel="noopener noreferrer"
@@ -243,6 +247,7 @@ watchEffect(() => { badges.verification = verRequests.value.filter((r: any) => r
 
     <PostLightbox v-if="evidenceLightbox"
       :images="evidenceLightbox.images"
+      :types="evidenceLightbox.types"
       :start-index="evidenceLightbox.start"
       @close="evidenceLightbox = null" />
   </div>

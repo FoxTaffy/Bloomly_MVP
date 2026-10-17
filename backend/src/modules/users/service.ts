@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma.js';
+import { fetchBytes } from '../../lib/boundedFetch.js';
 import { deleteFileByUrl, isTrustedMediaUrl, assertOwnedMedia } from '../media/service.js';
 import { getUserBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
@@ -905,9 +906,7 @@ export const usersService = {
     const owner = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } });
     const username = owner?.username ?? 'unknown';
 
-    const response = await fetch(ref.image_url, { redirect: 'error', signal: AbortSignal.timeout(15_000) });
-    if (!response.ok) return null;
-    const srcBuffer = Buffer.from(await response.arrayBuffer());
+    const { buffer: srcBuffer } = await fetchBytes(ref.image_url, 25 * 1024 * 1024);
 
     const metadata = await sharp(srcBuffer).metadata();
     const w = metadata.width  ?? 800;
@@ -1051,7 +1050,7 @@ export const usersService = {
   async searchMusic(term: string) {
     const q = encodeURIComponent(term.trim());
     const fetchCatalog = async (country: string) => {
-      const res = await fetch(`https://itunes.apple.com/search?term=${q}&media=music&entity=song&limit=8&country=${country}`);
+      const res = await fetch(`https://itunes.apple.com/search?term=${q}&media=music&entity=song&limit=8&country=${country}`, { signal: AbortSignal.timeout(12_000), redirect: 'error' });
       if (!res.ok) throw Object.assign(new Error('iTunes search failed'), { statusCode: 502 });
       const data = await res.json();
       return Array.isArray(data.results) ? data.results : [];
@@ -1087,13 +1086,9 @@ export const usersService = {
       throw Object.assign(new Error('Host not allowed'), { statusCode: 400 });
     }
     // Редиректы запрещены: разрешённый хост не должен переводить запрос на произвольный адрес.
-    const res = await fetch(parsed.toString(), { redirect: 'error' });
-    if (!res.ok) throw Object.assign(new Error('Upstream fetch failed'), { statusCode: 502 });
-    const declared = Number(res.headers.get('content-length') ?? 0);
-    if (declared > MUSIC_MAX_BYTES) throw Object.assign(new Error('Upstream file too large'), { statusCode: 502 });
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.length > MUSIC_MAX_BYTES) throw Object.assign(new Error('Upstream file too large'), { statusCode: 502 });
-    let contentType = res.headers.get('content-type') || 'application/octet-stream';
+    const upstream = await fetchBytes(parsed.toString(), 20 * 1024 * 1024, 15_000);
+    const buffer = upstream.buffer;
+    let contentType = upstream.contentType.split(';')[0];
     // Apple serves 30s preview clips as legit playable AAC/M4A but mislabels the
     // response as audio/x-m4p (the FairPlay-DRM MIME type) — browsers refuse to play
     // that type via <audio>, so play() silently no-ops. Same bytes, correct label.

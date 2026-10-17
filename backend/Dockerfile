@@ -1,15 +1,15 @@
 # Этап 1: Сборка приложения
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat openssl
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 COPY . .
 RUN npx prisma generate
 RUN npm run build
 
 # Этап 2: Создание production-образа
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
 RUN apk add --no-cache openssl ffmpeg
 COPY --from=builder /app/node_modules ./node_modules

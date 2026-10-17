@@ -621,6 +621,7 @@ function snapshotToSaved() {
     welcomeMsgEnabled: form.welcomeMsgEnabled,
     welcomeMsgText: form.welcomeMsgText,
   })
+  savedCommission.value = JSON.stringify(commForm.value)
 }
 
 function resetForm() {
@@ -651,6 +652,7 @@ function resetForm() {
   })
   avatarOriginalSrc.value = ''
   bannerOriginalSrc.value = ''
+  commForm.value = JSON.parse(savedCommission.value)
 }
 
 const isDirty = computed(() => {
@@ -676,12 +678,13 @@ const isDirty = computed(() => {
     JSON.stringify(form.supportTiers) !== JSON.stringify(savedForm.supportTiers) ||
     form.businessEnabled !== savedForm.businessEnabled ||
     form.welcomeMsgEnabled !== savedForm.welcomeMsgEnabled ||
-    form.welcomeMsgText !== savedForm.welcomeMsgText
+    form.welcomeMsgText !== savedForm.welcomeMsgText ||
+    ((group.value?.type === 'creative' || group.value?.type === 'shop') && JSON.stringify(commForm.value) !== savedCommission.value)
   )
 })
 
 // Commission form
-const commForm = ref({
+const defaultCommissionForm = () => ({
   status: 'closed' as 'open' | 'closed' | 'waitlist',
   currency: 'USD',
   maxQueue: 5,
@@ -692,6 +695,8 @@ const commForm = ref({
   basePrices: {} as Record<string, number>,
   priceList: [] as { name: string; price: number; description: string }[],
 })
+const commForm = ref(defaultCommissionForm())
+const savedCommission = ref(JSON.stringify(commForm.value))
 
 // ── Donations card linking ────────────────────────────────────────────────────
 const cardInputRaw = ref('')
@@ -958,6 +963,7 @@ async function load() {
   form.businessEnabled = g.business_enabled ?? false
   form.welcomeMsgEnabled = g.welcome_msg_enabled ?? false
   form.welcomeMsgText = g.welcome_msg_text || ''
+  commForm.value = defaultCommissionForm()
   if (g.commissionInfo) {
     const c = g.commissionInfo
     commForm.value.status = c.status || 'closed'
@@ -968,7 +974,7 @@ async function load() {
     commForm.value.turnaroundDays = c.turnaround_days || ''
     commForm.value.tosText = c.tos_text || ''
     commForm.value.basePrices = { ...(c.base_prices || {}) }
-    commForm.value.priceList = Array.isArray(c.price_list) ? [...c.price_list] : []
+    commForm.value.priceList = Array.isArray(c.price_list) ? c.price_list.map((item: { name: string; price: number; description: string }) => ({ ...item })) : []
   }
   snapshotToSaved()
 }
@@ -1081,7 +1087,7 @@ async function save() {
       } : {}),
       supportTiers: form.supportTiers.filter((t: { name: string }) => t.name.trim()),
     })
-    if (group.value.type === 'creative') {
+    if (group.value.type === 'creative' || group.value.type === 'shop') {
       await groupsStore.updateCommission(group.value.id, {
         status: commForm.value.status,
         currency: commForm.value.currency,
@@ -2439,6 +2445,12 @@ async function deleteGroup() {
                     <h2 class="font-bold text-white text-sm">{{ langStore.t.groupSettingsPriceList }}</h2>
                   </div>
                   <div class="p-6 space-y-5">
+                    <div v-if="group.type === 'shop'">
+                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsCurrency }}</label>
+                      <select v-model="commForm.currency" class="field-input appearance-none">
+                        <option value="USD">USD ($)</option><option value="EUR">EUR (€)</option><option value="RUB">RUB (₽)</option>
+                      </select>
+                    </div>
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsBasePrices }}</label>
                       <div class="space-y-2">

@@ -308,6 +308,7 @@ export interface CustomRole {
 export const useGroupsStore = defineStore('groups', () => {
   const groups = ref<Group[]>([])
   const currentGroup = ref<Group | null>(null)
+  let activeGroupLoad = 0
   const myGroups = ref<GroupMembership[]>([])
   /** Groups I own or administer. */
   const managedGroups = computed(() => myGroups.value.filter(m => isGroupManagerRole(m.role)).map(m => m.group))
@@ -344,16 +345,19 @@ export const useGroupsStore = defineStore('groups', () => {
   }
 
   async function loadGroup(slugOrId: string) {
+    const generation = ++activeGroupLoad
+    currentGroup.value = null
     isLoading.value = true
     try {
       const { data } = await api.get(`/groups/${slugOrId}`)
+      if (generation !== activeGroupLoad) return null
       currentGroup.value = data.data.group
       return data.data.group
     } catch (e) {
-      currentGroup.value = null
+      if (generation === activeGroupLoad) currentGroup.value = null
       throw e
     } finally {
-      isLoading.value = false
+      if (generation === activeGroupLoad) isLoading.value = false
     }
   }
 

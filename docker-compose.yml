@@ -17,7 +17,7 @@ services:
     shm_size: '256mb'
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
       POSTGRES_DB: ${POSTGRES_DB:-bloomly}
       # Tune PostgreSQL for stability under load
       POSTGRES_INITDB_ARGS: "--data-checksums"

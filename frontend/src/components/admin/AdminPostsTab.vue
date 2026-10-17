@@ -6,6 +6,7 @@ import api from '@/api'
 import { useConfirm } from '@/composables/useConfirm'
 import BIcon from '@/components/BIcon.vue'
 import PostLightbox from '@/components/PostLightbox.vue'
+import AdminMediaPreview from './AdminMediaPreview.vue'
 import { formatNum, formatDate } from './adminHelpers'
 import { useAdminContext } from './adminContext'
 
@@ -117,9 +118,7 @@ onActivated(() => { if (!posts.value.length) fetchPosts() })
         <button v-if="post.media_urls?.length" type="button"
           @click="openPostMediaLightbox(post.media_urls, 0)"
           class="relative aspect-[4/3] w-full overflow-hidden bg-black/20 flex-shrink-0">
-          <video v-if="/\.(mp4|webm|mov|mkv|ogv)$/i.test(post.media_urls[0].split('?')[0])" :src="post.media_urls[0] + '#t=0.1'" preload="metadata" muted playsinline
-            class="w-full h-full object-cover pointer-events-none" />
-          <img v-else :src="post.media_urls[0]" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
+          <AdminMediaPreview :src="post.media_urls[0]" />
           <div v-if="post.media_urls.length > 1"
             class="absolute top-2.5 right-2.5 flex items-center gap-1 text-[10px] font-extrabold px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white">
             <BIcon name="Images" class="w-3 h-3" /> {{ post.media_urls.length }}

@@ -1,3 +1,4 @@
+import { assertProfileReadable } from '../../lib/contentAccess.js';
 import type { FastifyInstance, RouteShorthandOptions } from 'fastify';
 import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
@@ -110,7 +111,7 @@ export async function usersRoutes(fastify: FastifyInstance) {
 
   // ── Fursona (1:N per user, up to 10 characters) ───────────────────────────
   // GET  /api/users/:id/fursonas — public character list (likes/dislikes gated by owner setting)
-  fastify.get<RouteGenericOf<typeof getFursonasHandler>>('/:id/fursonas', getFursonasHandler);
+  fastify.get<RouteGenericOf<typeof getFursonasHandler>>('/:id/fursonas', { onRequest: [fastify.tryAuthenticate], preHandler: async req => { await assertProfileReadable((req.params as { id: string }).id, req.user?.id); } }, getFursonasHandler);
 
   // POST /api/users/me/fursonas — create a new character
   fastify.post<RouteGenericOf<typeof createFursonaHandler>>('/me/fursonas', { schema: updateFursonaSchema, onRequest: [fastify.authenticate] }, createFursonaHandler);
@@ -126,10 +127,10 @@ export async function usersRoutes(fastify: FastifyInstance) {
 
   // ── Fursona reference gallery (1:N per Fursona) ───────────────────────────
   // GET  /api/users/:id/fursonas/:fursonaId/references — public gallery listing
-  fastify.get<RouteGenericOf<typeof getReferenceImagesHandler>>('/:id/fursonas/:fursonaId/references', getReferenceImagesHandler);
+  fastify.get<RouteGenericOf<typeof getReferenceImagesHandler>>('/:id/fursonas/:fursonaId/references', { onRequest: [fastify.tryAuthenticate], preHandler: async req => { await assertProfileReadable((req.params as { id: string }).id, req.user?.id); } }, getReferenceImagesHandler);
 
   // GET  /api/users/:id/fursonas/:fursonaId/references/:refId/watermarked — watermarked image (auth required)
-  fastify.get<RouteGenericOf<typeof getWatermarkedReferenceImageHandler>>('/:id/fursonas/:fursonaId/references/:refId/watermarked', auth, getWatermarkedReferenceImageHandler);
+  fastify.get<RouteGenericOf<typeof getWatermarkedReferenceImageHandler>>('/:id/fursonas/:fursonaId/references/:refId/watermarked', { onRequest: [fastify.authenticate], preHandler: async req => { await assertProfileReadable((req.params as { id: string }).id, req.user?.id); } }, getWatermarkedReferenceImageHandler);
 
   // POST /api/users/me/fursonas/:fursonaId/references — add a reference image
   fastify.post<RouteGenericOf<typeof addReferenceImageHandler>>('/me/fursonas/:fursonaId/references', { schema: { ...upsertReferenceImageSchema, ...fursonaIdParamSchema }, onRequest: [fastify.authenticate] }, addReferenceImageHandler);
@@ -142,7 +143,7 @@ export async function usersRoutes(fastify: FastifyInstance) {
 
   // ── Fursuits (1:N per user) ───────────────────────────────────────────────
   // GET  /api/users/:id/fursuits
-  fastify.get<RouteGenericOf<typeof getFursuitsHandler>>('/:id/fursuits', getFursuitsHandler);
+  fastify.get<RouteGenericOf<typeof getFursuitsHandler>>('/:id/fursuits', { onRequest: [fastify.tryAuthenticate], preHandler: async req => { await assertProfileReadable((req.params as { id: string }).id, req.user?.id); } }, getFursuitsHandler);
 
   // POST /api/users/me/fursuits — create a new fursuit
   fastify.post<RouteGenericOf<typeof createFursuitHandler>>('/me/fursuits', { schema: updateFursuitSchema, onRequest: [fastify.authenticate] }, createFursuitHandler);

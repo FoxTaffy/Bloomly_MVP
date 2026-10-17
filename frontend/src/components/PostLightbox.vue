@@ -8,6 +8,7 @@ import CustomPlayer from './CustomPlayer.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
+import { isVideoUrl } from '@/lib/mediaType'
 
 const props = defineProps<{
   images: string[]
@@ -64,7 +65,7 @@ function goToAuthor() {
 }
 
 const showComments = ref(!!props.postId)
-const isVideo = (url: string) => /\.(mp4|webm|mov|mkv|ogv)$/i.test(url.split('?')[0])
+const isVideo = isVideoUrl
 
 // ── Vote / repaw / favourite (mirrors PostCard.vue) ─────────────────────────
 const localRating     = ref(props.rating ?? 0)

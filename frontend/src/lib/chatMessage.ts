@@ -109,9 +109,18 @@ export function renderMentions(text: string): string {
 
 /** Escapes text and wraps every occurrence of `query` in a <mark>. */
 export function highlightMatches(text: string, query: string): string {
-  if (!query) return text
+  if (!query) return escapeHtml(text)
   const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return escapeHtml(text).replace(new RegExp(`(${escapedQuery})`, 'gi'), '<mark class="bg-brand-accent/30 text-white rounded px-0.5">$1</mark>')
+  const chunks: string[] = []
+  let offset = 0
+  for (const match of text.matchAll(new RegExp(escapedQuery, 'gi'))) {
+    const start = match.index!
+    chunks.push(escapeHtml(text.slice(offset, start)))
+    chunks.push(`<mark class="bg-brand-accent/30 text-white rounded px-0.5">${escapeHtml(match[0])}</mark>`)
+    offset = start + match[0].length
+  }
+  chunks.push(escapeHtml(text.slice(offset)))
+  return chunks.join('')
 }
 
 export interface AlbumFile { url: string; type: string }

@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { userLookup } from '../users/lookup.js';
+import { getSellerAccess } from './access.js';
 import { dealersDenService } from './service.js';
 import { fairService } from './fair.service.js';
 import type {
@@ -43,14 +43,18 @@ export async function getListingHandler(req: FastifyRequest, reply: FastifyReply
   }
 }
 
+export async function sellerEligibilityHandler(req: FastifyRequest, reply: FastifyReply) {
+  return reply.send({ success: true, data: await getSellerAccess(req.user.id) });
+}
+
 export async function createListingHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
-  const dbUser = await userLookup.denSellerStatus(user.id);
-  if (!dbUser?.is_verified || !['artist', 'master'].includes(dbUser.verification_type ?? '')) {
-    return reply.status(403).send({ success: false, error: 'Только верифицированные художники и мастера могут создавать объявления' });
-  }
-  if (dbUser.den_frozen) {
+  const access = await getSellerAccess(user.id);
+  if (access.frozen) {
     return reply.status(403).send({ success: false, error: 'Ваш аккаунт в Ярмарке заморожен' });
+  }
+  if (!access.canSell) {
+    return reply.status(403).send({ success: false, error: 'Объявления доступны верифицированным художникам, мастерам и владельцам групп «Магазин»' });
   }
   const input = req.body as CreateListingInput;
   // Avatar frames have their own approval-gated pipeline (POST /api/avatar-frames) that

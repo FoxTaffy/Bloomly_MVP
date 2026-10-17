@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma.js';
+import { assertGroupReadable, accessError, requireUuid } from '../../lib/contentAccess.js';
 
 // ── Selectors ─────────────────────────────────────────────────────────────────
 
@@ -26,17 +27,7 @@ export interface TrustScore {
   blacklist_reason?: string;
 }
 
-export async function computeTrustScore(userId: string): Promise<TrustScore> {
-  const [rows, blacklist] = await Promise.all([
-    prisma.activityParticipant.groupBy({
-      by: ['status'],
-      where: { user_id: userId, deleted_at: null },
-      _count: { status: true },
-    }),
-    prisma.activityBlacklist.findUnique({ where: { user_id: userId } }),
-  ]);
-
-  const counts = Object.fromEntries(rows.map((r) => [r.status, r._count.status]));
+function trustFromCounts(counts: Record<string, number>, blacklist?: { reason: string } | null): TrustScore {
   const completed   = counts['completed']  ?? 0;
   const withdrawn   = counts['withdrawn']  ?? 0;
   const delayed     = counts['delayed']    ?? 0;
@@ -69,6 +60,27 @@ export async function computeTrustScore(userId: string): Promise<TrustScore> {
   };
 }
 
+export async function computeTrustScores(userIds: string[]): Promise<Map<string, TrustScore>> {
+  const unique = [...new Set(userIds)];
+  if (!unique.length) return new Map();
+  const [rows, blacklist] = await Promise.all([
+    prisma.activityParticipant.groupBy({ by: ['user_id', 'status'], where: { user_id: { in: unique }, deleted_at: null }, _count: { status: true } }),
+    prisma.activityBlacklist.findMany({ where: { user_id: { in: unique } }, select: { user_id: true, reason: true } }),
+  ]);
+  const counts = new Map<string, Record<string, number>>();
+  for (const row of rows) {
+    const current = counts.get(row.user_id) ?? {};
+    current[row.status] = row._count.status;
+    counts.set(row.user_id, current);
+  }
+  const blocked = new Map(blacklist.map(row => [row.user_id, row]));
+  return new Map(unique.map(id => [id, trustFromCounts(counts.get(id) ?? {}, blocked.get(id))]));
+}
+
+export async function computeTrustScore(userId: string): Promise<TrustScore> {
+  return (await computeTrustScores([userId])).get(userId)!;
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 
 export const activityService = {
@@ -83,6 +95,16 @@ export const activityService = {
     max_participants?: number;
     group_id?: string;
   }) {
+    if (typeof input.title !== 'string' || !input.title.trim() || input.title.length > 200 ||
+      typeof input.type !== 'string' || !input.type.trim() || input.type.length > 30) throw accessError('Invalid activity title or type', 400);
+    if (input.max_participants !== undefined && input.max_participants !== null &&
+      (!Number.isSafeInteger(input.max_participants) || input.max_participants < 1 || input.max_participants > 10000)) throw accessError('Invalid participant limit', 400);
+    if (input.deadline && !Number.isFinite(new Date(input.deadline).getTime())) throw accessError('Invalid deadline', 400);
+    if (input.group_id) {
+      const group = await assertGroupReadable(input.group_id, ownerId);
+      const member = await prisma.groupMember.findUnique({ where: { group_id_user_id: { group_id: group.id, user_id: ownerId } }, select: { role: true } });
+      if (group.owner_id !== ownerId && !['owner', 'admin', 'moderator'].includes(member?.role ?? '')) throw accessError('Group staff access required', 403);
+    }
     const activity = await prisma.activity.create({
       data: {
         type:             input.type,
@@ -118,21 +140,18 @@ export const activityService = {
       },
     });
     if (!activity) throw Object.assign(new Error('Activity not found'), { statusCode: 404 });
+    if (activity.group_id) await assertGroupReadable(activity.group_id, requesterId);
 
-    // Compute trust scores for all participants in parallel
-    const participantsWithTrust = await Promise.all(
-      activity.participants.map(async (p) => ({
-        ...p,
-        trust: await computeTrustScore(p.user_id),
-      }))
-    );
+    const scores = await computeTrustScores(activity.participants.map(participant => participant.user_id));
+    const participantsWithTrust = activity.participants.map(participant => ({ ...participant, trust: scores.get(participant.user_id)! }));
 
     return { ...activity, participants: participantsWithTrust };
   },
 
   // ── List for group ────────────────────────────────────────────────────────
 
-  async listForGroup(groupId: string) {
+  async listForGroup(groupId: string, requesterId?: string) {
+    await assertGroupReadable(groupId, requesterId);
     return prisma.activity.findMany({
       where: { group_id: groupId, deleted_at: null },
       include: {
@@ -146,46 +165,28 @@ export const activityService = {
   // ── Join ──────────────────────────────────────────────────────────────────
 
   async join(activityId: string, userId: string) {
-    // Check blacklist
+    requireUuid(activityId);
     const blacklisted = await prisma.activityBlacklist.findUnique({ where: { user_id: userId } });
-    if (blacklisted) {
-      throw Object.assign(
-        new Error('Вы в чёрном списке интерактивов: ' + blacklisted.reason),
-        { statusCode: 403 }
-      );
-    }
-
-    const activity = await prisma.activity.findFirst({
-      where: { id: activityId, deleted_at: null },
-      include: { _count: { select: { participants: { where: { deleted_at: null } } } } },
+    if (blacklisted) throw accessError('Вы в чёрном списке интерактивов: ' + blacklisted.reason, 403);
+    return prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "Activity" WHERE id = ${activityId}::uuid FOR UPDATE`;
+      const activity = await tx.activity.findFirst({ where: { id: activityId, deleted_at: null } });
+      if (!activity) throw accessError('Activity not found', 404);
+      if (activity.group_id) await assertGroupReadable(activity.group_id, userId);
+      const existing = await tx.activityParticipant.findUnique({ where: { activity_id_user_id: { activity_id: activityId, user_id: userId } } });
+      // Repeating a request cannot reset an organizer's decision or extend the grace period.
+      if (existing && !existing.deleted_at) return existing;
+      if (existing && ['completed', 'fraud'].includes(existing.status)) throw accessError('Participation is already finalized', 409);
+      if (activity.status !== 'active' || (activity.deadline && activity.deadline < new Date())) throw accessError('Интерактив уже не принимает участников', 400);
+      const count = await tx.activityParticipant.count({ where: { activity_id: activityId, deleted_at: null } });
+      if (activity.max_participants && count >= activity.max_participants) throw accessError('Мест больше нет', 409);
+      const withdrawDeadline = existing?.withdraw_deadline ?? new Date(Date.now() + 3 * 86400000);
+      return tx.activityParticipant.upsert({
+        where: { activity_id_user_id: { activity_id: activityId, user_id: userId } },
+        create: { activity_id: activityId, user_id: userId, status: 'pending', withdraw_deadline: withdrawDeadline },
+        update: { deleted_at: null, status: 'pending', withdraw_deadline: withdrawDeadline },
+      });
     });
-    if (!activity) throw Object.assign(new Error('Activity not found'), { statusCode: 404 });
-    if (activity.status !== 'active') throw Object.assign(new Error('Интерактив уже не принимает участников'), { statusCode: 400 });
-    if (activity.max_participants && activity._count.participants >= activity.max_participants) {
-      throw Object.assign(new Error('Мест больше нет'), { statusCode: 400 });
-    }
-
-    // withdraw_deadline = join date + 3 days
-    const withdrawDeadline = new Date();
-    withdrawDeadline.setDate(withdrawDeadline.getDate() + 3);
-
-    const participant = await prisma.activityParticipant.upsert({
-      where: { activity_id_user_id: { activity_id: activityId, user_id: userId } },
-      create: {
-        activity_id:       activityId,
-        user_id:           userId,
-        status:            'pending',
-        withdraw_deadline: withdrawDeadline,
-      },
-      update: {
-        // Re-join after soft-delete
-        deleted_at:        null,
-        status:            'pending',
-        withdraw_deadline: withdrawDeadline,
-      },
-      include: { user: { select: userMiniSelect } },
-    });
-    return participant;
   },
 
   // ── Withdraw ──────────────────────────────────────────────────────────────

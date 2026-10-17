@@ -1,36 +1,32 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api'
 import BIcon from './BIcon.vue'
 import { useLangStore } from '@/stores/lang'
 import { verTypeIconUrl } from '@/lib/verificationIcons'
 import { verificationTypeInfo } from '@/composables/useVerificationBadge'
+import { useAuthStore } from '@/stores/auth'
+import { ROLE_GROUPS } from '@/lib/verificationPolicy'
 
 const SEEN_KEY = 'bloomly_seen_verification'
-const FRESH_DAYS = 14
-
-// Какие типы групп открывает роль верификации
-const ROLE_GROUPS: Record<string, string[]> = {
-  artist: ['creative', 'shop'],
-  master: ['creative', 'shop'],
-  fursuiter: ['creative', 'shop'],
-  organizer: ['event', 'brand'],
-  event: ['event', 'brand'],
-  popular: ['news', 'brand', 'creative'],
-  writer: ['news', 'brand', 'creative'],
-  photographer: ['news', 'brand', 'creative'],
-  programmer: ['brand'],
-}
 // Тип в модалке создания группы
 const GROUP_TYPE: Record<string, string> = { creative: 'creative', event: 'event', shop: 'shop', brand: 'brand', news: 'news' }
 
 const langStore = useLangStore()
+const auth = useAuthStore()
 const router = useRouter()
 const type = ref<string | null>(null)
 const verifiedAt = ref<string | null>(null)
 const visible = ref(false)
 const lit = ref(false)
+let generation = 0
+let timer: ReturnType<typeof setInterval> | undefined
+let animationTimer: ReturnType<typeof setTimeout> | undefined
+let checking = false
+let destroyed = false
+const seenThisSession = new Set<string>()
+const seenKey = () => `${SEEN_KEY}:${auth.user?.id ?? ''}`
 
 const t = computed(() => langStore.t as Record<string, string>)
 const roleLabel = computed(() => verificationTypeInfo(langStore.t, type.value).label)
@@ -43,7 +39,11 @@ const groups = computed(() =>
 
 function close() {
   visible.value = false
-  try { if (verifiedAt.value) localStorage.setItem(SEEN_KEY, verifiedAt.value) } catch {}
+  if (verifiedAt.value) {
+    seenThisSession.add(`${seenKey()}:${verifiedAt.value}`)
+    try { localStorage.setItem(seenKey(), verifiedAt.value) } catch {}
+  }
+  clearTimeout(animationTimer)
 }
 
 function createGroup() {
@@ -52,21 +52,61 @@ function createGroup() {
   router.push({ name: 'groups', query: first ? { create: GROUP_TYPE[first.id] } : { create: '1' } })
 }
 
-onMounted(async () => {
+async function checkStatus() {
+  if (!auth.user?.id || checking || destroyed || document.visibilityState === 'hidden') return
+  checking = true
+  const userId = auth.user.id
+  const currentGeneration = generation
   try {
     const res = await api.get('/verification/status')
     const d = res.data?.data
+    if (destroyed || currentGeneration !== generation || auth.user?.id !== userId) return
+    if (res.data?.success && d && auth.user) {
+      auth.user.is_verified = !!d?.isVerified
+      auth.user.verification_type = d?.verificationType ?? null
+    }
+    if (visible.value) return
     if (!res.data?.success || !d?.isVerified || !d.verificationType || !d.verifiedAt) return
     if (!ROLE_GROUPS[d.verificationType]) return
-    if (Date.now() - new Date(d.verifiedAt).getTime() > FRESH_DAYS * 86_400_000) return
     let seen: string | null = null
-    try { seen = localStorage.getItem(SEEN_KEY) } catch {}
-    if (seen === d.verifiedAt) return
+    try { seen = localStorage.getItem(seenKey()) } catch {}
+    if (seen === d.verifiedAt || seenThisSession.has(`${seenKey()}:${d.verifiedAt}`)) return
     type.value = d.verificationType
     verifiedAt.value = d.verifiedAt
     visible.value = true
-    setTimeout(() => { lit.value = true }, 700)
-  } catch {}
+    lit.value = false
+    clearTimeout(animationTimer)
+    animationTimer = setTimeout(() => { lit.value = true }, 700)
+  } catch {} finally {
+    checking = false
+    if (!destroyed && currentGeneration !== generation) void checkStatus()
+  }
+}
+
+watch(() => auth.user?.id, () => {
+  generation++
+  visible.value = false
+  lit.value = false
+  clearTimeout(animationTimer)
+  void checkStatus()
+}, { immediate: true })
+
+function onVisibility() { if (document.visibilityState === 'visible') void checkStatus() }
+function onKeydown(event: KeyboardEvent) { if (event.key === 'Escape' && visible.value) close() }
+onMounted(() => {
+  timer = setInterval(checkStatus, 60_000)
+  window.addEventListener('focus', checkStatus)
+  document.addEventListener('visibilitychange', onVisibility)
+  document.addEventListener('keydown', onKeydown)
+})
+onUnmounted(() => {
+  destroyed = true
+  generation++
+  clearInterval(timer)
+  clearTimeout(animationTimer)
+  window.removeEventListener('focus', checkStatus)
+  document.removeEventListener('visibilitychange', onVisibility)
+  document.removeEventListener('keydown', onKeydown)
 })
 </script>
 
@@ -74,11 +114,11 @@ onMounted(async () => {
   <Teleport to="body">
     <Transition name="vam-fade">
       <div v-if="visible" class="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4" @click.self="close">
-        <div class="relative w-full max-w-md bg-brand-card border border-brand-border rounded-3xl shadow-2xl p-6 text-center overflow-hidden">
+        <div role="dialog" aria-modal="true" aria-labelledby="verification-approved-title" class="relative w-full max-w-md bg-brand-card border border-brand-border rounded-3xl shadow-2xl p-6 text-center overflow-hidden">
           <div class="vam-halo" aria-hidden="true"></div>
           <div class="relative">
             <img :src="verTypeIconUrl(type!)" :alt="type ?? ''" class="vam-icon w-20 h-20 rounded-2xl object-cover mx-auto mb-4" />
-            <h2 class="text-xl font-extrabold text-white mb-1">{{ t.verCongratsTitle }}</h2>
+            <h2 id="verification-approved-title" class="text-xl font-extrabold text-white mb-1">{{ t.verCongratsTitle }}</h2>
             <p class="text-sm text-white/60 mb-6">{{ t.verCongratsSub.replace('{role}', roleLabel) }}</p>
 
             <p class="text-[11px] uppercase tracking-wider font-bold text-white/40 mb-2">{{ t.verUnlockedGroups }}</p>

@@ -1,19 +1,20 @@
 import prisma from '../../config/prisma.js'
+import { readableGroupsWhere, readablePostsWhere, readableProfilesWhere, UUID_PATTERN } from '../../lib/contentAccess.js'
 
 // Public data for the sitemap and the OpenGraph previews served to link-unfurling bots.
 export const seoService = {
   sitemapUsers() {
     return prisma.user.findMany({
-      where: { deleted_at: null },
+      where: readableProfilesWhere(),
       select: { username: true, updated_at: true },
       orderBy: { updated_at: 'desc' },
       take: 5000,
     })
   },
 
-  sitemapPosts() {
+  async sitemapPosts() {
     return prisma.post.findMany({
-      where: { deleted_at: null, is_nsfw: false },
+      where: { AND: [await readablePostsWhere()], is_nsfw: false, is_archived: false },
       select: { id: true, updated_at: true },
       orderBy: { updated_at: 'desc' },
       take: 10000,
@@ -22,16 +23,17 @@ export const seoService = {
 
   sitemapGroups() {
     return prisma.group.findMany({
-      where: { deleted_at: null },
+      where: readableGroupsWhere(),
       select: { slug: true, id: true, updated_at: true },
       orderBy: { updated_at: 'desc' },
       take: 2000,
     })
   },
 
-  postForOg(id: string) {
+  async postForOg(id: string) {
+    if (!UUID_PATTERN.test(id)) return null
     return prisma.post.findFirst({
-      where: { id, deleted_at: null },
+      where: { id, AND: [await readablePostsWhere()], is_nsfw: false, is_archived: false },
       select: {
         id: true,
         content: true,
@@ -44,7 +46,7 @@ export const seoService = {
 
   profileForOg(username: string) {
     return prisma.user.findFirst({
-      where: { username, deleted_at: null },
+      where: { username, AND: [readableProfilesWhere()] },
       select: { display_name: true, username: true, bio: true, avatar_url: true },
     })
   },
@@ -52,8 +54,8 @@ export const seoService = {
   groupForOg(slugOrId: string) {
     return prisma.group.findFirst({
       where: {
-        deleted_at: null,
-        OR: [{ slug: slugOrId }, { id: slugOrId }],
+        AND: [readableGroupsWhere()],
+        ...(UUID_PATTERN.test(slugOrId) ? { id: slugOrId } : { slug: slugOrId }),
       },
       select: { id: true, slug: true, name: true, description: true, avatar_url: true, _count: { select: { members: true } } },
     })

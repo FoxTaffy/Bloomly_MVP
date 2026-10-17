@@ -1029,7 +1029,7 @@ const isPinnedThis = computed(() => !!props.isPinnedPostId && props.isPinnedPost
 
 // Paywall: subscriber-only or paid, and not the author's own post
 const isPaywalled = computed(() =>
-  (props.post.subscriber_only || props.post.is_paid) && !isOwn.value
+  (props.post.subscriber_only || props.post.is_paid) && props.post.can_view_content !== true && !isOwn.value
 )
 
 const lightboxUrls = computed<string[]>(() =>

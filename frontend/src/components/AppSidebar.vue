@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useFriendsStore } from '@/stores/friends'
@@ -39,14 +39,15 @@ function navigate(fn: () => void) {
   fn()
 }
 
-onMounted(() => {
+watch([() => auth.user?.id, () => auth.isAuthenticated], ([userId, authenticated]) => {
+  if (!userId || !authenticated) return;
   friendsStore.loadRequests().catch(() => {})
   messagesStore.fetchUnreadCount().catch(() => {})
   if (auth.user) messagesStore.fetchMyGroupInboxCounts()
   if (auth.user && !groupsStore.myGroups.length) {
     groupsStore.loadMyGroups().catch(() => {})
   }
-})
+}, { immediate: true })
 
 // Sum of pending "Обращения" across every group the user owns/admins/moderates.
 const groupInboxTotal = computed(() =>

@@ -1,5 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import type { RouteGenericOf } from '../../lib/routeTypes.js';
+import { resolveAccountIdentity } from '../../lib/accountAccess.js';
+import { errCode, errMessage, errStatus } from '../../lib/httpErrors.js';
 import {
   getNotificationsHandler, getUnreadCountHandler,
   markReadHandler, deleteAllHandler, sseNotificationsHandler,
@@ -18,8 +20,12 @@ export async function notificationsRoutes(fastify: FastifyInstance) {
       const tokenStr = (req.headers.authorization?.replace('Bearer ', '') ?? '') || (req.query.token ?? '');
       if (!tokenStr) { reply.code(401).send({ error: 'Unauthorized' }); return; }
       const decoded = fastify.jwt.verify<{ id: string; role: string }>(tokenStr);
-      req.user = decoded;
-    } catch { reply.code(401).send({ error: 'Unauthorized' }); return; }
+      req.user = { ...decoded, ...await resolveAccountIdentity(decoded.id) };
+    } catch (error) {
+      const status = errStatus(error) ?? 401;
+      reply.code(status).send({ success: false, data: null, error: { code: errCode(error) ?? 'UNAUTHORIZED', message: status === 403 ? errMessage(error) : 'Unauthorized' } });
+      return;
+    }
     return sseNotificationsHandler(req, reply);
   });
 }

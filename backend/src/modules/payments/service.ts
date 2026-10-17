@@ -126,6 +126,9 @@ async function openGatewayPayment(
  */
 async function applySubscription(tx: Tx, userId: string, tier: PaidTier, period: BillingPeriod, now = new Date()) {
   const months = PERIOD_MONTHS[period];
+  // Different payment rows can target the same account simultaneously.
+  // Lock the account before calculating its new expiry, not only the payment.
+  await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId}::uuid FOR UPDATE`;
   const u = await tx.user.findUniqueOrThrow({
     where: { id: userId },
     select: { subscription_tier: true, subscription_expires_at: true },

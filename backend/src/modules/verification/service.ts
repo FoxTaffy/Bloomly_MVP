@@ -290,32 +290,31 @@ export async function adminReviewRequest(
   reviewerId: string,
   reason?: string,
 ) {
-  const req = await prisma.verificationRequest.findUnique({ where: { id: requestId } });
-  if (!req) throw new Error('Request not found');
-  if (req.status !== 'pending') throw new Error('Request already reviewed');
-
-  await prisma.verificationRequest.update({
-    where: { id: requestId },
-    data: {
-      status: action === 'approve' ? 'approved' : 'rejected',
-      reviewed_at: new Date(),
-      reviewed_by: reviewerId,
-      reason: reason || null,
-    },
-  });
-
-  if (action === 'approve') {
-    // Set user as verified with their specific badge/verification type
-    await prisma.user.update({
-      where: { id: req.user_id },
+  return prisma.$transaction(async (tx) => {
+    const req = await tx.verificationRequest.findUnique({ where: { id: requestId } });
+    if (!req) throw new Error('Request not found');
+    const reviewedAt = new Date();
+    const updated = await tx.verificationRequest.updateMany({
+      where: { id: requestId, status: 'pending' },
       data: {
-        is_verified: true,
-        verified_at: new Date(),
-        verification_type: req.verification_type,
-        badge_type: req.badge_type || 'verified',
+        status: action === 'approve' ? 'approved' : 'rejected',
+        reviewed_at: reviewedAt,
+        reviewed_by: reviewerId,
+        reason: reason?.trim().slice(0, 500) || null,
       },
     });
-  }
-
-  return { success: true, user_id: req.user_id };
+    if (updated.count !== 1) throw new Error('Request already reviewed');
+    if (action === 'approve') {
+      await tx.user.update({
+        where: { id: req.user_id },
+        data: {
+          is_verified: true,
+          verified_at: reviewedAt,
+          verification_type: req.verification_type,
+          badge_type: req.badge_type || 'verified',
+        },
+      });
+    }
+    return { success: true, user_id: req.user_id };
+  });
 }
