@@ -34,6 +34,27 @@ function cleanSocialLinks(links: Record<string, unknown>): Record<string, string
 // Must be a leap year so Feb 29 birthdays don't overflow into March.
 const MONTH_DAY_SENTINEL_YEAR = 2000;
 
+/** Best-effort card brand detection from the BIN prefix — cosmetic only, no real PSP behind this. */
+function detectCardBrand(digits: string): string {
+  if (/^4/.test(digits)) return 'visa';
+  if (/^5[1-5]/.test(digits) || /^2(2[2-9]|[3-6]\d|7[01])/.test(digits)) return 'mastercard';
+  if (/^220[0-4]/.test(digits)) return 'mir';
+  return 'card';
+}
+
+/** Which card networks are usable per payment region (mirrors frontend/src/lib/paymentRegions.ts). */
+const REGION_ALLOWED_BRANDS: Record<string, string[]> = {
+  RU:     ['mir'],
+  US:     ['visa', 'mastercard'],
+  EU:     ['visa', 'mastercard'],
+  CN:     ['visa', 'mastercard'],
+  IN:     ['visa', 'mastercard'],
+  BR:     ['visa', 'mastercard'],
+  GLOBAL: ['visa', 'mastercard', 'mir'],
+};
+
+const CARD_BRAND_LABELS: Record<string, string> = { visa: 'Visa', mastercard: 'Mastercard', mir: 'МИР', card: 'эта карта' };
+
 /** Null out a profile status bubble once its expiresAt timestamp has passed. */
 function liveProfileStatus(status: unknown): unknown {
   const s = status as { expiresAt?: number } | null;
@@ -1000,15 +1021,47 @@ export const usersService = {
     });
   },
 
-  // ── Сохранённые способы оплаты: токены ЮKassa (привязка — payments/card-binding), у нас только маска ──
+  // ── Saved payment methods (masked card info only — never store PAN/CVV) ──
   async listPaymentMethods(userId: string) {
     return prisma.paymentMethod.findMany({
-      // Старые «карты» без токена ЮKassa списать нельзя — не показываем
-      where: { user_id: userId, provider_method_id: { not: null } },
+      where: { user_id: userId },
       orderBy: [{ is_default: 'desc' }, { created_at: 'desc' }],
-      select: {
-        id: true, type: true, brand: true, last4: true, exp_month: true, exp_year: true,
-        title: true, is_default: true, created_at: true,
+    });
+  },
+
+  async addPaymentMethod(userId: string, input: {
+    cardNumber: string; expMonth: number; expYear: number; holderName: string; setDefault?: boolean;
+  }) {
+    const digits = input.cardNumber.replace(/\D/g, '');
+    if (digits.length < 12 || digits.length > 19) {
+      throw Object.assign(new Error('Invalid card number'), { statusCode: 400 });
+    }
+    const brand = detectCardBrand(digits);
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { payment_region: true } });
+    const allowedBrands = REGION_ALLOWED_BRANDS[user?.payment_region || 'GLOBAL'] ?? REGION_ALLOWED_BRANDS.GLOBAL;
+    if (!allowedBrands.includes(brand)) {
+      throw Object.assign(
+        new Error(`Карты «${CARD_BRAND_LABELS[brand] ?? brand}» недоступны в вашем регионе`),
+        { statusCode: 400 },
+      );
+    }
+    const count = await prisma.paymentMethod.count({ where: { user_id: userId } });
+    if (count >= 5) {
+      throw Object.assign(new Error('You can save up to 5 cards'), { statusCode: 400 });
+    }
+    const makeDefault = input.setDefault ?? count === 0;
+    if (makeDefault) {
+      await prisma.paymentMethod.updateMany({ where: { user_id: userId, is_default: true }, data: { is_default: false } });
+    }
+    return prisma.paymentMethod.create({
+      data: {
+        user_id: userId,
+        brand,
+        last4: digits.slice(-4),
+        exp_month: input.expMonth,
+        exp_year: input.expYear,
+        holder_name: input.holderName.trim().slice(0, 60),
+        is_default: makeDefault,
       },
     });
   },
@@ -1019,13 +1072,10 @@ export const usersService = {
 
     await prisma.paymentMethod.delete({ where: { id } });
 
-    const next = await prisma.paymentMethod.findFirst({
-      where: { user_id: userId, provider_method_id: { not: null } },
-      orderBy: { created_at: 'desc' },
-    });
-    if (existing.is_default && next) await prisma.paymentMethod.update({ where: { id: next.id }, data: { is_default: true } });
-    // Списывать больше не с чего — автопродление выключается
-    if (!next) await prisma.user.update({ where: { id: userId }, data: { subscription_auto_renew: false, subscription_next_renew_at: null } });
+    if (existing.is_default) {
+      const next = await prisma.paymentMethod.findFirst({ where: { user_id: userId }, orderBy: { created_at: 'desc' } });
+      if (next) await prisma.paymentMethod.update({ where: { id: next.id }, data: { is_default: true } });
+    }
     return { id };
   },
 

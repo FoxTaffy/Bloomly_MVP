@@ -27,11 +27,6 @@ const errorMsg = ref('')
 const method   = ref<PayMethod>('AC')
 const quoteRes = ref<PlanQuote | null>(null)
 const gatewayEnabled = ref(false)
-const hasSavedMethod = ref(false)
-const recurringEnabled = ref(false)
-// Автопродление: при оплате через ЮKassa способ сохраняется; с баланса — работает, если карта уже привязана
-const autoRenew = ref(true)
-const canAutoRenew = computed(() => recurringEnabled.value && (method.value !== 'wallet' || hasSavedMethod.value))
 
 // Пока сервер не ответил — показываем цену со страницы тарифов
 const perMonth = computed(() => quoteRes.value?.perMonth ?? props.price)
@@ -53,8 +48,6 @@ onMounted(async () => {
       walletStore.fetchBalance().catch(() => 0),
     ])
     gatewayEnabled.value = cfg.enabled
-    hasSavedMethod.value = cfg.hasSavedMethod
-    recurringEnabled.value = cfg.recurring
     quoteRes.value = q
   } catch {
     errorMsg.value = langStore.t.subToastError
@@ -99,9 +92,9 @@ async function pay() {
   sending.value = true
   errorMsg.value = ''
   try {
-    const res = await payments.startSubscription(props.plan.id, props.period, method.value, canAutoRenew.value && autoRenew.value)
-    // Онлайн-оплата — приложение уже открывает страницу оплаты, кнопку оставляем в состоянии загрузки
-    if (res.token) return
+    const res = await payments.startSubscription(props.plan.id, props.period, method.value)
+    // Карта/ЮMoney — браузер уже уходит на страницу оплаты, кнопку оставляем в состоянии загрузки
+    if (res.confirmationUrl) return
     walletStore.fetchBalance().catch(() => {})
     step.value = 'success'
     emit('success', props.plan.id, res.subscription?.expiresAt ?? null)
@@ -179,14 +172,6 @@ function close() {
                     <BIcon v-if="method === m.id && !m.disabled" name="CheckCircle2" class="w-4 h-4 text-brand-accent flex-shrink-0" />
                   </button>
                 </div>
-
-                <label v-if="canAutoRenew" class="flex items-start gap-3 px-4 py-3 rounded-2xl border border-white/10 bg-white/5 cursor-pointer select-none">
-                  <input v-model="autoRenew" type="checkbox" class="mt-0.5 w-4 h-4 accent-brand-accent flex-shrink-0" />
-                  <span class="min-w-0">
-                    <span class="block text-sm font-bold text-white/85">{{ langStore.t.payAutoRenew }}</span>
-                    <span class="block text-[11px] text-white/40 mt-0.5 leading-snug">{{ langStore.t.payAutoRenewHint }}</span>
-                  </span>
-                </label>
 
                 <p v-if="!gatewayEnabled" class="text-[11px] text-white/40 text-center">{{ langStore.t.payGatewayDisabled }}</p>
                 <p v-else-if="method !== 'wallet'" class="text-[11px] text-white/40 text-center">{{ langStore.t.payRedirectHint }}</p>

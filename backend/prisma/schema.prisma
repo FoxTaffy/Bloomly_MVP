@@ -62,11 +62,6 @@ model User {
   subscription_tier              String                    @default("free") @db.VarChar(20)
   // Конец оплаченного периода. null у платного тарифа — выдан админом бессрочно
   subscription_expires_at        DateTime?
-  // Автопродление: за сутки до конца периода списываем с основного сохранённого способа оплаты (ЮKassa)
-  subscription_auto_renew        Boolean                   @default(false)
-  subscription_period            String?                   @db.VarChar(10) // month | year — период для продления
-  subscription_renew_attempts    Int                       @default(0)
-  subscription_next_renew_at     DateTime?
   storage_used_bytes             BigInt                    @default(0)
   profile_theme                  String?                   @db.VarChar(50)
   profile_bg_url                 String?
@@ -213,20 +208,16 @@ model User {
 }
 
 model PaymentMethod {
-  id                 String   @id @default(uuid()) @db.Uuid
-  user_id            String   @db.Uuid
-  // Токен сохранённого способа оплаты в ЮKassa (payment_method.id). null — старая «карта» без токена, списать нельзя
-  provider_method_id String?  @unique @db.VarChar(100)
-  type               String   @default("bank_card") @db.VarChar(20) // bank_card | yoo_money | sbp
-  brand              String   @db.VarChar(20)
-  last4              String?  @db.VarChar(4)
-  exp_month          Int?
-  exp_year           Int?
-  holder_name        String?  @db.VarChar(60)
-  title              String?  @db.VarChar(100) // подпись от ЮKassa: «Bank card *4444», номер кошелька
-  is_default         Boolean  @default(false)
-  created_at         DateTime @default(now())
-  user               User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  id          String   @id @default(uuid()) @db.Uuid
+  user_id     String   @db.Uuid
+  brand       String   @db.VarChar(20)
+  last4       String   @db.VarChar(4)
+  exp_month   Int
+  exp_year    Int
+  holder_name String   @db.VarChar(60)
+  is_default  Boolean  @default(false)
+  created_at  DateTime @default(now())
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
 }
@@ -252,9 +243,8 @@ model Payment {
   id                    String    @id @default(uuid()) @db.Uuid
   user_id               String    @db.Uuid
   provider              String    @db.VarChar(20) // yoomoney | wallet
-  purpose               String    @db.VarChar(20) // wallet_topup | subscription | donation | card_binding
+  purpose               String    @db.VarChar(20) // wallet_topup | subscription | donation
   // pending → succeeded | expired | review (деньги пришли, но что-то не сходится — разобрать вручную)
-  // card_binding: succeeded → refunded (проверочный 1 ₽ возвращается)
   status                String    @default("pending") @db.VarChar(20)
   amount                Decimal   @db.Decimal(18, 2) // к оплате плательщиком
   credited_amount       Decimal?  @db.Decimal(18, 2) // пришло на счёт после комиссии шлюза
@@ -265,8 +255,6 @@ model Payment {
   provider_operation_id String?   @unique @db.VarChar(100)
   failure_reason        String?   @db.VarChar(200)
   raw_notification      Json?
-  save_method           Boolean   @default(false) // просили ЮKassa сохранить способ оплаты (привязка / автопродление)
-  recurring             Boolean   @default(false) // автосписание по сохранённому способу, без участия пользователя
   paid_at               DateTime?
   created_at            DateTime  @default(now())
   updated_at            DateTime  @updatedAt

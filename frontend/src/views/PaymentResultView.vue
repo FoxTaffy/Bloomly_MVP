@@ -45,7 +45,7 @@ async function poll() {
   } catch (e) {
     if (apiErrorStatus(e) === 404) { notFound.value = true; return }
   }
-  if (status.value === 'succeeded' || status.value === 'refunded') return onSucceeded()
+  if (status.value === 'succeeded') return onSucceeded()
   if (status.value !== 'pending') return
   if (++attempts >= POLL_LIMIT) { gaveUp.value = true; return }
   timer = setTimeout(poll, POLL_MS)
@@ -77,14 +77,6 @@ onUnmounted(() => { if (timer) clearTimeout(timer) })
         <template v-if="notFound">
           <BIcon name="SearchX" class="w-12 h-12 mx-auto text-white/40" />
           <h1 class="text-xl font-extrabold">{{ langStore.t.payResultNotFound }}</h1>
-        </template>
-
-        <template v-else-if="payment?.purpose === 'card_binding' && (status === 'succeeded' || status === 'refunded')">
-          <div class="w-16 h-16 mx-auto rounded-full bg-brand-success/15 flex items-center justify-center">
-            <BIcon name="CreditCard" class="w-9 h-9 text-brand-success" />
-          </div>
-          <h1 class="text-xl font-extrabold">{{ langStore.t.payResultCardBoundTitle }}</h1>
-          <p class="text-sm text-white/60">{{ langStore.t.payResultCardBoundDesc }}</p>
         </template>
 
         <template v-else-if="status === 'succeeded'">

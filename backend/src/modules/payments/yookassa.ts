@@ -2,13 +2,15 @@ import { yookassaConfig } from './config.js';
 import { logger } from '../../lib/logger.js';
 
 // ЮKassa API v3: https://yookassa.ru/developers/api
-// Платёж создаём на сервере, оплата — виджетом ЮKassa на нашей странице (confirmation_token), итог приходит webhook'ом
+// Платёж создаём на сервере, пользователя уводим на confirmation_url, итог приходит webhook'ом
 // (payment.succeeded / payment.canceled). Webhook не подписан, поэтому ему не верим на слово:
 // статус и сумму перечитываем из API по id платежа.
 
 export type PayMethod = 'AC' | 'PC'; // AC — банковская карта, PC — кошелёк ЮMoney
 
 const API = 'https://api.yookassa.ru/v3';
+
+const METHOD_TYPE: Record<PayMethod, string> = { AC: 'bank_card', PC: 'yoo_money' };
 
 export interface YookassaPayment {
   id: string;
@@ -18,18 +20,7 @@ export interface YookassaPayment {
   income_amount?: { value: string; currency: string };
   metadata?: Record<string, string>;
   cancellation_details?: { party?: string; reason?: string };
-  confirmation?: { type: string; confirmation_token?: string };
-  payment_method?: YookassaPaymentMethod;
-}
-
-/** Способ оплаты в платеже. saved = true — по id можно списывать без участия пользователя. */
-export interface YookassaPaymentMethod {
-  id: string;
-  type: string; // bank_card | yoo_money | sbp | …
-  saved: boolean;
-  title?: string;
-  account_number?: string;
-  card?: { first6?: string; last4?: string; expiry_month?: string; expiry_year?: string; card_type?: string };
+  confirmation?: { type: string; confirmation_url?: string };
 }
 
 export interface YookassaNotification {
@@ -58,73 +49,38 @@ async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, ide
   return res.json() as Promise<T>;
 }
 
-function receiptOf(description: string, amount: number, customerEmail?: string) {
-  const { receipt } = yookassaConfig();
-  if (!receipt.enabled || !customerEmail) return {};
-  return {
-    receipt: {
-      customer: { email: customerEmail },
-      ...(receipt.taxSystemCode ? { tax_system_code: receipt.taxSystemCode } : {}),
-      items: [{
-        description: description.slice(0, 128),
-        quantity: '1.00',
-        amount: { value: amount.toFixed(2), currency: 'RUB' },
-        vat_code: receipt.vatCode,
-        payment_mode: 'full_payment',
-        payment_subject: 'service',
-      }],
-    },
-  };
-}
-
-/**
- * Создаёт платёж (capture сразу). Повтор с тем же paymentId вернёт тот же платёж.
- * savePaymentMethod — ЮKassa сохранит карту/кошелёк для автоплатежей (нужно включить автоплатежи в магазине).
- */
+/** Создаёт платёж (capture сразу). Повтор с тем же paymentId вернёт тот же платёж. */
 export function createYookassaPayment(opts: {
   paymentId: string;
   amount: number;
+  method: PayMethod;
   description: string;
   returnUrl: string;
   customerEmail?: string;
-  savePaymentMethod?: boolean;
 }): Promise<YookassaPayment> {
+  const { receipt } = yookassaConfig();
   return call<YookassaPayment>('POST', '/payments', {
-    ...receiptOf(opts.description, opts.amount, opts.customerEmail),
+    ...(receipt.enabled && opts.customerEmail ? {
+      receipt: {
+        customer: { email: opts.customerEmail },
+        ...(receipt.taxSystemCode ? { tax_system_code: receipt.taxSystemCode } : {}),
+        items: [{
+          description: opts.description.slice(0, 128),
+          quantity: '1.00',
+          amount: { value: opts.amount.toFixed(2), currency: 'RUB' },
+          vat_code: receipt.vatCode,
+          payment_mode: 'full_payment',
+          payment_subject: 'service',
+        }],
+      },
+    } : {}),
     amount: { value: opts.amount.toFixed(2), currency: 'RUB' },
     capture: true,
-    // Способ оплаты (карта, ЮMoney, СБП…) пользователь выбирает в виджете
-    confirmation: { type: 'embedded' },
-    ...(opts.savePaymentMethod ? { save_payment_method: true } : {}),
+    payment_method_data: { type: METHOD_TYPE[opts.method] },
+    confirmation: { type: 'redirect', return_url: opts.returnUrl },
     description: opts.description.slice(0, 128),
     metadata: { payment_id: opts.paymentId },
   }, opts.paymentId);
-}
-
-/** Автоплатёж по сохранённому способу: без confirmation, пользователь не участвует. */
-export function chargeSavedPaymentMethod(opts: {
-  paymentId: string;
-  paymentMethodId: string;
-  amount: number;
-  description: string;
-  customerEmail?: string;
-}): Promise<YookassaPayment> {
-  return call<YookassaPayment>('POST', '/payments', {
-    ...receiptOf(opts.description, opts.amount, opts.customerEmail),
-    amount: { value: opts.amount.toFixed(2), currency: 'RUB' },
-    capture: true,
-    payment_method_id: opts.paymentMethodId,
-    description: opts.description.slice(0, 128),
-    metadata: { payment_id: opts.paymentId },
-  }, opts.paymentId);
-}
-
-/** Полный возврат (проверочный платёж привязки карты). */
-export function refundYookassaPayment(opts: { paymentId: string; remoteId: string; amount: number }) {
-  return call<{ id: string; status: string }>('POST', '/refunds', {
-    payment_id: opts.remoteId,
-    amount: { value: opts.amount.toFixed(2), currency: 'RUB' },
-  }, `refund-${opts.paymentId}`);
 }
 
 export function fetchYookassaPayment(id: string): Promise<YookassaPayment> {
