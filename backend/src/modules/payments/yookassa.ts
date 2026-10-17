@@ -59,6 +59,12 @@ async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, ide
   return res.json() as Promise<T>;
 }
 
+/** Описание в кабинете ЮKassa: что оплачено и кто платил (лимит ЮKassa — 128 символов). Чек покупателя ник не содержит. */
+function describe(description: string, payerUsername?: string) {
+  const who = payerUsername?.replace(/[\x00-\x1f]/g, '').slice(0, 40);
+  return (who ? `${description} · @${who}` : description).slice(0, 128);
+}
+
 function receiptOf(description: string, amount: number, customerEmail?: string) {
   const { receipt } = yookassaConfig();
   if (!receipt.enabled || !customerEmail) return {};
@@ -88,6 +94,7 @@ export function createYookassaPayment(opts: {
   description: string;
   returnUrl: string;
   customerEmail?: string;
+  payerUsername?: string;
   savePaymentMethod?: boolean;
 }): Promise<YookassaPayment> {
   return call<YookassaPayment>('POST', '/payments', {
@@ -97,8 +104,8 @@ export function createYookassaPayment(opts: {
     // Способ оплаты (карта, ЮMoney, СБП…) пользователь выбирает на странице ЮKassa
     confirmation: { type: 'redirect', return_url: opts.returnUrl },
     ...(opts.savePaymentMethod ? { save_payment_method: true } : {}),
-    description: opts.description.slice(0, 128),
-    metadata: { payment_id: opts.paymentId },
+    description: describe(opts.description, opts.payerUsername),
+    metadata: { payment_id: opts.paymentId, ...(opts.payerUsername ? { username: opts.payerUsername.slice(0, 60) } : {}) },
   }, opts.paymentId);
 }
 
@@ -109,14 +116,15 @@ export function chargeSavedPaymentMethod(opts: {
   amount: number;
   description: string;
   customerEmail?: string;
+  payerUsername?: string;
 }): Promise<YookassaPayment> {
   return call<YookassaPayment>('POST', '/payments', {
     ...receiptOf(opts.description, opts.amount, opts.customerEmail),
     amount: { value: opts.amount.toFixed(2), currency: 'RUB' },
     capture: true,
     payment_method_id: opts.paymentMethodId,
-    description: opts.description.slice(0, 128),
-    metadata: { payment_id: opts.paymentId },
+    description: describe(opts.description, opts.payerUsername),
+    metadata: { payment_id: opts.paymentId, ...(opts.payerUsername ? { username: opts.payerUsername.slice(0, 60) } : {}) },
   }, opts.paymentId);
 }
 

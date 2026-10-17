@@ -95,14 +95,13 @@ async function openGatewayPayment(
   cfg: ReturnType<typeof requireGateway>,
   payment: { id: string; user_id: string; save_method?: boolean }, amount: number, description: string,
 ) {
-  const buyer = cfg.receipt.enabled
-    ? await prisma.user.findUnique({ where: { id: payment.user_id }, select: { email: true } })
-    : null;
+  const buyer = await prisma.user.findUnique({ where: { id: payment.user_id }, select: { email: true, username: true } });
   try {
     const remote = await createYookassaPayment({
       paymentId: payment.id, amount, description,
       returnUrl: `${cfg.returnUrl}?id=${payment.id}`,
-      customerEmail: buyer?.email,
+      customerEmail: cfg.receipt.enabled ? buyer?.email : undefined,
+      payerUsername: buyer?.username,
       savePaymentMethod: payment.save_method,
     });
     const confirmationUrl = remote.confirmation?.confirmation_url;
@@ -776,7 +775,7 @@ export const paymentsService = {
         OR: [{ subscription_next_renew_at: null }, { subscription_next_renew_at: { lte: now } }],
       },
       select: {
-        id: true, email: true, created_at: true, subscription_tier: true, subscription_period: true,
+        id: true, email: true, username: true, created_at: true, subscription_tier: true, subscription_period: true,
         subscription_renew_attempts: true, subscription_next_renew_at: true,
       },
       take: 200,
@@ -822,6 +821,7 @@ export const paymentsService = {
           amount: q.amount,
           description: `${subscriptionLabel(tier, period)}, автопродление`,
           customerEmail: cfg.receipt.enabled ? u.email ?? undefined : undefined,
+          payerUsername: u.username,
         });
         await prisma.payment.update({ where: { id: payment.id }, data: { provider_operation_id: remote.id } });
         // Обычно ответ сразу succeeded/canceled; pending дождётся webhook

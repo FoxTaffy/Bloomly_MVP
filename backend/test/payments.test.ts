@@ -469,6 +469,15 @@ describe('payments: ЮKassa', () => {
       expect((await prisma.payment.findUniqueOrThrow({ where: { id } })).provider_operation_id).toBe(rid);
     });
 
+    it('в ЮKassa уходит ник плательщика: в описании и в metadata', async () => {
+      const { user, auth } = await createUser();
+      const res = await api('POST', '/api/payments/topup', { headers: auth, body: { amount: 540, method: 'AC' } });
+      const req = remote.get(await remoteIdOf(res.json.data.paymentId))!.request as { description: string; metadata: Record<string, string> };
+      expect(req.description).toContain(`@${user.username}`);
+      expect(req.description.length).toBeLessThanOrEqual(128);
+      expect(req.metadata.username).toBe(user.username);
+    });
+
     it('чужой/выдуманный id в webhook ничего не меняет и не вызывает повторов', async () => {
       const { user } = await createUser();
       expect((await webhook('does-not-exist')).statusCode).toBe(200);
