@@ -58,18 +58,51 @@ describe('stickers: доступ к черновикам и платным па�
     expect((await api('POST', `/api/stickers/${own.id}/collect`, { headers: other.auth })).status).toBe(404);
   });
 
-  it('по коду приглашения пак добавляется, а код скрыт от не-авторов', async () => {
+  it('по приглашению пак добавляется только после одобрения заявки', async () => {
     const author = await createUser();
     const guest = await createUser();
     const invite = await makePack(author.user.id, { visibility: 'invite', invite_code: 'abc123' });
 
-    expect((await api('POST', '/api/stickers/invite/wrong/join', { headers: guest.auth })).status).toBe(404);
-    expect((await api('POST', '/api/stickers/invite/abc123/join', { headers: guest.auth })).status).toBe(200);
-    expect(await prisma.userStickerPack.count({ where: { pack_id: invite.id, user_id: guest.user.id } })).toBe(1);
+    expect((await api('POST', '/api/stickers/invite/wrong/request', { headers: guest.auth })).status).toBe(404);
+    const req = await api('POST', '/api/stickers/invite/abc123/request', { headers: guest.auth });
+    expect(req.status).toBe(201);
+    expect(req.json.data.status).toBe('pending');
+    // повторная заявка не плодит дубликаты
+    await api('POST', '/api/stickers/invite/abc123/request', { headers: guest.auth });
+    expect(await prisma.stickerAccessRequest.count({ where: { pack_id: invite.id } })).toBe(1);
+    expect(await prisma.userStickerPack.count({ where: { pack_id: invite.id, user_id: guest.user.id } })).toBe(0);
 
-    const asGuest = await api('GET', `/api/stickers/${invite.id}`, { headers: guest.auth });
-    expect(asGuest.status).toBe(200);
+    // владелец видит заявку и получает уведомление
+    const incoming = await api('GET', '/api/stickers/me/access-requests', { headers: author.auth });
+    expect(incoming.json.data.count).toBe(1);
+    const requestId = incoming.json.data.requests[0].id;
+    expect(await prisma.notification.count({ where: { receiver_id: author.user.id, type: 'STICKER_ACCESS_REQUEST' } })).toBe(1);
+
+    // гость не может одобрить чужую заявку
+    expect((await api('POST', `/api/stickers/access-requests/${requestId}/approve`, { headers: guest.auth })).status).toBe(404);
+
+    expect((await api('POST', `/api/stickers/access-requests/${requestId}/approve`, { headers: author.auth })).status).toBe(200);
+    expect(await prisma.userStickerPack.count({ where: { pack_id: invite.id, user_id: guest.user.id } })).toBe(1);
+    expect(await prisma.notification.count({ where: { receiver_id: guest.user.id, type: 'STICKER_ACCESS_APPROVED' } })).toBe(1);
+    expect((await api('POST', `/api/stickers/access-requests/${requestId}/approve`, { headers: author.auth })).status).toBe(409);
+
+    const asGuest = await api('GET', `/api/stickers/invite/abc123`, { headers: guest.auth });
+    expect(asGuest.json.data.access).toBe('approved');
     expect(asGuest.json.data.pack.invite_code).toBeNull();
+  });
+
+  it('отклонённая заявка не добавляет пак', async () => {
+    const author = await createUser();
+    const guest = await createUser();
+    const invite = await makePack(author.user.id, { visibility: 'invite', invite_code: 'nope42' });
+    await api('POST', '/api/stickers/invite/nope42/request', { headers: guest.auth });
+    const incoming = await api('GET', '/api/stickers/me/access-requests', { headers: author.auth });
+    const requestId = incoming.json.data.requests[0].id;
+
+    expect((await api('POST', `/api/stickers/access-requests/${requestId}/reject`, { headers: author.auth })).status).toBe(200);
+    expect(await prisma.userStickerPack.count({ where: { pack_id: invite.id, user_id: guest.user.id } })).toBe(0);
+    // прямое добавление в обход заявки запрещено
+    expect((await api('POST', `/api/stickers/${invite.id}/collect`, { headers: guest.auth })).status).toBe(403);
   });
 
   it('платный пак создаёт только Business', async () => {

@@ -278,7 +278,7 @@ function labelById(id: string | null) {
       <main class="flex-1 min-w-0 pb-28 md:pb-20 space-y-4">
 
         <!-- Header card -->
-        <div class="bg-brand-card border border-brand-border rounded-3xl px-6 py-5 shadow-xl">
+        <div class="bg-brand-card border border-brand-border rounded-3xl px-6 py-5 max-md:px-4 max-md:py-4 shadow-xl">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-2xl bg-brand-yellow/15 flex items-center justify-center flex-shrink-0">
@@ -315,10 +315,10 @@ function labelById(id: string | null) {
 
           <!-- Tabs + sort -->
           <div class="mt-3 flex items-center gap-2 flex-wrap">
-            <div class="flex gap-1.5 flex-wrap">
+            <div class="flex gap-1.5 flex-wrap m-scroll-row max-md:w-[calc(100%+2rem)] max-md:-mx-4 max-md:px-4">
               <button v-for="tab in subTabs" :key="tab.key"
                 @click="activeTab = tab.key"
-                class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all"
+                class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-semibold max-md:whitespace-nowrap transition-all"
                 :class="activeTab === tab.key
                   ? 'bg-brand-accent text-white shadow-md shadow-brand-accent/25'
                   : 'bg-brand-bg border border-brand-border text-white/55 hover:text-white hover:border-brand-accent/40'">
@@ -352,21 +352,21 @@ function labelById(id: string | null) {
 
           <!-- Label filter strip (only on post tabs) -->
           <template v-if="isPostTab && labels.length">
-            <div class="mt-3 flex gap-1.5 flex-wrap items-center">
+            <div class="mt-3 flex gap-1.5 flex-wrap items-center m-scroll-row max-md:-mx-4 max-md:px-4">
               <button
                 @click="activeLabelId = ''"
-                class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all"
+                class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold max-md:whitespace-nowrap border transition-all"
                 :class="activeLabelId === '' ? 'bg-brand-accent/15 text-brand-accent border-brand-accent/40' : 'text-white/50 border-brand-border hover:text-white hover:border-white/20'"
               >Все</button>
               <button
                 @click="activeLabelId = null"
-                class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all"
+                class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold max-md:whitespace-nowrap border transition-all"
                 :class="activeLabelId === null ? 'bg-white/10 text-white border-white/30' : 'text-white/50 border-brand-border hover:text-white hover:border-white/20'"
               >Без метки</button>
               <button
                 v-for="label in labels" :key="label.id"
                 @click="activeLabelId = label.id"
-                class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all"
+                class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold max-md:whitespace-nowrap border transition-all"
                 :class="activeLabelId === label.id ? 'text-white border-transparent' : 'text-white/60 border-brand-border hover:text-white'"
                 :style="activeLabelId === label.id ? `background:${label.color}33;border-color:${label.color}66` : ''"
               >

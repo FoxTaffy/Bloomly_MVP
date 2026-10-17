@@ -59,6 +59,7 @@
   ::-webkit-scrollbar-thumb:hover { background: var(--c-muted); }
 }
 
+
 @layer utilities {
   /* Hide scrollbar while keeping scroll functionality */
   .scrollbar-hide {
@@ -70,13 +71,47 @@
   }
 }
 
+/* ── Mobile only (< md / 768px). Desktop layout is not affected. ─────────── */
+@media (max-width: 767px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  body {
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    /* room for the iPhone home indicator under the fixed bottom nav */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* iOS Safari zooms the page when a focused field has font-size < 16px —
+   keep fields at 16px on iOS touch devices only. */
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 767px) {
+    input.text-xs, input.text-sm, input.text-\[10px\], input.text-\[11px\], input.text-\[12px\], input.text-\[13px\], input.text-\[14px\], input.text-\[15px\],
+    textarea.text-xs, textarea.text-sm, textarea.text-\[12px\], textarea.text-\[13px\], textarea.text-\[14px\], textarea.text-\[15px\],
+    select.text-xs, select.text-sm {
+      font-size: 16px !important;
+    }
+  }
+}
+
 @layer utilities {
-  /* Hide scrollbar while keeping scroll functionality */
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  /* Mobile: turn a wrapping tab/chip row into a single horizontally scrollable row */
+  @media (max-width: 767px) {
+    .m-scroll-row {
+      flex-wrap: nowrap !important;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      overscroll-behavior-x: contain;
+    }
+    .m-scroll-row::-webkit-scrollbar { display: none; }
+    .m-scroll-row > * {
+      flex-shrink: 0;
+    }
   }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
 }

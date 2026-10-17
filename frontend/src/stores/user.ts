@@ -160,6 +160,7 @@ export interface UserProfile {
   artist_since: string | null
   onboarding_done: boolean
   _count?: { followers: number; following: number; posts: number }
+  likes_count?: number
   pinnedPost?: any | null
   badge_level?: string
   messages_privacy?: string

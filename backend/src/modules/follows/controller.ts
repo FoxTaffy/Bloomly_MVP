@@ -15,6 +15,9 @@ export const toggleFollowHandler = async (
     const result = await followsService.toggle(followerId, req.params.id);
     return reply.send({ success: true, data: result, error: null });
   } catch (e) {
+    if (errStatus(e) === 403) {
+      return reply.code(403).send({ success: false, data: null, error: { code: 'PROFILE_PRIVATE', message: errMessage(e) } });
+    }
     return reply.code(400).send({ success: false, data: null, error: { code: 'FOLLOW_ERROR', message: errMessage(e) } });
   }
 };

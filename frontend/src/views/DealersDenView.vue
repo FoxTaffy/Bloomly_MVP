@@ -5,7 +5,6 @@ const langStore = useLangStore()
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { isAdmin } from '@/lib/roles'
 import { useDealersDenStore, type DealerListing, type ListingKind } from '@/stores/dealersDen'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useConfirm } from '@/composables/useConfirm'
@@ -14,7 +13,6 @@ import AppSidebar   from '@/components/AppSidebar.vue'
 import BIcon        from '@/components/BIcon.vue'
 import MediaUpload  from '@/components/MediaUpload.vue'
 import DenWeeklyTop from '@/components/DenWeeklyTop.vue'
-import SubmitFrameModal from '@/components/SubmitFrameModal.vue'
 import DenCountdown from '@/components/DenCountdown.vue'
 
 const router = useRouter()
@@ -40,14 +38,6 @@ const canSell = computed(() => {
   return u.is_verified === true && (u.verification_type === 'artist' || u.verification_type === 'master')
 })
 
-// Avatar frames go through their own submission/approval flow (admins publish instantly,
-// artist-verified users go into a moderation queue) — narrower than general Den selling rights.
-const canSellFrames = computed(() => {
-  const u = auth.user
-  if (!u) return false
-  return isAdmin(u.role) || (u.is_verified === true && u.verification_type === 'artist')
-})
-const showFrameModal = ref(false)
 
 // ── Tabs ───────────────────────────────────────────────────────────────────────
 type MainTab = 'browse' | 'my'
@@ -414,15 +404,15 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <BIcon name="Gift" class="w-3.5 h-3.5 text-brand-success" /><span class="text-white text-xs font-bold">{{ langStore.t.dealersDenKindRaffle }}</span>
           </div>
 
-          <div class="relative z-10 px-6 py-7 md:px-8">
+          <div class="relative z-10 px-6 py-7 md:px-8 max-md:px-4 max-md:py-5">
             <div class="flex items-start justify-between gap-4 flex-wrap">
-              <div>
+              <div class="max-md:min-w-0 max-md:w-full">
                 <div class="flex items-center gap-3 mb-2">
                   <div class="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0" style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
                     <BIcon name="Store" class="w-6 h-6 text-white" />
                   </div>
-                  <div>
-                    <h1 class="text-3xl font-black tracking-tight" style="background: linear-gradient(90deg, #fff 30%, #93b4ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text">
+                  <div class="max-md:min-w-0">
+                    <h1 class="text-3xl max-md:text-2xl font-black tracking-tight" style="background: linear-gradient(90deg, #fff 30%, #93b4ff); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text">
                       Dealers' Den
                     </h1>
                     <p class="text-white/50 text-xs mt-0.5 font-medium">
@@ -439,7 +429,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               </div>
 
               <!-- Search + CTA -->
-              <div class="flex flex-col gap-2 min-w-[220px]">
+              <div class="flex flex-col gap-2 min-w-[220px] max-md:min-w-0 max-md:w-full">
                 <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl px-4 py-2.5">
                   <BIcon name="Search" class="w-4 h-4 text-white/50 shrink-0" />
                   <input v-model="searchQuery" :placeholder="langStore.t.dealersDenSearchPlaceholderHero"
@@ -456,17 +446,17 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             </div>
 
             <!-- Stats row -->
-            <div class="flex gap-3 mt-5 flex-wrap">
+            <div class="flex gap-3 mt-5 flex-wrap max-md:grid max-md:grid-cols-2 max-md:gap-2 max-md:mt-4">
               <div v-for="stat in [
                 { icon: 'ShoppingBag',  label: langStore.t.dealersDenListingsStatLabel, value: store.total },
                 { icon: 'Hammer',       label: langStore.t.dealersDenStatAuctions,  value: store.listings.filter(l => l.listing_kind === 'auction' || l.listing_kind === 'ych').length },
                 { icon: 'Gift',         label: langStore.t.dealersDenStatRaffles, value: store.listings.filter(l => l.listing_kind === 'raffle').length },
                 { icon: 'ListOrdered',  label: langStore.t.dealersDenStatCommissions,   value: store.listings.filter(l => l.listing_kind === 'commission_queue').length },
               ]" :key="stat.label"
-                class="flex items-center gap-2 bg-white/8 backdrop-blur-sm border border-white/10 rounded-2xl px-4 py-2">
-                <BIcon :name="stat.icon" class="w-3.5 h-3.5 text-brand-accent" />
+                class="flex items-center gap-2 bg-white/8 backdrop-blur-sm border border-white/10 rounded-2xl px-4 py-2 max-md:px-3 max-md:min-w-0">
+                <BIcon :name="stat.icon" class="w-3.5 h-3.5 text-brand-accent max-md:shrink-0" />
                 <span class="text-white font-extrabold text-sm">{{ stat.value }}</span>
-                <span class="text-white/45 text-xs">{{ stat.label }}</span>
+                <span class="text-white/45 text-xs max-md:truncate">{{ stat.label }}</span>
               </div>
             </div>
           </div>
@@ -502,7 +492,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
         ════════════════════════════════════════════ -->
         <div class="flex flex-col gap-2.5">
           <!-- Kind pills -->
-          <div class="flex items-center gap-2 flex-wrap">
+          <div class="flex items-center gap-2 flex-wrap m-scroll-row max-md:-mx-3 max-md:px-3">
             <button v-for="k in KINDS" :key="k.key"
               @click="selectKind(k.key)"
               class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap"
@@ -979,11 +969,6 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <BIcon name="LogIn" class="w-4 h-4" /> {{ langStore.t.dealersDenLoginToSellBtn }}
           </button>
         </div>
-
-        <button v-if="canSellFrames" @click="showFrameModal = true"
-          class="w-full flex items-center justify-center gap-2 py-3 text-white text-sm font-bold rounded-2xl transition-all shadow-lg hover:opacity-90 border border-brand-border bg-brand-card">
-          <BIcon name="CircleDashed" class="w-4 h-4" /> {{ langStore.t.avatarFrameSubmitBtn }}
-        </button>
 
         <!-- Trending hashtags -->
         <div v-if="trendingTags.length" class="bg-brand-card border border-brand-border rounded-2xl p-3.5 space-y-2.5">
@@ -1545,8 +1530,6 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
         </div>
       </transition>
     </Teleport>
-
-    <SubmitFrameModal v-model="showFrameModal" />
 
   </div>
 </template>

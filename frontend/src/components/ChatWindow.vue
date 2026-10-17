@@ -52,11 +52,7 @@
               <div v-else class="w-10 h-10 rounded-full bg-gradient-to-br from-brand-accent/30 to-brand-accent/10 ring-2 ring-brand-border hover:ring-brand-accent/50 transition-all flex items-center justify-center text-brand-accent font-bold">
                 {{ (other?.display_name || other?.username || '?')[0].toUpperCase() }}
               </div>
-              <span v-if="isPartnerOnline && !partnerDeviceIcon" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-brand-success rounded-full border-2 border-brand-card" />
-              <span v-else-if="isPartnerOnline" :title="partnerDevice ?? undefined"
-                class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-brand-success rounded-full border-2 border-brand-card flex items-center justify-center">
-                <BIcon :name="partnerDeviceIcon!" class="w-2 h-2 text-black/70" />
-              </span>
+              <OnlineIndicator v-if="isPartnerOnline" :device="partnerDevice" size="sm" />
             </span>
           </template>
         </template>
@@ -1325,6 +1321,7 @@ import { useMessagesStore, type Message, type MsgSender, type Conversation, type
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import BIcon from '@/components/BIcon.vue'
+import OnlineIndicator from '@/components/OnlineIndicator.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
 import MiniPlayer from '@/components/MiniPlayer.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'

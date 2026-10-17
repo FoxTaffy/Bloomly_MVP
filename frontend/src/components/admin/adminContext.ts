@@ -7,7 +7,7 @@ import { useLangStore } from '@/stores/lang'
 import { ROLE_RANK } from './adminHelpers'
 
 export type AdminTab = 'overview' | 'users' | 'posts' | 'reports' | 'support' | 'ads' | 'verification' | 'frames'
-  | 'automod' | 'updates' | 'groups' | 'finance' | 'settings'
+  | 'automod' | 'updates' | 'groups' | 'finance' | 'settings' | 'tags'
 
 // Users tab has five views: the user list, team & roles, frozen accounts, banned accounts, sponsors
 export type UsersView = 'all' | 'team' | 'frozen' | 'archived' | 'sponsors'

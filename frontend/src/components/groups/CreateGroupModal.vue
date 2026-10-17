@@ -41,6 +41,8 @@ export interface CreateGroupPayload {
   bannerUrl?: string
 }
 
+const props = defineProps<{ initialType?: GroupType }>()
+
 const emit = defineEmits<{
   (e: 'create', val: CreateGroupPayload): void
   (e: 'close'): void
@@ -54,7 +56,7 @@ const totalSteps = 4
 const name = ref('')
 const slug = ref('')
 const description = ref('')
-const type = ref<GroupType>('community')
+const type = ref<GroupType>(props.initialType ?? 'community')
 const isPublic = ref(true)
 
 const autoSlug = computed(() =>

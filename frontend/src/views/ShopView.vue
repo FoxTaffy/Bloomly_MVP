@@ -10,6 +10,8 @@ import AppHeader  from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon      from '@/components/BIcon.vue'
 import StickerPackEditor from '@/components/StickerPackEditor.vue'
+import SubmitFrameModal  from '@/components/SubmitFrameModal.vue'
+import { isAdmin } from '@/lib/roles'
 import { useConfirm } from '@/composables/useConfirm'
 import type { StickerPack } from '@/stores/stickers'
 
@@ -80,7 +82,10 @@ async function loadData() {
       promises.push(stickerStore.loadMyCollection())
     }
   }
-  if (auth.user) promises.push(shopStore.loadMyItems())
+  if (auth.user) {
+    promises.push(shopStore.loadMyItems())
+    promises.push(stickerStore.loadIncomingRequests())
+  }
 
   await Promise.all(promises)
 }
@@ -184,6 +189,35 @@ async function removePack(pack: StickerPack) {
   await stickerStore.deletePack(pack.id)
 }
 
+// ── Загрузка рамок (перенесено из Dealers' Den) ─────────────────────────────
+// Рамки проходят модерацию: админы публикуют сразу, верифицированные художники уходят в очередь
+const canSellFrames = computed(() => {
+  const u = auth.user
+  if (!u) return false
+  return isAdmin(u.role) || (u.is_verified === true && u.verification_type === 'artist')
+})
+const showFrameModal = ref(false)
+
+function onFrameCreated() {
+  clearTimeout(flashTimer)
+  purchaseMsg.value = { type: 'ok', text: 'Рамка загружена и отправлена на модерацию' }
+  flashTimer = setTimeout(() => (purchaseMsg.value = null), 4000)
+}
+
+const deciding = ref<Record<string, boolean>>({})
+
+async function decideRequest(id: string, action: 'approve' | 'reject') {
+  deciding.value[id] = true
+  try {
+    await stickerStore.decideAccessRequest(id, action)
+    if (action === 'approve') await stickerStore.loadMyCollection()
+  } catch (err: any) {
+    alert(err?.response?.data?.error ?? 'Не удалось обработать заявку')
+  } finally {
+    deciding.value[id] = false
+  }
+}
+
 const isOwnPack = (pack: StickerPack) => auth.user?.id === pack.author_id
 
 const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: string }> = {
@@ -237,16 +271,16 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
             <span class="text-white text-xs font-bold">Фоны</span>
           </div>
 
-          <div class="relative z-10 px-6 py-7 md:px-8">
+          <div class="relative z-10 px-6 py-7 md:px-8 max-md:px-4 max-md:py-5">
             <div class="flex items-start justify-between gap-4 flex-wrap">
-              <div>
+              <div class="max-md:min-w-0 max-md:w-full">
                 <div class="flex items-center gap-3 mb-2">
                   <div class="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0"
                        style="background: linear-gradient(135deg,#CD83F5,#7C3AED)">
                     <BIcon name="ShoppingBag" class="w-6 h-6 text-white" />
                   </div>
-                  <div>
-                    <h1 class="text-3xl font-black tracking-tight"
+                  <div class="max-md:min-w-0">
+                    <h1 class="text-3xl max-md:text-2xl font-black tracking-tight"
                         style="background: linear-gradient(90deg, #fff 30%, #CD83F5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text">
                       Bloomly Shop
                     </h1>
@@ -266,7 +300,7 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
                 </p>
               </div>
 
-              <div class="flex flex-col gap-2 min-w-[220px]">
+              <div class="flex flex-col gap-2 min-w-[220px] max-md:min-w-0 max-md:w-full">
                 <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl px-4 py-2.5">
                   <BIcon name="Search" class="w-4 h-4 text-white/50 shrink-0" />
                   <input v-model="searchQuery"
@@ -280,12 +314,12 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
               </div>
             </div>
 
-            <div class="flex gap-3 mt-5 flex-wrap">
+            <div class="flex gap-3 mt-5 flex-wrap max-md:grid max-md:grid-cols-2 max-md:gap-2 max-md:mt-4">
               <div v-for="stat in shopStats" :key="stat.label"
-                class="flex items-center gap-2 bg-white/8 backdrop-blur-sm border border-white/10 rounded-2xl px-4 py-2">
-                <BIcon :name="stat.icon" class="w-3.5 h-3.5 text-brand-purple" />
+                class="flex items-center gap-2 bg-white/8 backdrop-blur-sm border border-white/10 rounded-2xl px-4 py-2 max-md:px-3 max-md:min-w-0">
+                <BIcon :name="stat.icon" class="w-3.5 h-3.5 text-brand-purple max-md:shrink-0" />
                 <span class="text-white font-extrabold text-sm">{{ stat.value }}</span>
-                <span class="text-white/45 text-xs">{{ stat.label }}</span>
+                <span class="text-white/45 text-xs max-md:truncate">{{ stat.label }}</span>
               </div>
             </div>
           </div>
@@ -316,7 +350,7 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
 
         <!-- FILTER PILLS + SORT -->
         <div class="flex flex-col gap-2.5">
-          <div class="flex items-center gap-2 flex-wrap">
+          <div class="flex items-center gap-2 flex-wrap m-scroll-row max-md:-mx-3 max-md:px-3">
             <button v-for="cat in CATEGORIES" :key="cat.key"
               @click="activeCategory = cat.key"
               class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap"
@@ -326,6 +360,11 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
               :style="activeCategory === cat.key ? 'background: linear-gradient(135deg,#CD83F5,#7C3AED)' : ''">
               <BIcon :name="cat.icon" class="w-3.5 h-3.5" />
               {{ cat.label }}
+              <!-- Заявки на доступ к своим стикерпакам -->
+              <span v-if="cat.key === 'sticker_pack' && stickerStore.incomingCount > 0"
+                class="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center tabular-nums">
+                {{ stickerStore.incomingCount }}
+              </span>
             </button>
 
             <select v-if="activeCategory !== 'sticker_pack'"
@@ -336,7 +375,7 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
           </div>
 
           <div v-if="activeCategory === 'sticker_pack' && auth.user" class="flex flex-wrap items-center gap-3">
-          <div class="flex gap-1 self-start bg-brand-card rounded-2xl p-1 border border-brand-border">
+          <div class="flex gap-1 self-start bg-brand-card rounded-2xl p-1 border border-brand-border max-md:w-full">
             <button v-for="t in ([
               { key: 'browse', label: 'Все паки' },
               { key: 'collection', label: 'Коллекция' },
@@ -344,14 +383,14 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
             ] as const)"
               :key="t.key"
               @click="stickerTab = t.key"
-              class="px-4 py-1.5 rounded-xl text-xs font-bold transition-all"
+              class="px-4 py-1.5 rounded-xl text-xs font-bold transition-all max-md:flex-1 max-md:px-2 max-md:py-2 max-md:whitespace-nowrap"
               :class="stickerTab === t.key ? 'text-white shadow-md' : 'text-white/50 hover:text-white'"
               :style="stickerTab === t.key ? 'background: linear-gradient(135deg,#CD83F5,#7C3AED)' : ''">
               {{ t.label }}
             </button>
           </div>
             <button @click="openCreate"
-              class="ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl text-sm font-bold text-white shadow-md shadow-brand-purple/25 hover:opacity-90 transition-all"
+              class="ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-2xl text-sm font-bold text-white shadow-md shadow-brand-purple/25 hover:opacity-90 transition-all max-md:ml-0 max-md:w-full max-md:justify-center max-md:py-2.5"
               style="background: linear-gradient(135deg,#CD83F5,#7C3AED)">
               <BIcon name="Plus" class="w-4 h-4" /> Добавить стикерпак
             </button>
@@ -395,6 +434,12 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
             </div>
           </div>
         </div>
+
+        <!-- FRAME UPLOAD -->
+        <button v-if="activeCategory === 'frame' && canSellFrames" @click="showFrameModal = true"
+          class="w-full flex items-center justify-center gap-2 py-3 text-white text-sm font-bold rounded-2xl transition-all shadow-lg hover:opacity-90 border border-brand-border bg-brand-card">
+          <BIcon name="CircleDashed" class="w-4 h-4" /> {{ langStore.t.avatarFrameSubmitBtn }}
+        </button>
 
         <!-- SHOP ITEMS GRID -->
         <template v-if="!shopStore.loading && activeCategory !== 'sticker_pack'">
@@ -511,6 +556,28 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
 
         <!-- STICKER PACKS -->
         <template v-if="activeCategory === 'sticker_pack' || activeCategory === 'all'">
+          <!-- Заявки на доступ к стикерпакам по приглашению -->
+          <div v-if="stickerTab === 'my' && stickerStore.incomingRequests.length" class="space-y-2">
+            <h3 class="text-sm font-bold text-white/60 uppercase tracking-widest flex items-center gap-2">
+              <BIcon name="UserPlus" class="w-4 h-4 text-rose-400" />
+              Запросы на доступ · {{ stickerStore.incomingCount }}
+            </h3>
+            <div v-for="r in stickerStore.incomingRequests" :key="r.id"
+              class="flex items-center gap-3 bg-brand-card border border-brand-border rounded-2xl p-3">
+              <img v-if="r.user.avatar_url" :src="r.user.avatar_url" class="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+              <div v-else class="w-9 h-9 rounded-full bg-brand-bg flex-shrink-0" />
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-bold text-white truncate">{{ r.user.display_name ?? r.user.username }}
+                  <span class="text-white/40 font-normal">хочет получить «{{ r.pack.name }}»</span></p>
+                <p class="text-[11px] text-white/35">{{ new Date(r.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }}</p>
+              </div>
+              <button @click="decideRequest(r.id, 'reject')" :disabled="deciding[r.id]"
+                class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/8 hover:bg-white/15 text-white/70 disabled:opacity-40">Отклонить</button>
+              <button @click="decideRequest(r.id, 'approve')" :disabled="deciding[r.id]"
+                class="px-3 py-1.5 rounded-xl text-xs font-bold bg-brand-accent hover:opacity-90 text-white disabled:opacity-40">Одобрить</button>
+            </div>
+          </div>
+
           <div v-if="activeCategory === 'all'" class="flex items-center justify-between mt-2">
             <h2 class="text-sm font-bold text-white/60 uppercase tracking-widest flex items-center gap-2">
               <BIcon name="Smile" class="w-4 h-4 text-brand-pink" />
@@ -661,6 +728,8 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
 
       </main>
     </div>
+
+    <SubmitFrameModal v-model="showFrameModal" @created="onFrameCreated" />
 
     <StickerPackEditor v-if="showEditor" :pack="editingPack" @close="showEditor = false" @saved="onPackSaved" />
   </div>

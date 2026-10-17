@@ -13,6 +13,7 @@ import { useStickersStore, type StickerPack, type PackVisibility } from '@/store
 import { useConfirm } from '@/composables/useConfirm'
 import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import BIcon from '@/components/BIcon.vue'
+import { sanitizeTagInput } from '@/lib/tagRules'
 import MediaUpload from '@/components/MediaUpload.vue'
 import StickerUpload from '@/components/StickerUpload.vue'
 import StickerReorderGrid from '@/components/StickerReorderGrid.vue'
@@ -76,11 +77,41 @@ const form = ref({
   currency:     props.pack?.currency ?? 'RUB',
   isNsfw:       props.pack?.is_nsfw ?? false,
   hideAuthor:   props.pack?.hide_author ?? false,
-  tags:         props.pack?.tags.join(', ') ?? '',
   draft:        props.pack?.status === 'draft',
   coverUrl:     props.pack?.cover_url ?? '',
   coverBgColor: props.pack?.cover_bg_color ?? '#1a1a2e',
 })
+
+// ── Теги: каждый тег, отделённый пробелом, становится таблеткой ─────────────
+const MAX_TAGS   = 10
+const tagInput   = ref<HTMLInputElement | null>(null)
+const tagList    = ref<string[]>(props.pack?.tags ? [...props.pack.tags] : [])
+const tagDraft   = ref('')
+
+function addTags(raw: string) {
+  for (const part of raw.split(/[\s,]+/)) {
+    const t = sanitizeTagInput(part).slice(0, 32)
+    if (t && !tagList.value.includes(t) && tagList.value.length < MAX_TAGS) tagList.value.push(t)
+  }
+}
+
+function commitTag() {
+  if (tagDraft.value.trim()) addTags(tagDraft.value)
+  tagDraft.value = ''
+}
+
+function onTagKey(e: KeyboardEvent) {
+  if (e.key === ' ' || e.key === ',' || e.key === 'Enter') {
+    e.preventDefault()
+    commitTag()
+  } else if (e.key === 'Backspace' && !tagDraft.value && tagList.value.length) {
+    tagList.value.pop()
+  }
+}
+
+function removeTag(t: string) {
+  tagList.value = tagList.value.filter(x => x !== t)
+}
 
 const remaining   = computed(() => MAX_STICKERS - items.value.length)
 const nsfwCount   = computed(() => items.value.filter(i => i.nsfw).length)
@@ -117,7 +148,7 @@ function onTelegramImported(p: { title: string; tg_name: string; sticker_urls: s
   addUrls(p.sticker_urls)
   if (!form.value.name.trim()) form.value.name = p.title
   if (!form.value.description.trim()) form.value.description = `Импортировано из Telegram (@${p.tg_name})`
-  if (!form.value.tags.trim()) form.value.tags = p.tg_name
+  if (!tagList.value.length) addTags(p.tg_name)
 }
 
 // ── Публикация ──────────────────────────────────────────────────────────────
@@ -131,6 +162,7 @@ async function submit() {
   saving.value = true
   saveError.value = ''
   try {
+    commitTag()
     const idxOf = (k: string | null) => k ? items.value.findIndex(i => i.key === k) : -1
     const payload = {
       name:            form.value.name.trim(),
@@ -140,7 +172,7 @@ async function submit() {
       currency:        form.value.currency,
       isNsfw:          form.value.isNsfw,
       hideAuthor:      form.value.hideAuthor,
-      tags:            form.value.tags.split(',').map(t => t.trim()).filter(Boolean),
+      tags:            [...tagList.value],
       status:          (form.value.draft ? 'draft' : 'published') as 'draft' | 'published',
       coverUrl:        form.value.coverUrl || undefined,
       coverBgColor:    form.value.coverBgColor || undefined,
@@ -189,48 +221,42 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/75 backdrop-blur-sm"
-      @click.self="tryClose()">
-      <div class="bg-[#0e0e1c] border border-white/8 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+    <div class="fixed inset-0 z-[999] flex items-center justify-center p-4" @click.self="tryClose()">
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div class="relative bg-brand-card border border-brand-border rounded-3xl p-6 max-w-lg w-full shadow-2xl z-10 max-h-[90vh] overflow-y-auto">
+        <button type="button" @click="tryClose()"
+          class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-brand-bg/60 flex items-center justify-center hover:bg-brand-bg transition-colors z-20">
+          <BIcon name="X" class="w-4 h-4 text-white/50" />
+        </button>
 
-        <!-- Header -->
-        <div class="relative overflow-hidden flex-shrink-0">
-          <div class="absolute inset-0" style="background: linear-gradient(135deg, #2d1060 0%, #1a0e3a 60%, #0e0c1e 100%)" />
-          <div class="relative z-10 px-5 sm:px-6 pt-5 pb-4">
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg" style="background: linear-gradient(135deg, #7B2D8B, #5B2EFF)">
-                  <BIcon name="Smile" class="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h2 class="text-lg font-black text-white">{{ editingId ? 'Редактировать пак' : 'Новый стикерпак' }}</h2>
-                  <p class="text-xs text-white/40 mt-0.5">Магазин · Стикеры</p>
-                </div>
-              </div>
-              <button type="button" @click="tryClose()" class="w-9 h-9 rounded-full bg-white/8 hover:bg-white/15 flex items-center justify-center transition-all">
-                <BIcon name="X" class="w-4 h-4 text-white/70" />
-              </button>
-            </div>
+        <h2 class="text-xl font-extrabold text-white mb-1">{{ editingId ? 'Редактировать пак' : 'Новый стикерпак' }}</h2>
+        <p class="text-white/40 text-xs mb-4">
+          {{ step === 'done' ? 'Готово' : `Шаг ${stepIndex + 1} из ${STEPS.length}` }}
+        </p>
 
-            <div v-if="step !== 'done'" class="flex items-center">
-              <template v-for="(s, idx) in STEPS" :key="s.k">
-                <button type="button" @click="step = s.k" class="flex flex-col items-center gap-1.5 flex-shrink-0 group">
-                  <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all"
-                    :class="step === s.k ? 'text-white scale-110' : 'bg-white/8 text-white/40 group-hover:bg-white/15'"
-                    :style="step === s.k ? 'background: linear-gradient(135deg, #7B2D8B, #5B2EFF)' : stepIndex > idx ? 'background: linear-gradient(135deg, #7B2D8B88, #5B2EFF88)' : ''">
-                    <span v-if="stepIndex > idx">✓</span><span v-else>{{ idx + 1 }}</span>
-                  </div>
-                  <span class="text-[10px] font-bold" :class="step === s.k ? 'text-white' : 'text-white/35'">{{ s.l }}</span>
-                </button>
-                <div v-if="idx < STEPS.length - 1" class="flex-1 h-px mx-2 mb-4"
-                  :style="stepIndex > idx ? 'background: linear-gradient(90deg, #7B2D8B80, #5B2EFF80)' : 'background: rgba(255,255,255,0.1)'" />
-              </template>
-            </div>
-          </div>
+        <div v-if="step !== 'done'" class="flex items-center gap-1 mb-6">
+          <template v-for="(s, idx) in STEPS" :key="s.k">
+            <button type="button" @click="step = s.k"
+              class="flex items-center gap-1.5 select-none transition-all duration-200"
+              :class="stepIndex >= idx ? 'text-white' : 'text-white/25'">
+              <span class="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all duration-300"
+                :class="step === s.k
+                  ? 'bg-brand-accent text-white shadow-accent'
+                  : stepIndex > idx
+                    ? 'bg-brand-success/20 text-brand-success'
+                    : 'bg-brand-bg border border-brand-border text-white/30'">
+                <BIcon v-if="stepIndex > idx" name="Check" class="w-3.5 h-3.5" />
+                <span v-else>{{ idx + 1 }}</span>
+              </span>
+              <span class="text-xs font-semibold hidden sm:inline">{{ s.l }}</span>
+            </button>
+            <div v-if="idx < STEPS.length - 1" class="flex-1 h-0.5 rounded-full mx-1 transition-colors duration-300"
+              :class="stepIndex > idx ? 'bg-brand-success/40' : 'bg-brand-border'" />
+          </template>
         </div>
 
         <!-- ── Шаг 1: стикеры ─────────────────────────────────────────────── -->
-        <div v-if="step === 'stickers'" class="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+        <div v-if="step === 'stickers'" class="space-y-4">
           <StickerUpload :remaining="remaining" @uploaded="addUrls([$event])" @telegram="showTelegram = true" />
 
           <div v-if="items.length" class="space-y-2.5">
@@ -288,7 +314,7 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
         </div>
 
         <!-- ── Шаг 2: публикация ──────────────────────────────────────────── -->
-        <div v-else-if="step === 'info'" class="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+        <div v-else-if="step === 'info'" class="space-y-4">
           <div>
             <label class="block text-xs font-bold text-white/45 uppercase tracking-wider mb-2">Тип публикации</label>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -349,8 +375,20 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
 
           <div>
             <label class="block text-xs font-bold text-white/45 uppercase tracking-wider mb-1.5">Теги</label>
-            <input v-model="form.tags" placeholder="фурри, арт, анимация"
-              class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/25 outline-none focus:border-brand-purple/60 text-sm" />
+            <div class="flex flex-wrap items-center gap-1.5 min-h-[46px] bg-white/5 border border-white/10 rounded-2xl px-3 py-2 cursor-text focus-within:border-brand-purple/60"
+              @click="tagInput?.focus()">
+              <span v-for="t in tagList" :key="t"
+                class="inline-flex items-center gap-1 text-xs font-bold pl-2.5 pr-1.5 py-1 rounded-full bg-brand-purple/20 text-brand-purple border border-brand-purple/30">
+                #{{ t }}
+                <button type="button" @click.stop="removeTag(t)" class="w-4 h-4 rounded-full flex items-center justify-center hover:bg-white/15">
+                  <BIcon name="X" class="w-2.5 h-2.5" />
+                </button>
+              </span>
+              <input ref="tagInput" v-model="tagDraft" :disabled="tagList.length >= MAX_TAGS" @keydown="onTagKey" @blur="commitTag"
+                :placeholder="tagList.length ? '' : 'фурри арт анимация'"
+                class="flex-1 min-w-[8rem] bg-transparent outline-none text-sm text-white placeholder-white/25" />
+            </div>
+            <p class="text-[11px] text-white/30 mt-1">Через пробел · до {{ MAX_TAGS }} тегов</p>
           </div>
 
           <div v-for="t in [
@@ -380,7 +418,7 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
         </div>
 
         <!-- ── Шаг 3: обложка ─────────────────────────────────────────────── -->
-        <div v-else-if="step === 'cover'" class="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+        <div v-else-if="step === 'cover'" class="space-y-5">
           <div>
             <label class="block text-xs font-bold text-white/45 uppercase tracking-wider mb-2">Предпросмотр</label>
             <div class="relative w-full aspect-[3/2] rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
@@ -446,7 +484,7 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
               <BIcon name="ChevronLeft" class="w-4 h-4 inline mr-1" />Назад
             </button>
             <button type="button" @click="submit" :disabled="saving || !infoValid"
-              class="flex-1 flex items-center justify-center gap-2 py-2.5 disabled:opacity-50 text-white text-sm font-bold rounded-2xl bg-gradient-to-r from-brand-purple to-brand-accent shadow-lg shadow-brand-purple/30">
+              class="flex-1 flex items-center justify-center gap-2 py-2.5 disabled:opacity-50 text-white text-sm font-bold rounded-2xl bg-brand-accent hover:opacity-90 shadow-accent">
               <span v-if="saving" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               <BIcon v-else :name="editingId ? 'Save' : 'Rocket'" class="w-4 h-4" />
               {{ saving ? 'Сохранение…' : editingId ? 'Сохранить' : form.draft ? 'Сохранить черновик' : 'Опубликовать' }}
@@ -455,7 +493,7 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
         </div>
 
         <!-- ── Готово: ссылка-приглашение ─────────────────────────────────── -->
-        <div v-else class="flex-1 overflow-y-auto p-6 space-y-4 text-center">
+        <div v-else class="space-y-4 text-center">
           <div class="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center mx-auto">
             <BIcon name="Check" class="w-7 h-7 text-emerald-400" />
           </div>

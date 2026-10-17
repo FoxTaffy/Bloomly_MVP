@@ -62,16 +62,21 @@ export async function searchUsersHandler(
     .map(withRedactedBirthDate);
   // Без статуса подписки карточки в поиске всегда рисовали кнопку «Подписаться», даже для друзей и подписок
   const ids = found.map((u) => u.id);
-  const [following, followers] = await Promise.all([
+  const [following, followers, visibility] = await Promise.all([
     prisma.follow.findMany({ where: { follower_id: viewerId, following_id: { in: ids } }, select: { following_id: true } }),
     prisma.follow.findMany({ where: { following_id: viewerId, follower_id: { in: ids } }, select: { follower_id: true } }),
+    prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, profile_visibility: true } }),
   ]);
   const followingSet = new Set(following.map((r) => r.following_id));
   const followersSet = new Set(followers.map((r) => r.follower_id));
+  // Same rule as followsService.canStartFollowing: hidden profiles (friends/only_me) can only be
+  // followed back by someone they already follow. Lets the card hide the mini follow button.
+  const openProfiles = new Set(visibility.filter((v) => !v.profile_visibility || v.profile_visibility === 'everyone').map((v) => v.id));
   const users = found.map((u) => ({
     ...u,
     is_following: followingSet.has(u.id),
     is_friend: followingSet.has(u.id) && followersSet.has(u.id),
+    can_follow: u.id !== viewerId && (openProfiles.has(u.id) || followersSet.has(u.id)),
   }));
   return reply.send({ success: true, data: { users }, error: null });
 }

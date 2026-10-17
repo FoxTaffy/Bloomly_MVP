@@ -10,6 +10,7 @@ import { isModerator } from '@/lib/roles'
 import AdminOverviewTab from '@/components/admin/AdminOverviewTab.vue'
 import AdminUsersTab from '@/components/admin/AdminUsersTab.vue'
 import AdminPostsTab from '@/components/admin/AdminPostsTab.vue'
+import AdminTagsTab from '@/components/admin/AdminTagsTab.vue'
 import AdminReportsTab from '@/components/admin/AdminReportsTab.vue'
 import AdminSupportTab from '@/components/admin/AdminSupportTab.vue'
 import AdminAdsTab from '@/components/admin/AdminAdsTab.vue'
@@ -55,6 +56,7 @@ const TAB_COMPONENTS: Record<AdminTab, Component> = {
   overview: AdminOverviewTab,
   users: AdminUsersTab,
   posts: AdminPostsTab,
+  tags: AdminTagsTab,
   reports: AdminReportsTab,
   support: AdminSupportTab,
   ads: AdminAdsTab,
@@ -74,6 +76,7 @@ const navItems = computed(() => [
   { tab: 'support'      as const, label: langStore.t.adminNavSupport,        icon: 'LifeBuoy',        color: '#4C67CF', group: langStore.t.adminGroupModeration, badge: badges.support || null, minRole: 'moderator' },
   { tab: 'automod'      as const, label: 'AutoMod',                          icon: 'ShieldAlert',     color: '#ef4444', group: langStore.t.adminGroupModeration, badge: badges.automod > 0 ? formatNum(badges.automod) : null, minRole: 'moderator' },
   { tab: 'posts'        as const, label: langStore.t.posts,                 icon: 'FileText',        color: '#94a3b8', group: langStore.t.adminGroupContent,    badge: null, minRole: 'moderator' },
+  { tab: 'tags'         as const, label: 'Синонимы тегов',                    icon: 'Hash',            color: '#94a3b8', group: langStore.t.adminGroupContent,    badge: null, minRole: 'moderator' },
   { tab: 'verification' as const, label: langStore.t.secVerification,        icon: 'BadgeCheck',      color: '#2dd4bf', group: langStore.t.adminGroupContent,    badge: badges.verification || null, minRole: 'moderator' },
   { tab: 'frames'       as const, label: langStore.t.adminFramesTabLabel,    icon: 'CircleDashed',    color: '#c084fc', group: langStore.t.adminGroupContent,    badge: badges.frames || null, minRole: 'admin' },
   { tab: 'ads'          as const, label: langStore.t.adLabel,                icon: 'Megaphone',       color: '#f97316', group: langStore.t.adminGroupContent,    badge: badges.ads || null, minRole: 'admin' },

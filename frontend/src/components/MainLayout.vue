@@ -967,7 +967,7 @@ onDeactivated(() => {
           <button
             v-if="!showPostForm"
             @click="showPostForm = true"
-            class="w-full flex items-center gap-3 px-5 py-4 text-left group"
+            class="w-full flex items-center gap-3 px-5 py-4 max-md:px-4 max-md:py-3 text-left group"
           >
             <!-- Entity avatar -->
             <template v-if="postAsEntity.type === 'group'">
@@ -992,9 +992,9 @@ onDeactivated(() => {
           </button>
 
           <!-- Expanded composer -->
-          <div v-else class="p-5 space-y-4">
-            <!-- Author + textarea + send -->
-            <div class="flex items-start gap-3">
+          <div v-else class="p-5 max-md:p-4 space-y-4">
+            <!-- Author + textarea + send (mobile: avatar & buttons on top, full-width textarea below) -->
+            <div class="flex items-start gap-3 max-md:flex-wrap max-md:items-center max-md:gap-2">
               <!-- Entity avatar — кликабельна если есть группы -->
               <div class="relative flex-shrink-0 mt-0.5">
                 <!-- Clickable avatar -->
@@ -1068,7 +1068,7 @@ onDeactivated(() => {
                   </div>
                 </Transition>
               </div>
-              <div class="flex-1 min-w-0">
+              <div class="flex-1 min-w-0 max-md:order-last max-md:basis-full">
                 <MentionTextarea
                   v-model="newPost.content"
                   placeholder="Что у вас нового? Используйте @ для упоминаний"
@@ -1076,7 +1076,7 @@ onDeactivated(() => {
                 />
               </div>
               <!-- Schedule button -->
-              <div class="relative flex-shrink-0 mt-0.5">
+              <div class="relative flex-shrink-0 mt-0.5 max-md:mt-0 max-md:ml-auto">
                 <button
                   @click.stop="showScheduleMenu = !showScheduleMenu"
                   :disabled="(!newPost.content.trim() && mediaUrls.length === 0) || isScheduling"
@@ -1098,7 +1098,7 @@ onDeactivated(() => {
               <button
                 @click="createPost"
                 :disabled="(!newPost.content.trim() && mediaUrls.length === 0) || isPosting"
-                class="w-10 h-10 rounded-full flex items-center justify-center bg-brand-accent text-white hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-accent/25 flex-shrink-0 mt-0.5"
+                class="w-10 h-10 rounded-full flex items-center justify-center bg-brand-accent text-white hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-accent/25 flex-shrink-0 mt-0.5 max-md:mt-0"
                 title="Опубликовать"
               >
                 <BIcon v-if="isPosting" name="Loader2" class="w-5 h-5 animate-spin" />
@@ -1288,42 +1288,42 @@ onDeactivated(() => {
         </div>
 
         <!-- Feed Filters -->
-        <div class="flex flex-wrap gap-2 px-2">
+        <div class="flex flex-wrap gap-2 px-2 m-scroll-row max-md:-mx-1 max-md:gap-1.5">
           <button @click="feedMode = 'for-you'; selectedTag = ''"
             :class="feedMode === 'for-you' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
-            class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
+            class="px-4 py-2 rounded-2xl text-sm font-bold max-md:whitespace-nowrap transition-all duration-200">
             {{ langStore.t.forYou }}
           </button>
           <button @click="feedMode = 'subscriptions'; selectedTag = ''"
             :class="feedMode === 'subscriptions' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
-            class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
+            class="px-4 py-2 rounded-2xl text-sm font-bold max-md:whitespace-nowrap transition-all duration-200">
             {{ langStore.t.feedFollowing }}
           </button>
           <button @click="feedMode = 'news'; selectedTag = ''"
             :class="feedMode === 'news' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
-            class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
+            class="px-4 py-2 rounded-2xl text-sm font-bold max-md:whitespace-nowrap transition-all duration-200">
             {{ langStore.t.feedGeneral }}
           </button>
           <button @click="feedMode = 'photos'; selectedTag = ''"
             :class="feedMode === 'photos' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
-            class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
+            class="px-4 py-2 rounded-2xl text-sm font-bold max-md:whitespace-nowrap transition-all duration-200">
             {{ langStore.t.feedPhoto }}
           </button>
           <button v-if="nsfwEnabled" @click="feedMode = 'nsfw'; selectedTag = ''"
             :class="feedMode === 'nsfw' ? 'bg-brand-card text-white' : 'text-white/55 hover:text-white'"
-            class="px-4 py-2 rounded-2xl text-sm font-bold transition-all duration-200">
+            class="px-4 py-2 rounded-2xl text-sm font-bold max-md:whitespace-nowrap transition-all duration-200">
             NSFW
           </button>
         </div>
 
         <!-- Events Section — Ближайшие крупные мероприятия -->
-        <div v-if="upcomingEvents.length || isLoadingEvents" class="bg-brand-card border border-brand-border rounded-3xl p-5 shadow-xl">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="font-bold text-white flex items-center gap-2">
+        <div v-if="upcomingEvents.length || isLoadingEvents" class="bg-brand-card border border-brand-border rounded-3xl p-5 max-md:p-4 shadow-xl">
+          <div class="flex items-center justify-between gap-3 mb-4">
+            <h3 class="font-bold text-white flex items-center gap-2 max-md:min-w-0 max-md:text-[15px] max-md:leading-snug">
               <svg class="w-4 h-4 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
               {{ langStore.t.upcomingEvents }}
             </h3>
-            <button class="text-xs text-brand-accent font-semibold hover:text-brand-accent-plus transition-colors"
+            <button class="text-xs text-brand-accent font-semibold hover:text-brand-accent-plus transition-colors max-md:whitespace-nowrap max-md:shrink-0 max-md:px-2.5 max-md:py-1.5 max-md:rounded-xl max-md:bg-brand-accent/10"
               @click="router.push('/groups?type=event')">{{ langStore.t.seeAllBtn }}</button>
           </div>
           <!-- Loading skeleton -->
@@ -1337,7 +1337,7 @@ onDeactivated(() => {
           <div v-else class="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
             <router-link v-for="ev in upcomingEvents" :key="ev.id"
               :to="'/events/' + ev.id"
-              class="min-w-[260px] max-w-[280px] bg-brand-bg rounded-2xl overflow-hidden border border-brand-border hover:border-brand-accent/40 transition-all group/ev flex-shrink-0">
+              class="min-w-[260px] max-w-[280px] max-md:min-w-[230px] max-md:max-w-[250px] bg-brand-bg rounded-2xl overflow-hidden border border-brand-border hover:border-brand-accent/40 transition-all group/ev flex-shrink-0">
               <div class="h-28 relative overflow-hidden">
                 <img v-if="ev.banner_url || ev.group?.banner_url" :src="ev.banner_url || ev.group?.banner_url" class="w-full h-full object-cover group-hover/ev:scale-105 transition-transform duration-300" />
                 <div v-else class="h-full w-full" :style="`background:linear-gradient(135deg,${ev.group?.accent_color || '#4C67CF'}44,${ev.group?.accent_color || '#4C67CF'}11)`"></div>

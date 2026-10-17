@@ -79,11 +79,28 @@
 
             <!-- Top-up preset picker -->
             <div v-if="showTopupPicker" class="bg-brand-bg border border-brand-border rounded-2xl p-4 space-y-3">
+              <div v-if="paymentsStore.config?.enabled" class="grid grid-cols-2 gap-1 p-1 rounded-xl bg-brand-card border border-brand-border">
+                <button v-for="m in TOPUP_METHODS" :key="m.id" @click="topupMethod = m.id"
+                  class="flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold transition-all"
+                  :class="topupMethod === m.id ? 'bg-brand-accent/20 text-white' : 'text-white/45 hover:text-white'">
+                  <BIcon :name="m.icon" class="w-3.5 h-3.5" /> {{ m.label }}
+                </button>
+              </div>
               <p class="text-xs font-bold text-white/55">{{ langStore.t.profileTopupPresetLabel }}</p>
               <div class="grid grid-cols-3 gap-2">
                 <button v-for="amt in TOPUP_PRESETS" :key="amt" :disabled="toppingUp" @click="topupWallet(amt)"
                   class="py-2 rounded-xl border border-brand-border bg-brand-card text-sm font-bold text-white hover:border-brand-accent/50 hover:text-brand-accent transition-all disabled:opacity-40">
                   +{{ amt }}
+                </button>
+              </div>
+              <div v-if="paymentsStore.config?.enabled" class="flex gap-2">
+                <input v-model.number="customTopup" type="number" inputmode="numeric"
+                  :min="paymentsStore.config.topup.min" :max="paymentsStore.config.topup.max"
+                  :placeholder="`${langStore.t.profileTopupCustom} (${paymentsStore.config.topup.min}–${paymentsStore.config.topup.max})`"
+                  class="flex-1 min-w-0 px-3 py-2 rounded-xl border border-brand-border bg-brand-card text-sm text-white placeholder-white/30 focus:outline-none focus:border-brand-accent/50" />
+                <button :disabled="toppingUp || !customTopupValid" @click="topupWallet(customTopup!)"
+                  class="px-4 py-2 rounded-xl bg-brand-accent text-sm font-bold text-white disabled:opacity-40 transition-all">
+                  {{ langStore.t.profileTopupPay }}
                 </button>
               </div>
               <button @click="showTopupPicker = false" class="w-full py-1.5 text-xs font-semibold text-white/40 hover:text-white transition-colors">{{ langStore.t.cancel }}</button>
@@ -100,7 +117,9 @@
                 <span class="text-xs font-bold text-white/55">{{ langStore.t.withdrawBtn }}</span>
               </button>
             </div>
-            <p class="text-center text-[11px] text-white/35">{{ langStore.t.profileTopupDisclaimer }}</p>
+            <p class="text-center text-[11px] text-white/35">
+              {{ paymentsStore.config?.enabled ? langStore.t.profileTopupDisclaimerReal : langStore.t.profileTopupDisclaimer }}
+            </p>
           </div>
         </div>
       </div>
@@ -227,8 +246,8 @@
               <!-- Accent line top -->
               <div class="h-px bg-gradient-to-r from-transparent via-brand-accent/60 to-transparent"></div>
 
-              <div class="px-6 pt-0 pb-5">
-                <div class="flex items-start justify-between gap-4">
+              <div class="px-6 pt-0 pb-5 max-md:px-4 max-md:flex max-md:flex-col">
+                <div class="flex items-start justify-between gap-4 max-md:contents">
 
                   <!-- ══ Avatar block — dual card stack swap ══ -->
                   <!--
@@ -236,7 +255,7 @@
                     Активная — translate-x-0/y-0 scale-100, спящая — translate-x-7/y-7 scale-[0.78].
                     Плавный spring-easing: cubic-bezier(0.34,1.56,0.64,1).
                   -->
-                  <div class="relative flex-shrink-0 -mt-14 md:-mt-20 w-24 h-24 md:w-32 md:h-32 overflow-visible mb-3">
+                  <div class="relative flex-shrink-0 -mt-14 md:-mt-20 w-24 h-24 md:w-32 md:h-32 overflow-visible mb-3 max-md:order-1">
 
                     <!-- ── Story ring: animated gradient, sits behind avatar ── -->
                     <div
@@ -335,10 +354,10 @@
                   </div>
 
                   <!-- Action buttons (positioned to side of avatar) -->
-                  <div class="flex items-center gap-2 pt-3 md:pt-4 pr-1 flex-wrap">
+                  <div class="flex items-center gap-2 pt-3 md:pt-4 pr-1 flex-wrap max-md:order-3 max-md:w-full max-md:pr-0 max-md:pt-4">
                     <template v-if="isOwnProfile">
                       <router-link to="/settings/profile"
-                        class="relative inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand-accent to-brand-accent-plus text-white rounded-xl text-sm font-bold shadow-lg shadow-brand-accent/30 hover:shadow-brand-accent/50 hover:scale-[1.03] active:scale-[0.98] transition-all overflow-hidden group">
+                        class="relative inline-flex items-center gap-2 px-5 py-2.5 max-md:flex-1 max-md:justify-center bg-gradient-to-r from-brand-accent to-brand-accent-plus text-white rounded-xl text-sm font-bold shadow-lg shadow-brand-accent/30 hover:shadow-brand-accent/50 hover:scale-[1.03] active:scale-[0.98] transition-all overflow-hidden group">
                         <span class="absolute inset-0 bg-white/0 group-hover:bg-white/8 transition-colors duration-200" />
                         <BIcon name="Pencil" class="w-4 h-4 relative z-10" />
                         <span class="relative z-10">{{ langStore.t.editProfileBtn }}</span>
@@ -349,43 +368,44 @@
                         @click="toggleNotify"
                         :disabled="!relation.aFollowsB || notifyLoading"
                         :title="!relation.aFollowsB ? langStore.t.profileFollowFirstHint : notifyPosts ? langStore.t.profileNotificationsOnHint : langStore.t.profileNotificationsOffHint"
-                        class="w-9 h-9 flex items-center justify-center border rounded-xl transition-all disabled:opacity-40"
+                        class="w-9 h-9 max-md:w-auto max-md:h-10 max-md:order-3 max-md:flex-1 flex items-center justify-center border rounded-xl transition-all disabled:opacity-40"
                         :class="notifyPosts && relation.aFollowsB ? 'border-brand-accent bg-brand-accent/15 text-brand-accent' : 'border-brand-border bg-brand-bg hover:border-brand-accent/60 text-white/55 hover:text-brand-accent'">
                         <span v-if="notifyLoading" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         <BIcon v-else :name="notifyPosts && relation.aFollowsB ? 'BellRing' : 'Bell'" class="w-4 h-4" />
                       </button>
-                      <button v-if="viewedProfile.messages_privacy !== 'nobody'" @click="openChat" :disabled="isProfileBlocked" :title="isProfileBlocked ? langStore.t.profileBlockedByYouHint : undefined" class="inline-flex items-center gap-2 px-4 py-2 border border-brand-border bg-brand-bg hover:border-brand-accent/60 text-brand-offwhite hover:text-brand-accent rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:pointer-events-none">
-                        <BIcon name="MessageSquare" class="w-4 h-4" /> {{ langStore.t.messageBtn }}
+                      <button v-if="viewedProfile.messages_privacy !== 'nobody'" @click="openChat" :disabled="isProfileBlocked" :title="isProfileBlocked ? langStore.t.profileBlockedByYouHint : undefined" class="inline-flex items-center gap-2 px-4 py-2 max-md:h-10 max-md:px-3 max-md:order-2 max-md:basis-[calc(50%-0.25rem)] max-md:grow max-md:min-w-0 max-md:justify-center border border-brand-border bg-brand-bg hover:border-brand-accent/60 text-brand-offwhite hover:text-brand-accent rounded-xl text-sm font-bold transition-all disabled:opacity-40 disabled:pointer-events-none">
+                        <BIcon name="MessageSquare" class="w-4 h-4 max-md:shrink-0" /> <span class="max-md:truncate">{{ langStore.t.messageBtn }}</span>
                       </button>
                       <button @click="toggleFollow" :disabled="isTogglingFollow || isProfileBlocked" :title="isProfileBlocked ? langStore.t.profileBlockedByYouHint : undefined"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:pointer-events-none shadow-sm"
+                        class="inline-flex items-center gap-2 px-4 py-2 max-md:h-10 max-md:px-3 max-md:order-1 max-md:basis-[calc(50%-0.25rem)] max-md:grow max-md:min-w-0 max-md:justify-center max-md:whitespace-nowrap rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:pointer-events-none shadow-sm"
                         :class="followBtnClass">
                         <span v-if="isTogglingFollow" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         <component v-else :is="followBtnIcon" class="w-4 h-4" />
                         {{ followBtnLabel }}
-                        <span v-if="isMutual && !isTogglingFollow" class="text-[10px] font-bold ml-0.5 opacity-60">· {{ langStore.t.profileMutualLabel }}</span>
+                        <span v-if="isMutual && !isTogglingFollow" class="text-[10px] font-bold ml-0.5 opacity-60 max-[379px]:hidden">· {{ langStore.t.profileMutualLabel }}</span>
                       </button>
                       <!-- Donate button -->
                       <a v-if="viewedProfile.donate_url"
                         :href="safeHref(viewedProfile.donate_url)"
                         target="_blank" rel="noopener noreferrer"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/60">
+                        class="inline-flex items-center gap-2 px-4 py-2 max-md:h-10 max-md:p-0 max-md:justify-center max-md:order-3 max-md:flex-1 rounded-xl text-sm font-bold transition-all border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 hover:border-amber-500/60"
+                        :aria-label="langStore.t.profileDonateLabel">
                         <BIcon name="HeartHandshake" class="w-4 h-4" />
-                        {{ langStore.t.profileDonateLabel }}
+                        <span class="max-md:hidden">{{ langStore.t.profileDonateLabel }}</span>
                       </a>
                       <!-- Bookmark user button -->
                       <button
                         @click="toggleUserBookmark"
                         :disabled="isTogglingBookmark"
                         :title="isUserBookmarked ? langStore.t.unbookmarkUser : langStore.t.bookmarkUser"
-                        class="w-9 h-9 flex items-center justify-center border rounded-xl transition-all disabled:opacity-50"
+                        class="w-9 h-9 max-md:w-auto max-md:h-10 max-md:order-3 max-md:flex-1 flex items-center justify-center border rounded-xl transition-all disabled:opacity-50"
                         :class="isUserBookmarked ? 'border-yellow-500/50 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20' : 'border-brand-border bg-brand-bg hover:border-yellow-500/40 text-white/55 hover:text-yellow-400'">
                         <span v-if="isTogglingBookmark" class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                         <BIcon v-else :name="isUserBookmarked ? 'BookmarkCheck' : 'Bookmark'" class="w-4 h-4" />
                       </button>
-                      <div class="relative">
+                      <div class="relative max-md:order-3 max-md:flex-1">
                         <button ref="profileMenuBtnRef" @click.stop="toggleProfileMenu"
-                          class="w-9 h-9 flex items-center justify-center border border-brand-border bg-brand-bg hover:border-brand-border/80 rounded-xl text-white/55 hover:text-white transition-all">
+                          class="w-9 h-9 max-md:w-full max-md:h-10 flex items-center justify-center border border-brand-border bg-brand-bg hover:border-brand-border/80 rounded-xl text-white/55 hover:text-white transition-all">
                           <BIcon name="MoreHorizontal" class="w-4 h-4" />
                         </button>
                         <Teleport to="body">
@@ -414,7 +434,7 @@
                 <ReportModal v-if="viewedProfile" v-model="showProfileReportModal" :target-id="viewedProfile.id" target-type="user" />
 
                 <!-- Name row -->
-                <div class="mt-4">
+                <div class="mt-4 max-md:order-2 max-md:mt-1">
                   <div class="flex items-center flex-wrap gap-2 mb-2">
                     <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white tracking-tight min-w-0 max-w-full break-words [overflow-wrap:anywhere]">{{ profileDisplayName }}</h1>
                     <!-- Deceased badge -->
@@ -1203,22 +1223,22 @@
                 <button v-if="!showPostForm" @click="showPostForm = true"
                   class="w-full flex items-center gap-3 px-5 py-4 text-left group">
                   <img :src="ownAvatarSrc || '/icons/badges/NN.jpg'" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" @error="onAvatarError" />
-                  <span class="flex-1 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">{{ langStore.t.whatsNew }}</span>
+                  <span class="flex-1 max-md:min-w-0 max-md:truncate text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">{{ langStore.t.whatsNew }}</span>
                   <div class="flex items-center gap-2 text-white/55 group-hover:text-white transition-colors ml-1">
                     <BIcon name="ImagePlus" class="w-5 h-5" />
                     <BIcon name="Hash" class="w-5 h-5" />
                   </div>
                 </button>
                 <!-- Expanded composer -->
-                <div v-else class="p-5 space-y-4">
-                  <div class="flex items-start gap-3">
+                <div v-else class="p-5 max-md:p-4 space-y-4">
+                  <div class="flex items-start gap-3 max-md:flex-wrap max-md:items-center max-md:gap-2">
                     <div class="relative flex-shrink-0 mt-0.5">
                       <img :src="ownAvatarSrc || '/icons/badges/NN.jpg'" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover" @error="onAvatarError" />
                     </div>
-                    <div class="flex-1 min-w-0">
+                    <div class="flex-1 min-w-0 max-md:order-last max-md:basis-full">
                       <MentionTextarea v-model="newPostContent" :placeholder="langStore.t.profileWhatsNewPlaceholder" minHeight="90px" />
                     </div>
-                    <div class="relative flex-shrink-0 mt-0.5">
+                    <div class="relative flex-shrink-0 mt-0.5 max-md:mt-0 max-md:ml-auto">
                       <button
                         @click.stop="showProfileScheduleMenu = !showProfileScheduleMenu"
                         :disabled="(!newPostContent.trim() && newPostMediaUrls.length === 0) || isSchedulingProfilePost"
@@ -1236,7 +1256,7 @@
                       />
                     </div>
                     <button @click="createPost" :disabled="(!newPostContent.trim() && newPostMediaUrls.length === 0) || isCreatingPost"
-                      class="w-10 h-10 rounded-full flex items-center justify-center bg-brand-accent text-white hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-accent/25 flex-shrink-0 mt-0.5">
+                      class="w-10 h-10 rounded-full flex items-center justify-center bg-brand-accent text-white hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-accent/25 flex-shrink-0 mt-0.5 max-md:mt-0">
                       <BIcon v-if="isCreatingPost" name="Loader2" class="w-5 h-5 animate-spin" />
                       <BIcon v-else name="SendHorizontal" class="w-5 h-5" />
                     </button>
@@ -1411,7 +1431,7 @@
 
                   <!-- MEDIA -->
                   <div v-else-if="activeContentTab === 'media'" @click="mediaTagTarget = null">
-                    <AlbumsPanel :user-id="viewedProfile.id" :can-create="isOwnProfile" @click.stop />
+                    <AlbumsPanel :user-id="viewedProfile.id" :can-create="isOwnProfile" :builtin="builtinAlbums" :builtin-loading="isLoadingTab" :nsfw-mode="nsfwMode" @click.stop />
                     <!-- Панель фильтров + режим альбомов -->
                     <div class="flex items-center gap-2 mb-4 flex-wrap">
                       <button v-for="f in (['all','photo','video'] as const)" :key="f" @click="mediaFilter = f"
@@ -1420,12 +1440,6 @@
                         {{ f === 'all' ? `${langStore.t.tabAll} · ${filteredMediaPosts.length}` : f === 'photo' ? `${langStore.t.feedPhoto} · ${tabPosts.filter((p) => isImage(p.media_urls?.[0] ?? '')).length}` : `${langStore.t.profileMediaFilterVideoLabel} · ${tabPosts.filter((p) => !isImage(p.media_urls?.[0] ?? '')).length}` }}
                       </button>
                       <div class="flex-1" />
-                      <button @click.stop="mediaAlbumView = !mediaAlbumView"
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all"
-                        :class="mediaAlbumView ? 'bg-brand-accent/15 border-brand-accent/60 text-brand-accent' : 'border-brand-border text-white/55 hover:text-white'">
-                        <BIcon name="FolderOpen" class="w-3.5 h-3.5" />
-                        {{ langStore.t.profileAlbumsLabel }}
-                      </button>
                     </div>
 
                     <!-- Скелетон при загрузке -->
@@ -1434,74 +1448,14 @@
                     </div>
 
                     <!-- Пусто -->
-                    <div v-else-if="!filteredMediaPosts.length && !specialAlbums.length" class="py-14 text-center text-white/55">
+                    <div v-else-if="!filteredMediaPosts.length" class="py-14 text-center text-white/55">
                       <BIcon name="Image" class="w-10 h-10 mx-auto mb-3 opacity-30" />
                       <p class="font-semibold text-sm">{{ langStore.t.noMediaYet }}</p>
                     </div>
 
                     <template v-else>
-                      <!-- ══ Режим альбомов ══════════════════════════════════════ -->
-                      <template v-if="mediaAlbumView">
-
-                        <!-- Сетка карточек альбомов -->
-                        <div class="grid grid-cols-2 gap-3">
-                          <!-- Специальные альбомы (Фурсона / Фурсьют) -->
-                          <div v-for="sp in specialAlbums" :key="sp.id"
-                            @click.stop="openAlbumOrLightbox(sp)"
-                            class="relative rounded-2xl overflow-hidden cursor-pointer group aspect-[4/3] border border-brand-border hover:border-brand-accent/60 transition-all shadow-md">
-                            <img v-if="sp.urls[0] && isImage(sp.urls[0].url)" :src="sp.urls[0].url"
-                              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                            <div v-else class="w-full h-full bg-brand-bg flex items-center justify-center text-4xl">{{ sp.emoji }}</div>
-                            <!-- Overlay -->
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-                            <!-- Info -->
-                            <div class="absolute bottom-0 left-0 right-0 p-3">
-                              <div class="flex items-center gap-1.5 mb-0.5">
-                                <span class="text-sm leading-none">{{ sp.emoji }}</span>
-                                <p class="text-xs font-bold text-white">{{ sp.label }}</p>
-                              </div>
-                              <p class="text-[10px] text-white/55 font-semibold">{{ sp.urls.length }} {{ langStore.t.profilePhotosCountUnit }}</p>
-                            </div>
-                            <!-- Hover icon -->
-                            <div class="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
-                              <BIcon name="FolderOpen" class="w-3.5 h-3.5 text-white" />
-                            </div>
-                          </div>
-                          <!-- Альбомы по месяцам -->
-                          <div v-for="album in mediaAlbums" :key="album.label"
-                            @click.stop="openAlbumOrLightbox({ ...album, emoji: undefined })"
-                            class="relative rounded-2xl overflow-hidden cursor-pointer group aspect-[4/3] border border-brand-border hover:border-brand-accent/60 transition-all shadow-md">
-                            <!-- Мозаика из первых 4 фото -->
-                            <div v-if="album.urls.length >= 4" class="grid grid-cols-2 gap-0.5 w-full h-full">
-                              <div v-for="(item, i) in album.urls.slice(0, 4)" :key="i" class="overflow-hidden">
-                                <img v-if="isImage(item.url)" :src="item.url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
-                                <div v-else class="w-full h-full bg-brand-bg/60 flex items-center justify-center"><BIcon name="Play" class="w-5 h-5 text-white/40" /></div>
-                              </div>
-                            </div>
-                            <div v-else-if="album.urls[0]" class="w-full h-full">
-                              <img v-if="isImage(album.urls[0].url)" :src="album.urls[0].url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                              <div v-else class="w-full h-full bg-brand-bg flex items-center justify-center"><BIcon name="Image" class="w-10 h-10 text-white/20" /></div>
-                            </div>
-                            <!-- Overlay -->
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent"></div>
-                            <!-- Info -->
-                            <div class="absolute bottom-0 left-0 right-0 p-3">
-                              <div class="flex items-center gap-1.5 mb-0.5">
-                                <BIcon name="CalendarDays" class="w-3 h-3 text-brand-accent/80" />
-                                <p class="text-xs font-bold text-white">{{ album.label }}</p>
-                              </div>
-                              <p class="text-[10px] text-white/55 font-semibold">{{ album.urls.length }} {{ langStore.t.profilePhotosCountUnit }}</p>
-                            </div>
-                            <!-- Hover icon -->
-                            <div class="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
-                              <BIcon name="FolderOpen" class="w-3.5 h-3.5 text-white" />
-                            </div>
-                          </div>
-                        </div>
-                      </template>
-
                       <!-- ══ Обычная сетка ════════════════════════════════════════ -->
-                      <div v-else class="grid grid-cols-3 gap-1.5">
+                      <div class="grid grid-cols-3 gap-1.5">
                         <div v-for="(post, idx) in filteredMediaPosts" :key="post.id"
                           class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-brand-border/60 hover:border-brand-accent/60 bg-brand-bg transition-all">
                           <div @click.stop="openMediaLightbox(post.media_urls[0], filteredMediaPosts.map((p) => p.media_urls[0]), idx)"
@@ -1713,22 +1667,51 @@
               <!-- Stats: 3-column grid, clicks open modals -->
               <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                 <div class="grid grid-cols-3 divide-x divide-brand-border/60">
+                  <button @click="showFollowingModal = true"
+                    class="flex flex-col items-center gap-1 py-4 px-2 hover:bg-brand-bg/60 transition-all group cursor-pointer">
+                    <span class="text-lg font-extrabold text-white group-hover:text-brand-accent transition-colors leading-none">{{ following.length }}</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">{{ langStore.t.tabFollowing }}</span>
+                  </button>
                   <button @click="showFollowersModal = true"
                     class="flex flex-col items-center gap-1 py-4 px-2 hover:bg-brand-bg/60 transition-all group cursor-pointer">
                     <span class="text-lg font-extrabold text-white group-hover:text-brand-accent transition-colors leading-none">{{ followers.length }}</span>
                     <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">{{ langStore.t.tabFollowers }}</span>
                   </button>
-                  <button
-                    @click="openGroupsModal"
-                    :class="(isOwnProfile || !userGroupsHidden) ? 'hover:bg-brand-bg/60 cursor-pointer group' : 'cursor-default'"
-                    class="flex flex-col items-center gap-1 py-4 px-2 transition-all">
-                    <span class="text-lg font-extrabold text-white leading-none" :class="(isOwnProfile || !userGroupsHidden) ? 'group-hover:text-brand-accent transition-colors' : ''">{{ groupsCount }}</span>
-                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">{{ langStore.t.groups }}</span>
-                  </button>
-                  <button @click="showFollowingModal = true"
-                    class="flex flex-col items-center gap-1 py-4 px-2 hover:bg-brand-bg/60 transition-all group cursor-pointer">
-                    <span class="text-lg font-extrabold text-white group-hover:text-brand-accent transition-colors leading-none">{{ following.length }}</span>
-                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">{{ langStore.t.tabFollowing }}</span>
+                  <div class="flex flex-col items-center gap-1 py-4 px-2">
+                    <span class="text-lg font-extrabold text-white leading-none">{{ viewedProfile?.likes_count ?? 0 }}</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Лайки</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Groups: count + preview cards -->
+              <div v-if="isOwnProfile || !userGroupsHidden" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
+                <button @click="openGroupsModal"
+                  class="w-full flex items-center justify-between gap-2 px-4 py-3 hover:bg-brand-bg/60 transition-all group cursor-pointer">
+                  <span class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-white/55">
+                    <BIcon name="Users" class="w-4 h-4 text-violet-400" />
+                    {{ langStore.t.groups }}
+                  </span>
+                  <span class="flex items-center gap-1.5">
+                    <span class="text-sm font-extrabold text-white group-hover:text-brand-accent transition-colors">{{ groupsCount }}</span>
+                    <BIcon name="ChevronRight" class="w-3.5 h-3.5 text-white/35" />
+                  </span>
+                </button>
+                <div v-if="userGroupsList.length" class="px-3 pb-3 space-y-1.5">
+                  <router-link v-for="group in userGroupsList.slice(0, 3)" :key="group.id" :to="'/groups/' + group.slug"
+                    class="flex items-center gap-3 px-2.5 py-2 rounded-2xl border border-brand-border/60 bg-brand-bg/40 hover:border-brand-accent/40 hover:bg-brand-bg transition-all group/item">
+                    <img v-if="group.avatar_url" :src="group.avatar_url" class="w-9 h-9 rounded-xl object-cover flex-shrink-0" @error="onAvatarError" />
+                    <div v-else class="w-9 h-9 rounded-xl bg-brand-accent/15 flex items-center justify-center flex-shrink-0">
+                      <BIcon name="Users" class="w-4 h-4 text-brand-accent" />
+                    </div>
+                    <div class="min-w-0">
+                      <p class="text-sm font-bold text-white truncate group-hover/item:text-brand-accent transition-colors">{{ group.name }}</p>
+                      <p class="text-[10px] text-white/45">{{ group.members_count }} {{ langStore.t.membersUnit }}</p>
+                    </div>
+                  </router-link>
+                  <button v-if="userGroupsList.length > 3" @click="openGroupsModal"
+                    class="w-full text-center text-[11px] font-semibold text-white/45 hover:text-brand-accent transition-colors py-1">
+                    Показать все
                   </button>
                 </div>
               </div>
@@ -2454,13 +2437,14 @@ import { ref, computed, onMounted, onUnmounted, watch, reactive, type Component,
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
+import { usePaymentsStore } from '@/stores/payments'
 import { useUserStore, type UserProfile, type Fursona } from '@/stores/user'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import PostComments from '@/components/PostComments.vue'
 import PostCard from '@/components/PostCard.vue'
 import MentionTextarea from '@/components/MentionTextarea.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
-import AlbumsPanel from '@/components/AlbumsPanel.vue'
+import AlbumsPanel, { type BuiltinAlbum } from '@/components/AlbumsPanel.vue'
 import PostScheduleMenu from '@/components/PostScheduleMenu.vue'
 import CustomPlayer from '@/components/CustomPlayer.vue'
 import BIcon from '@/components/BIcon.vue'
@@ -2655,7 +2639,6 @@ const profilePostStatus = reactive<Record<string, { repawed: boolean; favourited
 const expandedMediaPost = ref<any | null>(null)
 const pinnedPost = ref<Post | null>(null)
 const mediaFilter = ref<'all' | 'photo' | 'video'>('all')
-const mediaAlbumView = ref(false)
 // postId → 'fursona' | 'fursuit' | null  (ярлыки для ручных альбомов)
 const mediaPostLabels = ref<Record<string, 'fursona' | 'fursuit'>>({})
 const mediaTagTarget = ref<string | null>(null) // postId с открытым попапом тегов
@@ -2741,15 +2724,34 @@ const walletStore = useWalletStore()
 const showTopupPicker = ref(false)
 const toppingUp = ref(false)
 const TOPUP_PRESETS = [100, 500, 1000, 2500, 5000]
+const paymentsStore = usePaymentsStore()
+const topupMethod = ref<'AC' | 'PC'>('AC')
+const customTopup = ref<number | null>(null)
+const TOPUP_METHODS = computed(() => [
+  { id: 'AC' as const, icon: 'CreditCard', label: langStore.t.payMethodCard },
+  { id: 'PC' as const, icon: 'Wallet', label: langStore.t.payMethodYoomoney },
+])
+const customTopupValid = computed(() => {
+  const lim = paymentsStore.config?.topup
+  const v = customTopup.value
+  return !!lim && Number.isInteger(v) && v! >= lim.min && v! <= lim.max
+})
 function openWalletModal() {
   showWalletModal.value = true
   showTopupPicker.value = false
   walletStore.fetchBalance().catch(() => {})
+  paymentsStore.fetchConfig().catch(() => {})
 }
 async function topupWallet(amount: number) {
   if (toppingUp.value) return
   toppingUp.value = true
   try {
+    if (paymentsStore.config?.enabled) {
+      // Уходим на форму ЮMoney; баланс пополнится по уведомлению, результат — на /payment/result
+      await paymentsStore.startTopup(amount, topupMethod.value)
+      return
+    }
+    // Шлюз не подключён — демо-пополнение (сервер разрешает его только в dev)
     await walletStore.topup(amount)
     showTopupPicker.value = false
   } catch (e) {
@@ -3153,7 +3155,7 @@ const filteredMediaPosts = computed(() => {
 // ── Альбомы медиа (группировка по месяцу) ────────────────────────────────────
 const mediaAlbums = computed(() => {
   const map = new Map<string, { url: string; created_at: string; postId?: string }[]>()
-  for (const post of filteredMediaPosts.value) {
+  for (const post of tabPosts.value) {
     const dt = new Date(post.created_at)
     const label = dt.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'long', year: 'numeric' })
     if (!map.has(label)) map.set(label, [])
@@ -3181,7 +3183,7 @@ const specialAlbums = computed(() => {
   // Альбом Фурсона
   const fursonaUrls: { url: string; postId?: string }[] = []
   // Посты помеченные как фурсона
-  for (const post of filteredMediaPosts.value) {
+  for (const post of tabPosts.value) {
     if (mediaPostLabels.value[post.id] === 'fursona') {
       for (const url of (post.media_urls ?? [])) fursonaUrls.push({ url, postId: post.id })
     }
@@ -3193,7 +3195,7 @@ const specialAlbums = computed(() => {
   for (const suit of profileFursuits.value) {
     if (suit.image_url) fursuitUrls.push({ url: suit.image_url })
   }
-  for (const post of filteredMediaPosts.value) {
+  for (const post of tabPosts.value) {
     if (mediaPostLabels.value[post.id] === 'fursuit') {
       for (const url of (post.media_urls ?? [])) fursuitUrls.push({ url, postId: post.id })
     }
@@ -3202,6 +3204,12 @@ const specialAlbums = computed(() => {
 
   return albums
 })
+
+// Встроенные альбомы для общей сетки альбомов (вместе с созданными вручную)
+const builtinAlbums = computed<BuiltinAlbum[]>(() => [
+  ...specialAlbums.value,
+  ...mediaAlbums.value.map((a) => ({ id: `month:${a.label}`, label: a.label, icon: 'CalendarDays', urls: a.urls })),
+])
 
 function loadMediaLabels(userId: string) {
   try {

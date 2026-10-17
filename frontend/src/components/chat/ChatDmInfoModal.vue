@@ -23,11 +23,7 @@
                 {{ (other?.display_name || other?.username || '?')[0].toUpperCase() }}
               </div>
               <!-- Online dot -->
-              <span v-if="online && !deviceIcon" class="absolute bottom-1 right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-brand-card" />
-              <span v-else-if="online" :title="device ?? undefined"
-                class="absolute bottom-1 right-1 w-4.5 h-4.5 bg-green-500 rounded-full border-2 border-brand-card flex items-center justify-center">
-                <BIcon :name="deviceIcon!" class="w-2.5 h-2.5 text-black/70" />
-              </span>
+              <OnlineIndicator v-if="online" :device="device" size="lg" />
             </div>
             <h3 class="relative text-base font-bold text-white truncate mt-2.5 flex items-center justify-center gap-1.5 drop-shadow">
               {{ other?.display_name || other?.username }}
@@ -93,6 +89,7 @@
 import { useLangStore } from '@/stores/lang'
 import type { Conversation, MsgSender } from '@/stores/messages'
 import BIcon from '@/components/BIcon.vue'
+import OnlineIndicator from '@/components/OnlineIndicator.vue'
 import ChatMediaStatsList, { type MediaStat } from '@/components/chat/ChatMediaStatsList.vue'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useCopyFeedback } from '@/composables/useCopyFeedback'

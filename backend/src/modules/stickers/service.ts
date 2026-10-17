@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js';
 import { uploadRawToMinIO, recordMediaOwner, assertOwnedMedia } from '../media/service.js';
+import { notificationService } from '../notifications/service.js';
 import { randomBytes } from 'crypto';
 import type { CreatePackInput, UpdatePackInput, GetPacksQuery, PackVisibility } from './types.js';
 
@@ -227,7 +228,9 @@ export const stickersService = {
       where: { invite_code: code, visibility: 'invite', status: 'published', deleted_at: null },
       select: PACK_SELECT,
     });
-    return pack ? redact(pack, requesterId) : null;
+    if (!pack) return null;
+    const access = requesterId ? await this.accessStatus(pack.id, requesterId, pack.author_id) : 'none';
+    return { pack: redact(pack, requesterId), access };
   },
 
   // ── create ────────────────────────────────────────────────────────────────
@@ -333,13 +336,14 @@ export const stickersService = {
   },
 
   // ── add to collection ─────────────────────────────────────────────────────
-  async addToCollection(userId: string, packId: string, code?: string) {
+  async addToCollection(userId: string, packId: string) {
     const pack = await prisma.stickerPack.findFirst({ where: { id: packId, deleted_at: null, status: 'published' } });
     if (!pack) return null;
     const isAuthor = pack.author_id === userId;
     if (!isAuthor) {
       if (pack.visibility === 'own') return null;
-      if (pack.visibility === 'invite' && !(code && pack.invite_code && code === pack.invite_code)) return null;
+      // По приглашению доступ даёт только одобренная заявка
+      if (pack.visibility === 'invite') throw httpError('Пак по приглашению — запросите доступ по ссылке', 403);
       // Платный пак добавляется только через покупку (purchase)
       if (pack.visibility === 'paid' || Number(pack.price) > 0) throw httpError('Платный пак нужно купить', 402);
     }
@@ -368,15 +372,100 @@ export const stickersService = {
     return true;
   },
 
-  // ── вход по приглашению ───────────────────────────────────────────────────
-  async joinByInvite(userId: string, code: string) {
+  // ── заявки на доступ к паку по приглашению ────────────────────────────────
+  async accessStatus(packId: string, userId: string, authorId: string): Promise<'owner' | 'approved' | 'pending' | 'rejected' | 'none'> {
+    if (authorId === userId) return 'owner';
+    const owned = await prisma.userStickerPack.findUnique({
+      where: { user_id_pack_id: { user_id: userId, pack_id: packId } }, select: { user_id: true },
+    });
+    if (owned) return 'approved';
+    const req = await prisma.stickerAccessRequest.findUnique({
+      where: { pack_id_user_id: { pack_id: packId, user_id: userId } }, select: { status: true },
+    });
+    return (req?.status as 'pending' | 'rejected' | undefined) ?? 'none';
+  },
+
+  /** Пользователь просит доступ по ссылке-приглашению; владелец получает уведомление */
+  async requestAccess(userId: string, code: string) {
     const pack = await prisma.stickerPack.findFirst({
       where: { invite_code: code, visibility: 'invite', status: 'published', deleted_at: null },
-      select: { id: true },
+      select: { id: true, name: true, author_id: true },
     });
     if (!pack) return null;
-    await this._collect(userId, pack.id);
-    return pack.id;
+    const status = await this.accessStatus(pack.id, userId, pack.author_id);
+    if (status === 'owner' || status === 'approved' || status === 'pending') return { status };
+
+    // Повторная заявка после отказа снова уходит владельцу
+    const req = await prisma.stickerAccessRequest.upsert({
+      where:  { pack_id_user_id: { pack_id: pack.id, user_id: userId } },
+      create: { pack_id: pack.id, user_id: userId, status: 'pending' },
+      update: { status: 'pending', decided_at: null, created_at: new Date() },
+      select: { id: true },
+    });
+    await notificationService.create({
+      receiverId: pack.author_id,
+      senderId:   userId,
+      type:       'STICKER_ACCESS_REQUEST',
+      refId:      req.id,
+      meta:       { packId: pack.id, packName: pack.name },
+    });
+    return { status: 'pending' as const };
+  },
+
+  /** Входящие заявки на доступ к пакам автора (для счётчика и списка) */
+  async listIncomingRequests(ownerId: string) {
+    const where = { status: 'pending', pack: { author_id: ownerId, deleted_at: null, visibility: 'invite' } };
+    const [requests, count] = await Promise.all([
+      prisma.stickerAccessRequest.findMany({
+        where,
+        orderBy: { created_at: 'asc' },
+        take: 100,
+        select: {
+          id: true,
+          created_at: true,
+          pack: { select: { id: true, name: true, cover_url: true } },
+          user: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        },
+      }),
+      prisma.stickerAccessRequest.count({ where }),
+    ]);
+    return { requests, count };
+  },
+
+  /** Владелец одобряет или отклоняет заявку. При одобрении пак попадает в библиотеку просителя */
+  async decideRequest(ownerId: string, requestId: string, action: 'approve' | 'reject') {
+    const req = await prisma.stickerAccessRequest.findUnique({
+      where: { id: requestId },
+      select: { id: true, status: true, pack_id: true, user_id: true, pack: { select: { name: true, author_id: true } } },
+    });
+    if (!req || req.pack.author_id !== ownerId) return null;
+
+    // Меняем статус только у ещё открытой заявки: два клика подряд не добавят пак дважды
+    const claimed = await prisma.stickerAccessRequest.updateMany({
+      where: { id: requestId, status: 'pending' },
+      data:  { status: action === 'approve' ? 'approved' : 'rejected', decided_at: new Date() },
+    });
+    if (claimed.count === 0) throw httpError('Заявка уже рассмотрена', 409);
+
+    if (action === 'reject') return { status: 'rejected' as const };
+
+    const already = await prisma.userStickerPack.findUnique({
+      where: { user_id_pack_id: { user_id: req.user_id, pack_id: req.pack_id } }, select: { user_id: true },
+    });
+    if (!already) {
+      await prisma.$transaction([
+        prisma.userStickerPack.create({ data: { user_id: req.user_id, pack_id: req.pack_id } }),
+        prisma.stickerPack.update({ where: { id: req.pack_id }, data: { downloads_count: { increment: 1 } } }),
+      ]);
+    }
+    await notificationService.create({
+      receiverId: req.user_id,
+      senderId:   ownerId,
+      type:       'STICKER_ACCESS_APPROVED',
+      refId:      req.pack_id,
+      meta:       { packId: req.pack_id, packName: req.pack.name },
+    });
+    return { status: 'approved' as const };
   },
 
   // ── покупка платного пака за баланс кошелька ──────────────────────────────

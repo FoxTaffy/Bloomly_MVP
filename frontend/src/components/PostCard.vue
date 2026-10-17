@@ -38,7 +38,7 @@
         {{ post.post_type === 'artwork' ? 'Новая работа' : post.post_type === 'article' ? 'Статья' : 'Обновление заказа' }}
       </span>
     </div>
-    <div class="p-5 md:p-6">
+    <div class="p-5 md:p-6 max-md:px-4 max-md:py-4">
 
       <!-- ── Header ────────────────────────────────────────────────────── -->
       <div class="flex items-start justify-between gap-3 mb-4">
@@ -510,8 +510,8 @@
       </div>
 
       <!-- ── Actions ───────────────────────────────────────────────────── -->
-      <div class="flex items-center justify-between pt-4 mt-4 border-t border-brand-border">
-        <div class="flex items-center gap-2">
+      <div class="flex items-center justify-between pt-4 mt-4 border-t border-brand-border max-md:gap-1.5">
+        <div class="flex items-center gap-2 max-md:gap-1.5 max-md:min-w-0">
           <!-- Vote -->
           <div class="flex items-center h-8 gap-0.5 bg-brand-bg rounded-full px-1 border border-brand-border">
             <button @click="vote(1)"
@@ -521,7 +521,7 @@
                 : 'text-white/40 hover:text-emerald-400'">
               <BIcon name="ArrowBigUp" class="w-5 h-5" :fill="localVote === 1 ? 'currentColor' : 'none'" />
             </button>
-            <span class="font-bold text-sm min-w-[26px] text-center tabular-nums"
+            <span class="font-bold text-sm min-w-[26px] max-md:min-w-[20px] text-center tabular-nums"
               :class="localVote === 1 ? 'text-emerald-400' : localVote === -1 ? 'text-rose-400' : localRating > 0 ? 'text-emerald-300/80' : localRating < 0 ? 'text-rose-300/80' : 'text-white/60'">
               {{ localRating }}
             </span>
@@ -538,7 +538,7 @@
           <button v-if="!adMode" @click="toggleRepaw"
             :disabled="authStore.user?.id === post.author?.id"
             :title="authStore.user?.id === post.author?.id ? 'Нельзя репавсить свой пост' : undefined"
-            class="flex items-center h-8 gap-1 px-2.5 rounded-full text-xs font-semibold border transition-all"
+            class="flex items-center h-8 gap-1 px-2.5 max-md:px-2 rounded-full text-xs font-semibold border transition-all"
             :class="[
               localRepawed
                 ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
@@ -551,7 +551,7 @@
 
           <!-- Comments toggle -->
           <button @click="isExpanded = !isExpanded"
-            class="flex items-center h-8 gap-1 px-2.5 rounded-full border text-xs transition-all"
+            class="flex items-center h-8 gap-1 px-2.5 max-md:px-2 rounded-full border text-xs transition-all"
             :class="isExpanded
               ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accent'
               : 'bg-brand-bg border-brand-border text-white/55 hover:text-white'">
@@ -560,7 +560,7 @@
           </button>
         </div>
 
-        <div class="flex items-center h-8 gap-1">
+        <div class="flex items-center h-8 gap-1 max-md:flex-shrink-0">
           <!-- Favourite -->
           <button @click="toggleFavourite"
             class="w-8 h-8 flex items-center justify-center rounded-full border transition-all"
@@ -577,7 +577,7 @@
           </button>
 
           <!-- Views count -->
-          <div class="flex items-center h-8 gap-1 px-1.5 text-white/35 text-xs select-none" title="Просмотры">
+          <div class="flex items-center h-8 gap-1 px-1.5 max-md:px-1 text-white/35 text-xs select-none max-[379px]:hidden" title="Просмотры">
             <BIcon name="Eye" class="w-3.5 h-3.5" />
             <span class="tabular-nums">{{ post.views_count ?? 0 }}</span>
           </div>

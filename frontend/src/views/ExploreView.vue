@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useTagSynonyms } from '@/composables/useTagSynonyms'
 import { useRouter } from 'vue-router'
 import { useLangStore } from '@/stores/lang'
 import { useAuthStore } from '@/stores/auth'
@@ -22,6 +23,7 @@ const isVideoUrl = (url: string) => /\.(mp4|webm|mov|mkv|ogv)$/i.test(url.split(
 type SortKey = 'hot' | 'new'
 const sortKey = ref<SortKey>('hot')
 const selectedTag = ref('')
+const { tagSynonyms } = useTagSynonyms()
 
 const sortTabs = computed(() => [
   { key: 'hot' as SortKey, label: langStore.t.trending,    icon: 'TrendingUp' },
@@ -105,7 +107,10 @@ async function fetchPosts(reset = true) {
       hasMedia: 'true',
     }
     params.nsfw = nsfwMode.value
-    if (selectedTag.value) params.tag = selectedTag.value
+    if (selectedTag.value) {
+      params.tag = selectedTag.value
+      params.synonyms = String(tagSynonyms.value)
+    }
 
     const res = await api.get('/posts', { params })
     if (res.data.success) {
@@ -146,6 +151,7 @@ function goToProfile(username: string) {
 }
 
 watch([sortKey, selectedTag, nsfwMode], () => fetchPosts(true))
+watch(tagSynonyms, () => { if (selectedTag.value) fetchPosts(true) })
 
 onMounted(() => {
   fetchPosts(true)
@@ -174,26 +180,33 @@ onMounted(() => {
         </div>
 
         <!-- Sort tabs -->
-        <div class="flex items-center gap-2 flex-wrap">
+        <div class="flex items-center gap-2 flex-wrap m-scroll-row max-md:-mx-3 max-md:px-3">
           <button v-for="tab in sortTabs" :key="tab.key"
             @click="sortKey = tab.key"
-            class="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition-all"
+            class="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold max-md:whitespace-nowrap transition-all"
             :class="sortKey === tab.key
               ? 'bg-brand-accent text-white shadow-md shadow-brand-accent/25'
               : 'bg-brand-card border border-brand-border text-white/55 hover:text-white hover:border-brand-accent/40'">
             <BIcon :name="tab.icon" class="w-4 h-4" />
             <span>{{ tab.label }}</span>
           </button>
-          <div class="w-px h-6 bg-brand-border mx-1" />
+          <div class="w-px h-6 bg-brand-border mx-1" :class="{ 'max-md:hidden': !selectedTag }" />
           <button v-if="selectedTag" @click="selectedTag = ''"
-            class="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold bg-brand-accent/15 text-brand-accent border border-brand-accent/40">
+            class="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold max-md:whitespace-nowrap bg-brand-accent/15 text-brand-accent border border-brand-accent/40">
             #{{ selectedTag }}
             <BIcon name="X" class="w-3.5 h-3.5" />
+          </button>
+          <button v-if="selectedTag" @click="tagSynonyms = !tagSynonyms"
+            :title="'Искать также по синонимам тега (лиса → fox)'"
+            class="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold whitespace-nowrap border transition-all"
+            :class="tagSynonyms ? 'bg-brand-accent/15 text-brand-accent border-brand-accent/40' : 'bg-brand-card text-white/55 border-brand-border hover:text-white'">
+            <BIcon :name="tagSynonyms ? 'CircleCheck' : 'Circle'" class="w-3.5 h-3.5" />
+            Синонимы тегов
           </button>
         </div>
 
         <!-- Tag chips strip -->
-        <div v-if="trendingTags.length" class="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
+        <div v-if="trendingTags.length" class="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1 max-md:-mx-3 max-md:px-3">
           <button v-for="tag in trendingTags" :key="tag.name"
             @click="selectTag(tag.name)"
             class="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap"

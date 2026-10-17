@@ -67,6 +67,7 @@ const notifTypeLabel = (type: string) => {
     REPAW: 'поставил(а) RePaw вашей публикации', FOLLOW: 'подписался(ась) на вас',
     MENTION: 'упомянул(а) вас', FOLLOW_POST: 'опубликовал(а) новый пост', GROUP_POST: 'новый пост в сообществе',
     RELATIONSHIP_REQUEST: 'хочет быть вашим партнёром 💕', RELATIONSHIP_ACCEPTED: 'принял(а) ваш запрос в отношения ❤️',
+    STICKER_ACCESS_REQUEST: 'хочет получить доступ к вашему стикерпаку', STICKER_ACCESS_APPROVED: 'одобрил(а) ваш доступ к стикерпаку — пак в библиотеке',
   }
   // Unknown type: neutral sentence in the UI language, never the raw type code.
   return map[key] ?? t.notifGeneric
@@ -74,6 +75,19 @@ const notifTypeLabel = (type: string) => {
 
 // ── Relationship request actions ──────────────────────────────────────────────
 const relActionLoading = ref<Record<string, boolean>>({})
+
+// ── Заявка на доступ к стикерпаку по приглашению ──────────────────────────────
+const decideStickerAccess = async (n: any, action: 'approve' | 'reject') => {
+  if (!n.ref_id) return
+  relActionLoading.value[n.id] = true
+  try {
+    await api.post(`/stickers/access-requests/${n.ref_id}/${action}`)
+    n._stickerDone = action === 'approve' ? 'approved' : 'rejected'
+    n.is_read = true
+  } catch (e) {
+    alert(apiErrorMessage(e) ?? 'Ошибка')
+  } finally { relActionLoading.value[n.id] = false }
+}
 
 const acceptRelationship = async (n: any) => {
   const reqId = n.ref_id
@@ -114,7 +128,8 @@ const identityHref = (n: any): string | null => {
 // Real link target — null for automod_warn (opens a modal instead of navigating) and
 // RELATIONSHIP_REQUEST (row shows Accept/Decline buttons instead of navigating away).
 const notifHref = (n: any): string | null => {
-  if (n.type === 'automod_warn' || n.type === 'RELATIONSHIP_REQUEST') return null
+  if (n.type === 'automod_warn' || n.type === 'RELATIONSHIP_REQUEST' || n.type === 'STICKER_ACCESS_REQUEST') return null
+  if (n.type === 'STICKER_ACCESS_APPROVED' && n.meta?.packId) return `/stickers/${n.meta.packId}`
   if (identityIsGroup(n)) return identityHref(n)
   if (n.sender?.username && ['FOLLOW', 'RELATIONSHIP_ACCEPTED', 'follow', 'relationship_accepted'].includes(n.type)) {
     return `/profile/${n.sender.username}`
@@ -143,22 +158,22 @@ onMounted(fetchAll)
       <AppSidebar />
 
       <main class="flex-1 min-w-0 pb-28 md:pb-20 max-w-2xl">
-        <div class="relative overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(98,109,255,0.26),transparent_35%),linear-gradient(135deg,rgba(18,19,33,0.96),rgba(26,31,52,0.92))] px-5 py-4 shadow-[0_18px_48px_rgba(17,22,39,0.45)] mb-4 backdrop-blur-sm">
+        <div class="relative overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(98,109,255,0.26),transparent_35%),linear-gradient(135deg,rgba(18,19,33,0.96),rgba(26,31,52,0.92))] px-5 py-4 max-md:px-4 shadow-[0_18px_48px_rgba(17,22,39,0.45)] mb-4 backdrop-blur-sm">
           <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-accent/70 to-transparent" />
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-3 min-w-0">
-              <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-accent/25 via-brand-accent/10 to-transparent border border-brand-accent/30 flex items-center justify-center flex-shrink-0 shadow-[0_0_25px_rgba(95,112,255,0.2)]">
+              <div class="w-12 h-12 max-md:w-10 max-md:h-10 rounded-2xl bg-gradient-to-br from-brand-accent/25 via-brand-accent/10 to-transparent border border-brand-accent/30 flex items-center justify-center flex-shrink-0 shadow-[0_0_25px_rgba(95,112,255,0.2)]">
                 <BIcon name="Bell" class="w-5 h-5 text-brand-accent" />
               </div>
               <div class="min-w-0">
-                <p class="text-[10px] uppercase tracking-[0.24em] text-white/45">Центр уведомлений</p>
-                <h1 class="text-xl font-extrabold text-white truncate">Все уведомления</h1>
+                <p class="text-[10px] uppercase tracking-[0.24em] max-md:tracking-[0.14em] text-white/45 max-md:truncate">Центр уведомлений</p>
+                <h1 class="text-xl max-md:text-base font-extrabold text-white truncate">Все уведомления</h1>
               </div>
             </div>
             <button
               @click="markAllRead"
               :disabled="unreadCount === 0"
-              class="inline-flex items-center gap-2 text-xs font-semibold transition-all rounded-full border px-3 py-1.5 min-w-[110px] justify-center"
+              class="inline-flex items-center gap-2 text-xs font-semibold transition-all rounded-full border px-3 py-1.5 min-w-[110px] max-md:min-w-0 max-md:min-h-[36px] max-md:px-2.5 max-md:whitespace-nowrap max-md:flex-shrink-0 justify-center"
               :class="unreadCount > 0
                 ? 'text-brand-accent border-brand-accent/35 bg-brand-accent/8 hover:bg-brand-accent/12 hover:text-white shadow-[0_0_18px_rgba(95,112,255,0.12)]'
                 : 'text-white/30 border-white/10 bg-white/[0.02] cursor-not-allowed'"
@@ -222,6 +237,18 @@ onMounted(fetchAll)
               </div>
               <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'accepted'" class="text-xs text-pink-400 mt-2 font-semibold">❤️ Принято</p>
               <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'declined'" class="text-xs text-white/40 mt-2">Отклонено</p>
+              <div v-if="n.type === 'STICKER_ACCESS_REQUEST' && !n._stickerDone" class="flex gap-2 mt-2 max-w-xs">
+                <button @click.stop.prevent="decideStickerAccess(n, 'approve')" :disabled="relActionLoading[n.id]"
+                  class="flex-1 py-1.5 rounded-xl bg-brand-accent hover:opacity-90 disabled:opacity-50 text-white text-xs font-bold transition-all">
+                  Одобрить
+                </button>
+                <button @click.stop.prevent="decideStickerAccess(n, 'reject')" :disabled="relActionLoading[n.id]"
+                  class="flex-1 py-1.5 rounded-xl border border-white/10 bg-white/[0.02] hover:border-white/20 disabled:opacity-50 text-white/70 hover:text-white text-xs font-semibold transition-all">
+                  Отклонить
+                </button>
+              </div>
+              <p v-if="n.type === 'STICKER_ACCESS_REQUEST' && n._stickerDone === 'approved'" class="text-xs text-emerald-400 mt-2 font-semibold">✅ Одобрено</p>
+              <p v-if="n.type === 'STICKER_ACCESS_REQUEST' && n._stickerDone === 'rejected'" class="text-xs text-white/40 mt-2">Отклонено</p>
             </div>
           </component>
         </div>

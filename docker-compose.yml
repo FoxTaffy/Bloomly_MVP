@@ -84,6 +84,8 @@ services:
       SUPPORT_SMTP_PORT: ${SUPPORT_SMTP_PORT:-1025}
       SUPPORT_SMTP_USER: ${SUPPORT_SMTP_USER:-}
       SUPPORT_SMTP_PASS: ${SUPPORT_SMTP_PASS:-}
+      YOOMONEY_RECEIVER: ${YOOMONEY_RECEIVER:-}
+      YOOMONEY_NOTIFICATION_SECRET: ${YOOMONEY_NOTIFICATION_SECRET:-}
     command: sh -c "npx prisma migrate deploy && npm run start"
     extra_hosts:
       - "host.docker.internal:host-gateway"

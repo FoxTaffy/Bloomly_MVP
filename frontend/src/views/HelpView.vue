@@ -193,7 +193,7 @@ async function sendReply(ticketId: string) {
       <AppSidebar />
 
       <main class="flex-1 min-w-0 max-w-3xl">
-        <div class="flex items-center gap-3 mb-6">
+        <div class="flex items-center gap-3 mb-6 max-md:mb-4">
           <div class="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 bg-brand-accent/15">
             <BIcon name="CircleHelp" class="w-5 h-5 text-brand-accent" />
           </div>
@@ -204,14 +204,14 @@ async function sendReply(ticketId: string) {
         </div>
 
         <!-- Section tabs -->
-        <div class="flex gap-2 mb-6 flex-wrap">
+        <div class="flex gap-2 mb-6 flex-wrap max-md:grid max-md:grid-cols-2 max-md:mb-4">
           <button v-for="s in sections" :key="s.key" @click="section = s.key"
-            class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold border transition-all"
+            class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold border transition-all max-md:justify-center max-md:px-2 max-md:text-[13px] max-md:min-h-[44px] max-md:min-w-0"
             :class="section === s.key
               ? 'bg-brand-accent/15 border-brand-accent/30 text-brand-accent'
               : 'bg-brand-card border-brand-border text-white/45 hover:text-white/80'">
-            <BIcon :name="s.icon" class="w-4 h-4" />
-            {{ s.label }}
+            <BIcon :name="s.icon" class="w-4 h-4 max-md:shrink-0" />
+            <span class="max-md:truncate">{{ s.label }}</span>
           </button>
         </div>
 

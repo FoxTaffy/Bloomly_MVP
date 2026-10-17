@@ -23,6 +23,8 @@ export interface GetPostsQuery {
   search?: string;
   category?: string;
   tag?: string;
+  /** 'true' — the tag filter also matches its synonyms (see lib/tagSynonyms). */
+  synonyms?: string;
   sort?: PostSortBy;
   safeMode?: string;
   nsfw?: string;

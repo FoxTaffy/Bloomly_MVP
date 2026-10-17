@@ -60,6 +60,8 @@ model User {
   fav_film                       String?                   @db.VarChar(80)
   public_key                     String?
   subscription_tier              String                    @default("free") @db.VarChar(20)
+  // Конец оплаченного периода. null у платного тарифа — выдан админом бессрочно
+  subscription_expires_at        DateTime?
   storage_used_bytes             BigInt                    @default(0)
   profile_theme                  String?                   @db.VarChar(50)
   profile_bg_url                 String?
@@ -128,6 +130,7 @@ model User {
   stickerCollection              UserStickerPack[]
   stickerUsages                  StickerUsage[]
   stickerFavorites               StickerFavorite[]
+  stickerAccessRequests          StickerAccessRequest[]
   autoModLogs                    AutoModLog[]
   autoModActorLogs               AutoModLog[]              @relation("AutoModActor")
   adminBroadcasts                AdminBroadcast[]
@@ -180,6 +183,7 @@ model User {
   payment_region                 String?                   @db.VarChar(10)
   paymentMethods                 PaymentMethod[]
   subscriptionPlans              SubscriptionPlan[]
+  payments                       Payment[]
   supportTickets                 SupportTicket[]           @relation("SupportTicketUser")
   supportTicketMessages          SupportTicketMessage[]    @relation("SupportTicketMessageSender")
   albums                         Album[]
@@ -231,6 +235,33 @@ model SubscriptionPlan {
   user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
+}
+
+/// Платёж: пополнение кошелька или оплата подписки. Через внешний шлюз (ЮMoney) или с баланса.
+/// Строка создаётся до редиректа на шлюз; id уходит в label и возвращается в уведомлении.
+model Payment {
+  id                    String    @id @default(uuid()) @db.Uuid
+  user_id               String    @db.Uuid
+  provider              String    @db.VarChar(20) // yoomoney | wallet
+  purpose               String    @db.VarChar(20) // wallet_topup | subscription
+  // pending → succeeded | expired | review (деньги пришли, но что-то не сходится — разобрать вручную)
+  status                String    @default("pending") @db.VarChar(20)
+  amount                Decimal   @db.Decimal(18, 2) // к оплате плательщиком
+  credited_amount       Decimal?  @db.Decimal(18, 2) // пришло на счёт после комиссии шлюза
+  currency              String    @default("RUB") @db.VarChar(3)
+  method                String?   @db.VarChar(10) // AC — карта, PC — кошелёк ЮMoney
+  tier                  String?   @db.VarChar(20)
+  period                String?   @db.VarChar(10) // month | year
+  provider_operation_id String?   @unique @db.VarChar(100)
+  failure_reason        String?   @db.VarChar(200)
+  raw_notification      Json?
+  paid_at               DateTime?
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+  user                  User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@index([status, created_at])
 }
 
 model OAuthAccount {
@@ -430,6 +461,18 @@ model Tag {
   id    String    @id @default(uuid()) @db.Uuid
   name  String    @unique
   posts PostTag[]
+}
+
+// Синоним хештега: alias → canonical. Теги в постах не переписываются — синонимы
+// объединяются только в популярных тегах и в поиске с включёнными синонимами.
+// Варианты с «_» и «-» (furry_art / furry-art / furryart) склеиваются автоматически, их сюда не заносят.
+model TagSynonym {
+  alias      String   @id @db.VarChar(100)
+  canonical  String   @db.VarChar(100)
+  created_by String?  @db.Uuid
+  created_at DateTime @default(now())
+
+  @@index([canonical])
 }
 
 model PostTag {
@@ -1597,10 +1640,11 @@ model StickerPack {
   updated_at        DateTime  @default(now()) @updatedAt @db.Timestamp(6)
   deleted_at        DateTime? @db.Timestamp(6)
 
-  author           User              @relation(fields: [author_id], references: [id], onDelete: Cascade)
+  author           User                   @relation(fields: [author_id], references: [id], onDelete: Cascade)
   userCollections  UserStickerPack[]
   stickerUsages    StickerUsage[]
   stickerFavorites StickerFavorite[]
+  accessRequests   StickerAccessRequest[]
 
   @@index([author_id])
   @@index([status])
@@ -1635,6 +1679,22 @@ model StickerUsage {
   @@unique([user_id, sticker_url])
   @@index([user_id, last_used_at(sort: Desc)])
   @@index([user_id, use_count(sort: Desc)])
+}
+
+/// Заявка на доступ к паку по приглашению. Одобрение добавляет пак в библиотеку пользователя.
+model StickerAccessRequest {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pack_id    String    @db.Uuid
+  user_id    String    @db.Uuid
+  status     String    @default("pending") @db.VarChar(20) // pending | approved | rejected
+  created_at DateTime  @default(now()) @db.Timestamp(6)
+  decided_at DateTime? @db.Timestamp(6)
+
+  pack StickerPack @relation(fields: [pack_id], references: [id], onDelete: Cascade)
+  user User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([pack_id, user_id])
+  @@index([status])
 }
 
 model StickerFavorite {

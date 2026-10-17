@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useLangStore } from '@/stores/lang'
+import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
@@ -27,6 +27,12 @@ const isEarlyUser = computed(() => {
 })
 
 const currentTier = computed(() => auth.user?.subscription_tier ?? 'free')
+// Оплаченный период: тариф с датой окончания можно продлить. Без даты — выдан бессрочно
+const expiresAt = computed(() => auth.user?.subscription_expires_at ?? null)
+const canExtend = (planId: string) => planId === currentTier.value && !!expiresAt.value
+const isLocked  = (planId: string) => planId === currentTier.value && !canExtend(planId)
+const expiresLabel = computed(() =>
+  expiresAt.value ? new Date(expiresAt.value).toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { day: 'numeric', month: 'long', year: 'numeric' }) : '')
 
 type Plan = {
   id:         string
@@ -132,18 +138,20 @@ function showToast(msg: string) {
 }
 
 function selectPlan(planId: string) {
-  if (planId === currentTier.value) return
+  if (isLocked(planId)) return
   if (planId === 'free') { showToast(langStore.t.subToastFreeInfo); return }
   if (planId === 'business') { showToast(langStore.t.subToastBusinessInfo); return }
   const plan = plans.value.find(p => p.id === planId)
   if (plan) payingPlan.value = plan
 }
 
-function onPaymentSuccess(planId: string) {
+function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
   if (auth.user) {
     ;auth.user.subscription_tier = planId
+    auth.user.subscription_expires_at = newExpiresAt
     sessionStorage.setItem('auth_user', JSON.stringify(auth.user))
   }
+  auth.fetchMe()
 }
 </script>
 
@@ -265,6 +273,9 @@ function onPaymentSuccess(planId: string) {
                     <BIcon name="CheckCircle" class="w-3 h-3" /> {{ langStore.t.subActive }}
                   </span>
                 </div>
+                <p v-if="currentTier === plan.id && expiresLabel" class="text-[11px] text-white/45 mb-1">
+                  {{ langStore.t.subActiveUntil }} {{ expiresLabel }}
+                </p>
 
                 <!-- Price -->
                 <div class="mb-4">
@@ -329,9 +340,9 @@ function onPaymentSuccess(planId: string) {
                 <!-- CTA -->
                 <button
                   @click="selectPlan(plan.id)"
-                  :disabled="currentTier === plan.id"
+                  :disabled="isLocked(plan.id)"
                   class="w-full py-2.5 rounded-2xl text-sm font-bold transition-all duration-150 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-[0.96] hover:brightness-110"
-                  :class="currentTier === plan.id
+                  :class="isLocked(plan.id)
                     ? 'bg-brand-success/10 text-brand-success border border-brand-success/30'
                     : plan.id === 'free'
                       ? 'bg-white/5 text-white/40 border border-white/10 hover:bg-white/10 hover:text-white/70'
@@ -339,10 +350,11 @@ function onPaymentSuccess(planId: string) {
                         ? 'bg-gradient-to-r from-brand-accent to-brand-accent-plus text-white shadow-lg shadow-brand-accent/40 hover:shadow-brand-accent/60'
                         : 'bg-white/8 hover:bg-white/15 text-white border border-white/10'"
                 >
-                  <BIcon v-if="currentTier === plan.id" name="CheckCircle" class="w-4 h-4" />
+                  <BIcon v-if="isLocked(plan.id)" name="CheckCircle" class="w-4 h-4" />
+                  <BIcon v-else-if="canExtend(plan.id)" name="RefreshCw" class="w-4 h-4" />
                   <BIcon v-else-if="plan.id !== 'free'" name="Ticket" class="w-4 h-4" />
                   <span>
-                    {{ currentTier === plan.id ? langStore.t.subYourPlan : plan.id === 'free' ? langStore.t.subBasic : `${langStore.t.subActivatePrefix} ${plan.label}` }}
+                    {{ isLocked(plan.id) ? langStore.t.subYourPlan : canExtend(plan.id) ? langStore.t.payExtendBtn : plan.id === 'free' ? langStore.t.subBasic : `${langStore.t.subActivatePrefix} ${plan.label}` }}
                   </span>
                 </button>
               </div>
@@ -382,6 +394,7 @@ function onPaymentSuccess(planId: string) {
     <SubscriptionPaymentModal
       v-if="payingPlan"
       :plan="payingPlan"
+      :period="billing === 'yearly' ? 'year' : 'month'"
       :price="effectivePrice(payingPlan)"
       :original-price="originalPrice(payingPlan)"
       :discounted="totalDiscountPercent(payingPlan) > 0"

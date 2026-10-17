@@ -390,7 +390,7 @@ const vClickOutside = {
     </div>
 
     <!-- Comment input -->
-    <div v-else-if="auth.user" class="flex gap-3 items-start">
+    <div v-else-if="auth.user" class="flex gap-3 max-md:gap-2 items-start">
       <div class="relative flex-shrink-0 mt-0.5">
         <!-- Clickable avatar — opens "comment as" picker if I manage any groups -->
         <button v-if="adminGroups.length" ref="entityBtnRef" @click.stop="toggleEntityPicker"
@@ -460,7 +460,7 @@ const vClickOutside = {
         </Teleport>
       </div>
 
-      <div class="flex-1 relative">
+      <div class="flex-1 max-md:min-w-0 relative">
         <!-- Sticker panel popover -->
         <Transition name="popover-up">
           <div v-if="showStickerPanel" class="absolute bottom-full mb-2 left-0 z-50">
@@ -484,14 +484,14 @@ const vClickOutside = {
         <input ref="commentFileRef" type="file" accept="image/*,video/*" class="hidden" @change="onCommentFilePicked" />
         <input ref="replyFileRef" type="file" accept="image/*,video/*" class="hidden" @change="onReplyFilePicked" />
 
-        <div class="flex gap-2">
+        <div class="flex gap-2 max-md:gap-1.5">
           <input
             v-model="commentText"
             @keydown.enter.prevent="submitComment"
             @focus="showReplyStickerPanel = false"
             @paste="onCommentPaste"
             :placeholder="langStore.t.writeComment"
-            class="flex-1 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
+            class="flex-1 max-md:min-w-0 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2 max-md:px-3 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
           />
           <!-- Media attach button -->
           <button
@@ -515,9 +515,13 @@ const vClickOutside = {
           <button
             @click="submitComment"
             :disabled="(!commentText.trim() && !commentFileUrl) || submitting || commentFileUploading"
-            class="px-4 py-2 bg-brand-accent text-white text-sm font-bold rounded-2xl disabled:opacity-40 flex-shrink-0">
+            :aria-label="langStore.t.send"
+            class="px-4 py-2 bg-brand-accent text-white text-sm font-bold rounded-2xl disabled:opacity-40 flex-shrink-0 max-md:w-9 max-md:h-9 max-md:p-0 max-md:flex max-md:items-center max-md:justify-center">
             <BIcon v-if="submitting" name="Loader2" class="w-4 h-4 animate-spin" />
-            <span v-else>{{ langStore.t.send }}</span>
+            <template v-else>
+              <span class="max-md:hidden">{{ langStore.t.send }}</span>
+              <BIcon name="SendHorizontal" class="w-4 h-4 md:hidden" />
+            </template>
           </button>
         </div>
       </div>
@@ -652,16 +656,16 @@ const vClickOutside = {
                 </button>
               </div>
 
-              <div class="flex gap-2 items-center">
-                <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover border border-brand-border flex-shrink-0" />
-                <div v-else class="w-7 h-7 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px]">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
+              <div class="flex gap-2 max-md:gap-1.5 items-center">
+                <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover border border-brand-border flex-shrink-0 max-md:hidden" />
+                <div v-else class="w-7 h-7 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px] max-md:hidden">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
                 <input
                   v-model="replyText"
                   @keydown.enter.prevent="submitReply"
                   @paste="onReplyPaste"
                   :placeholder="`@${replyingTo?.username}...`"
                   autofocus
-                  class="flex-1 bg-brand-bg border border-brand-border rounded-2xl px-3 py-1.5 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
+                  class="flex-1 max-md:min-w-0 bg-brand-bg border border-brand-border rounded-2xl px-3 py-1.5 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
                 />
                 <!-- Reply media attach button -->
                 <button
@@ -682,10 +686,12 @@ const vClickOutside = {
                   <BIcon name="Sticker" class="w-3.5 h-3.5" />
                 </button>
                 <button @click="submitReply" :disabled="(!replyText.trim() && !replyFileUrl) || submitting || replyFileUploading"
-                  class="px-3 py-1.5 bg-brand-accent text-white text-xs font-bold rounded-xl disabled:opacity-40">
-                  {{ langStore.t.send }}
+                  :aria-label="langStore.t.send"
+                  class="px-3 py-1.5 bg-brand-accent text-white text-xs font-bold rounded-xl disabled:opacity-40 max-md:flex-shrink-0 max-md:w-7 max-md:h-7 max-md:p-0 max-md:flex max-md:items-center max-md:justify-center">
+                  <span class="max-md:hidden">{{ langStore.t.send }}</span>
+                  <BIcon name="SendHorizontal" class="w-3.5 h-3.5 md:hidden" />
                 </button>
-                <button @click="cancelReply" class="p-1.5 text-white/55 hover:text-white rounded-xl hover:bg-brand-border">
+                <button @click="cancelReply" class="max-md:flex-shrink-0 p-1.5 text-white/55 hover:text-white rounded-xl hover:bg-brand-border">
                   <BIcon name="X" class="w-4 h-4" />
                 </button>
               </div>

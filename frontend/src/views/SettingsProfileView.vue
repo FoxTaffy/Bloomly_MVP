@@ -149,7 +149,7 @@
             </div>
 
             <!-- Mobile section tabs (xl+ uses the sticky sidebar instead) -->
-            <div class="flex gap-2 overflow-x-auto pb-1 xl:hidden no-scrollbar">
+            <div class="flex gap-2 overflow-x-auto pb-1 xl:hidden no-scrollbar max-md:-mx-3 max-md:px-3">
               <button
                 v-for="sec in sections.filter(s => s.id !== 'sec-ad')" :key="sec.id"
                 @click="openSec(sec.id)"
@@ -275,12 +275,12 @@
                   </div>
 
                   <!-- Spacer + action row -->
-                  <div class="pt-12 px-6 pb-4 flex items-end justify-between">
-                    <div>
-                      <p class="font-bold text-white text-sm">{{ form.display_name || authStore.user?.username }}</p>
-                      <p class="text-xs text-white/70">@{{ authStore.user?.username }}</p>
+                  <div class="pt-12 px-6 pb-4 flex items-end justify-between max-md:px-4 max-md:flex-col max-md:items-stretch max-md:gap-3">
+                    <div class="max-md:min-w-0">
+                      <p class="font-bold text-white text-sm max-md:truncate">{{ form.display_name || authStore.user?.username }}</p>
+                      <p class="text-xs text-white/70 max-md:truncate">@{{ authStore.user?.username }}</p>
                     </div>
-                    <div class="flex flex-wrap gap-2 text-xs text-white/35 font-semibold">
+                    <div class="flex flex-wrap gap-2 text-xs text-white/35 font-semibold max-md:flex-nowrap max-md:gap-1.5 max-md:[&>*]:flex-1 max-md:[&>*]:justify-center max-md:[&>*]:min-w-0 max-md:[&>*]:py-2 max-md:[&>*]:px-1.5 max-md:[&>*]:text-center max-md:[&>*]:leading-tight max-[379px]:[&>*>svg]:hidden">
                       <button type="button" @click="avatarFileRef?.click()"
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-border hover:border-brand-accent/50 hover:text-white transition-all">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>

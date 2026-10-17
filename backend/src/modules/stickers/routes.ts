@@ -23,7 +23,9 @@ import {
   getPackStatsHandler,
   purchasePackHandler,
   getInvitePackHandler,
-  joinInviteHandler,
+  requestInviteAccessHandler,
+  incomingAccessRequestsHandler,
+  decideAccessRequestHandler,
 } from './controller.js';
 
 export async function stickersRoutes(fastify: FastifyInstance) {
@@ -33,7 +35,9 @@ export async function stickersRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof listPacksHandler>>('/',            tryAuth, listPacksHandler);
   fastify.get<RouteGenericOf<typeof findByUrlHandler>>('/find-by-url', auth, findByUrlHandler);
   fastify.get<RouteGenericOf<typeof getInvitePackHandler>>('/invite/:code', tryAuth, getInvitePackHandler);
-  fastify.post<RouteGenericOf<typeof joinInviteHandler>>('/invite/:code/join', auth, joinInviteHandler);
+  fastify.post<RouteGenericOf<typeof requestInviteAccessHandler>>('/invite/:code/request', auth, requestInviteAccessHandler);
+  fastify.get<RouteGenericOf<typeof incomingAccessRequestsHandler>>('/me/access-requests', auth, incomingAccessRequestsHandler);
+  fastify.post<RouteGenericOf<typeof decideAccessRequestHandler>>('/access-requests/:id/:action', auth, decideAccessRequestHandler);
   fastify.get<RouteGenericOf<typeof getPackHandler>>('/:id',         tryAuth, getPackHandler);
 
   fastify.post<RouteGenericOf<typeof createPackHandler>>('/',      auth, createPackHandler);

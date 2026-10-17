@@ -11,6 +11,11 @@ const props = defineProps<{
   multiple?: boolean
   maxFiles?: number
   maxSizeMb?: number
+  /**
+   * Hand each file to the parent as soon as it finishes (uploaded = just that file) and drop its
+   * preview — for parents that keep their own list (album editor), so files aren't shown twice.
+   */
+  streaming?: boolean
 }>()
 
 const emit = defineEmits<{ (e: 'uploaded', urls: string[], originalUrls: string[], hasVideo: boolean): void }>()
@@ -184,6 +189,11 @@ const uploadFile = async (file: File, id: number) => {
     e.progress = 100
     e.finalUrl = res.data.data.url
     e.finalOriginalUrl = res.data.data.originalUrl || res.data.data.url
+    if (props.streaming) {
+      previews.value.splice(previews.value.indexOf(e), 1)
+      emit('uploaded', [res.data.data.url], [res.data.data.originalUrl || res.data.data.url], e.isVideo)
+      return
+    }
     setTimeout(() => { const e2 = entry(); if (e2) e2.uploading = false }, 350)
     emitAll()
   } catch (err: any) {

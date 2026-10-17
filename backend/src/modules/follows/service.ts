@@ -13,7 +13,25 @@ async function assertFriendsListVisible(userId: string, viewerId?: string) {
   }
 }
 
+/**
+ * A new follow is allowed only if the follower may see the target's profile. The one exception
+ * is following back someone who already follows you — otherwise a friends-only profile could
+ * never become mutual (friends = mutual follow).
+ */
+async function canStartFollowing(followerId: string, followingId: string): Promise<boolean> {
+  const target = await prisma.user.findUnique({ where: { id: followingId }, select: { profile_visibility: true } });
+  if (!target) return false;
+  if (await isAllowedByPrivacy(target.profile_visibility, followingId, followerId)) return true;
+  const followsBack = await prisma.follow.findUnique({
+    where: { follower_id_following_id: { follower_id: followingId, following_id: followerId } },
+  });
+  return !!followsBack;
+}
+
 export const followsService = {
+  canStartFollowing,
+
+
   async toggle(followerId: string, followingId: string) {
     if (followerId === followingId) throw new Error('Cannot follow yourself');
 
@@ -38,6 +56,11 @@ export const followsService = {
       // (follower counts, "follows you" badges), stays intact.
       if ((await isBlockedBy(followingId, followerId)) || (await isBlockedBy(followerId, followingId))) {
         throw new Error('Cannot follow a blocked user');
+      }
+      // The profile page already hides the follow button for hidden profiles; the mini-buttons
+      // on person cards hit this endpoint directly, so the privacy rule has to live here.
+      if (!(await canStartFollowing(followerId, followingId))) {
+        throw Object.assign(new Error('PROFILE_PRIVATE'), { statusCode: 403 });
       }
       await prisma.follow.create({ data: { follower_id: followerId, following_id: followingId } });
       // Send notification

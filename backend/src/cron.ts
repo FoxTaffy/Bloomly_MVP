@@ -7,6 +7,7 @@ import { pollSupportInbox } from './modules/support/mailPoller.js';
 import { scheduledPostService } from './modules/posts/scheduledService.js';
 import { cleanupSoftDeletedRows, cleanupExpiredStories } from './jobs/cleanup.js';
 import { logger } from './lib/logger.js';
+import { paymentsService } from './modules/payments/service.js';
 
 interface CronJob {
   name: string;
@@ -49,6 +50,15 @@ const JOBS: CronJob[] = [
     const published = await scheduledPostService.publishDueOnes();
     if (published > 0) logger.info(`[CRON] Scheduled posts: published ${published} post(s)`);
   } },
+
+  // Оплаченные периоды подписки: истёкшие → free (бессрочные, выданные админом, не трогаются)
+  { name: 'subscription expiry', schedule: '*/10 * * * *', run: async () => {
+    const expired = await paymentsService.expireSubscriptions();
+    if (expired > 0) logger.info(`[CRON] Subscriptions: ${expired} expired → free`);
+  } },
+
+  // Брошенные платежи (не дошли до оплаты за сутки) → expired
+  { name: 'stale payments', schedule: '15 * * * *', run: () => paymentsService.expireStalePayments() },
 ];
 
 export function initCronJobs() {

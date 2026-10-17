@@ -15,6 +15,8 @@ export interface FriendUser {
   deceased_at: string | null
   is_following?: boolean
   notify_posts?: boolean
+  // false = hidden profile the viewer may not follow (search results set it; absent = allowed)
+  can_follow?: boolean
 }
 
 export interface FriendRequest {

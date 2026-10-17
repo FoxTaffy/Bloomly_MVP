@@ -160,6 +160,8 @@ const notifTypeLabel = (type: string, pronouns?: string | null) => {
     MENTION: { m: 'упомянул вас',                      f: 'упомянула вас',                      n: 'упомянул(а) вас' },
     RELATIONSHIP_REQUEST:  { m: 'хочет быть вашим партнёром 💕',  f: 'хочет быть вашим партнёром 💕',  n: 'хочет быть вашим партнёром 💕' },
     RELATIONSHIP_ACCEPTED: { m: 'принял ваш запрос в отношения ❤️', f: 'приняла ваш запрос в отношения ❤️', n: 'принял(а) ваш запрос в отношения ❤️' },
+    STICKER_ACCESS_REQUEST:  { m: 'хочет получить доступ к вашему стикерпаку', f: 'хочет получить доступ к вашему стикерпаку', n: 'хочет получить доступ к вашему стикерпаку' },
+    STICKER_ACCESS_APPROVED: { m: 'одобрил ваш доступ к стикерпаку — пак в библиотеке', f: 'одобрила ваш доступ к стикерпаку — пак в библиотеке', n: 'одобрил(а) ваш доступ к стикерпаку — пак в библиотеке' },
   }
   const t = langStore.t as any
   if (isDenNotification(type)) return t[denNotificationKey(type)] ?? t.notifGeneric
@@ -285,6 +287,19 @@ const declineRelationship = async (n: any) => {
   } finally { relActionLoading.value[n.id] = false }
 }
 
+// ── Заявка на доступ к стикерпаку по приглашению ──────────────────────────────
+const decideStickerAccess = async (n: any, action: 'approve' | 'reject') => {
+  if (!n.ref_id) return
+  relActionLoading.value[n.id] = true
+  try {
+    await api.post(`/stickers/access-requests/${n.ref_id}/${action}`)
+    n._stickerDone = action === 'approve' ? 'approved' : 'rejected'
+    if (!n.is_read) { n.is_read = true; unreadCount.value = Math.max(0, unreadCount.value - 1) }
+  } catch (e) {
+    alert(apiErrorMessage(e) ?? 'Ошибка')
+  } finally { relActionLoading.value[n.id] = false }
+}
+
 // ── Post modal ───────────────────────────────────────────────────────────────
 const postModal = ref<{ id: string; data: any | null; loading: boolean } | null>(null)
 
@@ -314,7 +329,7 @@ const identityHref = (n: any): string => {
 }
 
 const onNotifClick = async (n: any) => {
-  if (n.type === 'RELATIONSHIP_REQUEST') return
+  if (n.type === 'RELATIONSHIP_REQUEST' || n.type === 'STICKER_ACCESS_REQUEST') return
   // Mark this single notification as read
   if (!n.is_read) {
     n.is_read = true
@@ -327,6 +342,12 @@ const onNotifClick = async (n: any) => {
   if (n.type === 'automod_warn') {
     showNotifications.value = false
     warningModal.open(n)
+    return
+  }
+  // Одобренный доступ открывает пак в библиотеке
+  if (n.type === 'STICKER_ACCESS_APPROVED' && n.meta?.packId) {
+    showNotifications.value = false
+    router.push(`/stickers/${n.meta.packId}`)
     return
   }
   // Open post modal
@@ -682,6 +703,12 @@ onUnmounted(() => {
         </Transition>
       </div>
 
+      <!-- Search (mobile — the search bar in the center is desktop-only) -->
+      <router-link v-if="auth.isAuthenticated" to="/search" :aria-label="langStore.t.search" :title="langStore.t.search"
+        class="md:hidden p-2 text-white/55 hover:text-white hover:bg-white/5 rounded-full">
+        <BIcon name="Search" class="h-5 w-5" />
+      </router-link>
+
       <!-- Notifications -->
       <div class="relative">
         <button @click.stop="toggleNotifications" class="p-2 md:p-2.5 text-white/55 hover:text-white hover:bg-white/5 rounded-full relative">
@@ -762,6 +789,18 @@ onUnmounted(() => {
                       </div>
                       <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'accepted'" class="text-xs text-pink-400 mt-1 font-semibold">❤️ Принято</p>
                       <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'declined'" class="text-xs text-white/40 mt-1">Отклонено</p>
+                      <div v-if="n.type === 'STICKER_ACCESS_REQUEST' && !n._stickerDone" class="flex gap-2 mt-2">
+                        <button @click.stop="decideStickerAccess(n, 'approve')" :disabled="relActionLoading[n.id]"
+                          class="flex-1 py-1 rounded-lg bg-brand-accent hover:opacity-90 disabled:opacity-50 text-white text-xs font-bold transition-colors">
+                          Одобрить
+                        </button>
+                        <button @click.stop="decideStickerAccess(n, 'reject')" :disabled="relActionLoading[n.id]"
+                          class="flex-1 py-1 rounded-lg bg-brand-bg border border-brand-border hover:border-white/20 disabled:opacity-50 text-white/55 hover:text-white text-xs font-semibold transition-colors">
+                          Отклонить
+                        </button>
+                      </div>
+                      <p v-if="n.type === 'STICKER_ACCESS_REQUEST' && n._stickerDone === 'approved'" class="text-xs text-emerald-400 mt-1 font-semibold">✅ Одобрено</p>
+                      <p v-if="n.type === 'STICKER_ACCESS_REQUEST' && n._stickerDone === 'rejected'" class="text-xs text-white/40 mt-1">Отклонено</p>
                     </div>
                     <!-- Unread dot -->
                     <div class="w-2 h-2 bg-brand-accent rounded-full flex-shrink-0 mt-2"></div>
@@ -817,6 +856,18 @@ onUnmounted(() => {
                       </div>
                       <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'accepted'" class="text-xs text-pink-400 mt-1 font-semibold">❤️ Принято</p>
                       <p v-if="n.type === 'RELATIONSHIP_REQUEST' && n._relDone === 'declined'" class="text-xs text-white/40 mt-1">Отклонено</p>
+                      <div v-if="n.type === 'STICKER_ACCESS_REQUEST' && !n._stickerDone" class="flex gap-2 mt-2">
+                        <button @click.stop="decideStickerAccess(n, 'approve')" :disabled="relActionLoading[n.id]"
+                          class="flex-1 py-1 rounded-lg bg-brand-accent hover:opacity-90 disabled:opacity-50 text-white text-xs font-bold transition-colors">
+                          Одобрить
+                        </button>
+                        <button @click.stop="decideStickerAccess(n, 'reject')" :disabled="relActionLoading[n.id]"
+                          class="flex-1 py-1 rounded-lg bg-brand-bg border border-brand-border hover:border-white/20 disabled:opacity-50 text-white/55 hover:text-white text-xs font-semibold transition-colors">
+                          Отклонить
+                        </button>
+                      </div>
+                      <p v-if="n.type === 'STICKER_ACCESS_REQUEST' && n._stickerDone === 'approved'" class="text-xs text-emerald-400 mt-1 font-semibold">✅ Одобрено</p>
+                      <p v-if="n.type === 'STICKER_ACCESS_REQUEST' && n._stickerDone === 'rejected'" class="text-xs text-white/40 mt-1">Отклонено</p>
                     </div>
                   </div>
                 </template>

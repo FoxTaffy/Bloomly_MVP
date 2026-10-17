@@ -1,7 +1,7 @@
 <template>
   <div
     v-click-outside="() => emit('close')"
-    class="absolute bottom-full right-0 mb-1.5 z-30 w-80 bg-brand-card border border-brand-border rounded-2xl shadow-2xl p-4 space-y-3"
+    class="absolute bottom-full right-0 mb-1.5 z-30 w-80 max-md:top-full max-md:bottom-auto max-md:mt-2 max-md:mb-0 max-md:-right-12 max-md:w-[calc(100vw-2rem)] max-md:max-w-80 bg-brand-card border border-brand-border rounded-2xl shadow-2xl p-4 space-y-3"
   >
     <div class="flex items-center justify-between">
       <span class="text-sm font-bold text-white">Время отправки</span>

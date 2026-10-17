@@ -321,54 +321,6 @@ onActivated(fetchStatistics)
         </div>
       </div>
 
-      <!-- Charts row 1 -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-
-        <!-- Registrations history -->
-        <div class="rounded-3xl border border-brand-border p-5" style="background:#1F223C">
-          <div class="flex items-center gap-2 mb-4">
-            <BIcon name="UserPlus" class="w-4 h-4 text-indigo-400" />
-            <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminRegistrationsTitle }}</h3>
-            <span class="ml-auto text-[10px] text-white/30">{{ langStore.t.adminLast30DaysLabel }}</span>
-          </div>
-          <div v-if="networkStats.registrationsHistory.length" class="flex items-end gap-0.5 h-32">
-            <div v-for="(point, idx) in networkStats.registrationsHistory" :key="idx"
-              class="flex-1 flex flex-col items-center group/bar cursor-default relative">
-              <div class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/bar:opacity-100
-                text-[9px] font-bold text-white bg-black/70 px-1.5 py-0.5 rounded-lg whitespace-nowrap transition-opacity pointer-events-none z-10">
-                {{ point.value }}
-              </div>
-              <div class="w-full rounded-t transition-all hover:opacity-100 opacity-70 min-h-[2px]"
-                :style="`height:${Math.max(2,(point.value/barMax(networkStats.registrationsHistory))*128)}px;
-                  background:linear-gradient(to top,#6366f1,#8b5cf6)`" />
-            </div>
-          </div>
-          <p v-else class="text-center text-sm text-white/25 py-12">{{ langStore.t.adminNoDataLabel }}</p>
-        </div>
-
-        <!-- Posts history -->
-        <div class="rounded-3xl border border-brand-border p-5" style="background:#1F223C">
-          <div class="flex items-center gap-2 mb-4">
-            <BIcon name="FileText" class="w-4 h-4 text-sky-400" />
-            <h3 class="font-extrabold text-sm text-white">{{ langStore.t.postsTab }}</h3>
-            <span class="ml-auto text-[10px] text-white/30">{{ langStore.t.adminLast30DaysLabel }}</span>
-          </div>
-          <div v-if="networkStats.postsHistory.length" class="flex items-end gap-0.5 h-32">
-            <div v-for="(point, idx) in networkStats.postsHistory" :key="idx"
-              class="flex-1 flex flex-col items-center group/bar cursor-default relative">
-              <div class="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/bar:opacity-100
-                text-[9px] font-bold text-white bg-black/70 px-1.5 py-0.5 rounded-lg whitespace-nowrap transition-opacity pointer-events-none z-10">
-                {{ point.value }}
-              </div>
-              <div class="w-full rounded-t transition-all hover:opacity-100 opacity-70 min-h-[2px]"
-                :style="`height:${Math.max(2,(point.value/barMax(networkStats.postsHistory))*128)}px;
-                  background:linear-gradient(to top,#0ea5e9,#38bdf8)`" />
-            </div>
-          </div>
-          <p v-else class="text-center text-sm text-white/25 py-12">{{ langStore.t.adminNoDataLabel }}</p>
-        </div>
-      </div>
-
       <!-- Charts row 2: by species / country / age / pronouns -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
 
@@ -387,27 +339,6 @@ onActivated(fetchStatistics)
               <div class="h-2 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.06)">
                 <div class="h-full rounded-full"
                   :style="`width:${(item.value/barMax(networkStats.usersBySpecies))*100}%;background:linear-gradient(to right,#f59e0b,#fbbf24)`" />
-              </div>
-            </div>
-          </div>
-          <p v-else class="text-center text-sm text-white/25 py-8">{{ langStore.t.adminNoDataLabel }}</p>
-        </div>
-
-        <!-- By Country -->
-        <div class="rounded-3xl border border-brand-border p-5" style="background:#1F223C">
-          <div class="flex items-center gap-2 mb-4">
-            <BIcon name="Globe" class="w-4 h-4 text-emerald-400" />
-            <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminUsersByCountryTitle }}</h3>
-          </div>
-          <div v-if="networkStats.usersByCountry.length" class="space-y-2.5">
-            <div v-for="item in networkStats.usersByCountry.slice(0,10)" :key="item.label">
-              <div class="flex items-center justify-between text-xs mb-1">
-                <span class="text-white/60 font-semibold truncate max-w-[140px]">{{ item.label }}</span>
-                <span class="text-white font-black">{{ formatNum(item.value) }}</span>
-              </div>
-              <div class="h-2 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.06)">
-                <div class="h-full rounded-full"
-                  :style="`width:${(item.value/barMax(networkStats.usersByCountry))*100}%;background:linear-gradient(to right,#10b981,#34d399)`" />
               </div>
             </div>
           </div>

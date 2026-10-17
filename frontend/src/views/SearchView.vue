@@ -8,6 +8,7 @@ import PostCard from '@/components/PostCard.vue'
 import PersonCard from '@/components/PersonCard.vue'
 import GroupCard from '@/components/groups/GroupCard.vue'
 import BIcon from '@/components/BIcon.vue'
+import { useTagSynonyms } from '@/composables/useTagSynonyms'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { formatCount } from '@/lib/utils'
@@ -30,6 +31,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 // matching VK — the dropdown itself already surfaces people/groups.
 const activeTab = ref<Tab>('posts')
 const query = ref((route.query.q as string) || '')
+const { tagSynonyms } = useTagSynonyms()
 
 const users = ref<any[]>([])
 const groups = ref<any[]>([])
@@ -45,7 +47,7 @@ async function runSearch() {
     const [usersRes, groupsRes, postsRes] = await Promise.all([
       api.get(`/users/search?q=${enc}&limit=20`),
       api.get(`/groups/search?q=${enc}&limit=20`),
-      api.get(`/posts/search?q=${enc}&limit=20`),
+      api.get(`/posts/search?q=${enc}&limit=20&synonyms=${tagSynonyms.value}`),
     ])
     users.value = usersRes.data.success ? usersRes.data.data.users ?? [] : []
     groups.value = groupsRes.data.success ? groupsRes.data.data.groups ?? [] : []
@@ -64,12 +66,19 @@ function searchTag(name: string) {
   submitSearch()
 }
 
+watch(tagSynonyms, () => { if (query.value.trim()) runSearch() })
+
 watch(() => route.query.q, (nv) => {
   query.value = (nv as string) || ''
   runSearch()
 })
 
-onMounted(runSearch)
+const queryInput = ref<HTMLInputElement | null>(null)
+onMounted(() => {
+  runSearch()
+  // Opened from the mobile header's search button — nothing typed yet, so go straight to the field.
+  if (!query.value.trim()) queryInput.value?.focus()
+})
 
 function onPostDeleted(id: string) { posts.value = posts.value.filter((p: any) => p.id !== id) }
 function onPostUpdated(p: any) { const idx = posts.value.findIndex((x: any) => x.id === p.id); if (idx !== -1) posts.value[idx] = p }
@@ -104,19 +113,26 @@ onMounted(fetchTrendingTags)
                 <BIcon name="Search" class="w-5 h-5 text-brand-accent" />
               </div>
               <div class="min-w-0">
-                <h1 class="text-xl font-extrabold text-white truncate">Результаты поиска</h1>
+                <h1 class="text-xl font-extrabold text-white truncate">{{ query.trim() ? 'Результаты поиска' : 'Поиск' }}</h1>
                 <p v-if="query.trim()" class="text-sm text-white/55 truncate">по запросу «{{ query }}»</p>
               </div>
             </div>
             <div class="flex items-center gap-2 mt-3 bg-brand-bg border border-brand-border rounded-full py-2 pl-4 pr-2">
               <BIcon name="Search" class="w-4 h-4 text-white/40 flex-shrink-0" />
-              <input v-model="query" @keydown.enter="submitSearch" type="text" placeholder="Поиск..."
+              <input ref="queryInput" v-model="query" @keydown.enter="submitSearch" type="text" placeholder="Поиск..."
                 class="flex-1 bg-transparent text-white placeholder-brand-muted text-sm outline-none min-w-0" />
               <button @click="submitSearch"
                 class="px-4 py-1.5 rounded-full bg-brand-accent hover:bg-brand-accent-plus text-white text-xs font-semibold transition-colors flex-shrink-0">
                 Найти
               </button>
             </div>
+            <button type="button" @click="tagSynonyms = !tagSynonyms"
+              title="Искать также по синонимам тега (лиса → fox)"
+              class="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold transition-colors"
+              :class="tagSynonyms ? 'text-brand-accent' : 'text-white/45 hover:text-white/70'">
+              <BIcon :name="tagSynonyms ? 'CircleCheck' : 'Circle'" class="w-3.5 h-3.5" />
+              Включать синонимы тегов
+            </button>
           </div>
 
           <!-- Tabs -->

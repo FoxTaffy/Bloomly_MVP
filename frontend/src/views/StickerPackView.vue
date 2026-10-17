@@ -5,7 +5,7 @@ const langStore = useLangStore()
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useStickersStore } from '@/stores/stickers'
+import { useStickersStore, type AccessStatus } from '@/stores/stickers'
 import api from '@/api'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
@@ -24,13 +24,16 @@ const toggling  = ref(false)
 const lightbox  = ref<string | null>(null)
 
 const inviteCode  = computed(() => (route.params.code as string | undefined) ?? null)
+const access      = ref<AccessStatus>('none')
 const actionError = ref('')
 
 onMounted(async () => {
   loading.value = true
   try {
     if (inviteCode.value) {
-      pack.value = await store.loadInvitePack(inviteCode.value)
+      const found = await store.loadInvitePack(inviteCode.value)
+      pack.value = found.pack
+      access.value = found.access
     } else {
       pack.value = await store.loadPack(route.params.id as string)
     }
@@ -53,8 +56,8 @@ async function toggleCollection() {
       await store.removeFromCollection(pack.value.id)
       collected.value = false
     } else if (inviteCode.value) {
-      await store.joinByInvite(inviteCode.value)
-      collected.value = true
+      // По приглашению доступ даёт только одобрение владельца: отправляем заявку
+      access.value = await store.requestAccess(inviteCode.value)
     } else if (pack.value.visibility === 'paid' && parseFloat(pack.value.price) > 0) {
       await store.purchasePack(pack.value.id)
       collected.value = true
@@ -260,13 +263,13 @@ const chartData = computed(() => {
                   <button
                     v-if="auth.user && !isOwn()"
                     @click="toggleCollection"
-                    :disabled="toggling"
+                    :disabled="toggling || (!!inviteCode && access === 'pending')"
                     class="flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-2xl transition-all disabled:opacity-50"
                     :class="collected
                       ? 'bg-brand-success/15 text-brand-success border border-brand-success/30 hover:bg-brand-error/15 hover:text-brand-error hover:border-brand-error/30'
                       : 'bg-brand-purple/80 hover:bg-brand-purple text-white shadow-md shadow-brand-purple/20'">
                     <BIcon :name="collected ? 'Check' : 'Plus'" class="w-4 h-4" />
-                    {{ toggling ? '…' : collected ? 'В коллекции' : pack.visibility === 'paid' ? `Купить за ${formatPrice(pack.price, pack.currency)}` : 'Добавить' }}
+                    {{ toggling ? '…' : collected ? 'В коллекции' : inviteCode ? (access === 'pending' ? 'Заявка отправлена' : access === 'rejected' ? 'Запросить снова' : 'Запросить доступ') : pack.visibility === 'paid' ? `Купить за ${formatPrice(pack.price, pack.currency)}` : 'Добавить' }}
                   </button>
                   <p v-if="actionError" class="text-xs font-bold text-brand-error max-w-[16rem]">{{ actionError }}</p>
                   <button

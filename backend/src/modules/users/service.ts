@@ -269,6 +269,11 @@ export const usersService = {
 
     (raw as any).profile_status = liveProfileStatus((raw as any).profile_status);
 
+    // Total likes received on the user's live posts (shown in the profile stats block)
+    (raw as any).likes_count = await prisma.vote.count({
+      where: { value: { gt: 0 }, deleted_at: null, post: { author_id: raw.id, deleted_at: null } },
+    });
+
     if (viewerId === raw.id) {
       return { ...raw, badge_level: getUserBadgeLevel(raw.artist_since) };
     }
@@ -629,7 +634,8 @@ export const usersService = {
       }),
       prisma.user.update({
         where: { id: userId, deleted_at: null },
-        data: { subscription_tier: tier },
+        // Ручная смена (админ или dev) — бессрочно; оплаченные периоды выдаёт модуль payments
+        data: { subscription_tier: tier, subscription_expires_at: null },
         select: { id: true, subscription_tier: true },
       }),
       prisma.subscriptionPlan.create({ data: { user_id: userId, tier } }),

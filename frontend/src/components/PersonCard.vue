@@ -32,7 +32,10 @@ const menuRef  = ref<HTMLElement | null>(null)
 const notifyActive  = ref(props.user.notify_posts ?? false)
 const notifyLoading = ref(false)
 
-const isFollowing   = ref(props.user.is_following ?? false)
+// Friends (mutual follows) are followed by definition, even when the list doesn't say so.
+const isFollowing   = ref(props.user.is_following ?? props.isFriend)
+const isMutual      = ref(props.isFriend)
+const canFollow     = ref(props.user.can_follow ?? true)
 const followLoading = ref(false)
 
 function initials(u: FriendUser) {
@@ -85,8 +88,14 @@ async function toggleFollow() {
     const { data } = await api.post(`/follows/${props.user.id}/toggle`)
     isFollowing.value = data.data?.following ?? !isFollowing.value
     invalidateFriendsCache()
-    if (!isFollowing.value) notifyActive.value = false
-  } catch { /* ignore */ } finally {
+    if (!isFollowing.value) {
+      notifyActive.value = false
+      isMutual.value = false
+    }
+  } catch (e: any) {
+    // Hidden profile — the server refused the follow; drop the button instead of failing silently.
+    if (e?.response?.status === 403) canFollow.value = false
+  } finally {
     followLoading.value = false
   }
 }
@@ -128,7 +137,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
         <component
           :is="deviceIconFor[deviceKind(user.device)!]"
           v-if="user.online && deviceKind(user.device)"
-          class="w-2.5 h-2.5"
+          class="w-3.5 h-3.5 fill-current"
           :title="user.device ?? undefined"
         />
       </span>
@@ -236,7 +245,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
         </button>
         <!-- Подписка / отписка -->
         <button
-          v-if="!isFriend"
+          v-if="isFollowing || canFollow"
           :class="[
             'w-9 h-9 flex items-center justify-center rounded-xl transition-colors flex-shrink-0',
             isFollowing
@@ -247,11 +256,12 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
           :title="isFollowing ? langStore.t.unfollowBtnTitle : langStore.t.followBtnTitle"
           @click.stop.prevent="toggleFollow"
         >
-          <BIcon :name="isFollowing ? 'UserCheck' : 'UserPlus'" class="w-4 h-4" />
+          <!-- Две галочки — взаимная подписка (друзья), одна — подписка только с моей стороны -->
+          <BIcon :name="isMutual ? 'CheckCheck' : isFollowing ? 'UserCheck' : 'UserPlus'" class="w-4 h-4" />
         </button>
         <!-- Колокольчик уведомлений -->
         <button
-          v-if="isFriend || isFollowing"
+          v-if="isMutual || isFollowing"
           :class="[
             'w-9 h-9 flex items-center justify-center rounded-xl transition-colors flex-shrink-0',
             notifyActive

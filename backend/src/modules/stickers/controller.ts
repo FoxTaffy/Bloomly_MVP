@@ -119,8 +119,7 @@ export async function addToCollectionHandler(req: FastifyRequest, reply: Fastify
   const user = req.user;
   const { id } = req.params as { id: string };
   try {
-    const { code } = (req.body ?? {}) as { code?: string };
-    const result = await stickersService.addToCollection(user.id, id, code);
+    const result = await stickersService.addToCollection(user.id, id);
     if (!result) return reply.status(404).send({ error: 'Pack not found' });
     return reply.send({ data: { ok: true } });
   } catch (err) {
@@ -148,24 +147,48 @@ export async function purchasePackHandler(req: FastifyRequest, reply: FastifyRep
 export async function getInvitePackHandler(req: FastifyRequest, reply: FastifyReply) {
   const { code } = req.params as { code: string };
   try {
-    const pack = await stickersService.getByInviteCode(code, req.user?.id);
-    if (!pack) return reply.status(404).send({ error: 'Приглашение недействительно' });
-    return reply.send({ data: { pack } });
+    const found = await stickersService.getByInviteCode(code, req.user?.id);
+    if (!found) return reply.status(404).send({ error: 'Приглашение недействительно' });
+    return reply.send({ data: found });
   } catch (err) {
     req.log.error(err);
     return reply.status(500).send({ error: 'Failed to load invite' });
   }
 }
 
-export async function joinInviteHandler(req: FastifyRequest, reply: FastifyReply) {
+export async function requestInviteAccessHandler(req: FastifyRequest, reply: FastifyReply) {
   const { code } = req.params as { code: string };
   try {
-    const packId = await stickersService.joinByInvite(req.user.id, code);
-    if (!packId) return reply.status(404).send({ error: 'Приглашение недействительно' });
-    return reply.send({ data: { ok: true, packId } });
+    const result = await stickersService.requestAccess(req.user.id, code);
+    if (!result) return reply.status(404).send({ error: 'Приглашение недействительно' });
+    return reply.status(201).send({ data: result });
   } catch (err) {
     req.log.error(err);
-    return reply.status(500).send({ error: 'Failed to join by invite' });
+    return reply.status(500).send({ error: 'Failed to request access' });
+  }
+}
+
+export async function incomingAccessRequestsHandler(req: FastifyRequest, reply: FastifyReply) {
+  try {
+    const result = await stickersService.listIncomingRequests(req.user.id);
+    return reply.send({ data: result });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ error: 'Failed to load access requests' });
+  }
+}
+
+export async function decideAccessRequestHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { id, action } = req.params as { id: string; action: 'approve' | 'reject' };
+  try {
+    const result = await stickersService.decideRequest(req.user.id, id, action);
+    if (!result) return reply.status(404).send({ error: 'Заявка не найдена' });
+    return reply.send({ data: result });
+  } catch (err) {
+    const status = errStatus(err);
+    if (status) return reply.status(status).send({ error: errMessage(err) });
+    req.log.error(err);
+    return reply.status(500).send({ error: 'Failed to decide access request' });
   }
 }
 

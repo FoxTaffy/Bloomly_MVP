@@ -1,6 +1,6 @@
 import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
-import { isBlockedBy } from '../../lib/blocks.js';
+import { getBlockerIds, isBlockedBy } from '../../lib/blocks.js';
 import { redactBirthDate } from '../users/service.js';
 import { errCode } from '../../lib/httpErrors.js';
 
@@ -349,16 +349,17 @@ export const friendsService = {
   /** Suggested users = friends of friends (people my friends follow/are followed by) */
   async getSuggestions(userId: string, limit = 20) {
     // Collect all follow relationships for current user
-    const [myFollowerRows, myFollowingRows] = await Promise.all([
+    const [myFollowerRows, myFollowingRows, blockedIds] = await Promise.all([
       prisma.follow.findMany({ where: { following_id: userId }, select: { follower_id: true } }),
       prisma.follow.findMany({ where: { follower_id: userId }, select: { following_id: true } }),
+      getBlockerIds(userId), // both directions: users I blocked + users who blocked me
     ]);
     const myFollowingSet  = new Set(myFollowingRows.map((r) => r.following_id));
     const myFollowerSet   = new Set(myFollowerRows.map((r) => r.follower_id));
     const myFriendIds     = Array.from(myFollowingSet).filter((id) => myFollowerSet.has(id));
 
-    // Exclude: me, all my friends, all follows in either direction, existing friendship requests
-    const excludedIds = new Set<string>([userId, ...myFriendIds, ...myFollowingSet, ...myFollowerSet]);
+    // Exclude: me, all my friends, all follows in either direction, blocks, existing friendship requests
+    const excludedIds = new Set<string>([userId, ...myFriendIds, ...myFollowingSet, ...myFollowerSet, ...blockedIds]);
 
     const existing = await prisma.friendship.findMany({
       where: { OR: [{ requester_id: userId }, { addressee_id: userId }] },

@@ -1,72 +1,62 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useLangStore } from '@/stores/lang'
-import { useAuthStore } from '@/stores/auth'
+import { useWalletStore } from '@/stores/wallet'
+import { usePaymentsStore, type PayMethod, type BillingPeriod, type PlanQuote } from '@/stores/payments'
+import { apiErrorCode } from '@/lib/apiError'
 import BIcon from '@/components/BIcon.vue'
-import CardFlipInput from '@/components/CardFlipInput.vue'
-import api from '@/api'
-import type { PaymentMethod } from '@/types/paymentMethod'
-import { cardBrandInfo } from '@/lib/cardBrand'
-import { altMethodsForRegion } from '@/lib/paymentRegions'
 
 const props = defineProps<{
   plan: { id: string; label: string; color: string; gradient: string; features: string[] }
+  period: BillingPeriod
   price: number
   originalPrice?: number
   discounted?: boolean
 }>()
 
-const emit = defineEmits<{ close: []; success: [planId: string] }>()
+const emit = defineEmits<{ close: []; success: [planId: string, expiresAt: string | null] }>()
 
 const langStore = useLangStore()
-const authStore = useAuthStore()
+const walletStore = useWalletStore()
+const payments = usePaymentsStore()
 
-const step    = ref<'card' | 'success'>('card')
-const flipped = ref(false)
-const sending = ref(false)
+const step     = ref<'method' | 'success'>('method')
+const loading  = ref(true)
+const sending  = ref(false)
 const errorMsg = ref('')
+const method   = ref<PayMethod>('AC')
+const quoteRes = ref<PlanQuote | null>(null)
+const gatewayEnabled = ref(false)
 
-const cardNum  = ref('')
-const cardExp  = ref('')
-const cardCvv  = ref('')
-const cardName = ref('')
-const saveCard = ref(true)
+// Пока сервер не ответил — показываем цену со страницы тарифов
+const perMonth = computed(() => quoteRes.value?.perMonth ?? props.price)
+const total    = computed(() => quoteRes.value?.amount ?? props.price * (props.period === 'year' ? 12 : 1))
+const canPayFromWallet = computed(() => walletStore.balance >= total.value)
 
-const savedMethods   = ref<PaymentMethod[]>([])
-const loadingMethods = ref(true)
-const useNewCard     = ref(false)
-const selectedId     = ref<string | null>(null)
+const METHODS = computed(() => [
+  { id: 'AC' as const, icon: 'CreditCard', label: langStore.t.payMethodCard, disabled: !gatewayEnabled.value },
+  { id: 'PC' as const, icon: 'Wallet', label: langStore.t.payMethodYoomoney, disabled: !gatewayEnabled.value },
+  { id: 'wallet' as const, icon: 'Flower2', label: langStore.t.payMethodWallet, disabled: !canPayFromWallet.value },
+])
 
 onMounted(async () => {
   try {
-    const res = await api.get('/users/me/payment-methods')
-    savedMethods.value = res.data.data ?? []
-    selectedId.value = savedMethods.value.find(m => m.is_default)?.id ?? savedMethods.value[0]?.id ?? null
+    const [cfg, q] = await Promise.all([
+      payments.fetchConfig(),
+      payments.quote(props.plan.id, props.period),
+      walletStore.fetchBalance().catch(() => 0),
+    ])
+    gatewayEnabled.value = cfg.enabled
+    quoteRes.value = q
   } catch {
-    savedMethods.value = []
+    errorMsg.value = langStore.t.subToastError
   } finally {
-    if (savedMethods.value.length === 0) useNewCard.value = true
-    loadingMethods.value = false
+    if (!gatewayEnabled.value) method.value = 'wallet'
+    loading.value = false
   }
 })
 
 const CONFETTI_COLORS = ['#4C67CF', '#66C770', '#F7A9E2', '#CD83F5', '#FFC01F', '#E76F51']
-
-const cardValid = computed(() =>
-  cardNum.value.replace(/\s/g, '').length === 16 &&
-  cardExp.value.length === 5 &&
-  cardCvv.value.length >= 3 &&
-  cardName.value.trim().length >= 2
-)
-
-// Regional alternatives (PayPal, Alipay, Bitcoin, …) shown only when the user has no card on file yet.
-const altMethods = computed(() => altMethodsForRegion(authStore.user?.payment_region))
-const altMsg = ref('')
-
-function tryAltMethod() {
-  altMsg.value = langStore.t.payModalAltComingSoon
-  setTimeout(() => { altMsg.value = '' }, 2500)
-}
 
 const confettiPieces = computed(() => {
   if (step.value !== 'success') return []
@@ -89,54 +79,27 @@ const confettiPieces = computed(() => {
   })
 })
 
-async function chargeSubscription() {
-  await Promise.all([
-    api.patch('/users/me/subscription', { tier: props.plan.id }),
-    new Promise(r => setTimeout(r, 1200)),
-  ])
-  step.value = 'success'
-  emit('success', props.plan.id)
+const ERROR_TEXT: Record<string, () => string> = {
+  INSUFFICIENT_FUNDS: () => langStore.t.payInsufficient,
+  SUBSCRIPTION_COMPED: () => langStore.t.payErrComped,
+  PAYMENTS_DISABLED: () => langStore.t.payGatewayDisabled,
 }
 
-async function payWithSaved() {
-  if (!selectedId.value || sending.value) return
+async function pay() {
+  const current = METHODS.value.find(m => m.id === method.value)
+  if (sending.value || loading.value || !current || current.disabled) return
   sending.value = true
   errorMsg.value = ''
   try {
-    await chargeSubscription()
-  } catch {
-    errorMsg.value = langStore.t.subToastError
-  } finally {
+    const res = await payments.startSubscription(props.plan.id, props.period, method.value)
+    // Карта/ЮMoney — браузер уже уходит на страницу оплаты, кнопку оставляем в состоянии загрузки
+    if (res.confirmationUrl) return
+    walletStore.fetchBalance().catch(() => {})
+    step.value = 'success'
+    emit('success', props.plan.id, res.subscription?.expiresAt ?? null)
     sending.value = false
-  }
-}
-
-async function payWithNewCard() {
-  if (!cardValid.value || sending.value) return
-  sending.value = true
-  errorMsg.value = ''
-  flipped.value = false
-  // The backend requires a card on file before it will grant a paid tier, so the card
-  // must be saved before charging — not after. If the user didn't ask to keep it, it's
-  // removed again once the "charge" has gone through.
-  let newMethodId: string | null = null
-  try {
-    const [expMonth, expYear] = cardExp.value.split('/')
-    const saved = await api.post('/users/me/payment-methods', {
-      cardNumber: cardNum.value,
-      expMonth: Number(expMonth),
-      expYear: 2000 + Number(expYear),
-      holderName: cardName.value,
-    })
-    newMethodId = saved.data?.data?.id ?? null
-    await chargeSubscription()
-  } catch {
-    errorMsg.value = langStore.t.subToastError
-  } finally {
-    // Карту, которую пользователь не хотел сохранять, удаляем и при успехе, и при ошибке оплаты
-    if (!saveCard.value && newMethodId) {
-      await api.delete(`/users/me/payment-methods/${newMethodId}`).catch(() => {})
-    }
+  } catch (e) {
+    errorMsg.value = ERROR_TEXT[apiErrorCode(e) ?? '']?.() ?? langStore.t.subToastError
     sending.value = false
   }
 }
@@ -157,8 +120,8 @@ function close() {
           <div class="h-1 w-full bg-gradient-to-r from-brand-accent via-brand-purple to-brand-pink" />
           <div class="w-10 h-1 bg-white/10 rounded-full mx-auto mt-3 mb-1 sm:hidden" />
 
-          <!-- STEP: card details -->
-          <template v-if="step === 'card'">
+          <!-- STEP: payment method -->
+          <template v-if="step === 'method'">
             <div class="px-6 pt-5 pb-6 space-y-5">
               <div class="flex items-center justify-between">
                 <h2 class="text-lg font-extrabold text-white">{{ langStore.t.payModalTitle }}</h2>
@@ -169,103 +132,60 @@ function close() {
               </div>
 
               <!-- Plan / price row -->
-              <div class="flex items-center justify-between px-4 py-3 rounded-2xl border border-white/10 bg-gradient-to-r from-white/[0.06] to-white/[0.02]">
-                <span class="flex items-center gap-1.5 text-sm font-extrabold" :class="plan.color">
-                  <BIcon name="Sparkles" class="w-3.5 h-3.5" />
-                  {{ plan.label }}
-                </span>
-                <div class="flex items-center gap-2">
-                  <span v-if="discounted && originalPrice" class="text-xs text-white/30 line-through">{{ originalPrice }} ₽</span>
-                  <span class="text-sm font-extrabold text-white">{{ price }} ₽{{ langStore.t.subPerMonth }}</span>
+              <div class="px-4 py-3 rounded-2xl border border-white/10 bg-gradient-to-r from-white/[0.06] to-white/[0.02] space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="flex items-center gap-1.5 text-sm font-extrabold" :class="plan.color">
+                    <BIcon name="Sparkles" class="w-3.5 h-3.5" />
+                    {{ plan.label }}
+                  </span>
+                  <div class="flex items-center gap-2">
+                    <span v-if="discounted && originalPrice" class="text-xs text-white/30 line-through">{{ originalPrice }} ₽</span>
+                    <span class="text-sm font-extrabold text-white">{{ perMonth }} ₽{{ langStore.t.subPerMonth }}</span>
+                  </div>
+                </div>
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-white/40">{{ period === 'year' ? langStore.t.payPeriodYear : langStore.t.payPeriodMonth }}</span>
+                  <span class="text-white/70 font-bold">{{ langStore.t.payTotal }}: {{ total }} ₽</span>
                 </div>
               </div>
 
-              <div v-if="loadingMethods" class="flex justify-center py-10">
+              <div v-if="loading" class="flex justify-center py-10">
                 <span class="w-6 h-6 border-2 border-white/15 border-t-white/60 rounded-full animate-spin" />
               </div>
 
-              <!-- Pay with a saved card -->
-              <template v-else-if="!useNewCard && savedMethods.length">
+              <template v-else>
                 <div class="space-y-2">
+                  <p class="text-[11px] font-bold uppercase tracking-wider text-white/35">{{ langStore.t.payMethodTitle }}</p>
                   <button
-                    v-for="m in savedMethods" :key="m.id"
-                    @click="selectedId = m.id"
-                    class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all text-left"
-                    :class="selectedId === m.id ? 'border-brand-accent/60 bg-brand-accent/10' : 'border-white/10 bg-white/5 hover:border-white/20'">
-                    <span class="px-2 py-1 rounded-lg text-[10px] font-black tracking-wide flex-shrink-0"
-                      :style="`background:${cardBrandInfo(m.brand).color}22; color:${cardBrandInfo(m.brand).color}`">
-                      {{ cardBrandInfo(m.brand).label }}
+                    v-for="m in METHODS" :key="m.id"
+                    @click="!m.disabled && (method = m.id)"
+                    :disabled="m.disabled"
+                    class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all text-left disabled:opacity-40 disabled:cursor-not-allowed"
+                    :class="method === m.id && !m.disabled ? 'border-brand-accent/60 bg-brand-accent/10' : 'border-white/10 bg-white/5 hover:border-white/20'">
+                    <BIcon :name="m.icon" class="w-4 h-4 text-white/70 flex-shrink-0" />
+                    <span class="text-sm font-bold text-white/85 flex-1">{{ m.label }}</span>
+                    <span v-if="m.id === 'wallet'" class="text-xs font-mono"
+                      :class="canPayFromWallet ? 'text-white/45' : 'text-brand-error/80'">
+                      {{ walletStore.balance.toFixed(0) }}
                     </span>
-                    <span class="font-mono text-sm text-white/85 flex-1">•••• {{ m.last4 }}</span>
-                    <span class="text-xs text-white/35 font-mono">{{ String(m.exp_month).padStart(2, '0') }}/{{ String(m.exp_year).slice(-2) }}</span>
-                    <BIcon v-if="selectedId === m.id" name="CheckCircle2" class="w-4 h-4 text-brand-accent flex-shrink-0" />
+                    <BIcon v-if="method === m.id && !m.disabled" name="CheckCircle2" class="w-4 h-4 text-brand-accent flex-shrink-0" />
                   </button>
                 </div>
 
-                <p v-if="errorMsg" class="text-xs text-brand-error text-center">{{ errorMsg }}</p>
-
-                <button
-                  @click="payWithSaved"
-                  :disabled="!selectedId || sending"
-                  class="w-full py-4 rounded-2xl text-base font-extrabold text-white transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-[0.97] hover:brightness-110 shadow-lg shadow-brand-accent/30"
-                  style="background: linear-gradient(135deg, #4C67CF 0%, #7C6FDB 55%, #CD83F5 100%);">
-                  <BIcon v-if="sending" name="Loader2" class="w-5 h-5 animate-spin" />
-                  <BIcon v-else name="Lock" class="w-4 h-4" />
-                  {{ sending ? langStore.t.payModalProcessing : `${langStore.t.payModalPayBtn} ${price} ₽${langStore.t.subPerMonth}` }}
-                </button>
-
-                <button @click="useNewCard = true" class="w-full text-center text-xs font-semibold text-white/45 hover:text-white transition-colors">
-                  {{ langStore.t.payModalUseNewCard }}
-                </button>
-              </template>
-
-              <!-- New card form -->
-              <template v-else>
-                <CardFlipInput
-                  v-model:card-num="cardNum" v-model:card-exp="cardExp"
-                  v-model:card-cvv="cardCvv" v-model:card-name="cardName"
-                  v-model:flipped="flipped" />
-
-                <label class="flex items-center gap-2.5 text-xs text-white/55 select-none cursor-pointer">
-                  <input type="checkbox" v-model="saveCard" class="save-card-checkbox" />
-                  {{ langStore.t.payModalSaveCard }}
-                </label>
+                <p v-if="!gatewayEnabled" class="text-[11px] text-white/40 text-center">{{ langStore.t.payGatewayDisabled }}</p>
+                <p v-else-if="method !== 'wallet'" class="text-[11px] text-white/40 text-center">{{ langStore.t.payRedirectHint }}</p>
 
                 <p v-if="errorMsg" class="text-xs text-brand-error text-center">{{ errorMsg }}</p>
 
                 <button
-                  @click="payWithNewCard"
-                  :disabled="!cardValid || sending"
+                  @click="pay"
+                  :disabled="sending || METHODS.find(m => m.id === method)?.disabled"
                   class="w-full py-4 rounded-2xl text-base font-extrabold text-white transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-[0.97] hover:brightness-110 shadow-lg shadow-brand-accent/30"
                   style="background: linear-gradient(135deg, #4C67CF 0%, #7C6FDB 55%, #CD83F5 100%);">
                   <BIcon v-if="sending" name="Loader2" class="w-5 h-5 animate-spin" />
                   <BIcon v-else name="Lock" class="w-4 h-4" />
-                  {{ sending ? langStore.t.payModalProcessing : `${langStore.t.payModalPayBtn} ${price} ₽${langStore.t.subPerMonth}` }}
+                  {{ sending ? langStore.t.payModalProcessing : `${langStore.t.payModalPayBtn} ${total} ₽` }}
                 </button>
-
-                <button v-if="savedMethods.length" @click="useNewCard = false" class="w-full text-center text-xs font-semibold text-white/45 hover:text-white transition-colors">
-                  {{ langStore.t.payModalUseSavedCard }}
-                </button>
-
-                <!-- Regional alternatives — only relevant when there's no card on file -->
-                <div v-if="!loadingMethods && !savedMethods.length" class="pt-1">
-                  <div class="flex items-center gap-3 mb-3">
-                    <div class="flex-1 h-px bg-white/10" />
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-white/30">{{ langStore.t.payModalAltMethodsTitle }}</span>
-                    <div class="flex-1 h-px bg-white/10" />
-                  </div>
-                  <div class="grid grid-cols-2 gap-2">
-                    <button
-                      v-for="am in altMethods" :key="am.id"
-                      @click="tryAltMethod"
-                      class="flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold text-white/60 border border-white/10 bg-white/5 hover:bg-white/10 hover:text-white transition-all active:scale-95"
-                    >
-                      <BIcon :name="am.icon" class="w-3.5 h-3.5" />
-                      {{ am.label }}
-                    </button>
-                  </div>
-                  <p v-if="altMsg" class="text-[11px] text-white/40 text-center mt-2">{{ altMsg }}</p>
-                </div>
               </template>
 
               <div class="flex items-center justify-center gap-2 text-[11px] text-white/25">
@@ -346,14 +266,6 @@ function close() {
 
 .modal-glow {
   box-shadow: 0 20px 60px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.03), 0 0 80px -10px rgba(124,111,219,0.35);
-}
-
-.save-card-checkbox {
-  width: 16px;
-  height: 16px;
-  border-radius: 5px;
-  accent-color: #4C67CF;
-  flex-shrink: 0;
 }
 
 /* Confetti */

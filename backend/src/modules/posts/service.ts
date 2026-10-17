@@ -7,6 +7,7 @@ import { groupService } from '../groups/service.js';
 import { extractKeywords } from '../../lib/textKeywords.js';
 import { interestsToTerms } from '../../lib/interestTags.js';
 import { normalizeTag } from '../../lib/tagRules.js';
+import { expandTag, synonymGroups } from '../../lib/tagSynonyms.js';
 import { muteKeywordsWhere, nsfwWhere, type NsfwMode } from '../../lib/contentFilters.js';
 import { analyzeContent } from '../automod/service.js';
 import type { CreatePostInput, GetPostsQuery } from './types.js';
@@ -560,7 +561,7 @@ export const postService = {
   },
 
   async getPosts(query: GetPostsQuery = {}, viewerId?: string) {
-    const { search, category, tag, sort = 'new', nsfwMode = 'hide', hasMedia = false, page, limit } = query;
+    const { search, category, tag, synonyms, sort = 'new', nsfwMode = 'hide', hasMedia = false, page, limit } = query;
     const pageNum = page ? Math.max(1, parseInt(page, 10)) : 1;
     const limitNum = limit ? Math.min(100, Math.max(1, parseInt(limit, 10))) : 20;
 
@@ -582,9 +583,7 @@ export const postService = {
     if (tag) {
       where.tags = {
         some: {
-          tag: {
-            name: tag,
-          },
+          tag: synonyms === 'true' ? { name: { in: await expandTag(tag) } } : { name: tag },
         },
       };
     }
@@ -605,10 +604,12 @@ export const postService = {
     return (await filterByProfilePrivacy(posts, viewerId)).map(maskGroupAuthor);
   },
 
-  async searchPosts(query: string, nsfwMode: NsfwMode = 'hide', pageNum: number = 1, limitNum: number = 20, viewerId?: string) {
+  async searchPosts(query: string, nsfwMode: NsfwMode = 'hide', pageNum: number = 1, limitNum: number = 20, viewerId?: string, withSynonyms = false) {
     const q = query.trim();
     if (!q) return [];
     const tagQuery = q.replace(/^#/, '');
+    // "лиса" with synonyms on also finds posts tagged fox / foxes / лисица…
+    const synonymTags = withSynonyms ? await expandTag(tagQuery) : [];
 
     const where: any = {
       deleted_at: null,
@@ -618,6 +619,7 @@ export const postService = {
         { content: { contains: q, mode: 'insensitive' } },
         { title: { contains: q, mode: 'insensitive' } },
         { tags: { some: { tag: { name: { contains: tagQuery, mode: 'insensitive' } } } } },
+        ...(synonymTags.length ? [{ tags: { some: { tag: { name: { in: synonymTags } } } } }] : []),
       ],
     };
     Object.assign(where, nsfwWhere(nsfwMode));
@@ -1467,6 +1469,7 @@ export const postService = {
     const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
 
     type RawRow = {
+      grp: string;
       name: string;
       total_count: bigint;
       month_count: bigint;
@@ -1474,32 +1477,48 @@ export const postService = {
       nsfw_pct: number;
     };
 
+    // Synonyms are counted as one tag: variants differing only in "_"/"-" always, plus the
+    // admin-defined alias → canonical pairs. A post carrying several synonyms counts once.
+    const { keyToGroup, groupName } = await synonymGroups();
+
     const rows = await prisma.$queryRaw<RawRow[]>`
+      WITH tagged AS (
+        SELECT
+          t.name,
+          pt.post_id,
+          p.created_at,
+          p.is_nsfw,
+          COALESCE(
+            ${JSON.stringify(keyToGroup)}::jsonb ->> regexp_replace(t.name, '[_-]', '', 'g'),
+            regexp_replace(t.name, '[_-]', '', 'g')
+          ) AS grp
+        FROM "Tag" t
+        JOIN "PostTag" pt ON pt.tag_id = t.id
+        JOIN "Post"    p  ON p.id = pt.post_id
+                          AND p.deleted_at IS NULL
+                          AND p.is_archived = false
+                          AND cardinality(p.media_urls) > 0
+                          AND NOT EXISTS (
+                            SELECT 1 FROM "GroupPost" gp
+                            JOIN "Group" g ON g.id = gp.group_id
+                            WHERE gp.post_id = p.id AND g.deleted_at IS NOT NULL
+                          )
+      )
       SELECT
-        t.name,
-        COUNT(DISTINCT pt.post_id)::bigint                                                          AS total_count,
-        COUNT(DISTINCT CASE WHEN p.created_at >= ${thirtyDaysAgo} THEN pt.post_id END)::bigint      AS month_count,
-        COUNT(DISTINCT CASE WHEN p.created_at >= ${sixtyDaysAgo}
-                             AND p.created_at  <  ${thirtyDaysAgo} THEN pt.post_id END)::bigint     AS prev_month_count,
+        grp,
+        mode() WITHIN GROUP (ORDER BY name)                                                      AS name,
+        COUNT(DISTINCT post_id)::bigint                                                          AS total_count,
+        COUNT(DISTINCT CASE WHEN created_at >= ${thirtyDaysAgo} THEN post_id END)::bigint        AS month_count,
+        COUNT(DISTINCT CASE WHEN created_at >= ${sixtyDaysAgo}
+                             AND created_at  <  ${thirtyDaysAgo} THEN post_id END)::bigint       AS prev_month_count,
         COALESCE(
           ROUND(
-            100.0 * COUNT(CASE WHEN p.is_nsfw = true THEN 1 END)::numeric
-                  / NULLIF(COUNT(*)::numeric, 0)
+            100.0 * COUNT(DISTINCT CASE WHEN is_nsfw = true THEN post_id END)::numeric
+                  / NULLIF(COUNT(DISTINCT post_id)::numeric, 0)
           ), 0
-        )::int                                                                                       AS nsfw_pct
-      FROM "Tag" t
-      JOIN "PostTag" pt ON pt.tag_id = t.id
-      JOIN "Post"    p  ON p.id = pt.post_id
-                        AND p.deleted_at IS NULL
-                        AND p.is_archived = false
-                        AND cardinality(p.media_urls) > 0
-                        AND NOT EXISTS (
-                          SELECT 1 FROM "GroupPost" gp
-                          JOIN "Group" g ON g.id = gp.group_id
-                          WHERE gp.post_id = p.id AND g.deleted_at IS NOT NULL
-                        )
-      GROUP BY t.id, t.name
-      HAVING COUNT(DISTINCT pt.post_id) > 0
+        )::int                                                                                   AS nsfw_pct
+      FROM tagged
+      GROUP BY grp
       ORDER BY month_count DESC, total_count DESC
       LIMIT 30
     `;
@@ -1521,7 +1540,7 @@ export const postService = {
           trend = 'stable';
         }
         return {
-          name:           row.name,
+          name:           groupName.get(row.grp) ?? row.name,
           totalCount:     Number(row.total_count),
           monthCount:     month,
           prevMonthCount: prev,

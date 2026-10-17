@@ -12,7 +12,7 @@ import BIcon from '@/components/BIcon.vue'
 import PostCard from '@/components/PostCard.vue'
 import MentionTextarea from '@/components/MentionTextarea.vue'
 import MediaUpload from '@/components/MediaUpload.vue'
-import AlbumsPanel from '@/components/AlbumsPanel.vue'
+import AlbumsPanel, { type BuiltinAlbum } from '@/components/AlbumsPanel.vue'
 import AppBadge from '@/components/shared/AppBadge.vue'
 import ReportModal from '@/components/ReportModal.vue'
 import { useTagSuggestions } from '@/composables/useTagSuggestions'
@@ -291,8 +291,6 @@ function onPostUpdated(post: any) {
 
 // ── Group Media ──────────────────────────────────────────────────────────
 const groupMediaFilter = ref<'all' | 'photo' | 'video'>('all')
-const groupMediaAlbumView = ref(false)
-const groupOpenAlbum = ref<{ label: string; urls: { url: string; postId?: string }[] } | null>(null)
 const expandedGroupMediaPost = ref<any | null>(null)
 const archivedGroupPosts = ref<any[]>([])
 const isLoadingArchive = ref(false)
@@ -340,7 +338,8 @@ const filteredGroupMediaPosts = computed(() => {
 
 const groupMediaAlbums = computed(() => {
   const map = new Map<string, { url: string; postId?: string }[]>()
-  for (const post of filteredGroupMediaPosts.value as any[]) {
+  // Shown in the albums panel above the photo/video filter, so built from all media.
+  for (const post of groupMediaPostsList.value as any[]) {
     const dt = new Date(post.created_at)
     const label = dt.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang], { month: 'long', year: 'numeric' })
     if (!map.has(label)) map.set(label, [])
@@ -350,6 +349,10 @@ const groupMediaAlbums = computed(() => {
   }
   return Array.from(map.entries()).map(([label, urls]) => ({ label, urls }))
 })
+
+// Встроенные альбомы (по месяцам) для общей сетки альбомов
+const groupBuiltinAlbums = computed<BuiltinAlbum[]>(() =>
+  groupMediaAlbums.value.map((a) => ({ id: `month:${a.label}`, label: a.label, icon: 'CalendarDays', urls: a.urls })))
 
 const activeEvent = computed(() =>
   group.value?.events?.find((e: any) => new Date(e.starts_at) > new Date()) || group.value?.events?.[0]
@@ -388,6 +391,10 @@ async function submitReview() {
 }
 
 // ── About tab (inside the About tabs card) ──────────────────────────────
+const groupPriceList = computed(() => {
+  const list = (group.value as any)?.commissionInfo?.price_list
+  return (Array.isArray(list) ? list : []).filter((p: any) => p?.name)
+})
 const aboutTab = ref<'about' | 'rules' | 'faq' | 'nearest' | 'orders' | 'schedule' | 'prices' | 'queue' | 'reviews' | 'digest' | 'categories' | 'team' | 'dealers-den' | 'sponsors' | 'contacts'>('about')
 
 const aboutNavs = computed(() => {
@@ -871,11 +878,11 @@ const vClickOutside = {
               <!-- Accent line top -->
               <div class="h-px rounded-t-3xl" :style="`background:linear-gradient(90deg,transparent,${group.accent_color || '#4C67CF'}60,transparent)`"></div>
 
-              <div class="px-6 pt-0 pb-5">
-                <div class="flex items-start justify-between gap-4">
+              <div class="px-6 pt-0 pb-5 max-md:px-4 max-md:flex max-md:flex-col">
+                <div class="flex items-start justify-between gap-4 max-md:contents">
 
                   <!-- Avatar (overlap banner like profile) -->
-                  <div class="relative flex-shrink-0 -mt-12 md:-mt-16 w-24 h-24 md:w-32 md:h-32 overflow-visible">
+                  <div class="relative flex-shrink-0 -mt-12 md:-mt-16 w-24 h-24 md:w-32 md:h-32 overflow-visible max-md:order-1">
                     <div class="w-24 h-24 md:w-32 md:h-32 rounded-2xl border-4 border-brand-card overflow-hidden shadow-xl cursor-pointer transition-transform hover:scale-[1.02]"
                       :style="group.avatar_url ? {} : { backgroundColor: (group.accent_color || '#4C67CF') + '22' }"
                       @click="group.avatar_url && (showAvatarViewer = true)">
@@ -887,8 +894,8 @@ const vClickOutside = {
                     </div>
                   </div>
 
-                  <!-- Action buttons -->
-                  <div class="flex items-center gap-2 pt-3 md:pt-4 pr-1 flex-wrap">
+                  <!-- Action buttons (mobile: full-width row under the name, buttons stretch to fill) -->
+                  <div class="flex items-center gap-2 pt-3 md:pt-4 pr-1 flex-wrap max-md:order-3 max-md:w-full max-md:pr-0 max-md:pt-4 max-md:[&>*]:grow max-md:[&>*]:justify-center max-md:[&>*]:whitespace-nowrap max-md:[&>*]:min-w-[40px] max-md:[&>div>button]:w-full">
                     <!-- Donate button — visible when donations enabled, or to owner (with hint) -->
                     <button v-if="group.donations_enabled"
                       @click="showDonateModal = true"
@@ -1031,7 +1038,7 @@ const vClickOutside = {
                 </div>
 
                 <!-- Name row -->
-                <div class="mt-4">
+                <div class="mt-4 max-md:order-2 max-md:mt-3">
                   <div class="flex items-center flex-wrap gap-2 mb-2">
                     <h1 class="text-2xl md:text-3xl font-extrabold leading-none text-white tracking-tight min-w-0 max-w-full break-words [overflow-wrap:anywhere]">{{ group.name }}</h1>
                     <!-- Badges -->
@@ -1387,15 +1394,15 @@ const vClickOutside = {
 
                   <!-- Artist / Creative: Прайс -->
                   <div v-else-if="aboutTab === 'prices'" class="space-y-4">
-                    <template v-if="(group as any).pricelist?.length">
-                      <div v-for="item in (group as any).pricelist" :key="item.id"
+                    <template v-if="groupPriceList.length">
+                      <div v-for="(item, idx) in groupPriceList" :key="idx"
                         class="flex items-center gap-4 px-4 py-3.5 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/30 transition-all">
                         <div class="flex-1 min-w-0">
                           <p class="text-sm font-bold text-white">{{ item.name }}</p>
                           <p v-if="item.description" class="text-xs text-white/40 mt-0.5">{{ item.description }}</p>
                         </div>
                         <div class="text-right flex-shrink-0">
-                          <p class="text-sm font-extrabold" :style="`color: ${group.accent_color || '#4C67CF'}`">{{ langStore.t.groupDetailFromPricePrefix }} {{ item.price_from }}₽</p>
+                          <p class="text-sm font-extrabold" :style="`color: ${group.accent_color || '#4C67CF'}`">{{ langStore.t.groupDetailFromPricePrefix }} {{ item.price }}₽</p>
                           <p v-if="item.days" class="text-[10px] text-white/35">{{ item.days }}</p>
                         </div>
                       </div>
@@ -1718,7 +1725,7 @@ const vClickOutside = {
               </div>
 
               <!-- ── Content tabs (floating pills) ───────────────────── -->
-              <div class="flex flex-wrap gap-2">
+              <div class="flex flex-wrap gap-2 m-scroll-row max-md:-mx-3 max-md:px-3 max-md:py-1.5 max-md:-my-1.5">
                 <button v-for="tab in contentTabs" :key="tab.key"
                   @click="activeContentTab = tab.key as any"
                   class="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold border transition-all duration-200 whitespace-nowrap"
@@ -1941,7 +1948,7 @@ const vClickOutside = {
 
                   <!-- MEDIA -->
                   <template v-else-if="activeContentTab === 'media'">
-                    <AlbumsPanel :group-id="group.id" :can-create="myRoleWeight >= 1" />
+                    <AlbumsPanel :group-id="group.id" :can-create="myRoleWeight >= 1" :builtin="groupBuiltinAlbums" :builtin-loading="isLoadingMedia" :nsfw-mode="nsfwMode" />
                     <!-- Filter tabs -->
                     <div class="flex gap-2 mb-4 flex-wrap">
                       <button v-for="f in (['all','photo','video'] as const)" :key="f" @click="groupMediaFilter = f"
@@ -1950,12 +1957,6 @@ const vClickOutside = {
                         {{ f === 'all' ? `${langStore.t.groupDetailAllFilterLabel} · ${groupMediaPostsList.length}` : f === 'photo' ? `${langStore.t.feedPhoto} · ${groupMediaPostsList.filter((p: any) => isGroupImage(p.media_urls[0])).length}` : `${langStore.t.profileMediaFilterVideoLabel} · ${groupMediaPostsList.filter((p: any) => !isGroupImage(p.media_urls[0])).length}` }}
                       </button>
                       <div class="flex-1" />
-                      <button @click.stop="groupMediaAlbumView = !groupMediaAlbumView"
-                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all"
-                        :class="groupMediaAlbumView ? 'bg-brand-accent/15 border-brand-accent/60 text-brand-accent' : 'border-brand-border text-white/55 hover:text-white'">
-                        <BIcon name="FolderOpen" class="w-3.5 h-3.5" />
-                        {{ langStore.t.profileAlbumsLabel }}
-                      </button>
                     </div>
 
                     <div v-if="isLoadingMedia" class="grid grid-cols-3 gap-1.5">
@@ -1966,39 +1967,8 @@ const vClickOutside = {
                       <p class="text-white/40 text-sm font-semibold">{{ langStore.t.noMediaYet }}</p>
                     </div>
                     <template v-else>
-                      <!-- Album view -->
-                      <template v-if="groupMediaAlbumView">
-                        <div class="grid grid-cols-2 gap-3">
-                          <div v-for="album in groupMediaAlbums" :key="album.label"
-                            @click.stop="groupOpenAlbum = album"
-                            class="relative rounded-2xl overflow-hidden cursor-pointer group aspect-[4/3] border border-brand-border hover:border-brand-accent/60 transition-all shadow-md">
-                            <div v-if="album.urls.length >= 4" class="grid grid-cols-2 gap-0.5 w-full h-full">
-                              <div v-for="(item, i) in album.urls.slice(0, 4)" :key="i" class="overflow-hidden">
-                                <img v-if="isGroupImage(item.url)" :src="item.url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
-                                <div v-else class="w-full h-full bg-brand-bg/60 flex items-center justify-center"><BIcon name="Play" class="w-5 h-5 text-white/40" /></div>
-                              </div>
-                            </div>
-                            <div v-else-if="album.urls[0]" class="w-full h-full">
-                              <img v-if="isGroupImage(album.urls[0].url)" :src="album.urls[0].url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                              <div v-else class="w-full h-full bg-brand-bg flex items-center justify-center"><BIcon name="Image" class="w-10 h-10 text-white/20" /></div>
-                            </div>
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent"/>
-                            <div class="absolute bottom-0 left-0 right-0 p-3">
-                              <div class="flex items-center gap-1.5 mb-0.5">
-                                <BIcon name="CalendarDays" class="w-3 h-3 text-brand-accent/80" />
-                                <p class="text-xs font-bold text-white">{{ album.label }}</p>
-                              </div>
-                              <p class="text-[10px] text-white/55 font-semibold">{{ album.urls.length }} {{ langStore.t.profilePhotosCountUnit }}</p>
-                            </div>
-                            <div class="absolute top-2 right-2 w-7 h-7 rounded-lg bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
-                              <BIcon name="FolderOpen" class="w-3.5 h-3.5 text-white" />
-                            </div>
-                          </div>
-                        </div>
-                      </template>
-
                       <!-- Grid view -->
-                      <template v-else>
+                      <template>
                     <div class="grid grid-cols-3 gap-1.5">
                       <div v-for="post in filteredGroupMediaPosts" :key="post.id"
                         @click="expandedGroupMediaPost = expandedGroupMediaPost?.id === post.id ? null : post"
@@ -2678,34 +2648,6 @@ const vClickOutside = {
               </button>
             </div>
             <p v-else-if="allMembers.length === 0" class="text-center text-white/40 text-sm py-8">{{ langStore.t.groupDetailNoMembersLabel }}</p>
-          </div>
-        </div>
-      </div>
-    </Transition>
-
-    <!-- ── Album Modal ─────────────────────────────────────────────── -->
-    <Transition name="fade">
-      <div v-if="groupOpenAlbum" class="fixed inset-0 z-[615] bg-black/95 flex flex-col" @click.self="groupOpenAlbum = null">
-        <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border/60 bg-brand-card/80 backdrop-blur-md flex-shrink-0">
-          <div class="flex items-center gap-2.5">
-            <BIcon name="CalendarDays" class="w-5 h-5 text-brand-accent" />
-            <h3 class="text-white font-bold text-lg">{{ groupOpenAlbum.label }}</h3>
-            <span class="text-xs text-white/40 font-semibold">· {{ groupOpenAlbum.urls.length }}</span>
-          </div>
-          <button @click="groupOpenAlbum = null"
-            class="w-9 h-9 flex items-center justify-center rounded-xl bg-brand-bg hover:bg-brand-border text-white/70 hover:text-white transition-all">
-            <BIcon name="X" class="w-4 h-4" />
-          </button>
-        </div>
-        <div class="flex-1 overflow-y-auto p-3">
-          <div class="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
-            <div v-for="(item, idx) in groupOpenAlbum.urls" :key="idx"
-              class="relative aspect-square rounded-xl overflow-hidden cursor-pointer group border border-brand-border/60 hover:border-brand-accent/60 bg-brand-bg transition-all">
-              <img v-if="isGroupImage(item.url)" :src="item.url" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-              <div v-else class="w-full h-full flex items-center justify-center bg-brand-bg/60">
-                <BIcon name="Play" class="w-8 h-8 text-white/55" />
-              </div>
-            </div>
           </div>
         </div>
       </div>

@@ -140,9 +140,9 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
         <div class="flex-1 min-w-0 flex flex-col gap-4">
 
           <!-- Header -->
-          <div class="bg-brand-card border border-brand-border rounded-3xl px-5 py-4 shadow-xl">
-            <div class="flex items-center justify-between gap-3 mb-4">
-              <div class="flex items-center gap-3">
+          <div class="bg-brand-card border border-brand-border rounded-3xl px-5 py-4 max-md:px-4 shadow-xl">
+            <div class="flex items-center justify-between gap-3 mb-4 max-md:flex-wrap">
+              <div class="flex items-center gap-3 max-md:min-w-0">
                 <div class="w-10 h-10 rounded-2xl bg-brand-accent/15 flex items-center justify-center">
                   <BIcon name="Users" class="w-5 h-5 text-brand-accent" />
                 </div>
@@ -150,7 +150,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
               </div>
 
               <!-- Добавить по ID -->
-              <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap max-md:flex-nowrap max-md:basis-full max-md:min-w-0">
                 <input
                   v-model="addInput"
                   type="text"
@@ -174,7 +174,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
 
             <!-- Main tabs: Друзья / Подписчики / Подписки -->
             <div class="flex items-center gap-2 flex-wrap">
-              <div ref="tabBarEl" class="relative flex bg-brand-bg rounded-xl p-1 gap-1">
+              <div ref="tabBarEl" class="relative flex bg-brand-bg rounded-xl p-1 gap-1 max-md:w-full">
                 <!-- Sliding highlight — animates to whichever tab is active -->
                 <div
                   v-if="tabSlider.ready"
@@ -186,15 +186,15 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
                   :key="tab.key"
                   :ref="setTabRef(tab.key)"
                   :class="[
-                    'relative z-10 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5',
+                    'relative z-10 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 max-md:whitespace-nowrap max-md:flex-1 max-md:min-w-0 max-md:justify-center max-md:px-1.5 max-md:text-[13px] max-md:gap-1',
                     mainTab === tab.key
                       ? 'text-white'
                       : 'text-white/55 hover:text-brand-offwhite'
                   ]"
                   @click="mainTab = tab.key; onlineFilter = false; searchQuery = ''"
                 >
-                  <BIcon :name="tab.icon" class="w-4 h-4" />
-                  {{ tab.label }}
+                  <BIcon :name="tab.icon" class="w-4 h-4 max-md:shrink-0 max-[379px]:hidden" />
+                  <span class="max-md:truncate">{{ tab.label }}</span>
                   <span
                     v-if="tab.count > 0"
                     :class="[
@@ -220,7 +220,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
               </button>
 
               <!-- Поиск -->
-              <div class="relative flex-1 min-w-[140px] max-w-xs">
+              <div class="relative flex-1 min-w-[140px] max-w-xs max-md:max-w-none">
                 <BIcon name="Search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/55 pointer-events-none" />
                 <input
                   v-model="searchQuery"

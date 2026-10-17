@@ -7,6 +7,7 @@ import { useLangStore } from '@/stores/lang'
 import MobileBottomNav from '@/components/MobileBottomNav.vue'
 import NotifToastContainer from '@/components/NotifToastContainer.vue'
 import UpdateAnnouncementModal from '@/components/UpdateAnnouncementModal.vue'
+import VerificationApprovedModal from '@/components/VerificationApprovedModal.vue'
 import MaintenanceOverlay from '@/components/MaintenanceOverlay.vue'
 import WarningDetailModal from '@/components/WarningDetailModal.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
@@ -65,6 +66,7 @@ function acceptCookies() {
   <MobileBottomNav v-if="showMobileNav" />
   <NotifToastContainer />
   <UpdateAnnouncementModal v-if="auth.token" />
+  <VerificationApprovedModal v-if="auth.token" />
   <MaintenanceOverlay />
   <WarningDetailModal />
   <ConfirmModal />

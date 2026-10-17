@@ -18,6 +18,8 @@ export const NOTIF_BADGE_ICON: Record<string, string> = {
   GROUP_DM:    'Inbox',
   FRIEND_REQUEST: 'UserPlus',
   FRIEND_ACCEPT:  'UserCheck',
+  STICKER_ACCESS_REQUEST:  'Smile',
+  STICKER_ACCESS_APPROVED: 'Smile',
   automod_warn: 'ShieldAlert',
 }
 
@@ -37,6 +39,8 @@ export const NOTIF_BADGE_COLOR: Record<string, string> = {
   GROUP_DM:    'bg-brand-accent',
   FRIEND_REQUEST: 'bg-violet-500',
   FRIEND_ACCEPT:  'bg-violet-500',
+  STICKER_ACCESS_REQUEST:  'bg-rose-500',
+  STICKER_ACCESS_APPROVED: 'bg-emerald-500',
   automod_warn: 'bg-amber-500',
 }
 

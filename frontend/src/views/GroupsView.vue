@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
@@ -17,10 +17,12 @@ import { useLangStore } from '@/stores/lang'
 import api from '@/api'
 
 const router = useRouter()
+const route = useRoute()
 const { nsfwEnabled: nsfwMode } = useNsfwMode()
 const langStore = useLangStore()
 const activeNav = ref('groups')
 const showCreateModal = ref(false)
+const createInitialType = ref<GroupType | undefined>()
 const search = ref('')
 const showCategoryDropdown = ref(false)
 
@@ -148,7 +150,15 @@ async function loadActiveAds() {
   } catch {}
 }
 
-onMounted(async () => { await Promise.all([loadData(), loadStaticData(), loadActiveAds()]) })
+onMounted(async () => {
+  const q = route.query.create
+  if (typeof q === 'string') {
+    if (q !== '1') createInitialType.value = q as GroupType
+    showCreateModal.value = true
+    router.replace({ name: 'groups' })
+  }
+  await Promise.all([loadData(), loadStaticData(), loadActiveAds()])
+})
 
 function selectCategory(key: string) {
   selectedCategory.value = key
@@ -185,7 +195,9 @@ function updateTabSlider() {
   if (!bar || !btn) return
   const barRect = bar.getBoundingClientRect()
   const btnRect = btn.getBoundingClientRect()
-  tabSlider.value = { left: btnRect.left - barRect.left, width: btnRect.width, ready: true }
+  // scrollLeft is non-zero only when the bar is a horizontal scroller (mobile)
+  tabSlider.value = { left: btnRect.left - barRect.left + bar.scrollLeft, width: btnRect.width, ready: true }
+  if (bar.scrollWidth > bar.clientWidth) btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
 }
 
 watch(sidebarTab, () => nextTick(updateTabSlider))
@@ -266,9 +278,9 @@ function fmtMembers(n: number): string {
         </div>
 
         <!-- ════════ SEARCH + CATEGORIES + CREATE ════════ -->
-        <div class="flex items-center gap-3 mb-6">
+        <div class="flex items-center gap-3 mb-6 max-md:gap-2 max-md:mb-4">
           <!-- Search -->
-          <div class="relative flex-1">
+          <div class="relative flex-1 max-md:min-w-0">
             <BIcon name="Search" class="w-4 h-4 text-white/30 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               v-model="search"
@@ -281,11 +293,11 @@ function fmtMembers(n: number): string {
           <!-- Category dropdown -->
           <div class="relative">
             <button
-              class="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-card border border-brand-border text-sm font-semibold text-white/70 hover:border-brand-accent/40 transition-colors whitespace-nowrap"
+              class="flex items-center gap-2 px-4 py-2.5 max-md:px-3 max-md:gap-1.5 rounded-2xl bg-brand-card border border-brand-border text-sm font-semibold text-white/70 hover:border-brand-accent/40 transition-colors whitespace-nowrap"
               @click="showCategoryDropdown = !showCategoryDropdown"
             >
-              <BIcon name="Filter" class="w-4 h-4" />
-              {{ selectedCategoryLabel }}
+              <BIcon name="Filter" class="w-4 h-4 max-md:shrink-0" />
+              <span class="max-md:max-w-[88px] max-md:truncate">{{ selectedCategoryLabel }}</span>
               <BIcon name="ChevronDown" class="w-3 h-3 text-white/30 transition-transform" :class="showCategoryDropdown ? 'rotate-180' : ''" />
             </button>
             <Transition name="dropdown">
@@ -307,7 +319,7 @@ function fmtMembers(n: number): string {
 
           <!-- Create button -->
           <button
-            class="px-4 py-2.5 rounded-2xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-colors shadow-accent flex items-center gap-2 shrink-0"
+            class="px-4 py-2.5 max-md:px-3 rounded-2xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-colors shadow-accent flex items-center gap-2 shrink-0"
             @click="showCreateModal = true"
           >
             <BIcon name="Plus" class="w-4 h-4" />
@@ -316,7 +328,7 @@ function fmtMembers(n: number): string {
         </div>
 
         <!-- ════════ TAB BAR ════════ -->
-        <div ref="tabBarEl" class="relative flex items-center gap-2 mb-5 flex-wrap">
+        <div ref="tabBarEl" class="relative flex items-center gap-2 mb-5 flex-wrap m-scroll-row max-md:-mx-3 max-md:px-3 max-md:mb-4">
           <!-- Sliding highlight — animates to whichever tab is active -->
           <div
             v-if="tabSlider.ready"
@@ -333,7 +345,7 @@ function fmtMembers(n: number): string {
             ]"
             :key="tab.key"
             :ref="setTabRef(tab.key)"
-            class="relative z-10 flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors border"
+            class="relative z-10 flex items-center gap-2 px-4 py-2 max-md:px-3.5 rounded-xl text-sm font-semibold max-md:whitespace-nowrap transition-colors border"
             :class="sidebarTab === tab.key
               ? 'text-brand-accent border-transparent'
               : 'text-white/50 hover:text-white border-brand-border hover:border-brand-accent/30 bg-brand-card'"
@@ -399,6 +411,7 @@ function fmtMembers(n: number): string {
     <!-- Create group modal -->
     <CreateGroupModal
       v-if="showCreateModal"
+      :initial-type="createInitialType"
       @create="handleCreateGroup"
       @close="showCreateModal = false"
     />

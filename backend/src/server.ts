@@ -34,7 +34,9 @@ import { updatesRoutes } from './modules/updates/routes.js';
 import { bookmarksRoutes } from './modules/bookmarks/routes.js';
 import { supportRoutes } from './modules/support/routes.js';
 import { albumRoutes } from './modules/albums/routes.js';
+import { tagRoutes } from './modules/tags/routes.js';
 import { walletRoutes } from './modules/wallet/routes.js';
+import { paymentsRoutes } from './modules/payments/routes.js';
 import { realtimeRoutes } from './modules/realtime/routes.js';
 import { initCronJobs } from './cron.js';
 import { registerAuth } from './plugins/auth.js';
@@ -160,7 +162,9 @@ fastify.register(updatesRoutes,    { prefix: '/api/updates' });
 fastify.register(bookmarksRoutes,  { prefix: '/api/bookmarks' });
 fastify.register(supportRoutes,    { prefix: '/api/support' });
 fastify.register(albumRoutes,      { prefix: '/api/albums' });
+fastify.register(tagRoutes,        { prefix: '/api/tags' });
 fastify.register(walletRoutes,     { prefix: '/api/wallet' });
+fastify.register(paymentsRoutes,   { prefix: '/api/payments' });
 // SEO: sitemap.xml and OG-proxy endpoints (no auth required, crawlers friendly)
 fastify.register(seoRoutes);
 

@@ -41,6 +41,15 @@ export interface StickerPack {
   in_collection?: boolean
 }
 
+export type AccessStatus = 'owner' | 'approved' | 'pending' | 'rejected' | 'none'
+
+export interface AccessRequest {
+  id: string
+  created_at: string
+  pack: { id: string; name: string; cover_url: string | null }
+  user: { id: string; username: string; display_name: string | null; avatar_url: string | null }
+}
+
 export interface CreatePackInput {
   name: string
   description?: string
@@ -233,13 +242,31 @@ export const useStickersStore = defineStore('stickers', () => {
 
   async function loadInvitePack(code: string) {
     const { data } = await api.get(`/stickers/invite/${encodeURIComponent(code)}`)
-    return data.data.pack as StickerPack
+    return data.data as { pack: StickerPack; access: AccessStatus }
   }
 
-  async function joinByInvite(code: string) {
-    const { data } = await api.post(`/stickers/invite/${encodeURIComponent(code)}/join`)
-    await loadMyCollection()
-    return data.data.packId as string
+  /** Просьба открыть доступ к паку по приглашению; владелец получит уведомление */
+  async function requestAccess(code: string) {
+    const { data } = await api.post(`/stickers/invite/${encodeURIComponent(code)}/request`)
+    return data.data.status as AccessStatus
+  }
+
+  // ── Заявки на доступ к своим пакам (счётчик в магазине) ──────────────────
+  const incomingRequests = ref<AccessRequest[]>([])
+  const incomingCount    = ref(0)
+
+  async function loadIncomingRequests() {
+    try {
+      const { data } = await api.get('/stickers/me/access-requests')
+      incomingRequests.value = data.data.requests
+      incomingCount.value = data.data.count
+    } catch { /* без заявок счётчик останется нулём */ }
+  }
+
+  async function decideAccessRequest(requestId: string, action: 'approve' | 'reject') {
+    await api.post(`/stickers/access-requests/${requestId}/${action}`)
+    incomingRequests.value = incomingRequests.value.filter(r => r.id !== requestId)
+    incomingCount.value = Math.max(0, incomingCount.value - 1)
   }
 
   async function removeFromCollection(packId: string) {
@@ -290,7 +317,8 @@ export const useStickersStore = defineStore('stickers', () => {
     loadPacks, loadPack, loadMyPacks, loadMyCollection,
     createPack, updatePack, addStickersToPack, deletePack,
     addToCollection, removeFromCollection, checkCollected,
-    purchasePack, loadInvitePack, joinByInvite,
+    purchasePack, loadInvitePack, requestAccess,
+    incomingRequests, incomingCount, loadIncomingRequests, decideAccessRequest,
     importFromTelegram, findPackByUrl,
   }
 })
