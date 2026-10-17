@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma.js';
+import { readableProfilesWhere, requireUuid } from '../../lib/contentAccess.js';
 import { isTrustedMediaUrl, deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy, getBlockerIds } from '../../lib/blocks.js';
@@ -13,7 +14,9 @@ async function assertProfileVisible(userId: string, viewerId?: string) {
   if (await isBlockedBy(userId, viewerId)) {
     throw Object.assign(new Error('PROFILE_BLOCKED'), { statusCode: 403 });
   }
-  const owner = await prisma.user.findUnique({ where: { id: userId }, select: { profile_visibility: true } });
+  requireUuid(userId);
+  const owner = await prisma.user.findUnique({ where: { id: userId }, select: { profile_visibility: true, deleted_at: true } });
+  if (!owner || owner.deleted_at) throw Object.assign(new Error('NOT_FOUND'), { statusCode: 404 });
   if (owner && !(await isAllowedByPrivacy(owner.profile_visibility, userId, viewerId))) {
     throw Object.assign(new Error('PROFILE_PRIVATE'), { statusCode: 403 });
   }
@@ -61,6 +64,8 @@ export const storiesService = {
       where: {
         created_at: { gte: since },
         deleted_at: null,
+        expires_at: { gt: new Date() },
+        user: readableProfilesWhere(viewerId),
         ...(blockerIds.length > 0 ? { user_id: { notIn: blockerIds } } : {}),
       },
       include: { user: { select: userSelect } },
@@ -125,6 +130,8 @@ export const storiesService = {
     const stories = await prisma.story.findMany({
       where: {
         user_id: userId,
+        user: readableProfilesWhere(viewerId),
+        expires_at: { gt: new Date() },
         created_at: { gte: since },
         deleted_at: null,
       },
@@ -137,9 +144,10 @@ export const storiesService = {
   async recordView(storyId: string, viewerId: string) {
     const story = await prisma.story.findUnique({
       where: { id: storyId },
-      select: { user_id: true, deleted_at: true },
+      select: { user_id: true, deleted_at: true, expires_at: true },
     });
-    if (!story || story.deleted_at) throw new Error('NOT_FOUND');
+    if (!story || story.deleted_at || story.expires_at <= new Date()) throw new Error('NOT_FOUND');
+    await assertProfileVisible(story.user_id, viewerId);
     if (story.user_id === viewerId) return; // owner viewing their own story isn't tracked
 
     await prisma.storyView.upsert({
@@ -167,9 +175,10 @@ export const storiesService = {
   async voteStory(storyId: string, userId: string, value: 1 | -1) {
     const story = await prisma.story.findUnique({
       where: { id: storyId },
-      select: { deleted_at: true },
+      select: { user_id: true, deleted_at: true, expires_at: true },
     });
-    if (!story || story.deleted_at) throw new Error('NOT_FOUND');
+    if (!story || story.deleted_at || story.expires_at <= new Date()) throw new Error('NOT_FOUND');
+    await assertProfileVisible(story.user_id, userId);
 
     const existing = await prisma.storyVote.findUnique({
       where: { story_id_user_id: { story_id: storyId, user_id: userId } },

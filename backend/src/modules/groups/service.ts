@@ -1,5 +1,8 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma.js';
+import { assertGroupReadable, readableGroupsWhere, readablePostsWhere, accessError } from '../../lib/contentAccess.js';
+import { pagination } from '../../lib/pagination.js';
+import { canCreateGroup } from '../../lib/verificationPolicy.js';
 import { sanitizeDisplayText } from '../../lib/sanitizeText.js';
 import { containsToxicLanguage } from '../automod/service.js';
 import { getGroupBadgeLevel } from '../../lib/badges.js';
@@ -202,12 +205,10 @@ const EVENT_SELECT = {
 // ── Group CRUD ────────────────────────────────────────────────────────────────
 export const groupService = {
   // ── list groups ───────────────────────────────────────────────────────────
-  async list(query: GetGroupsQuery) {
-    const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const limit = Math.min(50, Math.max(1, parseInt(query.limit ?? '20', 10)));
-    const skip = (page - 1) * limit;
+  async list(query: GetGroupsQuery, viewerId?: string) {
+    const { page, limit, skip } = pagination(query.page, query.limit, 20, 50);
 
-    const where: Prisma.GroupWhereInput = { deleted_at: null };
+    const where: Prisma.GroupWhereInput = { AND: [readableGroupsWhere(viewerId)] };
     if (query.type) where.type = query.type;
     if (query.search) {
       where.OR = [
@@ -228,11 +229,12 @@ export const groupService = {
   },
 
   // ── get by slug or id ─────────────────────────────────────────────────────
-  async getBySlugOrId(slugOrId: string) {
+  async getBySlugOrId(slugOrId: string, viewerId?: string) {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slugOrId);
     const raw = await prisma.group.findFirst({
       where: {
         deleted_at: null,
+        AND: [readableGroupsWhere(viewerId)],
         ...(isUuid
           ? { id: slugOrId }
           : { OR: [{ slug: slugOrId }, { slug_aliases: { has: slugOrId } }] }),
@@ -272,6 +274,9 @@ export const groupService = {
 
   async sweepExpiredEvent(groupId: string) {
     await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Group" WHERE id = ${groupId}::uuid FOR UPDATE`;
+      const current = await tx.group.findUnique({ where: { id: groupId }, select: { type: true, event_date: true, event_expired_at: true, deleted_at: true } });
+      if (!current || current.deleted_at || current.event_expired_at || !this.isEventExpired(current)) return;
       const soonBadges = await tx.soonBadge.findMany({
         where: { event: { group_id: groupId } },
         select: { id: true, event_id: true },
@@ -313,6 +318,7 @@ export const groupService = {
   },
 
   async subscribe(groupId: string, userId: string) {
+    await assertGroupReadable(groupId, userId);
     await prisma.groupSubscriber.upsert({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
       update: {},
@@ -328,7 +334,7 @@ export const groupService = {
 
   async getMySubscriptions(userId: string) {
     const rows = await prisma.groupSubscriber.findMany({
-      where: { user_id: userId },
+      where: { user_id: userId, group: readableGroupsWhere(userId) },
       select: { group_id: true },
     });
     return rows.map((r) => r.group_id);
@@ -341,6 +347,13 @@ export const groupService = {
     const slug = normalizeSlug(input.slug);
     if (!slug) throw new Error('Group slug is required');
     return prisma.$transaction(async (tx) => {
+      const owner = await tx.user.findUnique({
+        where: { id: ownerId },
+        select: { is_verified: true, verification_type: true },
+      });
+      if (!canCreateGroup(owner, input.type)) {
+        throw Object.assign(new Error('Для создания этого типа группы нужна одобренная верификация соответствующей роли'), { statusCode: 403 });
+      }
       const group = await tx.group.create({
         data: {
           slug,
@@ -540,8 +553,9 @@ export const groupService = {
 
   // ── membership ────────────────────────────────────────────────────────────
   async join(groupId: string, userId: string) {
+    await assertGroupReadable(groupId, userId);
     const group = await this.ensureEventExpirySwept(groupId);
-    if (!group || group.deleted_at) throw new Error('Group not found');
+    if (!group || group.deleted_at) throw accessError('Group not found', 404);
     if (this.isEventExpired(group)) throw new Error('EVENT_EXPIRED');
 
     // Create the membership row directly (instead of a separate "does it exist?" read
@@ -791,9 +805,9 @@ export const groupService = {
     return prisma.event.update({ where: { id: eventId }, data, select: EVENT_SELECT });
   },
 
-  async getEvent(eventId: string) {
+  async getEvent(eventId: string, viewerId?: string) {
     return prisma.event.findFirst({
-      where: { id: eventId, group: { deleted_at: null } },
+      where: { id: eventId, group: readableGroupsWhere(viewerId) },
       select: {
         ...EVENT_SELECT,
         tickets: { orderBy: { price: 'asc' } },
@@ -811,12 +825,10 @@ export const groupService = {
     });
   },
 
-  async listEvents(query: { groupId?: string; status?: string; upcoming?: boolean; page?: string; limit?: string; sort?: string; location?: string }) {
-    const page = Math.max(1, parseInt(query.page ?? '1', 10));
-    const limit = Math.min(50, Math.max(1, parseInt(query.limit ?? '20', 10)));
-    const skip = (page - 1) * limit;
+  async listEvents(query: { groupId?: string; status?: string; upcoming?: boolean; page?: string; limit?: string; sort?: string; location?: string }, viewerId?: string) {
+    const { page, limit, skip } = pagination(query.page, query.limit, 20, 50);
 
-    const where: Prisma.EventWhereInput = { group: { deleted_at: null } };
+    const where: Prisma.EventWhereInput = { group: readableGroupsWhere(viewerId) };
     if (query.groupId) where.group_id = query.groupId;
     if (query.status) where.status = query.status;
     if (query.upcoming) where.starts_at = { gt: new Date() };
@@ -869,28 +881,23 @@ export const groupService = {
 
   // ── SOON Badge ────────────────────────────────────────────────────────────
   async toggleSoonBadge(userId: string, eventId: string) {
-    const existing = await prisma.soonBadge.findUnique({
-      where: { user_id_event_id: { user_id: userId, event_id: eventId } },
-    });
-
-    if (existing) {
-      await Promise.all([
-        prisma.soonBadge.delete({ where: { id: existing.id } }),
-        prisma.event.update({ where: { id: eventId }, data: { attendee_count: { decrement: 1 } } }),
-      ]);
-      return { added: false };
-    }
-
     const event = await prisma.event.findUnique({ where: { id: eventId }, select: { group_id: true } });
-    if (!event) throw new Error('Event not found');
+    if (!event) throw accessError('Event not found', 404);
+    await assertGroupReadable(event.group_id, userId);
     const group = await this.ensureEventExpirySwept(event.group_id);
-    if (group && this.isEventExpired(group)) throw new Error('EVENT_EXPIRED');
-
-    await Promise.all([
-      prisma.soonBadge.create({ data: { user_id: userId, event_id: eventId } }),
-      prisma.event.update({ where: { id: eventId }, data: { attendee_count: { increment: 1 } } }),
-    ]);
-    return { added: true };
+    return prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId}::uuid FOR UPDATE`;
+      const existing = await tx.soonBadge.findUnique({ where: { user_id_event_id: { user_id: userId, event_id: eventId } } });
+      if (existing) {
+        await tx.soonBadge.delete({ where: { id: existing.id } });
+        await tx.event.update({ where: { id: eventId }, data: { attendee_count: { decrement: 1 } } });
+        return { added: false };
+      }
+      if (group && this.isEventExpired(group)) throw new Error('EVENT_EXPIRED');
+      await tx.soonBadge.create({ data: { user_id: userId, event_id: eventId } });
+      await tx.event.update({ where: { id: eventId }, data: { attendee_count: { increment: 1 } } });
+      return { added: true };
+    });
   },
 
   async toggleSoonBadgeVisibility(userId: string, eventId: string) {
@@ -904,9 +911,9 @@ export const groupService = {
     });
   },
 
-  async getUserSoonBadges(userId: string) {
+  async getUserSoonBadges(userId: string, viewerId?: string) {
     return prisma.soonBadge.findMany({
-      where: { user_id: userId, show_badge: true },
+      where: { user_id: userId, show_badge: true, event: { group: readableGroupsWhere(viewerId) } },
       include: {
         event: {
           select: {
@@ -931,14 +938,32 @@ export const groupService = {
   async upsertCommission(groupId: string, input: UpdateCommissionInput) {
     const data: Omit<Prisma.CommissionInfoUncheckedCreateInput, 'group_id'> = {};
     if (input.status !== undefined) data.status = input.status;
-    if (input.basePrices !== undefined) data.base_prices = input.basePrices;
-    if (input.currency !== undefined) data.currency = input.currency;
+    if (input.basePrices !== undefined) {
+      if (!input.basePrices || typeof input.basePrices !== 'object' || Array.isArray(input.basePrices) ||
+        Object.entries(input.basePrices).some(([name, price]) => !name.trim() || name.length > 120 || typeof price !== 'number' || !Number.isFinite(price) || price < 0)) {
+        throw new Error('Базовые цены должны быть неотрицательными числами');
+      }
+      data.base_prices = input.basePrices;
+    }
+    if (input.currency !== undefined) {
+      if (typeof input.currency !== 'string' || !/^[A-Z]{3}$/.test(input.currency)) throw new Error('Укажите трёхбуквенный код валюты');
+      data.currency = input.currency;
+    }
     if (input.tosText !== undefined) data.tos_text = input.tosText;
     if (input.maxQueue !== undefined) data.max_queue = input.maxQueue;
     if (input.rushSlots !== undefined) data.rush_slots = input.rushSlots;
     if (input.rushMax !== undefined) data.rush_max = input.rushMax;
     if (input.turnaroundDays !== undefined) data.turnaround_days = input.turnaroundDays;
-    if (input.priceList !== undefined) data.price_list = input.priceList;
+    if (input.priceList !== undefined) {
+      if (!Array.isArray(input.priceList) || input.priceList.length > 200 || input.priceList.some(item =>
+        !item || typeof item.name !== 'string' || !item.name.trim() || item.name.length > 120 ||
+        typeof item.price !== 'number' || !Number.isFinite(item.price) || item.price < 0 ||
+        (item.description !== undefined && (typeof item.description !== 'string' || item.description.length > 2000))
+      )) throw new Error('Прайс должен содержать название и неотрицательную цену для каждой позиции');
+      data.price_list = input.priceList.map(item => ({
+        name: item.name.trim(), price: item.price, description: item.description?.trim() ?? '',
+      }));
+    }
 
     return prisma.commissionInfo.upsert({
       where: { group_id: groupId },
@@ -974,7 +999,7 @@ export const groupService = {
   async hasSubscriberAccess(groupId: string, userId: string): Promise<boolean> {
     // Any membership counts (plain members have role weight 0), so check the row, not the weight.
     const member = await prisma.groupMember.findUnique({
-      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      where: { group_id_user_id: { group_id: groupId, user_id: userId }, group: { deleted_at: null } },
       select: { role: true },
     });
     if (member) return true;
@@ -992,13 +1017,17 @@ export const groupService = {
 
   // ── Group posts ──────────────────────────────────────────────────────────
   async getGroupPosts(groupId: string, page = 1, limit = 20, hasMedia = false, viewerId: string | null = null, archived = false) {
-    const skip = (page - 1) * limit;
+    await assertGroupReadable(groupId, viewerId);
+    const bounds = pagination(page, limit);
+    page = bounds.page; limit = bounds.limit;
+    const skip = bounds.skip;
     const hasSubscriberAccess = viewerId ? await groupService.hasSubscriberAccess(groupId, viewerId) : false;
-    return prisma.groupPost.findMany({
+    const rows = await prisma.groupPost.findMany({
       where: {
         group_id: groupId,
         group: { deleted_at: null },
         post: {
+          AND: [await readablePostsWhere(viewerId, archived)],
           deleted_at: null,
           // Архивные посты раньше не отфильтровывались и возвращались в ленту после обновления страницы
           is_archived: archived,
@@ -1019,16 +1048,18 @@ export const groupService = {
       skip,
       take: limit,
     });
+    return rows.map(row => ({ ...row, post: { ...row.post, can_view_content: true } }));
   },
 
   // ── Creative Kanban ───────────────────────────────────────────────────────
-  async getKanban(groupId: string) {
+  async getKanban(groupId: string, viewerId?: string) {
+    await assertGroupReadable(groupId, viewerId);
     const STAGES = ['скетч', 'линии', 'цвет', 'готово'] as const;
 
     const pivots = await prisma.groupPost.findMany({
       where: {
         group_id: groupId,
-        post: { deleted_at: null, post_type: 'commission_update' },
+        post: { deleted_at: null, post_type: 'commission_update', is_archived: false, AND: [await readablePostsWhere(viewerId)] },
       },
       include: {
         post: {
@@ -1092,7 +1123,7 @@ export const groupService = {
     const memberships = await prisma.groupMember.findMany({
       where: {
         user_id: userId,
-        group: { deleted_at: null },
+        group: readableGroupsWhere(requesterId),
         ...(pinnedOnly ? { is_pinned: true } : {}),
       },
       include: { group: { select: GROUP_LIST_SELECT } },
@@ -1152,46 +1183,21 @@ export const groupService = {
   // ── Group Rating (Reddit-style: -1 / +1 toggle) ───────────────────────────
   async rateGroup(groupId: string, userId: string, value: number) {
     if (value !== 1 && value !== -1) throw new Error('value must be 1 or -1');
-    const group = await prisma.group.findUnique({ where: { id: groupId }, select: { owner_id: true } });
-    if (group?.owner_id === userId) throw new Error('You cannot vote on your own group');
-
-    const existing = await prisma.groupRating.findUnique({
-      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+    await assertGroupReadable(groupId, userId);
+    return prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "Group" WHERE id = ${groupId}::uuid FOR UPDATE`;
+      const group = await tx.group.findUnique({ where: { id: groupId }, select: { owner_id: true, deleted_at: true } });
+      if (!group || group.deleted_at) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
+      if (group.owner_id === userId) throw new Error('You cannot vote on your own group');
+      const key = { group_id_user_id: { group_id: groupId, user_id: userId } };
+      const existing = await tx.groupRating.findUnique({ where: key });
+      const finalVote = existing?.value === value ? 0 : value;
+      if (!finalVote) await tx.groupRating.delete({ where: key });
+      else await tx.groupRating.upsert({ where: key, create: { group_id: groupId, user_id: userId, value }, update: { value } });
+      const total = await tx.groupRating.aggregate({ where: { group_id: groupId }, _sum: { value: true }, _count: true });
+      const updated = await tx.group.update({ where: { id: groupId }, data: { rating: total._sum.value ?? 0, rating_count: total._count }, select: { rating: true, rating_count: true } });
+      return { score: updated.rating, voteCount: updated.rating_count, myVote: finalVote };
     });
-
-    let delta = 0;
-    let finalVote: number = value;
-
-    if (existing) {
-      if (existing.value === value) {
-        // Toggle off — remove vote
-        await prisma.groupRating.delete({ where: { group_id_user_id: { group_id: groupId, user_id: userId } } });
-        delta = -value;
-        finalVote = 0;
-      } else {
-        // Flip vote direction
-        await prisma.groupRating.update({
-          where: { group_id_user_id: { group_id: groupId, user_id: userId } },
-          data: { value, updated_at: new Date() },
-        });
-        delta = value * 2; // e.g. was -1, now +1 → net +2
-      }
-    } else {
-      await prisma.groupRating.create({ data: { group_id: groupId, user_id: userId, value } });
-      delta = value;
-    }
-
-    const newCountDelta = existing ? (existing.value === value ? -1 : 0) : 1;
-    const updated = await prisma.group.update({
-      where: { id: groupId },
-      data: {
-        rating: { increment: delta },
-        rating_count: { increment: newCountDelta },
-      },
-      select: { rating: true, rating_count: true },
-    });
-
-    return { score: updated.rating, voteCount: updated.rating_count, myVote: finalVote };
   },
 
   async getMyRating(groupId: string, userId: string) {
@@ -1304,6 +1310,9 @@ export const groupService = {
 
   // ── RSVP ──────────────────────────────────────────────────────────────────
   async rsvpEvent(eventId: string, userId: string, status: 'going' | 'maybe' | 'not_going') {
+    const event = await prisma.event.findUnique({ where: { id: eventId }, select: { group_id: true } });
+    if (!event) throw accessError('Event not found', 404);
+    await assertGroupReadable(event.group_id, userId);
     return prisma.$transaction(async (tx) => {
       // Блокируем событие: два параллельных «иду» раньше оба читали старый статус и оба прибавляли +1
       await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId}::uuid FOR UPDATE`;
@@ -1346,7 +1355,12 @@ export const groupService = {
     });
   },
 
-  async getEventAttendees(eventId: string, page = 1, limit = 50) {
+  async getEventAttendees(eventId: string, page = 1, limit = 50, viewerId?: string) {
+    const event = await prisma.event.findUnique({ where: { id: eventId }, select: { group_id: true } });
+    if (!event) throw accessError('Event not found', 404);
+    await assertGroupReadable(event.group_id, viewerId);
+    const bounds = pagination(page, limit, 50, 100);
+    page = bounds.page; limit = bounds.limit;
     const [attendees, total] = await Promise.all([
       prisma.eventAttendee.findMany({
         where: { event_id: eventId },
@@ -1367,7 +1381,10 @@ export const groupService = {
   },
 
   // ── Sub-events ────────────────────────────────────────────────────────────
-  async listSubEvents(eventId: string) {
+  async listSubEvents(eventId: string, viewerId?: string) {
+    const event = await prisma.event.findUnique({ where: { id: eventId }, select: { group_id: true } });
+    if (!event) throw accessError('Event not found', 404);
+    await assertGroupReadable(event.group_id, viewerId);
     return prisma.subEvent.findMany({
       where: { event_id: eventId },
       orderBy: { starts_at: 'asc' },
@@ -1389,7 +1406,7 @@ export const groupService = {
     });
   },
 
-  async updateSubEvent(subEventId: string, input: UpdateSubEventInput) {
+  async updateSubEvent(eventId: string, subEventId: string, input: UpdateSubEventInput) {
     const data: Prisma.SubEventUpdateInput = {};
     if (input.title !== undefined) data.title = input.title;
     if (input.type !== undefined) data.type = input.type;
@@ -1398,18 +1415,18 @@ export const groupService = {
     if (input.startsAt !== undefined) data.starts_at = new Date(input.startsAt);
     if (input.endsAt !== undefined) data.ends_at = new Date(input.endsAt);
     if (input.description !== undefined) data.description = input.description;
-    return prisma.subEvent.update({ where: { id: subEventId }, data });
+    return prisma.subEvent.update({ where: { id: subEventId, event_id: eventId }, data });
   },
 
-  async deleteSubEvent(subEventId: string) {
-    return prisma.subEvent.delete({ where: { id: subEventId } });
+  async deleteSubEvent(eventId: string, subEventId: string) {
+    return prisma.subEvent.delete({ where: { id: subEventId, event_id: eventId } });
   },
 
   // ── Group Messages ─────────────────────────────────────────────────────────
   /** Чат группы видят и пишут только её участники (is_public на чат не влияет). */
   async assertGroupMember(groupId: string, userId: string) {
     const member = await prisma.groupMember.findUnique({
-      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      where: { group_id_user_id: { group_id: groupId, user_id: userId }, group: { deleted_at: null } },
       select: { role: true },
     });
     if (!member) throw Object.assign(new Error('Чат доступен только участникам группы'), { statusCode: 403 });

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import BIcon from './BIcon.vue'
+import { isVideoUrl } from '@/lib/mediaType'
 
 const props = defineProps<{ src: string; disableAutoplay?: boolean; msgType?: string }>()
 const emit = defineEmits(['click-image'])
@@ -53,13 +54,14 @@ const type = computed(() => {
   // Silent videos (no audio track) arrive tagged msgType 'gif' from the backend —
   // render with the lightweight autoplay/pause gif UI, not the full video player.
   if (props.msgType === 'gif') return 'gif'
-  const u = props.src.toLowerCase().split('?')[0]
-  if (/\.(mp4|webm|mov|mkv|ogv)$/.test(u)) return 'video'
+  if (props.msgType === 'video' || props.msgType === 'audio') return props.msgType
+  const u = props.src.toLowerCase().split(/[?#]/)[0]
+  if (isVideoUrl(props.src)) return 'video'
   if (/\.(mp3|wav|ogg|m4a|flac|aac)$/.test(u)) return 'audio'
   if (/\.gif$/.test(u)) return 'gif'
   return 'image'
 })
-const isGifVideo = computed(() => /\.(mp4|webm|mov|mkv|ogv)$/i.test(props.src.split('?')[0]))
+const isGifVideo = computed(() => isVideoUrl(props.src))
 
 // ── Formatters ────────────────────────────────────────────────────────────
 function fmt(s: number) {

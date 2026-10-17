@@ -1669,17 +1669,17 @@
                 <div class="grid grid-cols-3 divide-x divide-brand-border/60">
                   <button @click="showFollowingModal = true"
                     class="flex flex-col items-center gap-1 py-4 px-2 hover:bg-brand-bg/60 transition-all group cursor-pointer">
-                    <span class="text-lg font-extrabold text-white group-hover:text-brand-accent transition-colors leading-none">{{ following.length }}</span>
+                    <span class="text-lg font-extrabold text-white group-hover:text-brand-accent transition-colors leading-none">{{ viewedProfile?._count?.following ?? following.length }}</span>
                     <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">{{ langStore.t.tabFollowing }}</span>
                   </button>
                   <button @click="showFollowersModal = true"
                     class="flex flex-col items-center gap-1 py-4 px-2 hover:bg-brand-bg/60 transition-all group cursor-pointer">
-                    <span class="text-lg font-extrabold text-white group-hover:text-brand-accent transition-colors leading-none">{{ followers.length }}</span>
+                    <span class="text-lg font-extrabold text-white group-hover:text-brand-accent transition-colors leading-none">{{ viewedProfile?._count?.followers ?? followers.length }}</span>
                     <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">{{ langStore.t.tabFollowers }}</span>
                   </button>
                   <div class="flex flex-col items-center gap-1 py-4 px-2">
                     <span class="text-lg font-extrabold text-white leading-none">{{ viewedProfile?.likes_count ?? 0 }}</span>
-                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">Лайки</span>
+                    <span class="text-[10px] text-white/45 font-medium text-center leading-tight mt-0.5">{{ langStore.t.adminLikesLabel }}</span>
                   </div>
                 </div>
               </div>
@@ -2128,7 +2128,7 @@
             <div class="flex items-center gap-2.5">
               <BIcon name="Users" class="w-5 h-5 text-brand-accent" />
               <h3 class="font-bold text-white text-base">{{ langStore.t.tabFollowers }}</h3>
-              <span class="text-xs font-bold bg-brand-accent/15 text-brand-accent px-2 py-0.5 rounded-full">{{ followers.length }}</span>
+              <span class="text-xs font-bold bg-brand-accent/15 text-brand-accent px-2 py-0.5 rounded-full">{{ viewedProfile?._count?.followers ?? followers.length }}</span>
             </div>
             <button @click="showFollowersModal = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
               <BIcon name="X" class="w-4 h-4" />
@@ -2159,7 +2159,7 @@
             <div class="flex items-center gap-2.5">
               <BIcon name="UserPlus" class="w-5 h-5 text-emerald-400" />
               <h3 class="font-bold text-white text-base">{{ langStore.t.tabFollowing }}</h3>
-              <span class="text-xs font-bold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full">{{ following.length }}</span>
+              <span class="text-xs font-bold bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full">{{ viewedProfile?._count?.following ?? following.length }}</span>
             </div>
             <button @click="showFollowingModal = false" class="w-8 h-8 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
               <BIcon name="X" class="w-4 h-4" />
@@ -3048,9 +3048,9 @@ const profileStats = computed(() => {
   const p = viewedProfile.value
   if (!p) return []
   return [
-    { key: 'followers', value: followers.value.length,   label: langStore.t.followersTab, tab: null },
-    { key: 'groups',    value: groupsCount.value,         label: langStore.t.groups, tab: null },
-    { key: 'likes',     value: p._count?.followers ?? 0, label: langStore.t.favourited, tab: null },
+    { key: 'following', value: p._count?.following ?? following.value.length, label: langStore.t.tabFollowing, tab: null },
+    { key: 'followers', value: p._count?.followers ?? followers.value.length, label: langStore.t.tabFollowers, tab: null },
+    { key: 'likes', value: p.likes_count ?? 0, label: langStore.t.adminLikesLabel, tab: null },
   ]
 })
 

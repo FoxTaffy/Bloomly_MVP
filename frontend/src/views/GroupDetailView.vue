@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { apiErrorMessage, errorMessage } from '@/lib/apiError'
+import { apiErrorMessage, apiErrorStatus, errorMessage } from '@/lib/apiError'
 import { safeHref } from '@/utils/safeHref'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 const langStore = useLangStore()
@@ -372,18 +372,18 @@ const isEventPast = computed(() => {
 
 // Review prompt
 const showReviewModal = ref(false)
-const reviewText = ref('')
 const reviewRating = ref(0)
-const reviewHover = ref(0)
 const reviewSubmitting = ref(false)
 const reviewDismissed = ref(false)
 
 async function submitReview() {
-  if (!group.value || !reviewText.value.trim() || reviewRating.value < 1 || reviewSubmitting.value) return
+  if (!group.value || !reviewRating.value || reviewSubmitting.value) return
   reviewSubmitting.value = true
   try {
-    // FIXME: reviewRating is 1..5 stars but the API only accepts 1 | -1 (backend throws otherwise)
-    await groupsStore.rateGroup(group.value.id, reviewRating.value as 1 | -1)
+    if (myVote.value !== reviewRating.value) {
+      const result = await groupsStore.rateGroup(group.value.id, reviewRating.value as 1 | -1)
+      myVote.value = result.myVote
+    }
     showReviewModal.value = false
     reviewDismissed.value = true
   } catch (e) { console.error('Review failed', e) }
@@ -392,8 +392,16 @@ async function submitReview() {
 
 // ── About tab (inside the About tabs card) ──────────────────────────────
 const groupPriceList = computed(() => {
-  const list = (group.value as any)?.commissionInfo?.price_list
-  return (Array.isArray(list) ? list : []).filter((p: any) => p?.name)
+  const info = group.value?.commissionInfo
+  const list = info?.price_list
+  const labels: Record<string, string> = {
+    headshot: langStore.t.groupSettingsPriceHeadshot,
+    halfbody: langStore.t.groupSettingsPriceHalfbody,
+    fullbody: langStore.t.groupSettingsPriceFullbody,
+    ref_sheet: langStore.t.groupSettingsPriceRefSheet,
+  }
+  const base = Object.entries(info?.base_prices ?? {}).map(([key, price]) => ({ name: labels[key] ?? key, price, description: '' }))
+  return [...base, ...(Array.isArray(list) ? list.filter(p => p?.name) : [])]
 })
 const aboutTab = ref<'about' | 'rules' | 'faq' | 'nearest' | 'orders' | 'schedule' | 'prices' | 'queue' | 'reviews' | 'digest' | 'categories' | 'team' | 'dealers-den' | 'sponsors' | 'contacts'>('about')
 
@@ -418,6 +426,9 @@ const aboutNavs = computed(() => {
     navs.push({ key: 'digest', label: langStore.t.groupDetailDigestNav, icon: 'Newspaper' })
     navs.push({ key: 'categories', label: langStore.t.groupDetailCategoriesNav, icon: 'FolderOpen' })
     navs.push({ key: 'team', label: langStore.t.groupDetailTeamNav, icon: 'Users' })
+  } else if (t === 'shop') {
+    navs.push({ key: 'about', label: langStore.t.groupDetailAboutGeneric, icon: 'Info' })
+    navs.push({ key: 'prices', label: langStore.t.groupDetailPricesNav, icon: 'Tag' })
   } else if (t === 'creative') {
     navs.push({ key: 'about', label: langStore.t.groupDetailAboutCreative, icon: 'Info' })
     if (group.value?.commissionInfo)
@@ -582,11 +593,19 @@ async function toggleGroupBookmark() {
   finally { isTogglingGrpBm.value = false }
 }
 
+const groupLoadError = ref('')
 async function load() {
+  groupLoadError.value = ''
   groupMediaLoaded.value = false
   groupMediaPostsList.value = []
   activeContentTab.value = 'posts'
-  await groupsStore.loadGroup(route.params.slugOrId as string)
+  try {
+    await groupsStore.loadGroup(route.params.slugOrId as string)
+  } catch (error) {
+    if (![403, 404].includes(apiErrorStatus(error) ?? 0)) groupLoadError.value = apiErrorMessage(error) || langStore.t.groupSettingsErrorGeneric
+    return
+  }
+  if (!group.value) return
   loadMyRating()
   loadGroupPosts()
   loadMemberPreview()
@@ -820,8 +839,9 @@ const vClickOutside = {
           <div class="w-16 h-16 rounded-2xl bg-brand-bg border border-brand-border flex items-center justify-center mx-auto mb-4">
             <BIcon name="AlertCircle" class="w-8 h-8 text-brand-error" />
           </div>
-          <p class="text-white font-bold text-lg mb-2">{{ langStore.t.groupDetailNotFoundTitle }}</p>
-          <p class="text-white/55 text-sm mb-6">{{ langStore.t.groupDetailNotFoundDesc }}</p>
+          <p class="text-white font-bold text-lg mb-2">{{ groupLoadError ? langStore.t.groupSettingsErrorGeneric : langStore.t.groupDetailNotFoundTitle }}</p>
+          <p class="text-white/55 text-sm mb-6">{{ groupLoadError || langStore.t.groupDetailNotFoundDesc }}</p>
+          <button v-if="groupLoadError" @click="load" class="mr-3 px-5 py-2.5 rounded-xl bg-brand-accent font-bold text-sm">{{ langStore.t.retryBtn }}</button>
           <button @click="router.push({ name: 'groups' })" class="inline-flex items-center gap-2 px-5 py-2.5 bg-brand-card border border-brand-border hover:border-brand-accent text-sm font-bold rounded-xl transition-all">
             <BIcon name="ArrowLeft" class="w-4 h-4" /> {{ langStore.t.groupDetailBackToGroupsList }}
           </button>
@@ -1140,7 +1160,7 @@ const vClickOutside = {
               </div>
 
               <!-- ── Баннер: событие завершилось → предложить отзыв ──── -->
-              <div v-if="group.type === 'event' && isEventPast && (isMember || isOwner) && !reviewDismissed"
+              <div v-if="group.type === 'event' && isEventPast && isMember && !isOwner && !reviewDismissed"
                 class="rounded-3xl overflow-hidden border border-brand-yellow/25 shadow-xl">
                 <div class="flex items-center gap-4 px-5 py-4" style="background: linear-gradient(135deg,rgba(255,192,31,0.12) 0%,rgba(255,133,50,0.08) 100%)">
                   <div class="w-10 h-10 rounded-2xl bg-brand-yellow/20 border border-brand-yellow/30 flex items-center justify-center flex-shrink-0">
@@ -1402,64 +1422,11 @@ const vClickOutside = {
                           <p v-if="item.description" class="text-xs text-white/40 mt-0.5">{{ item.description }}</p>
                         </div>
                         <div class="text-right flex-shrink-0">
-                          <p class="text-sm font-extrabold" :style="`color: ${group.accent_color || '#4C67CF'}`">{{ langStore.t.groupDetailFromPricePrefix }} {{ item.price }}₽</p>
-                          <p v-if="item.days" class="text-[10px] text-white/35">{{ item.days }}</p>
+                          <p class="text-sm font-extrabold" :style="`color: ${group.accent_color || '#4C67CF'}`">{{ langStore.t.groupDetailFromPricePrefix }} {{ item.price }} {{ group.commissionInfo?.currency || 'RUB' }}</p>
                         </div>
                       </div>
                     </template>
-                    <template v-else-if="group.type === 'creative'">
-                      <div v-for="item in [
-                        [langStore.t.groupDetailFursuitHeadName, langStore.t.groupDetailFursuitHeadDesc, '25 000', langStore.t.groupDetailDuration1to2mo],
-                        [langStore.t.groupDetailFursuitPartialName, langStore.t.groupDetailFursuitPartialDesc, '45 000', langStore.t.groupDetailDuration2to3mo],
-                        [langStore.t.groupDetailFursuitMiniFullName, langStore.t.groupDetailFursuitMiniFullDesc, '60 000', langStore.t.groupDetailDuration3to4mo],
-                        [langStore.t.groupDetailFursuitFullsuitName, langStore.t.groupDetailFursuitFullsuitDesc, '90 000', langStore.t.groupDetailDuration4to6mo],
-                      ]" :key="item[0]"
-                        class="flex items-center gap-4 px-4 py-3.5 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-purple/30 transition-all">
-                        <div class="flex-1 min-w-0">
-                          <p class="text-sm font-bold text-white">{{ item[0] }}</p>
-                          <p class="text-xs text-white/40 mt-0.5">{{ item[1] }}</p>
-                        </div>
-                        <div class="text-right flex-shrink-0">
-                          <p class="text-sm font-extrabold text-brand-purple">{{ langStore.t.groupDetailFromPricePrefix }} {{ item[2] }}₽</p>
-                          <p class="text-[10px] text-white/35">~{{ item[3] }}</p>
-                        </div>
-                      </div>
-                    </template>
-                    <template v-else-if="(group.type as string) === 'artist'">
-                      <div class="space-y-3">
-                        <div class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl px-4 py-3">
-                          <p class="text-[10px] text-white/30 uppercase tracking-wide mb-2 font-bold">{{ langStore.t.groupDetailBasicPricesHeader }}</p>
-                          <div class="grid grid-cols-2 gap-2">
-                            <div v-for="item in [[langStore.t.groupDetailStageSketch,'500₽'],[langStore.t.groupDetailArtistLine,'1 200₽'],[langStore.t.groupDetailArtistFlat,'2 000₽'],[langStore.t.groupDetailArtistFlatShaded,'3 000₽']]" :key="item[0]"
-                              class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5">
-                              <p class="text-xs text-white/45">{{ item[0] }}</p>
-                              <p class="text-sm font-extrabold text-white mt-0.5">{{ langStore.t.groupDetailFromPricePrefix }} {{ item[1] }}</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl px-4 py-3">
-                          <p class="text-[10px] text-white/30 uppercase tracking-wide mb-2 font-bold">{{ langStore.t.groupDetailArtistRender }}</p>
-                          <div class="grid grid-cols-2 gap-2">
-                            <div v-for="item in [[langStore.t.groupDetailArtistRender,'5 000₽'],[langStore.t.groupDetailArtistFullRender,'8 000₽'],[langStore.t.groupDetailArtistGifAnim,'12 000₽'],[langStore.t.groupDetailArtistAnimation, langStore.t.groupDetailAnimationFromPrice]]" :key="item[0]"
-                              class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5">
-                              <p class="text-xs text-white/45">{{ item[0] }}</p>
-                              <p class="text-sm font-extrabold text-white mt-0.5">{{ item[1].startsWith(langStore.t.groupDetailFromPricePrefix) ? item[1] : `${langStore.t.groupDetailFromPricePrefix} ${item[1]}` }}</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl px-4 py-3">
-                          <p class="text-[10px] text-white/30 uppercase tracking-wide mb-2 font-bold">{{ langStore.t.groupDetailSurchargesHeader }}</p>
-                          <div class="space-y-1">
-                            <div v-for="item in [[langStore.t.groupDetailSurchargeComplexDesign,'+30%'],[langStore.t.groupDetailSurchargeRushOrder,'+50%'],[langStore.t.groupDetailSurchargeExtraChar,'+70%'],[langStore.t.groupDetailSurchargeSceneBg,'+800₽']]" :key="item[0]"
-                              class="flex items-center justify-between px-2 py-1.5">
-                              <p class="text-xs text-white/55">{{ item[0] }}</p>
-                              <p class="text-xs font-bold text-brand-yellow">{{ item[1] }}</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <p class="text-[10px] text-white/25 text-center">* {{ langStore.t.groupDetailFinalPriceNote }}</p>
-                    </template>
+                    <p v-else class="text-center text-white/40 text-sm py-8">{{ langStore.t.groupPriceEmpty }}</p>
                   </div>
 
                   <!-- Artist: Очередь заказов -->
@@ -2514,29 +2481,17 @@ const vClickOutside = {
               <BIcon name="X" class="w-4 h-4" />
             </button>
           </div>
-          <!-- Stars -->
-          <div class="px-6 pt-5 pb-2">
+          <div class="px-6 py-5">
             <p class="text-xs font-bold uppercase tracking-widest text-white/40 mb-3">{{ langStore.t.groupDetailYourRatingLabel }}</p>
-            <div class="flex items-center gap-2">
-              <button v-for="i in 5" :key="i"
-                @mouseenter="reviewHover = i" @mouseleave="reviewHover = 0" @click="reviewRating = i"
-                class="transition-all hover:scale-125">
-                <BIcon name="Star" class="w-8 h-8 transition-colors"
-                  :class="i <= (reviewHover || reviewRating)
-                    ? 'text-brand-yellow fill-brand-yellow' : 'text-white/15'" />
+            <div class="flex items-center gap-3">
+              <button v-for="value in [1, -1]" :key="value" @click="reviewRating = value"
+                :aria-pressed="reviewRating === value"
+                class="flex-1 rounded-xl border px-4 py-3 flex items-center justify-center gap-2 transition-colors"
+                :class="reviewRating === value ? 'border-brand-accent bg-brand-accent/20 text-white' : 'border-brand-border text-white/60'">
+                <BIcon :name="value === 1 ? 'ThumbsUp' : 'ThumbsDown'" class="w-5 h-5" />
+                {{ value === 1 ? langStore.t.groupDetailRatingGood : langStore.t.groupDetailRatingBad }}
               </button>
-              <span v-if="reviewHover || reviewRating" class="ml-2 text-sm font-semibold text-white/55">
-                {{ ['', langStore.t.groupDetailRatingBad, langStore.t.groupDetailRatingBelowAverage, langStore.t.groupDetailRatingNormal, langStore.t.groupDetailRatingGood, langStore.t.groupDetailRatingExcellent][reviewHover || reviewRating] }}
-              </span>
             </div>
-          </div>
-          <!-- Text area -->
-          <div class="px-6 pt-3 pb-5">
-            <p class="text-xs font-bold uppercase tracking-widest text-white/40 mb-2">{{ langStore.t.groupDetailReviewLabel }}</p>
-            <textarea v-model="reviewText"
-              class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-white/30 resize-none outline-none focus:border-brand-accent/50 transition-colors"
-              rows="4"
-              :placeholder="langStore.t.groupDetailReviewPlaceholder" />
           </div>
           <!-- Actions -->
           <div class="px-6 py-4 border-t border-brand-border flex items-center justify-between gap-3">
@@ -2545,7 +2500,7 @@ const vClickOutside = {
               {{ langStore.t.onboardingSkipBtn }}
             </button>
             <button @click="submitReview"
-              :disabled="!reviewText.trim() || reviewRating < 1 || reviewSubmitting"
+              :disabled="!reviewRating || reviewSubmitting"
               class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all">
               <BIcon v-if="reviewSubmitting" name="Loader2" class="w-4 h-4 animate-spin" />
               <BIcon v-else name="Send" class="w-4 h-4" />

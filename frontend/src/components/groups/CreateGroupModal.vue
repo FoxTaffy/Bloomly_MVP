@@ -8,6 +8,9 @@ import api from '@/api'
 import { compressImageForUpload } from '@/lib/utils'
 import { GROUP_RUBRIC_OPTIONS, DEFAULT_RUBRIC } from '@/lib/groupRubrics'
 import { sanitizeTagInput } from '@/lib/tagRules'
+import { useAuthStore } from '@/stores/auth'
+import { canCreateGroup } from '@/lib/verificationPolicy'
+const auth = useAuthStore()
 
 // ── Emit ─────────────────────────────────────────────────────────────────────
 export interface CreateGroupPayload {
@@ -56,7 +59,7 @@ const totalSteps = 4
 const name = ref('')
 const slug = ref('')
 const description = ref('')
-const type = ref<GroupType>(props.initialType ?? 'community')
+const type = ref<GroupType>(props.initialType && canCreateGroup(auth.user, props.initialType) ? props.initialType : 'community')
 const isPublic = ref(true)
 
 const autoSlug = computed(() =>
@@ -212,7 +215,7 @@ const stepLabels = computed(() => [
 ])
 
 // ── Validation ──────────────────────────────────────────────────────────────
-const step1Valid = computed(() => name.value.trim().length > 0 && !slugError.value)
+const step1Valid = computed(() => name.value.trim().length > 0 && !slugError.value && canCreateGroup(auth.user, type.value))
 const step2Valid = computed(() => {
   if (type.value === 'event') {
     return eventTitle.value.trim().length > 0 && eventShortCode.value.trim().length > 0
@@ -238,6 +241,7 @@ watch(name, (n) => {
 
 // ── Submit ──────────────────────────────────────────────────────────────────
 function submit() {
+  if (!step1Valid.value || !step2Valid.value) return
   const payload: CreateGroupPayload = {
     name: name.value.trim(),
     slug: slug.value.trim() || autoSlug.value,
@@ -326,11 +330,14 @@ function submit() {
           <!-- Type selector — 7 types scrollable grid -->
           <div>
             <p class="text-xs font-bold text-white/50 uppercase tracking-wider mb-2">Тип группы</p>
+            <p class="text-xs text-white/45 mb-3">{{ langStore.t.verGroupLockedHint }}</p>
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[280px] overflow-y-auto pr-1 scrollbar-thin">
               <button
                 v-for="t in types"
                 :key="t.value"
-                class="p-3 rounded-2xl border text-center transition-all duration-200 relative overflow-hidden"
+                :disabled="!canCreateGroup(auth.user, t.value)"
+                :title="canCreateGroup(auth.user, t.value) ? t.desc : langStore.t.verGroupLockedHint"
+                class="p-3 rounded-2xl border text-center transition-all duration-200 relative overflow-hidden disabled:opacity-40 disabled:cursor-not-allowed"
                 :class="type === t.value
                   ? 'border-brand-accent text-white'
                   : 'bg-brand-bg/40 border-brand-border text-white/50 hover:border-brand-accent/30'"

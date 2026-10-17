@@ -14,6 +14,8 @@ import BIcon        from '@/components/BIcon.vue'
 import MediaUpload  from '@/components/MediaUpload.vue'
 import DenWeeklyTop from '@/components/DenWeeklyTop.vue'
 import DenCountdown from '@/components/DenCountdown.vue'
+import api from '@/api'
+import { canSellInDen } from '@/lib/verificationPolicy'
 
 const router = useRouter()
 const route  = useRoute()
@@ -32,11 +34,19 @@ function handleEnableNsfw() {
 }
 
 // ── Permission ─────────────────────────────────────────────────────────────────
-const canSell = computed(() => {
-  const u = auth.user
-  if (!u) return false
-  return u.is_verified === true && (u.verification_type === 'artist' || u.verification_type === 'master')
-})
+const sellerAccess = ref<{ canSell: boolean; ownsShop: boolean; frozen: boolean } | null>(null)
+const canSell = computed(() => auth.user?.is_verified === true && sellerAccess.value?.canSell === true)
+const hasSellerRole = computed(() => canSellInDen(auth.user, sellerAccess.value?.ownsShop === true))
+let accessGeneration = 0
+watch(() => [auth.user?.id, auth.user?.is_verified, auth.user?.verification_type], async () => {
+  const seq = ++accessGeneration
+  sellerAccess.value = null
+  if (!auth.user?.id) return
+  try {
+    const res = await api.get('/dealers-den/eligibility')
+    if (seq === accessGeneration && res.data.success) sellerAccess.value = res.data.data
+  } catch {}
+}, { immediate: true })
 
 
 // ── Tabs ───────────────────────────────────────────────────────────────────────
@@ -952,9 +962,9 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 <span :class="auth.user.is_verified ? 'text-white/60' : 'text-white/25'">{{ langStore.t.secVerification }}</span>
               </div>
               <div class="flex items-center gap-2">
-                <BIcon :name="(auth.user.verification_type === 'artist' || auth.user.verification_type === 'master') ? 'CheckCircle2' : 'Circle'" class="w-4 h-4 flex-shrink-0"
-                  :class="(auth.user.verification_type === 'artist' || auth.user.verification_type === 'master') ? 'text-brand-success' : 'text-brand-border'" />
-                <span :class="(auth.user.verification_type === 'artist' || auth.user.verification_type === 'master') ? 'text-white/60' : 'text-white/25'">{{ langStore.t.dealersDenArtistMasterLabel }}</span>
+                <BIcon :name="hasSellerRole ? 'CheckCircle2' : 'Circle'" class="w-4 h-4 flex-shrink-0"
+                  :class="hasSellerRole ? 'text-brand-success' : 'text-brand-border'" />
+                <span :class="hasSellerRole ? 'text-white/60' : 'text-white/25'">{{ langStore.t.dealersDenArtistMasterLabel }}</span>
               </div>
             </div>
             <button @click="router.push({ name: 'settings' })"

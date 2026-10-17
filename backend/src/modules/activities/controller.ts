@@ -52,7 +52,7 @@ export async function listGroupActivitiesHandler(
   reply: FastifyReply,
 ) {
   try {
-    const activities = await activityService.listForGroup(req.params.groupId);
+    const activities = await activityService.listForGroup(req.params.groupId, req.user.id);
     return ok(reply, { activities });
   } catch (e) {
     return fail(reply, errStatus(e) ?? 500, 'ACTIVITY_ERROR', errMessage(e));

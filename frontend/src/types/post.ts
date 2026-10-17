@@ -3,6 +3,7 @@
 export interface PostGroupContext { id: string; slug: string; name: string; avatar_url: string | null; accent_color?: string | null }
 
 export interface Post {
+  can_view_content?: boolean
   id: string
   content?: string
   media_urls: string[]

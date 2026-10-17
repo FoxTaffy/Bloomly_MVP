@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import prisma from '../config/prisma.js';
 import { getSetting } from '../lib/settings.js';
-import { isAdult } from '../lib/age.js';
+import { resolveAccountIdentity } from '../lib/accountAccess.js';
 import { isModerator } from '../lib/roles.js';
 
 /**
@@ -37,26 +37,7 @@ export function registerAuth(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         await request.jwtVerify();
-        // Always refresh role from DB so role changes take effect without re-login
-        const payload = request.user as { id: string; role: string };
-        const dbUser = await prisma.user.findUnique({
-          where: { id: payload.id },
-          select: { role: true, deleted_at: true, frozen_at: true, frozen_reason: true, birth_date: true },
-        });
-        if (!dbUser || dbUser.deleted_at) {
-          return reply.code(401).send({ success: false, data: null, error: { code: 'UNAUTHORIZED', message: 'User not found' } });
-        }
-        request.user.role = dbUser.role;
-        request.user.is_adult = isAdult(dbUser.birth_date);
-        // Frozen accounts are force-logged-out on their very next authenticated request
-        // (frontend's response interceptor catches ACCOUNT_FROZEN and clears the session).
-        if (dbUser.frozen_at) {
-          return reply.code(403).send({
-            success: false,
-            data: null,
-            error: { code: 'ACCOUNT_FROZEN', message: dbUser.frozen_reason || 'Аккаунт временно заморожен за подозрительную активность' },
-          });
-        }
+        Object.assign(request.user, await resolveAccountIdentity(request.user.id));
       } catch (err) {
         reply.send(err);
       }
@@ -68,17 +49,7 @@ export function registerAuth(fastify: FastifyInstance) {
     async (request: FastifyRequest, _reply: FastifyReply) => {
       try {
         await request.jwtVerify();
-        const payload = request.user as { id: string; role: string };
-        const dbUser = await prisma.user.findUnique({
-          where: { id: payload.id },
-          select: { role: true, deleted_at: true, birth_date: true },
-        });
-        if (!dbUser || dbUser.deleted_at) {
-          (request as { user?: unknown }).user = undefined; // guest: no user on the request
-        } else {
-          request.user.role = dbUser.role;
-          request.user.is_adult = isAdult(dbUser.birth_date);
-        }
+        Object.assign(request.user, await resolveAccountIdentity(request.user.id));
       } catch {
         (request as { user?: unknown }).user = undefined; // guest: no user on the request
       }

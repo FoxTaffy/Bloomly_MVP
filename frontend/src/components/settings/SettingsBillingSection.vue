@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BIcon from '@/components/BIcon.vue'
 import { onMounted, ref } from 'vue'
 import api from '@/api'
 import { useLangStore } from '@/stores/lang'

@@ -1,6 +1,8 @@
 import prisma from '../../config/prisma.js';
 import { isTrustedMediaUrl } from '../media/service.js';
 import { groupService } from '../groups/service.js';
+import { assertGroupReadable, readableProfilesWhere } from '../../lib/contentAccess.js';
+import { isBlockedBy } from '../../lib/blocks.js';
 
 export const ALBUM_PRIVACIES = ['public', 'friends', 'private'] as const;
 const MAX_ITEMS = 200;
@@ -19,8 +21,15 @@ async function canManage(album: { user_id: string | null; group_id: string | nul
 
 /** Может ли зритель видеть альбом (владелец/модерация видят всё). */
 async function canView(album: { user_id: string | null; group_id: string | null; privacy: string }, viewerId: string | null): Promise<boolean> {
-  if (album.privacy === 'public') return true;
   if (await canManage(album, viewerId)) return true;
+  if (album.group_id) {
+    try { await assertGroupReadable(album.group_id, viewerId); } catch { return false; }
+  } else if (album.user_id) {
+    if (await isBlockedBy(album.user_id, viewerId ?? undefined)) return false;
+    const owner = await prisma.user.findFirst({ where: { id: album.user_id, AND: [readableProfilesWhere(viewerId)] }, select: { id: true } });
+    if (!owner) return false;
+  }
+  if (album.privacy === 'public') return true;
   if (album.privacy !== 'friends' || !viewerId) return false;
   if (album.group_id) {
     const member = await prisma.groupMember.findUnique({

@@ -77,10 +77,10 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
 
   // ── Group CRUD ──────────────────────────────────────────────────────────
-  fastify.get<RouteGenericOf<typeof listGroupsHandler>>('/', listGroupsHandler);
+  fastify.get<RouteGenericOf<typeof listGroupsHandler>>('/', { onRequest: [fastify.tryAuthenticate] }, listGroupsHandler);
   fastify.get<RouteGenericOf<typeof getMyGroupsHandler>>('/me', auth, getMyGroupsHandler);
-  fastify.get<RouteGenericOf<typeof getTrendingHandler>>('/trending', getTrendingHandler);
-  fastify.get<RouteGenericOf<typeof discoverGroupsHandler>>('/discover', discoverGroupsHandler);
+  fastify.get<RouteGenericOf<typeof getTrendingHandler>>('/trending', { onRequest: [fastify.tryAuthenticate] }, getTrendingHandler);
+  fastify.get<RouteGenericOf<typeof discoverGroupsHandler>>('/discover', { onRequest: [fastify.tryAuthenticate] }, discoverGroupsHandler);
   fastify.get<RouteGenericOf<typeof getMySubscriptionsHandler>>('/me/subscriptions', auth, getMySubscriptionsHandler);
   fastify.get<RouteGenericOf<typeof getUserPublicGroupsHandler>>('/user/:userId', { onRequest: [fastify.tryAuthenticate] }, getUserPublicGroupsHandler);
   fastify.get<RouteGenericOf<typeof getCommonGroupsHandler>>('/common/:userId', auth, getCommonGroupsHandler);
@@ -89,7 +89,7 @@ export async function groupsRoutes(fastify: FastifyInstance) {
     const groups = await groupService.searchGroups(q, limit ? parseInt(limit, 10) : 8, page ? parseInt(page, 10) : 1);
     return reply.send({ success: true, data: { groups }, error: null });
   });
-  fastify.get<RouteGenericOf<typeof getGroupHandler>>('/:slugOrId', getGroupHandler);
+  fastify.get<RouteGenericOf<typeof getGroupHandler>>('/:slugOrId', { onRequest: [fastify.tryAuthenticate] }, getGroupHandler);
   fastify.post<RouteGenericOf<typeof createGroupHandler>>('/', auth, createGroupHandler);
   fastify.patch<RouteGenericOf<typeof updateGroupHandler>>('/:id', auth, updateGroupHandler);
   fastify.delete<RouteGenericOf<typeof deleteGroupHandler>>('/:id', auth, deleteGroupHandler);
@@ -116,16 +116,16 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.post<RouteGenericOf<typeof createGroupPostHandler>>('/:id/posts', auth, createGroupPostHandler);
 
   // ── Creative Kanban ────────────────────────────────────────────────────
-  fastify.get<RouteGenericOf<typeof getKanbanHandler>>('/:id/kanban', getKanbanHandler);
+  fastify.get<RouteGenericOf<typeof getKanbanHandler>>('/:id/kanban', { onRequest: [fastify.tryAuthenticate] }, getKanbanHandler);
 
   // ── Group rating ────────────────────────────────────────────────────────
   fastify.post<RouteGenericOf<typeof rateGroupHandler>>('/:id/rate', auth, rateGroupHandler);
   fastify.get<RouteGenericOf<typeof getMyRatingHandler>>('/:id/my-rating', auth, getMyRatingHandler);
 
   // ── Events ────────────────────────────────────────────────────────────────
-  fastify.get<RouteGenericOf<typeof listEventsHandler>>('/events', listEventsHandler);
-  fastify.get<RouteGenericOf<typeof getEventHandler>>('/events/:eventId', getEventHandler);
-  fastify.get<RouteGenericOf<typeof getGroupEventsHandler>>('/:id/events', getGroupEventsHandler);       // GET /groups/:id/events
+  fastify.get<RouteGenericOf<typeof listEventsHandler>>('/events', { onRequest: [fastify.tryAuthenticate] }, listEventsHandler);
+  fastify.get<RouteGenericOf<typeof getEventHandler>>('/events/:eventId', { onRequest: [fastify.tryAuthenticate] }, getEventHandler);
+  fastify.get<RouteGenericOf<typeof getGroupEventsHandler>>('/:id/events', { onRequest: [fastify.tryAuthenticate] }, getGroupEventsHandler);       // GET /groups/:id/events
   fastify.post<RouteGenericOf<typeof createEventHandler>>('/:id/events', auth, createEventHandler);
   fastify.patch<RouteGenericOf<typeof updateEventHandler>>('/events/:eventId', auth, updateEventHandler);
   fastify.patch<RouteGenericOf<typeof setEventDateHandler>>('/:id/event-date', auth, setEventDateHandler);
@@ -133,7 +133,7 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   // ── RSVP ─────────────────────────────────────────────────────────────────
   fastify.post<RouteGenericOf<typeof rsvpEventHandler>>('/events/:eventId/rsvp', auth, rsvpEventHandler);
   fastify.delete<RouteGenericOf<typeof cancelRsvpHandler>>('/events/:eventId/rsvp', auth, cancelRsvpHandler);
-  fastify.get<RouteGenericOf<typeof getEventAttendeesHandler>>('/events/:eventId/attendees', getEventAttendeesHandler);
+  fastify.get<RouteGenericOf<typeof getEventAttendeesHandler>>('/events/:eventId/attendees', { onRequest: [fastify.tryAuthenticate] }, getEventAttendeesHandler);
   fastify.get<RouteGenericOf<typeof getMyRsvpHandler>>('/events/:eventId/my-rsvp', auth, getMyRsvpHandler);
 
   // ── Ticket tiers ─────────────────────────────────────────────────────────
@@ -144,13 +144,13 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   // ── SOON Badge ────────────────────────────────────────────────────────────
   fastify.post<RouteGenericOf<typeof toggleSoonBadgeHandler>>('/events/:eventId/soon', auth, toggleSoonBadgeHandler);
   fastify.patch<RouteGenericOf<typeof toggleSoonBadgeVisibilityHandler>>('/events/:eventId/soon/visibility', auth, toggleSoonBadgeVisibilityHandler);
-  fastify.get<RouteGenericOf<typeof getUserSoonBadgesHandler>>('/soon/user/:userId', getUserSoonBadgesHandler);
+  fastify.get<RouteGenericOf<typeof getUserSoonBadgesHandler>>('/soon/user/:userId', { onRequest: [fastify.tryAuthenticate] }, getUserSoonBadgesHandler);
 
   // ── Commission (Creative groups) ──────────────────────────────────────────
   fastify.put<RouteGenericOf<typeof upsertCommissionHandler>>('/:id/commission', auth, upsertCommissionHandler);
 
   // ── Sub-events ────────────────────────────────────────────────────────────
-  fastify.get<RouteGenericOf<typeof listSubEventsHandler>>('/events/:eventId/subevents', listSubEventsHandler);
+  fastify.get<RouteGenericOf<typeof listSubEventsHandler>>('/events/:eventId/subevents', { onRequest: [fastify.tryAuthenticate] }, listSubEventsHandler);
   fastify.post<RouteGenericOf<typeof createSubEventHandler>>('/events/:eventId/subevents', auth, createSubEventHandler);
   fastify.patch<RouteGenericOf<typeof updateSubEventHandler>>('/events/:eventId/subevents/:subId', auth, updateSubEventHandler);
   fastify.delete<RouteGenericOf<typeof deleteSubEventHandler>>('/events/:eventId/subevents/:subId', auth, deleteSubEventHandler);
@@ -163,9 +163,9 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof getGroupInboxHandler>>('/:id/inbox', auth, getGroupInboxHandler);     // owner/admin/moderator only: shared inbox of all members' threads
 
   // ── Artist Queue (Todo) ────────────────────────────────────────────────
-  fastify.get<RouteGenericOf<typeof getGroupTodoColumnsHandler>>('/:id/todo-columns', getGroupTodoColumnsHandler);
+  fastify.get<RouteGenericOf<typeof getGroupTodoColumnsHandler>>('/:id/todo-columns', { onRequest: [fastify.tryAuthenticate] }, getGroupTodoColumnsHandler);
   fastify.put<RouteGenericOf<typeof updateGroupTodoColumnsHandler>>('/:id/todo-columns', auth, updateGroupTodoColumnsHandler);
-  fastify.get<RouteGenericOf<typeof getGroupTodoHandler>>('/:id/todo', getGroupTodoHandler);
+  fastify.get<RouteGenericOf<typeof getGroupTodoHandler>>('/:id/todo', { onRequest: [fastify.tryAuthenticate] }, getGroupTodoHandler);
   fastify.post<RouteGenericOf<typeof createGroupTodoHandler>>('/:id/todo', auth, createGroupTodoHandler);
   fastify.patch<RouteGenericOf<typeof updateGroupTodoHandler>>('/:id/todo/:itemId', auth, updateGroupTodoHandler);
   fastify.delete<RouteGenericOf<typeof deleteGroupTodoHandler>>('/:id/todo/:itemId', auth, deleteGroupTodoHandler);

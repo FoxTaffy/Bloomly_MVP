@@ -548,7 +548,7 @@ export const oauthRedirectHandler = async (
     const client = request.query.client === 'mobile' ? 'mobile' : undefined;
     const { url, state } = buildOAuthUrl(provider, undefined, client, request.query.redirect);
     setOAuthStateCookie(reply, state);
-    return reply.redirect(302, url);
+    return reply.redirect(url, 302);
   } catch (e) {
     return reply.code(500).send({ success: false, data: null, error: { code: 'OAUTH_ERROR', message: errMessage(e) } });
   }
@@ -565,12 +565,12 @@ export const oauthCallbackHandler = async (
   const { code, state, error } = request.query;
 
   if (error || !code || !state) {
-    return reply.redirect(302, `${FRONTEND_URL()}/auth?error=oauth_denied`);
+    return reply.redirect(`${FRONTEND_URL()}/auth?error=oauth_denied`, 302);
   }
   const stateCookie = request.cookies?.[OAUTH_STATE_COOKIE];
   reply.clearCookie(OAUTH_STATE_COOKIE, { path: '/api/auth' });
   if (!stateCookie || stateCookie !== state) {
-    return reply.redirect(302, `${FRONTEND_URL()}/auth?error=oauth_denied`);
+    return reply.redirect(`${FRONTEND_URL()}/auth?error=oauth_denied`, 302);
   }
 
   try {
@@ -579,9 +579,9 @@ export const oauthCallbackHandler = async (
     // ── РЕЖИМ ПРИВЯЗКИ (пользователь уже залогинен) ───────────────────────────
     if (linkUserId) {
       if ((await oauthAccounts.link(linkUserId, provider, oauthUser.id)) === 'taken') {
-        return reply.redirect(302, `${FRONTEND_URL()}/settings/profile?section=sec-security&error=already_taken`);
+        return reply.redirect(`${FRONTEND_URL()}/settings/profile?section=sec-security&error=already_taken`, 302);
       }
-      return reply.redirect(302, `${FRONTEND_URL()}/settings/profile?section=sec-security&linked=${provider}`);
+      return reply.redirect(`${FRONTEND_URL()}/settings/profile?section=sec-security&linked=${provider}`, 302);
     }
 
     // ── ОБЫЧНЫЙ ВХОД / РЕГИСТРАЦИЯ ────────────────────────────────────────────
@@ -592,10 +592,10 @@ export const oauthCallbackHandler = async (
     // раньше нет, хотя findOrCreateOAuthUser ищет пользователя без фильтра по
     // deleted_at/frozen_at.
     if (user.deleted_at) {
-      return reply.redirect(302, `${FRONTEND_URL()}/auth?error=account_banned`);
+      return reply.redirect(`${FRONTEND_URL()}/auth?error=account_banned`, 302);
     }
     if (user.frozen_at) {
-      return reply.redirect(302, `${FRONTEND_URL()}/auth?error=account_frozen`);
+      return reply.redirect(`${FRONTEND_URL()}/auth?error=account_frozen`, 302);
     }
 
     // Пользователь мог включить 2FA (TOTP/email), войдя через пароль, а затем
@@ -611,9 +611,9 @@ export const oauthCallbackHandler = async (
       const mfaToken = createMfaToken(user.id);
       if (client === 'mobile') {
         const target = mobileRedirect ?? 'bloomly://auth/callback';
-        return reply.redirect(302, `${target}?mfaToken=${mfaToken}&method=${user.two_factor_method}`);
+        return reply.redirect(`${target}?mfaToken=${mfaToken}&method=${user.two_factor_method}`, 302);
       }
-      return reply.redirect(302, `${FRONTEND_URL()}/auth/callback#mfaToken=${mfaToken}&method=${user.two_factor_method}`);
+      return reply.redirect(`${FRONTEND_URL()}/auth/callback#mfaToken=${mfaToken}&method=${user.two_factor_method}`, 302);
     }
 
     const token = issueAccessToken(request, user.id, user.role);
@@ -624,13 +624,13 @@ export const oauthCallbackHandler = async (
       // Мобильное приложение не имеет cookie jar — отдаём токены через deep link.
       // В Expo Go это не bloomly://, а прокси-адрес (exp://...), который прислал сам клиент.
       const target = mobileRedirect ?? 'bloomly://auth/callback';
-      return reply.redirect(302, `${target}?token=${token}&refreshToken=${refreshToken}`);
+      return reply.redirect(`${target}?token=${token}&refreshToken=${refreshToken}`, 302);
     }
     // Токен во фрагменте: фрагмент не уходит на сервер и не попадает в access-лог nginx
-    return reply.redirect(302, `${FRONTEND_URL()}/auth/callback#token=${token}`);
+    return reply.redirect(`${FRONTEND_URL()}/auth/callback#token=${token}`, 302);
   } catch (e) {
     logger.error({ err: e }, '[OAuth callback error]');
-    return reply.redirect(302, `${FRONTEND_URL()}/auth?error=oauth_failed`);
+    return reply.redirect(`${FRONTEND_URL()}/auth?error=oauth_failed`, 302);
   }
 };
 

@@ -49,6 +49,22 @@ describe('payments: ЮMoney', () => {
     delete process.env.YOOMONEY_NOTIFICATION_SECRET;
   });
 
+  it('два одновременных платежа за подписку суммируют оба периода', async () => {
+    const { user, auth } = await createUser({ created_at: new Date('2027-06-01T00:00:00Z') });
+    const body = { tier: 'lite', period: 'month', method: 'AC' };
+    const first = await api('POST', '/api/payments/subscription', { headers: auth, body });
+    const second = await api('POST', '/api/payments/subscription', { headers: auth, body });
+    const results = await Promise.all([
+      notify(notification(first.json.data.paymentId, 149)),
+      notify(notification(second.json.data.paymentId, 149)),
+    ]);
+    expect(results.map(result => result.statusCode)).toEqual([200, 200]);
+    const account = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    const days = (account.subscription_expires_at!.getTime() - Date.now()) / 86400000;
+    expect(days).toBeGreaterThan(55);
+    expect(days).toBeLessThan(63);
+  });
+
   it('без ключей оплата через шлюз выключена', async () => {
     delete process.env.YOOMONEY_RECEIVER;
     const { auth } = await createUser();

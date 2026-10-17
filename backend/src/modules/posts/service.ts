@@ -1,4 +1,6 @@
 import prisma from '../../config/prisma.js';
+import { readablePostsWhere, assertPostReadable } from '../../lib/contentAccess.js';
+import { pagination } from '../../lib/pagination.js';
 import { notificationService } from '../notifications/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy, getBlockerIds } from '../../lib/blocks.js';
@@ -349,9 +351,9 @@ const POST_INCLUDE = {
 function maskGroupAuthor(post: any): any {
   if (!post) return post;
   if (post.groupPosts && post.groupPosts.length > 0) {
-    return { ...post, author: null };
+    return { ...post, author: null, can_view_content: true };
   }
-  return post;
+  return { ...post, can_view_content: true };
 }
 
 /** Same idea as maskGroupAuthor, but for a comment posted "as" a group (Comment.group_id). */
@@ -542,8 +544,9 @@ export const postService = {
 
 
   async getPostById(postId: string, viewerId?: string) {
+    await assertPostReadable(postId, viewerId);
     const post = await prisma.post.findUnique({
-      where: { id: postId, deleted_at: null, ...NOT_DELETED_GROUP_FILTER },
+      where: { id: postId, AND: [await readablePostsWhere(viewerId)], deleted_at: null, ...NOT_DELETED_GROUP_FILTER },
       include: {
         ...POST_INCLUDE,
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
@@ -562,8 +565,7 @@ export const postService = {
 
   async getPosts(query: GetPostsQuery = {}, viewerId?: string) {
     const { search, category, tag, synonyms, sort = 'new', nsfwMode = 'hide', hasMedia = false, page, limit } = query;
-    const pageNum = page ? Math.max(1, parseInt(page, 10)) : 1;
-    const limitNum = limit ? Math.min(100, Math.max(1, parseInt(limit, 10))) : 20;
+    const { page: pageNum, limit: limitNum } = pagination(page, limit);
 
     const where: any = { deleted_at: null, is_archived: false, ...NOT_DELETED_GROUP_FILTER };
     Object.assign(where, nsfwWhere(nsfwMode));
@@ -589,7 +591,7 @@ export const postService = {
     }
 
     const posts = await prisma.post.findMany({
-      where,
+      where: { AND: [where, await readablePostsWhere(viewerId)] },
       orderBy: sort === 'hot' ? { rating: 'desc' } : { created_at: 'desc' },
       skip: (pageNum - 1) * limitNum,
       take: limitNum,
@@ -628,7 +630,7 @@ export const postService = {
     if (blockerIds.length > 0) where.author_id = { notIn: blockerIds };
 
     const posts = await prisma.post.findMany({
-      where,
+      where: { AND: [where, await readablePostsWhere(viewerId)] },
       orderBy: { created_at: 'desc' },
       skip: (pageNum - 1) * limitNum,
       take: limitNum,
@@ -663,7 +665,7 @@ export const postService = {
     const hiddenPostIds = [...viewedPostIds, ...notInterested.map((n) => n.post_id)];
     const excludeIds = hiddenPostIds.length > 0 ? { notIn: hiddenPostIds } : undefined;
     // Every feed query: live, unarchived, not hidden/seen, NSFW mode, muted words, blocks, live groups
-    const feedWhere = { deleted_at: null, is_archived: false, id: excludeIds, ...nsfwFilter, ...muteFilter, ...blockFilter, ...NOT_DELETED_GROUP_FILTER };
+    const feedWhere = { AND: [await readablePostsWhere(userId)], deleted_at: null, is_archived: false, id: excludeIds, ...nsfwFilter, ...muteFilter, ...blockFilter, ...NOT_DELETED_GROUP_FILTER };
 
     // Posts from authors/groups the user rang the "bell" for (Follow/GroupMember.notify_posts).
     // Computed on every page (not just page 1) because the algorithmic pool below excludes all
@@ -743,6 +745,7 @@ export const postService = {
   },
 
   async toggleVote(userId: string, postId: string, value: 1 | -1) {
+    await assertPostReadable(postId, userId);
     return prisma.$transaction(async (tx) => {
       // Блокируем пост: два параллельных голоса иначе оба откатили бы эффект на сродство тегов дважды
       await tx.$queryRaw`SELECT id FROM "Post" WHERE id = ${postId}::uuid FOR UPDATE`;
@@ -919,6 +922,7 @@ export const postService = {
   },
 
   async toggleRepaw(userId: string, postId: string) {
+    await assertPostReadable(postId, userId);
     return prisma.$transaction(async (tx) => {
       const existing = await tx.repaw.findUnique({
         where: { user_id_post_id: { user_id: userId, post_id: postId } },
@@ -972,6 +976,7 @@ export const postService = {
   },
 
   async toggleFavourite(userId: string, postId: string) {
+    await assertPostReadable(postId, userId);
     const existing = await prisma.favourite.findUnique({
       where: { user_id_post_id: { user_id: userId, post_id: postId } },
     });
@@ -988,7 +993,7 @@ export const postService = {
   async getUserPosts(userId: string, take = 50, viewerId?: string) {
     await assertProfileVisible(userId, viewerId);
     const posts = await prisma.post.findMany({
-      where: { author_id: userId, deleted_at: null, is_archived: false, groupPosts: { none: {} } },
+      where: { author_id: userId, AND: [await readablePostsWhere(viewerId)], deleted_at: null, is_archived: false, groupPosts: { none: {} } },
       orderBy: { created_at: 'desc' },
       take,
       include: {
@@ -1005,7 +1010,7 @@ export const postService = {
   async getUserMediaPosts(userId: string, take = 50, viewerId?: string) {
     await assertProfileVisible(userId, viewerId);
     const posts = await prisma.post.findMany({
-      where: { author_id: userId, deleted_at: null, is_archived: false, media_urls: { isEmpty: false }, groupPosts: { none: {} } },
+      where: { author_id: userId, AND: [await readablePostsWhere(viewerId)], deleted_at: null, is_archived: false, media_urls: { isEmpty: false }, groupPosts: { none: {} } },
       orderBy: { created_at: 'desc' },
       take,
       include: {
@@ -1022,7 +1027,7 @@ export const postService = {
   async getUserRepawedPosts(userId: string, take = 50, viewerId?: string) {
     await assertProfileVisible(userId, viewerId);
     const repaws = await prisma.repaw.findMany({
-      where: { user_id: userId, post: { deleted_at: null, is_archived: false, groupPosts: { none: {} } } },
+      where: { user_id: userId, post: { AND: [await readablePostsWhere(viewerId)], deleted_at: null, is_archived: false, groupPosts: { none: {} } } },
       orderBy: { created_at: 'desc' },
       take,
       include: {
@@ -1043,7 +1048,7 @@ export const postService = {
   async getUserFavouritePosts(userId: string, take = 50, viewerId?: string) {
     await assertProfileVisible(userId, viewerId);
     const favs = await prisma.favourite.findMany({
-      where: { user_id: userId, post: { deleted_at: null, is_archived: false, groupPosts: { none: {} } } },
+      where: { user_id: userId, post: { AND: [await readablePostsWhere(viewerId)], deleted_at: null, is_archived: false, groupPosts: { none: {} } } },
       orderBy: { created_at: 'desc' },
       take,
       include: {
@@ -1067,7 +1072,7 @@ export const postService = {
   ) {
     const { skip = 0, take = 20, sort = 'newest', hasMedia, labelId } = opts;
 
-    const postFilter: any = { deleted_at: null };
+    const postFilter: any = { deleted_at: null, AND: [await readablePostsWhere(userId)] };
     if (hasMedia) postFilter.media_urls = { isEmpty: false };
 
     const where: any = { user_id: userId, post: postFilter };
@@ -1116,6 +1121,7 @@ export const postService = {
   },
 
   async createComment(userId: string, postId: string, content: string, parentId?: string, type?: string, file_url?: string, groupId?: string) {
+    await assertPostReadable(postId, userId);
     if (!content?.trim() && !file_url) {
       throw Object.assign(new Error('Content is required'), { statusCode: 400 });
     }
@@ -1142,6 +1148,10 @@ export const postService = {
       throw Object.assign(new Error('COMMENTS_DISABLED'), { statusCode: 403 });
     }
 
+    if (parentId) {
+      const parent = await prisma.comment.findFirst({ where: { id: parentId, post_id: postId, deleted_at: null }, select: { id: true } });
+      if (!parent) throw Object.assign(new Error('Reply must reference a live comment on this post'), { statusCode: 400 });
+    }
     const comment = await prisma.comment.create({
       data: {
         post_id: postId,
@@ -1196,6 +1206,7 @@ export const postService = {
   },
 
   async getComments(postId: string, viewerId?: string) {
+    await assertPostReadable(postId, viewerId);
     let muteFilter = {};
     let filterSpam = false;
     if (viewerId) {
@@ -1237,6 +1248,9 @@ export const postService = {
   },
 
   async voteComment(userId: string, commentId: string, value: 1 | -1) {
+    const comment = await prisma.comment.findFirst({ where: { id: commentId, deleted_at: null }, select: { post_id: true } });
+    if (!comment) throw Object.assign(new Error('Comment not found'), { statusCode: 404 });
+    await assertPostReadable(comment.post_id, userId);
     return prisma.$transaction(async (tx) => {
       const existing = await tx.commentVote.findUnique({
         where: { user_id_comment_id: { user_id: userId, comment_id: commentId } },

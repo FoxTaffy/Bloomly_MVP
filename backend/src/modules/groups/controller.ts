@@ -8,6 +8,7 @@ import { isMemberRole, isOrderStatus } from './types.js';
 import { errMessage, errStatus } from '../../lib/httpErrors.js';
 import type { JwtUser, GetGroupsQuery, CreateGroupInput, UpdateGroupInput, CreateEventInput, UpdateEventInput, CreateTicketTierInput, UpdateCommissionInput, RateGroupInput, CreateGroupPostInput, RsvpEventInput, SubEventInput, UpdateSubEventInput, CreateOrderInput } from './types.js';
 import { logError } from '../../lib/logger.js';
+import { assertGroupReadable } from '../../lib/contentAccess.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function ok(reply: FastifyReply, data: unknown, code = 200) {
@@ -20,6 +21,7 @@ function fail(reply: FastifyReply, code: number, errCode: string, message: strin
 
 async function requireGroupAdmin(request: FastifyRequest, reply: FastifyReply, groupId: string) {
   const { id: userId } = request.user as JwtUser;
+  await assertGroupReadable(groupId, userId);
   const isAdmin = await groupService.isOwnerOrAdmin(groupId, userId);
   if (!isAdmin) { fail(reply, 403, 'FORBIDDEN', 'You are not an admin of this group'); return false; }
   return true;
@@ -32,10 +34,10 @@ export const listGroupsHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const data = await groupService.list(request.query);
+    const data = await groupService.list(request.query, request.user?.id);
     return ok(reply, data);
   } catch (e) {
-    return fail(reply, 500, 'GROUPS_LIST_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GROUPS_LIST_ERROR', errMessage(e));
   }
 };
 
@@ -44,11 +46,11 @@ export const getGroupHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const group = await groupService.getBySlugOrId(request.params.slugOrId);
+    const group = await groupService.getBySlugOrId(request.params.slugOrId, request.user?.id);
     if (!group) return fail(reply, 404, 'NOT_FOUND', 'Group not found');
     return ok(reply, { group });
   } catch (e) {
-    return fail(reply, 500, 'GROUP_FETCH_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GROUP_FETCH_ERROR', errMessage(e));
   }
 };
 
@@ -61,7 +63,7 @@ export const createGroupHandler = async (
     const group = await groupService.create(ownerId, request.body);
     return ok(reply, { group }, 201);
   } catch (e) {
-    return fail(reply, 400, 'CREATE_GROUP_ERROR', errMessage(e));
+    return fail(reply, e instanceof Error && 'statusCode' in e && e.statusCode === 403 ? 403 : 400, 'CREATE_GROUP_ERROR', errMessage(e));
   }
 };
 
@@ -103,7 +105,7 @@ export const updateGroupHandler = async (
     if (e instanceof Error && errMessage(e) === 'CATEGORY_CHANGE_COOLDOWN') {
       return fail(reply, 429, 'CATEGORY_CHANGE_COOLDOWN', 'Категорию можно менять не чаще одного раза в месяц');
     }
-    return fail(reply, 400, 'UPDATE_GROUP_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'UPDATE_GROUP_ERROR', errMessage(e));
   }
 };
 
@@ -126,7 +128,7 @@ export const deleteGroupHandler = async (
     if (errMessage(e) === 'Group not found') {
       return fail(reply, 404, 'GROUP_NOT_FOUND', 'Group not found');
     }
-    return fail(reply, 500, 'DELETE_GROUP_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'DELETE_GROUP_ERROR', errMessage(e));
   }
 };
 
@@ -144,7 +146,7 @@ export const joinGroupHandler = async (
     if (e instanceof Error && errMessage(e) === 'EVENT_EXPIRED') {
       return fail(reply, 409, 'EVENT_EXPIRED', 'Мероприятие завершилось. Пока доступна только подписка на уведомления — участие и SOON откроются, когда организатор назначит новую дату.');
     }
-    return fail(reply, 400, 'JOIN_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'JOIN_ERROR', errMessage(e));
   }
 };
 
@@ -157,7 +159,7 @@ export const subscribeGroupHandler = async (
     const result = await groupService.subscribe(request.params.id, userId);
     return ok(reply, result);
   } catch (e) {
-    return fail(reply, 400, 'SUBSCRIBE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'SUBSCRIBE_ERROR', errMessage(e));
   }
 };
 
@@ -170,7 +172,7 @@ export const unsubscribeGroupHandler = async (
     const result = await groupService.unsubscribe(request.params.id, userId);
     return ok(reply, result);
   } catch (e) {
-    return fail(reply, 400, 'UNSUBSCRIBE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'UNSUBSCRIBE_ERROR', errMessage(e));
   }
 };
 
@@ -183,7 +185,7 @@ export const getMySubscriptionsHandler = async (
     const groupIds = await groupService.getMySubscriptions(userId);
     return ok(reply, { groupIds });
   } catch (e) {
-    return fail(reply, 500, 'MY_SUBSCRIPTIONS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'MY_SUBSCRIPTIONS_ERROR', errMessage(e));
   }
 };
 
@@ -200,7 +202,7 @@ export const setEventDateHandler = async (
     const group = await groupService.setEventDate(request.params.id, eventDate);
     return ok(reply, { group });
   } catch (e) {
-    return fail(reply, 400, 'SET_EVENT_DATE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'SET_EVENT_DATE_ERROR', errMessage(e));
   }
 };
 
@@ -213,7 +215,7 @@ export const leaveGroupHandler = async (
     await groupService.leave(request.params.id, userId);
     return ok(reply, { left: true });
   } catch (e) {
-    return fail(reply, 400, 'LEAVE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'LEAVE_ERROR', errMessage(e));
   }
 };
 
@@ -222,13 +224,14 @@ export const getMembersHandler = async (
   reply: FastifyReply,
 ) => {
   try {
+    await assertGroupReadable(request.params.id, request.user?.id);
     const page = Math.max(1, parseInt(request.query.page ?? '1', 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(request.query.limit ?? '30', 10) || 30));
     const viewerId = (request.user as JwtUser | undefined)?.id ?? null;
     const members = await groupService.getMembers(request.params.id, page, limit, viewerId);
     return ok(reply, { members });
   } catch (e) {
-    return fail(reply, 500, 'MEMBERS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'MEMBERS_ERROR', errMessage(e));
   }
 };
 
@@ -273,7 +276,7 @@ export const getCustomRolesHandler = async (
     const roles = await groupService.getCustomRoles(request.params.id);
     return ok(reply, { roles });
   } catch (e) {
-    return fail(reply, 500, 'GET_ROLES_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GET_ROLES_ERROR', errMessage(e));
   }
 };
 
@@ -286,7 +289,7 @@ export const createCustomRoleHandler = async (
     const role = await groupService.createCustomRole(request.params.id, request.body);
     return ok(reply, { role }, 201);
   } catch (e) {
-    return fail(reply, 400, 'CREATE_ROLE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'CREATE_ROLE_ERROR', errMessage(e));
   }
 };
 
@@ -299,7 +302,7 @@ export const updateCustomRoleHandler = async (
     const role = await groupService.updateCustomRole(request.params.id, request.params.roleId, request.body);
     return ok(reply, { role });
   } catch (e) {
-    return fail(reply, 400, 'UPDATE_ROLE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'UPDATE_ROLE_ERROR', errMessage(e));
   }
 };
 
@@ -312,7 +315,7 @@ export const deleteCustomRoleHandler = async (
     await groupService.deleteCustomRole(request.params.id, request.params.roleId);
     return ok(reply, { deleted: true });
   } catch (e) {
-    return fail(reply, 400, 'DELETE_ROLE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'DELETE_ROLE_ERROR', errMessage(e));
   }
 };
 
@@ -327,7 +330,7 @@ export const createEventHandler = async (
     const event = await groupService.createEvent({ ...request.body, groupId: request.params.id });
     return ok(reply, { event }, 201);
   } catch (e) {
-    return fail(reply, 400, 'CREATE_EVENT_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'CREATE_EVENT_ERROR', errMessage(e));
   }
 };
 
@@ -336,13 +339,13 @@ export const updateEventHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const event = await groupService.getEvent(request.params.eventId);
+    const event = await groupService.getEvent(request.params.eventId, request.user?.id);
     if (!event) return fail(reply, 404, 'NOT_FOUND', 'Event not found');
     if (!(await requireGroupAdmin(request, reply, event.group_id))) return;
     const updated = await groupService.updateEvent(request.params.eventId, request.body);
     return ok(reply, { event: updated });
   } catch (e) {
-    return fail(reply, 400, 'UPDATE_EVENT_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'UPDATE_EVENT_ERROR', errMessage(e));
   }
 };
 
@@ -351,11 +354,11 @@ export const getEventHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const event = await groupService.getEvent(request.params.eventId);
+    const event = await groupService.getEvent(request.params.eventId, request.user?.id);
     if (!event) return fail(reply, 404, 'NOT_FOUND', 'Event not found');
     return ok(reply, { event });
   } catch (e) {
-    return fail(reply, 500, 'EVENT_FETCH_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'EVENT_FETCH_ERROR', errMessage(e));
   }
 };
 
@@ -376,7 +379,7 @@ export const listEventsHandler = async (
     });
     return ok(reply, data);
   } catch (e) {
-    return fail(reply, 500, 'EVENTS_LIST_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'EVENTS_LIST_ERROR', errMessage(e));
   }
 };
 
@@ -387,13 +390,13 @@ export const createTicketTierHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const event = await groupService.getEvent(request.params.eventId);
+    const event = await groupService.getEvent(request.params.eventId, request.user?.id);
     if (!event) return fail(reply, 404, 'NOT_FOUND', 'Event not found');
     if (!(await requireGroupAdmin(request, reply, event.group_id))) return;
     const tier = await groupService.createTicketTier({ ...request.body, eventId: request.params.eventId });
     return ok(reply, { tier }, 201);
   } catch (e) {
-    return fail(reply, 400, 'CREATE_TICKET_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'CREATE_TICKET_ERROR', errMessage(e));
   }
 };
 
@@ -408,7 +411,7 @@ export const updateTicketTierHandler = async (
     const updated = await groupService.updateTicketTier(request.params.tierId, request.body);
     return ok(reply, { tier: updated });
   } catch (e) {
-    return fail(reply, 400, 'UPDATE_TICKET_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'UPDATE_TICKET_ERROR', errMessage(e));
   }
 };
 
@@ -423,7 +426,7 @@ export const deleteTicketTierHandler = async (
     await groupService.deleteTicketTier(request.params.tierId);
     return ok(reply, { deleted: true });
   } catch (e) {
-    return fail(reply, 400, 'DELETE_TICKET_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'DELETE_TICKET_ERROR', errMessage(e));
   }
 };
 
@@ -441,7 +444,7 @@ export const toggleSoonBadgeHandler = async (
     if (e instanceof Error && errMessage(e) === 'EVENT_EXPIRED') {
       return fail(reply, 409, 'EVENT_EXPIRED', 'Мероприятие завершилось. SOON откроется, когда организатор назначит новую дату.');
     }
-    return fail(reply, 400, 'SOON_BADGE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'SOON_BADGE_ERROR', errMessage(e));
   }
 };
 
@@ -454,7 +457,7 @@ export const toggleSoonBadgeVisibilityHandler = async (
     const badge = await groupService.toggleSoonBadgeVisibility(userId, request.params.eventId);
     return ok(reply, { badge });
   } catch (e) {
-    return fail(reply, 400, 'SOON_TOGGLE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'SOON_TOGGLE_ERROR', errMessage(e));
   }
 };
 
@@ -463,10 +466,10 @@ export const getUserSoonBadgesHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const badges = await groupService.getUserSoonBadges(request.params.userId);
+    const badges = await groupService.getUserSoonBadges(request.params.userId, request.user?.id);
     return ok(reply, { badges });
   } catch (e) {
-    return fail(reply, 500, 'SOON_BADGES_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'SOON_BADGES_ERROR', errMessage(e));
   }
 };
 
@@ -481,7 +484,7 @@ export const upsertCommissionHandler = async (
     const commission = await groupService.upsertCommission(request.params.id, request.body);
     return ok(reply, { commission });
   } catch (e) {
-    return fail(reply, 400, 'COMMISSION_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'COMMISSION_ERROR', errMessage(e));
   }
 };
 
@@ -504,7 +507,7 @@ export const getGroupPostsHandler = async (
     const posts = await groupService.getGroupPosts(request.params.id, page, limit, hasMedia, viewerId, archived);
     return ok(reply, { posts });
   } catch (e) {
-    return fail(reply, 500, 'GROUP_POSTS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GROUP_POSTS_ERROR', errMessage(e));
   }
 };
 
@@ -519,7 +522,7 @@ export const getMyGroupsHandler = async (
     const memberships = await groupService.getUserGroups(userId);
     return ok(reply, { memberships });
   } catch (e) {
-    return fail(reply, 500, 'MY_GROUPS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'MY_GROUPS_ERROR', errMessage(e));
   }
 };
 
@@ -532,7 +535,7 @@ export const getUserPublicGroupsHandler = async (
     const result = await groupService.getUserGroupsForViewer(request.params.userId, requesterId);
     return ok(reply, result);
   } catch (e) {
-    return fail(reply, 500, 'USER_GROUPS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'USER_GROUPS_ERROR', errMessage(e));
   }
 };
 
@@ -545,7 +548,7 @@ export const togglePinGroupHandler = async (
     const result = await groupService.togglePinGroup(userId, request.params.id);
     return ok(reply, result);
   } catch (e) {
-    return fail(reply, 500, 'PIN_GROUP_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'PIN_GROUP_ERROR', errMessage(e));
   }
 };
 
@@ -558,7 +561,7 @@ export const getCommonGroupsHandler = async (
     const groups = await groupService.getCommonGroups(request.params.userId, currentUserId);
     return ok(reply, { groups });
   } catch (e) {
-    return fail(reply, 500, 'COMMON_GROUPS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'COMMON_GROUPS_ERROR', errMessage(e));
   }
 };
 
@@ -573,7 +576,7 @@ export const rateGroupHandler = async (
     const result = await groupService.rateGroup(request.params.id, userId, request.body.value);
     return ok(reply, result);
   } catch (e) {
-    return fail(reply, 400, 'RATE_GROUP_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'RATE_GROUP_ERROR', errMessage(e));
   }
 };
 
@@ -586,7 +589,7 @@ export const getMyRatingHandler = async (
     const myRating = await groupService.getMyRating(request.params.id, userId);
     return ok(reply, { myRating });
   } catch (e) {
-    return fail(reply, 500, 'GET_RATING_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GET_RATING_ERROR', errMessage(e));
   }
 };
 
@@ -605,7 +608,7 @@ export const createGroupPostHandler = async (
     }
     return ok(reply, { post }, 201);
   } catch (e) {
-    return fail(reply, 400, 'CREATE_GROUP_POST_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'CREATE_GROUP_POST_ERROR', errMessage(e));
   }
 };
 // ── Creative Kanban ───────────────────────────────────────────────────────────
@@ -615,10 +618,10 @@ export const getKanbanHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const columns = await groupService.getKanban(request.params.id);
+    const columns = await groupService.getKanban(request.params.id, request.user?.id);
     return ok(reply, { columns });
   } catch (e) {
-    return fail(reply, 500, 'KANBAN_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'KANBAN_ERROR', errMessage(e));
   }
 };
 
@@ -635,7 +638,7 @@ export const rsvpEventHandler = async (
     const attendee = await groupService.rsvpEvent(request.params.eventId, userId, status);
     return ok(reply, { attendee });
   } catch (e) {
-    return fail(reply, 400, 'RSVP_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'RSVP_ERROR', errMessage(e));
   }
 };
 
@@ -648,7 +651,7 @@ export const cancelRsvpHandler = async (
     await groupService.cancelRsvp(request.params.eventId, userId);
     return ok(reply, { cancelled: true });
   } catch (e) {
-    return fail(reply, 400, 'CANCEL_RSVP_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'CANCEL_RSVP_ERROR', errMessage(e));
   }
 };
 
@@ -659,10 +662,10 @@ export const getEventAttendeesHandler = async (
   try {
     const page = Number(request.query.page) || 1;
     const limit = Math.min(Number(request.query.limit) || 50, 100);
-    const result = await groupService.getEventAttendees(request.params.eventId, page, limit);
+    const result = await groupService.getEventAttendees(request.params.eventId, page, limit, request.user?.id);
     return ok(reply, result);
   } catch (e) {
-    return fail(reply, 500, 'GET_ATTENDEES_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GET_ATTENDEES_ERROR', errMessage(e));
   }
 };
 
@@ -675,7 +678,7 @@ export const getMyRsvpHandler = async (
     const rsvp = await groupService.getMyRsvp(request.params.eventId, userId);
     return ok(reply, { rsvp });
   } catch (e) {
-    return fail(reply, 500, 'GET_MY_RSVP_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GET_MY_RSVP_ERROR', errMessage(e));
   }
 };
 
@@ -692,7 +695,7 @@ export const discoverGroupsHandler = async (
     const result = await groupService.discoverGroups(userId, page, limit);
     return ok(reply, result);
   } catch (e) {
-    return fail(reply, 500, 'DISCOVER_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'DISCOVER_ERROR', errMessage(e));
   }
 };
 
@@ -703,12 +706,13 @@ export const getGroupEventsHandler = async (
   reply: FastifyReply,
 ) => {
   try {
+    await assertGroupReadable(request.params.id, request.user?.id);
     const page = Number(request.query.page) || 1;
     const limit = Math.min(Number(request.query.limit) || 20, 50);
-    const result = await groupService.listEvents({ groupId: request.params.id, status: request.query.status, page: String(page), limit: String(limit) });
+    const result = await groupService.listEvents({ groupId: request.params.id, status: request.query.status, page: String(page), limit: String(limit) }, request.user?.id);
     return ok(reply, result);
   } catch (e) {
-    return fail(reply, 500, 'GROUP_EVENTS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GROUP_EVENTS_ERROR', errMessage(e));
   }
 };
 
@@ -719,10 +723,10 @@ export const listSubEventsHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const list = await groupService.listSubEvents(request.params.eventId);
+    const list = await groupService.listSubEvents(request.params.eventId, request.user?.id);
     return ok(reply, { subEvents: list });
   } catch (e) {
-    return fail(reply, 500, 'SUBEVENT_LIST_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'SUBEVENT_LIST_ERROR', errMessage(e));
   }
 };
 
@@ -731,13 +735,13 @@ export const createSubEventHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const event = await groupService.getEvent(request.params.eventId);
+    const event = await groupService.getEvent(request.params.eventId, request.user?.id);
     if (!event) return fail(reply, 404, 'NOT_FOUND', 'Event not found');
     if (!(await requireGroupAdmin(request, reply, event.group_id))) return;
     const sub = await groupService.createSubEvent(request.params.eventId, request.body);
     return ok(reply, { subEvent: sub }, 201);
   } catch (e) {
-    return fail(reply, 400, 'SUBEVENT_CREATE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'SUBEVENT_CREATE_ERROR', errMessage(e));
   }
 };
 
@@ -746,13 +750,14 @@ export const updateSubEventHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const event = await groupService.getEvent(request.params.eventId);
+    const event = await groupService.getEvent(request.params.eventId, request.user?.id);
     if (!event) return fail(reply, 404, 'NOT_FOUND', 'Event not found');
     if (!(await requireGroupAdmin(request, reply, event.group_id))) return;
-    const sub = await groupService.updateSubEvent(request.params.subId, request.body);
+    const sub = await groupService.updateSubEvent(request.params.eventId, request.params.subId, request.body);
     return ok(reply, { subEvent: sub });
   } catch (e) {
-    return fail(reply, 400, 'SUBEVENT_UPDATE_ERROR', errMessage(e));
+    if (e && typeof e === 'object' && 'code' in e && e.code === 'P2025') return fail(reply, 404, 'NOT_FOUND', 'Sub-event not found');
+    return fail(reply, errStatus(e) ?? 400, 'SUBEVENT_UPDATE_ERROR', errMessage(e));
   }
 };
 
@@ -761,13 +766,14 @@ export const deleteSubEventHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const event = await groupService.getEvent(request.params.eventId);
+    const event = await groupService.getEvent(request.params.eventId, request.user?.id);
     if (!event) return fail(reply, 404, 'NOT_FOUND', 'Event not found');
     if (!(await requireGroupAdmin(request, reply, event.group_id))) return;
-    await groupService.deleteSubEvent(request.params.subId);
+    await groupService.deleteSubEvent(request.params.eventId, request.params.subId);
     return ok(reply, { deleted: true });
   } catch (e) {
-    return fail(reply, 400, 'SUBEVENT_DELETE_ERROR', errMessage(e));
+    if (e && typeof e === 'object' && 'code' in e && e.code === 'P2025') return fail(reply, 404, 'NOT_FOUND', 'Sub-event not found');
+    return fail(reply, errStatus(e) ?? 400, 'SUBEVENT_DELETE_ERROR', errMessage(e));
   }
 };
 
@@ -841,10 +847,11 @@ export const getGroupTodoColumnsHandler = async (
   reply: FastifyReply,
 ) => {
   try {
+    await assertGroupReadable(request.params.id, request.user?.id);
     const columns = await groupService.getTodoColumns(request.params.id);
     return ok(reply, { columns });
   } catch (e) {
-    return fail(reply, 500, 'GET_TODO_COLUMNS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GET_TODO_COLUMNS_ERROR', errMessage(e));
   }
 };
 
@@ -860,7 +867,7 @@ export const updateGroupTodoColumnsHandler = async (
     const columns = await groupService.updateTodoColumns(request.params.id, request.body.columns);
     return ok(reply, { columns });
   } catch (e) {
-    return fail(reply, 500, 'UPDATE_TODO_COLUMNS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'UPDATE_TODO_COLUMNS_ERROR', errMessage(e));
   }
 };
 
@@ -869,10 +876,11 @@ export const getGroupTodoHandler = async (
   reply: FastifyReply,
 ) => {
   try {
+    await assertGroupReadable(request.params.id, request.user?.id);
     const items = await groupService.getTodoItems(request.params.id);
     return ok(reply, { items });
   } catch (e) {
-    return fail(reply, 500, 'GET_TODO_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GET_TODO_ERROR', errMessage(e));
   }
 };
 
@@ -922,7 +930,7 @@ export const deleteGroupTodoHandler = async (
     await groupService.deleteTodoItem(request.params.id, request.params.itemId);
     return ok(reply, { success: true });
   } catch (e) {
-    return fail(reply, 500, 'DELETE_TODO_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'DELETE_TODO_ERROR', errMessage(e));
   }
 };
 
@@ -938,7 +946,7 @@ export const reorderGroupTodoHandler = async (
     await groupService.reorderTodoItems(request.params.id, request.body.orderedIds);
     return ok(reply, { success: true });
   } catch (e) {
-    return fail(reply, 500, 'REORDER_TODO_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'REORDER_TODO_ERROR', errMessage(e));
   }
 };
 
@@ -1009,7 +1017,7 @@ export const getBusinessStatsHandler = async (
     const stats = await groupService.getBusinessStats(request.params.id);
     return ok(reply, { stats });
   } catch (e) {
-    return fail(reply, 500, 'BUSINESS_STATS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'BUSINESS_STATS_ERROR', errMessage(e));
   }
 };
 
@@ -1035,7 +1043,7 @@ export const getGroupBalanceHandler = async (
     const result = await groupService.getGroupBalance(request.params.id);
     return ok(reply, result);
   } catch (e) {
-    return fail(reply, 500, 'GROUP_BALANCE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GROUP_BALANCE_ERROR', errMessage(e));
   }
 };
 
@@ -1062,7 +1070,7 @@ export const getTrendingHandler = async (
     const data = await groupService.getTrending(page, limit);
     return ok(reply, data);
   } catch (e) {
-    return fail(reply, 500, 'TRENDING_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'TRENDING_ERROR', errMessage(e));
   }
 };
 

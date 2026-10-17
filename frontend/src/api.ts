@@ -65,7 +65,8 @@ api.interceptors.response.use(
       return Promise.reject(error)
     }
     const originalRequest = error.config
-    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/refresh')) {
+    const hadAuthorization = Boolean(originalRequest?.headers?.Authorization || originalRequest?.headers?.authorization)
+    if (error.response?.status === 401 && hadAuthorization && originalRequest && !originalRequest._retry && !originalRequest.url?.includes('/auth/refresh')) {
       if (_isRefreshing) {
         // Queue request until refresh finishes
         return new Promise((resolve, reject) => {

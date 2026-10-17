@@ -15,6 +15,9 @@ export function sanitizeHtml(html: string | null | undefined): string {
         continue
       }
       const el = node as HTMLElement
+      // Clean descendants before unwrapping: newly inserted siblings are absent
+      // from the snapshot above and otherwise keep their event attributes.
+      clean(el)
       if (!ALLOWED_TAGS.has(el.tagName)) {
         // Unwrap disallowed elements — keep their text/children, drop the tag itself
         while (el.firstChild) parent.insertBefore(el.firstChild, el)
@@ -22,7 +25,6 @@ export function sanitizeHtml(html: string | null | undefined): string {
         continue
       }
       for (const attr of Array.from(el.attributes)) el.removeAttribute(attr.name)
-      clean(el)
     }
   }
   clean(template.content)

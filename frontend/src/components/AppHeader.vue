@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { apiErrorMessage } from '@/lib/apiError'
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
@@ -111,12 +111,18 @@ const markAllRead = async () => {
 }
 
 let sseReconnectTimer: ReturnType<typeof setTimeout> | null = null
+let notifActive = true
+let connectedToken: string | null = null
 const connectNotifSSE = () => {
-  if (!auth.token) return
+  if (!notifActive || !auth.token || (notifEventSource && connectedToken === auth.token)) return
+  if (sseReconnectTimer) { clearTimeout(sseReconnectTimer); sseReconnectTimer = null }
   if (notifEventSource) { notifEventSource.close(); notifEventSource = null }
   try {
-    notifEventSource = new EventSource(`/api/notifications/stream?token=${encodeURIComponent(auth.token as string)}`)
-    notifEventSource.onmessage = (e) => {
+    connectedToken = auth.token
+    const stream = new EventSource(`/api/notifications/stream?token=${encodeURIComponent(connectedToken)}`)
+    notifEventSource = stream
+    stream.onmessage = (e) => {
+      if (!notifActive || notifEventSource !== stream) return
       try {
         const data = JSON.parse(e.data)
         if (data.type && data.type !== 'heartbeat') {
@@ -131,20 +137,36 @@ const connectNotifSSE = () => {
         }
       } catch {}
     }
-    notifEventSource.onerror = () => {
-      notifEventSource?.close()
+    stream.onerror = () => {
+      if (!notifActive || notifEventSource !== stream) return
+      stream.close()
       notifEventSource = null
+      connectedToken = null
       // Auto-reconnect after 5 seconds, refreshing the token first
       if (auth.isAuthenticated || auth.user) {
         sseReconnectTimer = setTimeout(async () => {
+          sseReconnectTimer = null
+          if (!notifActive) return
           // Access token may have merely expired (still truthy) — always refresh before retrying
-          await auth.tryRefresh()
-          if (auth.token) connectNotifSSE()
+          await auth.tryRefresh(true)
+          if (notifActive && auth.token) connectNotifSSE()
         }, 5000)
       }
     }
   } catch {}
 }
+
+watch(() => auth.token, token => {
+  if (token) connectNotifSSE()
+  else {
+    notifEventSource?.close()
+    notifEventSource = null
+    connectedToken = null
+    if (sseReconnectTimer) { clearTimeout(sseReconnectTimer); sseReconnectTimer = null }
+    notifications.value = []
+    unreadCount.value = 0
+  }
+})
 
 const notifTypeLabel = (type: string, pronouns?: string | null) => {
   // Determine gender from pronouns field: 'он/его' → male, 'она/её' → female, else neutral
@@ -495,6 +517,7 @@ onMounted(() => {
   document.addEventListener('click', onDocumentClick)
 })
 onUnmounted(() => {
+  notifActive = false
   notifEventSource?.close()
   if (sseReconnectTimer) clearTimeout(sseReconnectTimer)
   if (storyTimerInterval) clearInterval(storyTimerInterval)

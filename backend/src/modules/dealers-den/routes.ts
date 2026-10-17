@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import type { RouteGenericOf } from '../../lib/routeTypes.js';
 import {
+  sellerEligibilityHandler,
   listListingsHandler, getListingHandler, createListingHandler, updateListingHandler,
   deleteListingHandler, getMyListingsHandler, placeBidHandler, getBidsHandler,
   buyRaffleTicketHandler, drawRaffleHandler, getCommentsHandler, addCommentHandler, deleteCommentHandler,
@@ -22,6 +23,7 @@ export async function dealersDenRoutes(fastify: FastifyInstance) {
 
   // ── Listings ──
   fastify.get<RouteGenericOf<typeof listListingsHandler>>('/',              tryAuth, listListingsHandler);
+  fastify.get('/eligibility', auth, sellerEligibilityHandler);
   fastify.get<RouteGenericOf<typeof getMyListingsHandler>>('/me',    auth,   getMyListingsHandler);
   fastify.get<RouteGenericOf<typeof getListingHandler>>('/:id',           tryAuth, getListingHandler);
   fastify.post<RouteGenericOf<typeof createListingHandler>>('/',     auth,   createListingHandler);

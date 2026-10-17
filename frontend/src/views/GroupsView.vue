@@ -70,7 +70,7 @@ async function handleNotify(groupId: string) {
 }
 
 // Sidebar navigation
-const sidebarTab = ref<'my' | 'for_you' | 'trending' | 'afisha' | 'managed'>('my')
+const sidebarTab = ref<'my' | 'for_you' | 'trending' | 'afisha' | 'managed'>(authStore.isAuthenticated ? 'my' : 'for_you')
 
 // Category filter (via dropdown)
 const selectedCategory = ref<string>('all')

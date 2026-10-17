@@ -6,6 +6,14 @@ const field = (e: unknown, key: string): unknown =>
   typeof e === 'object' && e !== null ? (e as Record<string, unknown>)[key] : undefined;
 
 export function errMessage(e: unknown): string {
+  const code = field(e, 'code');
+  if (typeof code === 'string' && /^P\d{4}$/.test(code)) {
+    if (code === 'P2002') return 'Record already exists';
+    if (code === 'P2025') return 'Not found';
+    return 'Invalid request';
+  }
+  const name = field(e, 'name');
+  if (typeof name === 'string' && name.startsWith('Prisma')) return 'Invalid request';
   return e instanceof Error ? e.message : String(e);
 }
 

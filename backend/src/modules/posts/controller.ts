@@ -242,7 +242,7 @@ export const getCommentsHandler = async (
     return reply.send({ success: true, data: { comments, canModerate }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch comments';
-    return reply.code(500).send({ success: false, data: null, error: { code: 'GET_COMMENTS_ERROR', message } });
+    return reply.code((error as { statusCode?: number })?.statusCode ?? 500).send({ success: false, data: null, error: { code: 'GET_COMMENTS_ERROR', message } });
   }
 };
 
@@ -273,7 +273,7 @@ export const deletePostHandler = async (
     return reply.send({ success: true, data: null, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to delete post';
-    const code = message === 'Not authorized' ? 403 : 400;
+    const code = (error as { statusCode?: number })?.statusCode ?? (message === 'Not authorized' ? 403 : 400);
     return reply.code(code).send({ success: false, data: null, error: { code: 'DELETE_POST_ERROR', message } });
   }
 };
@@ -290,7 +290,7 @@ export const editPostHandler = async (
     return reply.send({ success: true, data: { post }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to edit post';
-    const code = message === 'Not authorized' || message === 'Edit window expired' ? 403 : 400;
+    const code = (error as { statusCode?: number })?.statusCode ?? (message === 'Not authorized' || message === 'Edit window expired' ? 403 : 400);
     return reply.code(code).send({ success: false, data: null, error: { code: 'EDIT_POST_ERROR', message } });
   }
 };
@@ -306,7 +306,7 @@ export const deleteCommentHandler = async (
     return reply.send({ success: true, data: null, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to delete comment';
-    const code = message === 'Not authorized' ? 403 : 400;
+    const code = (error as { statusCode?: number })?.statusCode ?? (message === 'Not authorized' ? 403 : 400);
     return reply.code(code).send({ success: false, data: null, error: { code: 'DELETE_COMMENT_ERROR', message } });
   }
 };
@@ -391,7 +391,7 @@ export const toggleArchivePostHandler = async (
     return reply.send({ success: true, data: result, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to archive post';
-    const code = message === 'Not authorized' ? 403 : 400;
+    const code = (error as { statusCode?: number })?.statusCode ?? (message === 'Not authorized' ? 403 : 400);
     return reply.code(code).send({ success: false, data: null, error: { code: 'ARCHIVE_ERROR', message } });
   }
 };
@@ -420,7 +420,7 @@ export const toggleCommentsDisabledHandler = async (
     return reply.send({ success: true, data: result, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to toggle comments';
-    const code = message === 'Not authorized' ? 403 : 400;
+    const code = (error as { statusCode?: number })?.statusCode ?? (message === 'Not authorized' ? 403 : 400);
     return reply.code(code).send({ success: false, data: null, error: { code: 'COMMENTS_TOGGLE_ERROR', message } });
   }
 };
