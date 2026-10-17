@@ -115,7 +115,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
 
     <!-- Banner — h-20, clips only inside this div -->
     <div
-      class="relative h-20 flex-shrink-0 rounded-t-2xl overflow-hidden"
+      class="relative h-20 shrink-0 rounded-t-2xl overflow-hidden"
       :style="user.banner_url ? '' : `background: ${bannerGradient(user.id)}`"
     >
       <img v-if="user.banner_url" :src="user.banner_url" class="w-full h-full object-cover" alt="" />
@@ -223,11 +223,11 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
       <div class="min-w-0 leading-snug -mt-1">
         <p class="font-semibold text-white truncate text-base leading-tight flex items-center gap-1.5">
           {{ user.display_name || user.username }}
-          <span v-if="user.deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
+          <span v-if="user.deceased_at" title="Светлая память" class="shrink-0">🪦</span>
         </p>
         <p class="text-sm text-white/50 truncate font-normal">@{{ user.username }}</p>
         <p v-if="user.location" class="text-xs text-white/40 flex items-center gap-1 mt-1 truncate">
-          <BIcon name="MapPin" class="w-3 h-3 flex-shrink-0" />
+          <BIcon name="MapPin" class="w-3 h-3 shrink-0" />
           {{ user.location }}
         </p>
       </div>
@@ -247,7 +247,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
         <button
           v-if="isFollowing || canFollow"
           :class="[
-            'w-9 h-9 flex items-center justify-center rounded-xl transition-colors flex-shrink-0',
+            'w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0',
             isFollowing
               ? 'bg-brand-accent/20 text-brand-accent-minus hover:bg-brand-error/15 hover:text-brand-error'
               : 'bg-white/5 hover:bg-brand-accent/15 text-white/55 hover:text-brand-accent-minus',
@@ -263,7 +263,7 @@ onUnmounted(() => document.removeEventListener('click', onOutside, true))
         <button
           v-if="isMutual || isFollowing"
           :class="[
-            'w-9 h-9 flex items-center justify-center rounded-xl transition-colors flex-shrink-0',
+            'w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0',
             notifyActive
               ? 'bg-brand-accent/20 text-brand-accent-minus hover:bg-brand-accent/30'
               : 'bg-white/5 hover:bg-brand-accent/15 text-white/55 hover:text-brand-accent-minus',

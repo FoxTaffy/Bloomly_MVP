@@ -78,7 +78,7 @@ function open() {
 
 <template>
   <div
-    class="mb-0.5 w-[240px] rounded-2xl overflow-hidden border border-brand-border bg-brand-bg shadow-sm cursor-pointer hover:brightness-110 active:scale-[0.98] transition-all"
+    class="mb-0.5 w-[240px] rounded-2xl overflow-hidden border border-brand-border bg-brand-bg shadow-xs cursor-pointer hover:brightness-110 active:scale-[0.98] transition-all"
     :class="isMine ? 'rounded-br-md' : 'rounded-bl-md'"
     @click.stop="open"
   >
@@ -91,7 +91,7 @@ function open() {
     <template v-else>
       <div v-if="firstMedia" class="relative w-full h-32 bg-black/30 overflow-hidden">
         <template v-if="thumbnailLocked">
-          <div class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-gradient-to-b from-white/5 to-transparent">
+          <div class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-linear-to-b/srgb from-white/5 to-transparent">
             <BIcon :name="post.is_nsfw ? 'EyeOff' : 'Lock'" class="w-5 h-5 text-white/50" />
             <span class="text-[10px] font-semibold text-white/40 uppercase tracking-wide">{{ post.is_nsfw ? 'NSFW' : 'Платный доступ' }}</span>
           </div>
@@ -108,12 +108,12 @@ function open() {
       </div>
       <div class="px-3 py-2.5">
         <div class="flex items-center gap-1.5 mb-1">
-          <img v-if="post.author?.avatar_url" :src="post.author.avatar_url" class="w-5 h-5 rounded-full object-cover border border-brand-border flex-shrink-0" />
-          <div v-else class="w-5 h-5 rounded-full bg-brand-accent/20 flex items-center justify-center text-[8px] font-bold text-brand-accent flex-shrink-0">
+          <img v-if="post.author?.avatar_url" :src="post.author.avatar_url" class="w-5 h-5 rounded-full object-cover border border-brand-border shrink-0" />
+          <div v-else class="w-5 h-5 rounded-full bg-brand-accent/20 flex items-center justify-center text-[8px] font-bold text-brand-accent shrink-0">
             {{ (post.author?.display_name || post.author?.username || '?')[0].toUpperCase() }}
           </div>
           <span class="text-[11px] font-bold text-white/85 truncate">{{ post.author?.display_name || post.author?.username }}</span>
-          <span class="text-[10px] text-white/35 flex-shrink-0 ml-auto">{{ fmtDate(post.created_at) }}</span>
+          <span class="text-[10px] text-white/35 shrink-0 ml-auto">{{ fmtDate(post.created_at) }}</span>
         </div>
         <p v-if="post.content" class="text-[11px] text-white/60 truncate">{{ post.content }}</p>
       </div>

@@ -32,7 +32,7 @@
         </div>
         <span class="text-xl font-black hero-gradient">Bloomly</span>
         <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/8 border border-white/12 text-[10px] font-bold text-white/50 ml-1">
-          <span class="w-1.5 h-1.5 rounded-full bg-[#FFC01F] shadow-[0_0_6px_#FFC01F] animate-pulse"></span>
+          <span class="w-1.5 h-1.5 rounded-full bg-brand-yellow shadow-[0_0_6px_#FFC01F] animate-pulse"></span>
           Beta
         </div>
       </div>
@@ -63,7 +63,7 @@
                 </div>
               </div>
 
-              <div class="space-y-4">
+              <div class="stack-y-4">
                 <!-- Отображаемое имя -->
                 <div>
                   <label class="field-label">{{ langStore.t.displayNameLabel }} <span class="text-brand-accent">*</span></label>
@@ -87,7 +87,7 @@
                     :max="new Date().toISOString().substring(0,10)"
                     @invalid="birthDateInvalid = $event" />
                   <p class="field-hint"
-                    :class="birthAge !== null && birthAge < 18 ? '!text-brand-error/80' : ''">
+                    :class="birthAge !== null && birthAge < 18 ? 'text-brand-error/80!' : ''">
                     <template v-if="birthAge !== null">
                       {{ ageLabel(birthAge) }}
                       <span v-if="birthAge < 18"> · {{ langStore.t.nsfwUnder18Hint }}</span>
@@ -168,7 +168,7 @@
       </button>
 
       <!-- Декоративная линия снизу -->
-      <div class="h-px mt-4 w-32 mx-auto bg-gradient-to-r from-transparent via-brand-accent/30 to-transparent blur-sm"></div>
+      <div class="h-px mt-4 w-32 mx-auto bg-linear-to-r/srgb from-transparent via-brand-accent/30 to-transparent blur-xs"></div>
     </div>
   </div>
 </template>

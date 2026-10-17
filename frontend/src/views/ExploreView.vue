@@ -169,11 +169,11 @@ onMounted(() => {
       <AppSidebar />
 
       <!-- ─── Center: Pinterest-style tile grid ────────────────────────── -->
-      <main class="flex-1 min-w-0 pb-28 md:pb-20 space-y-5">
+      <main class="flex-1 min-w-0 pb-28 md:pb-20 stack-y-5">
 
         <!-- Header -->
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-2xl bg-brand-accent/15 flex items-center justify-center flex-shrink-0">
+          <div class="w-10 h-10 rounded-2xl bg-brand-accent/15 flex items-center justify-center shrink-0">
             <BIcon name="Compass" class="w-5 h-5 text-brand-accent" />
           </div>
           <h1 class="text-xl font-extrabold text-white">{{ langStore.t.explore }}</h1>
@@ -209,7 +209,7 @@ onMounted(() => {
         <div v-if="trendingTags.length" class="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1 max-md:-mx-3 max-md:px-3">
           <button v-for="tag in trendingTags" :key="tag.name"
             @click="selectTag(tag.name)"
-            class="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap"
+            class="shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap"
             :class="selectedTag === tag.name
               ? 'bg-brand-accent/15 text-brand-accent border border-brand-accent/40'
               : 'bg-brand-card border border-brand-border text-white/55 hover:text-white hover:border-white/20'">
@@ -244,34 +244,34 @@ onMounted(() => {
           <div class="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-4">
             <div v-for="tile in tiles" :key="tile.key"
               @click="openTile(tile)"
-              class="mb-4 break-inside-avoid group relative rounded-2xl overflow-hidden bg-brand-card border border-brand-border cursor-pointer shadow-sm hover:shadow-xl hover:shadow-black/40 hover:ring-2 hover:ring-brand-accent/50 hover:-translate-y-0.5 transition-all duration-200">
+              class="mb-4 break-inside-avoid group relative rounded-2xl overflow-hidden bg-brand-card border border-brand-border cursor-pointer shadow-xs hover:shadow-xl hover:shadow-black/40 hover:ring-2 hover:ring-brand-accent/50 hover:-translate-y-0.5 transition-all duration-200">
               <img :src="tile.url" loading="lazy" class="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.04]" />
 
               <!-- Rating badge (hot sort) -->
               <div v-if="sortKey === 'hot' && tile.post.rating > 0"
-                class="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm text-white text-[11px] font-bold">
+                class="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full bg-black/60 backdrop-blur-xs text-white text-[11px] font-bold">
                 <BIcon name="Star" class="w-3 h-3 text-amber-400" />
                 {{ formatCount(tile.post.rating) }}
               </div>
 
               <!-- Multi-image indicator -->
               <div v-if="tile.images.length > 1"
-                class="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white">
+                class="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 backdrop-blur-xs flex items-center justify-center text-white">
                 <BIcon name="Images" class="w-3 h-3" />
               </div>
 
               <!-- Bottom gradient overlay: author always visible, stats fade in on hover -->
-              <div class="absolute inset-x-0 bottom-0 p-2.5 pt-9 flex items-end justify-between gap-2 bg-gradient-to-t from-black/85 via-black/25 to-transparent">
+              <div class="absolute inset-x-0 bottom-0 p-2.5 pt-9 flex items-end justify-between gap-2 bg-linear-to-t/srgb from-black/85 via-black/25 to-transparent">
                 <div v-if="tile.post.author" class="flex items-center gap-1.5 min-w-0 cursor-pointer" @click.stop="goToProfile(tile.post.author.username)">
                   <img :src="tile.post.author.avatar_url || '/default-avatar.png'" @error="onAvatarError"
-                    class="w-6 h-6 rounded-full object-cover border border-white/20 flex-shrink-0" />
+                    class="w-6 h-6 rounded-full object-cover border border-white/20 shrink-0" />
                   <span class="text-xs font-bold text-white truncate hover:text-brand-accent transition-colors">{{ tile.post.author.display_name || tile.post.author.username }}</span>
                 </div>
                 <router-link v-else-if="tile.post.groupPosts?.[0]?.group" :to="`/groups/${tile.post.groupPosts[0].group.slug}`" @click.stop class="flex items-center gap-1.5 min-w-0">
                   <img :src="tile.post.groupPosts[0].group.avatar_url || '/default-avatar.png'" @error="onAvatarError" class="w-6 h-6 rounded-full object-cover" />
                   <span class="text-xs font-bold text-white truncate">{{ tile.post.groupPosts[0].group.name }}</span>
                 </router-link>
-                <div class="flex items-center gap-2 flex-shrink-0 text-white/85 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div class="flex items-center gap-2 shrink-0 text-white/85 opacity-0 group-hover:opacity-100 transition-opacity">
                   <span v-if="tile.post._count?.comments" class="flex items-center gap-0.5 text-[11px] font-bold">
                     <BIcon name="MessageSquare" class="w-3.5 h-3.5" />
                     {{ formatCount(tile.post._count.comments) }}

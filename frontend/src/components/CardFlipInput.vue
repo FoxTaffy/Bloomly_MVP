@@ -59,7 +59,7 @@ function formatCvv(e: Event) {
                 <p class="text-[8px] text-white/50 uppercase tracking-wider mb-0.5">{{ langStore.t.payModalNameLabel }}</p>
                 <p class="text-xs font-bold text-white/90 uppercase tracking-wide truncate">{{ cardName || langStore.t.payModalNamePlaceholder }}</p>
               </div>
-              <div class="flex-shrink-0 ml-2">
+              <div class="shrink-0 ml-2">
                 <p class="text-[8px] text-white/50 uppercase tracking-wider mb-0.5">{{ langStore.t.payModalExpiry }}</p>
                 <p class="text-xs font-bold text-white/90 font-mono">{{ cardExp || 'MM/YY' }}</p>
               </div>
@@ -80,7 +80,7 @@ function formatCvv(e: Event) {
     </div>
 
     <!-- Inputs -->
-    <div class="space-y-3 mt-5">
+    <div class="stack-y-3 mt-5">
       <input
         type="text" inputmode="numeric" maxlength="19"
         :placeholder="langStore.t.payModalCardNumber"

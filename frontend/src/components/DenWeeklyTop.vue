@@ -22,11 +22,11 @@
         class="flex items-center gap-2.5 px-4 py-2.5 hover:bg-white/4 transition-colors"
         :class="entry.rank === 1 ? 'bg-brand-yellow/4' : ''"
       >
-        <span class="text-base w-5 text-center flex-shrink-0">{{ rankEmoji(entry.rank) }}</span>
+        <span class="text-base w-5 text-center shrink-0">{{ rankEmoji(entry.rank) }}</span>
         <img v-if="entry.user.avatar_url" :src="entry.user.avatar_url"
-          class="w-7 h-7 rounded-full object-cover border border-brand-border flex-shrink-0" />
+          class="w-7 h-7 rounded-full object-cover border border-brand-border shrink-0" />
         <div v-else
-          class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-[10px] font-extrabold border border-brand-border flex-shrink-0">
+          class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-[10px] font-extrabold border border-brand-border shrink-0">
           {{ (entry.user.display_name || entry.user.username).slice(0, 2).toUpperCase() }}
         </div>
         <div class="flex-1 min-w-0">
@@ -37,7 +37,7 @@
             {{ entry.sales_count }} {{ langStore.t.denTopSalesSuffix }} · {{ Number(entry.avg_rating).toFixed(1) }}★
           </p>
         </div>
-        <span class="text-xs font-black text-brand-accent tabular-nums flex-shrink-0">
+        <span class="text-xs font-black text-brand-accent tabular-nums shrink-0">
           {{ Number(entry.score).toFixed(0) }}
         </span>
       </RouterLink>

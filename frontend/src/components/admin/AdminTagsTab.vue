@@ -86,7 +86,7 @@ async function remove(alias: string) {
         <div class="flex items-center justify-center text-white/30"><BIcon name="ArrowRight" class="w-4 h-4 rotate-90 sm:rotate-0" /></div>
         <input v-model="form.canonical" type="text" placeholder="Основной тег: fox" class="adm-input sm:w-48" />
         <button type="submit" :disabled="saving"
-          class="px-4 py-2 rounded-xl text-xs font-bold bg-[#4C67CF] text-white disabled:opacity-50 hover:brightness-110 transition-all flex-shrink-0">
+          class="px-4 py-2 rounded-xl text-xs font-bold bg-brand-accent text-white disabled:opacity-50 hover:brightness-110 transition-all shrink-0">
           {{ saving ? 'Сохранение…' : 'Добавить' }}
         </button>
       </form>
@@ -96,7 +96,7 @@ async function remove(alias: string) {
     <div class="rounded-3xl border border-brand-border overflow-hidden" style="background:#1F223C">
       <div class="px-5 py-3 border-b border-brand-border flex items-center gap-3">
         <BIcon name="Search" class="w-4 h-4 text-white/30" />
-        <input v-model="filter" type="text" placeholder="Найти тег" class="flex-1 bg-transparent text-sm text-white placeholder-white/25 outline-none" />
+        <input v-model="filter" type="text" placeholder="Найти тег" class="flex-1 bg-transparent text-sm text-white placeholder-white/25 outline-hidden" />
         <span class="text-xs text-white/30">{{ synonyms.length }}</span>
       </div>
       <div v-if="loading" class="p-5 text-xs text-white/40">Загрузка…</div>
@@ -105,10 +105,10 @@ async function remove(alias: string) {
       </div>
       <div v-else class="divide-y divide-brand-border">
         <div v-for="g in groups" :key="g.canonical" class="px-5 py-3 flex flex-col sm:flex-row sm:items-center gap-2">
-          <span class="text-sm font-bold text-white sm:w-48 flex-shrink-0">#{{ g.canonical }}</span>
+          <span class="text-sm font-bold text-white sm:w-48 shrink-0">#{{ g.canonical }}</span>
           <div class="flex flex-wrap gap-1.5">
             <span v-for="a in g.aliases" :key="a"
-              class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-xs font-semibold bg-white/5 border border-white/[0.08] text-white/70">
+              class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-xs font-semibold bg-white/5 border border-white/8 text-white/70">
               #{{ a }}
               <button type="button" :title="`Убрать синоним #${a}`" @click="remove(a)"
                 class="w-4 h-4 rounded-full flex items-center justify-center text-white/40 hover:text-white hover:bg-rose-500/60">

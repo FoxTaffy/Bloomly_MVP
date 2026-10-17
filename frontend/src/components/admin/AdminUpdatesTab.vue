@@ -107,13 +107,13 @@ watchEffect(() => { badges.updates = updates.value.filter((u: any) => u.is_activ
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="stack-y-6">
 
     <!-- Segmented toggle: changelog updates vs push broadcasts (merged from the old separate tab) -->
-    <div class="flex items-center gap-2 p-1 rounded-2xl bg-white/[0.04] w-fit">
+    <div class="flex items-center gap-2 p-1 rounded-2xl bg-white/4 w-fit">
       <button type="button" @click="switchCommsView('updates')"
         class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
-        :class="commsViewMode === 'updates' ? 'bg-[#4C67CF]/20 text-[#4C67CF]' : 'text-white/40 hover:text-white/70'">
+        :class="commsViewMode === 'updates' ? 'bg-brand-accent/20 text-brand-accent' : 'text-white/40 hover:text-white/70'">
         <BIcon name="Sparkles" class="w-3.5 h-3.5" /> {{ langStore.t.adminNavUpdates }}
       </button>
       <button type="button" @click="switchCommsView('broadcasts')"
@@ -126,11 +126,11 @@ watchEffect(() => { badges.updates = updates.value.filter((u: any) => u.is_activ
     <template v-if="commsViewMode === 'updates'">
 
     <!-- Create form -->
-    <div class="relative rounded-3xl border border-brand-border p-6 space-y-4 overflow-hidden" style="background:#1F223C">
+    <div class="relative rounded-3xl border border-brand-border p-6 stack-y-4 overflow-hidden" style="background:#1F223C">
       <div class="absolute -top-24 -right-24 w-64 h-64 rounded-full opacity-20 pointer-events-none"
         style="background:radial-gradient(circle,#7c3aed,transparent 70%)" />
       <div class="flex items-center gap-3 mb-2 relative">
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center flex-shrink-0 shadow-lg shadow-[#4C67CF]/20">
+        <div class="w-9 h-9 rounded-xl bg-linear-to-br/srgb from-[#4C67CF] to-[#7c3aed] flex items-center justify-center shrink-0 shadow-lg shadow-[#4C67CF]/20">
           <span class="text-white font-black text-sm select-none">B</span>
         </div>
         <h3 class="font-extrabold text-white">{{ langStore.t.adminNewUpdateTitle }}</h3>
@@ -152,14 +152,14 @@ watchEffect(() => { badges.updates = updates.value.filter((u: any) => u.is_activ
         :placeholder="langStore.t.adminUpdateBodyPlaceholder"
         maxlength="800"
       />
-      <div v-if="newUpdateImageUrl" class="relative flex items-center gap-3 p-3 bg-white/5 border border-white/[0.08] rounded-2xl">
-        <img :src="newUpdateImageUrl" class="w-20 h-12 object-cover rounded-xl flex-shrink-0 border border-white/10" />
+      <div v-if="newUpdateImageUrl" class="relative flex items-center gap-3 p-3 bg-white/5 border border-white/8 rounded-2xl">
+        <img :src="newUpdateImageUrl" class="w-20 h-12 object-cover rounded-xl shrink-0 border border-white/10" />
         <div class="min-w-0 flex-1">
           <p class="text-xs font-bold text-white/70">{{ langStore.t.adminCoverUploadedLabel }}</p>
           <p class="text-[10px] text-white/30 truncate mt-0.5">{{ newUpdateImageUrl }}</p>
         </div>
         <button type="button" @click="newUpdateImageUrl = ''"
-          class="w-7 h-7 rounded-lg bg-white/5 hover:bg-rose-500/20 hover:text-rose-400 flex items-center justify-center flex-shrink-0 transition-colors">
+          class="w-7 h-7 rounded-lg bg-white/5 hover:bg-rose-500/20 hover:text-rose-400 flex items-center justify-center shrink-0 transition-colors">
           <BIcon name="X" class="w-3.5 h-3.5" />
         </button>
       </div>
@@ -190,11 +190,11 @@ watchEffect(() => { badges.updates = updates.value.filter((u: any) => u.is_activ
         v-for="u in updates"
         :key="u.id"
         class="relative rounded-3xl border overflow-hidden transition-all group"
-        :class="u.is_active ? 'border-[#4C67CF]/25 hover:border-[#4C67CF]/45' : 'border-brand-border opacity-55 hover:opacity-80'"
+        :class="u.is_active ? 'border-brand-accent/25 hover:border-brand-accent/45' : 'border-brand-border opacity-55 hover:opacity-80'"
         style="background:#1F223C"
       >
         <!-- Cover banner -->
-        <div class="relative h-28 w-full overflow-hidden flex-shrink-0">
+        <div class="relative h-28 w-full overflow-hidden shrink-0">
           <img v-if="u.image_url" :src="u.image_url"
             class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
           <div v-else class="w-full h-full flex items-center justify-center relative overflow-hidden"
@@ -202,13 +202,13 @@ watchEffect(() => { badges.updates = updates.value.filter((u: any) => u.is_activ
             <span class="text-white/25 font-black text-7xl select-none absolute -right-2 -bottom-4">B</span>
             <BIcon name="Sparkles" class="w-8 h-8 text-white/70 relative" />
           </div>
-          <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
-          <span class="absolute top-3 right-3 flex items-center gap-1 text-[10px] font-extrabold px-2 py-1 rounded-full backdrop-blur-sm"
+          <div class="absolute inset-0 bg-linear-to-t/srgb from-black/85 via-black/10 to-transparent" />
+          <span class="absolute top-3 right-3 flex items-center gap-1 text-[10px] font-extrabold px-2 py-1 rounded-full backdrop-blur-xs"
             :class="u.is_active ? 'bg-emerald-500/85 text-white' : 'bg-white/15 text-white/70'">
             <span class="w-1.5 h-1.5 rounded-full" :class="u.is_active ? 'bg-white' : 'bg-white/50'" />
             {{ u.is_active ? langStore.t.adminActiveShort : langStore.t.adminHiddenShort }}
           </span>
-          <p class="absolute bottom-2.5 left-4 right-4 font-extrabold text-white text-sm truncate drop-shadow">{{ u.title }}</p>
+          <p class="absolute bottom-2.5 left-4 right-4 font-extrabold text-white text-sm truncate drop-shadow-sm">{{ u.title }}</p>
         </div>
 
         <!-- Content -->
@@ -218,13 +218,13 @@ watchEffect(() => { badges.updates = updates.value.filter((u: any) => u.is_activ
             <span class="text-[11px] text-white/25 flex items-center gap-1">
               <BIcon name="Clock" class="w-3 h-3" /> {{ formatDate(u.created_at) }}
             </span>
-            <div class="flex items-center gap-1.5 flex-shrink-0">
+            <div class="flex items-center gap-1.5 shrink-0">
               <button
                 @click="toggleUpdate(u.id, !u.is_active)"
                 class="px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all"
                 :class="u.is_active
                   ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25'
-                  : 'bg-white/[0.06] text-white/40 hover:bg-white/10'"
+                  : 'bg-white/6 text-white/40 hover:bg-white/10'"
               >
                 {{ u.is_active ? langStore.t.adminActiveShort : langStore.t.adminHiddenShort }}
               </button>
@@ -247,7 +247,7 @@ watchEffect(() => { badges.updates = updates.value.filter((u: any) => u.is_activ
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
       <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
         <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminNewBroadcastTitle }}</h3>
-        <div class="space-y-3">
+        <div class="stack-y-3">
           <input v-model="broadcastTitle" :placeholder="langStore.t.adminNotificationTitlePlaceholder" class="adm-input" />
           <textarea v-model="broadcastBody" :placeholder="langStore.t.adminMessageTextPlaceholder" class="adm-input resize-none h-28" />
           <select v-model="broadcastAudience" class="adm-input">
@@ -266,7 +266,7 @@ watchEffect(() => { badges.updates = updates.value.filter((u: any) => u.is_activ
 
       <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
         <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminBroadcastHistoryTitle }}</h3>
-        <div v-if="isLoadingBroadcasts" class="space-y-3">
+        <div v-if="isLoadingBroadcasts" class="stack-y-3">
           <div v-for="n in 3" :key="n" class="h-12 rounded-xl bg-white/5 animate-pulse" />
         </div>
         <div v-else-if="!broadcasts.length" class="text-xs text-white/25 text-center py-10">{{ langStore.t.adminNoBroadcastsYet }}</div>

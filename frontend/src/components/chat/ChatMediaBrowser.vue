@@ -79,15 +79,15 @@ function openMediaBrowserImage(url: string) {
 <template>
   <Teleport to="body">
     <Transition name="fade">
-      <div v-if="type" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md" @click.self="emit('close')">
+      <div v-if="type" class="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md" @click.self="emit('close')">
         <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden" style="max-height:90vh">
           <!-- Header -->
-          <div class="flex items-center gap-2 px-2 py-3 border-b border-brand-border flex-shrink-0">
-            <button @click="emit('close')" class="w-8 h-8 rounded-xl hover:bg-brand-bg flex items-center justify-center text-white/70 hover:text-white transition-all flex-shrink-0">
+          <div class="flex items-center gap-2 px-2 py-3 border-b border-brand-border shrink-0">
+            <button @click="emit('close')" class="w-8 h-8 rounded-xl hover:bg-brand-bg flex items-center justify-center text-white/70 hover:text-white transition-all shrink-0">
               <BIcon name="ArrowLeft" class="w-4 h-4" />
             </button>
             <h3 class="flex-1 min-w-0 text-sm font-bold text-white truncate">{{ MEDIA_TYPE_TITLES[type] ?? '' }}</h3>
-            <button @click="emit('close')" class="w-8 h-8 rounded-xl hover:bg-brand-bg flex items-center justify-center text-white/70 hover:text-white transition-all flex-shrink-0">
+            <button @click="emit('close')" class="w-8 h-8 rounded-xl hover:bg-brand-bg flex items-center justify-center text-white/70 hover:text-white transition-all shrink-0">
               <BIcon name="X" class="w-4 h-4" />
             </button>
           </div>
@@ -106,7 +106,7 @@ function openMediaBrowserImage(url: string) {
                   <img v-if="m.type === 'image'" :src="m.file_url!" class="w-full h-full object-cover" loading="lazy" />
                   <video v-else :src="m.file_url!" class="w-full h-full object-cover" preload="metadata" />
                   <div v-if="m.type === 'video'" class="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
-                    <BIcon name="Play" class="w-5 h-5 text-white drop-shadow" />
+                    <BIcon name="Play" class="w-5 h-5 text-white drop-shadow-sm" />
                   </div>
                 </div>
               </div>
@@ -116,7 +116,7 @@ function openMediaBrowserImage(url: string) {
                 <div v-for="m in group.items" :key="m.id" class="flex items-center gap-3 px-4 py-2.5">
                   <audio v-if="mediaBrowserPlayingId === m.id" :src="m.file_url!" autoplay @ended="mediaBrowserPlayingId = null" class="hidden" />
                   <button @click="toggleMediaBrowserPlay(m.id)"
-                    class="flex-shrink-0 w-9 h-9 rounded-full bg-brand-accent/80 hover:bg-brand-accent flex items-center justify-center transition-all">
+                    class="shrink-0 w-9 h-9 rounded-full bg-brand-accent/80 hover:bg-brand-accent flex items-center justify-center transition-all">
                     <BIcon :name="mediaBrowserPlayingId === m.id ? 'Pause' : 'Play'" class="w-4 h-4 text-white" />
                   </button>
                   <div class="flex-1 min-w-0">
@@ -130,7 +130,7 @@ function openMediaBrowserImage(url: string) {
               <div v-else>
                 <div v-for="m in group.items" :key="m.id" class="px-4 py-2.5">
                   <p class="text-xs text-brand-accent font-semibold">{{ m.sender?.display_name || m.sender?.username }}</p>
-                  <p class="text-sm text-white/80 break-words">{{ m.text }}</p>
+                  <p class="text-sm text-white/80 wrap-break-word">{{ m.text }}</p>
                   <p class="text-xs text-white/40 mt-0.5">{{ formatMsgTime(m.created_at) }}</p>
                 </div>
               </div>

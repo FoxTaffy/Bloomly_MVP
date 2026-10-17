@@ -155,7 +155,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
                   v-model="addInput"
                   type="text"
                   :placeholder="langStore.t.addPlaceholder"
-                  class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-brand-offwhite placeholder-brand-muted focus:outline-none focus:border-brand-accent transition-colors min-w-0 flex-1 sm:w-40 sm:flex-initial"
+                  class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-brand-offwhite placeholder-brand-muted focus:outline-hidden focus:border-brand-accent transition-colors min-w-0 flex-1 sm:w-40 sm:flex-initial"
                   @keydown.enter="handleSendRequest(addInput)"
                 />
                 <button
@@ -226,7 +226,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
                   v-model="searchQuery"
                   type="text"
                   :placeholder="langStore.t.searchPlaceholder"
-                  class="w-full bg-brand-bg border border-brand-border rounded-xl pl-9 pr-3 py-2 text-sm text-brand-offwhite placeholder-brand-muted focus:outline-none focus:border-brand-accent transition-colors"
+                  class="w-full bg-brand-bg border border-brand-border rounded-xl pl-9 pr-3 py-2 text-sm text-brand-offwhite placeholder-brand-muted focus:outline-hidden focus:border-brand-accent transition-colors"
                 />
               </div>
             </div>
@@ -264,7 +264,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
         </div>
 
         <!-- ═══ ПРАВАЯ ПАНЕЛЬ ══════════════════════════════════════════ -->
-        <div class="hidden xl:flex flex-col gap-4 w-[272px] flex-shrink-0">
+        <div class="hidden xl:flex flex-col gap-4 w-[272px] shrink-0">
 
           <!-- Заявки / Знакомые -->
           <div class="bg-brand-card border border-brand-border rounded-3xl p-4">
@@ -299,7 +299,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
             <template v-else>
               <div v-if="friendsStore.suggestions.length" class="flex flex-col gap-3">
                 <div v-for="user in friendsStore.suggestions.slice(0, 8)" :key="user.id" class="flex items-center gap-3 group">
-                  <router-link :to="`/profile/${user.username}`" class="flex-shrink-0">
+                  <router-link :to="`/profile/${user.username}`" class="shrink-0">
                     <img v-if="user.avatar_url" :src="user.avatar_url" class="w-9 h-9 rounded-full object-cover border border-brand-border" />
                     <div v-else class="w-9 h-9 rounded-full border border-brand-border bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm">
                       {{ avatarInitial(user.display_name || user.username) }}
@@ -309,7 +309,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
                     <p class="text-sm font-semibold text-brand-offwhite truncate leading-tight">{{ user.display_name || user.username }}</p>
                     <p class="text-xs text-white/55 truncate">@{{ user.username }}</p>
                   </router-link>
-                  <button class="flex-shrink-0 w-8 h-8 rounded-xl bg-brand-accent/15 hover:bg-brand-accent/30 flex items-center justify-center text-brand-accent transition-colors" @click="handleSendRequest(user.id)">
+                  <button class="shrink-0 w-8 h-8 rounded-xl bg-brand-accent/15 hover:bg-brand-accent/30 flex items-center justify-center text-brand-accent transition-colors" @click="handleSendRequest(user.id)">
                     <BIcon name="UserPlus" class="w-4 h-4" />
                   </button>
                 </div>
@@ -369,7 +369,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
 
     <!-- Модалка удаления из друзей -->
     <Transition name="fade">
-      <div v-if="confirmRemoveId" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="confirmRemoveId = null">
+      <div v-if="confirmRemoveId" class="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" @click.self="confirmRemoveId = null">
         <div class="bg-brand-card border border-brand-border rounded-3xl p-6 max-w-sm w-full shadow-card">
           <h3 class="font-bold text-brand-offwhite text-lg mb-2">{{ langStore.t.confirmRemoveTitle }}</h3>
           <p class="text-white/55 text-sm mb-5">{{ langStore.t.confirmRemoveHint }}</p>

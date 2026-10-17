@@ -59,8 +59,8 @@ const save = async () => {
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @mousedown.self="emit('close')">
-      <div class="w-full max-w-lg rounded-2xl bg-[#161F40] border border-white/10 shadow-2xl shadow-black/50 flex flex-col max-h-[90vh]">
+    <div class="fixed inset-0 z-120 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs" @mousedown.self="emit('close')">
+      <div class="w-full max-w-lg rounded-2xl bg-brand-accent-plus-plus border border-white/10 shadow-2xl shadow-black/50 flex flex-col max-h-[90vh]">
         <div class="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div class="min-w-0">
             <p class="font-extrabold text-white text-sm">Редактирование профиля</p>
@@ -71,13 +71,13 @@ const save = async () => {
           </button>
         </div>
 
-        <div class="px-5 py-4 space-y-3 overflow-y-auto">
+        <div class="px-5 py-4 stack-y-3 overflow-y-auto">
           <label v-for="f in FIELDS" :key="f.key" class="block">
             <span class="block text-[10px] font-extrabold uppercase tracking-wider text-white/40 mb-1">{{ f.label }}</span>
             <textarea v-if="f.multiline" v-model="form[f.key]" :maxlength="f.max" rows="3"
-              class="w-full rounded-xl bg-white/[0.04] border border-white/10 focus:border-violet-400/50 outline-none px-3 py-2 text-sm text-white resize-none" />
+              class="w-full rounded-xl bg-white/4 border border-white/10 focus:border-violet-400/50 outline-hidden px-3 py-2 text-sm text-white resize-none" />
             <input v-else v-model="form[f.key]" :maxlength="f.max" type="text"
-              class="w-full rounded-xl bg-white/[0.04] border border-white/10 focus:border-violet-400/50 outline-none px-3 py-2 text-sm text-white" />
+              class="w-full rounded-xl bg-white/4 border border-white/10 focus:border-violet-400/50 outline-hidden px-3 py-2 text-sm text-white" />
           </label>
           <p v-if="error" class="text-xs font-semibold text-rose-400">{{ error }}</p>
         </div>

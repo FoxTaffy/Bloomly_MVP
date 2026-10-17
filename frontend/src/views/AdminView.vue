@@ -139,17 +139,17 @@ const totalPendingBadge = computed(() => {
   <div class="min-h-screen bg-brand-bg text-white font-nunito flex relative isolate">
 
     <!-- ═══════════════════ SIDEBAR ═══════════════════════════════════════ -->
-    <aside class="w-64 flex-shrink-0 hidden md:flex flex-col fixed top-0 left-0 h-full z-30
+    <aside class="w-64 shrink-0 hidden md:flex flex-col fixed top-0 left-0 h-full z-30
       bg-brand-card border-r border-brand-border">
 
       <!-- Logo -->
       <div class="px-5 pt-6 pb-5 border-b border-brand-border">
         <div class="flex items-center gap-2.5">
-          <div class="w-9 h-9 flex items-center justify-center flex-shrink-0">
+          <div class="w-9 h-9 flex items-center justify-center shrink-0">
             <img src="/bloomly.png?v=2" alt="Bloomly" class="w-full h-full object-contain" />
           </div>
           <p class="font-extrabold text-white text-xl tracking-tight leading-none">Bloomly</p>
-          <span class="text-[10px] font-extrabold px-2 py-1 rounded-full bg-brand-accent/15 text-brand-accent border border-brand-accent/25 tracking-[0.1em]">ADMIN</span>
+          <span class="text-[10px] font-extrabold px-2 py-1 rounded-full bg-brand-accent/15 text-brand-accent border border-brand-accent/25 tracking-widest">ADMIN</span>
         </div>
       </div>
 
@@ -174,7 +174,7 @@ const totalPendingBadge = computed(() => {
       <header class="adm-header sticky top-0 z-20 bg-brand-bg/95 backdrop-blur-xl border-b border-brand-border px-4 md:px-6 py-3 md:py-3.5 flex items-center gap-2 md:gap-4">
         <!-- Menu button: телефон -->
         <button @click="mobileNavOpen = true" :aria-label="langStore.t.adminMenuOpen"
-          class="md:hidden w-10 h-10 rounded-xl bg-brand-bg border border-brand-border flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0">
+          class="md:hidden w-10 h-10 rounded-xl bg-brand-bg border border-brand-border flex items-center justify-center text-white/60 hover:text-white transition-all shrink-0">
           <BIcon name="Menu" class="w-5 h-5" />
         </button>
 
@@ -184,11 +184,11 @@ const totalPendingBadge = computed(() => {
           <input v-model="headerSearch" @keyup.enter="runHeaderSearch" type="search" enterkeyhint="search"
             :placeholder="langStore.t.adminSearchPlaceholderGlobal"
             class="w-full bg-brand-bg border border-brand-border rounded-2xl pl-11 pr-4 py-2.5 text-base md:text-sm text-white placeholder-white/25
-              outline-none focus:border-brand-accent/50 transition-all" />
+              outline-hidden focus:border-brand-accent/50 transition-all" />
         </div>
 
         <!-- Bell -->
-        <button :title="langStore.t.adminBellPendingReview" class="relative flex w-10 h-10 md:w-9 md:h-9 rounded-xl bg-brand-bg border border-brand-border items-center justify-center text-white/50 hover:text-white transition-all flex-shrink-0">
+        <button :title="langStore.t.adminBellPendingReview" class="relative flex w-10 h-10 md:w-9 md:h-9 rounded-xl bg-brand-bg border border-brand-border items-center justify-center text-white/50 hover:text-white transition-all shrink-0">
           <BIcon name="Bell" class="w-4 h-4" />
           <span v-if="totalPendingBadge > 0" class="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-brand-error text-white text-[9px] font-extrabold flex items-center justify-center">
             {{ totalPendingBadge > 99 ? '99+' : totalPendingBadge }}
@@ -196,9 +196,9 @@ const totalPendingBadge = computed(() => {
         </button>
 
         <!-- My identity -->
-        <div class="hidden lg:flex items-center gap-2.5 pl-3 border-l border-brand-border flex-shrink-0">
-          <img v-if="auth.user?.avatar_url" :src="auth.user.avatar_url" class="w-9 h-9 rounded-xl object-cover border border-brand-border flex-shrink-0" />
-          <div v-else class="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0"
+        <div class="hidden lg:flex items-center gap-2.5 pl-3 border-l border-brand-border shrink-0">
+          <img v-if="auth.user?.avatar_url" :src="auth.user.avatar_url" class="w-9 h-9 rounded-xl object-cover border border-brand-border shrink-0" />
+          <div v-else class="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"
             :style="`background:${roleColor(myRole)}20;color:${roleColor(myRole)}`">
             {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
           </div>
@@ -236,7 +236,7 @@ const totalPendingBadge = computed(() => {
         <div class="px-4 pt-5 pb-4 border-b border-brand-border flex items-center gap-2.5">
           <img src="/bloomly.png?v=2" alt="Bloomly" class="w-8 h-8 object-contain" />
           <p class="font-extrabold text-white text-lg tracking-tight leading-none">Bloomly</p>
-          <span class="text-[10px] font-extrabold px-2 py-1 rounded-full bg-brand-accent/15 text-brand-accent border border-brand-accent/25 tracking-[0.1em]">ADMIN</span>
+          <span class="text-[10px] font-extrabold px-2 py-1 rounded-full bg-brand-accent/15 text-brand-accent border border-brand-accent/25 tracking-widest">ADMIN</span>
           <button @click="mobileNavOpen = false" :aria-label="langStore.t.adminMenuClose"
             class="ml-auto w-9 h-9 rounded-xl flex items-center justify-center text-white/50 hover:text-white hover:bg-white/5">
             <BIcon name="X" class="w-5 h-5" />

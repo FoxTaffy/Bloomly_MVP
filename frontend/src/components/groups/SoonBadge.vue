@@ -77,7 +77,7 @@ const fmtNum = (n?: number) => {
     <!-- Бейдж (компактный) -->
     <span class="soon-badge inline-flex items-stretch gap-0 rounded-xl overflow-hidden whitespace-nowrap">
       <!-- Стрелка + SOON -->
-      <span class="soon-left flex flex-col items-center justify-center px-2 py-1.5 gap-[2px] flex-shrink-0">
+      <span class="soon-left flex flex-col items-center justify-center px-2 py-1.5 gap-[2px] shrink-0">
         <svg class="w-3 h-3 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
           stroke-linecap="round" stroke-linejoin="round">
           <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -85,7 +85,7 @@ const fmtNum = (n?: number) => {
         <span class="text-[6px] font-black tracking-[0.18em] text-white/40 leading-none">SOON</span>
       </span>
       <!-- Разделитель -->
-      <span class="w-px bg-white/10 flex-shrink-0 my-1.5"></span>
+      <span class="w-px bg-white/10 shrink-0 my-1.5"></span>
       <!-- Код -->
       <span class="flex items-center px-2.5 text-[12px] font-black tracking-wider text-white leading-none">{{ shortCode }}</span>
     </span>

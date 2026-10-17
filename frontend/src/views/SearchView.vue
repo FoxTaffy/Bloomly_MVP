@@ -109,7 +109,7 @@ onMounted(fetchTrendingTags)
           <!-- Header / refine search -->
           <div class="bg-brand-card border border-brand-border rounded-3xl px-5 py-4 shadow-xl">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-2xl bg-brand-accent/15 flex items-center justify-center flex-shrink-0">
+              <div class="w-10 h-10 rounded-2xl bg-brand-accent/15 flex items-center justify-center shrink-0">
                 <BIcon name="Search" class="w-5 h-5 text-brand-accent" />
               </div>
               <div class="min-w-0">
@@ -118,11 +118,11 @@ onMounted(fetchTrendingTags)
               </div>
             </div>
             <div class="flex items-center gap-2 mt-3 bg-brand-bg border border-brand-border rounded-full py-2 pl-4 pr-2">
-              <BIcon name="Search" class="w-4 h-4 text-white/40 flex-shrink-0" />
+              <BIcon name="Search" class="w-4 h-4 text-white/40 shrink-0" />
               <input ref="queryInput" v-model="query" @keydown.enter="submitSearch" type="text" placeholder="Поиск..."
-                class="flex-1 bg-transparent text-white placeholder-brand-muted text-sm outline-none min-w-0" />
+                class="flex-1 bg-transparent text-white placeholder-brand-muted text-sm outline-hidden min-w-0" />
               <button @click="submitSearch"
-                class="px-4 py-1.5 rounded-full bg-brand-accent hover:bg-brand-accent-plus text-white text-xs font-semibold transition-colors flex-shrink-0">
+                class="px-4 py-1.5 rounded-full bg-brand-accent hover:bg-brand-accent-plus text-white text-xs font-semibold transition-colors shrink-0">
                 Найти
               </button>
             </div>
@@ -139,7 +139,7 @@ onMounted(fetchTrendingTags)
           <div class="flex items-center gap-1 bg-brand-card border border-brand-border rounded-2xl p-1.5 overflow-x-auto hide-scrollbar">
             <button v-for="tab in TABS" :key="tab.id" @click="activeTab = tab.id"
               :class="['flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all',
-                activeTab === tab.id ? 'bg-brand-accent text-white shadow-sm' : 'text-white/55 hover:text-white hover:bg-white/5']">
+                activeTab === tab.id ? 'bg-brand-accent text-white shadow-xs' : 'text-white/55 hover:text-white hover:bg-white/5']">
               <BIcon :name="tab.icon" class="w-4 h-4" />{{ tab.label }}
             </button>
           </div>
@@ -186,7 +186,7 @@ onMounted(fetchTrendingTags)
                     <router-link v-for="user in users.slice(0, 6)" :key="user.id" :to="`/profile/${user.username}`"
                       class="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors text-left">
                       <img :src="user.avatar_url || '/icons/badges/NN.jpg'"
-                        class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0" @error="onAvatarError" />
+                        class="w-10 h-10 rounded-full object-cover border border-brand-border shrink-0" @error="onAvatarError" />
                       <div class="min-w-0">
                         <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
                         <p class="text-xs text-white/55 truncate">@{{ user.username }}</p>
@@ -204,8 +204,8 @@ onMounted(fetchTrendingTags)
                     <router-link v-for="group in groups.slice(0, 6)" :key="group.id" :to="`/groups/${group.slug || group.id}`"
                       class="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors text-left">
                       <img v-if="group.avatar_url" :src="group.avatar_url"
-                        class="w-10 h-10 rounded-xl object-cover border border-brand-border flex-shrink-0" @error="onAvatarError" />
-                      <div v-else class="w-10 h-10 rounded-xl bg-brand-accent/15 border border-brand-border flex items-center justify-center text-brand-accent font-bold text-sm flex-shrink-0">
+                        class="w-10 h-10 rounded-xl object-cover border border-brand-border shrink-0" @error="onAvatarError" />
+                      <div v-else class="w-10 h-10 rounded-xl bg-brand-accent/15 border border-brand-border flex items-center justify-center text-brand-accent font-bold text-sm shrink-0">
                         {{ (group.name ?? '?')[0].toUpperCase() }}
                       </div>
                       <div class="min-w-0">
@@ -221,7 +221,7 @@ onMounted(fetchTrendingTags)
                     <h2 class="text-sm font-bold text-white/80">Посты</h2>
                     <button @click="activeTab = 'posts'" class="text-xs text-brand-accent hover:text-white font-semibold">Показать все</button>
                   </div>
-                  <div class="space-y-4">
+                  <div class="stack-y-4">
                     <PostCard v-for="post in posts.slice(0, 5)" :key="post.id" :post="post"
                       @deleted="onPostDeleted" @updated="onPostUpdated" />
                   </div>
@@ -246,7 +246,7 @@ onMounted(fetchTrendingTags)
                 <BIcon name="FileSearch" class="w-8 h-8 mb-2 opacity-30 mx-auto text-white/55" />
                 <p class="text-white/55 text-sm">Постов не найдено</p>
               </div>
-              <div v-else class="space-y-4">
+              <div v-else class="stack-y-4">
                 <PostCard v-for="post in posts" :key="post.id" :post="post"
                   @deleted="onPostDeleted" @updated="onPostUpdated" />
               </div>

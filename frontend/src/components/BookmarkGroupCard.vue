@@ -57,7 +57,7 @@ async function removeBookmark() {
 
     <!-- Banner -->
     <div
-      class="relative h-16 flex-shrink-0"
+      class="relative h-16 shrink-0"
       :style="group.banner_url ? '' : 'background: ' + bannerGradient(group.accent_color)">
       <img v-if="group.banner_url" :src="group.banner_url" :alt="group.name" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
       <div v-else class="absolute inset-0 opacity-10"
@@ -65,7 +65,7 @@ async function removeBookmark() {
 
       <!-- 18+ badge -->
       <span v-if="group.is_nsfw"
-        class="absolute top-2 left-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md bg-brand-error/80 text-white border border-brand-error/30 backdrop-blur-sm">
+        class="absolute top-2 left-2 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md bg-brand-error/80 text-white border border-brand-error/30 backdrop-blur-xs">
         18+
       </span>
 
@@ -73,7 +73,7 @@ async function removeBookmark() {
       <button
         @click.stop="removeBookmark"
         :disabled="removing"
-        class="absolute top-2 right-2 p-1.5 rounded-xl bg-black/50 backdrop-blur-sm text-white/70 hover:text-yellow-400 hover:bg-black/70 transition-all opacity-0 group-hover:opacity-100 disabled:opacity-30"
+        class="absolute top-2 right-2 p-1.5 rounded-xl bg-black/50 backdrop-blur-xs text-white/70 hover:text-yellow-400 hover:bg-black/70 transition-all opacity-0 group-hover:opacity-100 disabled:opacity-30"
         :title="langStore.t.unbookmarkGroup">
         <BIcon name="BookmarkX" class="w-3.5 h-3.5" />
       </button>
@@ -83,7 +83,7 @@ async function removeBookmark() {
     <div class="px-3 pb-3 pt-0 flex flex-col gap-1.5 flex-1">
       <!-- Avatar -->
       <div class="-mt-6 mb-1">
-        <div class="w-12 h-12 rounded-xl overflow-hidden border-[3px] border-brand-card shadow"
+        <div class="w-12 h-12 rounded-xl overflow-hidden border-[3px] border-brand-card shadow-sm"
           :style="!group.avatar_url ? 'background: ' + bannerGradient(group.accent_color) : ''">
           <img v-if="group.avatar_url" :src="group.avatar_url" :alt="group.name" class="w-full h-full object-cover" />
           <div v-else class="w-full h-full flex items-center justify-center">
@@ -96,7 +96,7 @@ async function removeBookmark() {
       <div>
         <div class="flex items-center gap-1.5 min-w-0">
           <p class="font-bold text-sm text-white truncate leading-tight">{{ group.name }}</p>
-          <BIcon v-if="group.is_verified" name="BadgeCheck" class="w-3.5 h-3.5 flex-shrink-0 text-brand-accent" />
+          <BIcon v-if="group.is_verified" name="BadgeCheck" class="w-3.5 h-3.5 shrink-0 text-brand-accent" />
         </div>
         <span v-if="typeLabel[group.type]"
           class="inline-flex items-center text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md border mt-0.5"

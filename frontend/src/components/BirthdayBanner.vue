@@ -80,7 +80,7 @@ function openProfile(item: NearbyBirthday) {
 <template>
   <div
     v-if="current"
-    class="relative mx-3 mt-3 mb-1 flex-shrink-0 rounded-2xl overflow-hidden border border-brand-accent/25 bg-gradient-to-br from-brand-accent/20 via-brand-purple/10 to-brand-card shadow-lg"
+    class="relative mx-3 mt-3 mb-1 shrink-0 rounded-2xl overflow-hidden border border-brand-accent/25 bg-linear-to-br/srgb from-brand-accent/20 via-brand-purple/10 to-brand-card shadow-lg"
     @mouseenter="stopAutoplay"
     @mouseleave="startAutoplay"
   >
@@ -91,7 +91,7 @@ function openProfile(item: NearbyBirthday) {
     <Transition :name="direction === 'next' ? 'bday-slide-next' : 'bday-slide-prev'" mode="out-in">
       <div :key="current.id" class="relative flex items-center gap-3 px-4 py-3">
         <!-- Avatar -->
-        <div class="relative flex-shrink-0 cursor-pointer" @click="openProfile(current)">
+        <div class="relative shrink-0 cursor-pointer" @click="openProfile(current)">
           <img
             v-if="current.avatar_url"
             :src="current.avatar_url"
@@ -126,7 +126,7 @@ function openProfile(item: NearbyBirthday) {
         <button
           type="button"
           @click.stop="emit('message', current.id)"
-          class="flex-shrink-0 p-2 rounded-xl bg-white/10 hover:bg-brand-accent text-white/80 hover:text-white transition-all active:scale-95"
+          class="shrink-0 p-2 rounded-xl bg-white/10 hover:bg-brand-accent text-white/80 hover:text-white transition-all active:scale-95"
           title="Написать"
         >
           <BIcon name="MessageCircle" class="w-4 h-4" />
@@ -137,11 +137,11 @@ function openProfile(item: NearbyBirthday) {
     <!-- Carousel controls (only when 2+) -->
     <template v-if="items.length > 1">
       <button type="button" @click.stop="prev"
-        class="absolute left-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/30 hover:bg-black/55 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white transition-all active:scale-90">
+        class="absolute left-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/30 hover:bg-black/55 backdrop-blur-xs flex items-center justify-center text-white/80 hover:text-white transition-all active:scale-90">
         <BIcon name="ChevronLeft" class="w-3.5 h-3.5" />
       </button>
       <button type="button" @click.stop="next"
-        class="absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/30 hover:bg-black/55 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white transition-all active:scale-90">
+        class="absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/30 hover:bg-black/55 backdrop-blur-xs flex items-center justify-center text-white/80 hover:text-white transition-all active:scale-90">
         <BIcon name="ChevronRight" class="w-3.5 h-3.5" />
       </button>
 

@@ -87,16 +87,16 @@ onActivated(fetchSettingsAndLogs)
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
       <div class="rounded-2xl border border-brand-border bg-brand-card p-5 h-fit">
         <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminPlatformSettingsTitle }}</h3>
-        <div v-if="isLoadingSettings" class="space-y-3">
+        <div v-if="isLoadingSettings" class="stack-y-3">
           <div v-for="n in 3" :key="n" class="h-10 rounded-xl bg-white/5 animate-pulse" />
         </div>
-        <div v-else-if="siteSettings" class="space-y-4">
+        <div v-else-if="siteSettings" class="stack-y-4">
           <div v-for="s in SETTING_META" :key="s.key" class="flex items-center justify-between gap-4">
             <div class="min-w-0">
               <p class="text-sm font-bold text-white">{{ s.label }}</p>
               <p class="text-xs text-white/40 mt-0.5">{{ s.desc }}</p>
             </div>
-            <button @click="toggleSetting(s.key)" class="w-11 h-6 rounded-full flex-shrink-0 transition-all relative"
+            <button @click="toggleSetting(s.key)" class="w-11 h-6 rounded-full shrink-0 transition-all relative"
               :class="siteSettings[s.key] ? 'bg-brand-accent' : 'bg-white/10'">
               <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" :class="siteSettings[s.key] ? 'left-[22px]' : 'left-0.5'" />
             </button>
@@ -106,13 +106,13 @@ onActivated(fetchSettingsAndLogs)
 
       <div class="rounded-2xl border border-brand-border bg-brand-card p-5">
         <h3 class="font-extrabold text-white text-sm mb-4">{{ langStore.t.adminAuditLogTitle }}</h3>
-        <div v-if="isLoadingAuditLogs" class="space-y-3">
+        <div v-if="isLoadingAuditLogs" class="stack-y-3">
           <div v-for="n in 5" :key="n" class="h-10 rounded-xl bg-white/5 animate-pulse" />
         </div>
         <div v-else-if="!auditLogs.length" class="text-xs text-white/25 text-center py-10">{{ langStore.t.adminNoActionsYet }}</div>
-        <div v-else class="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+        <div v-else class="stack-y-3 max-h-[480px] overflow-y-auto pr-1">
           <div v-for="l in auditLogs" :key="l.id" class="flex items-start gap-3">
-            <div class="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <div class="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center shrink-0 mt-0.5">
               <BIcon :name="AUDIT_ACTION_ICON[l.action] ?? 'Activity'" class="w-3.5 h-3.5 text-white/50" />
             </div>
             <div class="min-w-0">

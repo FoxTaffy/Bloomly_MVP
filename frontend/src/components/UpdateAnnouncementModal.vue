@@ -66,7 +66,7 @@ const close = () => {
     >
       <div
         v-if="visible && update"
-        class="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+        class="fixed inset-0 z-500 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
         @click.self="close"
       >
         <Transition
@@ -89,15 +89,15 @@ const close = () => {
             <!-- Scrollable body — image + text can be arbitrarily long -->
             <div class="overflow-y-auto">
               <!-- Cover -->
-              <img v-if="update.image_url" :src="update.image_url" class="w-full aspect-[3/1] object-cover flex-shrink-0" />
-              <div v-else class="w-full aspect-[3/1] bg-gradient-to-br from-[#4C67CF] via-[#7c3aed] to-[#4C67CF] flex items-center justify-center flex-shrink-0">
+              <img v-if="update.image_url" :src="update.image_url" class="w-full aspect-3/1 object-cover shrink-0" />
+              <div v-else class="w-full aspect-3/1 bg-linear-to-br/srgb from-[#4C67CF] via-[#7c3aed] to-[#4C67CF] flex items-center justify-center shrink-0">
                 <span class="text-white font-black text-5xl select-none" style="font-family:system-ui,sans-serif;letter-spacing:-2px">B</span>
               </div>
 
               <!-- Content -->
               <div class="px-6 py-5">
                 <div class="flex items-center gap-1.5 mb-2.5">
-                  <div class="w-4 h-4 rounded-md bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center flex-shrink-0">
+                  <div class="w-4 h-4 rounded-md bg-linear-to-br/srgb from-[#4C67CF] to-[#7c3aed] flex items-center justify-center shrink-0">
                     <span class="text-white font-black text-[8px]">B</span>
                   </div>
                   <span class="text-xs font-bold text-brand-accent">Обновление Bloomly</span>

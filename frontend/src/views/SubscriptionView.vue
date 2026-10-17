@@ -160,9 +160,9 @@ function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
 
     <!-- Ambient background glow -->
     <div class="pointer-events-none absolute inset-0 overflow-hidden">
-      <div class="absolute -top-32 left-1/4 w-[36rem] h-[36rem] rounded-full bg-brand-accent/15 blur-[120px]" />
-      <div class="absolute top-40 right-0 w-[28rem] h-[28rem] rounded-full bg-sky-500/10 blur-[110px]" />
-      <div class="absolute bottom-0 left-0 w-[26rem] h-[26rem] rounded-full bg-amber-400/8 blur-[110px]" />
+      <div class="absolute -top-32 left-1/4 w-xl h-144 rounded-full bg-brand-accent/15 blur-[120px]" />
+      <div class="absolute top-40 right-0 w-md h-112 rounded-full bg-sky-500/10 blur-[110px]" />
+      <div class="absolute bottom-0 left-0 w-104 h-104 rounded-full bg-amber-400/8 blur-[110px]" />
     </div>
 
     <!-- Toast -->
@@ -189,7 +189,7 @@ function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
             <BIcon name="Sparkles" class="w-3.5 h-3.5" />
             Bloomly Premium
           </div>
-          <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight bg-gradient-to-b from-white to-white/70 bg-clip-text text-transparent">
+          <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-3 tracking-tight bg-linear-to-b/srgb from-white to-white/70 bg-clip-text text-transparent">
             {{ langStore.t.subHeroTitle }}
           </h1>
           <p class="text-lg text-white/55 max-w-xl mx-auto">
@@ -205,7 +205,7 @@ function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
 
           <!-- Billing toggle -->
           <div class="relative inline-flex items-center gap-1 mt-8 p-1 rounded-2xl bg-brand-card border border-brand-border shadow-inner">
-            <div class="absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-xl bg-gradient-to-b from-white/15 to-white/5 border border-white/10 shadow-lg transition-transform duration-300 ease-out"
+            <div class="absolute top-1 bottom-1 w-[calc(50%-0.25rem)] rounded-xl bg-linear-to-b/srgb from-white/15 to-white/5 border border-white/10 shadow-lg transition-transform duration-300 ease-out"
               :class="billing === 'yearly' ? 'translate-x-[calc(100%+0.5rem)]' : 'translate-x-0'" />
             <button @click="billing = 'monthly'"
               class="relative z-10 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors duration-150 active:scale-95"
@@ -234,22 +234,22 @@ function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
           >
             <!-- Featured glow halo -->
             <div v-if="plan.featured"
-              class="absolute -inset-1 rounded-[28px] opacity-60 blur-md bg-gradient-to-b from-brand-accent/50 to-brand-accent/0 pointer-events-none featured-pulse" />
+              class="absolute -inset-1 rounded-[28px] opacity-60 blur-md bg-linear-to-b/srgb from-brand-accent/50 to-brand-accent/0 pointer-events-none featured-pulse" />
 
             <!-- Active glow -->
             <div v-if="currentTier === plan.id"
-              class="absolute -inset-0.5 rounded-3xl opacity-30 blur-sm"
-              :class="`bg-gradient-to-b ${plan.gradient}`" />
+              class="absolute -inset-0.5 rounded-3xl opacity-30 blur-xs"
+              :class="`bg-linear-to-b/srgb ${plan.gradient}`" />
 
             <!-- Ticket body -->
-            <div class="relative rounded-3xl border overflow-hidden backdrop-blur-sm"
+            <div class="relative rounded-3xl border overflow-hidden backdrop-blur-xs"
               :class="[
-                `bg-gradient-to-b ${plan.gradient}`,
+                `bg-linear-to-b/srgb ${plan.gradient}`,
                 plan.featured ? 'border-brand-accent/60 shadow-2xl shadow-brand-accent/25' : 'border-brand-border',
               ]">
 
               <!-- Accent line top -->
-              <div class="h-1 w-full" :class="plan.featured ? 'bg-gradient-to-r from-brand-accent via-brand-accent-minus to-brand-accent' : 'bg-white/10'" />
+              <div class="h-1 w-full" :class="plan.featured ? 'bg-linear-to-r/srgb from-brand-accent via-brand-accent-minus to-brand-accent' : 'bg-white/10'" />
 
               <!-- Top half: plan info -->
               <div class="px-5 pt-5 pb-4">
@@ -285,15 +285,15 @@ function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
                   </template>
                   <template v-else>
                     <div class="flex items-end gap-1.5">
-                      <p class="text-4xl font-extrabold tracking-tight" :class="plan.featured ? 'bg-gradient-to-b from-white to-brand-accent-minus bg-clip-text text-transparent' : 'text-white'">{{ effectivePrice(plan) }} ₽</p>
+                      <p class="text-4xl font-extrabold tracking-tight" :class="plan.featured ? 'bg-linear-to-b/srgb from-white to-brand-accent-minus bg-clip-text text-transparent' : 'text-white'">{{ effectivePrice(plan) }} ₽</p>
                       <p class="text-sm text-white/55 mb-1.5">{{ langStore.t.subPerMonth }}</p>
                     </div>
-                    <div class="flex items-center flex-wrap gap-1.5 mt-2 min-h-[1.5rem]">
+                    <div class="flex items-center flex-wrap gap-1.5 mt-2 min-h-6">
                       <template v-if="totalDiscountPercent(plan) > 0">
                         <span class="text-xs text-white/35 line-through decoration-white/25">{{ originalPrice(plan) }} ₽</span>
                         <span class="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-lg border"
                           :class="isEarlyUser
-                            ? 'text-amber-300 bg-gradient-to-r from-amber-400/25 to-amber-500/10 border-amber-400/30 shadow-[0_0_12px_rgba(251,191,36,0.25)]'
+                            ? 'text-amber-300 bg-linear-to-r/srgb from-amber-400/25 to-amber-500/10 border-amber-400/30 shadow-[0_0_12px_rgba(251,191,36,0.25)]'
                             : 'text-brand-success bg-brand-success/10 border-brand-success/20'">
                           <BIcon :name="isEarlyUser ? 'Star' : 'TrendingDown'" class="w-2.5 h-2.5" :class="isEarlyUser ? 'fill-amber-300' : ''" />
                           –{{ totalDiscountPercent(plan) }}%
@@ -309,9 +309,9 @@ function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
 
               <!-- Tear-line / perforation divider -->
               <div class="relative px-3 flex items-center gap-0 -my-0.5 z-10">
-                <div class="w-5 h-5 rounded-full bg-brand-bg flex-shrink-0 -ml-4 border border-brand-border" />
+                <div class="w-5 h-5 rounded-full bg-brand-bg shrink-0 -ml-4 border border-brand-border" />
                 <div class="flex-1 border-t-2 border-dashed border-white/12 mx-1" />
-                <div class="w-5 h-5 rounded-full bg-brand-bg flex-shrink-0 -mr-4 border border-brand-border" />
+                <div class="w-5 h-5 rounded-full bg-brand-bg shrink-0 -mr-4 border border-brand-border" />
               </div>
 
               <!-- Bottom half: features + button -->
@@ -323,13 +323,13 @@ function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
                 </div>
 
                 <!-- Features -->
-                <ul class="space-y-2.5 mb-5">
+                <ul class="stack-y-2.5 mb-5">
                   <li
                     v-for="feature in plan.features"
                     :key="feature"
                     class="flex items-start gap-2 text-xs text-white/65"
                   >
-                    <span class="w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 mt-0.5"
+                    <span class="w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5"
                       :class="plan.iconBg">
                       <BIcon name="Check" class="w-2.5 h-2.5" />
                     </span>
@@ -347,7 +347,7 @@ function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
                     : plan.id === 'free'
                       ? 'bg-white/5 text-white/40 border border-white/10 hover:bg-white/10 hover:text-white/70'
                       : plan.featured
-                        ? 'bg-gradient-to-r from-brand-accent to-brand-accent-plus text-white shadow-lg shadow-brand-accent/40 hover:shadow-brand-accent/60'
+                        ? 'bg-linear-to-r/srgb from-brand-accent to-brand-accent-plus text-white shadow-lg shadow-brand-accent/40 hover:shadow-brand-accent/60'
                         : 'bg-white/8 hover:bg-white/15 text-white border border-white/10'"
                 >
                   <BIcon v-if="isLocked(plan.id)" name="CheckCircle" class="w-4 h-4" />
@@ -378,9 +378,9 @@ function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
               { q: langStore.t.subFaqQ3, a: langStore.t.subFaqA3 },
               { q: langStore.t.subFaqQ4, a: langStore.t.subFaqA4 },
             ]" :key="faq.q"
-              class="pb-6 border-b border-white/5 md:border-b-0 last:border-b-0 md:[&:nth-last-child(-n+2)]:pb-0">
+              class="pb-6 border-b border-white/5 md:border-b-0 last:border-b-0 md:nth-last-[-n+2]:pb-0">
               <p class="font-bold text-white mb-1.5 flex items-center gap-2">
-                <BIcon name="ChevronRight" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+                <BIcon name="ChevronRight" class="w-3.5 h-3.5 text-brand-accent shrink-0" />
                 {{ faq.q }}
               </p>
               <p class="text-white/55 leading-relaxed pl-[22px]">{{ faq.a }}</p>

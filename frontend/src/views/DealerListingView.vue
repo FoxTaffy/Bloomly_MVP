@@ -428,7 +428,7 @@ async function submitReport() {
     <div class="max-w-7xl mx-auto flex pt-20 md:pt-24 px-3 md:px-4 gap-8">
       <AppSidebar />
 
-      <main class="flex-1 min-w-0 pb-28 md:pb-20 space-y-4">
+      <main class="flex-1 min-w-0 pb-28 md:pb-20 stack-y-4">
 
         <!-- Back -->
         <button @click="router.push({ name: 'dealers-den' })"
@@ -437,10 +437,10 @@ async function submitReport() {
         </button>
 
         <!-- Loading skeleton -->
-        <div v-if="store.isLoading" class="space-y-4">
+        <div v-if="store.isLoading" class="stack-y-4">
           <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden animate-pulse">
             <div class="w-full h-80 bg-brand-border" />
-            <div class="p-6 space-y-4">
+            <div class="p-6 stack-y-4">
               <div class="h-7 bg-brand-border rounded-full w-2/3" />
               <div class="h-4 bg-brand-border rounded-full w-full" />
               <div class="h-4 bg-brand-border rounded-full w-3/4" />
@@ -469,7 +469,7 @@ async function submitReport() {
             <div class="absolute inset-0 opacity-[0.07]"
               style="background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.1) 0, rgba(255,255,255,0.1) 1px, transparent 0, transparent 50%); background-size: 16px 16px" />
             <div class="relative z-10 px-5 py-4 flex items-center gap-3">
-              <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+              <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                 style="background: rgba(255,255,255,0.15)">
                 <BIcon :name="kindTheme.icon" class="w-5 h-5 text-white" />
               </div>
@@ -480,7 +480,7 @@ async function submitReport() {
                 <h1 class="text-lg font-black text-white leading-tight line-clamp-1">{{ listing.title }}</h1>
               </div>
               <span v-if="isSoldOut(listing)"
-                class="flex-shrink-0 bg-brand-error text-white text-xs font-extrabold px-3 py-1.5 rounded-full">
+                class="shrink-0 bg-brand-error text-white text-xs font-extrabold px-3 py-1.5 rounded-full">
                 {{ langStore.t.dealerListingSoldOutBadge }}
               </span>
             </div>
@@ -499,7 +499,7 @@ async function submitReport() {
             <!-- Owner buttons -->
             <template v-if="auth.user?.id === listing.seller_id">
               <button @click="openEdit"
-                class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white rounded-2xl transition-all hover:opacity-90 shadow-sm"
+                class="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white rounded-2xl transition-all hover:opacity-90 shadow-xs"
                 style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
                 <BIcon name="Pencil" class="w-3.5 h-3.5" /> {{ langStore.t.editPost }}
               </button>
@@ -525,7 +525,7 @@ async function submitReport() {
           <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
 
             <!-- Gallery (3/5) -->
-            <div class="lg:col-span-3 space-y-3">
+            <div class="lg:col-span-3 stack-y-3">
               <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
                 <!-- Main image -->
                 <div class="relative w-full" style="aspect-ratio: 4/3; background: #090d20">
@@ -542,14 +542,14 @@ async function submitReport() {
                     <span class="text-white/60 font-bold">{{ langStore.t.dealerListingNsfwContent }}</span>
                   </div>
                   <div v-if="listing.images.length > 1"
-                    class="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                    class="absolute bottom-3 right-3 bg-black/60 backdrop-blur-xs text-white text-xs font-bold px-2.5 py-1 rounded-full">
                     {{ activeImage + 1 }}/{{ listing.images.length }}
                   </div>
                 </div>
                 <!-- Thumbnails -->
                 <div v-if="listing.images.length > 1" class="flex gap-2 p-3 bg-black/20 overflow-x-auto scrollbar-none">
                   <button v-for="(img, i) in listing.images" :key="i" @click="activeImage = i"
-                    class="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 border-2 transition-all"
+                    class="w-14 h-14 rounded-xl overflow-hidden shrink-0 border-2 transition-all"
                     :class="activeImage === i ? 'border-brand-accent' : 'border-transparent opacity-55 hover:opacity-90'">
                     <img :src="img" class="w-full h-full object-cover" />
                   </button>
@@ -590,7 +590,7 @@ async function submitReport() {
               </div>
 
               <!-- Seller -->
-              <div class="bg-brand-card border border-brand-border rounded-2xl p-4 space-y-3 shadow-lg">
+              <div class="bg-brand-card border border-brand-border rounded-2xl p-4 stack-y-3 shadow-lg">
                 <div class="flex items-center justify-between gap-4 flex-wrap">
                   <div class="flex items-center gap-3 cursor-pointer" @click="router.push(`/dealers-den/seller/${listing.seller.username}`)">
                     <img v-if="listing.seller.avatar_url" :src="listing.seller.avatar_url"
@@ -603,7 +603,7 @@ async function submitReport() {
                         <span class="font-bold text-white text-sm hover:text-brand-accent transition-colors">
                           {{ listing.seller.display_name ?? listing.seller.username }}
                         </span>
-                        <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-4 h-4 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                        <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-4 h-4 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                       </div>
                       <p class="text-xs text-white/35">@{{ listing.seller.username }}</p>
                       <DenTrustBadge v-if="listing.seller.den_trust_score" :trust="listing.seller.den_trust_score" class="mt-1" />
@@ -628,7 +628,7 @@ async function submitReport() {
             </div>
 
             <!-- ═══ Right panel (2/5) ══════════════════════════════════════ -->
-            <div class="lg:col-span-2 space-y-4">
+            <div class="lg:col-span-2 stack-y-4">
 
               <!-- ── AUCTION ──────────────────────────────────────────────── -->
               <template v-if="listing.listing_kind === 'auction'">
@@ -644,7 +644,7 @@ async function submitReport() {
                       <p class="text-[10px] text-white/35">{{ langStore.t.dealerListingAuctionSubtitle }}</p>
                     </div>
                   </div>
-                  <div class="p-5 space-y-4">
+                  <div class="p-5 stack-y-4">
                     <div class="flex items-end justify-between">
                       <div>
                         <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">{{ langStore.t.dealerListingCurrentBid }}</p>
@@ -688,19 +688,19 @@ async function submitReport() {
                       </button>
                     </div>
                     <!-- Bid form -->
-                    <div v-if="showBidForm && !isSoldOut(listing)" class="space-y-3">
-                      <div class="space-y-1.5">
+                    <div v-if="showBidForm && !isSoldOut(listing)" class="stack-y-3">
+                      <div class="stack-y-1.5">
                         <label class="text-[9px] text-white/35 uppercase tracking-wider font-bold">{{ langStore.t.dealerListingYourBidLabel }}</label>
                         <div class="relative">
                           <input v-model.number="bidAmount" type="number" min="0" step="0.01"
-                            class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 pr-14 text-white text-sm outline-none focus:border-brand-yellow/40 transition-all" />
+                            class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 pr-14 text-white text-sm outline-hidden focus:border-brand-yellow/40 transition-all" />
                           <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/25 font-bold">{{ listing.currency }}</span>
                         </div>
                       </div>
-                      <div class="space-y-1.5">
+                      <div class="stack-y-1.5">
                         <label class="text-[9px] text-white/35 uppercase tracking-wider font-bold">{{ langStore.t.dealerListingMessageOptionalLabel }}</label>
                         <textarea v-model="bidMessage" rows="2" :placeholder="langStore.t.dealerListingBidMessagePlaceholder"
-                          class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm resize-none outline-none focus:border-brand-yellow/40 transition-all" />
+                          class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm resize-none outline-hidden focus:border-brand-yellow/40 transition-all" />
                       </div>
                       <div v-if="bidError" class="text-brand-error text-xs bg-brand-error/8 border border-brand-error/15 rounded-xl px-4 py-2.5">{{ bidError }}</div>
                       <div class="flex gap-2">
@@ -717,7 +717,7 @@ async function submitReport() {
                     </div>
                     <div v-if="isSoldOut(listing)"
                       class="flex items-center gap-2 bg-brand-success/10 border border-brand-success/20 rounded-2xl px-4 py-3">
-                      <BIcon name="Trophy" class="w-5 h-5 text-brand-success flex-shrink-0" />
+                      <BIcon name="Trophy" class="w-5 h-5 text-brand-success shrink-0" />
                       <div>
                         <p class="text-xs font-bold text-brand-success">{{ langStore.t.dealerListingAuctionEnded }}</p>
                         <p class="text-[10px] text-white/35 mt-0.5">{{ langStore.t.dealerListingFinalPriceLabel }} {{ formatPrice(listing.current_bid ?? listing.price, listing.currency) }}</p>
@@ -738,10 +738,10 @@ async function submitReport() {
                     <div v-if="bids.length === 0" class="py-8 text-center text-white/25 text-sm">{{ langStore.t.dealerListingNoBidsYet }}</div>
                     <div v-for="(bid, i) in bids" :key="bid.id"
                       class="px-5 py-3 flex items-center gap-3"
-                      :class="i === 0 ? 'bg-brand-yellow/5' : 'hover:bg-white/[0.02]'">
+                      :class="i === 0 ? 'bg-brand-yellow/5' : 'hover:bg-white/2'">
                       <div class="relative">
                         <img v-if="bid.bidder.avatar_url" :src="bid.bidder.avatar_url"
-                          class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0" />
+                          class="w-8 h-8 rounded-full object-cover border border-brand-border shrink-0" />
                         <div v-else class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-extrabold border border-brand-border">
                           {{ (bid.bidder.display_name ?? bid.bidder.username)[0].toUpperCase() }}
                         </div>
@@ -755,7 +755,7 @@ async function submitReport() {
                         <p v-if="bid.message" class="text-[10px] text-white/30 truncate mt-0.5">{{ bid.message }}</p>
                         <p class="text-[9px] text-white/25 mt-0.5">{{ formatDate(bid.created_at) }}, {{ formatTime(bid.created_at) }}</p>
                       </div>
-                      <span class="text-sm font-extrabold flex-shrink-0"
+                      <span class="text-sm font-extrabold shrink-0"
                         :class="i === 0 ? 'text-brand-yellow' : 'text-white/60'">
                         {{ formatPrice(bid.amount, listing.currency) }}
                       </span>
@@ -777,7 +777,7 @@ async function submitReport() {
                       <p class="text-[10px] text-white/35">{{ langStore.t.dealerListingYchSubtitle }}</p>
                     </div>
                   </div>
-                  <div class="p-5 space-y-4">
+                  <div class="p-5 stack-y-4">
                     <!-- Slot grid -->
                     <div>
                       <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-2">{{ langStore.t.dealerListingSlotsLabel }}</p>
@@ -833,19 +833,19 @@ async function submitReport() {
                       </button>
                     </div>
                     <!-- YCH bid form -->
-                    <div v-if="showBidForm && !isSoldOut(listing)" class="space-y-3">
-                      <div class="space-y-1.5">
+                    <div v-if="showBidForm && !isSoldOut(listing)" class="stack-y-3">
+                      <div class="stack-y-1.5">
                         <label class="text-[9px] text-white/35 uppercase tracking-wider font-bold">{{ langStore.t.dealerListingYourSlotBidLabel }}</label>
                         <div class="relative">
                           <input v-model.number="bidAmount" type="number" min="0" step="0.01"
-                            class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 pr-14 text-white text-sm outline-none focus:border-brand-purple/40 transition-all" />
+                            class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 pr-14 text-white text-sm outline-hidden focus:border-brand-purple/40 transition-all" />
                           <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/25 font-bold">{{ listing.currency }}</span>
                         </div>
                       </div>
-                      <div class="space-y-1.5">
+                      <div class="stack-y-1.5">
                         <label class="text-[9px] text-white/35 uppercase tracking-wider font-bold">{{ langStore.t.dealerListingCharDescLabel }}</label>
                         <textarea v-model="bidMessage" rows="3" :placeholder="langStore.t.dealerListingCharDescPlaceholder"
-                          class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm resize-none outline-none focus:border-brand-purple/40 transition-all" />
+                          class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-white text-sm resize-none outline-hidden focus:border-brand-purple/40 transition-all" />
                       </div>
                       <div v-if="bidError" class="text-brand-error text-xs bg-brand-error/8 border border-brand-error/15 rounded-xl px-4 py-2.5">{{ bidError }}</div>
                       <div class="flex gap-2">
@@ -879,8 +879,8 @@ async function submitReport() {
                     <div v-if="bids.length === 0" class="py-8 text-center text-white/25 text-sm">{{ langStore.t.dealerListingNoBidsYet }}</div>
                     <div v-for="(bid, i) in bids" :key="bid.id" class="px-5 py-3 flex items-center gap-3">
                       <img v-if="bid.bidder.avatar_url" :src="bid.bidder.avatar_url"
-                        class="w-8 h-8 rounded-full object-cover border border-brand-border flex-shrink-0" />
-                      <div v-else class="w-8 h-8 rounded-full bg-brand-purple/20 flex items-center justify-center text-brand-purple text-xs font-extrabold flex-shrink-0">
+                        class="w-8 h-8 rounded-full object-cover border border-brand-border shrink-0" />
+                      <div v-else class="w-8 h-8 rounded-full bg-brand-purple/20 flex items-center justify-center text-brand-purple text-xs font-extrabold shrink-0">
                         {{ (bid.bidder.display_name ?? bid.bidder.username)[0].toUpperCase() }}
                       </div>
                       <div class="flex-1 min-w-0">
@@ -890,7 +890,7 @@ async function submitReport() {
                         </p>
                         <p v-if="bid.message" class="text-[10px] text-white/25 truncate mt-0.5 italic">{{ bid.message }}</p>
                       </div>
-                      <span class="text-sm font-extrabold flex-shrink-0"
+                      <span class="text-sm font-extrabold shrink-0"
                         :class="i === 0 ? 'text-brand-purple' : 'text-white/50'">
                         {{ formatPrice(bid.amount, listing.currency) }}
                       </span>
@@ -912,7 +912,7 @@ async function submitReport() {
                       <p class="text-[10px] text-white/35">{{ langStore.t.dealerListingRaffleSubtitle }}</p>
                     </div>
                   </div>
-                  <div class="p-5 space-y-4">
+                  <div class="p-5 stack-y-4">
                     <!-- Progress -->
                     <div>
                       <div class="flex items-center justify-between mb-1.5">
@@ -942,7 +942,7 @@ async function submitReport() {
                               : listing.raffle_tickets_sold * 5) >= m
                               ? 'background: rgba(102,199,112,0.5)'
                               : 'background: rgba(255,255,255,0.06)'" />
-                          <span class="text-[8px] text-white/20 flex-shrink-0">{{ m }}%</span>
+                          <span class="text-[8px] text-white/20 shrink-0">{{ m }}%</span>
                         </template>
                       </div>
                     </div>
@@ -965,7 +965,7 @@ async function submitReport() {
                     <!-- Success state -->
                     <div v-if="ticketSuccess"
                       class="flex items-center gap-3 bg-brand-success/12 border border-brand-success/25 rounded-2xl px-4 py-3">
-                      <BIcon name="Ticket" class="w-5 h-5 text-brand-success flex-shrink-0" />
+                      <BIcon name="Ticket" class="w-5 h-5 text-brand-success shrink-0" />
                       <div>
                         <p class="text-xs font-bold text-brand-success">{{ langStore.t.dealerListingTicketPurchased }}</p>
                         <p class="text-[10px] text-white/40 mt-0.5">{{ langStore.t.dealerListingWatchRaffleResults }}</p>
@@ -1028,7 +1028,7 @@ async function submitReport() {
                       <p class="text-[10px] text-white/35">{{ langStore.t.dealerListingFixedSubtitle }}</p>
                     </div>
                   </div>
-                  <div class="p-5 space-y-4">
+                  <div class="p-5 stack-y-4">
                     <!-- Avatar frame preview: rendered on the viewer's own avatar, using the
                          seller's chosen default calibration from the submission editor. -->
                     <div v-if="isAvatarFrame" class="flex justify-center py-2">
@@ -1136,7 +1136,7 @@ async function submitReport() {
             </div>
 
             <!-- Review form -->
-            <div v-if="showReviewForm" class="p-5 border-b border-brand-border space-y-4">
+            <div v-if="showReviewForm" class="p-5 border-b border-brand-border stack-y-4">
               <!-- Stars -->
               <div class="flex items-center gap-1">
                 <button v-for="s in 5" :key="s" @click="reviewRating = s"
@@ -1157,7 +1157,7 @@ async function submitReport() {
               </div>
               <!-- Text -->
               <textarea v-model="reviewText" rows="3" :placeholder="langStore.t.dealerListingReviewPlaceholder"
-                class="w-full bg-[#0a0a1a] border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-white/20 resize-none" />
+                class="w-full bg-[#0a0a1a] border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-white/20 resize-none" />
               <div v-if="reviewError" class="text-xs text-brand-error">{{ reviewError }}</div>
               <button @click="submitReview" :disabled="isPostingReview || reviewRating === 0"
                 class="flex items-center gap-2 px-5 py-2.5 text-white text-sm font-bold rounded-xl disabled:opacity-30 transition-all hover:opacity-90"
@@ -1193,13 +1193,13 @@ async function submitReport() {
             <div v-if="auth.user" class="p-5 border-b border-brand-border">
               <div class="flex gap-3">
                 <img v-if="auth.user.avatar_url" :src="auth.user.avatar_url"
-                  class="w-9 h-9 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5" />
-                <div v-else class="w-9 h-9 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-extrabold text-sm flex-shrink-0 mt-0.5 border border-brand-border">
+                  class="w-9 h-9 rounded-full object-cover border border-brand-border shrink-0 mt-0.5" />
+                <div v-else class="w-9 h-9 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-extrabold text-sm shrink-0 mt-0.5 border border-brand-border">
                   {{ (auth.user.display_name ?? auth.user.username ?? 'U')[0].toUpperCase() }}
                 </div>
-                <div class="flex-1 space-y-2">
+                <div class="flex-1 stack-y-2">
                   <textarea v-model="commentBody" rows="2" :placeholder="langStore.t.dealerListingCommentPlaceholder"
-                    class="w-full bg-[#0a0a1a] border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-white/20 resize-none transition-all" />
+                    class="w-full bg-[#0a0a1a] border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-white/20 resize-none transition-all" />
                   <button @click="postComment" :disabled="isPostingComment || !commentBody.trim()"
                     class="flex items-center gap-2 px-4 py-2 text-white text-xs font-bold rounded-xl transition-all disabled:opacity-30 hover:opacity-90"
                     :style="`background: linear-gradient(135deg, ${kindTheme.from}, ${kindTheme.to})`">
@@ -1221,9 +1221,9 @@ async function submitReport() {
                 {{ langStore.t.dealerListingNoCommentsYet }}
               </div>
 
-              <div v-for="comment in comments" :key="comment.id" class="px-6 py-4 space-y-3">
+              <div v-for="comment in comments" :key="comment.id" class="px-6 py-4 stack-y-3">
                 <div class="flex gap-3">
-                  <div class="cursor-pointer flex-shrink-0" @click="router.push(`/profile/${comment.author.username}`)">
+                  <div class="cursor-pointer shrink-0" @click="router.push(`/profile/${comment.author.username}`)">
                     <img v-if="comment.author.avatar_url" :src="comment.author.avatar_url"
                       class="w-9 h-9 rounded-full object-cover border border-brand-border hover:border-brand-accent transition-colors" />
                     <div v-else class="w-9 h-9 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-extrabold border border-brand-border hover:border-brand-accent transition-colors">
@@ -1236,7 +1236,7 @@ async function submitReport() {
                         @click="router.push(`/profile/${comment.author.username}`)">
                         {{ comment.author.display_name ?? comment.author.username }}
                       </span>
-                      <BIcon v-if="comment.author.is_verified" name="BadgeCheck" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                      <BIcon v-if="comment.author.is_verified" name="BadgeCheck" class="w-3.5 h-3.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                       <span class="text-[10px] text-white/25">{{ formatDate(comment.created_at) }}, {{ formatTime(comment.created_at) }}</span>
                     </div>
                     <p class="text-sm text-white/75 leading-relaxed whitespace-pre-line">{{ comment.body }}</p>
@@ -1254,8 +1254,8 @@ async function submitReport() {
                     <!-- Reply form -->
                     <div v-if="replyTo?.id === comment.id" class="mt-3 flex gap-2">
                       <textarea v-model="replyBody" rows="2" :placeholder="`${langStore.t.reply} ${comment.author.display_name ?? comment.author.username}…`"
-                        class="flex-1 bg-[#0a0a1a] border border-white/8 rounded-xl px-3 py-2.5 text-xs text-white placeholder-white/20 outline-none focus:border-white/15 resize-none transition-all" />
-                      <div class="flex flex-col gap-1.5 flex-shrink-0">
+                        class="flex-1 bg-[#0a0a1a] border border-white/8 rounded-xl px-3 py-2.5 text-xs text-white placeholder-white/20 outline-hidden focus:border-white/15 resize-none transition-all" />
+                      <div class="flex flex-col gap-1.5 shrink-0">
                         <button @click="postReply(comment)" :disabled="!replyBody.trim()"
                           class="px-3 py-2 text-white text-xs font-bold rounded-xl disabled:opacity-30 transition-all"
                           :style="`background: linear-gradient(135deg, ${kindTheme.from}, ${kindTheme.to})`">
@@ -1271,9 +1271,9 @@ async function submitReport() {
                 </div>
 
                 <!-- Replies -->
-                <div v-if="comment.replies?.length" class="ml-12 space-y-3 border-l-2 border-brand-border pl-4">
+                <div v-if="comment.replies?.length" class="ml-12 stack-y-3 border-l-2 border-brand-border pl-4">
                   <div v-for="reply in comment.replies" :key="reply.id" class="flex gap-2.5">
-                    <div class="cursor-pointer flex-shrink-0" @click="router.push(`/profile/${reply.author.username}`)">
+                    <div class="cursor-pointer shrink-0" @click="router.push(`/profile/${reply.author.username}`)">
                       <img v-if="reply.author.avatar_url" :src="reply.author.avatar_url"
                         class="w-7 h-7 rounded-full object-cover border border-brand-border hover:border-brand-accent transition-colors" />
                       <div v-else class="w-7 h-7 rounded-full bg-brand-accent/15 flex items-center justify-center text-brand-accent text-xs font-extrabold border border-brand-border">
@@ -1286,7 +1286,7 @@ async function submitReport() {
                           @click="router.push(`/profile/${reply.author.username}`)">
                           {{ reply.author.display_name ?? reply.author.username }}
                         </span>
-                        <BIcon v-if="reply.author.is_verified" name="BadgeCheck" class="w-3 h-3 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                        <BIcon v-if="reply.author.is_verified" name="BadgeCheck" class="w-3 h-3 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                         <span class="text-[9px] text-white/20">{{ formatTime(reply.created_at) }}</span>
                       </div>
                       <p class="text-xs text-white/65 leading-relaxed">{{ reply.body }}</p>
@@ -1307,7 +1307,7 @@ async function submitReport() {
     <Teleport to="body">
       <Transition name="modal">
         <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showEditModal = false" />
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-xs" @click="showEditModal = false" />
           <div class="relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto scrollbar-none">
             <!-- Header -->
             <div class="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-card rounded-t-3xl">
@@ -1322,32 +1322,32 @@ async function submitReport() {
               </button>
             </div>
 
-            <div class="p-5 space-y-4">
+            <div class="p-5 stack-y-4">
               <!-- Title -->
-              <div class="space-y-1.5">
+              <div class="stack-y-1.5">
                 <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingTitleRequiredLabel }}</label>
                 <input v-model="editForm.title" type="text" :placeholder="langStore.t.dealerListingTitlePlaceholder"
-                  class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-brand-accent/50 transition-all" />
+                  class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-accent/50 transition-all" />
               </div>
 
               <!-- Description -->
-              <div class="space-y-1.5">
+              <div class="stack-y-1.5">
                 <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.fursuitDescLabel }}</label>
                 <textarea v-model="editForm.description" rows="3" :placeholder="langStore.t.dealerListingDescPlaceholder"
-                  class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-brand-accent/50 transition-all resize-none" />
+                  class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-accent/50 transition-all resize-none" />
               </div>
 
               <!-- Price + Currency -->
               <div class="grid grid-cols-2 gap-3">
-                <div class="space-y-1.5">
+                <div class="stack-y-1.5">
                   <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingPriceLabel }}</label>
                   <input v-model.number="editForm.price" type="number" min="0" step="0.01"
-                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-none focus:border-brand-accent/50 transition-all" />
+                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-hidden focus:border-brand-accent/50 transition-all" />
                 </div>
-                <div class="space-y-1.5">
+                <div class="stack-y-1.5">
                   <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingCurrencyLabel }}</label>
                   <select v-model="editForm.currency"
-                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-none focus:border-brand-accent/50 transition-all appearance-none cursor-pointer">
+                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-hidden focus:border-brand-accent/50 transition-all appearance-none cursor-pointer">
                     <option>USD</option><option>RUB</option><option>EUR</option>
                   </select>
                 </div>
@@ -1355,15 +1355,15 @@ async function submitReport() {
 
               <!-- Quantity + Status -->
               <div class="grid grid-cols-2 gap-3">
-                <div class="space-y-1.5">
+                <div class="stack-y-1.5">
                   <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingQuantityLabel }}</label>
                   <input v-model.number="editForm.quantity" type="number" min="1"
-                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-none focus:border-brand-accent/50 transition-all" />
+                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white outline-hidden focus:border-brand-accent/50 transition-all" />
                 </div>
-                <div class="space-y-1.5">
+                <div class="stack-y-1.5">
                   <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.statusFieldLabel }}</label>
                   <select v-model="editForm.status"
-                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm outline-none focus:border-brand-accent/50 transition-all appearance-none cursor-pointer"
+                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm outline-hidden focus:border-brand-accent/50 transition-all appearance-none cursor-pointer"
                     :class="editForm.status === 'active' ? 'text-brand-success'
                            : editForm.status === 'draft' ? 'text-white/40'
                            : editForm.status === 'archived' ? 'text-white/30'
@@ -1377,14 +1377,14 @@ async function submitReport() {
               </div>
 
               <!-- Tags -->
-              <div class="space-y-1.5">
+              <div class="stack-y-1.5">
                 <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingTagsLabel }}</label>
                 <input v-model="editForm.tags" type="text" :placeholder="langStore.t.dealerListingTagsPlaceholder"
-                  class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-brand-accent/50 transition-all" />
+                  class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-accent/50 transition-all" />
               </div>
 
               <!-- Images -->
-              <div class="space-y-2">
+              <div class="stack-y-2">
                 <div class="flex items-center justify-between">
                   <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingImagesLabel }}</label>
                   <button @click="addImageUrl" type="button"
@@ -1394,9 +1394,9 @@ async function submitReport() {
                 </div>
                 <div v-for="(img, i) in editForm.images" :key="i" class="flex gap-2 items-center">
                   <input v-model="editForm.images[i]" type="url" placeholder="https://…"
-                    class="flex-1 bg-[#0a0a1a] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white placeholder-white/20 outline-none focus:border-brand-accent/40 transition-all" />
+                    class="flex-1 bg-[#0a0a1a] border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white placeholder-white/20 outline-hidden focus:border-brand-accent/40 transition-all" />
                   <button @click="removeImage(i)" type="button"
-                    class="w-8 h-8 flex items-center justify-center rounded-xl bg-brand-error/10 text-brand-error/60 hover:bg-brand-error/20 hover:text-brand-error transition-all flex-shrink-0">
+                    class="w-8 h-8 flex items-center justify-center rounded-xl bg-brand-error/10 text-brand-error/60 hover:bg-brand-error/20 hover:text-brand-error transition-all shrink-0">
                     <BIcon name="Trash2" class="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -1410,9 +1410,9 @@ async function submitReport() {
                   <span class="text-sm font-medium text-white/70">{{ langStore.t.dealerListingNsfwContent }}</span>
                 </div>
                 <button type="button" @click="editForm.isNsfw = !editForm.isNsfw"
-                  class="w-10 h-5.5 rounded-full transition-all relative flex-shrink-0"
+                  class="w-10 h-5.5 rounded-full transition-all relative shrink-0"
                   :class="editForm.isNsfw ? 'bg-brand-error' : 'bg-white/10'">
-                  <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all"
+                  <span class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all"
                     :class="editForm.isNsfw ? 'left-5.5' : 'left-0.5'" />
                 </button>
               </div>
@@ -1448,7 +1448,7 @@ async function submitReport() {
     <Teleport to="body">
       <Transition name="modal">
         <div v-if="showReportModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="showReportModal = false" />
+          <div class="absolute inset-0 bg-black/70 backdrop-blur-xs" @click="showReportModal = false" />
           <div class="relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
             <!-- Header -->
             <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border">
@@ -1464,7 +1464,7 @@ async function submitReport() {
             </div>
 
             <!-- Success state -->
-            <div v-if="reportSuccess" class="p-8 text-center space-y-3">
+            <div v-if="reportSuccess" class="p-8 text-center stack-y-3">
               <div class="w-14 h-14 rounded-full bg-brand-success/15 flex items-center justify-center mx-auto">
                 <BIcon name="CheckCircle2" class="w-8 h-8 text-brand-success" />
               </div>
@@ -1473,10 +1473,10 @@ async function submitReport() {
             </div>
 
             <!-- Form -->
-            <div v-else class="p-5 space-y-4">
+            <div v-else class="p-5 stack-y-4">
               <p class="text-xs text-white/50">{{ langStore.t.dealerListingReportPrompt }}</p>
               <!-- Reason buttons -->
-              <div class="space-y-2">
+              <div class="stack-y-2">
                 <button v-for="r in REPORT_REASONS" :key="r" type="button"
                   @click="reportReason = r"
                   class="w-full text-left px-4 py-3 rounded-2xl text-sm transition-all border"
@@ -1489,10 +1489,10 @@ async function submitReport() {
 
               <!-- Custom reason -->
               <Transition name="fade">
-                <div v-if="reportReason === langStore.t.other" class="space-y-1.5">
+                <div v-if="reportReason === langStore.t.other" class="stack-y-1.5">
                   <label class="text-[10px] font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealerListingDescribeProblemLabel }}</label>
                   <textarea v-model="reportCustom" rows="3" :placeholder="langStore.t.dealerListingReportDetailPlaceholder"
-                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-brand-error/30 resize-none transition-all" />
+                    class="w-full bg-[#0a0a1a] border border-white/10 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-error/30 resize-none transition-all" />
                 </div>
               </Transition>
 

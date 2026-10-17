@@ -41,7 +41,7 @@ onMounted(() => { payments.fetchConfig().catch(() => {}) })
 <template>
   <div class="min-h-screen bg-brand-bg text-brand-offwhite font-nunito relative overflow-hidden">
     <!-- Декоративное свечение за героем -->
-    <div class="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-gradient-to-b from-brand-accent/25 via-brand-accent/5 to-transparent"></div>
+    <div class="pointer-events-none absolute inset-x-0 top-0 h-[420px] bg-linear-to-b/srgb from-brand-accent/25 via-brand-accent/5 to-transparent"></div>
     <div class="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[640px] h-[640px] rounded-full bg-brand-accent/10 blur-3xl"></div>
 
     <AppHeader />
@@ -49,13 +49,13 @@ onMounted(() => { payments.fetchConfig().catch(() => {}) })
     <main class="relative max-w-5xl mx-auto px-4 sm:px-6 pt-28 pb-20">
       <div class="grid gap-6 lg:grid-cols-5 lg:items-start">
         <!-- Левая колонка: герой -->
-        <section class="lg:col-span-2 text-center lg:text-left space-y-5 lg:pt-10">
+        <section class="lg:col-span-2 text-center lg:text-left stack-y-5 lg:pt-10">
           <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-brand-card border border-brand-border shadow-xl shadow-brand-accent/20">
             <img src="/bloomly.png?v=2" alt="Bloomly" class="w-12 h-12 object-contain" />
           </div>
-          <div class="space-y-3">
-            <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">{{ langStore.t.supportProject }}</h1>
-            <p class="text-sm sm:text-base text-white/65 leading-relaxed max-w-md mx-auto lg:mx-0">{{ langStore.t.supportDesc }}</p>
+          <div class="stack-y-3">
+            <h1 class="text-3xl sm:text-4xl sm:leading-10 font-extrabold tracking-tight leading-tight">{{ langStore.t.supportProject }}</h1>
+            <p class="text-sm sm:text-base sm:leading-6 text-white/65 leading-relaxed max-w-md mx-auto lg:mx-0">{{ langStore.t.supportDesc }}</p>
           </div>
           <div class="hidden lg:flex items-center gap-3 pt-2">
             <span class="w-10 h-10 rounded-2xl bg-brand-accent/15 flex items-center justify-center">
@@ -71,14 +71,14 @@ onMounted(() => { payments.fetchConfig().catch(() => {}) })
         </section>
 
         <!-- Правая колонка: форма доната -->
-        <section class="lg:col-span-3 rounded-3xl bg-brand-card/90 backdrop-blur border border-brand-border shadow-2xl shadow-black/30 p-5 sm:p-8 space-y-6">
+        <section class="lg:col-span-3 rounded-3xl bg-brand-card/90 backdrop-blur-sm border border-brand-border shadow-2xl shadow-black/30 p-5 sm:p-8 stack-y-6">
           <!-- Способы оплаты -->
           <div class="flex items-center justify-center gap-2 py-2.5 rounded-2xl bg-brand-bg border border-brand-border text-sm font-bold text-white/70">
             <BIcon name="CreditCard" class="w-4 h-4 text-brand-accent" /> {{ langStore.t.payMethodOnline }}
           </div>
 
           <!-- Сумма -->
-          <div class="space-y-3">
+          <div class="stack-y-3">
             <p class="text-xs font-bold text-white/45 uppercase tracking-wider">{{ langStore.t.supportAmount }}</p>
             <div class="grid grid-cols-3 sm:grid-cols-5 gap-2">
               <button v-for="p in PRESETS" :key="p" @click="pick(p)"
@@ -93,7 +93,7 @@ onMounted(() => { payments.fetchConfig().catch(() => {}) })
               <input v-model.number="custom" @input="onCustom" type="number" inputmode="numeric" step="1"
                 :min="limits.min" :max="limits.max"
                 :placeholder="`${langStore.t.supportCustom} (${limits.min}–${limits.max})`"
-                class="w-full pl-4 pr-10 py-3 rounded-2xl bg-brand-bg border border-brand-border text-sm outline-none transition focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/15" />
+                class="w-full pl-4 pr-10 py-3 rounded-2xl bg-brand-bg border border-brand-border text-sm outline-hidden transition focus:border-brand-accent focus:ring-4 focus:ring-brand-accent/15" />
               <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-white/40">₽</span>
             </div>
           </div>
@@ -111,7 +111,7 @@ onMounted(() => { payments.fetchConfig().catch(() => {}) })
           <p v-if="errorMsg" class="text-xs text-brand-error text-center">{{ errorMsg }}</p>
 
           <button :disabled="!valid || !enabled || sending" @click="donate"
-            class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-brand-accent to-brand-accent-plus text-sm sm:text-base font-extrabold text-white shadow-lg shadow-brand-accent/30 hover:brightness-110 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:translate-y-0 transition-all">
+            class="w-full py-3.5 rounded-2xl bg-linear-to-r/srgb from-brand-accent to-brand-accent-plus text-sm sm:text-base font-extrabold text-white shadow-lg shadow-brand-accent/30 hover:brightness-110 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:translate-y-0 transition-all">
             {{ langStore.t.supportDonate }}<template v-if="valid"> · {{ amount }} ₽</template>
           </button>
 

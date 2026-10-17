@@ -158,11 +158,11 @@ onMounted(fetchAll)
       <AppSidebar />
 
       <main class="flex-1 min-w-0 pb-28 md:pb-20 max-w-2xl">
-        <div class="relative overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(98,109,255,0.26),transparent_35%),linear-gradient(135deg,rgba(18,19,33,0.96),rgba(26,31,52,0.92))] px-5 py-4 max-md:px-4 shadow-[0_18px_48px_rgba(17,22,39,0.45)] mb-4 backdrop-blur-sm">
-          <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand-accent/70 to-transparent" />
+        <div class="relative overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(98,109,255,0.26),transparent_35%),linear-gradient(135deg,rgba(18,19,33,0.96),rgba(26,31,52,0.92))] px-5 py-4 max-md:px-4 shadow-[0_18px_48px_rgba(17,22,39,0.45)] mb-4 backdrop-blur-xs">
+          <div class="absolute inset-x-0 top-0 h-px bg-linear-to-r/srgb from-transparent via-brand-accent/70 to-transparent" />
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-3 min-w-0">
-              <div class="w-12 h-12 max-md:w-10 max-md:h-10 rounded-2xl bg-gradient-to-br from-brand-accent/25 via-brand-accent/10 to-transparent border border-brand-accent/30 flex items-center justify-center flex-shrink-0 shadow-[0_0_25px_rgba(95,112,255,0.2)]">
+              <div class="w-12 h-12 max-md:w-10 max-md:h-10 rounded-2xl bg-linear-to-br/srgb from-brand-accent/25 via-brand-accent/10 to-transparent border border-brand-accent/30 flex items-center justify-center shrink-0 shadow-[0_0_25px_rgba(95,112,255,0.2)]">
                 <BIcon name="Bell" class="w-5 h-5 text-brand-accent" />
               </div>
               <div class="min-w-0">
@@ -173,17 +173,17 @@ onMounted(fetchAll)
             <button
               @click="markAllRead"
               :disabled="unreadCount === 0"
-              class="inline-flex items-center gap-2 text-xs font-semibold transition-all rounded-full border px-3 py-1.5 min-w-[110px] max-md:min-w-0 max-md:min-h-[36px] max-md:px-2.5 max-md:whitespace-nowrap max-md:flex-shrink-0 justify-center"
+              class="inline-flex items-center gap-2 text-xs font-semibold transition-all rounded-full border px-3 py-1.5 min-w-[110px] max-md:min-w-0 max-md:min-h-[36px] max-md:px-2.5 max-md:whitespace-nowrap max-md:shrink-0 justify-center"
               :class="unreadCount > 0
                 ? 'text-brand-accent border-brand-accent/35 bg-brand-accent/8 hover:bg-brand-accent/12 hover:text-white shadow-[0_0_18px_rgba(95,112,255,0.12)]'
-                : 'text-white/30 border-white/10 bg-white/[0.02] cursor-not-allowed'"
+                : 'text-white/30 border-white/10 bg-white/2 cursor-not-allowed'"
             >
               <span>{{ unreadCount > 0 ? `${unreadCount} новых` : 'Все прочитаны' }}</span>
             </button>
           </div>
         </div>
 
-        <div v-if="isLoading" class="space-y-2">
+        <div v-if="isLoading" class="stack-y-2">
           <div v-for="n in 6" :key="n" class="h-16 rounded-2xl bg-brand-card border border-brand-border animate-pulse" />
         </div>
         <div v-else-if="notifications.length === 0"
@@ -191,19 +191,19 @@ onMounted(fetchAll)
           <BIcon name="BellOff" class="w-10 h-10 opacity-40" />
           <p class="text-sm font-semibold">Уведомлений нет</p>
         </div>
-        <div v-else class="space-y-2.5">
+        <div v-else class="stack-y-2.5">
           <component :is="notifHref(n) ? 'router-link' : 'div'" v-for="n in notifications" :key="n.id"
             :to="notifHref(n) ?? undefined"
             class="group relative flex items-start gap-3.5 pl-4 pr-3.5 py-3 rounded-[22px] cursor-pointer transition-all duration-200 overflow-hidden border"
             :class="[
               n.type === 'automod_warn' ? 'bg-amber-500/10 hover:bg-amber-500/15 border-amber-500/25' :
-              !n.is_read ? 'bg-[linear-gradient(135deg,rgba(98,109,255,0.12),rgba(18,19,33,0.96))] hover:bg-[linear-gradient(135deg,rgba(98,109,255,0.18),rgba(18,19,33,0.98))] border-brand-accent/20 shadow-[0_12px_30px_rgba(76,103,207,0.12)]' : 'bg-white/[0.02] hover:bg-white/[0.04] border-white/10',
+              !n.is_read ? 'bg-[linear-gradient(135deg,rgba(98,109,255,0.12),rgba(18,19,33,0.96))] hover:bg-[linear-gradient(135deg,rgba(98,109,255,0.18),rgba(18,19,33,0.98))] border-brand-accent/20 shadow-[0_12px_30px_rgba(76,103,207,0.12)]' : 'bg-white/2 hover:bg-white/4 border-white/10',
             ]"
             @click="onClick(n)">
-            <span v-if="!n.is_read" class="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-gradient-to-b from-brand-accent via-brand-accent/80 to-brand-accent/50" />
+            <span v-if="!n.is_read" class="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-linear-to-b/srgb from-brand-accent via-brand-accent/80 to-brand-accent/50" />
 
-            <div class="relative flex-shrink-0 pt-0.5">
-              <div v-if="isAutomodNotif(n)" class="w-11 h-11 rounded-full bg-gradient-to-br from-[#4C67CF] via-[#7c3aed] to-[#ec4899] flex items-center justify-center ring-1 ring-white/10 shadow-[0_10px_22px_rgba(99,102,241,0.35)]">
+            <div class="relative shrink-0 pt-0.5">
+              <div v-if="isAutomodNotif(n)" class="w-11 h-11 rounded-full bg-linear-to-br/srgb from-[#4C67CF] via-[#7c3aed] to-[#ec4899] flex items-center justify-center ring-1 ring-white/10 shadow-[0_10px_22px_rgba(99,102,241,0.35)]">
                 <span class="text-white font-black text-sm select-none" style="letter-spacing:-1px">B</span>
               </div>
               <img v-else :src="identityAvatar(n) || '/icons/badges/NN.jpg'"
@@ -227,11 +227,11 @@ onMounted(fetchAll)
 
               <div v-if="n.type === 'RELATIONSHIP_REQUEST' && !n._relDone" class="flex gap-2 mt-2 max-w-xs">
                 <button @click.stop.prevent="acceptRelationship(n)" :disabled="relActionLoading[n.id]"
-                  class="flex-1 py-1.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-400 hover:to-rose-400 disabled:opacity-50 text-white text-xs font-bold shadow-[0_8px_16px_rgba(236,72,153,0.2)] transition-all">
+                  class="flex-1 py-1.5 rounded-xl bg-linear-to-r/srgb from-pink-500 to-rose-500 hover:from-pink-400 hover:to-rose-400 disabled:opacity-50 text-white text-xs font-bold shadow-[0_8px_16px_rgba(236,72,153,0.2)] transition-all">
                   Принять
                 </button>
                 <button @click.stop.prevent="declineRelationship(n)" :disabled="relActionLoading[n.id]"
-                  class="flex-1 py-1.5 rounded-xl border border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04] disabled:opacity-50 text-white/70 hover:text-white text-xs font-semibold transition-all">
+                  class="flex-1 py-1.5 rounded-xl border border-white/10 bg-white/2 hover:border-white/20 hover:bg-white/4 disabled:opacity-50 text-white/70 hover:text-white text-xs font-semibold transition-all">
                   Отклонить
                 </button>
               </div>
@@ -243,7 +243,7 @@ onMounted(fetchAll)
                   Одобрить
                 </button>
                 <button @click.stop.prevent="decideStickerAccess(n, 'reject')" :disabled="relActionLoading[n.id]"
-                  class="flex-1 py-1.5 rounded-xl border border-white/10 bg-white/[0.02] hover:border-white/20 disabled:opacity-50 text-white/70 hover:text-white text-xs font-semibold transition-all">
+                  class="flex-1 py-1.5 rounded-xl border border-white/10 bg-white/2 hover:border-white/20 disabled:opacity-50 text-white/70 hover:text-white text-xs font-semibold transition-all">
                   Отклонить
                 </button>
               </div>

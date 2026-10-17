@@ -12,7 +12,7 @@ const langStore = useLangStore()
     <Transition name="modal-fade">
       <div
         v-if="state.visible"
-        class="fixed inset-0 z-[900] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+        class="fixed inset-0 z-900 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs"
         @click.self="resolve(false)"
       >
         <div
@@ -27,7 +27,7 @@ const langStore = useLangStore()
               : 'background:linear-gradient(90deg,rgba(76,103,207,0.1) 0%,transparent 100%)'"
           >
             <div
-              class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+              class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
               :class="state.danger ? 'bg-red-500/20' : 'bg-brand-accent/20'"
             >
               <BIcon name="TriangleAlert" class="w-4 h-4" :class="state.danger ? 'text-red-400' : 'text-brand-accent'" />
@@ -35,7 +35,7 @@ const langStore = useLangStore()
             <h3 class="font-bold text-white text-sm">{{ state.title || langStore.t.confirmBtn }}</h3>
           </div>
 
-          <div class="p-6 space-y-5">
+          <div class="p-6 stack-y-5">
             <p class="text-sm text-white/70 whitespace-pre-line">{{ state.message }}</p>
             <div class="flex gap-3">
               <button

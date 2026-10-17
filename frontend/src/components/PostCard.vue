@@ -1,6 +1,6 @@
 <template>
   <!-- Hidden state after "Не интересно" -->
-  <div v-if="isHidden" class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-sm">
+  <div v-if="isHidden" class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xs">
     <div class="flex items-center justify-between px-5 py-3.5">
       <span class="text-sm text-white/35">Пост скрыт</span>
       <button @click="undoNotInterested" class="text-xs text-brand-accent/70 hover:text-brand-accent transition-colors">Отменить</button>
@@ -10,7 +10,7 @@
   <div v-else ref="cardRootRef" class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl hover:border-brand-accent/30 transition-all group">
     <!-- Announcement banner -->
     <div v-if="post.is_announcement" class="flex items-center gap-2 px-5 py-2.5 bg-brand-yellow/10 border-b border-brand-yellow/25">
-      <BIcon name="Megaphone" class="w-3.5 h-3.5 text-brand-yellow flex-shrink-0" />
+      <BIcon name="Megaphone" class="w-3.5 h-3.5 text-brand-yellow shrink-0" />
       <span class="text-[11px] font-bold uppercase tracking-wide text-brand-yellow">Анонс</span>
     </div>
     <!-- Post type badge (artwork / article / commission_update) -->
@@ -23,7 +23,7 @@
       }">
       <BIcon
         :name="post.post_type === 'artwork' ? 'Palette' : post.post_type === 'article' ? 'Newspaper' : 'Scissors'"
-        class="w-3.5 h-3.5 flex-shrink-0"
+        class="w-3.5 h-3.5 shrink-0"
         :class="{
           'text-rose-400': post.post_type === 'artwork',
           'text-blue-400': post.post_type === 'article',
@@ -45,7 +45,7 @@
         <component :is="identityTo ? 'router-link' : 'div'" :to="identityTo ?? undefined"
           class="flex items-center gap-3 min-w-0 cursor-pointer">
           <!-- Avatar -->
-          <div class="relative flex-shrink-0">
+          <div class="relative shrink-0">
             <img
               v-if="effectiveGroupContext && effectiveGroupContext.avatar_url"
               :src="effectiveGroupContext.avatar_url"
@@ -87,10 +87,10 @@
               </h4>
               <!-- Verification badge — only for user posts -->
               <template v-if="!effectiveGroupContext && post.author">
-                <span v-if="post.author.deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
+                <span v-if="post.author.deceased_at" title="Светлая память" class="shrink-0">🪦</span>
                 <VerificationBadge v-if="post.author.is_verified"
                   :type="post.author.verification_type"
-                  icon-class="w-4 h-4 flex-shrink-0" />
+                  icon-class="w-4 h-4 shrink-0" />
                 <!-- AD badge -->
                 <span v-if="post.author?.role === 'ad'"
                   class="inline-flex items-center gap-0.5 text-[9px] font-extrabold uppercase tracking-wider text-amber-400 bg-amber-400/10 border border-amber-400/30 px-1.5 py-0.5 rounded-md">
@@ -109,7 +109,7 @@
         </component>
 
         <!-- Right: NSFW badge + context menu -->
-        <div class="flex items-center gap-2 flex-shrink-0">
+        <div class="flex items-center gap-2 shrink-0">
           <span
             v-if="post.is_nsfw"
             class="px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide bg-brand-error/15 text-brand-error border border-brand-error/30"
@@ -135,7 +135,7 @@
               <div
                 v-if="showMenu"
                 v-click-outside="() => showMenu = false"
-                class="fixed z-[9998] w-56 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1"
+                class="fixed z-9998 w-56 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1"
                 :style="{ top: menuPos.top, right: menuPos.right }"
               >
               <!-- Owner actions -->
@@ -234,7 +234,7 @@
       </div>
 
       <!-- ── Content ───────────────────────────────────────────────────── -->
-      <div class="space-y-3">
+      <div class="stack-y-3">
 
         <!-- Article title (news/article post_type) -->
         <h3 v-if="post.title" class="text-white font-extrabold text-lg leading-tight">{{ post.title }}</h3>
@@ -245,7 +245,7 @@
             v-model="editContent"
             autofocus
             rows="3"
-            class="w-full bg-brand-bg border border-brand-accent/50 rounded-2xl px-4 py-3 text-white text-[15px] leading-relaxed resize-none outline-none focus:border-brand-accent"
+            class="w-full bg-brand-bg border border-brand-accent/50 rounded-2xl px-4 py-3 text-white text-[15px] leading-relaxed resize-none outline-hidden focus:border-brand-accent"
           ></textarea>
           <div class="flex gap-2 mt-2 justify-end">
             <button @click="cancelEdit" class="px-4 py-1.5 text-sm text-white/55 hover:text-white hover:bg-white/5 rounded-xl">Отмена</button>
@@ -282,7 +282,7 @@
                 >
                   <!-- Avatar or initials -->
                   <span
-                    class="flex-shrink-0 w-5 h-5 overflow-hidden border border-brand-accent/40 bg-brand-accent/20 flex items-center justify-center"
+                    class="shrink-0 w-5 h-5 overflow-hidden border border-brand-accent/40 bg-brand-accent/20 flex items-center justify-center"
                     :class="mentionGroups[seg.username!] ? 'rounded-md' : 'rounded-full'"
                   >
                     <img
@@ -366,7 +366,7 @@
             <!-- Counter badge -->
             <div
               v-if="!isPhotoGrid && post.media_urls.length > 1"
-              class="absolute top-2.5 left-2.5 z-10 px-2.5 py-1 rounded-full bg-black/60 text-white text-xs font-bold backdrop-blur-sm border border-white/10 select-none"
+              class="absolute top-2.5 left-2.5 z-10 px-2.5 py-1 rounded-full bg-black/60 text-white text-xs font-bold backdrop-blur-xs border border-white/10 select-none"
             >
               {{ carouselIndex + 1 }}&thinsp;/&thinsp;{{ post.media_urls.length }}
             </div>
@@ -404,7 +404,7 @@
             <!-- Expand to lightbox with comments -->
             <button
               @click.stop="openLightbox(carouselIndex)"
-              class="absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white hover:bg-black/80 transition-colors opacity-0 group-hover/carousel:opacity-100"
+              class="absolute top-2.5 right-2.5 z-10 w-8 h-8 rounded-full bg-black/60 backdrop-blur-xs border border-white/10 flex items-center justify-center text-white hover:bg-black/80 transition-colors opacity-0 group-hover/carousel:opacity-100"
               title="Открыть"
             >
               <BIcon name="Expand" class="w-4 h-4" />
@@ -491,10 +491,10 @@
         <img
           v-if="topComment.author?.avatar_url"
           :src="topComment.author.avatar_url"
-          class="w-6 h-6 rounded-full object-cover border border-brand-border flex-shrink-0 mt-0.5"
+          class="w-6 h-6 rounded-full object-cover border border-brand-border shrink-0 mt-0.5"
           @error="onAvatarError"
         />
-        <div v-else class="w-6 h-6 rounded-full bg-brand-accent/20 flex items-center justify-center flex-shrink-0 mt-0.5 text-[9px] font-bold text-brand-accent">
+        <div v-else class="w-6 h-6 rounded-full bg-brand-accent/20 flex items-center justify-center shrink-0 mt-0.5 text-[9px] font-bold text-brand-accent">
           {{ (topComment.author?.username ?? '?')[0].toUpperCase() }}
         </div>
         <div class="flex-1 min-w-0 bg-brand-bg/60 rounded-xl px-3 py-2 border border-brand-border/50 group-hover/tc:border-brand-accent/30 transition-colors">
@@ -560,7 +560,7 @@
           </button>
         </div>
 
-        <div class="flex items-center h-8 gap-1 max-md:flex-shrink-0">
+        <div class="flex items-center h-8 gap-1 max-md:shrink-0">
           <!-- Favourite -->
           <button @click="toggleFavourite"
             class="w-8 h-8 flex items-center justify-center rounded-full border transition-all"
@@ -628,18 +628,18 @@
     <Transition name="mention-popup">
       <div
         v-if="hoveredMention && (mentionUsers[hoveredMention] || mentionGroups[hoveredMention])"
-        class="fixed z-[9999] w-52 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden pointer-events-none"
+        class="fixed z-9999 w-52 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden pointer-events-none"
         :style="{ top: mentionPopupPos.top, left: mentionPopupPos.left, transform: 'translateY(calc(-100% - 6px))' }"
       >
         <!-- Banner -->
-        <div class="w-full h-14 relative overflow-hidden bg-gradient-to-br from-brand-accent/30 to-brand-accent-plus/20">
+        <div class="w-full h-14 relative overflow-hidden bg-linear-to-br/srgb from-brand-accent/30 to-brand-accent-plus/20">
           <img
             v-if="(mentionGroups[hoveredMention] ?? mentionUsers[hoveredMention])?.banner_url"
             :src="(mentionGroups[hoveredMention] ?? mentionUsers[hoveredMention])!.banner_url!"
             class="w-full h-full object-cover"
             loading="lazy"
           />
-          <div class="absolute inset-0 bg-gradient-to-t from-brand-card/70 to-transparent"></div>
+          <div class="absolute inset-0 bg-linear-to-t/srgb from-brand-card/70 to-transparent"></div>
         </div>
         <!-- Avatar overlapping banner -->
         <div class="px-3 pb-3 -mt-5 relative">

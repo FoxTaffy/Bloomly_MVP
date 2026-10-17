@@ -59,18 +59,18 @@ async function save() {
 <template>
   <Teleport to="body">
     <Transition name="pay-fade" appear>
-      <div class="fixed inset-0 z-[700] flex items-end sm:items-center justify-center" @click.self="emit('close')">
-        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="emit('close')" />
+      <div class="fixed inset-0 z-700 flex items-end sm:items-center justify-center" @click.self="emit('close')">
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-xs" @click="emit('close')" />
 
         <div class="relative w-full sm:max-w-sm bg-[#13131f] border border-white/8 rounded-t-3xl sm:rounded-3xl overflow-hidden z-10 modal-glow">
-          <div class="h-1 w-full bg-gradient-to-r from-brand-accent via-brand-purple to-brand-pink" />
+          <div class="h-1 w-full bg-linear-to-r/srgb from-brand-accent via-brand-purple to-brand-pink" />
           <div class="w-10 h-1 bg-white/10 rounded-full mx-auto mt-3 mb-1 sm:hidden" />
 
-          <div class="px-6 pt-5 pb-6 space-y-5">
+          <div class="px-6 pt-5 pb-6 stack-y-5">
             <div class="flex items-center justify-between">
               <h2 class="text-lg font-extrabold text-white">{{ langStore.t.billingAddCard }}</h2>
               <button @click="emit('close')"
-                class="w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all active:scale-90 flex-shrink-0">
+                class="w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all active:scale-90 shrink-0">
                 <BIcon name="X" class="w-4 h-4" />
               </button>
             </div>
@@ -81,7 +81,7 @@ async function save() {
               v-model:flipped="flipped" />
 
             <p class="flex items-center justify-center gap-1.5 text-[11px] text-white/35">
-              <BIcon name="Info" class="w-3 h-3 flex-shrink-0" />
+              <BIcon name="Info" class="w-3 h-3 shrink-0" />
               {{ langStore.t.payModalRegionHint }}: {{ allowedBrandLabels }}
             </p>
 

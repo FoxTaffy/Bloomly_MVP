@@ -24,7 +24,7 @@ onMounted(async () => {
 <template>
   <Transition name="fade">
     <div
-      class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+      class="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
       @click.self="$emit('close')"
     >
       <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl max-w-sm w-full p-6 text-center relative">

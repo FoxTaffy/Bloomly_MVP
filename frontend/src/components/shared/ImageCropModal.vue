@@ -1,8 +1,8 @@
 <template>
   <Teleport to="body">
     <Transition name="modal-fade">
-      <div v-if="show" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/85 backdrop-blur-sm" @click="$emit('cancel')"></div>
+      <div v-if="show" class="fixed inset-0 z-9999 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/85 backdrop-blur-xs" @click="$emit('cancel')"></div>
         <div class="relative z-10 bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-[640px] overflow-hidden select-none">
           <!-- header -->
           <div class="px-6 py-4 border-b border-brand-border flex items-center justify-between">

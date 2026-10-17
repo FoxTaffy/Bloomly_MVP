@@ -1,10 +1,10 @@
 <template>
-  <div class="space-y-4">
+  <div class="stack-y-4">
 
     <!-- ── Шапка секции ──────────────────────────────────── -->
     <div class="flex items-center justify-between">
       <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-2">
-        <span class="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style="background:rgba(167,139,250,0.16)">
+        <span class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style="background:rgba(167,139,250,0.16)">
           <BIcon name="PawPrint" class="w-3.5 h-3.5 text-brand-accent" />
         </span>
         {{ t.fursonaSettingsTitle }}
@@ -28,7 +28,7 @@
 
     <!-- Empty state -->
     <div v-else-if="!showForm && userStore.fursonas.length === 0"
-      class="p-7 border border-dashed border-brand-accent/25 rounded-2xl text-center space-y-2"
+      class="p-7 border border-dashed border-brand-accent/25 rounded-2xl text-center stack-y-2"
       style="background:linear-gradient(135deg,rgba(167,139,250,0.08),transparent 65%)">
       <div class="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center shadow-inner" style="background:rgba(167,139,250,0.14)">
         <BIcon name="PawPrint" class="w-7 h-7 text-brand-accent/60" />
@@ -41,13 +41,13 @@
     </div>
 
     <!-- ── Список персонажей ──────────────────────────────── -->
-    <div v-else-if="!showForm" class="space-y-2">
+    <div v-else-if="!showForm" class="stack-y-2">
       <div
         v-for="f in userStore.fursonas"
         :key="f.id"
         class="flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border/60 rounded-2xl transition-all hover:border-brand-accent/30 hover:shadow-lg hover:shadow-black/20"
       >
-        <div class="relative flex-shrink-0">
+        <div class="relative shrink-0">
           <div class="w-14 h-14 rounded-xl flex items-center justify-center overflow-hidden" style="background:rgba(167,139,250,0.12)">
             <img v-if="f.cover_image_url" :src="f.cover_image_url" alt="" class="w-full h-full object-cover" draggable="false" />
             <svg v-else class="w-6 h-6 text-brand-accent/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -59,7 +59,7 @@
             </svg>
           </div>
           <span v-if="f.is_primary"
-            class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-brand-accent text-white text-[10px] font-bold flex items-center justify-center shadow leading-none">★</span>
+            class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-brand-accent text-white text-[10px] font-bold flex items-center justify-center shadow-sm leading-none">★</span>
         </div>
         <div class="flex-1 min-w-0">
           <p class="text-sm font-bold text-white truncate">{{ f.name || '—' }}</p>
@@ -68,7 +68,7 @@
           </p>
           <p v-if="f.is_primary" class="text-[10px] text-brand-accent/70 font-bold mt-0.5">{{ t.fursonaPrimaryLabel }}</p>
         </div>
-        <div class="flex gap-1.5 flex-shrink-0">
+        <div class="flex gap-1.5 shrink-0">
           <button
             v-if="!f.is_primary"
             type="button"
@@ -96,7 +96,7 @@
     </div>
 
     <!-- ── Форма создания / редактирования ──────────────── -->
-    <div v-if="showForm" class="space-y-5">
+    <div v-if="showForm" class="stack-y-5">
 
       <div class="flex items-center justify-between">
         <p class="text-xs font-bold text-brand-accent uppercase tracking-wider flex items-center gap-1.5">
@@ -130,7 +130,7 @@
             type="text"
             maxlength="80"
             :placeholder="t.fursonaNamePlaceholder"
-            class="w-full bg-brand-bg border rounded-2xl px-4 py-3 text-base font-semibold text-white placeholder-white/20 focus:outline-none transition-all pr-14"
+            class="w-full bg-brand-bg border rounded-2xl px-4 py-3 text-base font-semibold text-white placeholder-white/20 focus:outline-hidden transition-all pr-14"
             :class="form.name
               ? 'border-brand-accent/50 shadow-[0_0_0_3px_rgba(167,139,250,0.08)]'
               : 'border-brand-border focus:border-brand-accent/50 focus:shadow-[0_0_0_3px_rgba(167,139,250,0.08)]'"
@@ -148,7 +148,7 @@
       </div>
 
       <!-- Вид / порода -->
-      <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-3">
+      <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl stack-y-3">
         <div class="flex items-center justify-between">
           <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
             <svg class="w-3.5 h-3.5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -173,7 +173,7 @@
               v-model="speciesSearch"
               type="text"
               :placeholder="t.fursonaSpeciesSearchPlaceholder"
-              class="w-full bg-brand-bg border border-brand-border rounded-xl pl-9 pr-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/50 transition-all"
+              class="w-full bg-brand-bg border border-brand-border rounded-xl pl-9 pr-3 py-2 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/50 transition-all"
               @focus="speciesDropOpen = true"
               @blur="onSpeciesBlur"
             />
@@ -230,14 +230,14 @@
               type="text"
               maxlength="50"
               :placeholder="t.fursonaSpeciesOtherPlaceholder"
-              class="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-sm font-semibold text-white placeholder-white/20 focus:outline-none focus:border-brand-accent/50 focus:shadow-[0_0_0_3px_rgba(167,139,250,0.08)] transition-all"
+              class="w-full bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5 text-sm font-semibold text-white placeholder-white/20 focus:outline-hidden focus:border-brand-accent/50 focus:shadow-[0_0_0_3px_rgba(167,139,250,0.08)] transition-all"
             />
           </div>
         </Transition>
       </div>
 
       <!-- Цвета персонажа -->
-      <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-4">
+      <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl stack-y-4">
         <div class="flex items-center justify-between">
           <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
             <svg class="w-3.5 h-3.5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -271,10 +271,10 @@
             <button
               type="button"
               @click.stop="removeColor(idx)"
-              class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity"
+              class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
             >×</button>
             <div v-if="pickingIdx === idx"
-              class="absolute top-12 left-0 z-20 bg-brand-card border border-brand-border rounded-2xl p-3 shadow-2xl space-y-2"
+              class="absolute top-12 left-0 z-20 bg-brand-card border border-brand-border rounded-2xl p-3 shadow-2xl stack-y-2"
               style="min-width:180px">
               <div class="flex flex-wrap gap-1.5">
                 <button
@@ -289,7 +289,7 @@
                 </button>
               </div>
               <div class="flex items-center gap-2 border-t border-brand-border/60 pt-2">
-                <label class="relative w-6 h-6 rounded-lg border border-brand-border flex-shrink-0 cursor-pointer overflow-hidden" :style="`background:${color}`" title="Свой цвет">
+                <label class="relative w-6 h-6 rounded-lg border border-brand-border shrink-0 cursor-pointer overflow-hidden" :style="`background:${color}`" title="Свой цвет">
                   <input
                     type="color"
                     :value="color"
@@ -302,7 +302,7 @@
                   type="button"
                   title="Пипетка — выбрать цвет с экрана"
                   @click="pickWithEyedropper(idx)"
-                  class="w-6 h-6 rounded-lg border border-brand-border flex-shrink-0 flex items-center justify-center text-white/45 hover:text-brand-accent hover:border-brand-accent/50 transition-colors"
+                  class="w-6 h-6 rounded-lg border border-brand-border shrink-0 flex items-center justify-center text-white/45 hover:text-brand-accent hover:border-brand-accent/50 transition-colors"
                 >
                   <Pipette class="w-3.5 h-3.5" />
                 </button>
@@ -311,7 +311,7 @@
                   :value="color"
                   maxlength="7"
                   placeholder="#a78bfa"
-                  class="flex-1 min-w-0 bg-brand-bg border rounded-lg px-2 py-1 text-xs text-white font-mono focus:outline-none transition-colors"
+                  class="flex-1 min-w-0 bg-brand-bg border rounded-lg px-2 py-1 text-xs text-white font-mono focus:outline-hidden transition-colors"
                   :class="isValidHex(color) ? 'border-brand-border focus:border-brand-accent/50' : 'border-rose-500/60'"
                   @input="onHexInput(idx, ($event.target as HTMLInputElement).value)"
                 />
@@ -355,7 +355,7 @@
       </div>
 
       <!-- Симпатии / Антипатии -->
-      <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-4">
+      <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl stack-y-4">
         <div class="flex items-start justify-between gap-4">
           <div>
             <p class="text-xs font-bold text-white">{{ t.fursonaLikesVisibleLabel }}</p>
@@ -363,19 +363,19 @@
           </div>
           <button
             type="button"
-            :class="['relative w-11 h-6 rounded-full border transition-all flex-shrink-0',
+            :class="['relative w-11 h-6 rounded-full border transition-all shrink-0',
               form.likes_dislikes_visible
                 ? 'bg-brand-accent/20 border-brand-accent/60'
                 : 'bg-brand-bg border-brand-border']"
             @click="form.likes_dislikes_visible = !form.likes_dislikes_visible"
           >
-            <span :class="['absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-all',
+            <span :class="['absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow-sm transition-all',
               form.likes_dislikes_visible ? 'translate-x-5 bg-brand-accent' : 'translate-x-0 bg-white/40']"></span>
           </button>
         </div>
 
         <div v-if="form.likes_dislikes_visible" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div class="space-y-2">
+          <div class="stack-y-2">
             <p class="text-xs font-bold flex items-center gap-1.5" style="color:#22c55e">
               <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
@@ -393,14 +393,14 @@
             </div>
             <div class="flex gap-2">
               <input v-model="newLike" type="text" :placeholder="t.fursonaLikesPlaceholder" maxlength="100"
-                class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-1.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-emerald-500/40 transition-all"
+                class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-1.5 text-xs text-white placeholder-white/25 focus:outline-hidden focus:border-emerald-500/40 transition-all"
                 @keydown.enter.prevent="addTag('likes')" />
               <button type="button" @click="addTag('likes')"
                 class="w-8 h-8 flex items-center justify-center rounded-xl text-base font-bold border"
                 style="background:#22c55e15;border-color:#22c55e30;color:#22c55e">+</button>
             </div>
           </div>
-          <div class="space-y-2">
+          <div class="stack-y-2">
             <p class="text-xs font-bold flex items-center gap-1.5" style="color:#ef4444">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -419,7 +419,7 @@
             </div>
             <div class="flex gap-2">
               <input v-model="newDislike" type="text" :placeholder="t.fursonaDislikesPlaceholder" maxlength="100"
-                class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-1.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-rose-500/40 transition-all"
+                class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-1.5 text-xs text-white placeholder-white/25 focus:outline-hidden focus:border-rose-500/40 transition-all"
                 @keydown.enter.prevent="addTag('dislikes')" />
               <button type="button" @click="addTag('dislikes')"
                 class="w-8 h-8 flex items-center justify-center rounded-xl text-base font-bold border"
@@ -430,7 +430,7 @@
       </div>
 
       <!-- Реф-лист (галерея, только для уже сохранённого персонажа) -->
-      <div v-if="editingId" class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-3">
+      <div v-if="editingId" class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl stack-y-3">
         <div class="flex items-center justify-between">
           <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
             <svg class="w-3.5 h-3.5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -450,16 +450,16 @@
 
         <div v-if="userStore.referenceImages.length" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div v-for="item in userStore.referenceImages" :key="item.id"
-            class="group relative p-2 bg-brand-bg border border-brand-border rounded-xl space-y-1.5">
+            class="group relative p-2 bg-brand-bg border border-brand-border rounded-xl stack-y-1.5">
             <div class="relative">
               <img :src="item.image_url" alt="Reference"
                 class="w-full aspect-square rounded-lg object-cover"
-                :class="item.is_nsfw ? 'blur-sm' : ''"
+                :class="item.is_nsfw ? 'blur-xs' : ''"
                 draggable="false" />
               <span v-if="item.is_nsfw"
-                class="absolute top-1 left-1 text-[9px] font-bold px-1 py-0.5 rounded bg-rose-600/90 text-white leading-none">18+</span>
+                class="absolute top-1 left-1 text-[9px] font-bold px-1 py-0.5 rounded-sm bg-rose-600/90 text-white leading-none">18+</span>
               <button type="button" @click="removeReference(item.id)"
-                class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">×</button>
             </div>
             <button type="button" @click="toggleReferenceNsfw(item)"
               class="w-full py-1 rounded-lg text-[9px] font-bold border transition-all"
@@ -470,7 +470,7 @@
             </button>
             <input v-model="item.artist_name" @blur="persistReferenceMeta(item)" type="text" maxlength="100"
               placeholder="Художник…"
-              class="w-full bg-brand-bg border border-brand-border rounded-lg px-2 py-1 text-[10px] text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/50 transition-all" />
+              class="w-full bg-brand-bg border border-brand-border rounded-lg px-2 py-1 text-[10px] text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/50 transition-all" />
           </div>
         </div>
 

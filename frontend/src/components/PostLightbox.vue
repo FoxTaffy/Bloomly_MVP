@@ -213,20 +213,20 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-[300] flex overflow-hidden" @wheel.prevent="onWheel">
+    <div class="fixed inset-0 z-300 flex overflow-hidden" @wheel.prevent="onWheel">
       <!-- Backdrop -->
       <div class="absolute inset-0 bg-black/95" @click.self="emit('close')" />
 
       <!-- ── Media panel ─────────────────────────────────────────────── -->
       <div
-        class="relative z-10 flex flex-col items-center justify-center transition-all duration-300 flex-shrink-0"
+        class="relative z-10 flex flex-col items-center justify-center transition-all duration-300 shrink-0"
         :class="showComments ? 'w-full md:w-[60%]' : 'w-full'"
         @touchstart.passive="onTouchStart"
         @touchend.passive="onTouchEnd"
       >
         <!-- Top bar -->
-        <div class="lightbox-topbar absolute top-0 left-0 right-0 z-10 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent pointer-events-none">
-          <div v-if="total > 1" class="px-3 py-1 rounded-full bg-black/60 border border-white/10 text-white text-sm font-bold backdrop-blur-sm pointer-events-auto">
+        <div class="lightbox-topbar absolute top-0 left-0 right-0 z-10 flex items-center justify-between bg-linear-to-b/srgb from-black/70 to-transparent pointer-events-none">
+          <div v-if="total > 1" class="px-3 py-1 rounded-full bg-black/60 border border-white/10 text-white text-sm font-bold backdrop-blur-xs pointer-events-auto">
             {{ current + 1 }}&thinsp;/&thinsp;{{ total }}
           </div>
           <div v-else />
@@ -235,7 +235,7 @@ onUnmounted(() => {
             <button
               v-if="postId"
               @click="showComments = !showComments"
-              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-sm font-semibold transition-all backdrop-blur-sm"
+              class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-sm font-semibold transition-all backdrop-blur-xs"
               :class="showComments
                 ? 'bg-brand-accent/20 border-brand-accent/50 text-brand-accent'
                 : 'bg-black/50 border-white/15 text-white hover:bg-black/70'"
@@ -252,7 +252,7 @@ onUnmounted(() => {
               v-if="!isVideo(currentUrl)"
               @click="downloadOriginal"
               :disabled="downloading"
-              class="w-9 h-9 rounded-full bg-black/60 border border-white/15 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/80 transition-colors disabled:opacity-50"
+              class="w-9 h-9 rounded-full bg-black/60 border border-white/15 backdrop-blur-xs flex items-center justify-center text-white hover:bg-black/80 transition-colors disabled:opacity-50"
               title="Скачать оригинал"
             >
               <BIcon name="Download" class="w-4.5 h-4.5" />
@@ -260,7 +260,7 @@ onUnmounted(() => {
             <!-- Close -->
             <button
               @click="emit('close')"
-              class="w-11 h-11 rounded-full bg-black/70 border border-white/30 shadow-lg backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/85 transition-colors"
+              class="w-11 h-11 rounded-full bg-black/70 border border-white/30 shadow-lg backdrop-blur-xs flex items-center justify-center text-white hover:bg-black/85 transition-colors"
               title="Закрыть (Esc)"
               aria-label="Закрыть"
             >
@@ -303,7 +303,7 @@ onUnmounted(() => {
             v-for="(url, idx) in images"
             :key="idx"
             @click="current = idx"
-            class="w-12 h-12 rounded-lg overflow-hidden border-2 flex-shrink-0 transition-all"
+            class="w-12 h-12 rounded-lg overflow-hidden border-2 shrink-0 transition-all"
             :class="idx === current ? 'border-brand-accent scale-105' : 'border-white/20 opacity-50 hover:opacity-80'"
           >
             <img v-if="!isVideo(url)" :src="url" class="w-full h-full object-cover" />
@@ -318,31 +318,31 @@ onUnmounted(() => {
       <Transition name="comments-panel">
         <div
           v-if="showComments && postId"
-          class="relative z-10 md:w-[40%] w-full bg-brand-card border-l border-brand-border flex flex-col overflow-hidden flex-shrink-0"
+          class="relative z-10 md:w-[40%] w-full bg-brand-card border-l border-brand-border flex flex-col overflow-hidden shrink-0"
         >
           <!-- Scrollable body: post header + text, then comments -->
           <div class="flex-1 overflow-y-auto">
             <!-- Post author + date + text (VK-style) -->
-            <div v-if="author" class="px-5 pt-4 pb-3 border-b border-brand-border flex-shrink-0">
+            <div v-if="author" class="px-5 pt-4 pb-3 border-b border-brand-border shrink-0">
               <div class="flex items-center gap-2.5 cursor-pointer" @click="goToAuthor">
                 <img :src="author.avatar_url || '/default-avatar.png'" @error="onAvatarError"
-                  class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0" />
+                  class="w-10 h-10 rounded-full object-cover border border-brand-border shrink-0" />
                 <div class="min-w-0">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     <span class="font-bold text-white text-sm truncate hover:text-brand-accent transition-colors">
                       {{ author.display_name || author.username }}
                     </span>
                     <span v-if="author.deceased_at" title="Светлая память">🪦</span>
-                    <VerificationBadge v-if="author.is_verified" :type="author.verification_type" icon-class="w-3.5 h-3.5 flex-shrink-0" />
+                    <VerificationBadge v-if="author.is_verified" :type="author.verification_type" icon-class="w-3.5 h-3.5 shrink-0" />
                   </div>
                   <span class="text-xs text-white/55">{{ formatPostDate(createdAt) }}</span>
                 </div>
               </div>
-              <p v-if="content" class="text-sm text-white/85 leading-relaxed mt-3 whitespace-pre-wrap break-words">{{ content }}</p>
+              <p v-if="content" class="text-sm text-white/85 leading-relaxed mt-3 whitespace-pre-wrap wrap-break-word">{{ content }}</p>
             </div>
 
             <!-- Actions: vote / repaw / favourite / views (same behaviour as PostCard) -->
-            <div v-if="postId" class="flex items-center justify-between px-5 py-3 border-b border-brand-border flex-shrink-0">
+            <div v-if="postId" class="flex items-center justify-between px-5 py-3 border-b border-brand-border shrink-0">
               <div class="flex items-center gap-2">
                 <!-- Vote -->
                 <div class="flex items-center h-8 gap-0.5 bg-brand-bg rounded-full px-1 border border-brand-border">
@@ -398,7 +398,7 @@ onUnmounted(() => {
             </div>
 
             <!-- Comments header -->
-            <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border flex-shrink-0 bg-brand-card sticky top-0 z-10">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border shrink-0 bg-brand-card sticky top-0 z-10">
               <div class="flex items-center gap-2 font-bold text-white">
                 <BIcon name="MessageSquare" class="w-5 h-5 text-brand-accent" />
                 Комментарии

@@ -33,12 +33,12 @@ function onClick(t: typeof toasts.value[0]) {
 
 <template>
   <Teleport to="body">
-    <div class="fixed bottom-20 md:bottom-6 right-4 z-[9000] flex flex-col gap-2.5 items-end pointer-events-none" style="max-width: 340px">
+    <div class="fixed bottom-20 md:bottom-6 right-4 z-9000 flex flex-col gap-2.5 items-end pointer-events-none" style="max-width: 340px">
       <TransitionGroup name="notif-toast" tag="div" class="flex flex-col items-end gap-2.5">
         <div
           v-for="t in toasts"
           :key="t.id"
-          class="notif-toast-card group pointer-events-auto relative w-[320px] overflow-hidden flex items-start gap-3 pl-3.5 pr-3 py-3 rounded-2xl border shadow-[0_18px_44px_rgba(0,0,0,0.35)] cursor-pointer transition-all duration-200 backdrop-blur-xl bg-gradient-to-br from-white/8 via-brand-card/95 to-brand-card/90"
+          class="notif-toast-card group pointer-events-auto relative w-[320px] overflow-hidden flex items-start gap-3 pl-3.5 pr-3 py-3 rounded-2xl border shadow-[0_18px_44px_rgba(0,0,0,0.35)] cursor-pointer transition-all duration-200 backdrop-blur-xl bg-linear-to-br/srgb from-white/8 via-brand-card/95 to-brand-card/90"
           :class="t.type === 'automod_warn'
             ? 'border-amber-400/35 hover:border-amber-300/50 shadow-[0_18px_44px_rgba(245,158,11,0.18)]'
             : 'border-brand-border/80 hover:border-brand-accent/40'"
@@ -48,14 +48,14 @@ function onClick(t: typeof toasts.value[0]) {
           <span class="absolute left-0 top-3 bottom-3 w-[3px] rounded-full" :class="notifBadgeColor(t.type)" />
 
           <!-- Avatar + type badge -->
-          <div class="relative flex-shrink-0 mt-0.5">
+          <div class="relative shrink-0 mt-0.5">
             <img
               :src="t.senderAvatar || '/icons/badges/NN.jpg'"
               class="w-10 h-10 rounded-full object-cover ring-2 ring-brand-card/80 shadow-lg"
               @error="onAvatarError"
             />
             <div
-              class="absolute -bottom-1 -right-1 w-[22px] h-[22px] rounded-full ring-2 ring-brand-card flex items-center justify-center text-white shadow-sm"
+              class="absolute -bottom-1 -right-1 w-[22px] h-[22px] rounded-full ring-2 ring-brand-card flex items-center justify-center text-white shadow-xs"
               :class="notifBadgeColor(t.type)"
             >
               <BIcon :name="notifBadgeIcon(t.type)" class="w-3 h-3" />
@@ -65,12 +65,12 @@ function onClick(t: typeof toasts.value[0]) {
           <!-- Text -->
           <div class="min-w-0 flex-1 pt-0.5">
             <p class="text-[13px] font-extrabold text-white leading-tight truncate">{{ t.senderName }}</p>
-            <p class="text-[13px] text-white/70 leading-snug mt-0.5 line-clamp-2 break-words">{{ t.message }}</p>
+            <p class="text-[13px] text-white/70 leading-snug mt-0.5 line-clamp-2 wrap-break-word">{{ t.message }}</p>
           </div>
 
           <!-- Close -->
           <button
-            class="flex-shrink-0 -mt-1 -mr-0.5 p-1 rounded-full text-white/30 hover:text-white hover:bg-white/10 transition-colors"
+            class="shrink-0 -mt-1 -mr-0.5 p-1 rounded-full text-white/30 hover:text-white hover:bg-white/10 transition-colors"
             aria-label="Закрыть"
             @click.stop="remove(t.id)"
           >
@@ -78,7 +78,7 @@ function onClick(t: typeof toasts.value[0]) {
           </button>
 
           <!-- Lifetime bar -->
-          <span class="notif-toast-progress absolute left-0 bottom-0 h-[2px] w-full origin-left bg-gradient-to-r from-brand-accent via-white/80 to-white/40" />
+          <span class="notif-toast-progress absolute left-0 bottom-0 h-[2px] w-full origin-left bg-linear-to-r/srgb from-brand-accent via-white/80 to-white/40" />
         </div>
       </TransitionGroup>
     </div>

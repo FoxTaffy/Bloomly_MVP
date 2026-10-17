@@ -5,8 +5,8 @@
     <div v-if="open" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md" @click.self="emit('close')">
       <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden" style="max-height:90vh">
         <!-- Cover (colored banner behind avatar + name, plain card bg for the action row) -->
-        <div class="relative flex-shrink-0">
-          <div class="relative pt-4 pb-5 px-5 text-center overflow-hidden bg-gradient-to-br from-brand-accent/30 to-purple-900/40">
+        <div class="relative shrink-0">
+          <div class="relative pt-4 pb-5 px-5 text-center overflow-hidden bg-linear-to-br/srgb from-brand-accent/30 to-purple-900/40">
             <img v-if="other?.banner_url" :src="other.banner_url" class="absolute inset-0 w-full h-full object-cover" />
             <div v-if="other?.banner_url" class="absolute inset-0 bg-black/30" />
 
@@ -25,11 +25,11 @@
               <!-- Online dot -->
               <OnlineIndicator v-if="online" :device="device" size="lg" />
             </div>
-            <h3 class="relative text-base font-bold text-white truncate mt-2.5 flex items-center justify-center gap-1.5 drop-shadow">
+            <h3 class="relative text-base font-bold text-white truncate mt-2.5 flex items-center justify-center gap-1.5 drop-shadow-sm">
               {{ other?.display_name || other?.username }}
               <span v-if="other?.deceased_at" :title="langStore.t.chatRipTitle">🪦</span>
             </h3>
-            <p class="relative text-xs mt-0.5 flex items-center justify-center gap-1 drop-shadow" :class="online ? 'text-green-400' : 'text-white/70'">
+            <p class="relative text-xs mt-0.5 flex items-center justify-center gap-1 drop-shadow-sm" :class="online ? 'text-green-400' : 'text-white/70'">
               {{ online ? langStore.t.chatOnlineBulleted : `● ${lastSeenLabel}` }}
               <BIcon v-if="online && deviceIcon" :name="deviceIcon!" class="w-3 h-3" :title="device ?? undefined" />
             </p>
@@ -57,11 +57,11 @@
         </div>
 
         <!-- Username row (clicking anywhere in the row copies it, not just the icon) -->
-        <div class="flex items-center gap-2 px-5 py-2.5 border-t border-b border-brand-border flex-shrink-0 cursor-pointer hover:bg-brand-bg/40 transition-colors"
+        <div class="flex items-center gap-2 px-5 py-2.5 border-t border-b border-brand-border shrink-0 cursor-pointer hover:bg-brand-bg/40 transition-colors"
           @click="copyUsername" :title="langStore.t.chatCopyTitle">
-          <span class="text-brand-accent font-bold text-xs flex-shrink-0">@</span>
+          <span class="text-brand-accent font-bold text-xs shrink-0">@</span>
           <span class="flex-1 min-w-0 text-sm text-white/80 truncate">{{ other?.username }}</span>
-          <button class="flex-shrink-0 text-white/40 hover:text-white transition-colors">
+          <button class="shrink-0 text-white/40 hover:text-white transition-colors">
             <BIcon :name="usernameCopied ? 'Check' : 'Copy'" class="w-3.5 h-3.5" />
           </button>
         </div>
@@ -72,7 +72,7 @@
         </div>
 
         <!-- Danger zone -->
-        <div class="px-5 py-3 flex-shrink-0 border-t border-brand-border">
+        <div class="px-5 py-3 shrink-0 border-t border-brand-border">
           <button @click="emit('delete')"
             class="w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm text-brand-error hover:bg-brand-error/10 transition-colors font-medium">
             <BIcon name="Trash2" class="w-4 h-4" />

@@ -150,17 +150,17 @@ const categoryItems = computed(() => [
     <Transition name="sidebar-fade">
       <div
         v-if="mobileSidebar.isOpen.value"
-        class="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm lg:hidden"
+        class="fixed inset-0 z-300 bg-black/60 backdrop-blur-xs lg:hidden"
         @click="mobileSidebar.close()"
       />
     </Transition>
     <Transition name="sidebar-slide">
       <div
         v-if="mobileSidebar.isOpen.value"
-        class="fixed top-0 left-0 bottom-0 z-[301] w-72 bg-brand-bg border-r border-brand-border shadow-2xl lg:hidden flex flex-col overflow-y-auto"
+        class="fixed top-0 left-0 bottom-0 z-301 w-72 bg-brand-bg border-r border-brand-border shadow-2xl lg:hidden flex flex-col overflow-y-auto"
       >
         <!-- Drawer header -->
-        <div class="flex items-center justify-between px-4 py-4 border-b border-brand-border flex-shrink-0">
+        <div class="flex items-center justify-between px-4 py-4 border-b border-brand-border shrink-0">
           <router-link :to="{ name: 'home' }" class="flex items-center gap-2.5 cursor-pointer" @click="mobileSidebar.close()">
             <img src="/bloomly.png?v=2" alt="Bloomly" class="w-7 h-7 object-contain" />
             <span class="text-lg font-extrabold text-white">Bloomly</span>
@@ -171,7 +171,7 @@ const categoryItems = computed(() => [
         </div>
 
         <!-- Drawer content -->
-        <div class="flex-1 px-3 py-4 space-y-6 overflow-y-auto">
+        <div class="flex-1 px-3 py-4 stack-y-6 overflow-y-auto">
           <!-- User profile -->
           <router-link v-if="auth.user"
             :to="`/profile/${auth.user?.username}`"
@@ -192,14 +192,14 @@ const categoryItems = computed(() => [
           <!-- Auth still (re)loading — skeleton instead of a flash of "User" -->
           <div v-else class="flex items-center gap-3 px-1 animate-pulse">
             <div class="w-10 h-10 rounded-full bg-white/10"></div>
-            <div class="space-y-1.5">
-              <div class="h-3.5 w-24 rounded bg-white/10"></div>
-              <div class="h-2.5 w-16 rounded bg-white/5"></div>
+            <div class="stack-y-1.5">
+              <div class="h-3.5 w-24 rounded-sm bg-white/10"></div>
+              <div class="h-2.5 w-16 rounded-sm bg-white/5"></div>
             </div>
           </div>
 
           <!-- Main nav -->
-          <nav class="space-y-0.5">
+          <nav class="stack-y-0.5">
             <router-link v-for="item in navItems" :key="item.key"
               :to="item.to"
               @click="item.onClick?.(); mobileSidebar.close()"
@@ -226,7 +226,7 @@ const categoryItems = computed(() => [
           <!-- Categories -->
           <div>
             <h4 class="px-4 text-xs font-bold text-white/40 mb-2 uppercase tracking-wider">{{ langStore.t.categories }}</h4>
-            <nav class="space-y-0.5">
+            <nav class="stack-y-0.5">
               <component :is="cat.disabled ? 'button' : 'router-link'" v-for="cat in categoryItems" :key="cat.key"
                 :to="cat.disabled ? undefined : cat.to"
                 @click="!cat.disabled && mobileSidebar.close()"
@@ -251,7 +251,7 @@ const categoryItems = computed(() => [
           <!-- Admin tools mobile — shown only on own group page -->
           <div v-if="adminGroup">
             <h4 class="px-4 text-xs font-bold text-white/40 mb-2 uppercase tracking-wider">Админ-инструменты</h4>
-            <nav class="space-y-0.5">
+            <nav class="stack-y-0.5">
               <button
                 @click="navigate(() => router.push({ name: 'group-settings', params: { slugOrId: (adminGroup as any).slug } }))"
                 class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all text-white"
@@ -282,7 +282,7 @@ const categoryItems = computed(() => [
   </Teleport>
 
   <!-- ── Desktop sidebar ────────────────────────────────────────── -->
-  <aside class="w-64 hidden lg:block sticky top-24 self-start space-y-6 flex-shrink-0">
+  <aside class="w-64 hidden lg:block sticky top-24 self-start stack-y-6 shrink-0">
 
     <!-- User profile block -->
     <router-link
@@ -307,14 +307,14 @@ const categoryItems = computed(() => [
     <!-- Auth still (re)loading — skeleton instead of a flash of "User" -->
     <div v-else class="flex items-center gap-3 animate-pulse">
       <div class="w-12 h-12 rounded-full bg-white/10"></div>
-      <div class="space-y-1.5">
-        <div class="h-3.5 w-28 rounded bg-white/10"></div>
-        <div class="h-2.5 w-20 rounded bg-white/5"></div>
+      <div class="stack-y-1.5">
+        <div class="h-3.5 w-28 rounded-sm bg-white/10"></div>
+        <div class="h-2.5 w-20 rounded-sm bg-white/5"></div>
       </div>
     </div>
 
     <!-- Main navigation -->
-    <nav class="space-y-1">
+    <nav class="stack-y-1">
       <router-link
         v-for="item in navItems"
         :key="item.key"
@@ -357,7 +357,7 @@ const categoryItems = computed(() => [
     <!-- Admin tools — shown only on own group page, tools vary by group type -->
     <div v-if="adminGroup">
       <h4 class="px-4 text-xs font-bold text-white/40 mb-2 uppercase tracking-wider">Админ-инструменты</h4>
-      <nav class="space-y-1">
+      <nav class="stack-y-1">
         <button
           @click="router.push({ name: 'group-settings', params: { slugOrId: adminGroup.slug } })"
           class="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl text-sm font-bold transition-all text-white"
@@ -386,7 +386,7 @@ const categoryItems = computed(() => [
     <!-- Categories -->
     <div>
       <h4 class="px-4 text-xs font-bold text-white/40 mb-2 uppercase tracking-wider">{{ langStore.t.categories }}</h4>
-      <nav class="space-y-1">
+      <nav class="stack-y-1">
         <component
           :is="cat.disabled ? 'button' : 'router-link'"
           v-for="cat in categoryItems"

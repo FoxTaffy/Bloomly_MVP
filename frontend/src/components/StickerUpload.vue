@@ -191,7 +191,7 @@ async function onDrop(e: DragEvent) {
 </script>
 
 <template>
-  <div class="space-y-3">
+  <div class="stack-y-3">
     <!-- Drop zone -->
     <div
       class="relative border-2 border-dashed rounded-2xl p-5 text-center transition-all select-none"
@@ -236,7 +236,7 @@ async function onDrop(e: DragEvent) {
     </div>
 
     <!-- Progress -->
-    <div v-if="busy" class="space-y-1.5">
+    <div v-if="busy" class="stack-y-1.5">
       <div class="flex justify-between text-xs font-bold text-white/55">
         <span>Загрузка стикеров…</span>
         <span class="tabular-nums">{{ progress.done }} / {{ progress.total }}</span>
@@ -247,12 +247,12 @@ async function onDrop(e: DragEvent) {
     </div>
 
     <!-- Failures -->
-    <div v-if="failures.length" class="rounded-2xl border border-brand-error/30 bg-brand-error/5 p-3 space-y-1.5">
+    <div v-if="failures.length" class="rounded-2xl border border-brand-error/30 bg-brand-error/5 p-3 stack-y-1.5">
       <div class="flex items-center justify-between">
         <p class="text-xs font-extrabold text-brand-error">Не загружено: {{ failures.length }}</p>
         <button type="button" class="text-[11px] font-bold text-white/40 hover:text-white" @click="failures = []">Скрыть</button>
       </div>
-      <ul class="max-h-28 overflow-y-auto space-y-1">
+      <ul class="max-h-28 overflow-y-auto stack-y-1">
         <li v-for="f in failures" :key="f.id" class="text-[11px] leading-snug text-white/60">
           <span class="font-bold text-white/80 break-all">{{ f.name }}</span> — {{ f.error }}
         </li>

@@ -28,7 +28,7 @@ function avatarInitial(name: string | null | undefined) {
       @click="router.push(`/profile/${request.user.username}`)"
     >
       <!-- Avatar -->
-      <div class="relative flex-shrink-0">
+      <div class="relative shrink-0">
         <img
           v-if="request.user.avatar_url"
           :src="request.user.avatar_url"
@@ -50,11 +50,11 @@ function avatarInitial(name: string | null | undefined) {
         </p>
         <p class="text-xs text-white/55 truncate">@{{ request.user.username }}</p>
         <div class="flex items-center gap-1 mt-0.5 text-xs text-white/55">
-          <BIcon v-if="request.user.location" name="MapPin" class="w-3 h-3 flex-shrink-0" />
+          <BIcon v-if="request.user.location" name="MapPin" class="w-3 h-3 shrink-0" />
           <span v-if="request.user.location" class="truncate">{{ request.user.location }}</span>
           <template v-if="mutualCount">
             <span v-if="request.user.location" class="mx-1">·</span>
-            <BIcon name="Users" class="w-3 h-3 flex-shrink-0" />
+            <BIcon name="Users" class="w-3 h-3 shrink-0" />
             <span>{{ mutualCount }} общих</span>
           </template>
         </div>

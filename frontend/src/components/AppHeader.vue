@@ -537,7 +537,7 @@ onUnmounted(() => {
       <!-- Mobile hamburger (only when sidebar is present, < lg) -->
       <button v-if="auth.isAuthenticated && !showBack"
         @click="mobileSidebar.toggle()"
-        class="lg:hidden p-2 rounded-xl text-white/55 hover:text-white hover:bg-white/5 transition-all flex-shrink-0">
+        class="lg:hidden p-2 rounded-xl text-white/55 hover:text-white hover:bg-white/5 transition-all shrink-0">
         <BIcon :name="mobileSidebar.isOpen.value ? 'X' : 'Menu'" class="w-5 h-5" />
       </button>
       <button v-if="showBack" @click="router.back()"
@@ -546,7 +546,7 @@ onUnmounted(() => {
         <span class="hidden sm:block">Назад</span>
       </button>
       <router-link v-else :to="{ name: 'home' }" class="flex items-center gap-2.5 cursor-pointer">
-        <div class="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center flex-shrink-0">
+        <div class="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center shrink-0">
           <img src="/bloomly.png?v=2" alt="Bloomly" class="w-full h-full object-contain" />
         </div>
         <span class="text-xl md:text-2xl font-extrabold tracking-tight text-white">Bloomly</span>
@@ -558,18 +558,18 @@ onUnmounted(() => {
     <div class="relative flex-1 max-w-xl mx-8 hidden md:block" @click.stop>
       <div class="flex items-center gap-3 bg-brand-card border rounded-full py-2.5 pl-4 pr-4 text-sm transition-colors"
         :class="showSearchModal ? 'border-brand-accent/60 ring-2 ring-brand-accent/15' : 'border-brand-border'">
-        <BIcon name="Search" class="h-4 w-4 flex-shrink-0 text-white/55" />
+        <BIcon name="Search" class="h-4 w-4 shrink-0 text-white/55" />
         <input id="app-search-modal-input" type="text" v-model="searchModalQuery"
           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
           @focus="openSearchModal" @input="onSearchModalInput"
           @keydown.esc="closeSearchModal" @keydown.enter="goToFullSearch"
           :placeholder="langStore.t.search"
-          class="flex-1 min-w-0 bg-transparent text-white placeholder-white/55 outline-none" />
+          class="flex-1 min-w-0 bg-transparent text-white placeholder-white/55 outline-hidden" />
         <button v-if="searchModalQuery" @click="clearSearchModal"
-          class="p-0.5 text-white/40 hover:text-white transition-colors flex-shrink-0">
+          class="p-0.5 text-white/40 hover:text-white transition-colors shrink-0">
           <BIcon name="X" class="h-3.5 w-3.5" />
         </button>
-        <span v-else class="ml-auto flex items-center gap-1 text-xs text-white/35 bg-brand-bg px-2 py-0.5 rounded-md border border-brand-border/60 hidden xl:flex flex-shrink-0">Ctrl K</span>
+        <span v-else class="ml-auto flex items-center gap-1 text-xs text-white/35 bg-brand-bg px-2 py-0.5 rounded-md border border-brand-border/60 hidden xl:flex shrink-0">Ctrl K</span>
       </div>
 
       <!-- Search dropdown -->
@@ -585,9 +585,9 @@ onUnmounted(() => {
                 <p class="text-[10px] font-bold uppercase tracking-widest text-white/35 mb-3 px-1">Истории</p>
                 <div class="flex gap-3 overflow-x-auto hide-scrollbar pb-1">
                   <div v-for="story in searchStories" :key="story.id"
-                    class="flex flex-col items-center gap-1.5 cursor-pointer flex-shrink-0"
+                    class="flex flex-col items-center gap-1.5 cursor-pointer shrink-0"
                     @click="openStory(story)">
-                    <div class="w-14 h-14 rounded-2xl p-[2px] bg-gradient-to-tr from-brand-accent to-brand-purple">
+                    <div class="w-14 h-14 rounded-2xl p-[2px] bg-linear-to-tr/srgb from-brand-accent to-brand-purple">
                       <img v-if="story.user.avatar_url" :src="story.user.avatar_url"
                         class="w-full h-full rounded-xl border-2 border-brand-card object-cover"
                         @error="onAvatarError" />
@@ -606,7 +606,7 @@ onUnmounted(() => {
                 <router-link v-for="user in defaultSearchUsers" :key="user.id" :to="`/profile/${user.username}`" @click="closeSearchModal()"
                   class="w-full flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border rounded-2xl hover:border-brand-accent/40 transition-all text-left">
                   <img :src="user.avatar_url || '/icons/badges/NN.jpg'"
-                    class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0"
+                    class="w-10 h-10 rounded-full object-cover border border-brand-border shrink-0"
                     @error="onAvatarError" />
                   <div class="min-w-0 flex-1">
                     <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
@@ -621,15 +621,15 @@ onUnmounted(() => {
                 <router-link v-for="group in defaultSearchGroups" :key="group.id" :to="`/groups/${group.slug || group.id}`" @click="closeSearchModal()"
                   class="w-full flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border rounded-2xl hover:border-brand-accent/40 transition-all text-left">
                   <img v-if="group.avatar_url" :src="group.avatar_url"
-                    class="w-10 h-10 rounded-xl object-cover border border-brand-border flex-shrink-0"
+                    class="w-10 h-10 rounded-xl object-cover border border-brand-border shrink-0"
                     @error="onAvatarError" />
-                  <div v-else class="w-10 h-10 rounded-xl bg-brand-accent/15 border border-brand-border flex items-center justify-center text-brand-accent font-bold text-sm flex-shrink-0">
+                  <div v-else class="w-10 h-10 rounded-xl bg-brand-accent/15 border border-brand-border flex items-center justify-center text-brand-accent font-bold text-sm shrink-0">
                     {{ (group.name ?? '?')[0].toUpperCase() }}
                   </div>
                   <div class="min-w-0 flex-1">
                     <p class="text-sm font-semibold text-white truncate flex items-center gap-1">
                       {{ group.name }}
-                      <BIcon v-if="group.is_verified" name="BadgeCheck" class="h-3.5 w-3.5 text-brand-accent flex-shrink-0" />
+                      <BIcon v-if="group.is_verified" name="BadgeCheck" class="h-3.5 w-3.5 text-brand-accent shrink-0" />
                     </p>
                     <p class="text-xs text-white/55">{{ group.members_count ?? 0 }} участников</p>
                   </div>
@@ -659,7 +659,7 @@ onUnmounted(() => {
                   <router-link v-for="user in searchModalUsers" :key="user.id" :to="`/profile/${user.username}`" @click="closeSearchModal()"
                     class="w-full flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border rounded-2xl hover:border-brand-accent/40 transition-all text-left">
                     <img :src="user.avatar_url || '/icons/badges/NN.jpg'"
-                      class="w-10 h-10 rounded-full object-cover border border-brand-border flex-shrink-0"
+                      class="w-10 h-10 rounded-full object-cover border border-brand-border shrink-0"
                       @error="onAvatarError" />
                     <div class="min-w-0 flex-1">
                       <p class="text-sm font-semibold text-white truncate">{{ user.display_name || user.username }}</p>
@@ -673,15 +673,15 @@ onUnmounted(() => {
                   <router-link v-for="group in searchModalGroups" :key="group.id" :to="`/groups/${group.slug || group.id}`" @click="closeSearchModal()"
                     class="w-full flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border rounded-2xl hover:border-brand-accent/40 transition-all text-left">
                     <img v-if="group.avatar_url" :src="group.avatar_url"
-                      class="w-10 h-10 rounded-xl object-cover border border-brand-border flex-shrink-0"
+                      class="w-10 h-10 rounded-xl object-cover border border-brand-border shrink-0"
                       @error="onAvatarError" />
-                    <div v-else class="w-10 h-10 rounded-xl bg-brand-accent/15 border border-brand-border flex items-center justify-center text-brand-accent font-bold text-sm flex-shrink-0">
+                    <div v-else class="w-10 h-10 rounded-xl bg-brand-accent/15 border border-brand-border flex items-center justify-center text-brand-accent font-bold text-sm shrink-0">
                       {{ (group.name ?? '?')[0].toUpperCase() }}
                     </div>
                     <div class="min-w-0 flex-1">
                       <p class="text-sm font-semibold text-white truncate flex items-center gap-1">
                         {{ group.name }}
-                        <BIcon v-if="group.is_verified" name="BadgeCheck" class="h-3.5 w-3.5 text-brand-accent flex-shrink-0" />
+                        <BIcon v-if="group.is_verified" name="BadgeCheck" class="h-3.5 w-3.5 text-brand-accent shrink-0" />
                       </p>
                       <p class="text-xs text-white/55">{{ group.members_count ?? 0 }} участников</p>
                     </div>
@@ -706,7 +706,7 @@ onUnmounted(() => {
       <div class="relative hidden md:block">
         <button @click.stop="showLangDropdown = !showLangDropdown"
           class="flex items-center gap-1.5 px-2.5 py-1.5 bg-brand-card border border-brand-border rounded-xl text-sm font-bold text-white/80 hover:text-white hover:border-brand-accent/50 transition-all">
-          <span :class="`fi fi-${currentLangOption().fi} rounded-sm`" style="font-size:1.1rem"></span>
+          <span :class="`fi fi-${currentLangOption().fi} rounded-xs`" style="font-size:1.1rem"></span>
           <span class="hidden sm:inline text-xs">{{ currentLangOption().label }}</span>
           <BIcon name="ChevronDown" class="w-3 h-3 text-white/40" />
         </button>
@@ -718,7 +718,7 @@ onUnmounted(() => {
               @click="selectLang(lang.code)"
               class="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-semibold transition-colors hover:bg-brand-accent/10"
               :class="langStore.currentLang === lang.code ? 'text-brand-accent bg-brand-accent/5' : 'text-white/70 hover:text-white'">
-              <span :class="`fi fi-${lang.fi} rounded-sm`" style="font-size:1.1rem"></span>
+              <span :class="`fi fi-${lang.fi} rounded-xs`" style="font-size:1.1rem"></span>
               <span>{{ lang.label }}</span>
               <BIcon v-if="langStore.currentLang === lang.code" name="Check" class="w-3.5 h-3.5 ml-auto" />
             </button>
@@ -745,7 +745,7 @@ onUnmounted(() => {
             class="fixed inset-x-3 top-14 sm:inset-x-auto sm:absolute sm:right-0 sm:top-12 z-50 sm:w-[400px] bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] sm:max-h-[540px]">
 
             <!-- Header -->
-            <div class="flex items-center justify-between px-5 py-3.5 border-b border-brand-border flex-shrink-0">
+            <div class="flex items-center justify-between px-5 py-3.5 border-b border-brand-border shrink-0">
               <span class="font-bold text-base">Уведомления</span>
               <button v-if="unreadCount > 0" @click="markAllRead"
                 class="text-xs text-brand-accent hover:text-white font-semibold transition-colors">
@@ -772,15 +772,15 @@ onUnmounted(() => {
                     :class="n.type === 'automod_warn' ? 'bg-amber-500/10 hover:bg-amber-500/15 border-amber-500/30' : 'bg-brand-accent/5 hover:bg-brand-accent/10 border-brand-border/60'"
                     @click="onNotifClick(n)">
                     <!-- Avatar + type badge -->
-                    <div v-if="isAutomodNotif(n)" class="relative flex-shrink-0 mt-0.5">
-                      <div class="w-10 h-10 rounded-full bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center">
+                    <div v-if="isAutomodNotif(n)" class="relative shrink-0 mt-0.5">
+                      <div class="w-10 h-10 rounded-full bg-linear-to-br/srgb from-[#4C67CF] to-[#7c3aed] flex items-center justify-center">
                         <span class="text-white font-black text-sm select-none" style="letter-spacing:-1px">B</span>
                       </div>
                       <div :class="['absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center', notifBadgeClass(n.type)]">
                         <BIcon :name="notifBadgeIcon(n.type)" class="w-2.5 h-2.5" />
                       </div>
                     </div>
-                    <router-link v-else :to="identityHref(n)" @click.stop="showNotifications = false" class="relative flex-shrink-0 mt-0.5 cursor-pointer">
+                    <router-link v-else :to="identityHref(n)" @click.stop="showNotifications = false" class="relative shrink-0 mt-0.5 cursor-pointer">
                       <img :src="identityAvatar(n) || '/icons/badges/NN.jpg'"
                         class="w-10 h-10 rounded-full object-cover border border-brand-border"
                         @error="onAvatarError" />
@@ -826,7 +826,7 @@ onUnmounted(() => {
                       <p v-if="n.type === 'STICKER_ACCESS_REQUEST' && n._stickerDone === 'rejected'" class="text-xs text-white/40 mt-1">Отклонено</p>
                     </div>
                     <!-- Unread dot -->
-                    <div class="w-2 h-2 bg-brand-accent rounded-full flex-shrink-0 mt-2"></div>
+                    <div class="w-2 h-2 bg-brand-accent rounded-full shrink-0 mt-2"></div>
                   </div>
                 </template>
 
@@ -836,19 +836,19 @@ onUnmounted(() => {
                     <span class="text-[10px] font-bold tracking-widest text-white/35 uppercase">Просмотренные</span>
                   </div>
                   <div v-for="n in notifications.filter(n => n.is_read)" :key="n.id"
-                    class="flex items-start gap-3 px-4 py-3 mx-2 mb-1.5 rounded-2xl cursor-pointer transition-all border border-transparent hover:border-brand-border/60 hover:bg-white/[0.03]"
+                    class="flex items-start gap-3 px-4 py-3 mx-2 mb-1.5 rounded-2xl cursor-pointer transition-all border border-transparent hover:border-brand-border/60 hover:bg-white/3"
                     :class="n.type === 'automod_warn' ? 'bg-amber-500/5 hover:bg-amber-500/10 border-amber-500/20' : ''"
                     @click="onNotifClick(n)">
                     <!-- Avatar + type badge -->
-                    <div v-if="isAutomodNotif(n)" class="relative flex-shrink-0 mt-0.5 opacity-70">
-                      <div class="w-10 h-10 rounded-full bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center">
+                    <div v-if="isAutomodNotif(n)" class="relative shrink-0 mt-0.5 opacity-70">
+                      <div class="w-10 h-10 rounded-full bg-linear-to-br/srgb from-[#4C67CF] to-[#7c3aed] flex items-center justify-center">
                         <span class="text-white font-black text-sm select-none" style="letter-spacing:-1px">B</span>
                       </div>
                       <div :class="['absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-brand-card flex items-center justify-center opacity-60', notifBadgeClass(n.type)]">
                         <BIcon :name="notifBadgeIcon(n.type)" class="w-2.5 h-2.5" />
                       </div>
                     </div>
-                    <router-link v-else :to="identityHref(n)" @click.stop="showNotifications = false" class="relative flex-shrink-0 mt-0.5 cursor-pointer">
+                    <router-link v-else :to="identityHref(n)" @click.stop="showNotifications = false" class="relative shrink-0 mt-0.5 cursor-pointer">
                       <img :src="identityAvatar(n) || '/icons/badges/NN.jpg'"
                         class="w-10 h-10 rounded-full object-cover border border-brand-border opacity-70"
                         @error="onAvatarError" />
@@ -898,7 +898,7 @@ onUnmounted(() => {
             </div>
 
             <!-- Footer -->
-            <div class="border-t border-brand-border flex-shrink-0 px-4 py-2.5">
+            <div class="border-t border-brand-border shrink-0 px-4 py-2.5">
               <router-link to="/notifications" @click="showNotifications = false"
                 class="w-full py-2 rounded-xl text-sm text-white/55 hover:text-white hover:bg-white/5
                        font-medium transition-colors flex items-center justify-center gap-1.5">
@@ -914,12 +914,12 @@ onUnmounted(() => {
       <button v-if="canUseNsfw" @click="toggleNsfw"
         class="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 rounded-full border transition-all duration-200"
         :title="nsfwFilterMode === 'hide' ? 'NSFW скрыт' : nsfwFilterMode === 'blur' ? 'NSFW размыт' : 'NSFW показан'"
-        :class="nsfwEnabled ? 'bg-brand-error/15 border-brand-error/40 text-brand-error shadow-sm shadow-brand-error/20' : nsfwFilterMode === 'blur' ? 'bg-brand-card border-brand-error/30 text-brand-error/70' : 'bg-brand-card border-brand-border text-white/55 hover:text-white'">
+        :class="nsfwEnabled ? 'bg-brand-error/15 border-brand-error/40 text-brand-error shadow-xs shadow-brand-error/20' : nsfwFilterMode === 'blur' ? 'bg-brand-card border-brand-error/30 text-brand-error/70' : 'bg-brand-card border-brand-border text-white/55 hover:text-white'">
         <BIcon :name="nsfwEnabled ? 'Eye' : 'EyeOff'" class="h-4 w-4" />
         <span class="text-xs font-bold hidden sm:block">NSFW<template v-if="nsfwFilterMode === 'blur'"> · размыт</template></span>
-        <div class="relative w-7 h-3.5 flex-shrink-0 hidden sm:block">
+        <div class="relative w-7 h-3.5 shrink-0 hidden sm:block">
           <div class="w-7 h-3.5 rounded-full transition-colors" :class="nsfwEnabled ? 'bg-rose-500' : nsfwFilterMode === 'blur' ? 'bg-rose-500/50' : 'bg-white/20'"></div>
-          <div class="absolute top-0.5 h-2.5 w-2.5 bg-white rounded-full shadow transition-all" :class="nsfwEnabled ? 'left-[calc(100%-11px)]' : nsfwFilterMode === 'blur' ? 'left-[calc(50%-5px)]' : 'left-0.5'"></div>
+          <div class="absolute top-0.5 h-2.5 w-2.5 bg-white rounded-full shadow-sm transition-all" :class="nsfwEnabled ? 'left-[calc(100%-11px)]' : nsfwFilterMode === 'blur' ? 'left-[calc(50%-5px)]' : 'left-0.5'"></div>
         </div>
       </button>
 
@@ -942,10 +942,10 @@ onUnmounted(() => {
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div v-if="postModal" class="fixed inset-0 z-[200] overflow-y-auto"
+      <div v-if="postModal" class="fixed inset-0 z-200 overflow-y-auto"
         @click.self="closePostModal">
         <!-- Backdrop -->
-        <div class="fixed inset-0 bg-black/70 backdrop-blur-sm" @click="closePostModal" />
+        <div class="fixed inset-0 bg-black/70 backdrop-blur-xs" @click="closePostModal" />
 
         <!-- Centering wrapper -->
         <div class="flex items-center justify-center min-h-full py-8 px-4">
@@ -965,15 +965,15 @@ onUnmounted(() => {
           <div v-if="postModal.loading" class="bg-brand-card border border-brand-border rounded-3xl p-6 animate-pulse">
             <div class="flex items-center gap-3 mb-4">
               <div class="w-11 h-11 rounded-full bg-brand-border"></div>
-              <div class="flex-1 space-y-2">
-                <div class="h-3 bg-brand-border rounded w-32"></div>
-                <div class="h-2 bg-brand-border rounded w-20"></div>
+              <div class="flex-1 stack-y-2">
+                <div class="h-3 bg-brand-border rounded-sm w-32"></div>
+                <div class="h-2 bg-brand-border rounded-sm w-20"></div>
               </div>
             </div>
-            <div class="space-y-2">
-              <div class="h-3 bg-brand-border rounded w-full"></div>
-              <div class="h-3 bg-brand-border rounded w-4/5"></div>
-              <div class="h-3 bg-brand-border rounded w-2/3"></div>
+            <div class="stack-y-2">
+              <div class="h-3 bg-brand-border rounded-sm w-full"></div>
+              <div class="h-3 bg-brand-border rounded-sm w-4/5"></div>
+              <div class="h-3 bg-brand-border rounded-sm w-2/3"></div>
             </div>
           </div>
 
@@ -1005,7 +1005,7 @@ onUnmounted(() => {
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div v-if="activeStory" class="fixed inset-0 z-[600] bg-black/95 flex items-center justify-center" @click.self="closeStory">
+      <div v-if="activeStory" class="fixed inset-0 z-600 bg-black/95 flex items-center justify-center" @click.self="closeStory">
         <!-- Progress bar -->
         <div class="absolute top-4 left-1/2 -translate-x-1/2 w-64 h-1 bg-white/20 rounded-full overflow-hidden">
           <div class="h-full bg-brand-accent rounded-full transition-all duration-100" :style="{ width: storyProgress + '%' }" />

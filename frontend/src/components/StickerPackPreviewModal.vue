@@ -3,19 +3,19 @@
     <Transition name="fade">
       <div
         v-if="show"
-        class="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm"
+        class="fixed inset-0 z-80 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs"
         @click.self="$emit('close')"
       >
         <div class="bg-brand-card border border-brand-border rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm flex flex-col overflow-hidden"
           style="max-height: 90vh">
 
           <!-- Drag pill (mobile) -->
-          <div class="flex justify-center pt-2 pb-1 sm:hidden flex-shrink-0">
+          <div class="flex justify-center pt-2 pb-1 sm:hidden shrink-0">
             <div class="w-10 h-1 rounded-full bg-brand-border" />
           </div>
 
           <!-- Header -->
-          <div class="flex items-center justify-between px-5 py-3 border-b border-brand-border flex-shrink-0">
+          <div class="flex items-center justify-between px-5 py-3 border-b border-brand-border shrink-0">
             <div class="flex items-center gap-2">
               <BIcon name="Sticker" class="w-4 h-4 text-brand-accent" />
               <span class="text-sm font-semibold text-white">Стикерпак</span>
@@ -91,7 +91,7 @@
                   </div>
 
                   <!-- Price badge -->
-                  <div class="flex-shrink-0">
+                  <div class="shrink-0">
                     <span v-if="Number(pack.price) === 0"
                       class="text-xs font-bold px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                       Бесплатно
@@ -135,7 +135,7 @@
             </div>
 
             <!-- Action bar -->
-            <div class="px-4 py-3 border-t border-brand-border flex-shrink-0 space-y-2">
+            <div class="px-4 py-3 border-t border-brand-border shrink-0 stack-y-2">
 
               <!-- Already in collection -->
               <div v-if="pack.in_collection" class="flex gap-2">

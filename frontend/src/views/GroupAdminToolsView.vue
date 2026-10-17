@@ -171,7 +171,7 @@ watch(() => route.params.slugOrId, load)
 
         <div v-else-if="!group" class="text-center py-16 text-white/40">Группа не найдена</div>
 
-        <div v-else-if="!isAdmin" class="text-center py-16 space-y-3">
+        <div v-else-if="!isAdmin" class="text-center py-16 stack-y-3">
           <BIcon name="Lock" class="w-8 h-8 text-white/20 mx-auto" />
           <p class="text-white/40 text-sm">Доступно только администраторам группы</p>
         </div>
@@ -228,7 +228,7 @@ watch(() => route.params.slugOrId, load)
                 :group-id="group.id" />
 
               <div v-else-if="activeToolTab.kind === 'settings'"
-                class="bg-brand-card border border-brand-border rounded-3xl p-8 text-center space-y-4">
+                class="bg-brand-card border border-brand-border rounded-3xl p-8 text-center stack-y-4">
                 <div class="w-14 h-14 rounded-2xl bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center mx-auto">
                   <BIcon :name="activeToolTab.icon" class="w-7 h-7 text-brand-accent" />
                 </div>

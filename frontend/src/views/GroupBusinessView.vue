@@ -136,7 +136,7 @@ async function submitOrder() {
 
         <div v-else-if="!group" class="text-center py-16 text-white/40">Группа не найдена</div>
 
-        <div v-else-if="!group.business_enabled" class="text-center py-16 space-y-3">
+        <div v-else-if="!group.business_enabled" class="text-center py-16 stack-y-3">
           <BIcon name="Briefcase" class="w-8 h-8 text-white/20 mx-auto" />
           <p class="text-white/40 text-sm">Бизнес-вкладка не включена для этой группы</p>
           <button v-if="isOwner" @click="router.push({ name: 'group-settings', params: { slugOrId: route.params.slugOrId } })"
@@ -172,14 +172,14 @@ async function submitOrder() {
           <!-- Deadlines -->
           <div v-if="deadlineList.length" class="mt-6">
             <p class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 px-1">Дедлайны</p>
-            <div class="space-y-1.5">
+            <div class="stack-y-1.5">
               <div v-for="order in deadlineList" :key="order.id"
                 class="flex items-center justify-between bg-brand-card border border-brand-border rounded-xl px-3.5 py-2.5">
                 <div class="min-w-0">
                   <p class="text-sm font-semibold text-white truncate">{{ order.title }}</p>
                   <p class="text-[11px] text-white/40">{{ order.customer.display_name || order.customer.username }} · {{ STATUS_LABEL[order.status] }}</p>
                 </div>
-                <span class="text-xs font-bold px-2 py-1 rounded-lg flex-shrink-0"
+                <span class="text-xs font-bold px-2 py-1 rounded-lg shrink-0"
                   :class="{
                     'bg-brand-error/15 text-brand-error': deadlineState(order) === 'overdue',
                     'bg-amber-500/15 text-amber-400': deadlineState(order) === 'soon',
@@ -199,16 +199,16 @@ async function submitOrder() {
             <h1 class="text-lg font-bold text-white">Заказ у {{ group.name }}</h1>
           </div>
 
-          <div class="bg-brand-card border border-brand-border rounded-2xl p-4 mb-5 space-y-3">
+          <div class="bg-brand-card border border-brand-border rounded-2xl p-4 mb-5 stack-y-3">
             <p class="text-sm font-bold text-white">Оформить заказ</p>
             <input v-model="createForm.title" placeholder="Что вы хотите заказать?"
-              class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-brand-accent/60 transition-colors" />
+              class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-hidden focus:border-brand-accent/60 transition-colors" />
             <textarea v-model="createForm.description" placeholder="Описание (необязательно)" rows="3"
-              class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-brand-accent/60 transition-colors resize-none" />
-            <div class="space-y-1">
+              class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-hidden focus:border-brand-accent/60 transition-colors resize-none" />
+            <div class="stack-y-1">
               <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Желаемый дедлайн (необязательно)</p>
               <input v-model="createForm.deadlineAt" type="date"
-                class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent/60 transition-colors" />
+                class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white focus:outline-hidden focus:border-brand-accent/60 transition-colors" />
             </div>
             <p v-if="createError" class="text-xs text-brand-error">{{ createError }}</p>
             <button @click="submitOrder" :disabled="creating || !createForm.title.trim()"
@@ -219,7 +219,7 @@ async function submitOrder() {
 
           <p class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 px-1">Мои заказы</p>
           <div v-if="!orders.length" class="text-center py-10 text-white/30 text-sm">Заказов пока нет</div>
-          <div v-else class="space-y-1.5">
+          <div v-else class="stack-y-1.5">
             <div v-for="order in orders" :key="order.id"
               class="flex items-center justify-between bg-brand-card border border-brand-border rounded-xl px-3.5 py-2.5">
               <div class="min-w-0">
@@ -227,7 +227,7 @@ async function submitOrder() {
                 <p class="text-[11px] text-white/40">{{ STATUS_LABEL[order.status] }}</p>
               </div>
               <button @click="openChat(order)"
-                class="text-[11px] flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/5 text-white/55 hover:bg-white/10 hover:text-white transition-all flex-shrink-0">
+                class="text-[11px] flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/5 text-white/55 hover:bg-white/10 hover:text-white transition-all shrink-0">
                 <BIcon name="MessageCircle" class="w-3 h-3" /> Чат
               </button>
             </div>

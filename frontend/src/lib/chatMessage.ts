@@ -116,7 +116,7 @@ export function highlightMatches(text: string, query: string): string {
   for (const match of text.matchAll(new RegExp(escapedQuery, 'gi'))) {
     const start = match.index!
     chunks.push(escapeHtml(text.slice(offset, start)))
-    chunks.push(`<mark class="bg-brand-accent/30 text-white rounded px-0.5">${escapeHtml(match[0])}</mark>`)
+    chunks.push(`<mark class="bg-brand-accent/30 text-white rounded-sm px-0.5">${escapeHtml(match[0])}</mark>`)
     offset = start + match[0].length
   }
   chunks.push(escapeHtml(text.slice(offset)))

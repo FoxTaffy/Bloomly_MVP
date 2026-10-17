@@ -30,7 +30,7 @@ const expiresIn = computed(() => {
     >
       <div
         v-if="card"
-        class="fixed inset-0 z-[800] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+        class="fixed inset-0 z-800 flex items-center justify-center bg-black/90 backdrop-blur-xs"
         @click.self="emit('close')"
       >
         <!-- Story phone frame -->
@@ -46,7 +46,7 @@ const expiresIn = computed(() => {
               class="w-full h-full object-cover scale-110 blur-2xl opacity-30 pointer-events-none"
               aria-hidden="true"
             />
-            <div class="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
+            <div class="absolute inset-0 bg-linear-to-b/srgb from-black/50 via-transparent to-black/70" />
           </div>
 
           <!-- Main image -->
@@ -64,9 +64,9 @@ const expiresIn = computed(() => {
           </div>
 
           <!-- Top bar: author + expiry + close -->
-          <div class="absolute top-0 left-0 right-0 z-10 flex items-center gap-2.5 px-3 pt-3 pb-4 bg-gradient-to-b from-black/70 to-transparent">
+          <div class="absolute top-0 left-0 right-0 z-10 flex items-center gap-2.5 px-3 pt-3 pb-4 bg-linear-to-b/srgb from-black/70 to-transparent">
             <!-- Avatar -->
-            <div class="w-9 h-9 rounded-full overflow-hidden border-2 border-white/30 flex-shrink-0 bg-brand-accent/20">
+            <div class="w-9 h-9 rounded-full overflow-hidden border-2 border-white/30 shrink-0 bg-brand-accent/20">
               <img
                 v-if="card.authorAvatar"
                 :src="card.authorAvatar"
@@ -93,7 +93,7 @@ const expiresIn = computed(() => {
             <!-- Close button -->
             <button
               @click="emit('close')"
-              class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors flex-shrink-0"
+              class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors shrink-0"
             >
               <BIcon name="X" class="w-5 h-5" />
             </button>
@@ -102,7 +102,7 @@ const expiresIn = computed(() => {
           <!-- Bottom: reply text if present -->
           <div
             v-if="card.replyText"
-            class="absolute bottom-0 left-0 right-0 z-10 px-4 pb-5 pt-8 bg-gradient-to-t from-black/80 to-transparent"
+            class="absolute bottom-0 left-0 right-0 z-10 px-4 pb-5 pt-8 bg-linear-to-t/srgb from-black/80 to-transparent"
           >
             <div class="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl px-4 py-3">
               <p class="text-[10px] text-white/50 font-semibold uppercase tracking-wider mb-1">{{ langStore.t.chatReplyLabel }}</p>

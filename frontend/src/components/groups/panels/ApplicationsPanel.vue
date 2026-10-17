@@ -145,7 +145,7 @@ defineExpose({ loadMembers })
 
     <!-- Header -->
     <div class="px-6 py-5 border-b border-brand-border flex items-center gap-3">
-      <div class="w-10 h-10 rounded-2xl bg-brand-purple/15 border border-brand-purple/25 flex items-center justify-center flex-shrink-0">
+      <div class="w-10 h-10 rounded-2xl bg-brand-purple/15 border border-brand-purple/25 flex items-center justify-center shrink-0">
         <BIcon name="Users" class="w-5 h-5 text-brand-purple" />
       </div>
       <div class="flex-1 min-w-0">
@@ -203,7 +203,7 @@ defineExpose({ loadMembers })
         class="px-6 py-4 flex items-center gap-3 hover:bg-white/2 transition-colors relative">
 
         <!-- Avatar -->
-        <div class="relative flex-shrink-0">
+        <div class="relative shrink-0">
           <img
             v-if="member.user.avatar_url"
             :src="member.user.avatar_url"

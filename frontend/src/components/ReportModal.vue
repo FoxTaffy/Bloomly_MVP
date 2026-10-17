@@ -3,10 +3,10 @@
     <Transition name="report-backdrop">
       <div
         v-if="modelValue"
-        class="fixed inset-0 z-[300] flex items-end sm:items-center justify-center sm:p-4"
+        class="fixed inset-0 z-300 flex items-end sm:items-center justify-center sm:p-4"
         @click.self="close"
       >
-        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="close" />
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-xs" @click="close" />
 
         <Transition name="report-panel">
           <div
@@ -19,7 +19,7 @@
             </div>
 
             <!-- Header -->
-            <div class="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-white/6">
               <div class="flex items-center gap-3">
                 <div class="w-8 h-8 rounded-xl bg-red-500/15 border border-red-500/20 flex items-center justify-center">
                   <BIcon name="Flag" class="w-4 h-4 text-red-400" />
@@ -53,9 +53,9 @@
               </div>
 
               <!-- Form -->
-              <div v-else key="form" class="p-4 space-y-2 max-h-[70vh] overflow-y-auto overscroll-contain">
-                <div v-if="evidence" class="flex items-start gap-2 px-3.5 py-2.5 mb-3 rounded-2xl bg-white/[0.03] border border-white/8">
-                  <BIcon name="Quote" class="w-3.5 h-3.5 text-white/25 flex-shrink-0 mt-0.5" />
+              <div v-else key="form" class="p-4 stack-y-2 max-h-[70vh] overflow-y-auto overscroll-contain">
+                <div v-if="evidence" class="flex items-start gap-2 px-3.5 py-2.5 mb-3 rounded-2xl bg-white/3 border border-white/8">
+                  <BIcon name="Quote" class="w-3.5 h-3.5 text-white/25 shrink-0 mt-0.5" />
                   <div class="min-w-0">
                     <p class="text-[10px] text-white/30 mb-0.5">Приложено к жалобе как доказательство</p>
                     <p class="text-xs text-white/60 line-clamp-3">{{ evidence }}</p>
@@ -71,7 +71,7 @@
                   class="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-left transition-all duration-150 group"
                   :class="selected === item.value
                     ? 'bg-red-500/10 ring-1 ring-red-500/30'
-                    : 'bg-white/[0.03] hover:bg-white/[0.06]'"
+                    : 'bg-white/3 hover:bg-white/6'"
                 >
                   <div
                     class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-all"
@@ -100,7 +100,7 @@
                       v-model="extra"
                       rows="3"
                       placeholder="Подробно опишите нарушение…"
-                      class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white text-sm placeholder-white/20 resize-none outline-none focus:border-red-500/30 focus:bg-white/6 transition-all"
+                      class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white text-sm placeholder-white/20 resize-none outline-hidden focus:border-red-500/30 focus:bg-white/6 transition-all"
                     />
                   </div>
                 </Transition>
@@ -133,7 +133,7 @@
                     type="button"
                     @click="submit"
                     :disabled="!selected || isSending"
-                    class="flex-[2] flex items-center justify-center gap-2 py-3 rounded-2xl text-white text-sm font-extrabold disabled:opacity-30 transition-all hover:opacity-90 active:scale-[0.98]"
+                    class="flex-2 flex items-center justify-center gap-2 py-3 rounded-2xl text-white text-sm font-extrabold disabled:opacity-30 transition-all hover:opacity-90 active:scale-[0.98]"
                     style="background: linear-gradient(135deg, #dc2626, #991b1b)"
                   >
                     <span v-if="isSending" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />

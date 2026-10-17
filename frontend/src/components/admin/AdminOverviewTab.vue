@@ -118,7 +118,7 @@ const modSnapshot = computed(() => stats.value ? [
 <template>
   <div>
     <!-- Skeleton -->
-    <div v-if="isLoadingStats" class="space-y-5">
+    <div v-if="isLoadingStats" class="stack-y-5">
       <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <div v-for="n in 6" :key="n" class="h-28 rounded-2xl bg-white/5 animate-pulse" />
       </div>
@@ -127,7 +127,7 @@ const modSnapshot = computed(() => stats.value ? [
 
     <div v-else-if="statsError && !stats" class="flex flex-col items-center gap-3 py-20 text-white/30">
       <p class="text-sm font-semibold">{{ langStore.t.adminLoadFailed }}</p>
-      <button @click="fetchStats" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/[0.08] text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
+      <button @click="fetchStats" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/8 text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
     </div>
 
     <template v-else-if="stats">
@@ -158,7 +158,7 @@ const modSnapshot = computed(() => stats.value ? [
           class="relative rounded-2xl p-4 border border-brand-border bg-brand-card hover:border-white/20 transition-all duration-200">
           <div class="flex items-center justify-between mb-3">
             <p class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">{{ sc.label }}</p>
-            <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" :style="`background:${sc.color}20`">
+            <div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" :style="`background:${sc.color}20`">
               <BIcon :name="sc.icon" class="w-3.5 h-3.5" :style="`color:${sc.color}`" />
             </div>
           </div>
@@ -177,14 +177,14 @@ const modSnapshot = computed(() => stats.value ? [
             <div v-if="activeGrowthTooltip && hoveredGrowthPoint?.chart === 'users'"
               class="absolute z-10 -translate-x-1/2 -translate-y-full pointer-events-none flex flex-col items-center"
               :style="`left:${activeGrowthTooltip.left}%;top:${activeGrowthTooltip.top}%;margin-top:-10px`">
-              <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#0B1030]/95 backdrop-blur-sm border border-[#4C67CF]/30 shadow-lg shadow-black/40 whitespace-nowrap">
-                <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:#4C67CF" />
+              <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#0B1030]/95 backdrop-blur-xs border border-brand-accent/30 shadow-lg shadow-black/40 whitespace-nowrap">
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" style="background:#4C67CF" />
                 <div class="leading-tight">
                   <p class="text-[9px] text-white/45 font-semibold capitalize">{{ formatMonthShort(activeGrowthTooltip.month) }}</p>
                   <p class="text-xs font-black text-white">{{ formatNum(activeGrowthTooltip.total) }}</p>
                 </div>
               </div>
-              <div class="w-2 h-2 rotate-45 -mt-1 bg-[#0B1030]/95 border-r border-b border-[#4C67CF]/30" />
+              <div class="w-2 h-2 rotate-45 -mt-1 bg-[#0B1030]/95 border-r border-b border-brand-accent/30" />
             </div>
             <svg viewBox="0 0 300 100" preserveAspectRatio="none" class="w-full h-32">
               <polygon v-if="userGrowthPoints" :points="`0,100 ${userGrowthPoints} 300,100`" fill="url(#ov-grad-users)" />
@@ -217,7 +217,7 @@ const modSnapshot = computed(() => stats.value ? [
             <div v-if="userGrowthState === 'loading'" class="w-full h-full rounded-xl bg-white/5 animate-pulse" />
             <template v-else-if="userGrowthState === 'error'">
               <p class="text-xs font-semibold">{{ langStore.t.adminLoadFailed }}</p>
-              <button @click="fetchStats" class="px-3 py-1 rounded-lg text-xs font-bold bg-white/5 border border-white/[0.08] text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
+              <button @click="fetchStats" class="px-3 py-1 rounded-lg text-xs font-bold bg-white/5 border border-white/8 text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
             </template>
             <template v-else>
               <BIcon name="BarChart2" class="w-7 h-7 opacity-40" />
@@ -233,14 +233,14 @@ const modSnapshot = computed(() => stats.value ? [
             <div v-if="activeGrowthTooltip && hoveredGrowthPoint?.chart === 'posts'"
               class="absolute z-10 -translate-x-1/2 -translate-y-full pointer-events-none flex flex-col items-center"
               :style="`left:${activeGrowthTooltip.left}%;top:${activeGrowthTooltip.top}%;margin-top:-10px`">
-              <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#0B1030]/95 backdrop-blur-sm border border-[#66C770]/30 shadow-lg shadow-black/40 whitespace-nowrap">
-                <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:#66C770" />
+              <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#0B1030]/95 backdrop-blur-xs border border-brand-success/30 shadow-lg shadow-black/40 whitespace-nowrap">
+                <span class="w-1.5 h-1.5 rounded-full shrink-0" style="background:#66C770" />
                 <div class="leading-tight">
                   <p class="text-[9px] text-white/45 font-semibold capitalize">{{ formatMonthShort(activeGrowthTooltip.month) }}</p>
                   <p class="text-xs font-black text-white">{{ formatNum(activeGrowthTooltip.total) }}</p>
                 </div>
               </div>
-              <div class="w-2 h-2 rotate-45 -mt-1 bg-[#0B1030]/95 border-r border-b border-[#66C770]/30" />
+              <div class="w-2 h-2 rotate-45 -mt-1 bg-[#0B1030]/95 border-r border-b border-brand-success/30" />
             </div>
             <svg viewBox="0 0 300 100" preserveAspectRatio="none" class="w-full h-32">
               <polygon v-if="postGrowthPoints" :points="`0,100 ${postGrowthPoints} 300,100`" fill="url(#ov-grad-posts)" />
@@ -273,7 +273,7 @@ const modSnapshot = computed(() => stats.value ? [
             <div v-if="postGrowthState === 'loading'" class="w-full h-full rounded-xl bg-white/5 animate-pulse" />
             <template v-else-if="postGrowthState === 'error'">
               <p class="text-xs font-semibold">{{ langStore.t.adminLoadFailed }}</p>
-              <button @click="fetchStats" class="px-3 py-1 rounded-lg text-xs font-bold bg-white/5 border border-white/[0.08] text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
+              <button @click="fetchStats" class="px-3 py-1 rounded-lg text-xs font-bold bg-white/5 border border-white/8 text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
             </template>
             <template v-else>
               <BIcon name="BarChart2" class="w-7 h-7 opacity-40" />
@@ -296,9 +296,9 @@ const modSnapshot = computed(() => stats.value ? [
               <div v-if="hoveredActivityBar?.row === row.label"
                 class="absolute z-10 -translate-x-1/2 -translate-y-full pointer-events-none flex flex-col items-center"
                 :style="`left:${((hoveredActivityBar.index + 0.5) / row.days.length) * 100}%;bottom:calc(${Math.max(6, (row.days[hoveredActivityBar.index].count / row.max) * 100)}% + 8px)`">
-                <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#0B1030]/95 backdrop-blur-sm border shadow-lg shadow-black/40 whitespace-nowrap"
+                <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#0B1030]/95 backdrop-blur-xs border shadow-lg shadow-black/40 whitespace-nowrap"
                   :style="`border-color:${row.color}4d`">
-                  <span class="w-1.5 h-1.5 rounded-full flex-shrink-0" :style="`background:${row.color}`" />
+                  <span class="w-1.5 h-1.5 rounded-full shrink-0" :style="`background:${row.color}`" />
                   <div class="leading-tight">
                     <p class="text-[9px] text-white/45 font-semibold">{{ formatWeekday(row.days[hoveredActivityBar.index].day) }}</p>
                     <p class="text-xs font-black text-white">{{ formatNum(row.days[hoveredActivityBar.index].count) }}</p>
@@ -324,7 +324,7 @@ const modSnapshot = computed(() => stats.value ? [
               <span class="text-xs font-semibold text-white/60">{{ c.label }}</span>
               <span class="text-xs font-bold text-white">{{ c.pct }}%</span>
             </div>
-            <div class="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+            <div class="h-1.5 rounded-full bg-white/6 overflow-hidden">
               <div class="h-full rounded-full bg-brand-accent" :style="`width:${c.pct}%`" />
             </div>
           </div>
@@ -338,7 +338,7 @@ const modSnapshot = computed(() => stats.value ? [
               <span class="text-xs font-semibold text-white/60">{{ r.label }}</span>
               <span class="text-xs font-bold text-white">{{ r.count }}</span>
             </div>
-            <div class="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+            <div class="h-1.5 rounded-full bg-white/6 overflow-hidden">
               <div class="h-full rounded-full bg-brand-warning" :style="`width:${r.pct}%`" />
             </div>
           </div>
@@ -353,7 +353,7 @@ const modSnapshot = computed(() => stats.value ? [
         </h3>
         <div class="flex flex-wrap gap-3">
           <div v-for="rb in stats.roleBreakdown" :key="rb.role"
-            class="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border border-white/[0.08]"
+            class="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl border border-white/8"
             style="background:rgba(255,255,255,0.04)">
             <div class="w-2 h-2 rounded-full" :style="`background:${roleColor(rb.role)}`" />
             <span class="text-sm font-black text-white">{{ rb.count }}</span>

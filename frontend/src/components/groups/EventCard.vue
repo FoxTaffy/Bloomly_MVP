@@ -70,9 +70,9 @@ const accentColor = computed(() => props.event.theme?.accent ?? props.event.grou
         :alt="event.title"
         class="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500"
       />
-      <div v-else class="w-full h-full bg-gradient-to-br from-brand-accent/30 to-brand-purple/30" />
+      <div v-else class="w-full h-full bg-linear-to-br/srgb from-brand-accent/30 to-brand-purple/30" />
       <!-- Overlay -->
-      <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+      <div class="absolute inset-0 bg-linear-to-t/srgb from-black/70 to-transparent" />
       <!-- Title on banner -->
       <div class="absolute bottom-2 left-3 right-10">
         <h3 class="text-white font-extrabold text-base leading-tight drop-shadow-lg truncate">
@@ -86,7 +86,7 @@ const accentColor = computed(() => props.event.theme?.accent ?? props.event.grou
       </div>
       <!-- Settings gear -->
       <button
-        class="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:bg-black/60 transition-colors"
+        class="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 backdrop-blur-xs flex items-center justify-center hover:bg-black/60 transition-colors"
         @click.stop
       >
         <BIcon name="Settings" class="w-3.5 h-3.5 text-white/70" />
@@ -94,7 +94,7 @@ const accentColor = computed(() => props.event.theme?.accent ?? props.event.grou
     </div>
 
     <!-- Info -->
-    <div class="px-3.5 py-3 space-y-2">
+    <div class="px-3.5 py-3 stack-y-2">
       <!-- Date -->
       <div class="flex items-center gap-2 text-white/70 text-xs">
         <BIcon name="Calendar" class="w-3.5 h-3.5 shrink-0" />

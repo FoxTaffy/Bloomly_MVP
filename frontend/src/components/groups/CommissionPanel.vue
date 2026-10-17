@@ -36,7 +36,7 @@ const priceLabels: Record<string, string> = {
 </script>
 
 <template>
-  <div class="bg-brand-card border border-brand-border rounded-3xl p-5 space-y-4">
+  <div class="bg-brand-card border border-brand-border rounded-3xl p-5 stack-y-4">
     <!-- Header -->
     <div class="flex items-center justify-between">
       <h3 class="text-white font-extrabold text-base">Заказы</h3>

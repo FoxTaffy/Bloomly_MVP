@@ -4,7 +4,7 @@
       <!-- Header -->
       <div class="flex items-start justify-between mb-3 gap-2">
         <div class="flex items-center gap-2.5 min-w-0">
-          <router-link :to="'/profile/' + post.author.username" class="flex-shrink-0">
+          <router-link :to="'/profile/' + post.author.username" class="shrink-0">
             <img
               :src="avatarUrl(post.author.avatar_url, 'sm')"
               :alt="post.author.display_name || post.author.username"
@@ -19,11 +19,11 @@
                 :to="'/profile/' + post.author.username"
                 class="font-bold text-white hover:text-brand-accent transition-colors text-sm truncate"
               >{{ post.author.display_name || post.author.username }}</router-link>
-              <span v-if="post.author.deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
+              <span v-if="post.author.deceased_at" title="Светлая память" class="shrink-0">🪦</span>
               <!-- Verification badge -->
               <VerificationBadge v-if="post.author.is_verified"
                 :type="post.author.verification_type"
-                icon-class="w-4 h-4 flex-shrink-0" />
+                icon-class="w-4 h-4 shrink-0" />
               <span v-if="showRepawLabel"
                 class="inline-flex items-center gap-1 text-[10px] text-white/55 bg-brand-card border border-brand-border px-1.5 py-0.5 rounded-md font-semibold">
                 <Repeat2 class="w-3 h-3" /> Репав
@@ -38,7 +38,7 @@
         </div>
 
         <!-- Context menu -->
-        <div class="relative flex-shrink-0">
+        <div class="relative shrink-0">
           <button
             @click.stop="showMenu = !showMenu"
             class="p-1.5 text-white/55 hover:text-white rounded-lg hover:bg-brand-card transition opacity-0 group-hover:opacity-100"
@@ -55,23 +55,23 @@
               class="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition text-left"
               @click="openFullscreen"
             >
-              <Maximize2 class="w-4 h-4 flex-shrink-0" /> Открыть полностью
+              <Maximize2 class="w-4 h-4 shrink-0" /> Открыть полностью
             </button>
             <button v-if="canPin && !isPinnedThis" @click="emit('pin', post.id); showMenu = false"
               class="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition text-left">
-              <Pin class="w-4 h-4 flex-shrink-0" /> Закрепить
+              <Pin class="w-4 h-4 shrink-0" /> Закрепить
             </button>
             <button v-if="canPin && isPinnedThis" @click="emit('unpin'); showMenu = false"
               class="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition text-left">
-              <PinOff class="w-4 h-4 flex-shrink-0" /> Открепить
+              <PinOff class="w-4 h-4 shrink-0" /> Открепить
             </button>
             <button v-if="isEditable" @click="startEdit"
               class="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition text-left">
-              <Pencil class="w-4 h-4 flex-shrink-0" /> Редактировать
+              <Pencil class="w-4 h-4 shrink-0" /> Редактировать
             </button>
             <button v-if="isOwn" @click="deletePost" :disabled="isDeleting"
               class="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-brand-error hover:bg-brand-error/10 transition text-left disabled:opacity-50">
-              <Trash2 class="w-4 h-4 flex-shrink-0" /> Удалить
+              <Trash2 class="w-4 h-4 shrink-0" /> Удалить
             </button>
           </div>
         </div>
@@ -90,7 +90,7 @@
         <textarea
           v-model="editContent"
           rows="3"
-          class="w-full bg-brand-card border border-brand-border rounded-lg px-3 py-2 text-sm text-white resize-none focus:border-brand-accent outline-none"
+          class="w-full bg-brand-card border border-brand-border rounded-lg px-3 py-2 text-sm text-white resize-none focus:border-brand-accent outline-hidden"
         ></textarea>
         <div class="flex items-center gap-2 mt-2">
           <button @click="isEditing = false" class="px-3 py-1.5 text-xs text-white/55 hover:text-white transition">Отмена</button>
@@ -102,7 +102,7 @@
       </div>
 
       <!-- Content -->
-      <p v-else class="text-sm text-white/85 leading-relaxed mb-3 whitespace-pre-wrap break-words">
+      <p v-else class="text-sm text-white/85 leading-relaxed mb-3 whitespace-pre-wrap wrap-break-word">
         <template v-for="seg in parsedContent" :key="seg.key">
           <span v-if="seg.type === 'text'">{{ seg.text }}</span>
           <span v-else
@@ -137,7 +137,7 @@
             class="absolute inset-0 z-10 flex items-center justify-center"
             style="background: rgba(0,0,0,0.55)"
           >
-            <div class="bg-[#1a1a2e]/90 backdrop-blur-sm border border-white/10 rounded-2xl px-6 py-5 text-center max-w-xs">
+            <div class="bg-[#1a1a2e]/90 backdrop-blur-xs border border-white/10 rounded-2xl px-6 py-5 text-center max-w-xs">
               <div class="w-10 h-10 rounded-full border-2 border-red-500/40 bg-red-500/10 flex items-center justify-center mx-auto mb-3">
                 <AlertTriangle class="w-5 h-5 text-red-400" />
               </div>
@@ -190,7 +190,7 @@
         <button @click="vote(1)"
           class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-bold transition-all min-w-[52px]"
           :class="localVote === 1 ? 'text-brand-success bg-brand-success/10' : 'text-white/55 hover:text-brand-success hover:bg-brand-success/8'">
-          <ThumbsUp class="w-4 h-4 flex-shrink-0" />
+          <ThumbsUp class="w-4 h-4 shrink-0" />
           {{ localRating }}
         </button>
         <!-- Downvote -->
@@ -203,13 +203,13 @@
         <button @click="toggleRepaw"
           class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-bold transition-all"
           :class="localRepawed ? 'text-brand-accent bg-brand-accent/10' : 'text-white/55 hover:text-brand-accent hover:bg-brand-accent/8'">
-          <Repeat2 class="w-4 h-4 flex-shrink-0" />
+          <Repeat2 class="w-4 h-4 shrink-0" />
           {{ localRepaws }}
         </button>
         <!-- Comments -->
         <button @click="isExpanded = !isExpanded"
           class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-bold text-white/55 hover:text-brand-accent-minus hover:bg-brand-card transition-all ml-auto">
-          <MessageCircle class="w-4 h-4 flex-shrink-0" />
+          <MessageCircle class="w-4 h-4 shrink-0" />
           {{ post._count?.comments ?? 0 }}
         </button>
       </div>
@@ -223,7 +223,7 @@
     <!-- Image lightbox -->
     <Transition name="fade">
       <div v-if="showLightboxUrl"
-        class="fixed inset-0 z-[500] bg-black/90 flex items-center justify-center p-4"
+        class="fixed inset-0 z-500 bg-black/90 flex items-center justify-center p-4"
         @click.self="showLightboxUrl = null">
         <button @click="showLightboxUrl = null"
           class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all">

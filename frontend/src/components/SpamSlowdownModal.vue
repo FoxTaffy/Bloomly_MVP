@@ -41,21 +41,21 @@ onUnmounted(() => { if (tickInterval) clearInterval(tickInterval) })
     leave-active-class="transition-all duration-150 ease-in"
     leave-to-class="opacity-0"
   >
-    <div v-if="show" class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4" style="background:rgba(5,8,20,0.6);backdrop-filter:blur(4px)">
+    <div v-if="show" class="fixed inset-0 z-100 flex items-end sm:items-center justify-center p-4" style="background:rgba(5,8,20,0.6);backdrop-filter:blur(4px)">
       <Transition
         appear
         enter-active-class="transition-all duration-250 ease-out"
         enter-from-class="opacity-0 scale-95 translate-y-3"
         enter-to-class="opacity-100 scale-100 translate-y-0"
       >
-        <div class="w-full max-w-[380px] rounded-[24px] overflow-hidden relative p-5"
+        <div class="w-full max-w-[380px] rounded-3xl overflow-hidden relative p-5"
           style="background:rgba(16,14,28,0.95);border:1px solid rgba(251,146,60,0.3);box-shadow:0 24px 48px rgba(0,0,0,0.5)">
           <button @click="emit('close')" class="absolute top-4 right-4 text-white/30 hover:text-white/60 transition-colors">
             <BIcon name="X" class="w-4 h-4" />
           </button>
 
           <div class="flex items-start gap-3 pr-6">
-            <div class="w-10 h-10 rounded-2xl bg-amber-500/15 flex items-center justify-center flex-shrink-0">
+            <div class="w-10 h-10 rounded-2xl bg-amber-500/15 flex items-center justify-center shrink-0">
               <BIcon name="Zap" class="w-5 h-5 text-amber-400" />
             </div>
             <div>

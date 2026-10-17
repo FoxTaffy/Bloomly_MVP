@@ -6,8 +6,8 @@
       <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden" style="max-height:90vh">
 
         <!-- Cover (colored banner behind avatar + name, plain card bg for the action row) -->
-        <div class="relative flex-shrink-0">
-          <div class="relative pt-4 pb-5 px-3 text-center overflow-hidden bg-gradient-to-br from-brand-accent/30 to-purple-900/40">
+        <div class="relative shrink-0">
+          <div class="relative pt-4 pb-5 px-3 text-center overflow-hidden bg-linear-to-br/srgb from-brand-accent/30 to-purple-900/40">
             <img v-if="conv?.banner_url" :src="conv.banner_url" class="absolute inset-0 w-full h-full object-cover" />
             <div v-else-if="bannerCollage.length" class="absolute inset-0 flex">
               <div v-for="m in bannerCollage" :key="m.id" class="flex-1 h-full relative">
@@ -45,8 +45,8 @@
                 {{ (conv?.name ?? 'G')[0].toUpperCase() }}
               </div>
             </div>
-            <h3 class="relative text-base font-bold text-white truncate mt-2.5 drop-shadow">{{ conv?.name || langStore.t.chatGroupFallbackName }}</h3>
-            <p class="relative text-xs text-white/70 mt-0.5 drop-shadow">{{ groupMembers.length }} {{ langStore.t.membersUnit }}</p>
+            <h3 class="relative text-base font-bold text-white truncate mt-2.5 drop-shadow-sm">{{ conv?.name || langStore.t.chatGroupFallbackName }}</h3>
+            <p class="relative text-xs text-white/70 mt-0.5 drop-shadow-sm">{{ groupMembers.length }} {{ langStore.t.membersUnit }}</p>
           </div>
 
           <!-- Action row (plain card background) -->
@@ -76,12 +76,12 @@
         </div>
 
         <!-- Group link (real page, not a fake invite link) -->
-        <div v-if="conv?.group_id" class="flex items-center gap-2 px-4 py-2.5 border-t border-b border-brand-border flex-shrink-0">
-          <BIcon name="Link" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+        <div v-if="conv?.group_id" class="flex items-center gap-2 px-4 py-2.5 border-t border-b border-brand-border shrink-0">
+          <BIcon name="Link" class="w-3.5 h-3.5 text-brand-accent shrink-0" />
           <span class="flex-1 min-w-0 text-xs text-brand-accent truncate cursor-pointer hover:underline" @click="goToGroup()">
             {{ groupPageUrl }}
           </span>
-          <button @click="copyGroupLink" class="flex-shrink-0 text-white/40 hover:text-white transition-colors" :title="langStore.t.exportCopyLink">
+          <button @click="copyGroupLink" class="shrink-0 text-white/40 hover:text-white transition-colors" :title="langStore.t.exportCopyLink">
             <BIcon :name="groupLinkCopied ? 'Check' : 'Copy'" class="w-3.5 h-3.5" />
           </button>
         </div>
@@ -93,7 +93,7 @@
 
           <!-- Participants header -->
           <div class="flex items-center gap-2 px-4 py-3 mt-1 border-t border-brand-border">
-            <BIcon name="Users" class="w-3.5 h-3.5 text-white/40 flex-shrink-0" />
+            <BIcon name="Users" class="w-3.5 h-3.5 text-white/40 shrink-0" />
             <span class="text-xs font-bold text-white/50 uppercase tracking-wide">
               {{ groupMembers.length }} {{ langStore.t.membersUnit }}{{ groupOnlineCount ? `, ${groupOnlineCount} ${langStore.t.chatOnlineNow}` : '' }}
             </span>
@@ -102,12 +102,12 @@
           <!-- Member search -->
           <div class="px-3 pb-2">
             <div class="flex items-center gap-2 bg-brand-bg rounded-2xl px-3 py-2">
-              <BIcon name="Search" class="w-3.5 h-3.5 text-white/35 flex-shrink-0" />
+              <BIcon name="Search" class="w-3.5 h-3.5 text-white/35 shrink-0" />
               <input
                 v-model="memberSearchQuery"
                 type="text"
                 :placeholder="langStore.t.chatSearchMembersPlaceholder"
-                class="flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-none" />
+                class="flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-hidden" />
               <button v-if="memberSearchQuery" @click="memberSearchQuery = ''" class="text-white/30 hover:text-white">
                 <BIcon name="X" class="w-3.5 h-3.5" />
               </button>
@@ -117,7 +117,7 @@
           <!-- Add member (admin only) -->
           <button v-if="myRole === 'admin' && !showAddMember" @click="showAddMember = true; addMemberSearch = ''; addMemberResults = []"
             class="w-full flex items-center gap-3 px-4 py-2.5 text-brand-accent hover:bg-brand-bg/40 transition-colors text-left text-sm font-semibold">
-            <BIcon name="UserPlus" class="w-4 h-4 flex-shrink-0" />
+            <BIcon name="UserPlus" class="w-4 h-4 shrink-0" />
             {{ langStore.t.chatAddMembersAction }}
           </button>
 
@@ -125,20 +125,20 @@
           <Transition name="fade">
             <div v-if="showAddMember && myRole === 'admin'" class="px-3 pt-1 pb-2 border-b border-brand-border/60">
               <div class="flex items-center gap-2 bg-brand-bg rounded-2xl px-3 py-2">
-                <BIcon name="Search" class="w-3.5 h-3.5 text-white/35 flex-shrink-0" />
+                <BIcon name="Search" class="w-3.5 h-3.5 text-white/35 shrink-0" />
                 <input
                   v-model="addMemberSearch"
                   @input="debouncedAddMemberSearch"
                   type="text"
                   :placeholder="langStore.t.chatSearchUsersPlaceholder"
-                  class="flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-none"
+                  class="flex-1 bg-transparent text-sm text-white placeholder-white/30 outline-hidden"
                   autofocus />
                 <button @click="showAddMember = false; addMemberSearch = ''; addMemberResults = []" class="text-white/30 hover:text-white">
                   <BIcon name="X" class="w-3.5 h-3.5" />
                 </button>
               </div>
               <!-- Search results -->
-              <div v-if="addMemberResults.length" class="mt-1.5 space-y-0.5 max-h-48 overflow-y-auto">
+              <div v-if="addMemberResults.length" class="mt-1.5 stack-y-0.5 max-h-48 overflow-y-auto">
                 <button
                   v-for="u in addMemberResults" :key="u.id"
                   @click="doAddMember(u)"
@@ -148,8 +148,8 @@
                       ? 'opacity-40 cursor-not-allowed'
                       : 'hover:bg-brand-accent/10 cursor-pointer']"
                 >
-                  <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover flex-shrink-0" @error="onAvatarError" />
-                  <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold flex-shrink-0">
+                  <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover shrink-0" @error="onAvatarError" />
+                  <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold shrink-0">
                     {{ (u.display_name || u.username || '?')[0].toUpperCase() }}
                   </div>
                   <div class="flex-1 min-w-0">
@@ -158,7 +158,7 @@
                   </div>
                   <BIcon
                     :name="groupMembers.some(m => m.user_id === u.id) ? 'Check' : 'UserPlus'"
-                    :class="['w-3.5 h-3.5 flex-shrink-0', groupMembers.some(m => m.user_id === u.id) ? 'text-brand-accent' : 'text-white/40']" />
+                    :class="['w-3.5 h-3.5 shrink-0', groupMembers.some(m => m.user_id === u.id) ? 'text-brand-accent' : 'text-white/40']" />
                 </button>
               </div>
               <p v-else-if="addMemberSearch.length >= 2 && !addMemberLoading" class="text-center text-xs text-white/30 py-3">{{ langStore.t.chatNoOneFound }}</p>
@@ -174,7 +174,7 @@
           </p>
           <p v-else-if="!filteredGroupMembers.length" class="text-center text-xs text-white/30 py-6">{{ langStore.t.chatNoOneFound }}</p>
           <router-link v-for="m in filteredGroupMembers" :key="m.user_id" :to="`/profile/${m.user?.username}`" class="flex items-center gap-3 px-4 py-2.5 hover:bg-brand-bg/40 transition-colors cursor-pointer">
-            <div class="relative flex-shrink-0">
+            <div class="relative shrink-0">
               <img v-if="m.user?.avatar_url" :src="m.user.avatar_url" class="w-8 h-8 rounded-full object-cover" @error="onAvatarError" />
               <div v-else class="w-8 h-8 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold">
                 {{ (m.user?.display_name || m.user?.username || '?')[0].toUpperCase() }}
@@ -186,7 +186,7 @@
                 {{ groupOnlineStatus[m.user_id] ? langStore.t.chatOnlineNow : `@${m.user?.username}` }}
               </p>
             </div>
-            <div class="flex items-center gap-1.5 flex-shrink-0">
+            <div class="flex items-center gap-1.5 shrink-0">
               <span v-if="m.role === 'admin'" class="text-[9px] bg-brand-accent/15 text-brand-accent px-1.5 py-0.5 rounded-full border border-brand-accent/25 font-bold">{{ langStore.t.chatAdminBadge }}</span>
               <template v-if="myRole === 'admin' && m.user_id !== auth.user?.id">
                 <button @click.stop="kickMember(m.user_id)" class="p-1 rounded-lg text-white/40 hover:text-brand-error transition-colors" :title="langStore.t.chatKickMemberTitle">

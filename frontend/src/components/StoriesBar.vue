@@ -129,31 +129,31 @@ function openGroup(group: Story[]) {
 
         <!-- ── Add Story Button ───────────────────────────────────────────── -->
         <button
-          class="flex flex-col items-center gap-1.5 group flex-shrink-0"
+          class="flex flex-col items-center gap-1.5 group shrink-0"
           @click="emit('create')"
           aria-label="Добавить историю"
         >
           <!-- Notes bubble above avatar -->
           <div v-if="statusNote" class="relative mb-1 overflow-hidden" style="width:100px">
-            <div class="w-full px-2.5 py-2 rounded-[16px] text-white shadow-2xl overflow-hidden"
+            <div class="w-full px-2.5 py-2 rounded-2xl text-white shadow-2xl overflow-hidden"
               :style="noteBubbleBg(statusNote)">
               <div v-if="statusNote.text || statusNote.emoji"
                 class="flex gap-1 items-start"
                 :class="statusNote.music ? 'mb-1' : ''">
-                <span v-if="statusNote.emoji" class="text-sm flex-shrink-0 leading-tight">{{ statusNote.emoji }}</span>
+                <span v-if="statusNote.emoji" class="text-sm shrink-0 leading-tight">{{ statusNote.emoji }}</span>
                 <span v-if="statusNote.text"
                   class="text-[11px] font-semibold leading-snug"
                   style="display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;word-break:break-all">{{ statusNote.text }}</span>
               </div>
               <div v-if="statusNote.music" class="flex items-center gap-1.5">
-                <img v-if="statusNote.music.artworkUrl" :src="statusNote.music.artworkUrl" class="w-6 h-6 rounded-md object-cover flex-shrink-0" />
+                <img v-if="statusNote.music.artworkUrl" :src="statusNote.music.artworkUrl" class="w-6 h-6 rounded-md object-cover shrink-0" />
                 <div class="min-w-0 overflow-hidden">
                   <p class="text-[10px] font-bold leading-tight truncate">{{ statusNote.music.artist }}</p>
                   <p class="text-[9px] opacity-70 leading-tight truncate">{{ statusNote.music.title }}</p>
                 </div>
               </div>
             </div>
-            <div class="absolute -bottom-[7px] left-4 w-0 h-0 pointer-events-none"
+            <div class="absolute bottom-[-7px] left-4 w-0 h-0 pointer-events-none"
               :style="`border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${noteBubbleArrowColor(statusNote)}`" />
           </div>
 
@@ -168,7 +168,7 @@ function openGroup(group: Story[]) {
                 class="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity"
                 @error="onAvatarError"
               />
-              <div v-else class="w-full h-full bg-gradient-to-br from-brand-accent/20 to-brand-purple/20 flex items-center justify-center">
+              <div v-else class="w-full h-full bg-linear-to-br/srgb from-brand-accent/20 to-brand-purple/20 flex items-center justify-center">
                 <span class="text-brand-accent font-bold text-lg">
                   {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
                 </span>
@@ -182,14 +182,14 @@ function openGroup(group: Story[]) {
         </button>
 
         <!-- ── Divider ───────────────────────────────────────────────────── -->
-        <div class="w-px h-10 bg-brand-border flex-shrink-0 mx-1" v-if="userStories.length || loading"></div>
+        <div class="w-px h-10 bg-brand-border shrink-0 mx-1" v-if="userStories.length || loading"></div>
 
         <!-- ── Loading Skeletons ─────────────────────────────────────────── -->
         <template v-if="loading">
           <div
             v-for="n in 5"
             :key="n"
-            class="flex flex-col items-center gap-1.5 flex-shrink-0"
+            class="flex flex-col items-center gap-1.5 shrink-0"
           >
             <div class="h-[10px]" />
             <div class="w-[68px] h-[68px] rounded-full bg-white/5 animate-pulse"></div>
@@ -202,7 +202,7 @@ function openGroup(group: Story[]) {
           <button
             v-for="group in userStories"
             :key="group[0].user.id"
-            class="flex flex-col items-center gap-1.5 group flex-shrink-0"
+            class="flex flex-col items-center gap-1.5 group shrink-0"
             @click="openGroup(group)"
           >
             <div class="h-[10px]" />
@@ -211,7 +211,7 @@ function openGroup(group: Story[]) {
                 class="absolute inset-0 rounded-full p-[2.5px] transition-all duration-300"
                 :class="isGroupSeen(group)
                   ? 'bg-white/20 group-hover:bg-white/35'
-                  : 'bg-gradient-to-tr from-brand-accent via-pink-500 to-brand-purple group-hover:opacity-90'"
+                  : 'bg-linear-to-tr/srgb from-brand-accent via-pink-500 to-brand-purple group-hover:opacity-90'"
               >
                 <div class="w-full h-full rounded-full border-[3px] border-brand-card overflow-hidden">
                   <img
@@ -222,7 +222,7 @@ function openGroup(group: Story[]) {
                   />
                   <div
                     v-else
-                    class="w-full h-full bg-gradient-to-br from-brand-accent/20 to-brand-purple/20 flex items-center justify-center"
+                    class="w-full h-full bg-linear-to-br/srgb from-brand-accent/20 to-brand-purple/20 flex items-center justify-center"
                   >
                     <span class="text-brand-accent font-bold text-lg">
                       {{ (group[0].user.username ?? '?')[0].toUpperCase() }}
@@ -262,7 +262,7 @@ function openGroup(group: Story[]) {
           <!-- Empty state -->
           <div
             v-if="userStories.length === 0"
-            class="flex flex-col items-center gap-1.5 flex-shrink-0"
+            class="flex flex-col items-center gap-1.5 shrink-0"
           >
             <div class="h-[10px]" />
             <div class="w-[68px] h-[68px] rounded-full flex items-center justify-center bg-white/5 border border-dashed border-white/10">

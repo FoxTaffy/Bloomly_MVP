@@ -51,7 +51,7 @@ function bannerGradient(color: string | null | undefined) {
   >
     <!-- Banner -->
     <div
-      class="relative h-20 flex-shrink-0 rounded-t-2xl overflow-hidden"
+      class="relative h-20 shrink-0 rounded-t-2xl overflow-hidden"
       :style="group.banner_url ? '' : 'background: ' + bannerGradient(group.accent_color)"
     >
       <img v-if="group.banner_url" :src="group.banner_url" :alt="group.name"
@@ -60,7 +60,7 @@ function bannerGradient(color: string | null | undefined) {
         style="background-image: radial-gradient(circle, white 1px, transparent 1px); background-size: 14px 14px;" />
 
       <!-- Pinned chip -->
-      <div v-if="isPinned" class="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/90 backdrop-blur-sm shadow-sm">
+      <div v-if="isPinned" class="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/90 backdrop-blur-xs shadow-xs">
         <BIcon name="Pin" class="w-2.5 h-2.5 text-amber-900" />
         <span class="text-[9px] font-bold text-amber-900 uppercase tracking-wider">Закреп</span>
       </div>
@@ -68,12 +68,12 @@ function bannerGradient(color: string | null | undefined) {
       <!-- Top-right stack: 18+ / pending "Обращения" -->
       <div class="absolute top-2 right-2 flex items-center gap-1">
         <span v-if="pendingReplies" title="Ждут ответа"
-          class="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-brand-accent text-white shadow-sm backdrop-blur-sm">
+          class="flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-brand-accent text-white shadow-xs backdrop-blur-xs">
           <BIcon name="Inbox" class="w-2.5 h-2.5" />
           {{ pendingReplies > 99 ? '99+' : pendingReplies }}
         </span>
         <span v-if="group.is_nsfw"
-          class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md bg-brand-error/80 text-white border border-brand-error/30 backdrop-blur-sm">
+          class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md bg-brand-error/80 text-white border border-brand-error/30 backdrop-blur-xs">
           18+
         </span>
       </div>
@@ -83,7 +83,7 @@ function bannerGradient(color: string | null | undefined) {
     <div class="px-4 pb-3 pt-0 flex flex-col gap-1 flex-1 rounded-b-2xl bg-brand-card relative z-10 overflow-visible">
       <!-- Avatar row + three-dot menu -->
       <div class="-mt-7 mb-0.5 flex items-start justify-between">
-        <div class="w-14 h-14 rounded-xl overflow-hidden shadow"
+        <div class="w-14 h-14 rounded-xl overflow-hidden shadow-sm"
           :class="isPinned ? 'border-[3px] border-amber-400/50' : 'border-[3px] border-brand-card'">
           <img v-if="group.avatar_url" :src="group.avatar_url" :alt="group.name" class="w-full h-full object-cover" />
           <div v-else class="w-full h-full flex items-center justify-center"

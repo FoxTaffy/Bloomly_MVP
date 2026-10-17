@@ -188,7 +188,7 @@ const chartData = computed(() => {
         <!-- Loading skeleton -->
         <div v-if="loading" class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden animate-pulse">
           <div class="w-full h-52 bg-brand-border" />
-          <div class="p-6 space-y-4">
+          <div class="p-6 stack-y-4">
             <div class="h-6 bg-brand-border rounded-full w-1/2" />
             <div class="h-4 bg-brand-border rounded-full w-3/4" />
           </div>
@@ -208,7 +208,7 @@ const chartData = computed(() => {
         </div>
 
         <!-- Pack card -->
-        <div v-else class="space-y-4">
+        <div v-else class="stack-y-4">
           <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
 
             <!-- Header with cover -->
@@ -231,16 +231,16 @@ const chartData = computed(() => {
                 </div>
 
                 <!-- NSFW badge (без блюра) -->
-                <div v-if="pack.is_nsfw" class="absolute top-3 left-3 bg-rose-600/90 backdrop-blur-sm text-white text-xs font-extrabold px-3 py-1 rounded-xl border border-rose-500/40">18+</div>
+                <div v-if="pack.is_nsfw" class="absolute top-3 left-3 bg-rose-600/90 backdrop-blur-xs text-white text-xs font-extrabold px-3 py-1 rounded-xl border border-rose-500/40">18+</div>
               </div>
             </div>
 
             <!-- Content -->
-            <div class="p-6 space-y-5">
+            <div class="p-6 stack-y-5">
 
               <!-- Title row -->
               <div class="flex flex-wrap items-start justify-between gap-4">
-                <div class="space-y-2 flex-1">
+                <div class="stack-y-2 flex-1">
                   <div class="flex flex-wrap gap-2">
                     <span
                       class="text-xs font-extrabold px-3 py-1 rounded-full"
@@ -357,7 +357,7 @@ const chartData = computed(() => {
                   <p class="text-sm font-semibold">Не удалось загрузить статистику</p>
                   <button @click="fetchPackStats" class="text-xs font-bold text-brand-accent hover:underline">Повторить</button>
                 </div>
-                <div v-else class="space-y-3">
+                <div v-else class="stack-y-3">
 
                   <!-- Period switcher -->
                   <div class="flex items-center justify-between">
@@ -370,7 +370,7 @@ const chartData = computed(() => {
                         :key="p.v"
                         @click="period = p.v as any"
                         class="px-3 py-1 text-xs font-bold rounded-lg transition-all"
-                        :class="period === p.v ? 'bg-brand-accent text-white shadow' : 'text-white/40 hover:text-white'">
+                        :class="period === p.v ? 'bg-brand-accent text-white shadow-sm' : 'text-white/40 hover:text-white'">
                         {{ p.l }}
                       </button>
                     </div>
@@ -379,7 +379,7 @@ const chartData = computed(() => {
                   <!-- KPI cards -->
                   <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <!-- Установки -->
-                    <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 space-y-1">
+                    <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 stack-y-1">
                       <p class="text-[10px] text-white/35 uppercase tracking-wider font-bold">Установки</p>
                       <p class="text-xl font-black text-white tabular-nums">{{ pack.downloads_count.toLocaleString() }}</p>
                       <p class="text-[10px] font-semibold flex items-center gap-1"
@@ -389,19 +389,19 @@ const chartData = computed(() => {
                       </p>
                     </div>
                     <!-- Коллекции -->
-                    <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 space-y-1">
+                    <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 stack-y-1">
                       <p class="text-[10px] text-white/35 uppercase tracking-wider font-bold">В коллекциях</p>
                       <p class="text-xl font-black text-rose-400 tabular-nums">{{ pack._count.userCollections.toLocaleString() }}</p>
                       <p class="text-[10px] text-white/30 font-medium">хранят прямо сейчас</p>
                     </div>
                     <!-- Отправлено -->
-                    <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 space-y-1">
+                    <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 stack-y-1">
                       <p class="text-[10px] text-white/35 uppercase tracking-wider font-bold">Отправлено</p>
                       <p class="text-xl font-black text-brand-accent tabular-nums">{{ chartData.totalSends.toLocaleString() }}</p>
                       <p class="text-[10px] text-white/30 font-medium">стикеров всего</p>
                     </div>
                     <!-- Удержание -->
-                    <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 space-y-1">
+                    <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 stack-y-1">
                       <p class="text-[10px] text-white/35 uppercase tracking-wider font-bold">Удержание</p>
                       <p class="text-xl font-black tabular-nums"
                         :class="pack.downloads_count > 0 && (pack._count.userCollections / pack.downloads_count) >= 0.5 ? 'text-emerald-400' : 'text-brand-yellow'">
@@ -476,7 +476,7 @@ const chartData = computed(() => {
                   <div v-if="chartData.topStickers.length" class="bg-brand-bg border border-brand-border rounded-2xl p-4">
                     <p class="text-xs font-extrabold text-white mb-3">Популярные стикеры</p>
                     <p v-if="!chartData.topStickers.some(s => s.useCount > 0)" class="text-xs text-white/30">Ещё никто не отправлял стикеры из этого пака</p>
-                    <div v-else class="space-y-2">
+                    <div v-else class="stack-y-2">
                       <div
                         v-for="(sticker, i) in chartData.topStickers" :key="sticker.url"
                         class="flex items-center gap-3">
@@ -515,7 +515,7 @@ const chartData = computed(() => {
                     <span class="font-bold text-white hover:text-brand-accent transition-colors">
                       {{ pack.author.display_name ?? pack.author.username }}
                     </span>
-                    <BIcon v-if="pack.author.is_verified" name="BadgeCheck" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                    <BIcon v-if="pack.author.is_verified" name="BadgeCheck" class="w-3.5 h-3.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                   </div>
                   <p class="text-xs text-white/40">Автор · Опубликован {{ formatDate(pack.created_at) }}</p>
                 </div>

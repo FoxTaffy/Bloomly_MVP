@@ -423,15 +423,15 @@ watchEffect(() => { badges.users = userTotal.value })
 
 <template>
   <div>
-  <div v-if="actionError" class="fixed top-4 left-1/2 -translate-x-1/2 z-[130] px-4 py-2.5 rounded-xl bg-rose-500 text-white text-xs font-bold shadow-xl">
+  <div v-if="actionError" class="fixed top-4 left-1/2 -translate-x-1/2 z-130 px-4 py-2.5 rounded-xl bg-rose-500 text-white text-xs font-bold shadow-xl">
     {{ actionError }}
   </div>
 
     <!-- Segmented toggle: user list / team & roles / frozen / banned (all merged from old separate tabs) -->
-    <div class="flex items-center gap-2 mb-5 p-1 rounded-2xl bg-white/[0.04] w-fit flex-wrap">
+    <div class="flex items-center gap-2 mb-5 p-1 rounded-2xl bg-white/4 w-fit flex-wrap">
       <button type="button" @click="switchUsersView('all')"
         class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
-        :class="usersViewMode === 'all' ? 'bg-[#4C67CF]/20 text-[#4C67CF]' : 'text-white/40 hover:text-white/70'">
+        :class="usersViewMode === 'all' ? 'bg-brand-accent/20 text-brand-accent' : 'text-white/40 hover:text-white/70'">
         <BIcon name="Users" class="w-3.5 h-3.5" /> {{ langStore.t.tabAll }}
       </button>
       <button type="button" @click="switchUsersView('team')"
@@ -488,28 +488,28 @@ watchEffect(() => { badges.users = userTotal.value })
       <div class="relative flex-1 max-w-sm">
         <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
         <input v-model="userSearch" @input="onUserSearch" type="text" :placeholder="langStore.t.adminSearchPlaceholderUsers"
-          class="w-full bg-white/[0.06] border border-transparent rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
-            outline-none focus:border-[#4C67CF]/40 focus:bg-white/[0.08] transition-all" />
+          class="w-full bg-white/6 border border-transparent rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
+            outline-hidden focus:border-brand-accent/40 focus:bg-white/8 transition-all" />
       </div>
-      <div ref="userSortRef" class="relative flex-shrink-0">
+      <div ref="userSortRef" class="relative shrink-0">
         <button type="button" @click="userSortOpen = !userSortOpen"
-          class="flex items-center gap-2 bg-white/[0.06] border border-transparent rounded-2xl pl-3.5 pr-3 py-2.5 text-xs font-bold text-white/70
-            outline-none hover:bg-white/[0.08] focus:border-[#4C67CF]/40 cursor-pointer transition-all">
+          class="flex items-center gap-2 bg-white/6 border border-transparent rounded-2xl pl-3.5 pr-3 py-2.5 text-xs font-bold text-white/70
+            outline-hidden hover:bg-white/8 focus:border-brand-accent/40 cursor-pointer transition-all">
           {{ userSortLabel }}
           <BIcon name="ChevronDown" :class="`w-3.5 h-3.5 text-white/35 transition-transform ${userSortOpen ? 'rotate-180' : ''}`" />
         </button>
         <Transition name="fade-pop">
           <div v-if="userSortOpen"
-            class="absolute right-0 top-[calc(100%+8px)] z-30 min-w-[180px] rounded-2xl bg-[#161F40] shadow-2xl shadow-black/40 p-1.5">
+            class="absolute right-0 top-[calc(100%+8px)] z-30 min-w-[180px] rounded-2xl bg-brand-accent-plus-plus shadow-2xl shadow-black/40 p-1.5">
             <button v-for="opt in userSortOptions" :key="opt.value" type="button" @click="selectUserSort(opt.value as typeof userSort)"
               class="w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-colors"
-              :class="opt.value === userSort ? 'bg-[#4C67CF]/15 text-[#4C67CF]' : 'text-white/60 hover:bg-white/[0.06] hover:text-white'">
+              :class="opt.value === userSort ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/60 hover:bg-white/6 hover:text-white'">
               {{ opt.label }}
             </button>
           </div>
         </Transition>
       </div>
-      <span class="text-xs font-bold text-white/35 bg-white/[0.06] px-3 py-2 rounded-xl">{{ userTotal }}</span>
+      <span class="text-xs font-bold text-white/35 bg-white/6 px-3 py-2 rounded-xl">{{ userTotal }}</span>
     </div>
 
     <div class="rounded-2xl border border-brand-border bg-brand-card overflow-hidden">
@@ -519,39 +519,39 @@ watchEffect(() => { badges.users = userTotal.value })
           class="flex items-center gap-1 text-left text-[10px] font-extrabold uppercase tracking-wider whitespace-nowrap cursor-pointer transition-colors"
           :class="userColumnDirection(col) ? 'text-white' : 'text-white/35 hover:text-white/60'">
           {{ col.label }}
-          <BIcon v-if="userColumnDirection(col) === 'desc'" name="ArrowDown" class="w-3 h-3 flex-shrink-0" />
-          <BIcon v-else-if="userColumnDirection(col) === 'asc'" name="ArrowUp" class="w-3 h-3 flex-shrink-0" />
+          <BIcon v-if="userColumnDirection(col) === 'desc'" name="ArrowDown" class="w-3 h-3 shrink-0" />
+          <BIcon v-else-if="userColumnDirection(col) === 'asc'" name="ArrowUp" class="w-3 h-3 shrink-0" />
         </button>
       </div>
 
       <div v-if="isLoadingUsers" class="divide-y divide-brand-border">
         <div v-for="n in 6" :key="n" class="flex items-center gap-3 px-5 py-3.5 animate-pulse">
-          <div class="w-9 h-9 rounded-full bg-white/[0.08] flex-shrink-0" />
-          <div class="flex-1 space-y-2">
-            <div class="h-3 bg-white/[0.08] rounded-full w-32" />
+          <div class="w-9 h-9 rounded-full bg-white/8 shrink-0" />
+          <div class="flex-1 stack-y-2">
+            <div class="h-3 bg-white/8 rounded-full w-32" />
             <div class="h-2 bg-white/5 rounded-full w-24" />
           </div>
         </div>
       </div>
       <div v-else class="divide-y divide-brand-border">
         <div v-for="user in users" :key="user.id"
-          class="adm-user-row relative grid lg:grid-cols-[2.4fr_2fr_1.1fr_1.2fr_0.85fr_1.1fr_1.2fr] gap-2 lg:gap-3 items-center px-4 py-3.5 lg:px-5 lg:py-3 hover:bg-white/[0.03] transition-all group">
+          class="adm-user-row relative grid lg:grid-cols-[2.4fr_2fr_1.1fr_1.2fr_0.85fr_1.1fr_1.2fr] gap-2 lg:gap-3 items-center px-4 py-3.5 lg:px-5 lg:py-3 hover:bg-white/3 transition-all group">
 
           <!-- Пользователь -->
           <router-link :to="`/profile/${user.username}`" target="_blank" class="adm-u-user flex items-center gap-3 min-w-0 group/user">
-            <div class="flex-shrink-0 relative">
+            <div class="shrink-0 relative">
               <img v-if="user.avatar_url" :src="user.avatar_url"
-                class="w-9 h-9 rounded-full object-cover border border-white/[0.06] group-hover/user:opacity-80 transition-opacity" />
-              <div v-else class="w-9 h-9 rounded-full border border-white/[0.06] flex items-center justify-center text-sm font-bold group-hover/user:opacity-80 transition-opacity"
+                class="w-9 h-9 rounded-full object-cover border border-white/6 group-hover/user:opacity-80 transition-opacity" />
+              <div v-else class="w-9 h-9 rounded-full border border-white/6 flex items-center justify-center text-sm font-bold group-hover/user:opacity-80 transition-opacity"
                 :style="`background:${roleColor(user.role)}20;color:${roleColor(user.role)}`">
                 {{ (user.display_name || user.username || '?')[0].toUpperCase() }}
               </div>
             </div>
             <div class="min-w-0">
-              <p class="font-bold text-sm text-white truncate flex items-center gap-1.5 group-hover/user:text-[#4C67CF] transition-colors">
+              <p class="font-bold text-sm text-white truncate flex items-center gap-1.5 group-hover/user:text-brand-accent transition-colors">
                 {{ user.display_name || user.username }}
                 <span v-if="tierLabel(user.subscription_tier)"
-                  class="inline-flex items-center gap-0.5 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border flex-shrink-0"
+                  class="inline-flex items-center gap-0.5 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full border shrink-0"
                   :style="`color:${tierColor(user.subscription_tier)};border-color:${tierColor(user.subscription_tier)}40;background:${tierColor(user.subscription_tier)}18`">
                   ✦ {{ tierLabel(user.subscription_tier) }}
                 </span>
@@ -565,12 +565,12 @@ watchEffect(() => { badges.users = userTotal.value })
 
           <!-- Статус -->
           <div class="adm-u-status flex items-center gap-1.5 flex-wrap">
-            <span class="text-[10px] font-extrabold px-2 py-1 rounded-full flex-shrink-0"
+            <span class="text-[10px] font-extrabold px-2 py-1 rounded-full shrink-0"
               :style="`background:${userStatus(user).color}20;color:${userStatus(user).color}`">
               {{ userStatus(user).label }}
             </span>
             <span v-if="user.warn_count > 0" :title="`${user.warn_count}/5 ${langStore.t.adminWarnCountSuffix}`"
-              class="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+              class="text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
               :class="user.warn_count >= 4 ? 'bg-rose-500/15 text-rose-400' : 'bg-amber-500/15 text-amber-400'">
               ⚠ {{ user.warn_count }}/5
             </span>
@@ -592,32 +592,32 @@ watchEffect(() => { badges.users = userTotal.value })
           </p>
 
           <!-- Действия — inline on mobile, floating overlay on hover at lg+ so it never fights the columns for space -->
-          <div class="adm-u-actions flex items-center gap-1.5 flex-wrap lg:flex-nowrap flex-shrink-0 justify-start mt-1 lg:mt-0
+          <div class="adm-u-actions flex items-center gap-1.5 flex-wrap lg:flex-nowrap shrink-0 justify-start mt-1 lg:mt-0
             static lg:absolute lg:right-4 lg:top-1/2 lg:-translate-y-1/2 lg:z-10
             opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:pointer-events-none lg:group-hover:pointer-events-auto
             transition-opacity lg:bg-[#0B1030]/95 lg:backdrop-blur-md lg:rounded-full lg:pl-3 lg:pr-2 lg:py-2 lg:shadow-xl lg:shadow-black/50 lg:border lg:border-white/10">
             <button v-if="isAdminPlus" type="button" title="Редактировать профиль" @click="editingUser = user"
-              class="flex items-center justify-center bg-white/[0.06] border border-transparent rounded-full w-7 h-7 text-white/70
-                hover:bg-white/[0.08] hover:text-white cursor-pointer transition-all">
+              class="flex items-center justify-center bg-white/6 border border-transparent rounded-full w-7 h-7 text-white/70
+                hover:bg-white/8 hover:text-white cursor-pointer transition-all">
               <BIcon name="Pencil" class="w-3.5 h-3.5" />
             </button>
             <button v-if="isAdminPlus" type="button" data-user-menu :title="langStore.t.adminGrantRevokeSubTooltip"
               @click="toggleUserMenu(`tier-${user.id}`, $event)"
-              class="flex items-center gap-1 bg-white/[0.06] border border-transparent rounded-full pl-2.5 pr-2 py-1.5 text-xs font-bold text-white/70
-                outline-none hover:bg-white/[0.08] focus:border-violet-400/50 cursor-pointer transition-all">
+              class="flex items-center gap-1 bg-white/6 border border-transparent rounded-full pl-2.5 pr-2 py-1.5 text-xs font-bold text-white/70
+                outline-hidden hover:bg-white/8 focus:border-violet-400/50 cursor-pointer transition-all">
               {{ tierMenuOptions.find(o => o.value === (user.subscription_tier || 'free'))?.label }}
               <BIcon name="ChevronDown" :class="`w-3 h-3 text-white/35 transition-transform ${activeUserMenu === `tier-${user.id}` ? 'rotate-180' : ''}`" />
             </button>
             <button v-if="isAdminPlus" type="button" :title="langStore.t.adminSponsorTooltip"
               @click="toggleUserSponsor(user)"
               class="flex items-center justify-center rounded-full w-7 h-7 border cursor-pointer transition-all"
-              :class="user.is_sponsor ? 'bg-violet-400/20 border-violet-400/50' : 'bg-white/[0.06] border-transparent hover:bg-white/[0.08]'">
+              :class="user.is_sponsor ? 'bg-violet-400/20 border-violet-400/50' : 'bg-white/6 border-transparent hover:bg-white/8'">
               <img src="/icons/badges/sponsor.png" alt="" class="w-5 h-5 object-contain" :class="user.is_sponsor ? '' : 'opacity-40 grayscale'" />
             </button>
             <button v-if="isOwnerRole" type="button" data-user-menu
               @click="toggleUserMenu(`role-${user.id}`, $event)"
-              class="flex items-center gap-1 bg-white/[0.06] border border-transparent rounded-full pl-2.5 pr-2 py-1.5 text-xs font-bold text-white/70
-                outline-none hover:bg-white/[0.08] focus:border-[#4C67CF]/50 cursor-pointer transition-all">
+              class="flex items-center gap-1 bg-white/6 border border-transparent rounded-full pl-2.5 pr-2 py-1.5 text-xs font-bold text-white/70
+                outline-hidden hover:bg-white/8 focus:border-brand-accent/50 cursor-pointer transition-all">
               {{ roleLabel(user.role) }}
               <BIcon name="ChevronDown" :class="`w-3 h-3 text-white/35 transition-transform ${activeUserMenu === `role-${user.id}` ? 'rotate-180' : ''}`" />
             </button>
@@ -628,11 +628,11 @@ watchEffect(() => { badges.users = userTotal.value })
             <Teleport to="body">
               <Transition name="fade-pop">
                 <div v-if="activeUserMenu === `tier-${user.id}`" data-user-menu
-                  class="fixed z-[100] min-w-[160px] rounded-2xl bg-[#161F40] shadow-2xl shadow-black/40 p-1.5"
+                  class="fixed z-100 min-w-[160px] rounded-2xl bg-brand-accent-plus-plus shadow-2xl shadow-black/40 p-1.5"
                   :style="`top:${userMenuPos.top}px; right:${userMenuPos.right}px;`">
                   <button v-for="opt in tierMenuOptions" :key="opt.value" type="button" @click="selectUserTier(user.id, opt.value)"
                     class="w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-colors"
-                    :class="opt.value === (user.subscription_tier || 'free') ? 'bg-violet-400/15 text-violet-300' : 'text-white/60 hover:bg-white/[0.06] hover:text-white'">
+                    :class="opt.value === (user.subscription_tier || 'free') ? 'bg-violet-400/15 text-violet-300' : 'text-white/60 hover:bg-white/6 hover:text-white'">
                     {{ opt.label }}
                   </button>
                 </div>
@@ -641,11 +641,11 @@ watchEffect(() => { badges.users = userTotal.value })
             <Teleport to="body">
               <Transition name="fade-pop">
                 <div v-if="activeUserMenu === `role-${user.id}`" data-user-menu
-                  class="fixed z-[100] min-w-[160px] rounded-2xl bg-[#161F40] shadow-2xl shadow-black/40 p-1.5"
+                  class="fixed z-100 min-w-[160px] rounded-2xl bg-brand-accent-plus-plus shadow-2xl shadow-black/40 p-1.5"
                   :style="`top:${userMenuPos.top}px; right:${userMenuPos.right}px;`">
                   <button v-for="opt in roleMenuOptions" :key="opt.value" type="button" @click="selectUserRole(user.id, opt.value)"
                     class="w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-colors"
-                    :class="opt.value === user.role ? 'bg-[#4C67CF]/15 text-[#4C67CF]' : 'text-white/60 hover:bg-white/[0.06] hover:text-white'">
+                    :class="opt.value === user.role ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/60 hover:bg-white/6 hover:text-white'">
                     {{ opt.label }}
                   </button>
                 </div>
@@ -653,29 +653,29 @@ watchEffect(() => { badges.users = userTotal.value })
             </Teleport>
             <!-- deceased / alive -->
             <button v-if="user.deceased_at" @click="unmarkDeceased(user.id)" :title="langStore.t.adminUndoDeceasedTooltip"
-              class="w-7 h-7 rounded-full bg-white/10 border border-white/15 text-white/60 hover:bg-white/20 flex items-center justify-center transition-all text-xs flex-shrink-0">
+              class="w-7 h-7 rounded-full bg-white/10 border border-white/15 text-white/60 hover:bg-white/20 flex items-center justify-center transition-all text-xs shrink-0">
               ↺
             </button>
             <button v-else @click="markDeceased(user.id)" :title="langStore.t.adminMarkDeceasedTooltip"
-              class="w-7 h-7 rounded-full bg-white/5 border border-white/10 text-white/40 hover:bg-white/15 hover:text-white/60 flex items-center justify-center transition-all text-xs flex-shrink-0">
+              class="w-7 h-7 rounded-full bg-white/5 border border-white/10 text-white/40 hover:bg-white/15 hover:text-white/60 flex items-center justify-center transition-all text-xs shrink-0">
               🪦
             </button>
             <!-- freeze / unfreeze -->
             <button v-if="user.frozen_at" @click="unfreezeUser(user.id)" :title="langStore.t.adminUnfreezeTooltip"
-              class="w-7 h-7 rounded-full bg-sky-500/10 border border-sky-500/15 text-sky-400 hover:bg-sky-500/20 flex items-center justify-center transition-all text-xs flex-shrink-0">
+              class="w-7 h-7 rounded-full bg-sky-500/10 border border-sky-500/15 text-sky-400 hover:bg-sky-500/20 flex items-center justify-center transition-all text-xs shrink-0">
               🔓
             </button>
             <button v-else @click="freezeUser(user.id)" :title="langStore.t.adminFreezeTooltip"
-              class="w-7 h-7 rounded-full bg-sky-500/10 border border-sky-500/15 text-sky-400 hover:bg-sky-500/20 flex items-center justify-center transition-all text-xs flex-shrink-0">
+              class="w-7 h-7 rounded-full bg-sky-500/10 border border-sky-500/15 text-sky-400 hover:bg-sky-500/20 flex items-center justify-center transition-all text-xs shrink-0">
               🧊
             </button>
             <!-- clear warns -->
             <button v-if="user.warn_count > 0" @click="clearUserWarns(user.id)" :title="langStore.t.adminClearWarnsTooltip"
-              class="w-7 h-7 rounded-full bg-amber-500/10 border border-amber-500/15 text-amber-400 hover:bg-amber-500/20 flex items-center justify-center transition-all text-xs flex-shrink-0">
+              class="w-7 h-7 rounded-full bg-amber-500/10 border border-amber-500/15 text-amber-400 hover:bg-amber-500/20 flex items-center justify-center transition-all text-xs shrink-0">
               ✖
             </button>
             <button @click="deleteUser(user.id)" :title="langStore.t.deleteBtn"
-              class="w-7 h-7 rounded-full bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center transition-all flex-shrink-0">
+              class="w-7 h-7 rounded-full bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center transition-all shrink-0">
               <BIcon name="Trash2" class="w-3.5 h-3.5" />
             </button>
           </div>
@@ -685,12 +685,12 @@ watchEffect(() => { badges.users = userTotal.value })
 
     <div v-if="userTotal > 20" class="flex items-center justify-center gap-2 mt-4">
       <button @click="userPage--; fetchUsers()" :disabled="userPage <= 1"
-        class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+        class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
         <BIcon name="ChevronLeft" class="w-4 h-4" />
       </button>
       <span class="text-xs font-bold text-white/40 px-3">{{ userPage }} / {{ Math.ceil(userTotal/20) }}</span>
       <button @click="userPage++; fetchUsers()" :disabled="userPage >= Math.ceil(userTotal/20)"
-        class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+        class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
         <BIcon name="ChevronRight" class="w-4 h-4" />
       </button>
     </div>
@@ -718,7 +718,7 @@ watchEffect(() => { badges.users = userTotal.value })
               <option value="owner">{{ langStore.t.roleOwner }}</option>
             </select>
             <button @click="inviteToStaff" :disabled="isInviting || !inviteIdentifier.trim()"
-              class="px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all flex-shrink-0"
+              class="px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all shrink-0"
               style="background:linear-gradient(135deg,#4C67CF,#31458F)">
               {{ isInviting ? '...' : langStore.t.adminAddBtn }}
             </button>
@@ -735,7 +735,7 @@ watchEffect(() => { badges.users = userTotal.value })
           <span class="text-[10px] font-extrabold text-white/35 uppercase tracking-wider">{{ langStore.t.adminColLastActivity }}</span>
           <span></span>
         </div>
-        <div v-if="isLoadingStaff" class="p-5 space-y-3">
+        <div v-if="isLoadingStaff" class="p-5 stack-y-3">
           <div v-for="n in 4" :key="n" class="h-10 rounded-xl bg-white/5 animate-pulse" />
         </div>
         <div v-else-if="!staff.length" class="flex flex-col items-center gap-3 py-16 text-white/25">
@@ -746,13 +746,13 @@ watchEffect(() => { badges.users = userTotal.value })
           <div v-for="m in staff" :key="m.id"
             class="grid grid-cols-1 lg:grid-cols-[2fr_1fr_1fr_1.2fr_1fr] gap-2 lg:gap-3 items-center px-5 py-3.5">
             <router-link :to="`/profile/${m.username}`" target="_blank" class="flex items-center gap-2.5 min-w-0 group/user">
-              <img v-if="m.avatar_url" :src="m.avatar_url" class="w-9 h-9 rounded-full object-cover border border-white/10 flex-shrink-0 group-hover/user:opacity-80 transition-opacity" />
-              <div v-else class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 group-hover/user:opacity-80 transition-opacity"
+              <img v-if="m.avatar_url" :src="m.avatar_url" class="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0 group-hover/user:opacity-80 transition-opacity" />
+              <div v-else class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 group-hover/user:opacity-80 transition-opacity"
                 :style="`background:${roleColor(m.role)}20;color:${roleColor(m.role)}`">
                 {{ (m.display_name || m.username || '?')[0].toUpperCase() }}
               </div>
               <div class="min-w-0">
-                <p class="font-bold text-sm text-white truncate group-hover/user:text-[#4C67CF] transition-colors">{{ m.display_name || m.username }}</p>
+                <p class="font-bold text-sm text-white truncate group-hover/user:text-brand-accent transition-colors">{{ m.display_name || m.username }}</p>
                 <p class="text-xs text-white/35 truncate">{{ m.email }}</p>
               </div>
             </router-link>
@@ -789,18 +789,18 @@ watchEffect(() => { badges.users = userTotal.value })
       <div class="relative flex-1 max-w-sm">
         <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
         <input v-model="frozenSearch" @input="onFrozenSearch" type="text" :placeholder="langStore.t.adminSearchPlaceholderFrozen"
-          class="w-full bg-white/5 border border-white/[0.08] rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
-            outline-none focus:border-sky-500/40 focus:bg-white/[0.08] transition-all" />
+          class="w-full bg-white/5 border border-white/8 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
+            outline-hidden focus:border-sky-500/40 focus:bg-white/8 transition-all" />
       </div>
-      <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/[0.08]">{{ frozenTotal }}</span>
+      <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/8">{{ frozenTotal }}</span>
     </div>
 
     <div class="rounded-3xl border border-brand-border overflow-hidden" style="background:#1F223C">
       <div v-if="isLoadingFrozen" class="divide-y divide-brand-border">
         <div v-for="n in 4" :key="n" class="flex items-center gap-3 px-5 py-3.5 animate-pulse">
-          <div class="w-9 h-9 rounded-full bg-white/[0.08] flex-shrink-0" />
-          <div class="flex-1 space-y-2">
-            <div class="h-3 bg-white/[0.08] rounded-full w-32" /><div class="h-2 bg-white/5 rounded-full w-24" />
+          <div class="w-9 h-9 rounded-full bg-white/8 shrink-0" />
+          <div class="flex-1 stack-y-2">
+            <div class="h-3 bg-white/8 rounded-full w-32" /><div class="h-2 bg-white/5 rounded-full w-24" />
           </div>
         </div>
       </div>
@@ -811,10 +811,10 @@ watchEffect(() => { badges.users = userTotal.value })
       </div>
       <div v-else class="divide-y divide-brand-border">
         <div v-for="user in frozenUsers" :key="user.id"
-          class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-all group">
+          class="flex items-center gap-3 px-5 py-3 hover:bg-white/3 transition-all group">
           <img v-if="user.avatar_url" :src="user.avatar_url"
-            class="w-9 h-9 rounded-full object-cover border border-white/10 flex-shrink-0" />
-          <div v-else class="w-9 h-9 rounded-full border border-sky-500/20 bg-sky-500/10 flex items-center justify-center text-xs font-bold text-sky-400 flex-shrink-0">
+            class="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" />
+          <div v-else class="w-9 h-9 rounded-full border border-sky-500/20 bg-sky-500/10 flex items-center justify-center text-xs font-bold text-sky-400 shrink-0">
             {{ (user.display_name || user.username || '?')[0].toUpperCase() }}
           </div>
           <div class="flex-1 min-w-0">
@@ -827,7 +827,7 @@ watchEffect(() => { badges.users = userTotal.value })
             <p class="text-xs text-white/35 truncate">@{{ user.username }} · {{ user._count?.posts ?? 0 }} {{ langStore.t.posts }}</p>
             <p v-if="user.frozen_reason" class="text-[11px] text-sky-400/70 truncate mt-0.5">{{ user.frozen_reason }}</p>
           </div>
-          <div class="flex items-center gap-2 flex-shrink-0">
+          <div class="flex items-center gap-2 shrink-0">
             <button @click="unfreezeUser(user.id)" :title="langStore.t.adminUnfreezeTooltip"
               class="w-8 h-8 rounded-xl bg-sky-500/10 border border-sky-500/15 text-sky-400 hover:bg-sky-500/20 flex items-center justify-center transition-all text-xs">
               🔓
@@ -843,12 +843,12 @@ watchEffect(() => { badges.users = userTotal.value })
 
     <div v-if="frozenTotal > 20" class="flex items-center justify-center gap-2 mt-4">
       <button @click="frozenPage--; fetchFrozenUsers()" :disabled="frozenPage <= 1"
-        class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+        class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
         <BIcon name="ChevronLeft" class="w-4 h-4" />
       </button>
       <span class="text-xs font-bold text-white/40 px-3">{{ frozenPage }} / {{ Math.ceil(frozenTotal/20) }}</span>
       <button @click="frozenPage++; fetchFrozenUsers()" :disabled="frozenPage >= Math.ceil(frozenTotal/20)"
-        class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+        class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
         <BIcon name="ChevronRight" class="w-4 h-4" />
       </button>
     </div>
@@ -860,18 +860,18 @@ watchEffect(() => { badges.users = userTotal.value })
       <div class="relative flex-1 max-w-sm">
         <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
         <input v-model="sponsorSearch" @input="onSponsorSearch" type="text" :placeholder="langStore.t.adminSearchPlaceholderSponsors"
-          class="w-full bg-white/5 border border-white/[0.08] rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
-            outline-none focus:border-violet-500/40 focus:bg-white/[0.08] transition-all" />
+          class="w-full bg-white/5 border border-white/8 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
+            outline-hidden focus:border-violet-500/40 focus:bg-white/8 transition-all" />
       </div>
-      <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/[0.08]">{{ sponsorTotal }}</span>
+      <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/8">{{ sponsorTotal }}</span>
     </div>
 
     <div class="rounded-3xl border border-brand-border overflow-hidden" style="background:#1F223C">
       <div v-if="isLoadingSponsors" class="divide-y divide-brand-border">
         <div v-for="n in 4" :key="n" class="flex items-center gap-3 px-5 py-3.5 animate-pulse">
-          <div class="w-9 h-9 rounded-full bg-white/[0.08] flex-shrink-0" />
-          <div class="flex-1 space-y-2">
-            <div class="h-3 bg-white/[0.08] rounded-full w-32" /><div class="h-2 bg-white/5 rounded-full w-24" />
+          <div class="w-9 h-9 rounded-full bg-white/8 shrink-0" />
+          <div class="flex-1 stack-y-2">
+            <div class="h-3 bg-white/8 rounded-full w-32" /><div class="h-2 bg-white/5 rounded-full w-24" />
           </div>
         </div>
       </div>
@@ -882,10 +882,10 @@ watchEffect(() => { badges.users = userTotal.value })
       </div>
       <div v-else class="divide-y divide-brand-border">
         <div v-for="user in sponsorUsers" :key="user.id"
-          class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-all group">
+          class="flex items-center gap-3 px-5 py-3 hover:bg-white/3 transition-all group">
           <img v-if="user.avatar_url" :src="user.avatar_url"
-            class="w-9 h-9 rounded-full object-cover border border-white/10 flex-shrink-0" />
-          <div v-else class="w-9 h-9 rounded-full border border-violet-500/20 bg-violet-500/10 flex items-center justify-center text-xs font-bold text-violet-300 flex-shrink-0">
+            class="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" />
+          <div v-else class="w-9 h-9 rounded-full border border-violet-500/20 bg-violet-500/10 flex items-center justify-center text-xs font-bold text-violet-300 shrink-0">
             {{ (user.display_name || user.username || '?')[0].toUpperCase() }}
           </div>
           <div class="flex-1 min-w-0">
@@ -900,7 +900,7 @@ watchEffect(() => { badges.users = userTotal.value })
             </p>
             <p class="text-xs text-white/35 truncate">@{{ user.username }} · {{ user._count?.posts ?? 0 }} {{ langStore.t.posts }}</p>
           </div>
-          <div class="flex items-center gap-2 flex-shrink-0">
+          <div class="flex items-center gap-2 shrink-0">
             <button v-if="isAdminPlus" @click="revokeSponsor(user.id)" :title="langStore.t.adminSponsorTooltip"
               class="w-8 h-8 rounded-xl bg-violet-500/10 border border-violet-500/15 hover:bg-violet-500/20 flex items-center justify-center transition-all">
               <img src="/icons/badges/sponsor.png" alt="" class="w-5 h-5 object-contain" />
@@ -916,18 +916,18 @@ watchEffect(() => { badges.users = userTotal.value })
       <div class="relative flex-1 max-w-sm">
         <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
         <input v-model="archivedSearch" @input="onArchivedSearch" type="text" :placeholder="langStore.t.adminSearchPlaceholderArchive"
-          class="w-full bg-white/5 border border-white/[0.08] rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
-            outline-none focus:border-rose-500/40 focus:bg-white/[0.08] transition-all" />
+          class="w-full bg-white/5 border border-white/8 rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/25
+            outline-hidden focus:border-rose-500/40 focus:bg-white/8 transition-all" />
       </div>
-      <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/[0.08]">{{ archivedTotal }}</span>
+      <span class="text-xs font-bold text-white/35 bg-white/5 px-3 py-2 rounded-xl border border-white/8">{{ archivedTotal }}</span>
     </div>
 
     <div class="rounded-3xl border border-brand-border overflow-hidden" style="background:#1F223C">
       <div v-if="isLoadingArchived" class="divide-y divide-brand-border">
         <div v-for="n in 4" :key="n" class="flex items-center gap-3 px-5 py-3.5 animate-pulse">
-          <div class="w-9 h-9 rounded-full bg-white/[0.08] flex-shrink-0" />
-          <div class="flex-1 space-y-2">
-            <div class="h-3 bg-white/[0.08] rounded-full w-32" /><div class="h-2 bg-white/5 rounded-full w-24" />
+          <div class="w-9 h-9 rounded-full bg-white/8 shrink-0" />
+          <div class="flex-1 stack-y-2">
+            <div class="h-3 bg-white/8 rounded-full w-32" /><div class="h-2 bg-white/5 rounded-full w-24" />
           </div>
         </div>
       </div>
@@ -938,10 +938,10 @@ watchEffect(() => { badges.users = userTotal.value })
       </div>
       <div v-else class="divide-y divide-brand-border">
         <div v-for="user in archivedUsers" :key="user.id"
-          class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.03] transition-all group opacity-60 hover:opacity-100">
+          class="flex items-center gap-3 px-5 py-3 hover:bg-white/3 transition-all group opacity-60 hover:opacity-100">
           <img v-if="user.avatar_url" :src="user.avatar_url"
-            class="w-9 h-9 rounded-full object-cover border border-white/10 grayscale flex-shrink-0" />
-          <div v-else class="w-9 h-9 rounded-full border border-white/[0.08] bg-white/5 flex items-center justify-center text-xs font-bold text-white/30 flex-shrink-0">
+            class="w-9 h-9 rounded-full object-cover border border-white/10 grayscale shrink-0" />
+          <div v-else class="w-9 h-9 rounded-full border border-white/8 bg-white/5 flex items-center justify-center text-xs font-bold text-white/30 shrink-0">
             {{ (user.display_name || user.username || '?')[0].toUpperCase() }}
           </div>
           <div class="flex-1 min-w-0">
@@ -960,12 +960,12 @@ watchEffect(() => { badges.users = userTotal.value })
 
     <div v-if="archivedTotal > 20" class="flex items-center justify-center gap-2 mt-4">
       <button @click="archivedPage--; fetchArchivedUsers()" :disabled="archivedPage <= 1"
-        class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+        class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
         <BIcon name="ChevronLeft" class="w-4 h-4" />
       </button>
       <span class="text-xs font-bold text-white/40 px-3">{{ archivedPage }} / {{ Math.ceil(archivedTotal/20) }}</span>
       <button @click="archivedPage++; fetchArchivedUsers()" :disabled="archivedPage >= Math.ceil(archivedTotal/20)"
-        class="w-9 h-9 rounded-2xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
+        class="w-9 h-9 rounded-2xl bg-white/5 border border-white/8 text-white/40 hover:text-white disabled:opacity-25 flex items-center justify-center transition-all">
         <BIcon name="ChevronRight" class="w-4 h-4" />
       </button>
     </div>

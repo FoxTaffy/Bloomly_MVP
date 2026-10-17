@@ -15,9 +15,9 @@
       </div>
     </div>
 
-    <div class="p-5 space-y-4">
+    <div class="p-5 stack-y-4">
       <!-- Slots progress -->
-      <div v-if="listing.commission_slots_total" class="space-y-2">
+      <div v-if="listing.commission_slots_total" class="stack-y-2">
         <div class="flex items-center justify-between text-xs">
           <span class="text-white/45">Занято слотов</span>
           <span class="font-bold text-white">
@@ -30,23 +30,23 @@
             :style="`width: ${slotsFillPct}%; background: linear-gradient(90deg, #a78bfa, #7c3aed)`" />
         </div>
         <div v-if="isFull" class="flex items-center gap-2 bg-brand-error/10 border border-brand-error/20 rounded-xl px-3 py-2">
-          <BIcon name="XCircle" class="w-4 h-4 text-brand-error flex-shrink-0" />
+          <BIcon name="XCircle" class="w-4 h-4 text-brand-error shrink-0" />
           <span class="text-xs font-bold text-brand-error">Все слоты заняты</span>
         </div>
       </div>
 
       <!-- Form fields -->
-      <div v-if="listing.commission_form_fields?.length" class="space-y-3">
+      <div v-if="listing.commission_form_fields?.length" class="stack-y-3">
         <p class="text-[10px] font-bold text-white/35 uppercase tracking-wider">Информация о заказе</p>
-        <div v-for="field in listing.commission_form_fields" :key="field.label" class="space-y-1.5">
+        <div v-for="field in listing.commission_form_fields" :key="field.label" class="stack-y-1.5">
           <label class="text-xs text-white/60 font-medium">
             {{ field.label }}<span v-if="field.required" class="text-brand-error ml-1">*</span>
           </label>
           <textarea v-if="field.type === 'textarea'" v-model="formData[field.label]" rows="2"
-            class="w-full bg-[#0a0a1a] border border-white/8 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-none focus:border-violet-500/50 resize-none transition-all"
+            class="w-full bg-[#0a0a1a] border border-white/8 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-hidden focus:border-violet-500/50 resize-none transition-all"
             :placeholder="field.label" />
           <input v-else v-model="formData[field.label]" type="text"
-            class="w-full bg-[#0a0a1a] border border-white/8 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/20 outline-none focus:border-violet-500/50 transition-all"
+            class="w-full bg-[#0a0a1a] border border-white/8 rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/20 outline-hidden focus:border-violet-500/50 transition-all"
             :placeholder="field.label" />
         </div>
       </div>

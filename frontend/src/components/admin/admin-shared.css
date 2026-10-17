@@ -1,4 +1,5 @@
-/* Styles shared by the admin panel tabs (included via <style scoped src>). */
+/* Styles shared by the admin panel tabs (included via \3c style scoped src>). */
+@reference "../../assets/style.css";
 .filter-expand-enter-active, .filter-expand-leave-active { transition: all 0.2s ease; }
 .filter-expand-enter-from, .filter-expand-leave-to { opacity: 0; transform: translateY(-8px); }
 

@@ -49,7 +49,7 @@ function isImage(url: string) {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="stack-y-4">
 
     <!-- Header row -->
     <div class="flex items-center justify-between">
@@ -63,7 +63,7 @@ function isImage(url: string) {
 
     <!-- Loading -->
     <div v-if="loading" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <div v-for="n in 4" :key="n" class="space-y-2">
+      <div v-for="n in 4" :key="n" class="stack-y-2">
         <div class="h-7 bg-brand-bg rounded-xl animate-pulse" />
         <div v-for="m in 2" :key="m" class="h-24 bg-brand-bg rounded-2xl animate-pulse" />
       </div>
@@ -79,7 +79,7 @@ function isImage(url: string) {
         <!-- Column header -->
         <div class="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/6"
           :style="`background: ${stage.color}10`">
-          <BIcon :name="stage.icon" class="w-3.5 h-3.5 flex-shrink-0" :style="`color: ${stage.color}`" />
+          <BIcon :name="stage.icon" class="w-3.5 h-3.5 shrink-0" :style="`color: ${stage.color}`" />
           <span class="text-xs font-bold flex-1" :style="`color: ${stage.color}`">{{ stage.label }}</span>
           <span class="text-[10px] font-bold text-white/30 bg-white/5 px-1.5 py-0.5 rounded-full">
             {{ columns[stage.key]?.length ?? 0 }}
@@ -90,7 +90,7 @@ function isImage(url: string) {
         <template v-if="columns[stage.key]?.length">
           <div v-for="post in columns[stage.key]" :key="post.id"
             @click="expandedPostId = expandedPostId === post.id ? null : post.id"
-            class="group bg-brand-card border border-brand-border hover:border-brand-accent/30 rounded-2xl overflow-hidden cursor-pointer transition-all shadow-sm hover:shadow-md">
+            class="group bg-brand-card border border-brand-border hover:border-brand-accent/30 rounded-2xl overflow-hidden cursor-pointer transition-all shadow-xs hover:shadow-md">
 
             <!-- Thumbnail -->
             <div v-if="post.media_urls?.length" class="relative overflow-hidden bg-brand-bg"
@@ -101,13 +101,13 @@ function isImage(url: string) {
                 <BIcon name="Play" class="w-6 h-6 text-white/30" />
               </div>
               <div v-if="post.media_urls.length > 1"
-                class="absolute top-1.5 right-1.5 bg-black/60 backdrop-blur-sm rounded-lg px-1.5 py-0.5 text-[10px] text-white font-bold">
+                class="absolute top-1.5 right-1.5 bg-black/60 backdrop-blur-xs rounded-lg px-1.5 py-0.5 text-[10px] text-white font-bold">
                 +{{ post.media_urls.length - 1 }}
               </div>
             </div>
 
             <!-- Card body -->
-            <div class="p-2.5 space-y-1.5">
+            <div class="p-2.5 stack-y-1.5">
               <p class="text-[13px] font-semibold text-white leading-snug line-clamp-2">
                 {{ post.content }}
               </p>
@@ -156,7 +156,7 @@ function isImage(url: string) {
     <!-- Unstaged hint -->
     <div v-if="!loading && (columns.unstaged?.length ?? 0) > 0"
       class="px-4 py-2.5 bg-white/3 border border-white/8 rounded-2xl flex items-center gap-2">
-      <BIcon name="AlertCircle" class="w-4 h-4 text-white/30 flex-shrink-0" />
+      <BIcon name="AlertCircle" class="w-4 h-4 text-white/30 shrink-0" />
       <p class="text-xs text-white/40">
         {{ columns.unstaged.length }} WIP-{{ columns.unstaged.length === 1 ? 'пост' : 'поста' }} без стадии — выберите чип стадии при публикации
       </p>
@@ -164,7 +164,7 @@ function isImage(url: string) {
 
     <!-- Empty board hint for admin -->
     <div v-if="!loading && totalCards === 0 && isAdmin"
-      class="py-10 text-center space-y-3">
+      class="py-10 text-center stack-y-3">
       <div class="w-16 h-16 rounded-2xl bg-brand-bg border border-brand-border flex items-center justify-center mx-auto">
         <BIcon name="Kanban" class="w-7 h-7 text-white/20" />
       </div>

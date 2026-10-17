@@ -12,7 +12,7 @@
       v-if="ad.image_url"
       :src="ad.image_url"
       class="object-cover"
-      :class="variant === 'hero' ? 'w-full sm:w-56 h-36 sm:h-auto flex-shrink-0' : 'w-full max-h-28'"
+      :class="variant === 'hero' ? 'w-full sm:w-56 h-36 sm:h-auto shrink-0' : 'w-full max-h-28'"
     />
     <div class="px-4 py-3 flex-1 min-w-0" :class="variant === 'hero' ? 'flex flex-col justify-center' : ''">
       <span class="text-[9px] font-bold uppercase tracking-wider text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">
@@ -32,11 +32,11 @@
     v-else
     type="button"
     @click="showRequestModal = true"
-    class="w-full text-left border border-dashed border-white/10 rounded-3xl overflow-hidden hover:border-brand-accent/30 hover:bg-white/[0.03] transition-all group"
+    class="w-full text-left border border-dashed border-white/10 rounded-3xl overflow-hidden hover:border-brand-accent/30 hover:bg-white/3 transition-all group"
     :class="variant === 'hero' ? 'flex items-center gap-4 px-5 py-5' : 'px-4 py-5'"
   >
     <div
-      class="rounded-2xl bg-white/5 border border-white/[0.08] flex items-center justify-center flex-shrink-0 group-hover:border-brand-accent/30 transition-colors"
+      class="rounded-2xl bg-white/5 border border-white/8 flex items-center justify-center shrink-0 group-hover:border-brand-accent/30 transition-colors"
       :class="variant === 'hero' ? 'w-14 h-14' : 'w-10 h-10 mb-2.5'"
     >
       <BIcon name="Megaphone" class="text-white/25 group-hover:text-brand-accent/70 transition-colors" :class="variant === 'hero' ? 'w-6 h-6' : 'w-5 h-5'" />

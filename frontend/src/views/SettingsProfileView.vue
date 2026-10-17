@@ -79,7 +79,7 @@
         <div class="flex flex-row-reverse gap-6 items-start">
 
           <!-- ── Left sticky section nav ────────────────────────────── -->
-          <aside class="w-56 hidden xl:flex flex-col gap-3 sticky top-24 self-start flex-shrink-0">
+          <aside class="w-56 hidden xl:flex flex-col gap-3 sticky top-24 self-start shrink-0">
 
             <!-- Mini profile preview card -->
             <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
@@ -88,7 +88,7 @@
                   ? `background-image:url(${form.banner_url});background-size:cover;background-position:center`
                   : `background:linear-gradient(135deg,${form.accent_color}33,${form.accent_color}0a)`">
                 <span v-if="userStore.primaryFursona?.species?.length"
-                  class="absolute bottom-1 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold backdrop-blur-sm"
+                  class="absolute bottom-1 right-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold backdrop-blur-xs"
                   style="background:rgba(0,0,0,0.55);color:#fff">
                   <span class="leading-none">🐾</span>
                   {{ primarySpeciesLabel }}
@@ -113,14 +113,14 @@
               <div class="px-4 py-3 border-b border-brand-border">
                 <h4 class="text-[11px] font-bold text-white/55 uppercase tracking-widest">{{ langStore.t.sectionsHeader }}</h4>
               </div>
-              <nav class="p-2 space-y-0.5">
+              <nav class="p-2 stack-y-0.5">
                 <button
                   v-for="sec in sections.filter(s => s.id !== 'sec-ad')" :key="sec.id"
                   @click="openSec(sec.id)"
                   class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all group"
                   :class="openSection === sec.id ? 'text-white' : 'text-white/55 hover:text-white'"
                   :style="openSection === sec.id ? `background:${sec.color}20;box-shadow:inset 0 0 0 1px ${sec.color}30` : ''">
-                  <div class="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 transition-all"
+                  <div class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-all"
                     :style="openSection === sec.id ? `background:${sec.color}30` : ''"
                     :class="openSection !== sec.id ? 'group-hover:bg-white/5' : ''">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -130,7 +130,7 @@
                     </svg>
                   </div>
                   <span class="flex-1 text-left">{{ sec.label }}</span>
-                  <div v-if="openSection === sec.id" class="w-1.5 h-1.5 rounded-full flex-shrink-0" :style="`background:${sec.color}`"></div>
+                  <div v-if="openSection === sec.id" class="w-1.5 h-1.5 rounded-full shrink-0" :style="`background:${sec.color}`"></div>
                 </button>
               </nav>
             </div>
@@ -138,7 +138,7 @@
           </aside>
 
           <!-- ── Form column ─────────────────────────────────────────── -->
-          <div class="flex-1 min-w-0 space-y-5">
+          <div class="flex-1 min-w-0 stack-y-5">
 
             <!-- Page header -->
             <div class="flex items-center gap-4">
@@ -153,20 +153,20 @@
               <button
                 v-for="sec in sections.filter(s => s.id !== 'sec-ad')" :key="sec.id"
                 @click="openSec(sec.id)"
-                class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all"
+                class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all"
                 :class="openSection === sec.id ? 'text-white border-transparent shadow-lg' : 'text-white/55 border-brand-border hover:border-white/20 bg-brand-card'"
                 :style="openSection === sec.id ? `background:${sec.color};box-shadow:0 4px 12px ${sec.color}44` : ''">
                 {{ sec.label }}
               </button>
             </div>
 
-            <form @submit.prevent="handleSubmit" class="space-y-5">
+            <form @submit.prevent="handleSubmit" class="stack-y-5">
 
               <!-- ── § 1: ОСНОВНОЕ + МЕДИА ──────────────────────────── -->
               <section v-show="openSection === sections[0].id" :id="sections[0].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl scroll-mt-28">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3 rounded-t-3xl"
                   :style="`background:linear-gradient(90deg,${sections[0].color}0c 0%,transparent 100%)`">
-                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[0].color}1a`">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${sections[0].color}1a`">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[0].color}`">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[0].iconPath"/>
                     </svg>
@@ -200,7 +200,7 @@
                       <!-- hover / drag-over overlay -->
                       <div class="absolute inset-0 transition-all duration-200 flex flex-col items-center justify-center gap-2 pointer-events-none"
                         :class="bannerDragOver ? 'bg-sky-500/20 opacity-100' : 'bg-black/50 opacity-0 group-hover:opacity-100'">
-                        <div class="w-10 h-10 rounded-2xl border flex items-center justify-center backdrop-blur transition-all"
+                        <div class="w-10 h-10 rounded-2xl border flex items-center justify-center backdrop-blur-sm transition-all"
                           :class="bannerDragOver ? 'bg-sky-500/30 border-sky-400/60' : 'bg-white/15 border-white/25'">
                           <svg v-if="!bannerDragOver" class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -219,7 +219,7 @@
                         <Transition name="fade">
                           <button v-if="form.banner_url" type="button"
                             @click.stop="reopenCrop('banner')"
-                            class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-black/55 border border-white/20 backdrop-blur text-white/75 hover:text-white hover:bg-black/80 transition-all text-[10px] font-bold">
+                            class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-black/55 border border-white/20 backdrop-blur-sm text-white/75 hover:text-white hover:bg-black/80 transition-all text-[10px] font-bold">
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
                             {{ langStore.t.settingsProfileCropBtn }}
                           </button>
@@ -227,7 +227,7 @@
                         <Transition name="fade">
                           <button v-if="form.banner_url" type="button"
                             @click.stop="form.banner_url = ''"
-                            class="w-7 h-7 rounded-full bg-black/55 border border-white/20 backdrop-blur flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-all">
+                            class="w-7 h-7 rounded-full bg-black/55 border border-white/20 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-all">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                           </button>
                         </Transition>
@@ -252,7 +252,7 @@
                           </div>
                         </div>
                         <!-- GIF badge (animated avatar has a WebM counterpart) -->
-                        <span v-if="form.avatar_video_url" class="absolute -top-1 -left-1 text-[9px] font-extrabold bg-brand-accent text-white px-1.5 py-0.5 rounded-full border border-brand-card shadow z-10">GIF</span>
+                        <span v-if="form.avatar_video_url" class="absolute -top-1 -left-1 text-[9px] font-extrabold bg-brand-accent text-white px-1.5 py-0.5 rounded-full border border-brand-card shadow-sm z-10">GIF</span>
                         <!-- hover / drag overlay -->
                         <div class="absolute inset-0 rounded-full transition-all duration-200 flex items-center justify-center"
                           :class="avatarDragOver ? 'bg-sky-500/45 opacity-100' : 'bg-black/55 opacity-0 group-hover/av:opacity-100'">
@@ -280,7 +280,7 @@
                       <p class="font-bold text-white text-sm max-md:truncate">{{ form.display_name || authStore.user?.username }}</p>
                       <p class="text-xs text-white/70 max-md:truncate">@{{ authStore.user?.username }}</p>
                     </div>
-                    <div class="flex flex-wrap gap-2 text-xs text-white/35 font-semibold max-md:flex-nowrap max-md:gap-1.5 max-md:[&>*]:flex-1 max-md:[&>*]:justify-center max-md:[&>*]:min-w-0 max-md:[&>*]:py-2 max-md:[&>*]:px-1.5 max-md:[&>*]:text-center max-md:[&>*]:leading-tight max-[379px]:[&>*>svg]:hidden">
+                    <div class="flex flex-wrap gap-2 text-xs text-white/35 font-semibold max-md:flex-nowrap max-md:gap-1.5 max-md:*:flex-1 max-md:*:justify-center max-md:*:min-w-0 max-md:*:py-2 max-md:*:px-1.5 max-md:*:text-center max-md:*:leading-tight max-[379px]:[&>*>svg]:hidden">
                       <button type="button" @click="avatarFileRef?.click()"
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-border hover:border-brand-accent/50 hover:text-white transition-all">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -367,7 +367,7 @@
                   </div>
 
                   <!-- ── Поля формы ── -->
-                  <div class="p-6 space-y-5 border-t border-brand-border/40">
+                  <div class="p-6 stack-y-5 border-t border-brand-border/40">
 
                   <!-- Username -->
                   <div>
@@ -385,8 +385,8 @@
                         type="text"
                         maxlength="30"
                         :placeholder="langStore.t.settingsProfileUsernamePlaceholder"
-                        class="field-input !pl-8"
-                        :class="usernameError ? '!border-brand-error/60 !ring-brand-error/20' : ''"
+                        class="field-input pl-8!"
+                        :class="usernameError ? 'border-brand-error/60! ring-brand-error/20!' : ''"
                         autocomplete="username"
                         spellcheck="false"
                       />
@@ -462,7 +462,7 @@
                       </div>
                       <div class="flex gap-2">
                         <input v-model="form.pronouns" type="text" maxlength="30" :placeholder="langStore.t.pronounsFieldPlaceholder" class="field-input flex-1"/>
-                        <div class="flex gap-1.5 items-center flex-shrink-0">
+                        <div class="flex gap-1.5 items-center shrink-0">
                           <button v-for="p in pronounPresets" :key="p" type="button" @click="form.pronouns = p"
                             class="px-2 py-1 rounded-xl text-[10px] font-bold transition-all border"
                             :class="form.pronouns === p ? 'border-transparent text-white' : 'bg-brand-bg border-brand-border text-white/55 hover:text-white'"
@@ -499,7 +499,7 @@
                   </div>
 
                   <!-- Soon — куда собираешься -->
-                  <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-3">
+                  <div class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl stack-y-3">
                     <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
                       <BIcon name="Sparkles" class="w-3.5 h-3.5" style="color:#fbbf24" />
                       {{ langStore.t.soonSectionTitle }}
@@ -510,7 +510,7 @@
 
                     <!-- Current selection chip -->
                     <div v-if="mySoonEvent" class="flex items-center gap-3 p-3 rounded-xl border border-brand-border bg-brand-card">
-                      <div class="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 bg-brand-accent/15 flex items-center justify-center">
+                      <div class="w-9 h-9 rounded-xl overflow-hidden shrink-0 bg-brand-accent/15 flex items-center justify-center">
                         <img v-if="mySoonEvent.banner_url" :src="mySoonEvent.banner_url" class="w-full h-full object-cover" />
                         <BIcon v-else name="Sparkles" class="w-4 h-4 text-brand-accent" />
                       </div>
@@ -519,7 +519,7 @@
                         <p class="text-xs text-white/55 truncate">{{ mySoonEvent.group?.name }} · {{ formatSoonDate(mySoonEvent.starts_at) }}</p>
                       </div>
                       <button type="button" @click="clearSoonSelection" :disabled="soonSaving"
-                        class="w-7 h-7 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-white/10 transition-all flex-shrink-0 disabled:opacity-40">
+                        class="w-7 h-7 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-white/10 transition-all shrink-0 disabled:opacity-40">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                       </button>
                     </div>
@@ -541,7 +541,7 @@
                           <button v-for="ev in filteredSoonEvents" :key="ev.id" type="button"
                             class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-all"
                             @mousedown.prevent="selectSoonEvent(ev)">
-                            <div class="w-7 h-7 rounded-lg overflow-hidden flex-shrink-0 bg-brand-accent/15 flex items-center justify-center">
+                            <div class="w-7 h-7 rounded-lg overflow-hidden shrink-0 bg-brand-accent/15 flex items-center justify-center">
                               <img v-if="ev.banner_url" :src="ev.banner_url" class="w-full h-full object-cover" />
                               <BIcon v-else name="CalendarDays" class="w-3.5 h-3.5 text-brand-accent" />
                             </div>
@@ -565,14 +565,14 @@
               <section v-show="openSection === sections[1].id" :id="sections[1].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                   :style="`background:linear-gradient(90deg,${sections[1].color}0c 0%,transparent 100%)`">
-                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[1].color}1a`">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${sections[1].color}1a`">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[1].color}`">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[1].iconPath"/>
                     </svg>
                   </div>
                   <h2 class="font-bold text-white text-sm">{{ sections[1].label }}</h2>
                 </div>
-                <div class="p-6 space-y-5">
+                <div class="p-6 stack-y-5">
 
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <!-- Website -->
@@ -582,7 +582,7 @@
                         <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/35 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
                         </svg>
-                        <input v-model="form.website" type="url" placeholder="https://yoursite.com" class="field-input !pl-10"/>
+                        <input v-model="form.website" type="url" placeholder="https://yoursite.com" class="field-input pl-10!"/>
                       </div>
                     </div>
 
@@ -595,7 +595,7 @@
                           v-model="countrySearch"
                           type="text"
                           :placeholder="langStore.t.settingsProfileSelectCountryPlaceholder"
-                          class="field-input !pl-10 pr-8"
+                          class="field-input pl-10! pr-8"
                           @focus="countryDropOpen = true"
                           @blur="onCountryBlur"
                           @input="countryDropOpen = true"
@@ -629,7 +629,7 @@
                           v-model="citySearch"
                           type="text"
                           :placeholder="langStore.t.settingsProfileTypeOrSelectPlaceholder"
-                          class="field-input !pl-10"
+                          class="field-input pl-10!"
                           @focus="cityDropOpen = filteredCities.length > 0"
                           @blur="onCityBlur"
                           @input="cityDropOpen = filteredCities.length > 0; form.location = citySearch"
@@ -669,7 +669,7 @@
 
                   <!-- Partner picker (shown when applicable status) -->
                   <Transition name="fade">
-                    <div v-if="showPartnerPicker" class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl space-y-3">
+                    <div v-if="showPartnerPicker" class="p-4 bg-brand-bg/60 border border-brand-border/60 rounded-2xl stack-y-3">
                       <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#ec4899">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
@@ -679,8 +679,8 @@
 
                       <!-- Current partner chip -->
                       <div v-if="selectedPartner" class="flex items-center gap-3 p-3 rounded-xl border border-brand-border bg-brand-card">
-                        <img v-if="selectedPartner.avatar_url" :src="selectedPartner.avatar_url" class="w-8 h-8 rounded-full object-cover flex-shrink-0"/>
-                        <div v-else class="w-8 h-8 rounded-full bg-brand-border flex items-center justify-center text-xs font-bold text-white/55 flex-shrink-0">
+                        <img v-if="selectedPartner.avatar_url" :src="selectedPartner.avatar_url" class="w-8 h-8 rounded-full object-cover shrink-0"/>
+                        <div v-else class="w-8 h-8 rounded-full bg-brand-border flex items-center justify-center text-xs font-bold text-white/55 shrink-0">
                           {{ (selectedPartner.display_name ?? selectedPartner.username)[0].toUpperCase() }}
                         </div>
                         <div class="flex-1 min-w-0">
@@ -688,7 +688,7 @@
                           <p class="text-xs text-white/55 truncate">@{{ selectedPartner.username }}</p>
                         </div>
                         <button type="button" @click="clearPartner"
-                          class="w-7 h-7 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-white/10 transition-all flex-shrink-0">
+                          class="w-7 h-7 flex items-center justify-center rounded-xl text-white/55 hover:text-white hover:bg-white/10 transition-all shrink-0">
                           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                       </div>
@@ -709,8 +709,8 @@
                             <button v-for="u in filteredPartners" :key="u.id" type="button"
                               class="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-all"
                               @mousedown.prevent="selectPartner(u)">
-                              <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover flex-shrink-0"/>
-                              <div v-else class="w-7 h-7 rounded-full bg-brand-border flex items-center justify-center text-xs font-bold text-white/55 flex-shrink-0">
+                              <img v-if="u.avatar_url" :src="u.avatar_url" class="w-7 h-7 rounded-full object-cover shrink-0"/>
+                              <div v-else class="w-7 h-7 rounded-full bg-brand-border flex items-center justify-center text-xs font-bold text-white/55 shrink-0">
                                 {{ (u.display_name ?? u.username)[0].toUpperCase() }}
                               </div>
                               <div class="flex-1 min-w-0 text-left">
@@ -729,9 +729,9 @@
                   <!-- ── Соцсети ────────────────────────────── -->
                   <div class="pt-2">
                     <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-3">{{ langStore.t.socialNetworksLabel }}</label>
-                    <div class="space-y-2">
+                    <div class="stack-y-2">
                       <div v-for="net in socialNetworks" :key="net.key" class="flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 border"
+                        <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border"
                           :style="{ backgroundColor: net.color + '22', borderColor: net.color + '44' }">
                           <span class="w-5 h-5 flex items-center justify-center" :style="{ color: net.color }" v-html="net.svg"></span>
                         </div>
@@ -756,7 +756,7 @@
                       <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400/70 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                       </svg>
-                      <input v-model="form.donate_url" type="url" :placeholder="langStore.t.settingsProfileDonatePlaceholder" class="field-input !pl-10"/>
+                      <input v-model="form.donate_url" type="url" :placeholder="langStore.t.settingsProfileDonatePlaceholder" class="field-input pl-10!"/>
                     </div>
                     <p class="text-[11px] text-white/35 mt-1.5">{{ langStore.t.settingsProfileDonateHint }}</p>
                   </div>
@@ -770,14 +770,14 @@
                 :class="sectionHighlight === sections[2].id ? 'section-link-flash' : ''">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                   :style="`background:linear-gradient(90deg,${sections[2].color}0c 0%,transparent 100%)`">
-                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[2].color}1a`">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${sections[2].color}1a`">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[2].color}`">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[2].iconPath"/>
                     </svg>
                   </div>
                   <h2 class="font-bold text-white text-sm">{{ sections[2].label }}</h2>
                 </div>
-                <div class="p-6 space-y-5">
+                <div class="p-6 stack-y-5">
                   <FursonaSettings ref="fursonaRef" @dirty="fursonaIsDirty = $event" />
                   <FursuitSettings />
                 </div>
@@ -789,7 +789,7 @@
               <section v-show="openSection === sections[3].id" :id="sections[3].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                   :style="`background:linear-gradient(90deg,${sections[3].color}0c 0%,transparent 100%)`">
-                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[3].color}1a`">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${sections[3].color}1a`">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[3].color}`">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[3].iconPath"/>
                     </svg>
@@ -807,7 +807,7 @@
                   </router-link>
                 </div>
 
-                <div class="p-6 space-y-7">
+                <div class="p-6 stack-y-7">
 
                   <!-- ── Theme selector (Lite+) ────────────────────────── -->
                   <div>
@@ -817,7 +817,7 @@
                     </div>
                     <div v-if="['free'].includes(authStore.user?.subscription_tier ?? 'free')"
                       class="rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 flex items-center gap-3">
-                      <BIcon name="Lock" class="w-4 h-4 text-amber-400 flex-shrink-0" />
+                      <BIcon name="Lock" class="w-4 h-4 text-amber-400 shrink-0" />
                       <p class="text-xs text-white/55">{{ langStore.t.profileThemeLiteSub }} <router-link to="/subscriptions" class="text-amber-400 hover:underline font-bold">Lite</router-link>.</p>
                     </div>
                     <div v-else class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -849,7 +849,7 @@
                     </div>
                     <div v-if="!['pro', 'business'].includes(authStore.user?.subscription_tier ?? 'free')"
                       class="rounded-2xl border border-brand-accent/20 bg-brand-accent/5 px-4 py-3 flex items-center gap-3">
-                      <BIcon name="Lock" class="w-4 h-4 text-brand-accent flex-shrink-0" />
+                      <BIcon name="Lock" class="w-4 h-4 text-brand-accent shrink-0" />
                       <p class="text-xs text-white/55">{{ langStore.t.avatarFrameProSub }} <router-link to="/subscriptions" class="text-brand-accent hover:underline font-bold">Pro</router-link>.</p>
                     </div>
                     <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -860,12 +860,12 @@
                           ? 'border-brand-accent bg-brand-accent/10'
                           : 'border-brand-border hover:border-white/20 bg-brand-bg'">
                         <!-- Mini avatar preview with frame -->
-                        <div class="w-10 h-10 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm flex-shrink-0"
+                        <div class="w-10 h-10 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm shrink-0"
                           :class="frame.style || ''">
                           B
                         </div>
                         <span class="text-xs font-bold text-white">{{ frame.label }}</span>
-                        <BIcon v-if="form.profile_frame === id && !form.profile_frame_id" name="Check" class="w-4 h-4 text-brand-accent ml-auto flex-shrink-0" />
+                        <BIcon v-if="form.profile_frame === id && !form.profile_frame_id" name="Check" class="w-4 h-4 text-brand-accent ml-auto shrink-0" />
                       </button>
                     </div>
                   </div>
@@ -884,14 +884,14 @@
                           ? 'border-brand-accent bg-brand-accent/10'
                           : 'border-brand-border hover:border-white/20 bg-brand-bg'">
                         <button type="button" class="flex items-center gap-3" @click="form.profile_frame_id = mf.id; form.profile_frame = ''">
-                          <div class="relative w-10 h-10 flex-shrink-0">
+                          <div class="relative w-10 h-10 shrink-0">
                             <div class="w-10 h-10 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm overflow-hidden">
                               <img v-if="authStore.avatarUrl" :src="authStore.avatarUrl" class="w-full h-full object-cover" />
                             </div>
                             <AvatarFrameOverlay :frame="{ image_url: mf.image_url, offset_x: mf.offset_x, offset_y: mf.offset_y, scale: mf.scale, rotation: mf.rotation }" />
                           </div>
                           <span class="text-xs font-bold text-white truncate">{{ mf.name }}</span>
-                          <BIcon v-if="form.profile_frame_id === mf.id" name="Check" class="w-4 h-4 text-brand-accent ml-auto flex-shrink-0" />
+                          <BIcon v-if="form.profile_frame_id === mf.id" name="Check" class="w-4 h-4 text-brand-accent ml-auto shrink-0" />
                         </button>
                         <button type="button" @click="openFrameCalibration(mf)" class="text-[10px] font-bold text-white/40 hover:text-brand-accent text-left">
                           {{ langStore.t.avatarFrameCustomizeBtn }}
@@ -902,7 +902,7 @@
 
                   <!-- ── Calibration editor modal ──────────────────────────── -->
                   <div v-if="calibratingFrame" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" @click.self="calibratingFrame = null">
-                    <div class="bg-brand-card border border-brand-border rounded-3xl w-full max-w-sm p-5 space-y-4">
+                    <div class="bg-brand-card border border-brand-border rounded-3xl w-full max-w-sm p-5 stack-y-4">
                       <div class="flex items-center justify-between">
                         <h3 class="text-sm font-black text-white">{{ langStore.t.avatarFrameCalibrateTitle }}</h3>
                         <button @click="calibratingFrame = null" class="w-8 h-8 rounded-full bg-white/8 hover:bg-white/15 flex items-center justify-center">
@@ -931,7 +931,7 @@
                     </div>
                     <div v-if="!['pro', 'business'].includes(authStore.user?.subscription_tier ?? 'free')"
                       class="rounded-2xl border border-brand-accent/20 bg-brand-accent/5 px-4 py-3 flex items-center gap-3">
-                      <BIcon name="Lock" class="w-4 h-4 text-brand-accent flex-shrink-0" />
+                      <BIcon name="Lock" class="w-4 h-4 text-brand-accent shrink-0" />
                       <p class="text-xs text-white/55">{{ langStore.t.customBgPro }} <router-link to="/subscriptions" class="text-brand-accent hover:underline font-bold">Pro</router-link>.</p>
                     </div>
                     <div v-else>
@@ -962,7 +962,7 @@
               <section v-show="openSection === sections[4].id" :id="sections[4].id" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                   :style="`background:linear-gradient(90deg,${sections[4].color}0c 0%,transparent 100%)`">
-                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${sections[4].color}1a`">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${sections[4].color}1a`">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${sections[4].color}`">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="sections[4].iconPath"/>
                     </svg>
@@ -973,7 +973,7 @@
                   </div>
                 </div>
 
-                <div class="p-6 space-y-6">
+                <div class="p-6 stack-y-6">
 
                   <!-- Loading state -->
                   <div v-if="isLoadingVerification" class="flex items-center justify-center py-8">
@@ -991,7 +991,7 @@
                       <div v-if="verificationStatus.verificationType && verTypeMeta[verificationStatus.verificationType]"
                         class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl border text-xs font-bold"
                         :class="verTypeMeta[verificationStatus.verificationType].badgeCls">
-                        <img :src="verTypeIconUrl(verificationStatus.verificationType)" :alt="verificationStatus.verificationType" class="w-4 h-4 rounded-sm flex-shrink-0 object-cover" />
+                        <img :src="verTypeIconUrl(verificationStatus.verificationType)" :alt="verificationStatus.verificationType" class="w-4 h-4 rounded-xs shrink-0 object-cover" />
                         {{ verTypeMeta[verificationStatus.verificationType].label }}
                       </div>
                       <div class="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold">
@@ -1011,15 +1011,15 @@
                       <div v-if="verificationStatus.latestRequest.verification_type && verTypeMeta[verificationStatus.latestRequest.verification_type]"
                         class="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold"
                         :class="verTypeMeta[verificationStatus.latestRequest.verification_type].badgeCls">
-                        <img :src="verTypeIconUrl(verificationStatus.latestRequest.verification_type)" :alt="verificationStatus.latestRequest.verification_type" class="w-4 h-4 rounded-sm flex-shrink-0 object-cover" />
+                        <img :src="verTypeIconUrl(verificationStatus.latestRequest.verification_type)" :alt="verificationStatus.latestRequest.verification_type" class="w-4 h-4 rounded-xs shrink-0 object-cover" />
                         {{ verTypeMeta[verificationStatus.latestRequest.verification_type].label }}
                       </div>
                     </div>
 
                     <!-- Rejected request -->
-                    <div v-else-if="verificationStatus?.latestRequest?.status === 'rejected'" class="space-y-4">
+                    <div v-else-if="verificationStatus?.latestRequest?.status === 'rejected'" class="stack-y-4">
                       <div class="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-4 flex items-start gap-3">
-                        <BIcon name="AlertTriangle" class="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
+                        <BIcon name="AlertTriangle" class="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
                         <div>
                           <p class="text-sm font-bold text-rose-400">{{ langStore.t.verRejected }}</p>
                           <p v-if="verificationStatus.latestRequest.reason" class="text-xs text-white/55 mt-1">{{ verificationStatus.latestRequest.reason }}</p>
@@ -1034,7 +1034,7 @@
                       <!-- Profile completeness -->
                       <div>
                         <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
-                          <BIcon name="UserCheck" class="w-4 h-4 text-blue-400 flex-shrink-0" />
+                          <BIcon name="UserCheck" class="w-4 h-4 text-blue-400 shrink-0" />
                           {{ langStore.t.verProfileCompletenessTitle }}
                           <span class="ml-auto text-xs font-bold"
                             :class="localCompleteness.canSubmit ? 'text-emerald-400' : 'text-amber-400'">
@@ -1043,20 +1043,20 @@
                         </h3>
                         <div class="w-full h-3 bg-brand-bg rounded-full overflow-hidden border border-brand-border">
                           <div class="h-full rounded-full transition-all duration-500"
-                            :class="localCompleteness.canSubmit ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : 'bg-gradient-to-r from-amber-500 to-amber-400'"
+                            :class="localCompleteness.canSubmit ? 'bg-linear-to-r/srgb from-emerald-500 to-emerald-400' : 'bg-linear-to-r/srgb from-amber-500 to-amber-400'"
                             :style="`width: ${localCompleteness.percentage}%`"></div>
                         </div>
                         <div class="grid grid-cols-2 gap-2 mt-3">
                           <div v-for="field in completenessFields" :key="field.key"
                             class="flex items-center gap-2 px-3 py-2 rounded-xl border text-xs"
                             :class="field.met ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-400' : 'bg-brand-bg border-brand-border text-white/40'">
-                            <BIcon v-if="field.met" name="Check" class="w-3.5 h-3.5 flex-shrink-0" />
-                            <BIcon v-else name="X" class="w-3.5 h-3.5 flex-shrink-0" />
+                            <BIcon v-if="field.met" name="Check" class="w-3.5 h-3.5 shrink-0" />
+                            <BIcon v-else name="X" class="w-3.5 h-3.5 shrink-0" />
                             {{ field.label }}
                           </div>
                         </div>
                         <p v-if="!localCompleteness.canSubmit" class="text-xs text-amber-400/80 mt-2 flex items-center gap-1.5">
-                          <BIcon name="Info" class="w-3.5 h-3.5 flex-shrink-0" />
+                          <BIcon name="Info" class="w-3.5 h-3.5 shrink-0" />
                           {{ langStore.t.verFillProfile80 }}
                         </p>
                       </div>
@@ -1064,14 +1064,14 @@
                       <!-- Criteria checklist -->
                       <div>
                         <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
-                          <BIcon name="ClipboardList" class="w-4 h-4 text-blue-400 flex-shrink-0" />
+                          <BIcon name="ClipboardList" class="w-4 h-4 text-blue-400 shrink-0" />
                           {{ langStore.t.verCriteriaTitle }}
                         </h3>
-                        <div class="space-y-2">
+                        <div class="stack-y-2">
                           <div v-for="(cr, i) in verCriteriaList" :key="i"
                             class="flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all"
                             :class="cr.met ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-brand-bg border-brand-border'">
-                            <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+                            <div class="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
                               :class="cr.met ? 'bg-emerald-500/20' : 'bg-white/5'">
                               <BIcon v-if="cr.met" name="Check" class="w-3.5 h-3.5 text-emerald-400" />
                               <BIcon v-else name="X" class="w-3.5 h-3.5 text-white/30" />
@@ -1085,7 +1085,7 @@
                       <!-- Verification type selector -->
                       <div>
                         <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
-                          <BIcon name="BadgeCheck" class="w-4 h-4 text-purple-400 flex-shrink-0" />
+                          <BIcon name="BadgeCheck" class="w-4 h-4 text-purple-400 shrink-0" />
                           {{ langStore.t.verTypeTitle }}
                         </h3>
                         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -1094,8 +1094,8 @@
                             class="relative rounded-2xl overflow-hidden transition-all text-left aspect-square"
                             :class="selectedVerType === vt.id ? `ring-4 ${vt.ringSel} shadow-lg` : 'hover:brightness-110'">
                             <img :src="verTypeIconUrl(vt.id)" :alt="vt.id" class="absolute inset-0 w-full h-full object-cover" />
-                            <div class="absolute inset-x-0 top-0 bg-gradient-to-b from-black/80 via-black/30 to-transparent px-3 pt-2.5 pb-6">
-                              <span class="font-extrabold text-sm sm:text-base text-white leading-tight drop-shadow">
+                            <div class="absolute inset-x-0 top-0 bg-linear-to-b/srgb from-black/80 via-black/30 to-transparent px-3 pt-2.5 pb-6">
+                              <span class="font-extrabold text-sm sm:text-base sm:leading-6 text-white leading-tight drop-shadow-sm">
                                 {{ langStore.t[vt.titleKey] }}
                               </span>
                             </div>
@@ -1111,7 +1111,7 @@
                       <!-- Evidence upload -->
                       <div v-if="selectedVerType">
                         <h3 class="font-bold text-sm text-white mb-3 flex items-center gap-2">
-                          <BIcon name="ImagePlus" class="w-4 h-4 text-blue-400 flex-shrink-0" />
+                          <BIcon name="ImagePlus" class="w-4 h-4 text-blue-400 shrink-0" />
                           {{ langStore.t.verEvidenceTitle }}
                           <span v-if="selectedVerType !== 'popular'" class="text-[10px] text-white/40 font-normal ml-1">{{ evidenceUrls.length }}/5</span>
                         </h3>
@@ -1133,7 +1133,7 @@
                         </div>
 
                         <!-- Social links section (popular type) -->
-                        <div v-if="selectedVerType === 'popular'" class="mb-3 space-y-2">
+                        <div v-if="selectedVerType === 'popular'" class="mb-3 stack-y-2">
                           <p class="text-xs font-bold text-white/70 flex items-center gap-1.5">
                             <BIcon name="Link" class="w-3.5 h-3.5 text-blue-400" />
                             {{ langStore.t.verLinksTitle }}
@@ -1141,9 +1141,9 @@
                           <div v-for="(_, i) in popularLinks" :key="i" class="flex items-center gap-2">
                             <input v-model="popularLinks[i]" type="url"
                               :placeholder="langStore.t.verLinkPlaceholder"
-                              class="flex-1 px-3 py-2 rounded-xl bg-brand-bg border border-brand-border text-sm text-white placeholder-white/30 focus:outline-none focus:border-blue-500/60 transition-colors" />
+                              class="flex-1 px-3 py-2 rounded-xl bg-brand-bg border border-brand-border text-sm text-white placeholder-white/30 focus:outline-hidden focus:border-blue-500/60 transition-colors" />
                             <button v-if="popularLinks.length > 1" type="button" @click="popularLinks.splice(i, 1)"
-                              class="w-7 h-7 rounded-lg bg-white/5 hover:bg-rose-500/15 text-white/40 hover:text-rose-400 flex items-center justify-center transition-colors flex-shrink-0">
+                              class="w-7 h-7 rounded-lg bg-white/5 hover:bg-rose-500/15 text-white/40 hover:text-rose-400 flex items-center justify-center transition-colors shrink-0">
                               <BIcon name="X" class="w-3.5 h-3.5" />
                             </button>
                           </div>
@@ -1172,7 +1172,7 @@
                           </p>
                           <textarea v-model="evidenceText" maxlength="2000" rows="3"
                             :placeholder="langStore.t.verEvidenceTextPlaceholder"
-                            class="w-full px-3 py-2 rounded-xl bg-brand-bg border border-brand-border text-sm text-white placeholder-white/30 focus:outline-none focus:border-blue-500/60 transition-colors resize-none"></textarea>
+                            class="w-full px-3 py-2 rounded-xl bg-brand-bg border border-brand-border text-sm text-white placeholder-white/30 focus:outline-hidden focus:border-blue-500/60 transition-colors resize-none"></textarea>
                           <p class="text-[10px] text-white/40 mt-1">{{ langStore.t.verEvidenceTextHint }}</p>
                         </div>
                       </div>
@@ -1180,7 +1180,7 @@
                       <!-- Anti-AI notice -->
                       <div class="bg-rose-500/5 border border-rose-500/15 rounded-2xl px-4 py-3">
                         <p class="text-xs text-white/55 flex items-start gap-1.5">
-                          <BIcon name="AlertTriangle" class="w-3.5 h-3.5 text-rose-400 flex-shrink-0 mt-0.5" />
+                          <BIcon name="AlertTriangle" class="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
                           <span><span class="text-rose-400 font-bold">{{ langStore.t.verImportantLabel }}</span>{{ langStore.t.verAntiAINotice }}</span>
                         </p>
                       </div>
@@ -1203,14 +1203,14 @@
               <!-- ── § PRIVACY: Приватность ─────────────────────────── -->
               <section v-show="openSection === 'sec-privacy'" id="sec-privacy" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3" style="background:linear-gradient(90deg,rgba(236,72,153,0.07) 0%,transparent 100%)">
-                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(236,72,153,0.15)">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:rgba(236,72,153,0.15)">
                     <svg class="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0-1.104.896-2 2-2s2 .896 2 2-.896 2-2 2-2-.896-2-2zm-6 0a6 6 0 1112 0 6 6 0 01-12 0zM3 21c0-3.314 4.03-6 9-6s9 2.686 9 6"/>
                     </svg>
                   </div>
                   <h2 class="font-bold text-white text-sm">{{ langStore.t.secPrivacy }}</h2>
                 </div>
-                <div class="p-6 space-y-3">
+                <div class="p-6 stack-y-3">
                   <div>
                     <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.birthdayVisibilityLabel }}</label>
                     <p class="text-[11px] text-white/35 mb-3">{{ langStore.t.birthdayVisibilityHint }}</p>
@@ -1249,12 +1249,12 @@
               <!-- ── § INTERESTS: тег-профиль по лайкам/дизлайкам ───── -->
               <section v-show="openSection === 'sec-interests'" id="sec-interests" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3" style="background:linear-gradient(90deg,rgba(52,211,153,0.07) 0%,transparent 100%)">
-                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(52,211,153,0.15)">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:rgba(52,211,153,0.15)">
                     <BIcon name="Heart" class="w-4 h-4 text-emerald-400" />
                   </div>
                   <h2 class="font-bold text-white text-sm">{{ langStore.t.secInterests }}</h2>
                 </div>
-                <div class="p-6 space-y-6">
+                <div class="p-6 stack-y-6">
                   <!-- Declared favourites, picked at onboarding, editable here -->
                   <div>
                     <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-2">{{ langStore.t.interestsPickTitle }}</label>
@@ -1268,7 +1268,7 @@
                           @change="updateFavorite(cat.key, ($event.target as HTMLInputElement).value)"
                           :placeholder="cat.placeholder"
                           maxlength="80"
-                          class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent/50 transition-colors" />
+                          class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-hidden focus:border-brand-accent/50 transition-colors" />
                       </div>
                     </div>
                   </div>
@@ -1279,7 +1279,7 @@
                   <div>
                     <div class="flex items-center justify-between mb-1">
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.interestsCloudTitle }}</label>
-                      <span v-if="tagInsights?.unlocked && tagInsights.tags.length > 0" class="flex items-center gap-3 text-[10px] font-bold flex-shrink-0">
+                      <span v-if="tagInsights?.unlocked && tagInsights.tags.length > 0" class="flex items-center gap-3 text-[10px] font-bold shrink-0">
                         <span class="flex items-center gap-1 text-emerald-400"><span class="w-2 h-2 rounded-full bg-emerald-400"></span>{{ langStore.t.interestsLikedLabel }}</span>
                         <span class="flex items-center gap-1 text-rose-400"><span class="w-2 h-2 rounded-full bg-rose-400"></span>{{ langStore.t.interestsDislikedLabel }}</span>
                       </span>
@@ -1322,7 +1322,7 @@
               <!-- ── § LANG: Язык интерфейса ───────────────────────── -->
               <section v-show="openSection === 'sec-lang'" id="sec-lang" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                 <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3" style="background:linear-gradient(90deg,rgba(245,158,11,0.07) 0%,transparent 100%)">
-                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(245,158,11,0.18)">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:rgba(245,158,11,0.18)">
                     <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
                     </svg>
@@ -1342,7 +1342,7 @@
                       :class="langStore.currentLang === opt.code
                         ? 'border-amber-400 bg-amber-400/10 shadow-lg shadow-amber-400/10'
                         : 'border-brand-border bg-brand-bg/40 hover:border-amber-400/40 hover:bg-amber-400/5'">
-                      <span :class="`fi fi-${opt.fi} rounded-sm`" style="font-size:2rem"></span>
+                      <span :class="`fi fi-${opt.fi} rounded-xs`" style="font-size:2rem"></span>
                       <span class="text-sm font-bold" :class="langStore.currentLang === opt.code ? 'text-amber-400' : 'text-white/70'">{{ opt.name }}</span>
                       <div v-if="langStore.currentLang === opt.code" class="w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center">
                         <BIcon name="Check" class="w-3 h-3 text-black" />
@@ -1358,7 +1358,7 @@
                     <!-- Toggle row -->
                     <div class="flex items-center justify-between p-4">
                       <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(245,158,11,0.12)">
+                        <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:rgba(245,158,11,0.12)">
                           <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
                           </svg>
@@ -1372,11 +1372,11 @@
                       <button
                         type="button"
                         @click="langStore.setAutoTranslate(!langStore.autoTranslateEnabled)"
-                        class="relative flex-shrink-0 w-11 h-6 rounded-full transition-colors duration-200"
+                        class="relative shrink-0 w-11 h-6 rounded-full transition-colors duration-200"
                         :class="langStore.autoTranslateEnabled ? 'bg-amber-400' : 'bg-white/15'"
                       >
                         <span
-                          class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-200"
+                          class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all duration-200"
                           :class="langStore.autoTranslateEnabled ? 'left-[22px]' : 'left-0.5'"
                         />
                       </button>
@@ -1396,7 +1396,7 @@
                               ? 'border-amber-400 bg-amber-400/10'
                               : 'border-brand-border bg-brand-bg/40 hover:border-amber-400/30'"
                           >
-                            <span :class="`fi fi-${opt.fi} rounded-sm`" style="font-size:1.25rem"></span>
+                            <span :class="`fi fi-${opt.fi} rounded-xs`" style="font-size:1.25rem"></span>
                             <span class="text-[11px] font-bold" :class="langStore.autoTranslateLang === opt.code ? 'text-amber-400' : 'text-white/50'">{{ opt.code }}</span>
                           </button>
                         </div>
@@ -1430,14 +1430,14 @@
               <!-- ── § 7: DANGER ZONE ────────────────────────────────── -->
               <section v-show="openSection === 'sec-danger'" id="sec-danger" class="bg-brand-card border border-red-500/30 rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                 <div class="px-6 py-4 border-b border-red-500/20 flex items-center gap-3" style="background:linear-gradient(90deg,rgba(239,68,68,0.07) 0%,transparent 100%)">
-                  <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(239,68,68,0.15)">
+                  <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:rgba(239,68,68,0.15)">
                     <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                     </svg>
                   </div>
                   <h2 class="font-bold text-white text-sm">{{ langStore.t.secAccount }}</h2>
                 </div>
-                <div class="p-6 space-y-4">
+                <div class="p-6 stack-y-4">
                   <div class="p-4 rounded-2xl border border-red-500/25 bg-red-500/5">
                     <h3 class="text-sm font-bold text-red-400 mb-1">{{ langStore.t.deleteAccountTitle }}</h3>
                     <p class="text-xs text-white/50 mb-4">{{ langStore.t.deleteAccountDesc }}</p>
@@ -1476,20 +1476,20 @@
   <!-- ── Delete Account Modal ─────────────────────────────────────────── -->
   <Teleport to="body">
     <Transition name="modal-fade">
-      <div v-if="showDeleteModal" class="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" @click.self="showDeleteModal = false">
+      <div v-if="showDeleteModal" class="fixed inset-0 z-300 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs" @click.self="showDeleteModal = false">
         <div class="bg-brand-card border border-red-500/40 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
           <div class="px-6 py-4 border-b border-red-500/20 flex items-center gap-3" style="background:linear-gradient(90deg,rgba(239,68,68,0.1) 0%,transparent 100%)">
-            <div class="w-8 h-8 rounded-xl bg-red-500/20 flex items-center justify-center flex-shrink-0">
+            <div class="w-8 h-8 rounded-xl bg-red-500/20 flex items-center justify-center shrink-0">
               <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
             </div>
             <h3 class="font-bold text-white text-sm">{{ langStore.t.deleteAccountModalTitle }}</h3>
           </div>
-          <div class="p-6 space-y-4">
+          <div class="p-6 stack-y-4">
             <p class="text-sm text-white/70">{{ langStore.t.deleteModalDescPre }} <strong class="text-red-400">{{ langStore.t.deleteModalDescHighlight }}</strong>{{ langStore.t.deleteModalDescPost }}</p>
             <div>
               <label class="block text-xs font-bold text-white/55 uppercase tracking-wider mb-2">{{ langStore.t.deleteConfirmLabel }} <span class="text-red-400 font-black">{{ langStore.t.deleteWord }}</span></label>
               <input v-model="deleteConfirmText" type="text" :placeholder="langStore.t.deleteWord"
-                class="w-full bg-brand-bg border border-red-500/30 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-none focus:border-red-500/60 transition-all"
+                class="w-full bg-brand-bg border border-red-500/30 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-red-500/60 transition-all"
                 @keydown.enter="handleDeleteAccount" />
             </div>
             <div class="flex gap-3 pt-1">
@@ -2965,9 +2965,10 @@ function openSec(id: string) {
 </script>
 
 <style scoped>
+@reference "../assets/style.css";
 /* stylelint-disable */
 .field-input {
-  @apply w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/50 focus:outline-none transition-all;
+  @apply w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/50 focus:outline-hidden transition-all;
 }
 
 /* ── Accordion section transition ───────────────────────────────────────── */

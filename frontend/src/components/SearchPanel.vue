@@ -9,11 +9,11 @@
         v-model="searchQuery"
         @input="onSearchInput"
         placeholder="Search posts..."
-        class="block w-full pl-10 pr-3 py-2.5 border border-brand-border rounded-xl leading-5 bg-brand-bg text-brand-offwhite placeholder-brand-muted focus:outline-none focus:ring-1 focus:ring-brand-accent focus:border-brand-accent text-sm transition-all"
+        class="block w-full pl-10 pr-3 py-2.5 border border-brand-border rounded-xl leading-5 bg-brand-bg text-brand-offwhite placeholder-brand-muted focus:outline-hidden focus:ring-1 focus:ring-brand-accent focus:border-brand-accent text-sm transition-all"
       />
     </div>
 
-    <div class="categories-scroll flex overflow-x-auto space-x-2 pb-2 hide-scrollbar">
+    <div class="categories-scroll flex overflow-x-auto stack-x-2 pb-2 hide-scrollbar">
       <button
         v-for="category in categories"
         :key="category.id"

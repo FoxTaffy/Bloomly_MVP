@@ -14,13 +14,13 @@
           <!-- ── Left panel: conversation list ──────────────────────────── -->
           <div :class="[
             'relative z-10 flex-col overflow-hidden transition-all duration-200',
-            'w-full sm:w-[300px] md:w-[340px] xl:w-[380px] flex-shrink-0',
-            'bg-brand-card/90 backdrop-blur-xl border-r border-white/[0.06]',
+            'w-full sm:w-[300px] md:w-[340px] xl:w-[380px] shrink-0',
+            'bg-brand-card/90 backdrop-blur-xl border-r border-white/6',
             activeConvId ? 'hidden sm:flex' : 'flex',
           ]">
-            <div class="flex items-center justify-between px-4 py-3.5 flex-shrink-0">
+            <div class="flex items-center justify-between px-4 py-3.5 shrink-0">
               <div class="flex items-center gap-2.5 min-w-0">
-                <div class="w-8 h-8 rounded-2xl bg-gradient-to-br from-brand-accent to-brand-purple/80 flex items-center justify-center shadow-lg shadow-brand-accent/25">
+                <div class="w-8 h-8 rounded-2xl bg-linear-to-br/srgb from-brand-accent to-brand-purple/80 flex items-center justify-center shadow-lg shadow-brand-accent/25">
                   <BIcon name="MessageCircle" class="w-4 h-4 text-white" />
                 </div>
                 <div class="min-w-0">
@@ -75,7 +75,7 @@
                 <div class="relative w-28 h-28 rounded-[32px] bg-brand-card/80 border border-white/10 flex items-center justify-center shadow-2xl">
                   <BIcon name="MessageCircle" class="w-14 h-14 text-brand-accent" />
                 </div>
-                <div class="absolute -bottom-1 -right-1 w-9 h-9 rounded-2xl bg-gradient-to-br from-brand-accent to-brand-purple flex items-center justify-center shadow-lg">
+                <div class="absolute -bottom-1 -right-1 w-9 h-9 rounded-2xl bg-linear-to-br/srgb from-brand-accent to-brand-purple flex items-center justify-center shadow-lg">
                   <BIcon name="Sparkles" class="w-4 h-4 text-white" />
                 </div>
               </div>
@@ -105,12 +105,12 @@
       <Transition name="fade">
         <div
           v-if="showNewDm"
-          class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          class="fixed inset-0 z-200 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
           @click.self="closeNewDm"
         >
           <div class="bg-brand-card border border-white/10 rounded-[28px] w-full max-w-md shadow-2xl overflow-hidden">
-            <div class="flex items-center gap-3 px-5 pt-5 pb-4 border-b border-white/[0.06]">
-              <div class="w-9 h-9 rounded-2xl bg-gradient-to-br from-brand-accent/30 to-brand-purple/20 border border-brand-accent/20 flex items-center justify-center flex-shrink-0">
+            <div class="flex items-center gap-3 px-5 pt-5 pb-4 border-b border-white/6">
+              <div class="w-9 h-9 rounded-2xl bg-linear-to-br/srgb from-brand-accent/30 to-brand-purple/20 border border-brand-accent/20 flex items-center justify-center shrink-0">
                 <BIcon name="SquarePen" class="w-4 h-4 text-brand-accent" />
               </div>
               <div class="flex-1 min-w-0">
@@ -127,19 +127,19 @@
 
             <div class="p-4">
               <div class="flex items-center gap-2 bg-brand-bg border border-white/8 rounded-2xl px-4 py-2.5 mb-3 focus-within:border-brand-accent/60 transition-colors">
-                <BIcon name="Search" class="w-4 h-4 text-white/45 flex-shrink-0" />
+                <BIcon name="Search" class="w-4 h-4 text-white/45 shrink-0" />
                 <input
                   v-model="dmSearch"
                   type="text"
                   :placeholder="langStore.t.dmSearchPlaceholder"
-                  class="bg-transparent text-sm text-white placeholder-brand-muted outline-none flex-1"
+                  class="bg-transparent text-sm text-white placeholder-brand-muted outline-hidden flex-1"
                   @input="onDmSearch"
                   autofocus
                 />
-                <BIcon v-if="dmLoading" name="Loader2" class="w-4 h-4 text-white/45 animate-spin flex-shrink-0" />
+                <BIcon v-if="dmLoading" name="Loader2" class="w-4 h-4 text-white/45 animate-spin shrink-0" />
               </div>
 
-              <div class="max-h-72 overflow-y-auto space-y-0.5">
+              <div class="max-h-72 overflow-y-auto stack-y-0.5">
                 <div v-if="!dmResults.length && dmSearch && !dmLoading" class="text-center text-white/45 text-sm py-8">
                   <BIcon name="UserX" class="w-8 h-8 mx-auto mb-2 opacity-40" />
                   {{ langStore.t.dmNoResults }}
@@ -161,7 +161,7 @@
                     @click="startDm(u.id)"
                     class="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-brand-bg transition-colors text-left group"
                   >
-                    <div class="relative flex-shrink-0">
+                    <div class="relative shrink-0">
                       <img
                         v-if="u.avatar_url"
                         :src="u.avatar_url"
@@ -185,7 +185,7 @@
                         {{ u.online ? langStore.t.onlineStatus : '@' + u.username }}
                       </p>
                     </div>
-                    <BIcon name="MessageCircle" class="w-4 h-4 text-brand-accent opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                    <BIcon name="MessageCircle" class="w-4 h-4 text-brand-accent opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                   </button>
                 </template>
 
@@ -195,7 +195,7 @@
                   @click="startDm(u.id)"
                   class="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-brand-bg transition-colors text-left group"
                 >
-                  <div class="relative flex-shrink-0">
+                  <div class="relative shrink-0">
                     <img
                       v-if="u.avatar_url"
                       :src="u.avatar_url"
@@ -213,7 +213,7 @@
                     <p class="text-sm font-semibold text-white truncate">{{ u.display_name || u.username }}</p>
                     <p class="text-xs text-white/40 truncate">@{{ u.username }}</p>
                   </div>
-                  <BIcon name="MessageCircle" class="w-4 h-4 text-brand-accent opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                  <BIcon name="MessageCircle" class="w-4 h-4 text-brand-accent opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                 </button>
               </div>
             </div>

@@ -206,7 +206,7 @@ const sections = computed(() => [
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="stack-y-6">
 
     <!-- Toast -->
     <Transition name="toast">
@@ -234,7 +234,7 @@ const sections = computed(() => [
       <div class="divide-y divide-brand-border/30">
         <div v-for="item in sec.items" :key="item.key"
           class="flex items-center gap-4 px-5 py-4">
-          <div class="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center bg-brand-card/60">
+          <div class="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center bg-brand-card/60">
             <BIcon :name="item.icon" class="w-4 h-4 text-white/50" />
           </div>
           <div class="flex-1 min-w-0">
@@ -252,13 +252,13 @@ const sections = computed(() => [
             v-if="!item.soon"
             type="button"
             @click="toggleProp(item.key as any)"
-            class="flex-shrink-0 relative w-11 h-6 rounded-full transition-all duration-200"
+            class="shrink-0 relative w-11 h-6 rounded-full transition-all duration-200"
             :class="(s as any)[item.key] ? 'bg-brand-accent' : 'bg-brand-border'"
           >
             <div class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200"
               :class="(s as any)[item.key] ? 'left-[calc(100%-1.375rem)]' : 'left-0.5'" />
           </button>
-          <span v-else class="flex-shrink-0 w-11 h-6 rounded-full bg-brand-border/40 flex items-center justify-center">
+          <span v-else class="shrink-0 w-11 h-6 rounded-full bg-brand-border/40 flex items-center justify-center">
             <BIcon name="Lock" class="w-3 h-3 text-white/25" />
           </span>
         </div>
@@ -271,13 +271,13 @@ const sections = computed(() => [
           <div class="flex-1">
             <label class="block text-xs font-bold text-white/50 mb-1.5">С</label>
             <input v-model="s.quietFrom" type="time" @change="saveQuietHours"
-              class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-brand-accent/60 [color-scheme:dark]" />
+              class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white outline-hidden focus:border-brand-accent/60 scheme-dark" />
           </div>
           <div class="text-white/30 mt-5">—</div>
           <div class="flex-1">
             <label class="block text-xs font-bold text-white/50 mb-1.5">До</label>
             <input v-model="s.quietTo" type="time" @change="saveQuietHours"
-              class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white outline-none focus:border-brand-accent/60 [color-scheme:dark]" />
+              class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white outline-hidden focus:border-brand-accent/60 scheme-dark" />
           </div>
         </div>
       </div>
@@ -291,7 +291,7 @@ const sections = computed(() => [
         </div>
         <h3 class="font-extrabold text-white text-sm">Заглушённые слова</h3>
       </div>
-      <div class="p-5 space-y-3">
+      <div class="p-5 stack-y-3">
         <p class="text-xs text-white/40">Посты и комментарии с этими словами будут скрыты из ленты</p>
 
         <!-- Add keyword -->
@@ -299,7 +299,7 @@ const sections = computed(() => [
           <input
             v-model="newKeyword"
             type="text"
-            class="flex-1 bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 outline-none focus:border-brand-accent/60"
+            class="flex-1 bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 outline-hidden focus:border-brand-accent/60"
             placeholder="Добавить слово или фразу…"
             @keydown.enter="addKeyword"
           />
@@ -326,9 +326,9 @@ const sections = computed(() => [
 
     <!-- Scheduled posts -->
     <div class="relative overflow-hidden bg-brand-bg border border-brand-border rounded-2xl p-6">
-      <div class="absolute inset-0 bg-gradient-to-r from-brand-purple/8 to-brand-accent/5 pointer-events-none" />
+      <div class="absolute inset-0 bg-linear-to-r/srgb from-brand-purple/8 to-brand-accent/5 pointer-events-none" />
       <div class="relative flex items-start gap-4">
-        <div class="w-12 h-12 rounded-2xl bg-brand-purple/15 flex items-center justify-center flex-shrink-0">
+        <div class="w-12 h-12 rounded-2xl bg-brand-purple/15 flex items-center justify-center shrink-0">
           <BIcon name="CalendarClock" class="w-6 h-6 text-brand-purple" />
         </div>
         <div class="flex-1 min-w-0">

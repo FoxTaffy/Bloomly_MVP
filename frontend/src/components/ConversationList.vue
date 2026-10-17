@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col h-full bg-transparent w-full overflow-hidden">
     <!-- Header -->
-    <div v-if="!hideHeader" class="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] flex-shrink-0">
+    <div v-if="!hideHeader" class="flex items-center justify-between px-4 py-3 border-b border-white/6 shrink-0">
       <h2 class="font-bold text-white text-base">{{ langStore.t.messagesPageTitle }}</h2>
       <div class="flex items-center gap-1">
         <button @click="showCreateGroup = true"
@@ -18,11 +18,11 @@
     </div>
 
     <!-- Search -->
-    <div class="px-3 pt-1 pb-0 flex-shrink-0">
-      <div class="flex items-center gap-2 bg-black/20 rounded-2xl px-3 py-2 border border-white/[0.06] focus-within:border-brand-accent/50 focus-within:bg-black/30 transition-colors">
-        <BIcon name="Search" class="w-3.5 h-3.5 text-white/40 flex-shrink-0" />
+    <div class="px-3 pt-1 pb-0 shrink-0">
+      <div class="flex items-center gap-2 bg-black/20 rounded-2xl px-3 py-2 border border-white/6 focus-within:border-brand-accent/50 focus-within:bg-black/30 transition-colors">
+        <BIcon name="Search" class="w-3.5 h-3.5 text-white/40 shrink-0" />
         <input v-model="search" type="text" :placeholder="langStore.t.convSearchPlaceholder"
-          class="bg-transparent text-sm text-white placeholder-white/30 outline-none w-full" />
+          class="bg-transparent text-sm text-white placeholder-white/30 outline-hidden w-full" />
         <button v-if="search" @click="search = ''" class="text-white/40 hover:text-white transition-colors">
           <BIcon name="X" class="w-3.5 h-3.5" />
         </button>
@@ -30,7 +30,7 @@
     </div>
 
     <!-- Category tabs -->
-    <div v-if="!props.convFilter || props.convFilter === 'all'" class="flex-shrink-0 px-3 pt-2.5 pb-2 overflow-x-auto">
+    <div v-if="!props.convFilter || props.convFilter === 'all'" class="shrink-0 px-3 pt-2.5 pb-2 overflow-x-auto">
       <div class="flex items-center gap-1 w-max bg-black/20 p-1 rounded-2xl">
         <button @click="activeCategory = 'personal'"
           :class="['flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-150',
@@ -71,43 +71,43 @@
       <!-- ═══ Conversations (personal / groups / community / customer) tabs ═══ -->
         <template v-if="store.loading">
           <div v-for="i in 5" :key="i" class="flex items-center gap-3 px-3 py-3">
-            <div class="w-10 h-10 rounded-full bg-brand-border animate-pulse flex-shrink-0" />
-            <div class="flex-1 space-y-2">
+            <div class="w-10 h-10 rounded-full bg-brand-border animate-pulse shrink-0" />
+            <div class="flex-1 stack-y-2">
               <div class="h-3 bg-brand-border rounded-full animate-pulse w-28" />
               <div class="h-2.5 bg-brand-border rounded-full animate-pulse w-40" />
             </div>
           </div>
         </template>
         <div v-else-if="!filtered.length && activeCategory === 'community'" class="flex flex-col items-center justify-center h-40 text-white/55 text-sm gap-2">
-          <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-accent/20 to-brand-accent/5 border border-brand-accent/20 flex items-center justify-center mb-1">
+          <div class="w-14 h-14 rounded-2xl bg-linear-to-br/srgb from-brand-accent/20 to-brand-accent/5 border border-brand-accent/20 flex items-center justify-center mb-1">
             <BIcon name="Globe" class="w-6 h-6 text-brand-accent/60" />
           </div>
           <span>{{ langStore.t.convNoGroups }}</span>
           <button @click="router.push('/groups')" class="text-brand-accent text-xs hover:underline mt-1">{{ langStore.t.findGroupsLink }}</button>
         </div>
         <div v-else-if="!filtered.length" class="flex flex-col items-center justify-center h-40 text-white/55 text-sm gap-2">
-          <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-accent/20 to-brand-accent/5 border border-brand-accent/20 flex items-center justify-center mb-1">
+          <div class="w-14 h-14 rounded-2xl bg-linear-to-br/srgb from-brand-accent/20 to-brand-accent/5 border border-brand-accent/20 flex items-center justify-center mb-1">
             <BIcon name="MessageCircle" class="w-6 h-6 text-brand-accent/60" />
           </div>
           <span>{{ search ? langStore.t.convNothingFound : langStore.t.emptyNoConvs }}</span>
         </div>
         <button v-for="conv in filtered" :key="conv.id"
         :class="['w-[calc(100%-12px)] mx-1.5 mb-0.5 flex items-center gap-3 px-2.5 py-2.5 rounded-2xl transition-all duration-200 text-left relative group/conv',
-          activeId === conv.id ? 'bg-brand-accent/15 ring-1 ring-brand-accent/25' : 'hover:bg-white/[0.04]']"
+          activeId === conv.id ? 'bg-brand-accent/15 ring-1 ring-brand-accent/25' : 'hover:bg-white/4']"
         @click="$emit('select', conv.id)">
         <!-- Customer badge -->
         <div v-if="conv.my_participant?.label === 'customer'"
-          class="absolute top-2 right-24 flex items-center gap-0.5 bg-gradient-to-r from-brand-purple/20 to-brand-pink/20 border border-brand-pink/40 rounded-full px-1.5 py-0.5 pointer-events-none">
+          class="absolute top-2 right-24 flex items-center gap-0.5 bg-linear-to-r/srgb from-brand-purple/20 to-brand-pink/20 border border-brand-pink/40 rounded-full px-1.5 py-0.5 pointer-events-none">
           <BIcon name="Briefcase" class="w-2.5 h-2.5 text-brand-pink" />
           <span class="text-[9px] font-bold text-brand-pink">{{ langStore.t.tabOrders }}</span>
         </div>
         <!-- Avatar -->
-        <div class="relative flex-shrink-0">
+        <div class="relative shrink-0">
           <!-- Group DM (personal thread with a group): the group's own avatar/globe fallback -->
           <template v-if="conv.type === 'community'">
             <img v-if="conv.avatar_url" :src="conv.avatar_url" :alt="conv.name ?? 'Группа'"
               class="w-11 h-11 rounded-xl object-cover ring-2 ring-brand-border group-hover/conv:ring-brand-accent/40 transition-all" @error="onAvatarError" />
-            <div v-else class="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-accent/25 to-brand-accent/10 ring-2 ring-brand-accent/30 flex items-center justify-center">
+            <div v-else class="w-11 h-11 rounded-xl bg-linear-to-br/srgb from-brand-accent/25 to-brand-accent/10 ring-2 ring-brand-accent/30 flex items-center justify-center">
               <BIcon name="Globe" class="w-5 h-5 text-brand-accent" />
             </div>
           </template>
@@ -129,14 +129,14 @@
           <template v-else>
             <!-- Notes: self-DM (no other participants) -->
             <template v-if="isNotes(conv)">
-              <div class="w-11 h-11 rounded-full bg-gradient-to-br from-brand-accent/25 to-brand-accent/10 ring-2 ring-brand-accent/30 flex items-center justify-center">
+              <div class="w-11 h-11 rounded-full bg-linear-to-br/srgb from-brand-accent/25 to-brand-accent/10 ring-2 ring-brand-accent/30 flex items-center justify-center">
                 <BIcon name="StickyNote" class="w-5 h-5 text-brand-accent" />
               </div>
             </template>
             <template v-else>
               <img v-if="getOther(conv)?.avatar_url" :src="getOther(conv)!.avatar_url!" :alt="getOther(conv)?.username"
                 class="w-11 h-11 rounded-full object-cover ring-2 ring-white/10 group-hover/conv:ring-brand-accent/40 transition-all" @error="onAvatarError" />
-              <div v-else class="w-11 h-11 rounded-full bg-gradient-to-br from-brand-accent/30 to-brand-accent/10 ring-2 ring-white/10 group-hover/conv:ring-brand-accent/40 transition-all flex items-center justify-center text-brand-accent font-bold text-sm">
+              <div v-else class="w-11 h-11 rounded-full bg-linear-to-br/srgb from-brand-accent/30 to-brand-accent/10 ring-2 ring-white/10 group-hover/conv:ring-brand-accent/40 transition-all flex items-center justify-center text-brand-accent font-bold text-sm">
                 {{ (getOther(conv)?.display_name || getOther(conv)?.username || '?')[0].toUpperCase() }}
               </div>
               <span
@@ -153,11 +153,11 @@
               <span :class="['font-semibold text-sm truncate', isUnread(conv) ? 'text-white' : 'text-brand-offwhite/80']">
                   {{ conv.type === 'community' ? (conv.name || 'Группа') : conv.is_group ? (conv.name || langStore.t.tabGroups) : isNotes(conv) ? langStore.t.notesBtn : (getOther(conv)?.display_name || getOther(conv)?.username || '?') }}
               </span>
-              <BIcon v-if="conv.type === 'community'" name="Globe" class="w-3 h-3 text-white/55 flex-shrink-0" />
-              <BIcon v-else-if="conv.is_group" name="Users" class="w-3 h-3 text-white/55 flex-shrink-0" />
-              <span v-if="conv.type !== 'community' && !conv.is_group && (getOther(conv) as any)?.deceased_at" title="Светлая память" class="flex-shrink-0">🪦</span>
+              <BIcon v-if="conv.type === 'community'" name="Globe" class="w-3 h-3 text-white/55 shrink-0" />
+              <BIcon v-else-if="conv.is_group" name="Users" class="w-3 h-3 text-white/55 shrink-0" />
+              <span v-if="conv.type !== 'community' && !conv.is_group && (getOther(conv) as any)?.deceased_at" title="Светлая память" class="shrink-0">🪦</span>
             </div>
-            <span class="flex items-center gap-1 flex-shrink-0">
+            <span class="flex items-center gap-1 shrink-0">
               <BIcon v-if="store.isConvMuted(conv)" name="BellOff" class="w-3 h-3 text-white/35" title="Уведомления выключены" />
               <BIcon v-else-if="conv.my_participant?.sound_muted" name="VolumeX" class="w-3 h-3 text-white/35" title="Звук выключен" />
               <span class="text-[10px] text-white/45 tabular-nums">{{ formatTime(conv.last_message?.created_at || conv.updated_at) }}</span>
@@ -175,7 +175,7 @@
             <p v-else :class="['text-xs truncate flex items-center gap-1 min-w-0', isUnread(conv) ? 'text-brand-offwhite/80 font-medium' : 'text-white/45']">
               <BIcon v-if="conv.type !== 'community' && !conv.is_group && conv.last_message?.sender_id === auth.user?.id"
                 :name="isLastReadByOther(conv) ? 'CheckCheck' : 'Check'"
-                :class="['w-3.5 h-3.5 flex-shrink-0', isLastReadByOther(conv) ? 'text-brand-accent' : 'text-white/40']" />
+                :class="['w-3.5 h-3.5 shrink-0', isLastReadByOther(conv) ? 'text-brand-accent' : 'text-white/40']" />
               <span class="truncate">
                 <template v-if="conv.is_group && conv.last_message">
                   <span class="text-brand-accent/80">{{ conv.last_message.sender?.display_name || conv.last_message.sender?.username }}: </span>
@@ -188,13 +188,13 @@
             </p>
             <!-- Unread count pill -->
             <span v-if="conv.unread_count"
-              class="flex-shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full bg-brand-accent text-white text-[10px] font-bold flex items-center justify-center">
+              class="shrink-0 min-w-[18px] h-[18px] px-1.5 rounded-full bg-brand-accent text-white text-[10px] font-bold flex items-center justify-center">
               {{ conv.unread_count > 99 ? '99+' : conv.unread_count }}
             </span>
           </div>
         </div>
         <!-- Context menu trigger -->
-        <div class="relative flex-shrink-0 opacity-0 group-hover/conv:opacity-100 transition-opacity" @click.stop>
+        <div class="relative shrink-0 opacity-0 group-hover/conv:opacity-100 transition-opacity" @click.stop>
           <button @click.stop="menuConvId = menuConvId === conv.id ? null : conv.id; muteMenuFor = null; muteDurationPickerFor = null"
             class="p-1.5 rounded-xl hover:bg-white/10 text-white/40 hover:text-white/80 transition-colors">
             <BIcon name="MoreVertical" class="w-3.5 h-3.5" />
@@ -209,7 +209,7 @@
               <button v-if="conv.group_id"
                 @click.stop="router.push('/groups/' + conv.group_id); menuConvId = null"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
-                <BIcon name="Users2" class="w-4 h-4 text-white/55 flex-shrink-0" />
+                <BIcon name="Users2" class="w-4 h-4 text-white/55 shrink-0" />
                 {{ langStore.t.contextGoToGroup }}
               </button>
               <div class="border-t border-brand-border my-1" />
@@ -219,7 +219,7 @@
             <router-link v-if="conv.type !== 'community' && !conv.is_group && getOther(conv)?.username"
               :to="'/profile/' + getOther(conv)!.username" @click.stop="menuConvId = null"
               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
-              <BIcon name="User" class="w-4 h-4 text-white/55 flex-shrink-0" />
+              <BIcon name="User" class="w-4 h-4 text-white/55 shrink-0" />
               {{ langStore.t.contextProfile }}
             </router-link>
 
@@ -227,14 +227,14 @@
               @click.stop="setLabel(conv, conv.my_participant?.label === 'customer' ? 'default' : 'customer')"
               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-brand-bg transition-colors text-left"
               :class="conv.my_participant?.label === 'customer' ? 'text-brand-accent' : 'text-brand-offwhite'">
-              <BIcon :name="conv.my_participant?.label === 'customer' ? 'BriefcaseOff' : 'Briefcase'" class="w-4 h-4 text-white/55 flex-shrink-0" />
+              <BIcon :name="conv.my_participant?.label === 'customer' ? 'BriefcaseOff' : 'Briefcase'" class="w-4 h-4 text-white/55 shrink-0" />
               {{ conv.my_participant?.label === 'customer' ? langStore.t.removeLabelOrder : langStore.t.setLabelOrder }}
             </button>
 
             <button
               @click.stop="toggleArchive(conv); menuConvId = null"
               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
-              <BIcon :name="conv.my_participant?.archived ? 'ArchiveX' : 'Archive'" class="w-4 h-4 text-white/55 flex-shrink-0" />
+              <BIcon :name="conv.my_participant?.archived ? 'ArchiveX' : 'Archive'" class="w-4 h-4 text-white/55 shrink-0" />
               {{ conv.my_participant?.archived ? langStore.t.contextUnarchive : langStore.t.contextArchive }}
             </button>
 
@@ -254,31 +254,31 @@
             <template v-else-if="muteMenuFor === conv.id">
               <button v-if="store.isConvMuted(conv)" @click.stop="unmute(conv)"
                 class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
-                <BIcon name="Bell" class="w-4 h-4 text-white/55 flex-shrink-0" /> Включить уведомления
+                <BIcon name="Bell" class="w-4 h-4 text-white/55 shrink-0" /> Включить уведомления
               </button>
               <template v-else>
                 <button @click.stop="toggleSoundMute(conv)"
                   class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
-                  <BIcon :name="conv.my_participant?.sound_muted ? 'Volume2' : 'VolumeX'" class="w-4 h-4 text-white/55 flex-shrink-0" />
+                  <BIcon :name="conv.my_participant?.sound_muted ? 'Volume2' : 'VolumeX'" class="w-4 h-4 text-white/55 shrink-0" />
                   {{ conv.my_participant?.sound_muted ? 'Включить звук' : 'Выключить звук' }}
                 </button>
                 <button @click.stop="muteFor(conv, 4 * 3600_000)"
                   class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
-                  <BIcon name="BellOff" class="w-4 h-4 text-white/55 flex-shrink-0" /> Выключить на 4 часа
+                  <BIcon name="BellOff" class="w-4 h-4 text-white/55 shrink-0" /> Выключить на 4 часа
                 </button>
                 <button @click.stop="muteDurationPickerFor = conv.id"
                   class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
-                  <BIcon name="Clock" class="w-4 h-4 text-white/55 flex-shrink-0" /> Выключить на время…
+                  <BIcon name="Clock" class="w-4 h-4 text-white/55 shrink-0" /> Выключить на время…
                 </button>
                 <button @click.stop="muteForever(conv)"
                   class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-error hover:bg-brand-error/8 transition-colors text-left">
-                  <BIcon name="BellOff" class="w-4 h-4 flex-shrink-0" /> Выключить уведомления
+                  <BIcon name="BellOff" class="w-4 h-4 shrink-0" /> Выключить уведомления
                 </button>
               </template>
             </template>
             <button v-else @click.stop="muteMenuFor = conv.id"
               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-offwhite hover:bg-brand-bg transition-colors text-left">
-              <BIcon :name="store.isConvMuted(conv) ? 'BellOff' : 'Bell'" class="w-4 h-4 text-white/55 flex-shrink-0" /> Уведомления
+              <BIcon :name="store.isConvMuted(conv) ? 'BellOff' : 'Bell'" class="w-4 h-4 text-white/55 shrink-0" /> Уведомления
             </button>
 
             <div class="border-t border-brand-border my-1" />
@@ -286,7 +286,7 @@
             <button
               @click.stop="deleteConvTarget = conv; menuConvId = null"
               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-brand-error hover:bg-brand-error/8 transition-colors text-left">
-              <BIcon name="Trash2" class="w-4 h-4 flex-shrink-0" />
+              <BIcon name="Trash2" class="w-4 h-4 shrink-0" />
               {{ conv.is_group ? langStore.t.contextLeaveGroup : langStore.t.contextDeleteConv }}
             </button>
           </div>
@@ -295,10 +295,10 @@
     </div>
 
     <!-- Notes + Archive bar (hidden on groups-only tab) -->
-    <div v-if="props.convFilter !== 'groups'" class="flex-shrink-0 border-t border-white/[0.06] px-2 py-1.5 flex items-center gap-1 bg-black/10">
+    <div v-if="props.convFilter !== 'groups'" class="shrink-0 border-t border-white/6 px-2 py-1.5 flex items-center gap-1 bg-black/10">
       <button @click="openNotes"
         class="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl text-left hover:bg-brand-bg transition-colors group">
-        <div class="w-7 h-7 rounded-full bg-brand-accent/15 flex items-center justify-center flex-shrink-0">
+        <div class="w-7 h-7 rounded-full bg-brand-accent/15 flex items-center justify-center shrink-0">
           <BIcon name="StickyNote" class="w-3.5 h-3.5 text-brand-accent" />
         </div>
         <span class="text-sm text-brand-offwhite/80 group-hover:text-white transition-colors truncate">{{ langStore.t.notesBtn }}</span>
@@ -310,7 +310,7 @@
         <span v-if="archivedCount" class="ml-0.5 text-[10px] bg-brand-accent/20 text-brand-accent rounded-full px-1.5 py-0.5 font-semibold">{{ archivedCount }}</span>
       </button>
       <button @click="showCreateGroup = true"
-        class="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 text-white/55 hover:text-brand-accent hover:bg-brand-bg transition-colors"
+        class="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 text-white/55 hover:text-brand-accent hover:bg-brand-bg transition-colors"
         :title="langStore.t.createGroupBtn">
         <BIcon name="Plus" class="w-4 h-4" />
       </button>
@@ -323,7 +323,7 @@
           <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden" style="max-height:94vh">
 
             <!-- ── Step indicator bar ── -->
-            <div class="relative flex-shrink-0">
+            <div class="relative shrink-0">
               <!-- Progress line -->
               <div class="h-[3px] bg-brand-bg">
                 <div class="h-full bg-brand-accent transition-all duration-500 ease-in-out" :style="`width:${createStep === 1 ? 50 : 100}%`" />
@@ -350,11 +350,11 @@
 
                 <!-- Banner -->
                 <div class="relative w-full h-36 cursor-pointer group" @click="cgBannerRef?.click()">
-                  <div class="absolute inset-0 bg-gradient-to-br from-brand-accent/25 via-purple-900/35 to-brand-bg overflow-hidden">
+                  <div class="absolute inset-0 bg-linear-to-br/srgb from-brand-accent/25 via-purple-900/35 to-brand-bg overflow-hidden">
                     <img v-if="cgBanner" :src="cgBanner" class="w-full h-full object-cover" />
                   </div>
                   <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/25">
-                    <div class="flex items-center gap-2 bg-black/60 px-3 py-1.5 rounded-xl text-xs text-white backdrop-blur-sm">
+                    <div class="flex items-center gap-2 bg-black/60 px-3 py-1.5 rounded-xl text-xs text-white backdrop-blur-xs">
                       <BIcon name="Image" class="w-3.5 h-3.5" />
                       {{ cgBanner ? langStore.t.changeBanner : langStore.t.addBanner }}
                     </div>
@@ -396,14 +396,14 @@
                   <div class="bg-brand-bg rounded-2xl px-4 py-3 border border-brand-border/60 focus-within:border-brand-accent/50 transition-colors">
                     <label class="block text-[10px] text-brand-accent font-bold uppercase tracking-widest mb-1.5">{{ langStore.t.groupNameLabel }}</label>
                     <input v-model="groupName" type="text" maxlength="100" :placeholder="langStore.t.groupNamePlaceholder"
-                      class="w-full bg-transparent text-sm text-white placeholder-white/25 outline-none" />
+                      class="w-full bg-transparent text-sm text-white placeholder-white/25 outline-hidden" />
                   </div>
                   <p class="text-[10px] text-white/30 mt-2 px-1">{{ langStore.t.groupNameHint }}</p>
                 </div>
               </div>
 
               <!-- ── Step 2: Add participants ── -->
-              <div v-else key="step2" class="flex-1 overflow-y-auto min-h-0 p-5 space-y-3">
+              <div v-else key="step2" class="flex-1 overflow-y-auto min-h-0 p-5 stack-y-3">
                 <!-- Selected chips -->
                 <div v-if="selectedUsers.length" class="flex flex-wrap gap-1.5">
                   <div v-for="u in selectedUsers" :key="u.id"
@@ -421,19 +421,19 @@
 
                 <!-- Search input -->
                 <div class="flex items-center gap-2 bg-brand-bg border border-brand-border rounded-2xl px-3 py-2.5 focus-within:border-brand-accent/50 transition-colors">
-                  <BIcon name="Search" class="w-3.5 h-3.5 text-white/45 flex-shrink-0" />
+                  <BIcon name="Search" class="w-3.5 h-3.5 text-white/45 shrink-0" />
                   <input v-model="userSearch" type="text" :placeholder="langStore.t.userSearchPlaceholder"
-                    class="bg-transparent text-sm text-white placeholder-white/30 outline-none w-full" @input="searchUsers" />
+                    class="bg-transparent text-sm text-white placeholder-white/30 outline-hidden w-full" @input="searchUsers" />
                   <button v-if="userSearch" @click="userSearch = ''; searchResults = []" class="text-white/30 hover:text-white">
                     <BIcon name="X" class="w-3.5 h-3.5" />
                   </button>
                 </div>
 
                 <!-- Search results -->
-                <div v-if="searchResults.length" class="space-y-0.5">
+                <div v-if="searchResults.length" class="stack-y-0.5">
                   <button v-for="u in searchResults" :key="u.id" @click="toggleUser(u)"
                     class="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-brand-bg transition-colors text-left">
-                    <div class="relative flex-shrink-0">
+                    <div class="relative shrink-0">
                       <img v-if="u.avatar_url" :src="u.avatar_url" class="w-9 h-9 rounded-full object-cover" @error="onAvatarError" />
                       <div v-else class="w-9 h-9 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xs font-bold">
                         {{ (u.display_name || u.username || '?')[0].toUpperCase() }}
@@ -444,7 +444,7 @@
                       <p class="text-xs text-white/40 truncate">@{{ u.username }}</p>
                     </div>
                     <!-- Checkbox -->
-                    <div :class="['w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all',
+                    <div :class="['w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
                       isSelected(u.id) ? 'bg-brand-accent border-brand-accent' : 'border-brand-border hover:border-brand-accent/50']">
                       <BIcon v-if="isSelected(u.id)" name="Check" class="w-3 h-3 text-white" />
                     </div>
@@ -459,7 +459,7 @@
             </Transition>
 
             <!-- ── Footer ── -->
-            <div class="flex items-center gap-2.5 px-5 py-4 border-t border-brand-border flex-shrink-0">
+            <div class="flex items-center gap-2.5 px-5 py-4 border-t border-brand-border shrink-0">
               <button
                 @click="createStep === 1 ? closeCreateGroup() : (createStep = 1)"
                 class="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl border border-brand-border text-sm text-white/55 hover:text-white hover:bg-brand-bg/60 transition-all">
@@ -493,10 +493,10 @@
     <!-- Delete / Leave confirmation modal -->
     <Teleport to="body">
       <Transition name="fade">
-        <div v-if="deleteConvTarget" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" @click.self="deleteConvTarget = null">
+        <div v-if="deleteConvTarget" class="fixed inset-0 z-200 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" @click.self="deleteConvTarget = null">
           <div class="bg-brand-card border border-brand-border rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden">
             <div class="flex items-center gap-3 px-5 pt-5 pb-4 border-b border-brand-border">
-              <div class="w-8 h-8 rounded-xl bg-brand-error/15 border border-brand-error/20 flex items-center justify-center flex-shrink-0">
+              <div class="w-8 h-8 rounded-xl bg-brand-error/15 border border-brand-error/20 flex items-center justify-center shrink-0">
                 <BIcon name="Trash2" class="w-4 h-4 text-brand-error" />
               </div>
               <div class="flex-1">

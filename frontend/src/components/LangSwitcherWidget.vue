@@ -47,7 +47,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
       <span class="label">{{ currentEntry().label }}</span>
       <svg
         class="chevron"
-        :class="{ 'rotate-180': open }"
+        :class="{ 'is-open': open }"
         viewBox="0 0 20 20" fill="currentColor"
       >
         <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
@@ -118,7 +118,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
   opacity: 0.5;
   transition: transform 0.25s ease;
 }
-.chevron.rotate-180 { transform: rotate(180deg); }
+.chevron.is-open { transform: rotate(180deg); }
 
 .lang-popup {
   position: absolute;

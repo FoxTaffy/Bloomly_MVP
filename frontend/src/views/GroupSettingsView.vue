@@ -1203,7 +1203,7 @@ async function deleteGroup() {
           <div class="flex flex-row-reverse gap-6 items-start">
 
             <!-- ── Right sticky sidebar ──────────────────────────────── -->
-            <aside class="w-56 hidden xl:flex flex-col gap-3 sticky top-24 self-start flex-shrink-0">
+            <aside class="w-56 hidden xl:flex flex-col gap-3 sticky top-24 self-start shrink-0">
 
               <!-- Mini group preview card -->
               <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
@@ -1224,7 +1224,7 @@ async function deleteGroup() {
 
               <!-- Section scroll-spy nav -->
               <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
-                <div class="px-4 py-3 border-b border-brand-border space-y-2">
+                <div class="px-4 py-3 border-b border-brand-border stack-y-2">
                   <h4 class="text-[11px] font-bold text-white/55 uppercase tracking-widest">{{ langStore.t.groupSettingsSections }}</h4>
                   <!-- Smart search -->
                   <div class="relative">
@@ -1232,20 +1232,20 @@ async function deleteGroup() {
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                     </svg>
                     <input v-model="settingsSearch" type="text" :placeholder="langStore.t.groupSettingsSearchPlaceholder"
-                      class="w-full bg-brand-bg border border-brand-border rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-white/25 focus:border-brand-accent focus:outline-none transition-colors" />
+                      class="w-full bg-brand-bg border border-brand-border rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-white/25 focus:border-brand-accent focus:outline-hidden transition-colors" />
                     <button v-if="settingsSearch" @click="settingsSearch = ''" class="absolute right-2 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
                       <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                   </div>
                 </div>
-                <nav class="p-2 space-y-0.5">
+                <nav class="p-2 stack-y-0.5">
                   <p v-if="filteredNavSections.length === 0" class="text-center text-white/30 text-xs py-4">{{ langStore.t.groupSettingsNotFound }}</p>
                   <button v-for="sec in filteredNavSections" :key="sec.id"
                     @click="openSec(sec.id)"
                     class="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl text-xs font-semibold transition-all group"
                     :class="openSection === sec.id ? 'text-white' : 'text-white/55 hover:text-white'"
                     :style="openSection === sec.id ? `background:${sec.color}20;box-shadow:inset 0 0 0 1px ${sec.color}30` : ''">
-                    <div class="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 transition-all"
+                    <div class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-all"
                       :style="openSection === sec.id ? `background:${sec.color}30` : ''"
                       :class="openSection !== sec.id ? 'group-hover:bg-white/5' : ''">
                       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -1255,14 +1255,14 @@ async function deleteGroup() {
                       </svg>
                     </div>
                     <span class="flex-1 text-left">{{ sec.label }}</span>
-                    <div v-if="openSection === sec.id" class="w-1.5 h-1.5 rounded-full flex-shrink-0" :style="`background:${sec.color}`"></div>
+                    <div v-if="openSection === sec.id" class="w-1.5 h-1.5 rounded-full shrink-0" :style="`background:${sec.color}`"></div>
                   </button>
                 </nav>
               </div>
             </aside>
 
             <!-- ── Form column ─────────────────────────────────────────── -->
-            <div class="flex-1 min-w-0 space-y-5">
+            <div class="flex-1 min-w-0 stack-y-5">
 
               <!-- Page header -->
               <div class="flex items-center gap-4">
@@ -1276,27 +1276,27 @@ async function deleteGroup() {
               <div class="flex gap-2 overflow-x-auto pb-1 xl:hidden no-scrollbar">
                 <button v-for="sec in sections" :key="sec.id"
                   @click="openSec(sec.id)"
-                  class="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all"
+                  class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all"
                   :class="openSection === sec.id ? 'text-white border-transparent shadow-lg' : 'text-white/55 border-brand-border hover:border-white/20 bg-brand-card'"
                   :style="openSection === sec.id ? `background:${sec.color};box-shadow:0 4px 12px ${sec.color}44` : ''">
                   {{ sec.label }}
                 </button>
               </div>
 
-              <form @submit.prevent="save" class="space-y-5">
+              <form @submit.prevent="save" class="stack-y-5">
 
                 <!-- ═══ § GENERAL ═══════════════════════════════════════ -->
                 <section v-show="openSection === 'sec-general'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                   <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                     :style="`background:linear-gradient(90deg,${baseSections[0].color}0c 0%,transparent 100%)`">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${baseSections[0].color}1a`">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${baseSections[0].color}1a`">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${baseSections[0].color}`">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="baseSections[0].iconPath"/>
                       </svg>
                     </div>
                     <h2 class="font-bold text-white text-sm">{{ baseSections[0].label }}</h2>
                   </div>
-                  <div class="p-6 space-y-5">
+                  <div class="p-6 stack-y-5">
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsFieldName }}</label>
                       <input v-model="form.name" class="field-input" maxlength="120" :placeholder="langStore.t.groupSettingsNamePlaceholder" />
@@ -1312,9 +1312,9 @@ async function deleteGroup() {
                       <div class="relative">
                         <span class="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-sm">@</span>
                         <input :value="form.slug" @input="onSlugInput"
-                          class="field-input !pl-8 !pr-10 transition-colors"
+                          class="field-input pl-8! pr-10! transition-colors"
                           :class="form.slug
-                            ? (settingsSlugError ? '!border-brand-error focus:!border-brand-error' : '!border-brand-success focus:!border-brand-success')
+                            ? (settingsSlugError ? 'border-brand-error! focus:border-brand-error!' : 'border-brand-success! focus:border-brand-success!')
                             : ''"
                           placeholder="my-group" />
                         <span v-if="form.slug" class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
@@ -1323,9 +1323,9 @@ async function deleteGroup() {
                         </span>
                       </div>
                       <p v-if="settingsSlugError && form.slug" class="flex items-center gap-1 text-[11px] text-brand-error mt-1.5">
-                        <BIcon name="AlertCircle" class="w-3.5 h-3.5 flex-shrink-0" /> {{ settingsSlugError }}
+                        <BIcon name="AlertCircle" class="w-3.5 h-3.5 shrink-0" /> {{ settingsSlugError }}
                       </p>
-                      <div class="mt-2 px-0.5 space-y-1">
+                      <div class="mt-2 px-0.5 stack-y-1">
                         <p class="text-[10px] text-white/30 font-bold uppercase tracking-wider">{{ langStore.t.groupSettingsSlugRules }}</p>
                         <div class="grid grid-cols-2 gap-x-3 gap-y-0.5">
                           <span class="text-[10px] text-white/30 flex items-center gap-1"><span class="w-1 h-1 rounded-full bg-white/20 shrink-0" />{{ langStore.t.groupSettingsSlugRuleChars }}</span>
@@ -1385,16 +1385,16 @@ async function deleteGroup() {
                     </div>
 
                     <!-- Welcome message: first-message auto-reply in the group's chat -->
-                    <div class="space-y-2">
+                    <div class="stack-y-2">
                       <div class="flex items-center justify-between px-4 py-3.5 bg-brand-bg/40 border border-brand-border rounded-2xl">
                         <div class="flex-1 min-w-0 pr-3">
                           <p class="text-sm font-semibold text-white">{{ langStore.t.groupSettingsWelcomeMsgTitle }}</p>
                           <p class="text-xs mt-0.5 text-white/40">{{ langStore.t.groupSettingsWelcomeMsgHint }}</p>
                         </div>
                         <button type="button" @click="form.welcomeMsgEnabled = !form.welcomeMsgEnabled"
-                          class="relative w-12 h-6 rounded-full transition-all flex-shrink-0"
+                          class="relative w-12 h-6 rounded-full transition-all shrink-0"
                           :style="form.welcomeMsgEnabled ? 'background: #10b981' : 'background: rgba(255,255,255,0.08)'">
-                          <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all"
+                          <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-xs transition-all"
                             :class="form.welcomeMsgEnabled ? 'left-[calc(100%-1.375rem)]' : 'left-0.5'" />
                         </button>
                       </div>
@@ -1409,7 +1409,7 @@ async function deleteGroup() {
                 <section v-show="openSection === 'sec-appearance'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                   <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                     :style="`background:linear-gradient(90deg,${baseSections[1].color}0c 0%,transparent 100%)`">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${baseSections[1].color}1a`">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${baseSections[1].color}1a`">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${baseSections[1].color}`">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="baseSections[1].iconPath"/>
                       </svg>
@@ -1425,19 +1425,19 @@ async function deleteGroup() {
                         <div v-if="!bannerPreview" class="absolute inset-0 pointer-events-none"
                           style="background-image:repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,255,255,0.025) 39px,rgba(255,255,255,0.025) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,255,255,0.025) 39px,rgba(255,255,255,0.025) 40px)"></div>
                         <div class="absolute inset-0 transition-all duration-200 flex flex-col items-center justify-center gap-2 pointer-events-none bg-black/50 opacity-0 group-hover:opacity-100">
-                          <div class="w-10 h-10 rounded-2xl border bg-white/15 border-white/25 flex items-center justify-center backdrop-blur">
+                          <div class="w-10 h-10 rounded-2xl border bg-white/15 border-white/25 flex items-center justify-center backdrop-blur-sm">
                             <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                           </div>
                           <span class="text-white text-xs font-bold">{{ bannerPreview ? langStore.t.changeBanner : langStore.t.addBanner }}</span>
                         </div>
                         <div v-if="bannerPreview" class="absolute top-3 right-3 flex gap-1.5">
                           <button type="button" @click.stop="reopenCrop('banner')"
-                            class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-black/55 border border-white/20 backdrop-blur text-white/75 hover:text-white hover:bg-black/80 transition-all text-[10px] font-bold">
+                            class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-black/55 border border-white/20 backdrop-blur-sm text-white/75 hover:text-white hover:bg-black/80 transition-all text-[10px] font-bold">
                             <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
                             {{ langStore.t.groupSettingsCropShort }}
                           </button>
                           <button type="button" @click.stop="bannerPreview = ''; bannerOriginalSrc = ''; groupsStore.updateGroup(group!.id, { bannerUrl: '' })"
-                            class="w-7 h-7 rounded-full bg-black/55 border border-white/20 backdrop-blur flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-all">
+                            class="w-7 h-7 rounded-full bg-black/55 border border-white/20 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white hover:bg-black/80 transition-all">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                           </button>
                         </div>
@@ -1488,7 +1488,7 @@ async function deleteGroup() {
                     </div>
 
                     <!-- Accent color + Customization -->
-                    <div class="px-6 pb-6 space-y-5 border-t border-brand-border/40 pt-5 mt-2">
+                    <div class="px-6 pb-6 stack-y-5 border-t border-brand-border/40 pt-5 mt-2">
                       <div>
                         <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsAccentColor }}</label>
                         <div class="flex flex-wrap gap-2 mb-3">
@@ -1502,7 +1502,7 @@ async function deleteGroup() {
                         </div>
                         <div class="relative">
                           <span class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border border-white/20" :style="{ backgroundColor: form.accentColor }" />
-                          <input v-model="form.accentColor" maxlength="9" placeholder="#4C67CF" class="field-input !pl-11 font-mono" />
+                          <input v-model="form.accentColor" maxlength="9" placeholder="#4C67CF" class="field-input pl-11! font-mono" />
                         </div>
                       </div>
 
@@ -1511,7 +1511,7 @@ async function deleteGroup() {
                         <!-- Header -->
                         <div class="flex items-center justify-between mb-4">
                           <div class="flex items-center gap-2.5">
-                            <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:linear-gradient(135deg,#a78bfa20,#7c3aed20);border:1px solid #a78bfa25">
+                            <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:linear-gradient(135deg,#a78bfa20,#7c3aed20);border:1px solid #a78bfa25">
                               <BIcon name="Palette" class="w-4 h-4 text-brand-purple" />
                             </div>
                             <div>
@@ -1519,7 +1519,7 @@ async function deleteGroup() {
                               <p class="text-[11px] text-white/40">{{ langStore.t.groupSettingsCustomizeHint }}</p>
                             </div>
                           </div>
-                          <span class="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold flex-shrink-0" style="background:#a78bfa15;color:#a78bfa;border:1px solid #a78bfa30">
+                          <span class="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold shrink-0" style="background:#a78bfa15;color:#a78bfa;border:1px solid #a78bfa30">
                             <BIcon name="Star" class="w-2.5 h-2.5"/>Business
                           </span>
                         </div>
@@ -1530,7 +1530,7 @@ async function deleteGroup() {
                           <div class="absolute top-0 right-0 w-24 h-24 opacity-20 blur-2xl rounded-full pointer-events-none" style="background:#a78bfa"/>
                           <div class="relative p-5">
                             <div class="flex items-center gap-3 mb-3">
-                              <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background:linear-gradient(135deg,#a78bfa30,#7c3aed30);border:1px solid #a78bfa25">
+                              <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style="background:linear-gradient(135deg,#a78bfa30,#7c3aed30);border:1px solid #a78bfa25">
                                 <BIcon name="Lock" class="w-4 h-4 text-brand-purple"/>
                               </div>
                               <div>
@@ -1655,14 +1655,14 @@ async function deleteGroup() {
                 <section v-show="openSection === 'sec-content'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                   <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                     :style="`background:linear-gradient(90deg,${baseSections[2].color}0c 0%,transparent 100%)`">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${baseSections[2].color}1a`">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${baseSections[2].color}1a`">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${baseSections[2].color}`">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="baseSections[2].iconPath"/>
                       </svg>
                     </div>
                     <h2 class="font-bold text-white text-sm">{{ baseSections[2].label }}</h2>
                   </div>
-                  <div class="p-6 space-y-5">
+                  <div class="p-6 stack-y-5">
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsRules }}</label>
                       <textarea v-model="form.rulesText" rows="6" :placeholder="langStore.t.groupSettingsRulesPlaceholder" class="field-input resize-none" />
@@ -1672,8 +1672,8 @@ async function deleteGroup() {
                         <label class="text-xs font-bold text-white/55 uppercase tracking-wider">FAQ</label>
                         <button type="button" class="text-xs font-semibold hover:text-brand-accent-plus transition-colors" :style="`color:${baseSections[2].color}`" @click="addFaq">+ {{ langStore.t.addButton }}</button>
                       </div>
-                      <div class="space-y-3">
-                        <div v-for="(item, idx) in form.faq" :key="idx" class="bg-brand-bg/40 border border-brand-border rounded-2xl p-3 space-y-2 relative">
+                      <div class="stack-y-3">
+                        <div v-for="(item, idx) in form.faq" :key="idx" class="bg-brand-bg/40 border border-brand-border rounded-2xl p-3 stack-y-2 relative">
                           <button type="button" class="absolute top-2 right-2 w-6 h-6 rounded-lg bg-brand-error/10 flex items-center justify-center hover:bg-brand-error/20 transition-colors" @click="removeFaq(idx)">
                             <BIcon name="X" class="w-3 h-3 text-brand-error" />
                           </button>
@@ -1690,20 +1690,20 @@ async function deleteGroup() {
                 <section v-if="group.type === 'event'" v-show="openSection === 'sec-event'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                   <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                     :style="`background:linear-gradient(90deg,${eventSections[0].color}0c 0%,transparent 100%)`">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${eventSections[0].color}1a`">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${eventSections[0].color}1a`">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${eventSections[0].color}`">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="eventSections[0].iconPath"/>
                       </svg>
                     </div>
                     <h2 class="font-bold text-white text-sm">{{ eventSections[0].label }}</h2>
                   </div>
-                  <div class="p-6 space-y-5">
+                  <div class="p-6 stack-y-5">
                     <div>
                       <div class="flex items-center justify-between mb-2">
                         <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.groupSettingsSchedule }}</label>
                         <button type="button" class="text-xs font-semibold" :style="`color:${eventSections[0].color}`" @click="addSchedule">+ {{ langStore.t.addButton }}</button>
                       </div>
-                      <div class="space-y-2">
+                      <div class="stack-y-2">
                         <div v-for="(item, idx) in form.schedule" :key="idx" class="flex items-center gap-2">
                           <input v-model="item.time" placeholder="09:30 - 10:00" class="w-32 field-input font-mono" />
                           <input v-model="item.label" :placeholder="langStore.t.fursuitDescLabel" class="flex-1 field-input" />
@@ -1734,14 +1734,14 @@ async function deleteGroup() {
                 <section v-if="group.type === 'event'" v-show="openSection === 'sec-organizers'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                   <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                     :style="`background:linear-gradient(90deg,${eventSections[1].color}0c 0%,transparent 100%)`">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${eventSections[1].color}1a`">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${eventSections[1].color}1a`">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${eventSections[1].color}`">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="eventSections[1].iconPath"/>
                       </svg>
                     </div>
                     <h2 class="font-bold text-white text-sm">{{ eventSections[1].label }}</h2>
                   </div>
-                  <div class="p-5 space-y-5">
+                  <div class="p-5 stack-y-5">
 
                     <!-- Current admins/organizers -->
                     <div>
@@ -1757,16 +1757,16 @@ async function deleteGroup() {
                         class="py-4 text-center text-white/30 text-sm bg-brand-bg border border-dashed border-brand-border/60 rounded-2xl">
                         {{ langStore.t.groupSettingsNoOrganizersAssigned }}
                       </div>
-                      <div v-else class="space-y-2">
+                      <div v-else class="stack-y-2">
                         <div v-for="m in sortedMembers.filter(m => ['owner','admin','moderator'].includes(m.role))" :key="m.user_id"
                           class="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-brand-bg border border-brand-border">
-                          <div class="w-9 h-9 rounded-xl bg-brand-accent/15 overflow-hidden flex-shrink-0">
+                          <div class="w-9 h-9 rounded-xl bg-brand-accent/15 overflow-hidden shrink-0">
                             <img v-if="m.user.avatar_url" :src="m.user.avatar_url" class="w-full h-full object-cover" />
                             <div v-else class="w-full h-full flex items-center justify-center text-brand-accent text-xs font-bold">{{ (m.user.display_name || m.user.username || '?')[0].toUpperCase() }}</div>
                           </div>
                           <div class="flex-1 min-w-0">
                             <p class="text-sm font-bold text-white truncate">{{ m.user.display_name || m.user.username }}</p>
-                            <p class="text-[10px] mt-0.5 flex items-center gap-1" :style="`color: ${ROLE_META[m.role]?.color || '#9ca3af'}`"><svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="ROLE_META[m.role]?.iconPath ?? ROLE_META.member.iconPath"/></svg>{{ ROLE_META[m.role]?.label }}</p>
+                            <p class="text-[10px] mt-0.5 flex items-center gap-1" :style="`color: ${ROLE_META[m.role]?.color || '#9ca3af'}`"><svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="ROLE_META[m.role]?.iconPath ?? ROLE_META.member.iconPath"/></svg>{{ ROLE_META[m.role]?.label }}</p>
                           </div>
                         </div>
                       </div>
@@ -1775,10 +1775,10 @@ async function deleteGroup() {
                     <!-- Add organizer from members -->
                     <div v-if="sortedMembers.filter(m => m.role === 'member').length">
                       <p class="text-xs font-bold text-white/55 uppercase tracking-wider mb-3">{{ langStore.t.groupSettingsAssignFromMembers }}</p>
-                      <div class="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                      <div class="max-h-52 overflow-y-auto stack-y-1.5 pr-1">
                         <div v-for="m in sortedMembers.filter(m => m.role === 'member').slice(0, 20)" :key="m.user_id"
                           class="flex items-center gap-3 px-3 py-2 rounded-xl bg-brand-bg/60 border border-brand-border/60 hover:border-brand-border transition-colors">
-                          <div class="w-8 h-8 rounded-lg bg-brand-accent/10 overflow-hidden flex-shrink-0">
+                          <div class="w-8 h-8 rounded-lg bg-brand-accent/10 overflow-hidden shrink-0">
                             <img v-if="m.user.avatar_url" :src="m.user.avatar_url" class="w-full h-full object-cover" />
                             <div v-else class="w-full h-full flex items-center justify-center text-brand-accent/60 text-xs font-bold">{{ (m.user.display_name || m.user.username || '?')[0].toUpperCase() }}</div>
                           </div>
@@ -1819,14 +1819,14 @@ async function deleteGroup() {
                 <section v-if="group.type === 'event'" v-show="openSection === 'sec-tickets'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                   <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                     :style="`background:linear-gradient(90deg,${eventSections[2].color}0c 0%,transparent 100%)`">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${eventSections[2].color}1a`">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${eventSections[2].color}1a`">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${eventSections[2].color}`">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="eventSections[2].iconPath"/>
                       </svg>
                     </div>
                     <h2 class="font-bold text-white text-sm">{{ eventSections[2].label }}</h2>
                   </div>
-                  <div class="p-6 space-y-6">
+                  <div class="p-6 stack-y-6">
 
                     <!-- No events notice -->
                     <div v-if="!group.events?.length" class="bg-brand-bg/40 border border-brand-border/60 rounded-2xl p-6 text-center">
@@ -1834,7 +1834,7 @@ async function deleteGroup() {
                     </div>
 
                     <!-- Per-event ticket management -->
-                    <div v-for="ev in group.events || []" :key="ev.id" class="space-y-3">
+                    <div v-for="ev in group.events || []" :key="ev.id" class="stack-y-3">
                       <!-- Event header -->
                       <div class="flex items-center justify-between">
                         <div>
@@ -1852,10 +1852,10 @@ async function deleteGroup() {
                       </div>
 
                       <!-- Existing tiers -->
-                      <div v-if="ev.tickets?.length" class="space-y-2">
+                      <div v-if="ev.tickets?.length" class="stack-y-2">
                         <div v-for="tier in ev.tickets" :key="tier.id">
                           <!-- Edit form -->
-                          <div v-if="editingTier === tier.id" class="bg-brand-bg/60 border border-brand-border rounded-2xl p-4 space-y-3">
+                          <div v-if="editingTier === tier.id" class="bg-brand-bg/60 border border-brand-border rounded-2xl p-4 stack-y-3">
                             <div class="grid grid-cols-2 gap-3">
                               <div class="col-span-2">
                                 <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-1.5 block">{{ langStore.t.groupSettingsFieldName }}</label>
@@ -1918,7 +1918,7 @@ async function deleteGroup() {
                                 </template>
                               </p>
                             </div>
-                            <div class="flex items-center gap-1.5 flex-shrink-0">
+                            <div class="flex items-center gap-1.5 shrink-0">
                               <button type="button" @click="openEditTierForm(tier)"
                                 class="w-8 h-8 rounded-xl bg-brand-bg border border-brand-border flex items-center justify-center hover:border-brand-accent/40 hover:text-brand-accent text-white/55 transition-all">
                                 <BIcon name="Pencil" class="w-3.5 h-3.5" />
@@ -1938,7 +1938,7 @@ async function deleteGroup() {
                       </div>
 
                       <!-- New tier form -->
-                      <div v-if="showNewTierForm === ev.id" class="bg-brand-bg/60 border border-brand-border rounded-2xl p-4 space-y-3">
+                      <div v-if="showNewTierForm === ev.id" class="bg-brand-bg/60 border border-brand-border rounded-2xl p-4 stack-y-3">
                         <h5 class="text-xs font-bold text-white/70 uppercase tracking-wider">{{ langStore.t.groupSettingsNewTicketTier }}</h5>
                         <div class="grid grid-cols-2 gap-3">
                           <div class="col-span-2">
@@ -1991,7 +1991,7 @@ async function deleteGroup() {
                 <section v-if="group.type === 'event'" v-show="openSection === 'sec-soon'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                   <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                     :style="`background:linear-gradient(90deg,${eventSections[3].color}0c 0%,transparent 100%)`">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${eventSections[3].color}1a`">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${eventSections[3].color}1a`">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${eventSections[3].color}`">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="eventSections[3].iconPath"/>
                       </svg>
@@ -2001,9 +2001,9 @@ async function deleteGroup() {
                       <p class="text-white/40 text-xs">{{ langStore.t.groupSettingsSoonHint }}</p>
                     </div>
                   </div>
-                  <div class="p-6 space-y-6">
+                  <div class="p-6 stack-y-6">
                     <!-- Event date lifecycle: gates SOON + participation for the whole group -->
-                    <div class="rounded-2xl border p-4 space-y-3"
+                    <div class="rounded-2xl border p-4 stack-y-3"
                       :class="isGroupEventExpired ? 'border-brand-error/30 bg-brand-error/5' : 'border-brand-border/60 bg-brand-bg/40'">
                       <div class="flex items-center justify-between gap-3 flex-wrap">
                         <div>
@@ -2012,7 +2012,7 @@ async function deleteGroup() {
                             {{ langStore.t.groupSettingsEventDateHint }}
                           </p>
                         </div>
-                        <span v-if="isGroupEventExpired" class="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase bg-brand-error/15 text-brand-error border border-brand-error/25">
+                        <span v-if="isGroupEventExpired" class="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase bg-brand-error/15 text-brand-error border border-brand-error/25">
                           {{ langStore.t.groupSettingsExpired }}
                         </span>
                       </div>
@@ -2073,10 +2073,10 @@ async function deleteGroup() {
                         <div class="relative h-24 overflow-hidden">
                           <img v-if="ev.banner_url || (group as any)?.banner_url" :src="ev.banner_url || (group as any)?.banner_url" class="w-full h-full object-cover" />
                           <div v-else class="w-full h-full" :style="`background: linear-gradient(135deg, ${group.accent_color || '#4C67CF'}44, ${group.accent_color || '#4C67CF'}11)`" />
-                          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                          <div class="absolute inset-0 bg-linear-to-t/srgb from-black/80 via-black/30 to-transparent" />
                           <!-- Status badge top-right -->
                           <div class="absolute top-2 right-2">
-                            <span class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold backdrop-blur-sm"
+                            <span class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold backdrop-blur-xs"
                               :style="`background: ${EVENT_STATUSES.find(s=>s.value===computeEventStatus(ev))?.color || '#fbbf24'}33; color: ${EVENT_STATUSES.find(s=>s.value===computeEventStatus(ev))?.color || '#fbbf24'}; border: 1px solid ${EVENT_STATUSES.find(s=>s.value===computeEventStatus(ev))?.color || '#fbbf24'}44`">
                               <span>{{ EVENT_STATUSES.find(s=>s.value===computeEventStatus(ev))?.icon }}</span>
                               {{ EVENT_STATUSES.find(s=>s.value===computeEventStatus(ev))?.label }}
@@ -2095,7 +2095,7 @@ async function deleteGroup() {
                         </div>
 
                         <!-- Edit body -->
-                        <div class="p-4 space-y-4 bg-brand-bg/30">
+                        <div class="p-4 stack-y-4 bg-brand-bg/30">
 
                           <!-- Short code row -->
                           <div>
@@ -2111,7 +2111,7 @@ async function deleteGroup() {
                               </button>
                             </div>
                             <div class="flex items-center gap-3">
-                              <div class="flex-shrink-0 scale-110 origin-left">
+                              <div class="shrink-0 scale-110 origin-left">
                                 <SoonBadge :short-code="soonEditMap[ev.id]?.shortCode || '???'" />
                               </div>
                               <div class="flex-1 relative">
@@ -2121,7 +2121,7 @@ async function deleteGroup() {
                                   @input="() => { if (soonEditMap[ev.id]) soonEditMap[ev.id].shortCode = soonEditMap[ev.id].shortCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) }"
                                   maxlength="4"
                                   placeholder="EF"
-                                  class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-white text-sm font-mono placeholder-white/25 focus:outline-none focus:border-amber-400/60 transition-colors uppercase tracking-widest text-center text-lg"
+                                  class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-white text-sm font-mono placeholder-white/25 focus:outline-hidden focus:border-amber-400/60 transition-colors uppercase tracking-widest text-center text-lg"
                                 />
                                 <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-white/25 font-mono">
                                   {{ (soonEditMap[ev.id]?.shortCode || '').length }}/4
@@ -2153,12 +2153,12 @@ async function deleteGroup() {
                         </div>
 
                         <!-- Badge holders -->
-                        <div class="px-4 pb-4 bg-brand-bg/30 space-y-2.5">
+                        <div class="px-4 pb-4 bg-brand-bg/30 stack-y-2.5">
                           <div class="flex items-center justify-between">
                             <p class="text-xs font-bold text-white/40 uppercase tracking-wider">{{ langStore.t.groupSettingsInterested }}</p>
                             <div class="flex items-center gap-2">
                               <!-- Mini avatars stack -->
-                              <div v-if="(eventSoonMap[ev.id] ?? []).length" class="flex -space-x-2">
+                              <div v-if="(eventSoonMap[ev.id] ?? []).length" class="flex -stack-x-2">
                                 <div v-for="badge in (eventSoonMap[ev.id] ?? []).slice(0, 5)" :key="badge.id"
                                   class="w-5 h-5 rounded-full border border-brand-card overflow-hidden bg-brand-accent/20">
                                   <img v-if="badge.user.avatar_url" :src="badge.user.avatar_url" class="w-full h-full object-cover" />
@@ -2181,7 +2181,7 @@ async function deleteGroup() {
                               class="flex items-center gap-2.5 px-3 py-2 bg-brand-bg/60 border border-brand-border/60 rounded-xl cursor-pointer hover:border-amber-400/20 hover:bg-brand-bg transition-all group"
                               @click="router.push({ name: 'profile', params: { id: badge.user.id } })"
                             >
-                              <div class="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 ring-1 ring-brand-border bg-brand-accent/20">
+                              <div class="w-7 h-7 rounded-full overflow-hidden shrink-0 ring-1 ring-brand-border bg-brand-accent/20">
                                 <img v-if="badge.user.avatar_url" :src="badge.user.avatar_url" class="w-full h-full object-cover" />
                                 <div v-else class="w-full h-full flex items-center justify-center text-[10px] font-bold text-brand-accent">
                                   {{ (badge.user.display_name || badge.user.username)[0].toUpperCase() }}
@@ -2191,7 +2191,7 @@ async function deleteGroup() {
                                 <p class="text-white text-xs font-bold truncate">{{ badge.user.display_name || badge.user.username }}</p>
                                 <p class="text-white/35 text-[10px] truncate">@{{ badge.user.username }}</p>
                               </div>
-                              <BIcon name="ChevronRight" class="w-3 h-3 text-white/15 group-hover:text-white/30 transition-colors flex-shrink-0" />
+                              <BIcon name="ChevronRight" class="w-3 h-3 text-white/15 group-hover:text-white/30 transition-colors shrink-0" />
                             </div>
                           </div>
 
@@ -2211,7 +2211,7 @@ async function deleteGroup() {
                 <section v-if="group.type === 'event'" v-show="openSection === 'sec-finance'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                   <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                     style="background:linear-gradient(90deg,#10b98112 0%,transparent 100%)">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:#10b98120">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:#10b98120">
                       <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
                       </svg>
@@ -2223,7 +2223,7 @@ async function deleteGroup() {
                     <span class="ml-auto text-[10px] font-bold px-2.5 py-1 rounded-full" style="background:#10b98120;color:#10b981;border:1px solid #10b98130">MOCKUP</span>
                   </div>
 
-                  <div class="p-6 space-y-6">
+                  <div class="p-6 stack-y-6">
 
                     <!-- Сводка -->
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -2274,7 +2274,7 @@ async function deleteGroup() {
                     <!-- Разбивка по типам билетов -->
                     <div class="bg-brand-bg/50 border border-brand-border/60 rounded-2xl p-4">
                       <h3 class="text-sm font-bold text-white mb-4">{{ langStore.t.groupSettingsSalesByCategory }}</h3>
-                      <div class="space-y-3">
+                      <div class="stack-y-3">
                         <div v-for="(tier, i) in [
                           { name: langStore.t.groupSettingsTierStandard, sold: 100, total: 150, revenue: '60 000 ₽', pct: 67, color: '#34d399' },
                           { name: langStore.t.groupSettingsTierSponsor, sold: 40, total: 50, revenue: '28 000 ₽', pct: 80, color: '#a78bfa' },
@@ -2296,7 +2296,7 @@ async function deleteGroup() {
                         <h3 class="text-sm font-bold text-white">{{ langStore.t.groupSettingsRecentTransactions }}</h3>
                         <button class="text-[11px] text-emerald-400/70 hover:text-emerald-400 transition-colors">{{ langStore.t.seeAllBtn }}</button>
                       </div>
-                      <div class="space-y-1">
+                      <div class="stack-y-1">
                         <div v-for="(tx, i) in [
                           { user: 'Taffy', type: `${langStore.t.groupSettingsSecTickets}: VIP`, amount: '+1 500 ₽', time: `2 ${langStore.t.groupSettingsMinAgo}`, color: '#34d399', icon: '🎟️' },
                           { user: 'FoxDev', type: langStore.t.groupSettingsSecDonations, amount: '+500 ₽', time: `15 ${langStore.t.groupSettingsMinAgo}`, color: '#a78bfa', icon: '💜' },
@@ -2310,7 +2310,7 @@ async function deleteGroup() {
                             <p class="text-xs font-bold text-white truncate">{{ tx.user }}</p>
                             <p class="text-[10px] text-white/40">{{ tx.type }}</p>
                           </div>
-                          <div class="text-right flex-shrink-0">
+                          <div class="text-right shrink-0">
                             <p class="text-sm font-black" :style="`color:${tx.color}`">{{ tx.amount }}</p>
                             <p class="text-[9px] text-white/25">{{ tx.time }}</p>
                           </div>
@@ -2322,7 +2322,7 @@ async function deleteGroup() {
                     <div class="bg-brand-bg/50 border border-brand-border/60 rounded-2xl p-4">
                       <h3 class="text-sm font-bold text-white mb-1">{{ langStore.t.groupSettingsSettlements }}</h3>
                       <p class="text-[11px] text-white/35 mb-4">{{ langStore.t.groupSettingsSettlementsHint }}</p>
-                      <div class="space-y-2">
+                      <div class="stack-y-2">
                         <div v-for="(item, i) in [
                           { user: 'Wolfy', status: langStore.t.groupSettingsPayPending, amount: '1 200 ₽', due: `15 ${langStore.t.groupSettingsMonMar}`, statusColor: '#fbbf24' },
                           { user: 'KitsuFox', status: langStore.t.groupSettingsPayPending, amount: '700 ₽', due: `20 ${langStore.t.groupSettingsMonMar}`, statusColor: '#fbbf24' },
@@ -2332,7 +2332,7 @@ async function deleteGroup() {
                         ]" :key="i"
                           class="flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all"
                           :style="`border-color: ${item.statusColor}25; background: ${item.statusColor}08`">
-                          <div class="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black flex-shrink-0"
+                          <div class="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black shrink-0"
                             :style="`background:${item.statusColor}20;color:${item.statusColor}`">
                             {{ item.user[0] }}
                           </div>
@@ -2351,7 +2351,7 @@ async function deleteGroup() {
 
                     <!-- Заглушка про реальные данные -->
                     <div class="rounded-2xl p-4 flex items-start gap-3" style="background:rgba(16,185,129,0.06);border:1px dashed rgba(16,185,129,0.25)">
-                      <svg class="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg class="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                       </svg>
                       <p class="text-[11px] text-emerald-400/70 leading-relaxed">
@@ -2366,14 +2366,14 @@ async function deleteGroup() {
                 <section v-if="group.type === 'creative'" v-show="openSection === 'sec-commissions'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                   <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                     :style="`background:linear-gradient(90deg,${creativeSections[0].color}0c 0%,transparent 100%)`">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${creativeSections[0].color}1a`">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${creativeSections[0].color}1a`">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${creativeSections[0].color}`">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="creativeSections[0].iconPath"/>
                       </svg>
                     </div>
                     <h2 class="font-bold text-white text-sm">{{ creativeSections[0].label }}</h2>
                   </div>
-                  <div class="p-6 space-y-5">
+                  <div class="p-6 stack-y-5">
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsOrderStatusLabel }}</label>
                       <div class="grid grid-cols-3 gap-2">
@@ -2437,14 +2437,14 @@ async function deleteGroup() {
                 <!-- ═══ § PRICES ═════════════════════════════════════════ -->
                 <section v-if="group.type === 'creative' || group.type === 'shop'" v-show="openSection === 'sec-prices'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                   <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3" style="background:linear-gradient(90deg,#34d3990c 0%,transparent 100%)">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:#34d3991a">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:#34d3991a">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:#34d399">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
                       </svg>
                     </div>
                     <h2 class="font-bold text-white text-sm">{{ langStore.t.groupSettingsPriceList }}</h2>
                   </div>
-                  <div class="p-6 space-y-5">
+                  <div class="p-6 stack-y-5">
                     <div v-if="group.type === 'shop'">
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsCurrency }}</label>
                       <select v-model="commForm.currency" class="field-input appearance-none">
@@ -2453,11 +2453,11 @@ async function deleteGroup() {
                     </div>
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsBasePrices }}</label>
-                      <div class="space-y-2">
+                      <div class="stack-y-2">
                         <div v-for="key in basePriceKeys" :key="key" class="flex items-center gap-3 bg-brand-bg/40 border border-brand-border rounded-xl px-3 py-2">
                           <span class="text-white text-xs font-semibold flex-1">{{ basePriceLabels[key] }}</span>
                           <input v-model.number="commForm.basePrices[key]" type="number" min="0" placeholder="0"
-                            class="w-24 bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-white text-xs text-right focus:border-brand-accent focus:outline-none" />
+                            class="w-24 bg-brand-bg border border-brand-border rounded-lg px-3 py-1.5 text-white text-xs text-right focus:border-brand-accent focus:outline-hidden" />
                           <span class="text-white/30 text-xs w-8">{{ commForm.currency }}</span>
                         </div>
                       </div>
@@ -2467,8 +2467,8 @@ async function deleteGroup() {
                         <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.groupSettingsDetailedPrices }}</label>
                         <button type="button" class="text-xs font-semibold" style="color:#34d399" @click="addPriceItem">+ {{ langStore.t.addButton }}</button>
                       </div>
-                      <div class="space-y-2">
-                        <div v-for="(item, idx) in commForm.priceList" :key="idx" class="bg-brand-bg/40 border border-brand-border rounded-2xl p-3 space-y-2 relative">
+                      <div class="stack-y-2">
+                        <div v-for="(item, idx) in commForm.priceList" :key="idx" class="bg-brand-bg/40 border border-brand-border rounded-2xl p-3 stack-y-2 relative">
                           <button type="button" class="absolute top-2 right-2 w-6 h-6 rounded-lg bg-brand-error/10 flex items-center justify-center" @click="removePriceItem(idx)">
                             <BIcon name="X" class="w-3 h-3 text-brand-error" />
                           </button>
@@ -2487,7 +2487,7 @@ async function deleteGroup() {
                 <section v-show="openSection === 'sec-donations'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl scroll-mt-28 overflow-hidden">
                   <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                     style="background:linear-gradient(90deg,#10b98112 0%,transparent 100%)">
-                    <div class="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+                    <div class="w-8 h-8 rounded-xl bg-emerald-500/15 flex items-center justify-center shrink-0">
                       <BIcon name="Heart" class="w-4 h-4 text-emerald-400" />
                     </div>
                     <div>
@@ -2496,10 +2496,10 @@ async function deleteGroup() {
                     </div>
                   </div>
 
-                  <div class="p-6 space-y-6">
+                  <div class="p-6 stack-y-6">
 
                     <!-- Card linking -->
-                    <div class="space-y-3">
+                    <div class="stack-y-3">
                       <div class="flex items-center gap-2">
                         <BIcon name="CreditCard" class="w-4 h-4 text-white/40" />
                         <p class="text-sm font-bold text-white">{{ langStore.t.groupSettingsCardForReceiving }}</p>
@@ -2508,14 +2508,14 @@ async function deleteGroup() {
                       <!-- Card linked -->
                       <template v-if="form.bankCardMasked && !showCardForm">
                         <div class="flex items-center gap-4 px-4 py-3.5 bg-emerald-500/8 border border-emerald-500/20 rounded-2xl">
-                          <div class="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+                          <div class="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center shrink-0">
                             <BIcon name="CreditCard" class="w-5 h-5 text-emerald-400" />
                           </div>
                           <div class="flex-1 min-w-0">
                             <p class="text-xs text-white/40 uppercase tracking-wide font-bold mb-0.5">{{ langStore.t.groupSettingsCardLinked }}</p>
                             <p class="text-sm font-bold text-white font-mono tracking-widest">{{ form.bankCardMasked }}</p>
                           </div>
-                          <div class="flex gap-2 flex-shrink-0">
+                          <div class="flex gap-2 shrink-0">
                             <button @click="showCardForm = true"
                               class="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 hover:bg-white/10 text-white/55 hover:text-white transition-all border border-white/8">
                               {{ langStore.t.groupSettingsReplace }}
@@ -2531,7 +2531,7 @@ async function deleteGroup() {
                       <!-- No card / card form -->
                       <template v-else>
                         <div v-if="!form.bankCardMasked && !showCardForm"
-                          class="px-4 py-4 bg-brand-bg border border-dashed border-white/10 rounded-2xl text-center space-y-3">
+                          class="px-4 py-4 bg-brand-bg border border-dashed border-white/10 rounded-2xl text-center stack-y-3">
                           <BIcon name="CreditCard" class="w-8 h-8 mx-auto text-white/20" />
                           <p class="text-sm text-white/40">{{ langStore.t.groupSettingsCardNotLinked }}</p>
                           <p class="text-xs text-white/25">{{ langStore.t.groupSettingsLinkCardHint }}</p>
@@ -2542,7 +2542,7 @@ async function deleteGroup() {
                         </div>
 
                         <!-- Card input form -->
-                        <div v-if="showCardForm" class="space-y-3 bg-brand-bg border border-brand-border rounded-2xl p-4">
+                        <div v-if="showCardForm" class="stack-y-3 bg-brand-bg border border-brand-border rounded-2xl p-4">
                           <p class="text-xs font-bold text-white/40 uppercase tracking-wider">{{ langStore.t.groupSettingsCardDetails }}</p>
                           <input
                             type="text"
@@ -2551,7 +2551,7 @@ async function deleteGroup() {
                             :value="cardInputRaw"
                             @input="formatSettingsCard"
                             maxlength="19"
-                            class="w-full bg-brand-bg/0 border border-brand-border focus:border-emerald-500/40 rounded-xl px-4 py-3 text-white text-sm font-mono placeholder-white/20 outline-none transition-all" />
+                            class="w-full bg-brand-bg/0 border border-brand-border focus:border-emerald-500/40 rounded-xl px-4 py-3 text-white text-sm font-mono placeholder-white/20 outline-hidden transition-all" />
                           <div class="grid grid-cols-2 gap-3">
                             <input
                               type="text"
@@ -2560,7 +2560,7 @@ async function deleteGroup() {
                               :value="cardExpInput"
                               @input="formatSettingsExp"
                               maxlength="5"
-                              class="w-full bg-brand-bg/0 border border-brand-border focus:border-emerald-500/40 rounded-xl px-4 py-3 text-white text-sm font-mono placeholder-white/20 outline-none transition-all" />
+                              class="w-full bg-brand-bg/0 border border-brand-border focus:border-emerald-500/40 rounded-xl px-4 py-3 text-white text-sm font-mono placeholder-white/20 outline-hidden transition-all" />
                             <div class="flex items-center justify-center text-xs text-white/25 bg-brand-bg border border-brand-border rounded-xl px-3">
                               {{ langStore.t.groupSettingsCvvNotNeeded }}
                             </div>
@@ -2582,7 +2582,7 @@ async function deleteGroup() {
                     </div>
 
                     <!-- Donations toggle -->
-                    <div class="space-y-2">
+                    <div class="stack-y-2">
                       <div class="flex items-center gap-2">
                         <BIcon name="Zap" class="w-4 h-4 text-white/40" />
                         <p class="text-sm font-bold text-white">{{ langStore.t.groupSettingsEnableDonations }}</p>
@@ -2600,30 +2600,30 @@ async function deleteGroup() {
                         <button
                           :disabled="!form.bankCardMasked"
                           @click="form.bankCardMasked && (form.donationsEnabled = !form.donationsEnabled)"
-                          class="relative w-12 h-6 rounded-full transition-all flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
+                          class="relative w-12 h-6 rounded-full transition-all shrink-0 disabled:opacity-30 disabled:cursor-not-allowed"
                           :style="form.donationsEnabled ? 'background: #10b981' : 'background: rgba(255,255,255,0.08)'">
-                          <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all"
+                          <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-xs transition-all"
                             :class="form.donationsEnabled ? 'left-[calc(100%-1.375rem)]' : 'left-0.5'" />
                         </button>
                       </div>
                     </div>
 
                     <!-- Info block -->
-                    <div v-if="form.donationsEnabled" class="bg-emerald-500/8 border border-emerald-500/15 rounded-2xl px-4 py-3.5 space-y-2">
+                    <div v-if="form.donationsEnabled" class="bg-emerald-500/8 border border-emerald-500/15 rounded-2xl px-4 py-3.5 stack-y-2">
                       <div class="flex items-center gap-2">
-                        <BIcon name="Info" class="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                        <BIcon name="Info" class="w-4 h-4 text-emerald-400 shrink-0" />
                         <p class="text-xs font-bold text-emerald-400">{{ langStore.t.groupSettingsDonationsActive }}</p>
                       </div>
-                      <ul class="space-y-1 text-[11px] text-white/40">
-                        <li class="flex gap-1.5"><span class="text-emerald-500 mt-0.5 flex-shrink-0">✓</span> {{ langStore.t.groupSettingsDonationsPoint1 }}</li>
-                        <li class="flex gap-1.5"><span class="text-emerald-500 mt-0.5 flex-shrink-0">✓</span> {{ langStore.t.groupSettingsDonationsPoint2 }}</li>
-                        <li class="flex gap-1.5"><span class="text-emerald-500 mt-0.5 flex-shrink-0">✓</span> {{ langStore.t.groupSettingsDonationsPoint3 }}</li>
-                        <li class="flex gap-1.5"><span class="text-white/25 mt-0.5 flex-shrink-0">•</span> {{ langStore.t.groupSettingsDonationsPoint4 }}</li>
+                      <ul class="stack-y-1 text-[11px] text-white/40">
+                        <li class="flex gap-1.5"><span class="text-emerald-500 mt-0.5 shrink-0">✓</span> {{ langStore.t.groupSettingsDonationsPoint1 }}</li>
+                        <li class="flex gap-1.5"><span class="text-emerald-500 mt-0.5 shrink-0">✓</span> {{ langStore.t.groupSettingsDonationsPoint2 }}</li>
+                        <li class="flex gap-1.5"><span class="text-emerald-500 mt-0.5 shrink-0">✓</span> {{ langStore.t.groupSettingsDonationsPoint3 }}</li>
+                        <li class="flex gap-1.5"><span class="text-white/25 mt-0.5 shrink-0">•</span> {{ langStore.t.groupSettingsDonationsPoint4 }}</li>
                       </ul>
                     </div>
 
                     <!-- Business tab toggle -->
-                    <div class="space-y-2">
+                    <div class="stack-y-2">
                       <div class="flex items-center gap-2">
                         <BIcon name="Briefcase" class="w-4 h-4 text-white/40" />
                         <p class="text-sm font-bold text-white">{{ langStore.t.groupSettingsBusinessTabTitle }}</p>
@@ -2637,9 +2637,9 @@ async function deleteGroup() {
                         </div>
                         <button
                           @click="form.businessEnabled = !form.businessEnabled"
-                          class="relative w-12 h-6 rounded-full transition-all flex-shrink-0"
+                          class="relative w-12 h-6 rounded-full transition-all shrink-0"
                           :style="form.businessEnabled ? 'background: #10b981' : 'background: rgba(255,255,255,0.08)'">
-                          <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all"
+                          <span class="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-xs transition-all"
                             :class="form.businessEnabled ? 'left-[calc(100%-1.375rem)]' : 'left-0.5'" />
                         </button>
                       </div>
@@ -2650,7 +2650,7 @@ async function deleteGroup() {
                     </div>
 
                     <!-- Support tiers -->
-                    <div class="space-y-3">
+                    <div class="stack-y-3">
                       <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
                           <BIcon name="Crown" class="w-4 h-4 text-brand-yellow" />
@@ -2672,21 +2672,21 @@ async function deleteGroup() {
                       </div>
 
                       <div v-for="(tier, idx) in form.supportTiers" :key="idx"
-                        class="bg-brand-bg border border-brand-border rounded-2xl p-4 space-y-3">
+                        class="bg-brand-bg border border-brand-border rounded-2xl p-4 stack-y-3">
                         <div class="flex items-center gap-2">
                           <input v-model="tier.emoji" maxlength="4" placeholder="⭐"
-                            class="w-14 text-center bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-2 py-2 text-lg outline-none transition-all" />
+                            class="w-14 text-center bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-2 py-2 text-lg outline-hidden transition-all" />
                           <input v-model="tier.name" :placeholder="langStore.t.groupSettingsTierNameFieldPlaceholder"
-                            class="flex-1 bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-none transition-all" />
+                            class="flex-1 bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-hidden transition-all" />
                           <input v-model="tier.price" :placeholder="langStore.t.groupSettingsTierPricePlaceholder" maxlength="20"
-                            class="w-28 bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-none transition-all" />
+                            class="w-28 bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-hidden transition-all" />
                           <button @click="form.supportTiers.splice(idx, 1)"
-                            class="w-8 h-8 flex items-center justify-center rounded-xl text-white/30 hover:text-brand-error hover:bg-brand-error/10 transition-all flex-shrink-0">
+                            class="w-8 h-8 flex items-center justify-center rounded-xl text-white/30 hover:text-brand-error hover:bg-brand-error/10 transition-all shrink-0">
                             <BIcon name="Trash2" class="w-4 h-4" />
                           </button>
                         </div>
                         <input v-model="tier.desc" :placeholder="langStore.t.groupSettingsTierDescPlaceholder"
-                          class="w-full bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-none transition-all" />
+                          class="w-full bg-brand-bg/0 border border-brand-border focus:border-brand-yellow/40 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 outline-hidden transition-all" />
                       </div>
                     </div>
 
@@ -2708,7 +2708,7 @@ async function deleteGroup() {
                   <div class="px-6 py-4 border-b border-brand-border flex items-center justify-between"
                     :style="`background:linear-gradient(90deg,${tailSections[0].color}0c 0%,transparent 100%)`">
                     <div class="flex items-center gap-3">
-                      <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${tailSections[0].color}1a`">
+                      <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${tailSections[0].color}1a`">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${tailSections[0].color}`">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="tailSections[0].iconPath"/>
                         </svg>
@@ -2756,7 +2756,7 @@ async function deleteGroup() {
                     <div v-else-if="membersLoaded && !membersList.length" class="text-center py-10 text-white/40 text-sm">{{ langStore.t.groupSettingsNoMembersFound }}</div>
 
                     <!-- Members list -->
-                    <div v-else class="space-y-2">
+                    <div v-else class="stack-y-2">
                       <!-- Role legend -->
                       <div class="flex flex-wrap gap-1.5 mb-4">
                         <span v-for="r in MEMBER_ROLES" :key="r.value"
@@ -2776,15 +2776,15 @@ async function deleteGroup() {
                       <div v-for="m in sortedMembers" :key="m.user_id"
                         class="flex items-center gap-3 px-4 py-3 rounded-2xl border transition-colors group/row"
                         :class="form.hiddenMemberIds.includes(m.user_id) ? 'bg-brand-bg/20 border-brand-border/40 opacity-60' : 'bg-brand-bg/50 border-brand-border hover:border-white/15'">
-                        <img v-if="m.user.avatar_url" :src="m.user.avatar_url" class="w-9 h-9 rounded-xl object-cover flex-shrink-0" />
-                        <div v-else class="w-9 h-9 rounded-xl bg-brand-border flex items-center justify-center flex-shrink-0 text-white/40 font-bold text-sm">
+                        <img v-if="m.user.avatar_url" :src="m.user.avatar_url" class="w-9 h-9 rounded-xl object-cover shrink-0" />
+                        <div v-else class="w-9 h-9 rounded-xl bg-brand-border flex items-center justify-center shrink-0 text-white/40 font-bold text-sm">
                           {{ (m.user.display_name || m.user.username).charAt(0).toUpperCase() }}
                         </div>
                         <div class="flex-1 min-w-0">
                           <p class="text-sm font-semibold text-white truncate">{{ m.user.display_name || m.user.username }}</p>
                           <p class="text-xs text-white/40 truncate">@{{ m.user.username }}</p>
                         </div>
-                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-white/10 flex-shrink-0"
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-white/10 shrink-0"
                           :style="`background:${(ROLE_META[m.role] ?? ROLE_META.member).color}15;color:${(ROLE_META[m.role] ?? ROLE_META.member).color}`">
                           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="(ROLE_META[m.role] ?? ROLE_META.member).iconPath"/></svg>
                           {{ (ROLE_META[m.role] ?? ROLE_META.member).label }}
@@ -2793,14 +2793,14 @@ async function deleteGroup() {
                         <button v-if="isOwner && ['owner','admin','moderator'].includes(m.role)"
                           type="button"
                           @click="toggleHideMember(m.user_id)"
-                          class="w-8 h-8 rounded-xl border flex items-center justify-center transition-all flex-shrink-0"
+                          class="w-8 h-8 rounded-xl border flex items-center justify-center transition-all shrink-0"
                           :class="form.hiddenMemberIds.includes(m.user_id) ? 'border-brand-error/40 bg-brand-error/10 text-brand-error hover:bg-brand-error/20' : 'border-brand-border/60 bg-brand-bg text-white/30 hover:border-white/30 hover:text-white/60'"
                           :title="form.hiddenMemberIds.includes(m.user_id) ? langStore.t.groupSettingsShowPublicly : langStore.t.groupSettingsHideFromPublic">
                           <svg v-if="!form.hiddenMemberIds.includes(m.user_id)" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
                           <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
                         </button>
                         <!-- Role changer (not for owner) -->
-                        <div v-if="m.role !== 'owner'" class="relative flex-shrink-0">
+                        <div v-if="m.role !== 'owner'" class="relative shrink-0">
                           <div v-if="memberSaving[m.user_id]" class="w-5 h-5 border-2 border-brand-accent border-t-transparent rounded-full animate-spin"/>
                           <template v-else>
                             <button @click="openRoleDropdown($event, m.user_id)"
@@ -2838,10 +2838,10 @@ async function deleteGroup() {
                       <!-- Системные роли -->
                       <div class="mb-6">
                         <p class="text-xs font-semibold text-white/40 uppercase tracking-wider mb-3">{{ langStore.t.groupSettingsBuiltinRoles }}</p>
-                        <div class="space-y-2">
+                        <div class="stack-y-2">
                           <div v-for="(perms, rkey) in SYSTEM_ROLE_PERMISSIONS" :key="rkey"
                             class="flex items-start gap-3 px-4 py-3 rounded-2xl bg-brand-bg/50 border border-brand-border">
-                            <span class="mt-0.5 flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center" :style="`background:${(ROLE_META[rkey] ?? ROLE_META.member).color}15`">
+                            <span class="mt-0.5 shrink-0 w-6 h-6 rounded-lg flex items-center justify-center" :style="`background:${(ROLE_META[rkey] ?? ROLE_META.member).color}15`">
                               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${(ROLE_META[rkey] ?? ROLE_META.member).color}`"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="(ROLE_META[rkey] ?? ROLE_META.member).iconPath"/></svg>
                             </span>
                             <div class="flex-1 min-w-0">
@@ -2853,7 +2853,7 @@ async function deleteGroup() {
                                 <span v-for="p in PERMISSIONS_LIST" :key="p.id"
                                   class="text-xs px-2 py-0.5 rounded-lg border"
                                   :class="perms.includes(p.id) ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-white/8 text-white/20 bg-transparent'">
-                                  <svg class="w-2.5 h-2.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="p.iconPath"/></svg>
+                                  <svg class="w-2.5 h-2.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="p.iconPath"/></svg>
                                   {{ p.label }}
                                 </span>
                               </div>
@@ -2868,25 +2868,25 @@ async function deleteGroup() {
                         <div v-if="!customRolesList.length" class="text-center py-8 text-white/30 text-sm border border-dashed border-white/10 rounded-2xl">
                           {{ langStore.t.groupSettingsNoRolesHint }}
                         </div>
-                        <div v-else class="space-y-2 mb-4">
+                        <div v-else class="stack-y-2 mb-4">
                           <div v-for="role in customRolesList" :key="role.id"
                             class="flex items-start gap-3 px-4 py-3 rounded-2xl bg-brand-bg/50 border border-brand-border hover:border-white/15 transition-colors">
-                            <span class="text-xl flex-shrink-0 mt-0.5">{{ role.icon }}</span>
+                            <span class="text-xl shrink-0 mt-0.5">{{ role.icon }}</span>
                             <div class="flex-1 min-w-0">
                               <div class="flex items-center gap-2 mb-1.5">
-                                <span class="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" :style="`background:${role.color}`"/>
+                                <span class="inline-block w-2.5 h-2.5 rounded-full shrink-0" :style="`background:${role.color}`"/>
                                 <span class="text-sm font-semibold text-white">{{ role.name }}</span>
                               </div>
                               <div class="flex flex-wrap gap-1.5">
                                 <span v-for="p in PERMISSIONS_LIST" :key="p.id"
                                   class="text-xs px-2 py-0.5 rounded-lg border"
                                   :class="role.permissions.includes(p.id) ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' : 'border-white/8 text-white/20'">
-                                  <svg class="w-2.5 h-2.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="p.iconPath"/></svg>
+                                  <svg class="w-2.5 h-2.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="p.iconPath"/></svg>
                                   {{ p.label }}
                                 </span>
                               </div>
                             </div>
-                            <div class="flex items-center gap-1.5 flex-shrink-0 mt-0.5">
+                            <div class="flex items-center gap-1.5 shrink-0 mt-0.5">
                               <button @click="openEditRole(role)"
                                 class="w-8 h-8 rounded-xl border border-brand-border bg-brand-bg hover:border-white/30 flex items-center justify-center transition-colors text-white/50 hover:text-white"
                                 :title="langStore.t.editPost">
@@ -2918,7 +2918,7 @@ async function deleteGroup() {
                   </div>
 
                   <!-- ── Tab: Организаторы ── -->
-                  <div v-show="teamTab === 'organizers'" class="p-5 space-y-5">
+                  <div v-show="teamTab === 'organizers'" class="p-5 stack-y-5">
                     <!-- Current admins/organizers -->
                     <div>
                       <div class="flex items-center justify-between mb-3">
@@ -2933,16 +2933,16 @@ async function deleteGroup() {
                         class="py-4 text-center text-white/30 text-sm bg-brand-bg border border-dashed border-brand-border/60 rounded-2xl">
                         {{ langStore.t.groupSettingsNoOrganizersAssigned }}
                       </div>
-                      <div v-else class="space-y-2">
+                      <div v-else class="stack-y-2">
                         <div v-for="m in sortedMembers.filter(m => ['owner','admin','moderator'].includes(m.role))" :key="m.user_id"
                           class="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-brand-bg border border-brand-border">
-                          <div class="w-9 h-9 rounded-xl bg-brand-accent/15 overflow-hidden flex-shrink-0">
+                          <div class="w-9 h-9 rounded-xl bg-brand-accent/15 overflow-hidden shrink-0">
                             <img v-if="m.user.avatar_url" :src="m.user.avatar_url" class="w-full h-full object-cover" />
                             <div v-else class="w-full h-full flex items-center justify-center text-brand-accent text-xs font-bold">{{ (m.user.display_name || m.user.username || '?')[0].toUpperCase() }}</div>
                           </div>
                           <div class="flex-1 min-w-0">
                             <p class="text-sm font-bold text-white truncate">{{ m.user.display_name || m.user.username }}</p>
-                            <p class="text-[10px] mt-0.5 flex items-center gap-1" :style="`color: ${ROLE_META[m.role]?.color || '#9ca3af'}`"><svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="ROLE_META[m.role]?.iconPath ?? ROLE_META.member.iconPath"/></svg>{{ ROLE_META[m.role]?.label }}</p>
+                            <p class="text-[10px] mt-0.5 flex items-center gap-1" :style="`color: ${ROLE_META[m.role]?.color || '#9ca3af'}`"><svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="ROLE_META[m.role]?.iconPath ?? ROLE_META.member.iconPath"/></svg>{{ ROLE_META[m.role]?.label }}</p>
                           </div>
                         </div>
                       </div>
@@ -2951,10 +2951,10 @@ async function deleteGroup() {
                     <!-- Add organizer from members -->
                     <div v-if="sortedMembers.filter(m => m.role === 'member').length">
                       <p class="text-xs font-bold text-white/55 uppercase tracking-wider mb-3">{{ langStore.t.groupSettingsAssignFromMembers }}</p>
-                      <div class="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                      <div class="max-h-52 overflow-y-auto stack-y-1.5 pr-1">
                         <div v-for="m in sortedMembers.filter(m => m.role === 'member').slice(0, 20)" :key="m.user_id"
                           class="flex items-center gap-3 px-3 py-2 rounded-xl bg-brand-bg/60 border border-brand-border/60 hover:border-brand-border transition-colors">
-                          <div class="w-8 h-8 rounded-lg bg-brand-accent/10 overflow-hidden flex-shrink-0">
+                          <div class="w-8 h-8 rounded-lg bg-brand-accent/10 overflow-hidden shrink-0">
                             <img v-if="m.user.avatar_url" :src="m.user.avatar_url" class="w-full h-full object-cover" />
                             <div v-else class="w-full h-full flex items-center justify-center text-brand-accent/60 text-xs font-bold">{{ (m.user.display_name || m.user.username || '?')[0].toUpperCase() }}</div>
                           </div>
@@ -2995,14 +2995,14 @@ async function deleteGroup() {
                 <section v-show="openSection === 'sec-social'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                   <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3"
                     :style="`background:linear-gradient(90deg,${tailSections[2].color}0c 0%,transparent 100%)`">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${tailSections[2].color}1a`">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" :style="`background:${tailSections[2].color}1a`">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${tailSections[2].color}`">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="tailSections[2].iconPath"/>
                       </svg>
                     </div>
                     <h2 class="font-bold text-white text-sm">{{ tailSections[2].label }}</h2>
                   </div>
-                  <div class="p-6 space-y-4">
+                  <div class="p-6 stack-y-4">
                     <div v-for="link in [
                       { key: 'socialTelegram', label: 'Telegram', placeholder: 'https://t.me/...', d: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z' },
                       { key: 'socialDiscord', label: 'Discord', placeholder: 'https://discord.gg/...', d: 'M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z' },
@@ -3025,7 +3025,7 @@ async function deleteGroup() {
                 <section v-show="openSection === 'sec-customize'" class="bg-brand-card border border-border-default rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                   <div class="px-6 py-4 border-b border-border-default flex items-center gap-3"
                     style="background:linear-gradient(90deg,rgba(167,139,250,0.05) 0%,transparent 100%)">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(167,139,250,0.12)">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:rgba(167,139,250,0.12)">
                       <BIcon name="Palette" class="w-4 h-4" style="color:#a78bfa" />
                     </div>
                     <h2 class="font-bold text-sm text-text-primary">{{ langStore.t.groupSettingsCustomizeGroupTitle }}</h2>
@@ -3049,7 +3049,7 @@ async function deleteGroup() {
                     <!-- Customization editors (business only) -->
                     <template v-else>
                       <!-- My items from shop -->
-                      <div class="space-y-6">
+                      <div class="stack-y-6">
                         <!-- Background -->
                         <div>
                           <label class="block text-sm font-medium text-text-primary mb-2">{{ langStore.t.groupSettingsGroupBackground }}</label>
@@ -3127,14 +3127,14 @@ async function deleteGroup() {
                 <section v-show="openSection === 'sec-danger'" class="bg-brand-card border border-brand-error/20 rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
                   <div class="px-6 py-4 border-b border-brand-error/20 flex items-center gap-3"
                     style="background:linear-gradient(90deg,rgba(239,68,68,0.05) 0%,transparent 100%)">
-                    <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(239,68,68,0.1)">
+                    <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:rgba(239,68,68,0.1)">
                       <svg class="w-4 h-4 text-brand-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                       </svg>
                     </div>
                     <h2 class="font-bold text-brand-error text-sm">{{ langStore.t.groupSettingsSecDanger }}</h2>
                   </div>
-                  <div class="p-6 space-y-5">
+                  <div class="p-6 stack-y-5">
                     <p class="text-white/40 text-sm">{{ langStore.t.groupSettingsDangerHint }}</p>
                     <div class="bg-brand-bg/40 border border-brand-error/20 rounded-2xl p-4 flex items-center justify-between">
                       <div>
@@ -3167,7 +3167,7 @@ async function deleteGroup() {
   <!-- ══ Dropdown роли (Teleport to body, fixes overflow-hidden clip) ══ -->
   <Teleport to="body">
     <div v-if="roleDropdownFor && roleDropdownMember"
-      class="fixed z-[999] bg-brand-card border border-brand-border rounded-2xl shadow-2xl py-1.5 w-56"
+      class="fixed z-999 bg-brand-card border border-brand-border rounded-2xl shadow-2xl py-1.5 w-56"
       :style="`top:${dropdownY}px;right:${dropdownRight}px`"
       @click.stop>
       <div class="px-3 pb-1 pt-0.5 mb-1 border-b border-brand-border">
@@ -3177,11 +3177,11 @@ async function deleteGroup() {
         @click="doSetRole(roleDropdownMember!.user_id, r.value)"
         class="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm hover:bg-white/5 transition-colors text-left"
         :class="roleDropdownMember!.role === r.value ? 'text-white font-bold' : 'text-white/70'">
-        <span class="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center" :style="`background:${r.color}20`">
+        <span class="shrink-0 w-5 h-5 rounded-md flex items-center justify-center" :style="`background:${r.color}20`">
           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" :style="`color:${r.color}`"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="r.iconPath"/></svg>
         </span>
         <span class="flex-1">{{ r.label }}</span>
-        <svg v-if="roleDropdownMember!.role === r.value" class="w-3.5 h-3.5 flex-shrink-0" style="color:#a78bfa" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg v-if="roleDropdownMember!.role === r.value" class="w-3.5 h-3.5 shrink-0" style="color:#a78bfa" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
         </svg>
       </button>
@@ -3190,7 +3190,7 @@ async function deleteGroup() {
         <button @click="doKickMember(roleDropdownMember!.user_id); closeRoleDropdown()"
           :disabled="memberKicking[roleDropdownMember!.user_id]"
           class="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors text-left">
-          <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6m3-3l3 3-3 3"/>
           </svg>
           {{ langStore.t.groupSettingsKick }}
@@ -3198,14 +3198,14 @@ async function deleteGroup() {
       </div>
     </div>
     <!-- Backdrop to close dropdown -->
-    <div v-if="roleDropdownFor" class="fixed inset-0 z-[998]" @click="closeRoleDropdown()"/>
+    <div v-if="roleDropdownFor" class="fixed inset-0 z-998" @click="closeRoleDropdown()"/>
   </Teleport>
 
   <!-- ══ Модалка создания/редактирования роли ═══════════════════════════ -->
   <Teleport to="body">
     <Transition name="modal-fade">
-      <div v-if="showRoleModal" class="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showRoleModal = false"/>
+      <div v-if="showRoleModal" class="fixed inset-0 z-1000 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-xs" @click="showRoleModal = false"/>
         <div class="relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-lg p-6 z-10" @click.stop>
           <div class="flex items-center justify-between mb-6">
             <h2 class="text-lg font-bold text-white">{{ roleModalMode === 'create' ? langStore.t.groupSettingsNewRole : langStore.t.groupSettingsEditRole }}</h2>
@@ -3251,9 +3251,9 @@ async function deleteGroup() {
                 :class="roleForm.permissions.includes(p.id)
                   ? 'border-emerald-500/50 bg-emerald-500/10 text-white'
                   : 'border-white/10 bg-white/5 text-white/50 hover:bg-white/8 hover:text-white/70'">
-                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="p.iconPath"/></svg>
+                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="p.iconPath"/></svg>
                 <span class="text-xs font-medium leading-tight">{{ p.label }}</span>
-                <svg v-if="roleForm.permissions.includes(p.id)" class="w-3.5 h-3.5 ml-auto text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg v-if="roleForm.permissions.includes(p.id)" class="w-3.5 h-3.5 ml-auto text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
                 </svg>
               </button>
@@ -3293,8 +3293,9 @@ async function deleteGroup() {
 </template>
 
 <style scoped>
+@reference "../assets/style.css";
 .field-input {
-  @apply w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/50 focus:outline-none transition-all;
+  @apply w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-brand-muted/50 focus:outline-hidden transition-all;
 }
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }

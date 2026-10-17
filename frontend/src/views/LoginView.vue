@@ -345,8 +345,8 @@ const features = computed(() => [
           :class="mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'"
         >
           <!-- Бейджик Beta -->
-          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/8 border border-white/12 text-xs font-bold text-white/60 mb-7 backdrop-blur-sm">
-            <span class="w-1.5 h-1.5 rounded-full bg-[#FFC01F] shadow-[0_0_6px_#FFC01F] animate-pulse"></span>
+          <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/8 border border-white/12 text-xs font-bold text-white/60 mb-7 backdrop-blur-xs">
+            <span class="w-1.5 h-1.5 rounded-full bg-brand-yellow shadow-[0_0_6px_#FFC01F] animate-pulse"></span>
             Bloomly Beta
           </div>
 
@@ -382,7 +382,7 @@ const features = computed(() => [
               :style="{ transitionDelay: `${i * 80 + 400}ms` }"
               :class="mounted ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'"
             >
-              <div class="flex-shrink-0 w-9 h-9 rounded-xl bg-white/8 border border-white/10 flex items-center justify-center text-base group-hover:bg-brand-accent/20 group-hover:border-brand-accent/30 transition-all duration-200">
+              <div class="shrink-0 w-9 h-9 rounded-xl bg-white/8 border border-white/10 flex items-center justify-center text-base group-hover:bg-brand-accent/20 group-hover:border-brand-accent/30 transition-all duration-200">
                 {{ f.icon }}
               </div>
               <div>
@@ -395,7 +395,7 @@ const features = computed(() => [
       </div>
 
       <!-- ─────────── DIVIDER ─────────── -->
-      <div class="hidden lg:block w-px self-stretch my-10 bg-gradient-to-b from-transparent via-white/8 to-transparent"></div>
+      <div class="hidden lg:block w-px self-stretch my-10 bg-linear-to-b/srgb from-transparent via-white/8 to-transparent"></div>
 
       <!-- ─────────── RIGHT PANEL ─────────── -->
       <div class="w-full lg:w-[42%] flex items-center justify-center p-5 sm:p-8 lg:p-12">
@@ -478,7 +478,7 @@ const features = computed(() => [
               </button>
 
               <!-- ФОРМА -->
-              <form @submit.prevent="onSubmit" class="space-y-3.5">
+              <form @submit.prevent="onSubmit" class="stack-y-3.5">
 
                 <!-- Email (login / register / forgot / reset) -->
                 <div v-if="mode !== 'verify' && mode !== 'twofactor'" class="input-group">
@@ -503,7 +503,7 @@ const features = computed(() => [
                   leave-from-class="opacity-100 max-h-20 translate-y-0"
                   leave-to-class="opacity-0 max-h-0 -translate-y-2"
                 >
-                  <div v-if="mode === 'register'" class="space-y-1.5">
+                  <div v-if="mode === 'register'" class="stack-y-1.5">
                     <div class="input-group overflow-hidden">
                       <UserIcon class="input-icon" />
                       <input :value="username" @input="username = ($event.target as HTMLInputElement).value.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '').slice(0, 30)" type="text" :placeholder="langStore.t.usernamePlaceholder" required minlength="3" maxlength="30" class="fld" autocomplete="username" autocorrect="off" autocapitalize="none" spellcheck="false" />
@@ -534,23 +534,23 @@ const features = computed(() => [
                   </button>
                 </div>
 
-                <div v-if="mode === 'register'" class="space-y-2.5 rounded-2xl border border-white/10 bg-white/3 p-3 text-left">
+                <div v-if="mode === 'register'" class="stack-y-2.5 rounded-2xl border border-white/10 bg-white/3 p-3 text-left">
                   <label class="flex items-start gap-2.5 cursor-pointer text-xs text-white/75">
-                    <input v-model="consentPersonalData" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-white/20 bg-white/5 text-brand-accent focus:ring-brand-accent" required />
+                    <input v-model="consentPersonalData" type="checkbox" class="mt-0.5 h-4 w-4 rounded-sm border-white/20 bg-white/5 text-brand-accent focus:ring-brand-accent" required />
                     <span>
                       Я согласен на обработку моих персональных данных в соответствии с
                       <RouterLink to="/privacy" class="text-brand-accent hover:underline">Политикой конфиденциальности</RouterLink>.
                     </span>
                   </label>
                   <label class="flex items-start gap-2.5 cursor-pointer text-xs text-white/75">
-                    <input v-model="consentCookies" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-white/20 bg-white/5 text-brand-accent focus:ring-brand-accent" required />
+                    <input v-model="consentCookies" type="checkbox" class="mt-0.5 h-4 w-4 rounded-sm border-white/20 bg-white/5 text-brand-accent focus:ring-brand-accent" required />
                     <span>
                       Я согласен на использование cookie и аналогичных технологий, описанных в
                       <RouterLink to="/privacy" class="text-brand-accent hover:underline">Политике использования cookie</RouterLink>.
                     </span>
                   </label>
                   <label class="flex items-start gap-2.5 cursor-pointer text-xs text-white/65">
-                    <input v-model="consentMarketingEmails" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-white/20 bg-white/5 text-brand-accent focus:ring-brand-accent" />
+                    <input v-model="consentMarketingEmails" type="checkbox" class="mt-0.5 h-4 w-4 rounded-sm border-white/20 bg-white/5 text-brand-accent focus:ring-brand-accent" />
                     <span>Я хочу получать новости и предложения по email (необязательно).</span>
                   </label>
                 </div>
@@ -565,10 +565,10 @@ const features = computed(() => [
 
                 <!-- Запомнить устройство (только login) -->
                 <label v-if="mode === 'login'" class="flex items-center gap-3 cursor-pointer select-none group">
-                  <div class="relative w-10 h-5.5 flex-shrink-0">
+                  <div class="relative w-10 h-5.5 shrink-0">
                     <input type="checkbox" v-model="remember" class="sr-only peer" />
                     <div class="w-10 h-5 rounded-full border border-white/12 bg-white/5 peer-checked:bg-brand-accent peer-checked:border-brand-accent transition-all duration-200"></div>
-                    <div class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white/40 peer-checked:bg-white peer-checked:translate-x-5 transition-all duration-200 shadow-sm"></div>
+                    <div class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white/40 peer-checked:bg-white peer-checked:translate-x-5 transition-all duration-200 shadow-xs"></div>
                   </div>
                   <span class="text-xs font-semibold text-white/35 group-hover:text-white/55 transition-colors flex items-center gap-1.5">
                     <ComputerDesktopIcon class="w-3.5 h-3.5" />
@@ -583,7 +583,7 @@ const features = computed(() => [
                 </div>
 
                 <!-- OTP для подтверждения email (режим verify) -->
-                <div v-if="mode === 'verify'" class="space-y-3">
+                <div v-if="mode === 'verify'" class="stack-y-3">
                   <!-- Информация куда отправлено -->
                   <div class="flex items-center gap-2.5 p-3.5 rounded-2xl bg-[#7c3aed]/10 border border-[#7c3aed]/25">
                     <ShieldCheckIcon class="w-4 h-4 shrink-0 text-[#a78bfa]" />
@@ -617,7 +617,7 @@ const features = computed(() => [
                 </div>
 
                 <!-- Код второго фактора (режим twofactor) -->
-                <div v-if="mode === 'twofactor'" class="space-y-3">
+                <div v-if="mode === 'twofactor'" class="stack-y-3">
                   <div class="flex items-center gap-2.5 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25">
                     <ShieldCheckIcon class="w-4 h-4 shrink-0 text-emerald-400" />
                     <p class="text-xs text-emerald-400 font-semibold">
@@ -800,7 +800,7 @@ const features = computed(() => [
           </div>
 
           <!-- Декоративная подсветка снизу -->
-          <div class="h-px mt-3 w-2/3 mx-auto bg-gradient-to-r from-transparent via-brand-accent/40 to-transparent blur-sm"></div>
+          <div class="h-px mt-3 w-2/3 mx-auto bg-linear-to-r/srgb from-transparent via-brand-accent/40 to-transparent blur-xs"></div>
         </div>
       </div>
     </div>
@@ -1004,7 +1004,6 @@ const features = computed(() => [
 .cta-btn {
   position: relative;
   width: 100%;
-  margin-top: 6px;
   padding: 15px 28px;
   border-radius: 18px;
   font-weight: 900;
@@ -1058,5 +1057,5 @@ const features = computed(() => [
 
 /* ══ TOGGLE SWITCH ═════════════════════════════════════════════════ */
 .peer:checked ~ div { background: theme('colors.brand.accent'); border-color: theme('colors.brand.accent'); }
-.peer:checked ~ div + div { transform: translateX(20px); background: white; }
+.peer:checked ~ div + div { background: white; }
 </style>

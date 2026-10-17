@@ -74,7 +74,7 @@ function reset() {
   <!-- Backdrop -->
   <Teleport to="body">
     <div
-      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4"
       @click.self="$emit('close')">
 
       <div class="w-full max-w-lg bg-[#0e0e1c] border border-white/8 rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl">
@@ -103,7 +103,7 @@ function reset() {
         </div>
 
         <!-- Body -->
-        <div class="p-6 space-y-5 bg-[#0e0e1c]">
+        <div class="p-6 stack-y-5 bg-[#0e0e1c]">
 
           <!-- ── idle / error form ─────────────────────────────────────── -->
           <template v-if="step === 'idle' || step === 'error'">
@@ -117,7 +117,7 @@ function reset() {
                   v-model="link"
                   type="text"
                   placeholder="https://t.me/addstickers/PackName"
-                  class="flex-1 bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-[#2AABEE] transition-colors font-mono"
+                  class="flex-1 bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-white/30 outline-hidden focus:border-[#2AABEE] transition-colors font-mono"
                   @keydown.enter.prevent="doImport" />
               </div>
               <p class="text-[11px] text-white/35 mt-1.5">
@@ -174,7 +174,7 @@ function reset() {
 
           <!-- ── done ─────────────────────────────────────────────────── -->
           <template v-else-if="step === 'done' && result">
-            <div class="space-y-4">
+            <div class="stack-y-4">
               <!-- Summary -->
               <div class="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl px-4 py-3 flex items-center gap-3">
                 <BIcon name="CheckCircle2" class="w-5 h-5 text-emerald-400 shrink-0" />

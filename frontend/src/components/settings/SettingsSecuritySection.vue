@@ -350,18 +350,18 @@ onMounted(() => {
 <template>
   <section id="sec-security" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden scroll-mt-28">
     <div class="px-6 py-4 border-b border-brand-border flex items-center gap-3" style="background:linear-gradient(90deg,rgba(16,185,129,0.07) 0%,transparent 100%)">
-      <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(16,185,129,0.15)">
+      <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style="background:rgba(16,185,129,0.15)">
         <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
         </svg>
       </div>
       <h2 class="font-bold text-white text-sm">{{ langStore.t.securityLoginTitle }}</h2>
     </div>
-    <div class="p-6 space-y-3">
+    <div class="p-6 stack-y-3">
       <!-- Пароль -->
       <div class="flex items-center justify-between p-4 rounded-2xl border border-brand-border bg-brand-bg/60">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
+          <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
             <BIcon name="Lock" class="w-4.5 h-4.5 text-white/70" />
           </div>
           <div>
@@ -380,7 +380,7 @@ onMounted(() => {
 
       <!-- Смена пароля -->
       <Transition name="fade">
-        <div v-if="showChangePassword" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 space-y-3">
+        <div v-if="showChangePassword" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 stack-y-3">
           <div>
             <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-1.5">{{ langStore.t.currentPasswordLabel }}</label>
             <input v-model="pwForm.current" type="password" autocomplete="current-password" class="field-input" />
@@ -410,7 +410,7 @@ onMounted(() => {
 
       <!-- Забыли пароль — сброс кодом на почту -->
       <Transition name="fade">
-        <div v-if="showForgotPassword" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 space-y-3">
+        <div v-if="showForgotPassword" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 stack-y-3">
           <p class="text-xs text-white/45">{{ maskEmail(authStore.user?.email) }}</p>
           <button v-if="!fpCodeSent" type="button" @click="startForgotPassword" :disabled="fpSending"
             class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/15 transition-all disabled:opacity-50">
@@ -443,7 +443,7 @@ onMounted(() => {
       <!-- Смена email -->
       <div class="flex items-center justify-between p-4 rounded-2xl border border-brand-border bg-brand-bg/60">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
+          <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
             <svg class="w-4.5 h-4.5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
             </svg>
@@ -460,7 +460,7 @@ onMounted(() => {
       </div>
 
       <Transition name="fade">
-        <div v-if="showChangeEmail" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 space-y-3">
+        <div v-if="showChangeEmail" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 stack-y-3">
           <button v-if="!ecCodeSent" type="button" @click="startChangeEmail" :disabled="ecSending"
             class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/15 transition-all disabled:opacity-50">
             {{ ecSending ? langStore.t.savingLabel : langStore.t.sendCodeBtn }}
@@ -488,7 +488,7 @@ onMounted(() => {
       <!-- Двухфакторная аутентификация: приложение-аутентификатор -->
       <div class="flex items-center justify-between p-4 rounded-2xl border border-brand-border bg-brand-bg/60">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
+          <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
             <BIcon name="Smartphone" class="w-4.5 h-4.5 text-white/70" />
           </div>
           <div>
@@ -510,7 +510,7 @@ onMounted(() => {
       </div>
 
       <Transition name="fade">
-        <div v-if="showTotpSetup" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 space-y-3">
+        <div v-if="showTotpSetup" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 stack-y-3">
           <p v-if="authStore.user?.two_factor_method === 'email'" class="text-xs text-amber-400/90">{{ langStore.t.twoFactorReplaceHint }}</p>
           <div v-if="totpQr" class="flex flex-col items-center gap-3 py-2">
             <img :src="totpQr" alt="QR" class="w-40 h-40 rounded-xl bg-white p-2" />
@@ -533,7 +533,7 @@ onMounted(() => {
       <!-- Двухфакторная аутентификация: код на почту -->
       <div class="flex items-center justify-between p-4 rounded-2xl border border-brand-border bg-brand-bg/60">
         <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
+          <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
             <BIcon name="MailCheck" class="w-4.5 h-4.5 text-white/70" />
           </div>
           <div>
@@ -555,7 +555,7 @@ onMounted(() => {
       </div>
 
       <Transition name="fade">
-        <div v-if="showEmail2fa" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 space-y-3">
+        <div v-if="showEmail2fa" class="p-4 rounded-2xl border border-brand-border bg-brand-bg/60 stack-y-3">
           <p v-if="authStore.user?.two_factor_method === 'totp'" class="text-xs text-amber-400/90">{{ langStore.t.twoFactorReplaceHint }}</p>
           <button v-if="!email2faCodeSent" type="button" @click="startEmail2fa" :disabled="email2faSending"
             class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-white/10 hover:bg-white/15 transition-all disabled:opacity-50">
@@ -579,7 +579,7 @@ onMounted(() => {
 
       <!-- Отключение 2FA (требует пароль) -->
       <Transition name="fade">
-        <div v-if="showDisable2fa" class="p-4 rounded-2xl border border-red-500/20 bg-red-500/5 space-y-3">
+        <div v-if="showDisable2fa" class="p-4 rounded-2xl border border-red-500/20 bg-red-500/5 stack-y-3">
           <div>
             <label class="text-xs font-bold text-white/55 uppercase tracking-wider block mb-1.5">{{ langStore.t.currentPasswordLabel }}</label>
             <input v-model="disable2faPassword" type="password" autocomplete="current-password" class="field-input" />
@@ -604,7 +604,7 @@ onMounted(() => {
           :class="linkedAccounts.includes(p.key) ? 'border-brand-border bg-brand-bg/60' : 'border-brand-border/50 bg-brand-bg/30'"
         >
           <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" :style="`background:${p.color}22`">
+            <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" :style="`background:${p.color}22`">
               <svg class="w-5 h-5" :fill="p.iconFill ? p.color : 'none'" :stroke="p.iconFill ? 'none' : p.color" :stroke-width="p.iconFill ? '0' : '1.8'" viewBox="0 0 24 24">
                 <path :d="p.iconPath" />
               </svg>
@@ -660,14 +660,14 @@ onMounted(() => {
         <div v-if="sessionsLoading" class="flex justify-center py-6">
           <span class="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin"></span>
         </div>
-        <div v-else class="space-y-2">
+        <div v-else class="stack-y-2">
           <div
             v-for="s in sessions" :key="s.id"
             class="flex items-center justify-between p-4 rounded-2xl border transition-all"
             :class="s.current ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-brand-border/50 bg-brand-bg/30'"
           >
             <div class="flex items-center gap-3 min-w-0">
-              <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0">
+              <div class="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
                 <svg class="w-4.5 h-4.5 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                 </svg>
@@ -687,7 +687,7 @@ onMounted(() => {
               type="button"
               @click="revokeSession(s.id)"
               :disabled="revokingSessionId === s.id"
-              class="px-4 py-1.5 rounded-xl text-xs font-bold text-red-400 border border-red-500/20 hover:border-red-500/50 bg-red-500/5 hover:bg-red-500/10 transition-all disabled:opacity-50 flex-shrink-0"
+              class="px-4 py-1.5 rounded-xl text-xs font-bold text-red-400 border border-red-500/20 hover:border-red-500/50 bg-red-500/5 hover:bg-red-500/10 transition-all disabled:opacity-50 shrink-0"
             >
               <span v-if="revokingSessionId === s.id" class="flex items-center gap-1.5">
                 <span class="w-3 h-3 border border-t-transparent border-red-400 rounded-full animate-spin"></span>

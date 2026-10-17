@@ -434,7 +434,7 @@ onUnmounted(() => {
     >
       <div
         v-if="currentStory"
-        class="fixed inset-0 z-[700] flex items-center justify-center bg-black select-none"
+        class="fixed inset-0 z-700 flex items-center justify-center bg-black select-none"
         @mousedown="onTapStart"
         @mouseup="onTapEnd"
         @touchstart.passive="onTapStart"
@@ -448,11 +448,11 @@ onUnmounted(() => {
             class="w-full h-full object-cover scale-110 blur-2xl opacity-30 pointer-events-none"
             aria-hidden="true"
           />
-          <div class="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70"></div>
+          <div class="absolute inset-0 bg-linear-to-b/srgb from-black/50 via-transparent to-black/70"></div>
         </div>
 
         <!-- ── Story card ────────────────────────────────────────────────── -->
-        <div class="relative w-full h-full max-w-[430px] mx-auto flex flex-col md:h-auto md:aspect-[9/16] md:max-h-[95vh] md:rounded-3xl md:overflow-hidden md:my-auto">
+        <div class="relative w-full h-full max-w-[430px] mx-auto flex flex-col md:h-auto md:aspect-9/16 md:max-h-[95vh] md:rounded-3xl md:overflow-hidden md:my-auto">
 
           <!-- Progress bars row -->
           <div class="relative z-10 flex gap-1 px-3 pt-3">
@@ -478,12 +478,12 @@ onUnmounted(() => {
           <!-- Top bar: user info + actions -->
           <div class="relative z-10 flex items-center gap-3 px-3 pt-2 pb-1">
             <!-- Bloomly avatar / regular avatar -->
-            <div v-if="isBloomlyGroup" class="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center ring-2 ring-brand-accent/60">
+            <div v-if="isBloomlyGroup" class="shrink-0 w-9 h-9 rounded-full bg-linear-to-br/srgb from-[#4C67CF] to-[#7c3aed] flex items-center justify-center ring-2 ring-brand-accent/60">
               <span class="text-white font-black text-base select-none" style="letter-spacing:-1px">B</span>
             </div>
             <button
               v-else
-              class="flex-shrink-0 ring-2 ring-white/30 hover:ring-white/60 rounded-full transition-all"
+              class="shrink-0 ring-2 ring-white/30 hover:ring-white/60 rounded-full transition-all"
               @click.stop="emit('close'); router.push('/profile/' + currentStory.user.username)"
             >
               <img
@@ -523,7 +523,7 @@ onUnmounted(() => {
             <Transition name="fade">
               <div
                 v-if="paused"
-                class="px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-sm text-xs font-bold text-white flex items-center gap-1"
+                class="px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-xs text-xs font-bold text-white flex items-center gap-1"
               >
                 <BIcon name="Pause" class="w-3 h-3" />Пауза
               </div>
@@ -532,7 +532,7 @@ onUnmounted(() => {
             <button
               v-if="isVideoStory"
               @click.stop="toggleVideoMute"
-              class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors flex-shrink-0"
+              class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors shrink-0"
               :aria-label="videoMuted ? 'Включить звук' : 'Выключить звук'"
             >
               <BIcon :name="videoMuted ? 'VolumeX' : 'Volume2'" class="w-4 h-4" />
@@ -540,7 +540,7 @@ onUnmounted(() => {
             <!-- Close -->
             <button
               @click.stop="emit('close')"
-              class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors flex-shrink-0"
+              class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors shrink-0"
               aria-label="Закрыть"
             >
               <BIcon name="X" class="w-5 h-5" />
@@ -590,13 +590,13 @@ onUnmounted(() => {
                      content still centers vertically like before. -->
                 <div
                   v-else-if="currentStory.isBloomly"
-                  class="w-full h-full overflow-y-auto bg-gradient-to-br from-[#1a1f4e] via-[#0f172a] to-[#1e1b4b]"
+                  class="w-full h-full overflow-y-auto bg-linear-to-br/srgb from-[#1a1f4e] via-[#0f172a] to-[#1e1b4b]"
                 >
                   <div class="min-h-full flex flex-col items-center justify-center gap-6 px-8 py-12">
-                    <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center shadow-2xl shadow-brand-accent/30 flex-shrink-0">
+                    <div class="w-16 h-16 rounded-2xl bg-linear-to-br/srgb from-[#4C67CF] to-[#7c3aed] flex items-center justify-center shadow-2xl shadow-brand-accent/30 shrink-0">
                       <span class="text-white font-black text-3xl select-none" style="letter-spacing:-2px">B</span>
                     </div>
-                    <div class="w-full text-center space-y-3">
+                    <div class="w-full text-center stack-y-3">
                       <h2 class="text-xl font-extrabold text-white leading-tight">{{ currentStory.title }}</h2>
                       <p v-if="currentStory.body" class="text-sm text-white/70 leading-relaxed update-body text-left" v-html="sanitizeHtml(currentStory.body)" />
                     </div>
@@ -613,7 +613,7 @@ onUnmounted(() => {
                 <Transition name="fade">
                   <div
                     v-if="!loaded && (currentStory.image_url || currentStory.video_url)"
-                    class="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+                    class="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-xs"
                   >
                     <BIcon name="Loader2" class="w-10 h-10 text-white animate-spin" />
                   </div>
@@ -625,7 +625,7 @@ onUnmounted(() => {
             <div
               class="absolute left-0 top-0 bottom-0 w-1/3 flex items-center justify-start pl-3 opacity-0 hover:opacity-100 transition-opacity pointer-events-none"
             >
-              <div class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center">
+              <div class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-xs flex items-center justify-center">
                 <BIcon name="ChevronLeft" class="w-5 h-5 text-white" />
               </div>
             </div>
@@ -633,7 +633,7 @@ onUnmounted(() => {
             <div
               class="absolute right-0 top-0 bottom-0 w-1/3 flex items-center justify-end pr-3 opacity-0 hover:opacity-100 transition-opacity pointer-events-none"
             >
-              <div class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center">
+              <div class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-xs flex items-center justify-center">
                 <BIcon name="ChevronRight" class="w-5 h-5 text-white" />
               </div>
             </div>
@@ -649,7 +649,7 @@ onUnmounted(() => {
             >
               <div
                 v-if="showHeart"
-                class="fixed pointer-events-none z-[800] text-5xl"
+                class="fixed pointer-events-none z-800 text-5xl"
                 :style="{ left: heartX + 'px', top: heartY + 'px', transform: 'translate(-50%, -50%)' }"
               >
                 ❤️
@@ -661,7 +661,7 @@ onUnmounted(() => {
           <button
             v-if="hasPrevGroup"
             @click.stop="curGroupIdx--; curStoryIdx = 0"
-            class="hidden md:flex absolute left-[-60px] top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 items-center justify-center text-white transition-all hover:scale-110 backdrop-blur-sm"
+            class="hidden md:flex absolute left-[-60px] top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 items-center justify-center text-white transition-all hover:scale-110 backdrop-blur-xs"
             aria-label="Предыдущий пользователь"
           >
             <BIcon name="ChevronLeft" class="w-6 h-6" />
@@ -669,7 +669,7 @@ onUnmounted(() => {
           <button
             v-if="hasNextGroup"
             @click.stop="curGroupIdx++; curStoryIdx = 0"
-            class="hidden md:flex absolute right-[-60px] top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 items-center justify-center text-white transition-all hover:scale-110 backdrop-blur-sm"
+            class="hidden md:flex absolute right-[-60px] top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 items-center justify-center text-white transition-all hover:scale-110 backdrop-blur-xs"
             aria-label="Следующий пользователь"
           >
             <BIcon name="ChevronRight" class="w-6 h-6" />
@@ -710,7 +710,7 @@ onUnmounted(() => {
                 class="flex-1 flex flex-col gap-1 bg-white/6 border border-brand-accent/20 rounded-2xl px-4 py-2.5"
               >
                 <div class="flex items-center gap-1.5">
-                  <div class="w-4 h-4 rounded-md bg-gradient-to-br from-[#4C67CF] to-[#7c3aed] flex items-center justify-center flex-shrink-0">
+                  <div class="w-4 h-4 rounded-md bg-linear-to-br/srgb from-[#4C67CF] to-[#7c3aed] flex items-center justify-center shrink-0">
                     <span class="text-white font-black text-[8px]">B</span>
                   </div>
                   <span class="text-xs font-bold text-brand-accent">Обновление Bloomly</span>
@@ -728,7 +728,7 @@ onUnmounted(() => {
                   type="text"
                   placeholder="Ответить в личку…"
                   :disabled="replySending"
-                  class="flex-1 bg-transparent text-sm text-white placeholder-white/40 outline-none disabled:opacity-50"
+                  class="flex-1 bg-transparent text-sm text-white placeholder-white/40 outline-hidden disabled:opacity-50"
                   @keydown.enter.stop="sendReply"
                   @focus="inputFocused = true; pauseStory()"
                   @blur="inputFocused = false; resumeStory()"
@@ -737,7 +737,7 @@ onUnmounted(() => {
                   v-if="replyText.trim() || replySending"
                   @click.stop="sendReply"
                   :disabled="replySending"
-                  class="w-7 h-7 rounded-full bg-brand-accent flex items-center justify-center flex-shrink-0 hover:bg-brand-accent-plus disabled:opacity-60 transition-all active:scale-90"
+                  class="w-7 h-7 rounded-full bg-brand-accent flex items-center justify-center shrink-0 hover:bg-brand-accent-plus disabled:opacity-60 transition-all active:scale-90"
                 >
                   <BIcon v-if="replySending" name="Loader2" class="w-3.5 h-3.5 text-white animate-spin" />
                   <BIcon v-else name="SendHorizontal" class="w-3.5 h-3.5 text-white" />
@@ -754,7 +754,7 @@ onUnmounted(() => {
               </button>
 
             <!-- Vote pill — hidden for Bloomly stories -->
-            <div v-if="!isBloomlyGroup" class="flex items-center gap-1 bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/20 flex-shrink-0">
+            <div v-if="!isBloomlyGroup" class="flex items-center gap-1 bg-white/10 backdrop-blur-md rounded-full p-1 border border-white/20 shrink-0">
               <button
                 @click.stop="castVote(1)"
                 class="p-1.5 rounded-full transition-all duration-150"
@@ -783,7 +783,7 @@ onUnmounted(() => {
             <button
               v-if="!isBloomlyGroup"
               @click.stop
-              class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center transition-all hover:scale-110 backdrop-blur-sm flex-shrink-0"
+              class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center transition-all hover:scale-110 backdrop-blur-xs shrink-0"
               aria-label="Поделиться"
             >
               <BIcon name="Share2" class="w-4.5 h-4.5 text-white" />
@@ -798,14 +798,14 @@ onUnmounted(() => {
             v-for="(g, gi) in groups"
             :key="g[0].user.id"
             @click.stop="curGroupIdx = gi; curStoryIdx = 0"
-            class="flex-shrink-0 transition-all duration-200"
+            class="shrink-0 transition-all duration-200"
             :class="gi === curGroupIdx ? 'scale-110' : 'opacity-50 hover:opacity-80'"
             :aria-label="'Истории пользователя ' + g[0].user.username"
           >
             <div
               class="w-9 h-9 rounded-xl p-[2px]"
               :class="gi === curGroupIdx
-                ? 'bg-gradient-to-tr from-brand-accent to-brand-purple'
+                ? 'bg-linear-to-tr/srgb from-brand-accent to-brand-purple'
                 : 'bg-white/20'"
             >
               <div class="w-full h-full rounded-[9px] overflow-hidden">
@@ -841,7 +841,7 @@ onUnmounted(() => {
             @mousedown.stop
             @touchstart.stop
           >
-            <div class="flex items-center justify-between px-5 pt-4 pb-2 flex-shrink-0">
+            <div class="flex items-center justify-between px-5 pt-4 pb-2 shrink-0">
               <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
                 <BIcon name="Eye" class="w-4 h-4" />
                 Просмотры
@@ -854,7 +854,7 @@ onUnmounted(() => {
                 <BIcon name="X" class="w-4 h-4" />
               </button>
             </div>
-            <div class="flex-1 overflow-y-auto px-5 pb-5 space-y-1">
+            <div class="flex-1 overflow-y-auto px-5 pb-5 stack-y-1">
               <div v-if="loadingViewers" class="flex items-center justify-center py-8">
                 <BIcon name="Loader2" class="w-6 h-6 text-white/40 animate-spin" />
               </div>
@@ -871,13 +871,13 @@ onUnmounted(() => {
                 <img
                   v-if="v.user.avatar_url"
                   :src="v.user.avatar_url"
-                  class="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                  class="w-9 h-9 rounded-full object-cover shrink-0"
                 />
-                <div v-else class="w-9 h-9 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm flex-shrink-0">
+                <div v-else class="w-9 h-9 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm shrink-0">
                   {{ (v.user.username ?? '?')[0].toUpperCase() }}
                 </div>
                 <span class="flex-1 min-w-0 text-sm font-semibold text-white truncate">{{ v.user.display_name || v.user.username }}</span>
-                <span class="text-[11px] text-white/40 flex-shrink-0">{{ formatAgo(v.created_at) }}</span>
+                <span class="text-[11px] text-white/40 shrink-0">{{ formatAgo(v.created_at) }}</span>
               </button>
             </div>
           </div>

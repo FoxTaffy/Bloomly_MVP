@@ -894,7 +894,7 @@ onDeactivated(() => {
   <div class="min-h-screen bg-brand-bg text-white font-nunito selection:bg-brand-accent/30" @click="closeMenu">
 
     <!-- Share toast -->
-    <div v-if="shareToast" class="fixed top-20 left-1/2 -translate-x-1/2 z-[500] px-5 py-2.5 bg-brand-success text-white text-sm font-bold rounded-full shadow-xl pointer-events-none">
+    <div v-if="shareToast" class="fixed top-20 left-1/2 -translate-x-1/2 z-500 px-5 py-2.5 bg-brand-success text-white text-sm font-bold rounded-full shadow-xl pointer-events-none">
       {{ shareToast }}
     </div>
 
@@ -905,7 +905,7 @@ onDeactivated(() => {
       <!-- Left Sidebar -->
       <AppSidebar v-model:activeNav="activeNav">
         <template #bottom>
-          <div v-if="adSlotMode !== 'hidden'" class="space-y-3">
+          <div v-if="adSlotMode !== 'hidden'" class="stack-y-3">
             <template v-if="adSlotMode === 'ads'">
               <AdSlot v-for="ad in activeAds" :key="ad.id" :ad="ad" />
             </template>
@@ -915,7 +915,7 @@ onDeactivated(() => {
       </AppSidebar>
 
       <!-- Main Content -->
-      <main class="flex-1 min-w-0 space-y-4 md:space-y-5 pb-28 md:pb-20 max-w-2xl w-full">
+      <main class="flex-1 min-w-0 stack-y-4 md:stack-y-5 pb-28 md:pb-20 max-w-2xl w-full">
 
         <!-- ── BOOKMARKS VIEW ────────────────────────────────────────────── -->
         <div v-if="activeNav === 'bookmarks'">
@@ -923,7 +923,7 @@ onDeactivated(() => {
             <BIcon name="Bookmark" class="w-6 h-6 text-brand-yellow" />
             <h2 class="text-xl font-bold text-white">{{ langStore.t.bookmarks }}</h2>
           </div>
-          <div v-if="isLoadingBookmarks" class="space-y-4">
+          <div v-if="isLoadingBookmarks" class="stack-y-4">
             <SkeletonPost v-for="n in 3" :key="n" />
           </div>
           <div v-else-if="bookmarkedPosts.length === 0" class="text-center py-16 bg-brand-card border border-brand-border rounded-3xl shadow-xl">
@@ -933,7 +933,7 @@ onDeactivated(() => {
             <h3 class="text-2xl font-bold text-white mb-2">{{ langStore.t.noBookmarks }}</h3>
             <p class="text-white/55">{{ langStore.t.saveToBookmarks }}</p>
           </div>
-          <div v-else class="space-y-4">
+          <div v-else class="stack-y-4">
             <PostCard
               v-for="post in bookmarkedPosts"
               :key="post.id"
@@ -972,19 +972,19 @@ onDeactivated(() => {
             <!-- Entity avatar -->
             <template v-if="postAsEntity.type === 'group'">
               <img v-if="postAsEntity.avatar_url" :src="postAsEntity.avatar_url"
-                class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors"
+                class="w-10 h-10 rounded-xl border-2 border-brand-border object-cover shrink-0 group-hover:border-brand-accent/50 transition-colors"
                 @error="onAvatarError" />
-              <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">
+              <div v-else class="w-10 h-10 rounded-xl border-2 border-brand-border shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">
                 {{ (postAsEntity.name || '?')[0].toUpperCase() }}
               </div>
             </template>
             <template v-else>
-              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover flex-shrink-0 group-hover:border-brand-accent/50 transition-colors" @error="onAvatarError" />
-              <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border flex-shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
+              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-10 h-10 rounded-full border-2 border-brand-border object-cover shrink-0 group-hover:border-brand-accent/50 transition-colors" @error="onAvatarError" />
+              <div v-else class="w-10 h-10 rounded-full border-2 border-brand-border shrink-0 group-hover:border-brand-accent/50 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold transition-colors">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
             </template>
             <span class="flex-1 flex items-center justify-between gap-2 min-w-0 text-sm text-white/55 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2.5 group-hover:border-brand-accent/40 transition-colors">
               <span class="truncate">{{ postAsEntity.type === 'group' ? `${postAsEntity.name}…` : langStore.t.whatsNew }}</span>
-              <span class="flex items-center gap-2 text-white/35 group-hover:text-white/60 transition-colors flex-shrink-0">
+              <span class="flex items-center gap-2 text-white/35 group-hover:text-white/60 transition-colors shrink-0">
                 <BIcon name="ImagePlus" class="w-4 h-4" />
                 <BIcon name="Hash" class="w-4 h-4" />
               </span>
@@ -992,16 +992,16 @@ onDeactivated(() => {
           </button>
 
           <!-- Expanded composer -->
-          <div v-else class="p-5 max-md:p-4 space-y-4">
+          <div v-else class="p-5 max-md:p-4 stack-y-4">
             <!-- Author + textarea + send (mobile: avatar & buttons on top, full-width textarea below) -->
             <div class="flex items-start gap-3 max-md:flex-wrap max-md:items-center max-md:gap-2">
               <!-- Entity avatar — кликабельна если есть группы -->
-              <div class="relative flex-shrink-0 mt-0.5">
+              <div class="relative shrink-0 mt-0.5">
                 <!-- Clickable avatar -->
                 <button
                   v-if="adminGroups.length"
                   @click.stop="showEntityPicker = !showEntityPicker"
-                  class="flex items-center gap-1 focus:outline-none group/av"
+                  class="flex items-center gap-1 focus:outline-hidden group/av"
                 >
                   <template v-if="postAsEntity.type === 'group'">
                     <img v-if="postAsEntity.avatar_url" :src="postAsEntity.avatar_url"
@@ -1044,12 +1044,12 @@ onDeactivated(() => {
                     <button class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
                       :class="postAsEntity.type === 'user' ? 'text-brand-accent' : 'text-white'"
                       @click="postAsEntity = { type: 'user' }; showEntityPicker = false">
-                      <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover flex-shrink-0" @error="onAvatarError" />
-                      <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
+                      <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover shrink-0" @error="onAvatarError" />
+                      <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold shrink-0">
                         {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
                       </div>
                       <span class="font-semibold truncate flex-1 text-left">{{ auth.user?.display_name || auth.user?.username }}</span>
-                      <BIcon v-if="postAsEntity.type === 'user'" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+                      <BIcon v-if="postAsEntity.type === 'user'" name="Check" class="w-3.5 h-3.5 text-brand-accent shrink-0" />
                     </button>
                     <div class="h-px bg-brand-border mx-3 my-1" />
                     <!-- Admin groups -->
@@ -1057,13 +1057,13 @@ onDeactivated(() => {
                       class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
                       :class="postAsEntity.type === 'group' && postAsEntity.id === grp.id ? 'text-brand-accent' : 'text-white'"
                       @click="postAsEntity = { type: 'group', id: grp.id, slug: grp.slug, name: grp.name, avatar_url: grp.avatar_url }; showEntityPicker = false">
-                      <img v-if="grp.avatar_url" :src="grp.avatar_url" class="w-7 h-7 rounded-xl object-cover flex-shrink-0" @error="onAvatarError" />
-                      <div v-else class="w-7 h-7 rounded-xl bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
+                      <img v-if="grp.avatar_url" :src="grp.avatar_url" class="w-7 h-7 rounded-xl object-cover shrink-0" @error="onAvatarError" />
+                      <div v-else class="w-7 h-7 rounded-xl bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold shrink-0">
                         {{ (grp.name || '?')[0].toUpperCase() }}
                       </div>
                       <span class="font-semibold truncate flex-1 text-left">{{ grp.name }}</span>
-                      <span class="text-[9px] text-brand-accent/70 bg-brand-accent/10 border border-brand-accent/25 px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">{{ langStore.t.groups }}</span>
-                      <BIcon v-if="postAsEntity.type === 'group' && postAsEntity.id === grp.id" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+                      <span class="text-[9px] text-brand-accent/70 bg-brand-accent/10 border border-brand-accent/25 px-1.5 py-0.5 rounded-sm font-bold uppercase shrink-0">{{ langStore.t.groups }}</span>
+                      <BIcon v-if="postAsEntity.type === 'group' && postAsEntity.id === grp.id" name="Check" class="w-3.5 h-3.5 text-brand-accent shrink-0" />
                     </button>
                   </div>
                 </Transition>
@@ -1076,7 +1076,7 @@ onDeactivated(() => {
                 />
               </div>
               <!-- Schedule button -->
-              <div class="relative flex-shrink-0 mt-0.5 max-md:mt-0 max-md:ml-auto">
+              <div class="relative shrink-0 mt-0.5 max-md:mt-0 max-md:ml-auto">
                 <button
                   @click.stop="showScheduleMenu = !showScheduleMenu"
                   :disabled="(!newPost.content.trim() && mediaUrls.length === 0) || isScheduling"
@@ -1098,7 +1098,7 @@ onDeactivated(() => {
               <button
                 @click="createPost"
                 :disabled="(!newPost.content.trim() && mediaUrls.length === 0) || isPosting"
-                class="w-10 h-10 rounded-full flex items-center justify-center bg-brand-accent text-white hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-accent/25 flex-shrink-0 mt-0.5 max-md:mt-0"
+                class="w-10 h-10 rounded-full flex items-center justify-center bg-brand-accent text-white hover:bg-brand-accent-plus disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-brand-accent/25 shrink-0 mt-0.5 max-md:mt-0"
                 title="Опубликовать"
               >
                 <BIcon v-if="isPosting" name="Loader2" class="w-5 h-5 animate-spin" />
@@ -1152,7 +1152,7 @@ onDeactivated(() => {
 
               <!-- Tag input -->
               <div class="relative inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-transparent hover:border-brand-border hover:bg-brand-bg transition-all">
-                <BIcon name="Hash" class="w-4 h-4 text-white/55 flex-shrink-0" />
+                <BIcon name="Hash" class="w-4 h-4 text-white/55 shrink-0" />
                 <input
                   type="text"
                   v-model="tagInput"
@@ -1160,7 +1160,7 @@ onDeactivated(() => {
                   @keydown.enter.prevent="addTag"
                   @keydown.escape="clearTagSuggestions"
                   placeholder="тег + Enter"
-                  class="bg-transparent text-xs text-white placeholder-brand-muted outline-none w-24"
+                  class="bg-transparent text-xs text-white placeholder-brand-muted outline-hidden w-24"
                 />
 
                 <!-- Tag suggestions, ranked by usage -->
@@ -1170,7 +1170,7 @@ onDeactivated(() => {
                     @click="addTagFromSuggestion(s.name)"
                     class="w-full flex items-center justify-between gap-2 px-4 py-2 text-sm text-white hover:bg-white/5">
                     <span class="truncate">#{{ s.name }}</span>
-                    <span class="text-xs text-white/35 flex-shrink-0">{{ s.count }}</span>
+                    <span class="text-xs text-white/35 shrink-0">{{ s.count }}</span>
                   </button>
                 </div>
               </div>
@@ -1224,7 +1224,7 @@ onDeactivated(() => {
                       class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
                       :class="newPost.visibility === 'public' ? 'text-brand-accent' : 'text-white'"
                     >
-                      <BIcon name="Globe2" class="w-4 h-4 flex-shrink-0" />
+                      <BIcon name="Globe2" class="w-4 h-4 shrink-0" />
                       Видно всем
                       <BIcon v-if="newPost.visibility === 'public'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
                     </button>
@@ -1233,7 +1233,7 @@ onDeactivated(() => {
                       class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm hover:bg-brand-bg/60 transition-colors"
                       :class="newPost.visibility === 'subscriber_only' ? 'text-brand-accent' : 'text-white'"
                     >
-                      <BIcon name="Users" class="w-4 h-4 flex-shrink-0" />
+                      <BIcon name="Users" class="w-4 h-4 shrink-0" />
                       Только Подписчикам
                       <BIcon v-if="newPost.visibility === 'subscriber_only'" name="Check" class="w-3.5 h-3.5 ml-auto text-brand-accent" />
                     </button>
@@ -1242,7 +1242,7 @@ onDeactivated(() => {
                       title="Скоро будет доступно"
                       class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-white/30 cursor-not-allowed"
                     >
-                      <BIcon name="DollarSign" class="w-4 h-4 flex-shrink-0" />
+                      <BIcon name="DollarSign" class="w-4 h-4 shrink-0" />
                       Платный пост
                       <span class="ml-auto text-[10px] uppercase tracking-wide">скоро</span>
                     </button>
@@ -1267,20 +1267,20 @@ onDeactivated(() => {
                 min="0"
                 step="0.01"
                 placeholder="Цена (₽)"
-                class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-brand-accent transition-colors w-32"
+                class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-hidden focus:border-brand-accent transition-colors w-32"
               />
               <template v-if="mediaHasVideo">
                 <input
                   v-model="newPost.videoTitle"
                   type="text"
                   placeholder="Заголовок видео"
-                  class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-brand-accent transition-colors flex-1 min-w-[160px]"
+                  class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-hidden focus:border-brand-accent transition-colors flex-1 min-w-[160px]"
                 />
                 <input
                   v-model="newPost.videoDescription"
                   type="text"
                   placeholder="Описание видео"
-                  class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-brand-accent transition-colors flex-1 min-w-[160px]"
+                  class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 outline-hidden focus:border-brand-accent transition-colors flex-1 min-w-[160px]"
                 />
               </template>
             </div>
@@ -1330,27 +1330,27 @@ onDeactivated(() => {
           <div v-if="isLoadingEvents" class="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
             <div v-for="n in 3" :key="n" class="min-w-[260px] bg-brand-bg rounded-2xl overflow-hidden border border-brand-border animate-pulse">
               <div class="h-28 bg-white/5"></div>
-              <div class="p-3 space-y-2"><div class="h-3 bg-white/5 rounded w-2/3"></div><div class="h-3 bg-white/5 rounded w-1/2"></div></div>
+              <div class="p-3 stack-y-2"><div class="h-3 bg-white/5 rounded-sm w-2/3"></div><div class="h-3 bg-white/5 rounded-sm w-1/2"></div></div>
             </div>
           </div>
           <!-- Actual event cards -->
           <div v-else class="flex gap-4 overflow-x-auto hide-scrollbar pb-2">
             <router-link v-for="ev in upcomingEvents" :key="ev.id"
               :to="'/events/' + ev.id"
-              class="min-w-[260px] max-w-[280px] max-md:min-w-[230px] max-md:max-w-[250px] bg-brand-bg rounded-2xl overflow-hidden border border-brand-border hover:border-brand-accent/40 transition-all group/ev flex-shrink-0">
+              class="min-w-[260px] max-w-[280px] max-md:min-w-[230px] max-md:max-w-[250px] bg-brand-bg rounded-2xl overflow-hidden border border-brand-border hover:border-brand-accent/40 transition-all group/ev shrink-0">
               <div class="h-28 relative overflow-hidden">
                 <img v-if="ev.banner_url || ev.group?.banner_url" :src="ev.banner_url || ev.group?.banner_url" class="w-full h-full object-cover group-hover/ev:scale-105 transition-transform duration-300" />
                 <div v-else class="h-full w-full" :style="`background:linear-gradient(135deg,${ev.group?.accent_color || '#4C67CF'}44,${ev.group?.accent_color || '#4C67CF'}11)`"></div>
-                <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                <div class="absolute inset-0 bg-linear-to-t/srgb from-black/60 to-transparent"></div>
                 <div class="absolute bottom-2 left-2 right-2 flex items-end justify-between">
-                  <div class="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-lg text-[11px] font-bold text-white truncate max-w-[75%]">{{ ev.title }}</div>
-                  <div v-if="ev.attendee_count > 0" class="bg-brand-accent/80 backdrop-blur-sm px-1.5 py-0.5 rounded-md text-[10px] font-bold text-white flex items-center gap-1 shrink-0">
+                  <div class="bg-black/50 backdrop-blur-xs px-2 py-1 rounded-lg text-[11px] font-bold text-white truncate max-w-[75%]">{{ ev.title }}</div>
+                  <div v-if="ev.attendee_count > 0" class="bg-brand-accent/80 backdrop-blur-xs px-1.5 py-0.5 rounded-md text-[10px] font-bold text-white flex items-center gap-1 shrink-0">
                     <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                     {{ ev.attendee_count }}
                   </div>
                 </div>
               </div>
-              <div class="p-3 space-y-1.5">
+              <div class="p-3 stack-y-1.5">
                 <div class="flex items-center gap-1.5 text-[11px] text-white/55">
                   <BIcon name="Calendar" class="w-3 h-3 shrink-0" />
                   <span>{{ formatEventDate(ev.starts_at, ev.ends_at) }}</span>
@@ -1372,7 +1372,7 @@ onDeactivated(() => {
         <!-- Active hashtag filter pill -->
         <Transition name="filter-expand">
           <div v-if="selectedTag" class="flex items-center gap-2 bg-brand-card border border-brand-accent/30 rounded-2xl px-4 py-2.5 shadow-xl">
-            <BIcon name="Hash" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+            <BIcon name="Hash" class="w-3.5 h-3.5 text-brand-accent shrink-0" />
             <span class="text-sm font-bold text-brand-accent flex-1">#{{ selectedTag }}</span>
             <span class="text-[10px] text-white/55">{{ langStore.t.tagFilter }}</span>
             <button @click="selectedTag = ''" class="ml-1 p-1 text-white/55 hover:text-white hover:bg-white/8 rounded-lg transition-colors">
@@ -1386,7 +1386,7 @@ onDeactivated(() => {
         <AdSlot v-else-if="adSlotMode === 'ads' && activeAds[0]" :ad="activeAds[0]" variant="hero" />
 
         <!-- Feed -->
-        <div v-if="isLoadingPosts" class="space-y-4">
+        <div v-if="isLoadingPosts" class="stack-y-4">
           <SkeletonPost v-for="n in 4" :key="n" />
         </div>
 
@@ -1398,7 +1398,7 @@ onDeactivated(() => {
           <p class="text-white/55">{{ langStore.t.beFirst }}</p>
         </div>
 
-        <div v-else class="space-y-4">
+        <div v-else class="stack-y-4">
           <PostCard
             v-for="post in posts"
             :key="post.id"
@@ -1425,7 +1425,7 @@ onDeactivated(() => {
       </main>
 
       <!-- Right Sidebar -->
-      <aside class="w-80 hidden xl:block sticky top-24 self-start space-y-6">
+      <aside class="w-80 hidden xl:block sticky top-24 self-start stack-y-6">
 
         <!-- Ad placement -->
         <AdSlot v-if="adSlotMode === 'offer'" :ad="null" />
@@ -1434,16 +1434,16 @@ onDeactivated(() => {
         <!-- Trending Hashtags -->
         <div>
           <h3 class="font-bold text-white mb-4">{{ langStore.t.popularTags }}</h3>
-          <div v-if="isFetchingTags" class="space-y-3">
+          <div v-if="isFetchingTags" class="stack-y-3">
             <div v-for="n in 5" :key="n" class="flex items-center justify-between animate-pulse">
-              <div class="h-4 bg-white/5 rounded w-24"></div>
-              <div class="h-4 bg-white/5 rounded w-12"></div>
+              <div class="h-4 bg-white/5 rounded-sm w-24"></div>
+              <div class="h-4 bg-white/5 rounded-sm w-12"></div>
             </div>
           </div>
           <div v-else-if="trendingTags.length === 0" class="text-center py-6">
             <p class="text-xs text-white/55">{{ langStore.t.noHashtagsYet }}</p>
           </div>
-          <div v-else class="space-y-3">
+          <div v-else class="stack-y-3">
             <router-link v-for="tag in trendingTags.slice(0, 10)" :key="tag.name"
               :to="{ path: '/search', query: { q: tag.name } }"
               class="flex items-center justify-between cursor-pointer group">
@@ -1463,10 +1463,10 @@ onDeactivated(() => {
           </div>
 
           <!-- Skeletons -->
-          <div v-if="isLoadingRecommended" class="space-y-2">
+          <div v-if="isLoadingRecommended" class="stack-y-2">
             <div v-for="n in 3" :key="n" class="flex items-center gap-3 px-1 animate-pulse">
-              <div class="w-10 h-10 rounded-full bg-white/8 flex-shrink-0"></div>
-              <div class="flex-1 space-y-1.5">
+              <div class="w-10 h-10 rounded-full bg-white/8 shrink-0"></div>
+              <div class="flex-1 stack-y-1.5">
                 <div class="h-3 bg-white/8 rounded-full w-28"></div>
                 <div class="h-2.5 bg-white/5 rounded-full w-20"></div>
               </div>
@@ -1475,7 +1475,7 @@ onDeactivated(() => {
           </div>
 
           <!-- User list -->
-          <div v-else class="space-y-1">
+          <div v-else class="stack-y-1">
             <router-link
               v-for="user in visibleRecommendedUsers.slice(0, 5)"
               :key="user.id"
@@ -1483,7 +1483,7 @@ onDeactivated(() => {
               class="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-brand-card/60 transition-colors group cursor-pointer"
             >
               <!-- Avatar -->
-              <div class="relative flex-shrink-0">
+              <div class="relative shrink-0">
                 <img
                   v-if="user.avatar_url"
                   :src="user.avatar_url"
@@ -1495,7 +1495,7 @@ onDeactivated(() => {
                 </div>
                 <!-- Online indicator -->
                 <span v-if="onlineStatus[user.id]"
-                  class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-brand-success border-2 border-brand-card shadow-sm"
+                  class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-brand-success border-2 border-brand-card shadow-xs"
                   title="Онлайн"
                 ></span>
               </div>
@@ -1509,7 +1509,7 @@ onDeactivated(() => {
               <!-- Follow button -->
               <button
                 @click.stop.prevent="followRecommended(user.id)"
-                class="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all"
+                class="shrink-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all"
                 :class="followStatus[user.id]
                   ? 'border-brand-border text-white/55 hover:border-rose-500/40 hover:text-rose-400'
                   : 'border-brand-accent/50 text-brand-accent hover:bg-brand-accent hover:text-white hover:border-brand-accent'"

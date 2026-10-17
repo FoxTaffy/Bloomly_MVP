@@ -25,7 +25,7 @@ const langStore = useLangStore()
         <!-- Header -->
         <div class="mb-10">
           <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/8 border border-white/12 text-xs font-bold text-white/50 mb-5">
-            <span class="w-1.5 h-1.5 rounded-full bg-[#cd83f5]"></span>
+            <span class="w-1.5 h-1.5 rounded-full bg-brand-purple"></span>
             bloomly.fun
           </div>
           <h1 class="text-3xl font-black text-white mb-2">{{ langStore.t.privacyTitle }}</h1>

@@ -233,8 +233,8 @@ onMounted(() => {
 
     <!-- Header -->
     <div class="relative px-6 py-5 border-b border-brand-border flex items-center gap-3 overflow-hidden">
-      <div class="absolute inset-0 bg-gradient-to-r from-brand-purple/10 via-transparent to-transparent pointer-events-none" />
-      <div class="relative w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
+      <div class="absolute inset-0 bg-linear-to-r/srgb from-brand-purple/10 via-transparent to-transparent pointer-events-none" />
+      <div class="relative w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
         style="background: linear-gradient(135deg, #8b5cf6, #a855f7); box-shadow: 0 4px 16px #8b5cf645">
         <BIcon name="CheckSquare" class="w-5 h-5 text-white" />
       </div>
@@ -267,23 +267,23 @@ onMounted(() => {
 
     <!-- Column manager -->
     <Transition name="col-mgr">
-      <div v-if="showColumnManager" class="mx-6 my-4 bg-brand-bg border border-brand-border rounded-2xl p-5 space-y-3">
+      <div v-if="showColumnManager" class="mx-6 my-4 bg-brand-bg border border-brand-border rounded-2xl p-5 stack-y-3">
         <div class="flex items-center justify-between">
           <p class="text-sm font-bold text-white">Стадии канбана</p>
           <p class="text-[11px] text-white/35">Своя раскладка для этой группы</p>
         </div>
 
-        <div class="space-y-2">
+        <div class="stack-y-2">
           <div v-for="(col, idx) in editColumns" :key="col.key" class="relative bg-brand-card border border-brand-border rounded-xl p-2.5 flex items-center gap-2">
             <button @click="togglePicker(idx, 'color')"
-              class="w-7 h-7 rounded-lg border border-white/15 flex-shrink-0" :style="`background:${col.color}`" />
+              class="w-7 h-7 rounded-lg border border-white/15 shrink-0" :style="`background:${col.color}`" />
             <button @click="togglePicker(idx, 'icon')"
-              class="w-7 h-7 rounded-lg border border-brand-border flex items-center justify-center flex-shrink-0 text-white/60 hover:text-white transition-colors">
+              class="w-7 h-7 rounded-lg border border-brand-border flex items-center justify-center shrink-0 text-white/60 hover:text-white transition-colors">
               <BIcon :name="col.icon" class="w-4 h-4" />
             </button>
             <input v-model="col.label" placeholder="Название стадии"
-              class="flex-1 min-w-0 bg-transparent text-sm text-white placeholder-white/25 focus:outline-none" />
-            <div class="flex items-center gap-0.5 flex-shrink-0">
+              class="flex-1 min-w-0 bg-transparent text-sm text-white placeholder-white/25 focus:outline-hidden" />
+            <div class="flex items-center gap-0.5 shrink-0">
               <button @click="moveColumn(idx, -1)" :disabled="idx === 0"
                 class="p-1 rounded-lg text-white/30 hover:text-white disabled:opacity-20 disabled:hover:text-white/30 transition-colors">
                 <BIcon name="ChevronUp" class="w-3.5 h-3.5" />
@@ -340,18 +340,18 @@ onMounted(() => {
     </Transition>
 
     <!-- Add form -->
-    <div v-if="showAdd" class="mx-6 my-4 bg-brand-bg border border-brand-border rounded-2xl p-5 space-y-3">
+    <div v-if="showAdd" class="mx-6 my-4 bg-brand-bg border border-brand-border rounded-2xl p-5 stack-y-3">
       <p class="text-sm font-bold text-white">Новая задача</p>
       <input
         v-model="newTitle"
         placeholder="Название задачи / имя заказчика..."
         @keyup.enter="addItem"
-        class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-purple/50" />
+        class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-purple/50" />
       <textarea
         v-model="newDesc"
         placeholder="Описание (необязательно)..."
         rows="2"
-        class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-purple/50 resize-none" />
+        class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-purple/50 resize-none" />
       <div class="flex gap-2 justify-end">
         <button
           @click="showAdd = false"
@@ -388,13 +388,13 @@ onMounted(() => {
         <div v-for="stage in todoColumns" :key="stage.key" class="flex flex-col gap-2">
 
           <!-- Column header -->
-          <div class="space-y-1.5">
+          <div class="stack-y-1.5">
             <div class="flex items-center gap-2 px-1">
-              <div class="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" :style="`background: ${stage.color}22`">
+              <div class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" :style="`background: ${stage.color}22`">
                 <BIcon :name="stage.icon" class="w-3.5 h-3.5" :style="`color: ${stage.color}`" />
               </div>
               <span class="text-xs font-bold flex-1 truncate text-white/85">{{ stage.label }}</span>
-              <span class="text-[10px] font-bold text-white/40 bg-white/5 px-1.5 py-0.5 rounded-full flex-shrink-0">
+              <span class="text-[10px] font-bold text-white/40 bg-white/5 px-1.5 py-0.5 rounded-full shrink-0">
                 {{ groupedItems[stage.key]?.length ?? 0 }}
               </span>
             </div>
@@ -417,14 +417,14 @@ onMounted(() => {
 
                 <!-- Editing mode -->
                 <template v-if="editingId === item.id">
-                  <div class="space-y-2" @click.stop>
+                  <div class="stack-y-2" @click.stop>
                     <input
                       v-model="editTitle"
-                      class="w-full bg-brand-card border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-purple/50" />
+                      class="w-full bg-brand-card border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-hidden focus:border-brand-purple/50" />
                     <textarea
                       v-model="editDesc"
                       rows="2"
-                      class="w-full bg-brand-card border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-brand-purple/50 resize-none" />
+                      class="w-full bg-brand-card border border-brand-border rounded-lg px-3 py-1.5 text-xs text-white focus:outline-hidden focus:border-brand-purple/50 resize-none" />
                     <div class="flex gap-1.5">
                       <button
                         @click="editingId = null"

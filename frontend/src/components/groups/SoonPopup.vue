@@ -23,11 +23,11 @@ const showBadgePreview = ref(true)
     <Transition name="popup">
       <div
         v-if="show"
-        class="fixed inset-0 z-[999] flex items-center justify-center p-4"
+        class="fixed inset-0 z-999 flex items-center justify-center p-4"
         @click.self="emit('cancel')"
       >
         <!-- Backdrop -->
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-xs" />
 
         <!-- Dialog -->
         <div class="relative bg-brand-card border border-brand-border rounded-3xl p-6 max-w-sm w-full shadow-2xl z-10 animate-in">

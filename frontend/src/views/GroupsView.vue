@@ -285,7 +285,7 @@ function fmtMembers(n: number): string {
             <input
               v-model="search"
               placeholder="Поиск групп..."
-              class="w-full bg-brand-card border border-brand-border rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/30 focus:border-brand-accent focus:outline-none"
+              class="w-full bg-brand-card border border-brand-border rounded-2xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-white/30 focus:border-brand-accent focus:outline-hidden"
               @keyup.enter="loadData"
             />
           </div>

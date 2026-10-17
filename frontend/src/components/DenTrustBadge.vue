@@ -18,7 +18,7 @@ const tierClass = computed(() => ({
   reliable: 'bg-brand-success/10 border-brand-success/30 text-brand-success',
   verified: 'bg-brand-purple/10 border-brand-purple/30 text-brand-purple',
   master:   'bg-brand-yellow/10 border-brand-yellow/30 text-brand-yellow',
-  elite:    'bg-gradient-to-r from-brand-yellow/20 to-brand-accent/20 border-brand-yellow/40 text-brand-yellow',
+  elite:    'bg-linear-to-r/srgb from-brand-yellow/20 to-brand-accent/20 border-brand-yellow/40 text-brand-yellow',
 }[props.trust?.tier ?? 'new'] ?? 'bg-white/5 border-white/10 text-white/40'))
 
 const tierIcon = computed(() => ({

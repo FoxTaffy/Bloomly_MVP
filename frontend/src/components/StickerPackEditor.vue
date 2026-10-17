@@ -221,8 +221,8 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-[999] flex items-center justify-center p-4" @click.self="tryClose()">
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+    <div class="fixed inset-0 z-999 flex items-center justify-center p-4" @click.self="tryClose()">
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-xs" />
       <div class="relative bg-brand-card border border-brand-border rounded-3xl p-6 max-w-lg w-full shadow-2xl z-10 max-h-[90vh] overflow-y-auto">
         <button type="button" @click="tryClose()"
           class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-brand-bg/60 flex items-center justify-center hover:bg-brand-bg transition-colors z-20">
@@ -256,10 +256,10 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
         </div>
 
         <!-- ── Шаг 1: стикеры ─────────────────────────────────────────────── -->
-        <div v-if="step === 'stickers'" class="space-y-4">
+        <div v-if="step === 'stickers'" class="stack-y-4">
           <StickerUpload :remaining="remaining" @uploaded="addUrls([$event])" @telegram="showTelegram = true" />
 
-          <div v-if="items.length" class="space-y-2.5">
+          <div v-if="items.length" class="stack-y-2.5">
             <div class="flex items-center justify-between gap-2">
               <span class="text-xs font-bold text-white/55">
                 {{ items.length }} / {{ MAX_STICKERS }} · перетащите, чтобы изменить порядок
@@ -280,7 +280,7 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
                     <BIcon name="Star" class="w-2.5 h-2.5 text-white" />
                   </div>
                   <!-- Действия: по наведению (ПК) или после нажатия (телефон) -->
-                  <div data-no-drag class="absolute inset-x-0 bottom-0 flex justify-center gap-1 p-1 bg-gradient-to-t from-black/80 to-transparent transition-opacity"
+                  <div data-no-drag class="absolute inset-x-0 bottom-0 flex justify-center gap-1 p-1 bg-linear-to-t/srgb from-black/80 to-transparent transition-opacity"
                     :class="selectedKey === item.key ? 'opacity-100' : 'opacity-0 group-hover/tile:opacity-100'">
                     <button type="button" @click.stop="toggleNsfw(item)" title="18+"
                       class="w-6 h-6 rounded-full text-[8px] font-extrabold text-white" :class="item.nsfw ? 'bg-rose-500' : 'bg-white/25 hover:bg-rose-500'">18+</button>
@@ -314,7 +314,7 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
         </div>
 
         <!-- ── Шаг 2: публикация ──────────────────────────────────────────── -->
-        <div v-else-if="step === 'info'" class="space-y-4">
+        <div v-else-if="step === 'info'" class="stack-y-4">
           <div>
             <label class="block text-xs font-bold text-white/45 uppercase tracking-wider mb-2">Тип публикации</label>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -322,7 +322,7 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
                 class="relative text-left p-3.5 rounded-2xl border transition-all flex gap-3"
                 :class="[form.visibility === o.key ? 'bg-brand-purple/15 border-brand-purple/60' : 'bg-white/5 border-white/10 hover:border-white/25',
                          o.key === 'paid' && !isBusiness ? 'opacity-60' : '']">
-                <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                <div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                   :class="form.visibility === o.key ? 'bg-brand-purple text-white' : 'bg-white/10 text-white/60'">
                   <BIcon :name="o.icon" class="w-4 h-4" />
                 </div>
@@ -349,25 +349,25 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
           <div>
             <label class="block text-xs font-bold text-white/45 uppercase tracking-wider mb-1.5">Название *</label>
             <input v-model="form.name" maxlength="120" placeholder="Напр. «Весенние котики»"
-              class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/25 outline-none focus:border-brand-purple/60 text-sm font-semibold" />
+              class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/25 outline-hidden focus:border-brand-purple/60 text-sm font-semibold" />
           </div>
 
           <div>
             <label class="block text-xs font-bold text-white/45 uppercase tracking-wider mb-1.5">Описание</label>
             <textarea v-model="form.description" rows="3" maxlength="1000" placeholder="Расскажите о стикерах…"
-              class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/25 outline-none focus:border-brand-purple/60 text-sm resize-none" />
+              class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/25 outline-hidden focus:border-brand-purple/60 text-sm resize-none" />
           </div>
 
           <div v-if="isPaid" class="grid grid-cols-2 gap-3">
             <div>
               <label class="block text-xs font-bold text-white/45 uppercase tracking-wider mb-1.5">Цена *</label>
               <input v-model.number="form.price" type="number" min="1" step="1"
-                class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white outline-none focus:border-brand-purple/60 text-sm" />
+                class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white outline-hidden focus:border-brand-purple/60 text-sm" />
             </div>
             <div>
               <label class="block text-xs font-bold text-white/45 uppercase tracking-wider mb-1.5">Валюта</label>
               <select v-model="form.currency"
-                class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white outline-none focus:border-brand-purple/60 text-sm appearance-none">
+                class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white outline-hidden focus:border-brand-purple/60 text-sm appearance-none">
                 <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
               </select>
             </div>
@@ -386,7 +386,7 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
               </span>
               <input ref="tagInput" v-model="tagDraft" :disabled="tagList.length >= MAX_TAGS" @keydown="onTagKey" @blur="commitTag"
                 :placeholder="tagList.length ? '' : 'фурри арт анимация'"
-                class="flex-1 min-w-[8rem] bg-transparent outline-none text-sm text-white placeholder-white/25" />
+                class="flex-1 min-w-32 bg-transparent outline-hidden text-sm text-white placeholder-white/25" />
             </div>
             <p class="text-[11px] text-white/30 mt-1">Через пробел · до {{ MAX_TAGS }} тегов</p>
           </div>
@@ -401,7 +401,7 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
               <p class="text-xs text-white/45 mt-0.5">{{ t.hint }}</p>
             </div>
             <button type="button" @click="(form as any)[t.m] = !(form as any)[t.m]"
-              class="w-12 h-6 rounded-full transition-all relative flex-shrink-0" :class="(form as any)[t.m] ? t.on : 'bg-white/15'">
+              class="w-12 h-6 rounded-full transition-all relative shrink-0" :class="(form as any)[t.m] ? t.on : 'bg-white/15'">
               <div class="w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all shadow-md" :class="(form as any)[t.m] ? 'left-6' : 'left-0.5'" />
             </button>
           </div>
@@ -418,15 +418,15 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
         </div>
 
         <!-- ── Шаг 3: обложка ─────────────────────────────────────────────── -->
-        <div v-else-if="step === 'cover'" class="space-y-5">
+        <div v-else-if="step === 'cover'" class="stack-y-5">
           <div>
             <label class="block text-xs font-bold text-white/45 uppercase tracking-wider mb-2">Предпросмотр</label>
-            <div class="relative w-full aspect-[3/2] rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
+            <div class="relative w-full aspect-3/2 rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
               <img v-if="form.coverUrl" :src="form.coverUrl" class="absolute inset-0 w-full h-full object-cover" />
               <div v-else class="absolute inset-0" :style="{ background: form.coverBgColor }" />
-              <div class="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-black/30 pointer-events-none" />
+              <div class="absolute inset-0 bg-linear-to-br/srgb from-white/5 via-transparent to-black/30 pointer-events-none" />
               <img v-if="coverItem" :src="coverItem.url" class="absolute right-4 bottom-4 w-28 h-28 object-contain drop-shadow-2xl" :class="coverItem.nsfw ? 'blur-md' : ''" />
-              <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-4 pt-8">
+              <div class="absolute bottom-0 inset-x-0 bg-linear-to-t/srgb from-black/80 via-black/30 to-transparent p-4 pt-8">
                 <p class="font-black text-white text-xl leading-tight">{{ form.name || 'Название пака' }}</p>
                 <p v-if="isPaid" class="text-white/70 text-sm mt-0.5">{{ form.price }} {{ form.currency }}</p>
                 <p v-else class="text-emerald-400 text-sm font-bold mt-0.5">Бесплатно</p>
@@ -493,7 +493,7 @@ function goSubscription() { emit('close'); router.push('/subscriptions') }
         </div>
 
         <!-- ── Готово: ссылка-приглашение ─────────────────────────────────── -->
-        <div v-else class="space-y-4 text-center">
+        <div v-else class="stack-y-4 text-center">
           <div class="w-14 h-14 rounded-full bg-emerald-500/15 flex items-center justify-center mx-auto">
             <BIcon name="Check" class="w-7 h-7 text-emerald-400" />
           </div>

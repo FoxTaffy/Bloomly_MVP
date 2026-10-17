@@ -37,7 +37,7 @@ const dateStr = computed(() => {
     class="flex items-center gap-3 py-2.5 cursor-pointer hover:opacity-80 transition-opacity"
   >
     <!-- Avatar -->
-    <div class="relative flex-shrink-0">
+    <div class="relative shrink-0">
       <img
         v-if="birthday.avatar_url"
         :src="birthday.avatar_url"
@@ -61,6 +61,6 @@ const dateStr = computed(() => {
     </div>
 
     <!-- Days badge -->
-    <span :class="['text-xs flex-shrink-0', labelClass]">{{ label }}</span>
+    <span :class="['text-xs shrink-0', labelClass]">{{ label }}</span>
   </router-link>
 </template>

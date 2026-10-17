@@ -72,7 +72,7 @@ onUnmounted(() => { if (timer) clearTimeout(timer) })
   <div class="min-h-screen bg-brand-bg text-white font-nunito">
     <AppHeader />
     <main class="max-w-md mx-auto px-4 pt-28 pb-20">
-      <div class="bg-brand-card border border-brand-border rounded-3xl p-8 text-center space-y-4">
+      <div class="bg-brand-card border border-brand-border rounded-3xl p-8 text-center stack-y-4">
 
         <template v-if="notFound">
           <BIcon name="SearchX" class="w-12 h-12 mx-auto text-white/40" />

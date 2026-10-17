@@ -38,7 +38,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
         :src="url" source="support-attachment" kind="video"
         class="w-full max-w-sm max-h-64 rounded-lg border border-white/10"
       />
-      <button v-else type="button" class="flex-shrink-0 cursor-zoom-in" @click="open(url)">
+      <button v-else type="button" class="shrink-0 cursor-zoom-in" @click="open(url)">
         <SafeMedia
           :src="url" source="support-attachment" kind="image"
           class="w-24 h-24 rounded-lg overflow-hidden border border-white/10 object-cover hover:border-white/30 transition-colors"
@@ -48,7 +48,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
   </div>
 
   <Teleport to="body">
-    <div v-if="openIndex !== null" class="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center" @click.self="close">
+    <div v-if="openIndex !== null" class="fixed inset-0 z-9999 bg-black/90 flex items-center justify-center" @click.self="close">
       <SafeMedia
         :src="images[openIndex]" source="support-attachment" kind="image"
         class="max-w-[92vw] max-h-[88vh] object-contain rounded-lg"

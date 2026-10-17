@@ -1,10 +1,10 @@
 <template>
-  <div class="space-y-4">
+  <div class="stack-y-4">
 
     <!-- ── Шапка секции ──────────────────────────────────── -->
     <div class="flex items-center justify-between">
       <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-2">
-        <span class="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style="background:rgba(167,139,250,0.16)">
+        <span class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0" style="background:rgba(167,139,250,0.16)">
           <BIcon name="Shirt" class="w-3.5 h-3.5 text-brand-accent" />
         </span>
         {{ t.fursuitTitle }}
@@ -23,7 +23,7 @@
 
     <!-- Empty state -->
     <div v-else-if="!showForm && userStore.fursuits.length === 0"
-      class="p-7 border border-dashed border-brand-accent/25 rounded-2xl text-center space-y-2"
+      class="p-7 border border-dashed border-brand-accent/25 rounded-2xl text-center stack-y-2"
       style="background:linear-gradient(135deg,rgba(167,139,250,0.08),transparent 65%)">
       <div class="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center shadow-inner" style="background:rgba(167,139,250,0.14)">
         <BIcon name="Shirt" class="w-7 h-7 text-brand-accent/60" />
@@ -36,27 +36,27 @@
     </div>
 
     <!-- Fursuit list -->
-    <div v-else-if="!showForm" class="space-y-2">
+    <div v-else-if="!showForm" class="stack-y-2">
       <div
         v-for="suit in userStore.fursuits"
         :key="suit.id"
         class="flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border/60 rounded-2xl transition-all hover:border-brand-accent/30 hover:shadow-lg hover:shadow-black/20"
       >
         <!-- Photo / NSFW blur -->
-        <div class="relative flex-shrink-0">
+        <div class="relative shrink-0">
           <img
             v-if="suit.image_url"
             :src="suit.image_url"
             alt="Fursuit"
             class="w-14 h-14 rounded-xl object-cover border border-brand-border"
-            :class="suit.is_nsfw ? 'blur-sm' : ''"
+            :class="suit.is_nsfw ? 'blur-xs' : ''"
             draggable="false"
           />
           <div v-else class="w-14 h-14 rounded-xl flex items-center justify-center" style="background:rgba(167,139,250,0.12)">
             <BIcon name="Shirt" class="w-6 h-6 text-brand-accent/40" />
           </div>
           <span v-if="suit.is_nsfw"
-            class="absolute -top-1.5 -right-1.5 text-[9px] font-bold px-1 py-0.5 rounded bg-rose-600/90 text-white leading-none">
+            class="absolute -top-1.5 -right-1.5 text-[9px] font-bold px-1 py-0.5 rounded-sm bg-rose-600/90 text-white leading-none">
             18+
           </span>
         </div>
@@ -77,7 +77,7 @@
             </span>
           </div>
         </div>
-        <div class="flex gap-1.5 flex-shrink-0">
+        <div class="flex gap-1.5 shrink-0">
           <button type="button" @click="openEditForm(suit)"
             class="w-8 h-8 flex items-center justify-center rounded-xl bg-brand-bg border border-brand-border text-white/55 hover:text-white hover:border-brand-accent/40 transition-all">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -97,7 +97,7 @@
     </div>
 
     <!-- ── Форма создания / редактирования ──────────────── -->
-    <div v-if="showForm" class="p-4 bg-brand-bg/60 border border-brand-accent/30 rounded-2xl space-y-5">
+    <div v-if="showForm" class="p-4 bg-brand-bg/60 border border-brand-accent/30 rounded-2xl stack-y-5">
 
       <!-- Заголовок формы -->
       <div class="flex items-center justify-between">
@@ -112,7 +112,7 @@
       </div>
 
       <!-- Фото + NSFW -->
-      <div class="space-y-2">
+      <div class="stack-y-2">
         <label class="block text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
           <svg class="w-3.5 h-3.5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -121,10 +121,10 @@
           {{ t.fursuitPhotoLabel }}
         </label>
         <div class="flex items-start gap-4">
-          <div v-if="form.image_url" class="relative inline-block group flex-shrink-0">
+          <div v-if="form.image_url" class="relative inline-block group shrink-0">
             <img :src="form.image_url" alt="Fursuit photo"
               class="w-20 h-20 rounded-xl object-cover border border-brand-border"
-              :class="form.is_nsfw ? 'blur-sm' : ''"
+              :class="form.is_nsfw ? 'blur-xs' : ''"
               draggable="false" />
             <div class="absolute inset-0 rounded-xl bg-black/55 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
               <button type="button" @click="form.image_url = null"
@@ -143,13 +143,13 @@
           <div v-if="form.image_url" class="flex items-start gap-2 pt-1">
             <button
               type="button"
-              :class="['relative w-11 h-6 rounded-full border transition-all flex-shrink-0',
+              :class="['relative w-11 h-6 rounded-full border transition-all shrink-0',
                 form.is_nsfw
                   ? 'bg-rose-500/20 border-rose-500/60'
                   : 'bg-brand-bg border-brand-border']"
               @click="form.is_nsfw = !form.is_nsfw"
             >
-              <span :class="['absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow transition-all',
+              <span :class="['absolute top-0.5 left-0.5 w-5 h-5 rounded-full shadow-sm transition-all',
                 form.is_nsfw ? 'translate-x-5 bg-rose-500' : 'translate-x-0 bg-white/40']"></span>
             </button>
             <div>
@@ -163,7 +163,7 @@
       </div>
 
       <!-- Поиск мастера (группы + пользователи) -->
-      <div class="space-y-2">
+      <div class="stack-y-2">
         <label class="block text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
           <svg class="w-3.5 h-3.5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -175,8 +175,8 @@
         <!-- Если мастер выбран -->
         <div v-if="selectedMaker" class="flex items-center gap-3 p-2.5 bg-brand-bg border border-brand-accent/30 rounded-xl">
           <img v-if="selectedMaker.avatar_url" :src="selectedMaker.avatar_url"
-            class="w-8 h-8 rounded-lg object-cover border border-brand-border flex-shrink-0" />
-          <div v-else class="w-8 h-8 rounded-lg bg-brand-accent/10 flex items-center justify-center flex-shrink-0">
+            class="w-8 h-8 rounded-lg object-cover border border-brand-border shrink-0" />
+          <div v-else class="w-8 h-8 rounded-lg bg-brand-accent/10 flex items-center justify-center shrink-0">
             <span class="text-brand-accent text-xs font-bold">{{ (selectedMaker.name || selectedMaker.username || '?')[0].toUpperCase() }}</span>
           </div>
           <div class="flex-1 min-w-0">
@@ -203,7 +203,7 @@
               v-model="makerQuery"
               type="text"
               :placeholder="t.fursuitMakerSearchPlaceholder"
-              class="w-full bg-brand-bg border border-brand-border rounded-xl pl-8 pr-4 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/50 transition-all"
+              class="w-full bg-brand-bg border border-brand-border rounded-xl pl-8 pr-4 py-2 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/50 transition-all"
               @input="debouncedSearchMaker"
               @focus="() => { if (makerQuery.length >= 2) showMakerDropdown = true }"
               @blur="hideMakerDropdownSoon"
@@ -235,8 +235,8 @@
                   class="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-brand-border/20 transition-colors"
                 >
                   <img v-if="g.avatar_url" :src="g.avatar_url"
-                    class="w-7 h-7 rounded-lg object-cover border border-brand-border flex-shrink-0" />
-                  <div v-else class="w-7 h-7 rounded-lg bg-brand-accent/10 flex items-center justify-center flex-shrink-0 text-xs font-bold text-brand-accent">
+                    class="w-7 h-7 rounded-lg object-cover border border-brand-border shrink-0" />
+                  <div v-else class="w-7 h-7 rounded-lg bg-brand-accent/10 flex items-center justify-center shrink-0 text-xs font-bold text-brand-accent">
                     {{ g.name[0].toUpperCase() }}
                   </div>
                   <span class="font-semibold text-white">{{ g.name }}</span>
@@ -261,7 +261,7 @@
                   @mousedown.prevent="pickMaker({ id: u.id, name: u.display_name || u.username, username: u.username, display_name: u.display_name, avatar_url: null, type: 'user' })"
                   class="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-brand-border/20 transition-colors"
                 >
-                  <div class="w-7 h-7 rounded-full bg-brand-accent/10 flex items-center justify-center flex-shrink-0 text-xs font-bold text-brand-accent">
+                  <div class="w-7 h-7 rounded-full bg-brand-accent/10 flex items-center justify-center shrink-0 text-xs font-bold text-brand-accent">
                     {{ u.username[0].toUpperCase() }}
                   </div>
                   <span class="font-bold text-brand-accent">@{{ u.username }}</span>
@@ -275,23 +275,23 @@
 
       <!-- Ссылки на мастера (только если мастер не выбран из Bloomly) -->
       <Transition name="fade-section">
-        <div v-if="!form.maker_id" class="space-y-2">
+        <div v-if="!form.maker_id" class="stack-y-2">
           <label class="block text-xs font-bold text-white/55 uppercase tracking-wider">
             {{ t.fursuitLinksLabel }}
             <span class="text-white/25 font-normal ml-1 normal-case">({{ t.fursuitLinksHint }})</span>
           </label>
-          <div class="space-y-2">
+          <div class="stack-y-2">
             <div v-for="(link, idx) in form.external_maker_links" :key="idx" class="flex gap-2">
               <input
                 :value="link"
                 type="url"
                 maxlength="500"
                 placeholder="https://..."
-                class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent/40 transition-all"
+                class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-hidden focus:border-brand-accent/40 transition-all"
                 @input="updateLink(idx, ($event.target as HTMLInputElement).value)"
               />
               <button type="button" @click="removeLink(idx)"
-                class="w-9 h-9 flex items-center justify-center rounded-xl text-white/35 hover:text-rose-400 border border-brand-border hover:border-rose-500/40 transition-all text-lg flex-shrink-0">
+                class="w-9 h-9 flex items-center justify-center rounded-xl text-white/35 hover:text-rose-400 border border-brand-border hover:border-rose-500/40 transition-all text-lg shrink-0">
                 ×
               </button>
             </div>
@@ -308,7 +308,7 @@
       </Transition>
 
       <!-- Описание -->
-      <div class="space-y-2">
+      <div class="stack-y-2">
         <label class="block text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
           <svg class="w-3.5 h-3.5 text-brand-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -322,7 +322,7 @@
             rows="3"
             maxlength="2000"
             :placeholder="t.fursuitDescPlaceholder"
-            class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-brand-accent/40 transition-all resize-none"
+            class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder-white/20 focus:outline-hidden focus:border-brand-accent/40 transition-all resize-none"
           />
           <span class="absolute right-3 bottom-2 text-[10px]"
             :class="(form.description?.length ?? 0) > 1800 ? 'text-amber-400' : 'text-white/20'">

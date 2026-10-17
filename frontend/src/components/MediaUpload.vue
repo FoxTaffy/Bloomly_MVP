@@ -379,7 +379,7 @@ defineExpose({
 
           <!-- Upload progress -->
           <div v-else-if="p.uploading" class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/40 backdrop-blur-[2px]">
-            <svg viewBox="0 0 48 48" class="w-10 h-10 drop-shadow">
+            <svg viewBox="0 0 48 48" class="w-10 h-10 drop-shadow-sm">
               <defs>
                 <clipPath :id="`pf-${idx}`">
                   <rect x="0" :y="48 - (p.progress / 100) * 48" width="48" :height="(p.progress / 100) * 48" />

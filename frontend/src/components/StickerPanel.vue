@@ -5,14 +5,14 @@
 
     <!-- ── Search bar (toggle) ──────────────────────────────────────────── -->
     <Transition name="search-slide">
-      <div v-if="searchOpen" class="px-2 py-1.5 flex-shrink-0 border-b border-brand-border/40">
+      <div v-if="searchOpen" class="px-2 py-1.5 shrink-0 border-b border-brand-border/40">
         <div class="flex items-center gap-1.5 bg-brand-bg rounded-xl px-2.5 py-1.5 border border-brand-border/60">
-          <BIcon name="Search" class="w-3 h-3 text-white/40 flex-shrink-0" />
+          <BIcon name="Search" class="w-3 h-3 text-white/40 shrink-0" />
           <input
             v-model="searchQuery"
             type="text"
             placeholder="Поиск стикеров…"
-            class="flex-1 text-xs bg-transparent text-white placeholder-white/30 outline-none"
+            class="flex-1 text-xs bg-transparent text-white placeholder-white/30 outline-hidden"
             autofocus />
           <button v-if="searchQuery" @click="searchQuery = ''" class="text-white/35 hover:text-white transition-colors">
             <BIcon name="X" class="w-3 h-3" />
@@ -41,7 +41,7 @@
               @click="pick(item.url)"
               class="relative aspect-square rounded-xl bg-white/5 border border-brand-border/30 hover:border-brand-accent/50 hover:bg-brand-accent/8 transition-all active:scale-90 flex items-center justify-center p-1 overflow-hidden group"
               :title="item.packName">
-              <StickerRenderer :src="item.url" size="sm" :loop="false" :autoplay="false" class="!w-full !h-full pointer-events-none" />
+              <StickerRenderer :src="item.url" size="sm" :loop="false" :autoplay="false" class="w-full! h-full! pointer-events-none" />
               <FavBtn :url="item.url" />
             </button>
           </div>
@@ -58,7 +58,7 @@
               v-for="url in favStickers" :key="url"
               @click="pick(url)"
               class="relative aspect-square rounded-xl bg-white/5 border border-brand-border/30 hover:border-brand-accent/50 hover:bg-brand-accent/8 transition-all active:scale-90 flex items-center justify-center p-1 overflow-hidden group">
-              <StickerRenderer :src="url" size="sm" :loop="false" :autoplay="false" class="!w-full !h-full pointer-events-none" />
+              <StickerRenderer :src="url" size="sm" :loop="false" :autoplay="false" class="w-full! h-full! pointer-events-none" />
               <FavBtn :url="url" />
             </button>
           </div>
@@ -75,7 +75,7 @@
               v-for="url in frequentDisplay" :key="url"
               @click="pick(url)"
               class="relative aspect-square rounded-xl bg-white/5 border border-brand-border/30 hover:border-brand-accent/50 hover:bg-brand-accent/8 transition-all active:scale-90 flex items-center justify-center p-1 overflow-hidden group">
-              <StickerRenderer :src="url" size="sm" :loop="false" :autoplay="false" class="!w-full !h-full pointer-events-none" />
+              <StickerRenderer :src="url" size="sm" :loop="false" :autoplay="false" class="w-full! h-full! pointer-events-none" />
               <FavBtn :url="url" />
             </button>
           </div>
@@ -89,10 +89,10 @@
               <p class="text-[10px] font-bold text-white/40 uppercase tracking-wider truncate">
                 {{ currentPack.name }}
               </p>
-              <span v-if="ownPackIds.has(currentPack.id)" class="text-[8px] text-white/30 flex-shrink-0">✏️</span>
-              <span v-if="currentPack.is_nsfw" class="text-[8px] font-bold px-1 py-px rounded bg-rose-500/20 text-rose-400 flex-shrink-0 border border-rose-500/20">18+</span>
+              <span v-if="ownPackIds.has(currentPack.id)" class="text-[8px] text-white/30 shrink-0">✏️</span>
+              <span v-if="currentPack.is_nsfw" class="text-[8px] font-bold px-1 py-px rounded-sm bg-rose-500/20 text-rose-400 shrink-0 border border-rose-500/20">18+</span>
             </div>
-            <div class="flex items-center gap-1 flex-shrink-0">
+            <div class="flex items-center gap-1 shrink-0">
               <!-- Popularity indicator -->
               <span v-if="currentPack.use_count > 0" class="text-[9px] text-white/30">
                 🔥{{ currentPack.use_count > 999 ? Math.round(currentPack.use_count / 1000) + 'k' : currentPack.use_count }}
@@ -120,7 +120,7 @@
               ]">
               <!-- NSFW badge -->
               <span v-if="currentPack.nsfw_stickers?.includes(idx)"
-                class="absolute top-0.5 right-0.5 text-[7px] bg-pink-500/80 text-white px-0.5 rounded z-10 leading-none py-[1px] font-bold">18+</span>
+                class="absolute top-0.5 right-0.5 text-[7px] bg-pink-500/80 text-white px-0.5 rounded-sm z-10 leading-none py-px font-bold">18+</span>
               <!-- Paid lock overlay -->
               <div
                 v-if="parseFloat(currentPack.price) > 0 && !isInCollection(currentPack) && !ownPackIds.has(currentPack.id)"
@@ -128,7 +128,7 @@
                 @click.stop="openPack(currentPack)">
                 <BIcon name="Lock" class="w-3 h-3 text-yellow-400/80" />
               </div>
-              <StickerRenderer :src="url" size="sm" :loop="false" :autoplay="false" class="!w-full !h-full pointer-events-none" />
+              <StickerRenderer :src="url" size="sm" :loop="false" :autoplay="false" class="w-full! h-full! pointer-events-none" />
               <FavBtn :url="url" />
             </button>
           </div>
@@ -147,12 +147,12 @@
     </div>
 
     <!-- ── Unified bottom nav bar (Telegram style) ──────────────────────── -->
-    <div class="flex items-center flex-shrink-0 border-t border-brand-border/50 bg-brand-bg/20 py-1 overflow-x-auto scrollbar-hide px-1 gap-0.5">
+    <div class="flex items-center shrink-0 border-t border-brand-border/50 bg-brand-bg/20 py-1 overflow-x-auto scrollbar-hide px-1 gap-0.5">
 
       <!-- 🔍 Search toggle -->
       <button
         @click="searchOpen = !searchOpen; if (!searchOpen) searchQuery = ''"
-        :class="['flex-shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center transition-all',
+        :class="['shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center transition-all',
           searchOpen ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/35 hover:text-white hover:bg-white/8']">
         <BIcon name="Search" class="w-4 h-4" />
       </button>
@@ -160,14 +160,14 @@
       <!-- ⭐ Favorites -->
       <button
         @click="setNav('__fav__')"
-        :class="['flex-shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center transition-all text-base',
+        :class="['shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center transition-all text-base',
           activeNav === '__fav__' ? 'bg-brand-accent/15 text-brand-accent' : 'hover:bg-white/8 text-white/70']"
         title="Избранные">⭐</button>
 
       <!-- 🔥 Frequently used -->
       <button
         @click="setNav('__frequent__')"
-        :class="['flex-shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center transition-all text-base',
+        :class="['shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center transition-all text-base',
           activeNav === '__frequent__' ? 'bg-brand-accent/15 text-brand-accent' : 'hover:bg-white/8 text-white/70']"
         title="Часто используемые">🔥</button>
 
@@ -175,7 +175,7 @@
       <button
         v-for="pack in collection" :key="pack.id"
         @click="setNav(pack.id)"
-        :class="['flex-shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center overflow-hidden transition-all',
+        :class="['shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center overflow-hidden transition-all',
           activeNav === pack.id ? 'bg-brand-accent/15 ring-2 ring-brand-accent/50' : 'hover:bg-white/8 opacity-70 hover:opacity-100']"
         :title="pack.name">
         <StickerRenderer
@@ -183,14 +183,14 @@
           :src="pack.cover_url || pack.stickers[pack.cover_sticker_idx ?? 0] || pack.stickers[0]"
           size="xs"
           :loop="false" :autoplay="false"
-          class="!w-7 !h-7 pointer-events-none" />
+          class="w-7! h-7! pointer-events-none" />
         <span v-else class="text-sm">📦</span>
       </button>
 
       <!-- Upload new sticker -->
       <button
         @click="importTgsRef?.click()"
-        class="flex-shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center text-white/30 hover:bg-brand-accent/15 hover:text-brand-accent transition-all"
+        class="shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center text-white/30 hover:bg-brand-accent/15 hover:text-brand-accent transition-all"
         title="Загрузить стикер (.tgs/.webp)">
         <BIcon name="Upload" class="w-4 h-4" />
       </button>
@@ -198,7 +198,7 @@
       <!-- Catalog link -->
       <router-link
         to="/stickers"
-        class="flex-shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center text-white/30 hover:bg-brand-accent/15 hover:text-brand-accent transition-all"
+        class="shrink-0 w-9 h-9 mb-0.5 rounded-2xl flex items-center justify-center text-white/30 hover:bg-brand-accent/15 hover:text-brand-accent transition-all"
         title="Каталог стикеров">
         <BIcon name="ExternalLink" class="w-3.5 h-3.5" />
       </router-link>

@@ -83,8 +83,8 @@ watchEffect(() => { badges.support = supportTickets.value.filter((t: any) => t.s
         @click="supportFilter = s; fetchSupportTickets()"
         class="px-4 py-2 rounded-2xl text-xs font-bold border transition-all"
         :class="supportFilter === s
-          ? 'bg-[#4C67CF]/15 border-[#4C67CF]/25 text-[#8fa0ec]'
-          : 'bg-white/5 border-white/[0.08] text-white/40 hover:text-white/70'">
+          ? 'bg-brand-accent/15 border-brand-accent/25 text-[#8fa0ec]'
+          : 'bg-white/5 border-white/8 text-white/40 hover:text-white/70'">
         {{ s === '' ? langStore.t.tabAll : SUPPORT_STATUS_LABEL[s] }}
       </button>
     </div>
@@ -92,14 +92,14 @@ watchEffect(() => { badges.support = supportTickets.value.filter((t: any) => t.s
     <div class="rounded-3xl border border-brand-border overflow-hidden" style="background:#1F223C">
       <div v-if="isLoadingSupport" class="divide-y divide-brand-border">
         <div v-for="n in 4" :key="n" class="flex gap-3 px-5 py-4 animate-pulse">
-          <div class="flex-1 space-y-2">
-            <div class="h-3 bg-white/[0.08] rounded-full w-48" /><div class="h-2 bg-white/5 rounded-full w-32" />
+          <div class="flex-1 stack-y-2">
+            <div class="h-3 bg-white/8 rounded-full w-48" /><div class="h-2 bg-white/5 rounded-full w-32" />
           </div>
         </div>
       </div>
       <div v-else-if="supportLoadError && supportTickets.length === 0" class="flex flex-col items-center gap-3 py-16 text-white/30">
         <p class="text-sm font-semibold">{{ langStore.t.adminLoadFailed }}</p>
-        <button @click="fetchSupportTickets" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/[0.08] text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
+        <button @click="fetchSupportTickets" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/8 text-white/60 hover:text-white transition-all">{{ langStore.t.adminRetryBtn }}</button>
       </div>
       <div v-else-if="supportTickets.length === 0"
         class="flex flex-col items-center gap-3 py-16 text-white/25">
@@ -107,9 +107,9 @@ watchEffect(() => { badges.support = supportTickets.value.filter((t: any) => t.s
         <p class="text-sm font-semibold">{{ langStore.t.adminNoTicketsFound }}</p>
       </div>
       <div v-else class="divide-y divide-brand-border">
-        <div v-for="ticket in supportTickets" :key="ticket.id" class="px-5 py-4 hover:bg-white/[0.03] transition-all">
+        <div v-for="ticket in supportTickets" :key="ticket.id" class="px-5 py-4 hover:bg-white/3 transition-all">
           <div class="flex items-start gap-4">
-            <div class="flex-shrink-0 mt-1.5">
+            <div class="shrink-0 mt-1.5">
               <div class="w-2.5 h-2.5 rounded-full" :style="`background:${SUPPORT_STATUS_COLOR[ticket.status]}`" />
             </div>
             <div class="flex-1 min-w-0">
@@ -129,10 +129,10 @@ watchEffect(() => { badges.support = supportTickets.value.filter((t: any) => t.s
                 <span v-if="ticket.contact_email && ticket.contact_email !== ticket.external_email"> · {{ ticket.contact_email }}</span>
               </p>
 
-              <div class="mt-3 space-y-2">
+              <div class="mt-3 stack-y-2">
                 <div v-for="m in ticket.messages" :key="m.id"
                   class="px-3 py-2 rounded-xl border"
-                  :class="m.sender_type === 'admin' ? 'bg-[#4C67CF]/[0.08] border-[#4C67CF]/20' : 'bg-white/5 border-white/[0.06]'">
+                  :class="m.sender_type === 'admin' ? 'bg-brand-accent/8 border-brand-accent/20' : 'bg-white/5 border-white/6'">
                   <p class="text-[10px] font-bold mb-0.5" :class="m.sender_type === 'admin' ? 'text-[#8fa0ec]' : 'text-white/30'">
                     {{ supportSenderLabel(m) }}
                   </p>
@@ -143,8 +143,8 @@ watchEffect(() => { badges.support = supportTickets.value.filter((t: any) => t.s
 
               <div class="mt-3 flex flex-col sm:flex-row gap-2">
                 <input v-model="supportReplyDrafts[ticket.id]" type="text" :placeholder="langStore.t.adminReplyToUserPlaceholder"
-                  class="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/[0.08] text-xs text-white placeholder-white/25 focus:outline-none focus:border-[#4C67CF]/40" />
-                <div class="flex gap-2 flex-shrink-0">
+                  class="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/8 text-xs text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/40" />
+                <div class="flex gap-2 shrink-0">
                   <button @click="replySupportTicket(ticket.id, 'in_progress')" :disabled="supportBusy[ticket.id]"
                     class="disabled:opacity-50 disabled:pointer-events-none px-3 py-1.5 rounded-xl text-xs font-bold bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/20 transition-all">
                     {{ langStore.t.adminMarkInProgressBtn }}
@@ -154,7 +154,7 @@ watchEffect(() => { badges.support = supportTickets.value.filter((t: any) => t.s
                     ✓ {{ langStore.t.adminMarkResolvedBtn }}
                   </button>
                   <button @click="replySupportTicket(ticket.id, 'closed')" :disabled="supportBusy[ticket.id]"
-                    class="disabled:opacity-50 disabled:pointer-events-none px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 border border-white/[0.08] text-white/40 hover:text-white transition-all">
+                    class="disabled:opacity-50 disabled:pointer-events-none px-3 py-1.5 rounded-xl text-xs font-bold bg-white/5 border border-white/8 text-white/40 hover:text-white transition-all">
                     {{ langStore.t.adminCloseBtn }}
                   </button>
                 </div>

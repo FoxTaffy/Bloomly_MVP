@@ -99,7 +99,7 @@ async function confirm() {
     leave-active-class="transition-all duration-150 ease-in"
     leave-to-class="opacity-0"
   >
-    <div v-if="show" class="fixed inset-0 z-[100] flex items-center justify-center p-4" style="background:rgba(5,8,20,0.72);backdrop-filter:blur(6px)">
+    <div v-if="show" class="fixed inset-0 z-100 flex items-center justify-center p-4" style="background:rgba(5,8,20,0.72);backdrop-filter:blur(6px)">
       <Transition
         appear
         enter-active-class="transition-all duration-300 ease-out"
@@ -111,13 +111,13 @@ async function confirm() {
 
           <!-- Icy top banner -->
           <div class="relative px-8 pt-8 pb-6 text-center" style="background:linear-gradient(160deg,#0ea5e9 0%,#38bdf8 55%,#7dd3fc 100%)">
-            <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-white/15 border border-white/25 flex items-center justify-center backdrop-blur-sm">
+            <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-white/15 border border-white/25 flex items-center justify-center backdrop-blur-xs">
               <BIcon name="Snowflake" class="w-8 h-8 text-white" />
             </div>
             <h2 class="text-xl font-black text-white">Аккаунт заморожен</h2>
           </div>
 
-          <div class="p-7 space-y-4">
+          <div class="p-7 stack-y-4">
             <p class="text-sm text-white/50 leading-relaxed">{{ reason || 'Аккаунт временно заморожен модерацией.' }}</p>
 
             <div class="flex items-center gap-2.5 p-3.5 rounded-2xl bg-sky-500/8 border border-sky-500/20">
@@ -136,7 +136,7 @@ async function confirm() {
               placeholder="• • • • • •"
               maxlength="6"
               :disabled="!sent"
-              class="w-full text-center text-xl font-bold tracking-[0.5em] rounded-2xl px-4 py-3.5 outline-none text-white disabled:opacity-40"
+              class="w-full text-center text-xl font-bold tracking-[0.5em] rounded-2xl px-4 py-3.5 outline-hidden text-white disabled:opacity-40"
               style="background:rgba(255,255,255,0.04);border:1px solid rgba(56,189,248,0.3)"
               autocomplete="one-time-code"
             />

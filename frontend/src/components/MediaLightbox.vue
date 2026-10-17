@@ -38,7 +38,7 @@ function onTouchEnd(e: TouchEvent) {
 
 <template>
   <Teleport to="body">
-    <div v-if="current" class="fixed inset-0 z-[700] bg-black/95 flex items-center justify-center select-none"
+    <div v-if="current" class="fixed inset-0 z-700 bg-black/95 flex items-center justify-center select-none"
       @click.self="close" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
       <img v-if="isImage(current)" :key="current" :src="current" alt="" class="max-w-[94vw] max-h-[90vh] object-contain" />
       <video v-else :key="current" :src="current" controls autoplay playsinline class="max-w-[94vw] max-h-[90vh]" />

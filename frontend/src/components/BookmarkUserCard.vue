@@ -40,7 +40,7 @@ async function removeBookmark() {
 
     <!-- Banner -->
     <div
-      class="relative h-16 flex-shrink-0"
+      class="relative h-16 shrink-0"
       :style="user.banner_url ? '' : `background: ${bannerGradient(user.id)}`"
     >
       <img v-if="user.banner_url" :src="user.banner_url" class="w-full h-full object-cover" alt="" />
@@ -48,7 +48,7 @@ async function removeBookmark() {
       <button
         @click.stop="removeBookmark"
         :disabled="removing"
-        class="absolute top-2 right-2 p-1.5 rounded-xl bg-black/50 backdrop-blur-sm text-white/70 hover:text-yellow-400 hover:bg-black/70 transition-all opacity-0 group-hover:opacity-100 disabled:opacity-30"
+        class="absolute top-2 right-2 p-1.5 rounded-xl bg-black/50 backdrop-blur-xs text-white/70 hover:text-yellow-400 hover:bg-black/70 transition-all opacity-0 group-hover:opacity-100 disabled:opacity-30"
         :title="langStore.t.unbookmarkUser">
         <BIcon name="BookmarkX" class="w-3.5 h-3.5" />
       </button>
@@ -79,7 +79,7 @@ async function removeBookmark() {
           <p class="font-bold text-sm text-white truncate leading-tight">
             {{ user.display_name || user.username }}
           </p>
-          <BIcon v-if="user.is_verified" name="BadgeCheck" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+          <BIcon v-if="user.is_verified" name="BadgeCheck" class="w-3.5 h-3.5 text-brand-accent shrink-0" />
         </div>
         <p class="text-xs text-white/45 truncate">@{{ user.username }}</p>
       </div>
@@ -94,7 +94,7 @@ async function removeBookmark() {
           {{ fmtNum(user._count?.followers ?? 0) }} {{ langStore.t.followersCount }}
         </span>
         <span v-if="user.location" class="flex items-center gap-1 truncate">
-          <BIcon name="MapPin" class="w-3 h-3 flex-shrink-0" />
+          <BIcon name="MapPin" class="w-3 h-3 shrink-0" />
           {{ user.location }}
         </span>
       </div>

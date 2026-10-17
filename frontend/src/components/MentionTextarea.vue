@@ -112,7 +112,7 @@ const onBlur = () => { window.setTimeout(closeDropdown, 150) }
       @input="onInput"
       @keydown="onKeydown"
       @blur="onBlur"
-      class="w-full bg-transparent text-white placeholder-brand-muted text-[15px] leading-relaxed resize-none outline-none min-h-[60px] max-h-[300px]"
+      class="w-full bg-transparent text-white placeholder-brand-muted text-[15px] leading-relaxed resize-none outline-hidden min-h-[60px] max-h-[300px]"
       :style="minHeight ? `min-height:${minHeight}` : ''"
     />
 
@@ -132,11 +132,11 @@ const onBlur = () => { window.setTimeout(closeDropdown, 150) }
           <!-- Avatar: round for users, rounded-lg for groups -->
           <img v-if="item.avatar_url"
             :src="item.avatar_url"
-            class="w-8 h-8 object-cover border border-brand-border flex-shrink-0"
+            class="w-8 h-8 object-cover border border-brand-border shrink-0"
             :class="item.type === 'group' ? 'rounded-lg' : 'rounded-full'"
           />
           <div v-else
-            class="w-8 h-8 border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs"
+            class="w-8 h-8 border border-brand-border shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-xs"
             :class="item.type === 'group' ? 'rounded-lg' : 'rounded-full'"
           >{{ (item.name || '?')[0].toUpperCase() }}</div>
 
@@ -146,8 +146,8 @@ const onBlur = () => { window.setTimeout(closeDropdown, 150) }
           </div>
 
           <!-- Type indicator -->
-          <BIcon v-if="item.type === 'group'" name="Users" class="w-3.5 h-3.5 ml-auto flex-shrink-0 opacity-50" />
-          <BIcon v-else name="AtSign" class="w-3.5 h-3.5 ml-auto flex-shrink-0 opacity-50" />
+          <BIcon v-if="item.type === 'group'" name="Users" class="w-3.5 h-3.5 ml-auto shrink-0 opacity-50" />
+          <BIcon v-else name="AtSign" class="w-3.5 h-3.5 ml-auto shrink-0 opacity-50" />
         </button>
       </div>
     </Transition>

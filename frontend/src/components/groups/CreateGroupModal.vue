@@ -290,8 +290,8 @@ function submit() {
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-[999] flex items-center justify-center p-4" @click.self="emit('close')">
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+    <div class="fixed inset-0 z-999 flex items-center justify-center p-4" @click.self="emit('close')">
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-xs" />
       <div class="relative bg-brand-card border border-brand-border rounded-3xl p-6 max-w-lg w-full shadow-2xl z-10 max-h-[90vh] overflow-y-auto">
         <button class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-brand-bg/60 flex items-center justify-center hover:bg-brand-bg transition-colors z-20"
           @click="emit('close')">
@@ -326,7 +326,7 @@ function submit() {
         <!-- ══════════════════════════════════════════════════════════════════
              STEP 1: Основа
              ═══════════════════════════════════════════════════════════════ -->
-        <div v-show="step === 1" class="space-y-4">
+        <div v-show="step === 1" class="stack-y-4">
           <!-- Type selector — 7 types scrollable grid -->
           <div>
             <p class="text-xs font-bold text-white/50 uppercase tracking-wider mb-2">Тип группы</p>
@@ -362,7 +362,7 @@ function submit() {
           <div>
             <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 block">Название</label>
             <input v-model="name" placeholder="Bloomly NEWS, FurMarket…" maxlength="120"
-              class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-none" />
+              class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden" />
           </div>
 
           <!-- Slug -->
@@ -377,7 +377,7 @@ function submit() {
             <div class="relative">
               <span class="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-sm">@</span>
               <input v-model="slug" :placeholder="autoSlug || 'my-group'"
-                class="w-full bg-brand-bg border rounded-2xl pl-8 pr-10 py-3 text-white text-sm placeholder-white/30 focus:outline-none transition-colors"
+                class="w-full bg-brand-bg border rounded-2xl pl-8 pr-10 py-3 text-white text-sm placeholder-white/30 focus:outline-hidden transition-colors"
                 :class="slug
                   ? (slugError ? 'border-brand-error focus:border-brand-error' : 'border-brand-success focus:border-brand-success')
                   : 'border-brand-border focus:border-brand-accent'" />
@@ -388,10 +388,10 @@ function submit() {
             </div>
             <!-- Dynamic error -->
             <p v-if="slugError && slug" class="flex items-center gap-1 text-[11px] text-brand-error mt-1.5">
-              <BIcon name="AlertCircle" class="w-3.5 h-3.5 flex-shrink-0" /> {{ slugError }}
+              <BIcon name="AlertCircle" class="w-3.5 h-3.5 shrink-0" /> {{ slugError }}
             </p>
             <!-- Static rules -->
-            <div class="mt-2 px-1 space-y-1">
+            <div class="mt-2 px-1 stack-y-1">
               <p class="text-[10px] text-white/30 font-bold uppercase tracking-wider">Правила slug</p>
               <div class="grid grid-cols-2 gap-x-3 gap-y-0.5">
                 <span class="text-[10px] text-white/30 flex items-center gap-1">
@@ -414,7 +414,7 @@ function submit() {
           <div>
             <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 block">Описание</label>
             <textarea v-model="description" placeholder="Расскажите о группе…" rows="3"
-              class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-none resize-none" />
+              class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden resize-none" />
           </div>
 
           <!-- Visibility -->
@@ -435,7 +435,7 @@ function submit() {
         <!-- ══════════════════════════════════════════════════════════════════
              STEP 2: Специфика
              ═══════════════════════════════════════════════════════════════ -->
-        <div v-show="step === 2" class="space-y-4">
+        <div v-show="step === 2" class="stack-y-4">
 
           <!-- ── EVENT ───────────────────────────────────────────────────── -->
           <template v-if="type === 'event'">
@@ -453,18 +453,18 @@ function submit() {
               <div class="col-span-2">
                 <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 block">Название события</label>
                 <input v-model="eventTitle" placeholder="FurMarket, Eurofurence 30…"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-none" />
+                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden" />
               </div>
               <div>
                 <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 block">Код (тег)</label>
                 <input v-model="eventShortCode" placeholder="FURM" maxlength="10"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-none uppercase font-bold tracking-wider" />
+                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden uppercase font-bold tracking-wider" />
                 <p class="text-white/25 text-[10px] mt-1">Будет в SOON-бейдже</p>
               </div>
               <div>
                 <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 block">Локация</label>
                 <input v-model="eventLocation" placeholder="Atlanta, GA"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-none" />
+                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden" />
               </div>
             </div>
 
@@ -472,12 +472,12 @@ function submit() {
               <div>
                 <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 block">Начало</label>
                 <input v-model="eventStartsAt" type="date"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm focus:border-brand-accent focus:outline-none [color-scheme:dark]" />
+                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm focus:border-brand-accent focus:outline-hidden scheme-dark" />
               </div>
               <div>
                 <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 block">Конец</label>
                 <input v-model="eventEndsAt" type="date"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm focus:border-brand-accent focus:outline-none [color-scheme:dark]" />
+                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm focus:border-brand-accent focus:outline-hidden scheme-dark" />
               </div>
             </div>
 
@@ -565,12 +565,12 @@ function submit() {
               <div>
                 <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 block">Макс. очередь</label>
                 <input v-model.number="commissionMaxQueue" type="number" min="1" max="100"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm focus:border-brand-accent focus:outline-none" />
+                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm focus:border-brand-accent focus:outline-hidden" />
               </div>
               <div>
                 <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 block">Валюта</label>
                 <select v-model="commissionCurrency"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm focus:border-brand-accent focus:outline-none appearance-none">
+                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm focus:border-brand-accent focus:outline-hidden appearance-none">
                   <option value="USD">USD ($)</option><option value="EUR">EUR (€)</option><option value="RUB">RUB (₽)</option>
                 </select>
               </div>
@@ -604,20 +604,20 @@ function submit() {
             <!-- Social links for news -->
             <div>
               <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-2 block">Соцсети (необязательно)</label>
-              <div class="space-y-2">
+              <div class="stack-y-2">
                 <div class="flex items-center gap-2">
                   <div class="w-8 h-8 rounded-lg bg-brand-bg border border-brand-border flex items-center justify-center shrink-0">
                     <BIcon name="Send" class="w-3.5 h-3.5 text-white/40" />
                   </div>
                   <input v-model="socialTelegram" placeholder="https://t.me/..."
-                    class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-none" />
+                    class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden" />
                 </div>
                 <div class="flex items-center gap-2">
                   <div class="w-8 h-8 rounded-lg bg-brand-bg border border-brand-border flex items-center justify-center shrink-0">
                     <BIcon name="Globe" class="w-3.5 h-3.5 text-white/40" />
                   </div>
                   <input v-model="socialWebsite" placeholder="https://..."
-                    class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-none" />
+                    class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden" />
                 </div>
               </div>
             </div>
@@ -625,9 +625,9 @@ function submit() {
 
           <!-- ── SHOP ─────────────────────────────────────────────────────── -->
           <template v-if="type === 'shop'">
-            <div class="bg-brand-bg/40 border border-[#E76F51]/20 rounded-2xl p-4 flex items-start gap-3">
-              <div class="w-9 h-9 rounded-xl bg-[#E76F51]/10 flex items-center justify-center shrink-0 mt-0.5">
-                <BIcon name="ShoppingBag" class="w-5 h-5 text-[#E76F51]" />
+            <div class="bg-brand-bg/40 border border-brand-warning/20 rounded-2xl p-4 flex items-start gap-3">
+              <div class="w-9 h-9 rounded-xl bg-brand-warning/10 flex items-center justify-center shrink-0 mt-0.5">
+                <BIcon name="ShoppingBag" class="w-5 h-5 text-brand-warning" />
               </div>
               <div>
                 <p class="text-white font-bold text-sm">Создание магазина</p>
@@ -640,7 +640,7 @@ function submit() {
               <div class="grid grid-cols-3 gap-2">
                 <button v-for="cur in ['RUB', 'USD', 'EUR']" :key="cur"
                   class="py-2.5 rounded-xl border text-xs font-bold transition-all"
-                  :class="shopCurrency === cur ? 'bg-[#E76F51]/10 border-[#E76F51]/40 text-[#E76F51]' : 'bg-brand-bg/40 border-brand-border text-white/40'"
+                  :class="shopCurrency === cur ? 'bg-brand-warning/10 border-brand-warning/40 text-brand-warning' : 'bg-brand-bg/40 border-brand-border text-white/40'"
                   @click="shopCurrency = cur">
                   {{ cur === 'RUB' ? '₽ RUB' : cur === 'USD' ? '$ USD' : '€ EUR' }}
                 </button>
@@ -655,13 +655,13 @@ function submit() {
               <p class="text-white/30 text-xs">Товары можно добавить после создания группы в настройках через прайс-лист.</p>
             </div>
 
-            <div class="space-y-2">
+            <div class="stack-y-2">
               <div class="flex items-center gap-2">
                 <div class="w-8 h-8 rounded-lg bg-brand-bg border border-brand-border flex items-center justify-center shrink-0">
                   <BIcon name="Globe" class="w-3.5 h-3.5 text-white/40" />
                 </div>
                 <input v-model="socialWebsite" placeholder="Ссылка на основной магазин (если есть)"
-                  class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-none" />
+                  class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden" />
               </div>
             </div>
           </template>
@@ -692,7 +692,7 @@ function submit() {
 
             <div>
               <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-2 block">Соцсети и контакты</label>
-              <div class="space-y-2">
+              <div class="stack-y-2">
                 <div v-for="link in [
                   { ref: socialTelegram, icon: 'Send', placeholder: 'https://t.me/...' },
                   { ref: socialWebsite, icon: 'Globe', placeholder: 'https://...' },
@@ -702,7 +702,7 @@ function submit() {
                     <BIcon :name="link.icon" class="w-3.5 h-3.5 text-white/40" />
                   </div>
                   <input :value="link.ref" :placeholder="link.placeholder"
-                    class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-none"
+                    class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden"
                     @input="(e: any) => {
                       if (link.placeholder.includes('t.me')) socialTelegram = e.target.value
                       else if (link.placeholder.includes('vk')) socialVk = e.target.value
@@ -728,7 +728,7 @@ function submit() {
               </div>
             </div>
 
-            <div class="space-y-3">
+            <div class="stack-y-3">
               <div v-for="link in [
                 { model: 'telegram', icon: 'Send', label: 'Telegram', placeholder: 'https://t.me/...' },
                 { model: 'discord', icon: 'MessageCircle', label: 'Discord', placeholder: 'https://discord.gg/...' },
@@ -746,7 +746,7 @@ function submit() {
                     : link.model === 'vk' ? socialVk
                     : socialWebsite"
                   :placeholder="link.placeholder"
-                  class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-none"
+                  class="flex-1 bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden"
                   @input="(e: any) => {
                     const val = e.target.value
                     if (link.model === 'telegram') socialTelegram = val
@@ -763,7 +763,7 @@ function submit() {
         <!-- ══════════════════════════════════════════════════════════════════
              STEP 3: Медиа — аватар и баннер
              ═══════════════════════════════════════════════════════════════ -->
-        <div v-show="step === 3" class="space-y-5">
+        <div v-show="step === 3" class="stack-y-5">
           <div class="bg-brand-bg/40 border border-brand-accent/20 rounded-2xl p-4 flex items-start gap-3">
             <div class="w-9 h-9 rounded-xl bg-brand-accent/10 flex items-center justify-center shrink-0 mt-0.5">
               <BIcon name="Image" class="w-5 h-5 text-brand-accent" />
@@ -818,7 +818,7 @@ function submit() {
             <div class="flex items-center gap-4">
               <!-- Avatar circle -->
               <div
-                class="w-20 h-20 rounded-2xl border-2 border-dashed overflow-hidden cursor-pointer flex-shrink-0 transition-colors group relative"
+                class="w-20 h-20 rounded-2xl border-2 border-dashed overflow-hidden cursor-pointer shrink-0 transition-colors group relative"
                 :class="avatarPreview ? 'border-transparent' : 'border-brand-border hover:border-brand-accent/50'"
                 :style="avatarPreview ? {} : { background: `${accentColor}15` }"
                 @click="avatarInputRef?.click()"
@@ -839,7 +839,7 @@ function submit() {
                   <div class="w-5 h-5 rounded-full border-2 border-white/20 border-t-white animate-spin" />
                 </div>
               </div>
-              <div class="flex-1 space-y-1.5">
+              <div class="flex-1 stack-y-1.5">
                 <p class="text-white/60 text-xs leading-relaxed">Квадратное изображение · PNG, JPG, WEBP<br/>Рекомендуется 400×400 пикселей</p>
                 <button
                   class="px-3 py-1.5 rounded-xl border border-brand-border text-xs font-semibold text-white/60 hover:text-white hover:border-brand-accent/40 transition-colors"
@@ -860,7 +860,7 @@ function submit() {
         <!-- ══════════════════════════════════════════════════════════════════
              STEP 4: Визуал — акцентный цвет
              ═══════════════════════════════════════════════════════════════ -->
-        <div v-show="step === 4" class="space-y-4">
+        <div v-show="step === 4" class="stack-y-4">
           <div class="bg-brand-bg/40 border border-brand-accent/20 rounded-2xl p-4 flex items-start gap-3">
             <div class="w-9 h-9 rounded-xl bg-brand-accent/10 flex items-center justify-center shrink-0 mt-0.5">
               <BIcon name="Sparkles" class="w-5 h-5 text-brand-accent" />
@@ -887,7 +887,7 @@ function submit() {
             <div class="relative">
               <span class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border border-white/20" :style="{ backgroundColor: accentColor }" />
               <input v-model="accentColor" maxlength="9" placeholder="#4C67CF"
-                class="w-full bg-brand-bg border border-brand-border rounded-2xl pl-11 pr-4 py-3 text-white text-sm placeholder-white/30 font-mono focus:border-brand-accent focus:outline-none" />
+                class="w-full bg-brand-bg border border-brand-border rounded-2xl pl-11 pr-4 py-3 text-white text-sm placeholder-white/30 font-mono focus:border-brand-accent focus:outline-hidden" />
             </div>
           </div>
 

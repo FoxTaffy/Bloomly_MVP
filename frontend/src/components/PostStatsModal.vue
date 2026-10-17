@@ -48,7 +48,7 @@ onMounted(load)
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-[9999] flex items-center justify-center px-4" style="background: rgba(0,0,0,0.6)" @click.self="emit('close')">
+    <div class="fixed inset-0 z-9999 flex items-center justify-center px-4" style="background: rgba(0,0,0,0.6)" @click.self="emit('close')">
       <div class="w-full max-w-sm bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden">
         <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border">
           <h3 class="font-bold text-white flex items-center gap-2">
@@ -73,7 +73,7 @@ onMounted(load)
             <p class="text-sm font-bold text-white">Статистика доступна в PRO</p>
             <p class="text-xs text-white/55">Оформите подписку PRO, чтобы видеть подробную статистику по каждому посту.</p>
             <button @click="goToSubscriptions"
-              class="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-brand-accent to-brand-accent-plus text-white text-sm font-bold rounded-2xl shadow-lg shadow-brand-accent/25">
+              class="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-linear-to-r/srgb from-brand-accent to-brand-accent-plus text-white text-sm font-bold rounded-2xl shadow-lg shadow-brand-accent/25">
               <BIcon name="Ticket" class="w-4 h-4" /> Перейти к подписке
             </button>
           </div>
@@ -107,11 +107,11 @@ onMounted(load)
             </div>
 
             <div class="grid grid-cols-2 gap-4 pt-4">
-              <div class="space-y-1.5">
+              <div class="stack-y-1.5">
                 <p class="text-sm"><span class="font-bold text-white tabular-nums">{{ stats.rating }}</span> <span class="text-white/50">рейтинга записи</span></p>
                 <p class="text-sm"><span class="font-bold text-white tabular-nums">{{ stats.downvotes }}</span> <span class="text-white/50">дизлайков</span></p>
               </div>
-              <div class="space-y-1.5">
+              <div class="stack-y-1.5">
                 <p class="text-sm"><span class="font-bold text-white tabular-nums">{{ stats.favourites }}</span> <span class="text-white/50">в закладках</span></p>
                 <p class="text-sm text-white/40">{{ formattedDate }}</p>
               </div>

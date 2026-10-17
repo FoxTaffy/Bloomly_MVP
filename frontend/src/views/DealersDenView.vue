@@ -378,13 +378,13 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
       <AppSidebar />
 
       <!-- ─── Main ──────────────────────────────────────────────────────── -->
-      <main class="flex-1 min-w-0 pb-28 md:pb-20 space-y-5">
+      <main class="flex-1 min-w-0 pb-28 md:pb-20 stack-y-5">
 
         <!-- Загрузка страницы (top progress bar) -->
         <Teleport to="body">
           <transition name="fade-bar">
             <div v-if="store.isLoading"
-              class="fixed top-0 left-0 right-0 z-[9999] h-0.5 overflow-hidden"
+              class="fixed top-0 left-0 right-0 z-9999 h-0.5 overflow-hidden"
               style="background: transparent">
               <div class="h-full animate-loading-bar"
                 style="background: linear-gradient(90deg, #3148FF, #4C67CF, #FFC01F, #4C67CF, #3148FF); background-size: 200%"></div>
@@ -404,13 +404,13 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
           <div class="absolute top-4 right-4 w-36 h-36 rounded-full opacity-20 blur-2xl" style="background: radial-gradient(circle, #FFC01F, transparent)" />
 
           <!-- Floating decorative chips -->
-          <div class="absolute top-3 right-12 rotate-12 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-3 py-1.5 hidden md:flex items-center gap-1.5">
+          <div class="absolute top-3 right-12 rotate-12 bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl px-3 py-1.5 hidden md:flex items-center gap-1.5">
             <BIcon name="Hammer" class="w-3.5 h-3.5 text-brand-yellow" /><span class="text-white text-xs font-bold">{{ langStore.t.dealersDenKindAuction }}</span>
           </div>
-          <div class="absolute bottom-4 right-6 -rotate-6 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-3 py-1.5 hidden md:flex items-center gap-1.5">
+          <div class="absolute bottom-4 right-6 -rotate-6 bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl px-3 py-1.5 hidden md:flex items-center gap-1.5">
             <BIcon name="Paintbrush" class="w-3.5 h-3.5 text-brand-purple" /><span class="text-white text-xs font-bold">YCH</span>
           </div>
-          <div class="absolute top-10 right-44 rotate-2 bg-brand-accent/20 backdrop-blur-sm border border-brand-accent/30 rounded-xl px-3 py-1.5 hidden xl:flex items-center gap-1.5">
+          <div class="absolute top-10 right-44 rotate-2 bg-brand-accent/20 backdrop-blur-xs border border-brand-accent/30 rounded-xl px-3 py-1.5 hidden xl:flex items-center gap-1.5">
             <BIcon name="Gift" class="w-3.5 h-3.5 text-brand-success" /><span class="text-white text-xs font-bold">{{ langStore.t.dealersDenKindRaffle }}</span>
           </div>
 
@@ -418,7 +418,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <div class="flex items-start justify-between gap-4 flex-wrap">
               <div class="max-md:min-w-0 max-md:w-full">
                 <div class="flex items-center gap-3 mb-2">
-                  <div class="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0" style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+                  <div class="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg shrink-0" style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
                     <BIcon name="Store" class="w-6 h-6 text-white" />
                   </div>
                   <div class="max-md:min-w-0">
@@ -440,11 +440,11 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
               <!-- Search + CTA -->
               <div class="flex flex-col gap-2 min-w-[220px] max-md:min-w-0 max-md:w-full">
-                <div class="flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl px-4 py-2.5">
+                <div class="flex items-center gap-2 bg-white/10 backdrop-blur-xs border border-white/15 rounded-2xl px-4 py-2.5">
                   <BIcon name="Search" class="w-4 h-4 text-white/50 shrink-0" />
                   <input v-model="searchQuery" :placeholder="langStore.t.dealersDenSearchPlaceholderHero"
                     @keyup.enter="applyFilter()"
-                    class="bg-transparent text-sm text-white placeholder-white/35 outline-none w-full" />
+                    class="bg-transparent text-sm text-white placeholder-white/35 outline-hidden w-full" />
                 </div>
                 <button v-if="auth.user" @click="activeTab = auth.user ? (activeTab === 'my' ? 'browse' : 'my') : 'browse'"
                   class="flex items-center justify-center gap-2 px-4 py-2.5 text-white text-sm font-bold rounded-2xl transition-all"
@@ -463,7 +463,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 { icon: 'Gift',         label: langStore.t.dealersDenStatRaffles, value: store.listings.filter(l => l.listing_kind === 'raffle').length },
                 { icon: 'ListOrdered',  label: langStore.t.dealersDenStatCommissions,   value: store.listings.filter(l => l.listing_kind === 'commission_queue').length },
               ]" :key="stat.label"
-                class="flex items-center gap-2 bg-white/8 backdrop-blur-sm border border-white/10 rounded-2xl px-4 py-2 max-md:px-3 max-md:min-w-0">
+                class="flex items-center gap-2 bg-white/8 backdrop-blur-xs border border-white/10 rounded-2xl px-4 py-2 max-md:px-3 max-md:min-w-0">
                 <BIcon :name="stat.icon" class="w-3.5 h-3.5 text-brand-accent max-md:shrink-0" />
                 <span class="text-white font-extrabold text-sm">{{ stat.value }}</span>
                 <span class="text-white/45 text-xs max-md:truncate">{{ stat.label }}</span>
@@ -488,7 +488,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             style="height:72px">
             <div class="absolute inset-0" :style="`background: linear-gradient(135deg, ${tile.from}cc, ${tile.to}cc)`" />
             <div class="relative z-10 h-full flex items-center gap-2.5 px-3">
-              <BIcon :name="tile.icon" class="w-5 h-5 text-white/90 flex-shrink-0" />
+              <BIcon :name="tile.icon" class="w-5 h-5 text-white/90 shrink-0" />
               <div>
                 <p class="text-white font-bold text-xs leading-tight">{{ tile.label }}</p>
                 <p class="text-white/55 text-[10px]">{{ tile.sub }}</p>
@@ -505,7 +505,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
           <div class="flex items-center gap-2 flex-wrap m-scroll-row max-md:-mx-3 max-md:px-3">
             <button v-for="k in KINDS" :key="k.key"
               @click="selectKind(k.key)"
-              class="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap"
+              class="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold transition-all whitespace-nowrap"
               :class="selectedKind === k.key
                 ? 'text-white shadow-md shadow-brand-accent/25'
                 : 'bg-brand-card border border-brand-border text-white/65 hover:text-white hover:border-white/20'"
@@ -514,7 +514,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               {{ k.label }}
             </button>
 
-            <div class="flex gap-1.5 ml-auto flex-shrink-0">
+            <div class="flex gap-1.5 ml-auto shrink-0">
               <button v-if="auth.user && canSell" @click="openCreateModal"
                 class="flex items-center gap-1.5 px-4 py-2 text-white text-sm font-bold rounded-full transition-all shadow-md"
                 style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
@@ -527,7 +527,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
           <div class="flex gap-2 overflow-x-auto scrollbar-none pb-0.5">
             <button v-for="cat in CATS" :key="cat.key"
               @click="selectCategory(cat.key)"
-              class="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border"
+              class="shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border"
               :class="selectedCategory === cat.key
                 ? 'bg-brand-accent/20 border-brand-accent text-brand-accent'
                 : 'bg-brand-card border-brand-border text-white/50 hover:text-white hover:border-white/20'">
@@ -542,13 +542,13 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <BIcon name="Search" class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/25 pointer-events-none" />
               <input v-model="searchQuery" @input="onSearchInput"
                 :placeholder="langStore.t.dealersDenSearchPlaceholder"
-                class="w-full bg-brand-card border border-brand-border rounded-full pl-10 pr-4 py-2 text-sm text-white placeholder-white/20 outline-none focus:border-brand-accent/50 transition-all" />
+                class="w-full bg-brand-card border border-brand-border rounded-full pl-10 pr-4 py-2 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-accent/50 transition-all" />
             </div>
             <select v-model="selectedSort"
-              class="bg-brand-card border border-brand-border rounded-full px-3.5 py-2 text-sm text-white/60 outline-none transition-all appearance-none cursor-pointer flex-shrink-0">
+              class="bg-brand-card border border-brand-border rounded-full px-3.5 py-2 text-sm text-white/60 outline-hidden transition-all appearance-none cursor-pointer shrink-0">
               <option v-for="s in SORTS" :key="s.key" :value="s.key">{{ s.label }}</option>
             </select>
-            <div class="flex gap-1 flex-shrink-0">
+            <div class="flex gap-1 shrink-0">
               <button v-for="t in [{ v: '', l: 'Globe', title: langStore.t.tabAll }, { v: 'digital', l: 'Download', title: langStore.t.dealersDenTypeDigital }, { v: 'physical', l: 'Package', title: langStore.t.dealersDenTypePhysical }]" :key="t.v"
                 @click="selectedType = t.v as any; applyFilter()"
                 :title="t.title"
@@ -565,7 +565,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
         <!-- ═══════════════════════════════════════════
              LIVE AUCTIONS — горизонтальный скролл
         ════════════════════════════════════════════ -->
-        <div v-if="liveAuctions.length > 0 && selectedKind === '' && activeTab === 'browse'" class="space-y-3">
+        <div v-if="liveAuctions.length > 0 && selectedKind === '' && activeTab === 'browse'" class="stack-y-3">
           <h2 class="text-sm font-bold text-white/60 uppercase tracking-widest flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-brand-error animate-pulse inline-block" />
             <BIcon name="Flame" class="w-4 h-4 text-brand-yellow" />
@@ -574,14 +574,14 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
           <div class="flex gap-3 overflow-x-auto scrollbar-none pb-1">
             <div v-for="listing in liveAuctions" :key="listing.id"
               @click="openListing(listing)"
-              class="flex-shrink-0 w-44 bg-brand-card border border-brand-yellow/20 rounded-2xl overflow-hidden cursor-pointer group hover:border-brand-yellow/50 transition-all shadow-lg hover:shadow-brand-yellow/10 hover:-translate-y-0.5">
+              class="shrink-0 w-44 bg-brand-card border border-brand-yellow/20 rounded-2xl overflow-hidden cursor-pointer group hover:border-brand-yellow/50 transition-all shadow-lg hover:shadow-brand-yellow/10 hover:-translate-y-0.5">
               <div class="relative h-28 bg-brand-bg overflow-hidden">
                 <img v-if="listing.images[0]" :src="listing.images[0]" :alt="listing.title"
                   class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                 <div v-else class="w-full h-full flex items-center justify-center bg-brand-bg">
                   <BIcon name="Hammer" class="w-10 h-10 text-brand-yellow/30" />
                 </div>
-                <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                <div class="absolute inset-0 bg-linear-to-t/srgb from-black/70 to-transparent" />
                 <div class="absolute bottom-2 inset-x-2 flex items-end justify-between">
                   <span class="text-[10px] font-extrabold text-brand-yellow leading-none">
                     {{ formatPrice(listing.current_bid ?? listing.price, listing.currency) }}
@@ -621,7 +621,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
         <div v-if="store.isLoading" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           <div v-for="n in 8" :key="n" class="bg-brand-card border border-brand-border rounded-2xl overflow-hidden animate-pulse">
             <div class="w-full aspect-square bg-brand-border" />
-            <div class="p-3 space-y-1.5">
+            <div class="p-3 stack-y-1.5">
               <div class="h-3.5 bg-brand-border rounded-full w-3/4" />
               <div class="h-3 bg-brand-border rounded-full w-1/2" />
             </div>
@@ -658,11 +658,11 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <div class="relative w-full overflow-hidden bg-brand-bg" style="aspect-ratio: 4/3">
               <img v-if="listing.images[0]" :src="listing.images[0]" :alt="listing.title"
                 class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-              <div v-else class="w-full h-full flex items-center justify-center bg-gradient-to-br from-brand-bg to-brand-border">
+              <div v-else class="w-full h-full flex items-center justify-center bg-linear-to-br/srgb from-brand-bg to-brand-border">
                 <BIcon name="Image" class="w-12 h-12 text-white/8" />
               </div>
 
-              <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+              <div class="absolute inset-0 bg-linear-to-t/srgb from-black/50 to-transparent" />
 
               <!-- Sold overlay -->
               <div v-if="isSoldOut(listing)" class="absolute inset-0 bg-black/65 flex items-center justify-center">
@@ -681,7 +681,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <!-- Kind badge top-left -->
               <div class="absolute top-2 left-2">
                 <span :class="[KIND_META[listing.listing_kind ?? 'fixed']?.color, KIND_META[listing.listing_kind ?? 'fixed']?.border, KIND_META[listing.listing_kind ?? 'fixed']?.bg]"
-                  class="inline-flex items-center gap-1 border text-[9px] font-extrabold px-2 py-0.5 rounded-full backdrop-blur-sm">
+                  class="inline-flex items-center gap-1 border text-[9px] font-extrabold px-2 py-0.5 rounded-full backdrop-blur-xs">
                   <BIcon :name="KIND_META[listing.listing_kind ?? 'fixed']?.icon" class="w-2.5 h-2.5" />
                   {{ KIND_META[listing.listing_kind ?? 'fixed']?.label }}
                 </span>
@@ -690,7 +690,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <!-- Type badge top-right -->
               <div class="absolute top-2 right-2">
                 <span v-if="listing.type !== 'physical'"
-                  class="text-[9px] font-extrabold px-2 py-0.5 rounded-full backdrop-blur-sm"
+                  class="text-[9px] font-extrabold px-2 py-0.5 rounded-full backdrop-blur-xs"
                   :class="listing.type === 'digital' ? 'bg-brand-accent/90 text-white' : 'bg-brand-yellow/90 text-black'">
                   {{ listing.type === 'digital' ? langStore.t.dealersDenTypeDigital : langStore.t.dealersDenTypeBoth }}
                 </span>
@@ -698,7 +698,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
               <!-- Draft chip -->
               <div v-if="listing.status === 'draft'" class="absolute bottom-2 left-2">
-                <span class="inline-flex items-center gap-1 bg-white/15 backdrop-blur-sm text-white/80 text-[9px] font-bold px-2 py-0.5 rounded-full">
+                <span class="inline-flex items-center gap-1 bg-white/15 backdrop-blur-xs text-white/80 text-[9px] font-bold px-2 py-0.5 rounded-full">
                   <BIcon name="Pencil" class="w-2.5 h-2.5" /> {{ langStore.t.dealersDenDraftBadge }}
                 </span>
               </div>
@@ -706,7 +706,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <!-- Auction countdown bottom-right -->
               <div v-if="(listing.listing_kind === 'auction' || listing.listing_kind === 'ych') && !isSoldOut(listing)" class="absolute bottom-2 right-2">
                 <DenCountdown v-slot="{ text, hot }" :ends-at="listing.auction_ends_at">
-                  <span class="text-[9px] font-extrabold tabular-nums px-2 py-0.5 rounded-full backdrop-blur-sm"
+                  <span class="text-[9px] font-extrabold tabular-nums px-2 py-0.5 rounded-full backdrop-blur-xs"
                     :class="hot ? 'bg-brand-error/90 text-white' : 'bg-black/60 text-white/80'">{{ text || '—' }}</span>
                 </DenCountdown>
               </div>
@@ -714,11 +714,11 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <!-- My controls -->
               <div v-if="activeTab === 'my'" class="absolute bottom-2 right-2 flex gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity" @click.stop>
                 <button @click="openEdit(listing)"
-                  class="w-7 h-7 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-brand-accent transition-all">
+                  class="w-7 h-7 bg-black/60 backdrop-blur-xs rounded-full flex items-center justify-center hover:bg-brand-accent transition-all">
                   <BIcon name="Pencil" class="w-3.5 h-3.5 text-white" />
                 </button>
                 <button @click="deleteListing(listing.id)"
-                  class="w-7 h-7 bg-black/60 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-brand-error transition-all">
+                  class="w-7 h-7 bg-black/60 backdrop-blur-xs rounded-full flex items-center justify-center hover:bg-brand-error transition-all">
                   <BIcon name="Trash2" class="w-3.5 h-3.5 text-white" />
                 </button>
               </div>
@@ -732,12 +732,12 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 <h3 class="font-extrabold text-white text-xs leading-tight line-clamp-1">{{ listing.title }}</h3>
                 <div class="flex items-center gap-1 mt-0.5">
                   <img v-if="listing.seller.avatar_url" :src="listing.seller.avatar_url"
-                    class="w-4 h-4 rounded-full object-cover flex-shrink-0 border border-brand-yellow/20" />
-                  <div v-else class="w-4 h-4 rounded-full bg-brand-yellow/15 flex items-center justify-center flex-shrink-0 text-[7px] text-brand-yellow font-extrabold border border-brand-yellow/20">
+                    class="w-4 h-4 rounded-full object-cover shrink-0 border border-brand-yellow/20" />
+                  <div v-else class="w-4 h-4 rounded-full bg-brand-yellow/15 flex items-center justify-center shrink-0 text-[7px] text-brand-yellow font-extrabold border border-brand-yellow/20">
                     {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
                   </div>
                   <span class="text-[10px] text-brand-yellow/80 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
-                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                 </div>
               </div>
               <!-- Auction live panel -->
@@ -754,7 +754,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                         :class="hot ? 'text-brand-error' : 'text-white/50'">{{ text || '—' }}</span>
                     </DenCountdown>
                     <button v-if="!isSoldOut(listing) && !isAuctionEnded(listing)" @click.stop="openBidModal(listing, $event)"
-                      class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-white shadow-sm transition-all hover:opacity-90 active:scale-95"
+                      class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-white shadow-xs transition-all hover:opacity-90 active:scale-95"
                       style="background: linear-gradient(135deg, #FFC01F, #E76F51)">
                       <BIcon name="Hammer" class="w-3 h-3" /> {{ langStore.t.dealersDenBidWord }}
                     </button>
@@ -770,12 +770,12 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 <h3 class="font-extrabold text-white text-xs leading-tight line-clamp-1">{{ listing.title }}</h3>
                 <div class="flex items-center gap-1 mt-0.5">
                   <img v-if="listing.seller.avatar_url" :src="listing.seller.avatar_url"
-                    class="w-4 h-4 rounded-full object-cover flex-shrink-0 border border-brand-purple/20" />
-                  <div v-else class="w-4 h-4 rounded-full bg-brand-purple/15 flex items-center justify-center flex-shrink-0 text-[7px] text-brand-purple font-extrabold border border-brand-purple/20">
+                    class="w-4 h-4 rounded-full object-cover shrink-0 border border-brand-purple/20" />
+                  <div v-else class="w-4 h-4 rounded-full bg-brand-purple/15 flex items-center justify-center shrink-0 text-[7px] text-brand-purple font-extrabold border border-brand-purple/20">
                     {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
                   </div>
                   <span class="text-[10px] text-brand-purple/90 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
-                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                 </div>
               </div>
               <!-- YCH slot panel -->
@@ -784,7 +784,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   <!-- Slot squares row -->
                   <div class="flex items-center gap-1 mb-1.5">
                     <template v-for="s in Math.max(listing.quantity ?? 1, 1)" :key="s">
-                      <div class="w-3.5 h-3.5 rounded-sm flex-shrink-0 transition-all"
+                      <div class="w-3.5 h-3.5 rounded-xs shrink-0 transition-all"
                         :style="s <= (listing.quantity_sold ?? 0)
                           ? 'background: rgba(205,131,245,0.20); border: 1px solid rgba(205,131,245,0.15)'
                           : 'background: linear-gradient(135deg, #CD83F5, #7C3AED); box-shadow: 0 0 4px rgba(205,131,245,0.4)'" />
@@ -800,7 +800,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                       <p v-if="listing.auto_buy_price" class="text-[8px] text-brand-yellow/70 mt-0.5 font-bold">{{ langStore.t.dealersDenBuyNowShort }}: {{ formatPrice(listing.auto_buy_price, listing.currency) }}</p>
                     </div>
                     <button v-if="!isSoldOut(listing) && !isAuctionEnded(listing)" @click.stop="openBidModal(listing, $event)"
-                      class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-white shadow-sm transition-all hover:opacity-90 active:scale-95"
+                      class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-white shadow-xs transition-all hover:opacity-90 active:scale-95"
                       style="background: linear-gradient(135deg, #CD83F5, #7C3AED)">
                       <BIcon name="Paintbrush" class="w-3 h-3" /> {{ langStore.t.dealersDenSlotBtn }}
                     </button>
@@ -816,12 +816,12 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 <h3 class="font-extrabold text-white text-xs leading-tight line-clamp-1">{{ listing.title }}</h3>
                 <div class="flex items-center gap-1 mt-0.5">
                   <img v-if="listing.seller.avatar_url" :src="listing.seller.avatar_url"
-                    class="w-4 h-4 rounded-full object-cover flex-shrink-0 border border-brand-success/20" />
-                  <div v-else class="w-4 h-4 rounded-full bg-brand-success/15 flex items-center justify-center flex-shrink-0 text-[7px] text-brand-success font-extrabold border border-brand-success/20">
+                    class="w-4 h-4 rounded-full object-cover shrink-0 border border-brand-success/20" />
+                  <div v-else class="w-4 h-4 rounded-full bg-brand-success/15 flex items-center justify-center shrink-0 text-[7px] text-brand-success font-extrabold border border-brand-success/20">
                     {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
                   </div>
                   <span class="text-[10px] text-brand-success/80 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
-                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                 </div>
               </div>
               <!-- Raffle ticket panel -->
@@ -852,7 +852,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   <div class="flex items-center justify-between gap-1">
                     <p class="text-xs font-black text-brand-success tabular-nums">{{ formatPrice(listing.price, listing.currency) }}<span class="text-[8px] text-white/30 font-normal">/{{ langStore.t.dealersDenPiecesAbbr }}</span></p>
                     <button v-if="!isSoldOut(listing)" @click.stop="submitRaffleTicket(listing, $event)" :disabled="buyingTicketId === listing.id"
-                      class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-white shadow-sm transition-all hover:opacity-90 active:scale-95"
+                      class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-white shadow-xs transition-all hover:opacity-90 active:scale-95"
                       style="background: linear-gradient(135deg, #66C770, #059669)">
                       <BIcon name="Ticket" class="w-3 h-3" /> {{ langStore.t.dealersDenTicketBtn }}
                     </button>
@@ -868,7 +868,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 <h3 class="font-extrabold text-white text-xs leading-tight line-clamp-1">{{ listing.title }}</h3>
                 <div class="flex items-center gap-1 mt-0.5">
                   <span class="text-[10px] text-violet-300/80 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
-                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                 </div>
               </div>
               <div class="mx-2 mb-2 rounded-xl px-2.5 py-2 flex items-center justify-between gap-2"
@@ -894,15 +894,15 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   <h3 class="font-extrabold text-white text-xs leading-tight line-clamp-1">{{ listing.title }}</h3>
                   <div class="flex items-center gap-1 mt-0.5">
                     <img v-if="listing.seller.avatar_url" :src="listing.seller.avatar_url"
-                      class="w-4 h-4 rounded-full object-cover flex-shrink-0 border border-brand-accent/20" />
-                    <div v-else class="w-4 h-4 rounded-full bg-brand-accent/15 flex items-center justify-center flex-shrink-0 text-[7px] text-brand-accent font-extrabold border border-brand-accent/20">
+                      class="w-4 h-4 rounded-full object-cover shrink-0 border border-brand-accent/20" />
+                    <div v-else class="w-4 h-4 rounded-full bg-brand-accent/15 flex items-center justify-center shrink-0 text-[7px] text-brand-accent font-extrabold border border-brand-accent/20">
                       {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
                     </div>
                     <span class="text-[10px] text-brand-accent/80 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
-                    <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent flex-shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                    <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                   </div>
                 </div>
-                <div class="flex-shrink-0 flex flex-col items-end gap-0.5" @click.stop>
+                <div class="shrink-0 flex flex-col items-end gap-0.5" @click.stop>
                   <template v-if="isSoldOut(listing)">
                     <span class="text-[10px] font-bold text-white/30 line-through">{{ formatPrice(listing.price, listing.currency) }}</span>
                     <span class="text-[9px] font-bold text-brand-error/60">{{ langStore.t.dealersDenOutOfStock }}</span>
@@ -939,7 +939,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
       </main>
 
       <!-- ─── Right sidebar ─────────────────────────────────────────────── -->
-      <aside class="w-52 hidden xl:flex flex-col gap-4 sticky top-24 self-start flex-shrink-0">
+      <aside class="w-52 hidden xl:flex flex-col gap-4 sticky top-24 self-start shrink-0">
 
         <!-- Create button / requirements -->
         <div v-if="auth.user">
@@ -948,21 +948,21 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
             <BIcon name="Plus" class="w-4 h-4" /> {{ langStore.t.dealersDenPostItemBtn }}
           </button>
-          <div v-else class="bg-brand-card border border-brand-border rounded-2xl p-3.5 space-y-3">
+          <div v-else class="bg-brand-card border border-brand-border rounded-2xl p-3.5 stack-y-3">
             <div class="flex items-center gap-2.5">
               <div class="w-7 h-7 rounded-xl bg-brand-bg flex items-center justify-center">
                 <BIcon name="Lock" class="w-3.5 h-3.5 text-white/30" />
               </div>
               <p class="text-xs font-bold text-white/50">{{ langStore.t.dealersDenRequirementsLabel }}</p>
             </div>
-            <div class="space-y-2 text-xs">
+            <div class="stack-y-2 text-xs">
               <div class="flex items-center gap-2">
-                <BIcon :name="auth.user.is_verified ? 'CheckCircle2' : 'Circle'" class="w-4 h-4 flex-shrink-0"
+                <BIcon :name="auth.user.is_verified ? 'CheckCircle2' : 'Circle'" class="w-4 h-4 shrink-0"
                   :class="auth.user.is_verified ? 'text-brand-success' : 'text-brand-border'" />
                 <span :class="auth.user.is_verified ? 'text-white/60' : 'text-white/25'">{{ langStore.t.secVerification }}</span>
               </div>
               <div class="flex items-center gap-2">
-                <BIcon :name="hasSellerRole ? 'CheckCircle2' : 'Circle'" class="w-4 h-4 flex-shrink-0"
+                <BIcon :name="hasSellerRole ? 'CheckCircle2' : 'Circle'" class="w-4 h-4 shrink-0"
                   :class="hasSellerRole ? 'text-brand-success' : 'text-brand-border'" />
                 <span :class="hasSellerRole ? 'text-white/60' : 'text-white/25'">{{ langStore.t.dealersDenArtistMasterLabel }}</span>
               </div>
@@ -981,7 +981,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
         </div>
 
         <!-- Trending hashtags -->
-        <div v-if="trendingTags.length" class="bg-brand-card border border-brand-border rounded-2xl p-3.5 space-y-2.5">
+        <div v-if="trendingTags.length" class="bg-brand-card border border-brand-border rounded-2xl p-3.5 stack-y-2.5">
           <h4 class="text-xs font-bold text-white/35 uppercase tracking-wider">{{ langStore.t.dealersDenTrendingTagsLabel }}</h4>
           <div class="flex flex-wrap gap-1.5">
             <button v-for="t in trendingTags" :key="t.tag" @click="filterByTag(t.tag)"
@@ -992,7 +992,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
         </div>
 
         <!-- Quick filter mini-cards (like Stickers) -->
-        <div class="space-y-2">
+        <div class="stack-y-2">
           <h4 class="text-xs font-bold text-white/35 uppercase tracking-wider px-1">{{ langStore.t.dealersDenSaleTypesLabel }}</h4>
           <div v-for="k in [
             { key: '',        icon: 'LayoutGrid', label: langStore.t.tabAll,             from: '#3148FF', to: '#4C67CF' },
@@ -1015,7 +1015,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
         </div>
 
         <!-- Stats card -->
-        <div class="bg-brand-card border border-brand-border rounded-2xl p-4 space-y-2">
+        <div class="bg-brand-card border border-brand-border rounded-2xl p-4 stack-y-2">
           <h4 class="text-xs font-bold text-white/35 uppercase tracking-wider mb-3">{{ langStore.t.dealersDenStatsTitle }}</h4>
           <div class="flex items-center justify-between">
             <span class="text-xs text-white/45">{{ langStore.t.dealersDenListingsStatLabel }}</span>
@@ -1041,11 +1041,11 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
     <Teleport to="body">
       <transition name="modal-fade">
       <div v-if="showCreateModal"
-        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/75 backdrop-blur-sm"
+        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/75 backdrop-blur-xs"
         @click.self="tryCloseCreate()">
         <div class="modal-form bg-[#0e0e1c] border border-white/8 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-2xl max-h-[94vh] flex flex-col overflow-hidden">
 
-          <div class="relative overflow-hidden flex-shrink-0">
+          <div class="relative overflow-hidden shrink-0">
             <div class="absolute inset-0" style="background: linear-gradient(135deg, #0b1540 0%, #07102a 100%)" />
             <div class="absolute -top-8 -right-8 w-36 h-36 rounded-full opacity-20 blur-3xl" style="background: #3148FF" />
             <div class="absolute -bottom-4 left-6 w-24 h-24 rounded-full opacity-15 blur-2xl" style="background: #4C67CF" />
@@ -1065,7 +1065,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             </div>
           </div>
 
-          <div class="flex-1 overflow-y-auto p-6 space-y-5">
+          <div class="flex-1 overflow-y-auto p-6 stack-y-5">
 
             <!-- Kind -->
             <div>
@@ -1099,7 +1099,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <div>
               <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenTitleLabel }} <span class="text-brand-accent normal-case font-normal">*</span></label>
               <input v-model="form.title" maxlength="200" :placeholder="langStore.t.dealersDenTitlePlaceholderCreate"
-                class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all" />
+                class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden transition-all" />
             </div>
 
             <!-- Description -->
@@ -1107,7 +1107,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.fursuitDescLabel }}</label>
               <textarea v-model="form.description" rows="3"
                 :placeholder="langStore.t.dealersDenDescPlaceholderCreate"
-                class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all resize-none" />
+                class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden transition-all resize-none" />
             </div>
 
             <!-- Price + currency -->
@@ -1119,7 +1119,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 </label>
                 <div class="relative">
                   <input v-model.number="form.price" type="number" min="0" step="0.01" placeholder="0.00"
-                    class="w-full rounded-2xl px-4 py-3 pr-16 text-sm text-white outline-none transition-all" />
+                    class="w-full rounded-2xl px-4 py-3 pr-16 text-sm text-white outline-hidden transition-all" />
                   <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/20 font-bold">
                     {{ Number(form.price) === 0 ? langStore.t.subFree : form.currency }}
                   </span>
@@ -1127,7 +1127,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               </div>
               <div>
                 <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenCurrencyLabel }}</label>
-                <select v-model="form.currency" class="w-full rounded-2xl px-3 py-3 text-sm text-white outline-none transition-all appearance-none">
+                <select v-model="form.currency" class="w-full rounded-2xl px-3 py-3 text-sm text-white outline-hidden transition-all appearance-none">
                   <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
                 </select>
               </div>
@@ -1135,7 +1135,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
             <!-- Auction fields -->
             <div v-if="form.listingKind === 'auction' || form.listingKind === 'ych'"
-              class="bg-brand-yellow/5 border border-brand-yellow/15 rounded-2xl p-4 space-y-4">
+              class="bg-brand-yellow/5 border border-brand-yellow/15 rounded-2xl p-4 stack-y-4">
               <p class="flex items-center gap-1.5 text-xs font-bold text-brand-yellow uppercase tracking-wider">
                 <BIcon name="Hammer" class="w-3.5 h-3.5" /> {{ langStore.t.dealersDenAuctionParamsTitle }}
               </p>
@@ -1143,34 +1143,34 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 <div>
                   <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenAuctionEndLabel }}</label>
                   <input v-model="form.auctionEndsAt" type="datetime-local"
-                    class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
+                    class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all" />
                 </div>
                 <div>
                   <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenBidStepLabel }}</label>
                   <input v-model.number="form.bidIncrement" type="number" min="0.01" step="0.01"
-                    class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
+                    class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all" />
                 </div>
               </div>
               <div>
                 <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenAutoBuyOptionalLabel }}</label>
                 <input v-model.number="form.autoBuyPrice" type="number" min="0" step="0.01" :placeholder="langStore.t.dealersDenAutoBuyPlaceholder"
-                  class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
+                  class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all" />
               </div>
             </div>
 
             <!-- Commission queue fields -->
             <div v-if="form.listingKind === 'commission_queue'"
-              class="bg-violet-400/5 border border-violet-400/15 rounded-2xl p-4 space-y-4">
+              class="bg-violet-400/5 border border-violet-400/15 rounded-2xl p-4 stack-y-4">
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenCommissionSlotsLabel }} <span class="text-brand-accent normal-case font-normal">*</span></label>
                   <input v-model.number="form.commissionSlotsTotal" type="number" min="1" max="1000"
-                    class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
+                    class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all" />
                 </div>
                 <div>
                   <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenCommissionEtaLabel }}</label>
                   <input v-model.number="form.commissionEtaDays" type="number" min="0" max="365"
-                    class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
+                    class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all" />
                 </div>
               </div>
               <div>
@@ -1179,20 +1179,20 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   <span class="normal-case font-normal text-white/20">{{ langStore.t.dealersDenCommissionFieldsHint }}</span>
                 </label>
                 <textarea v-model="form.commissionFieldsText" rows="3" placeholder="Reference link*&#10;Colour palette"
-                  class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all resize-none" />
+                  class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden transition-all resize-none" />
               </div>
             </div>
 
             <!-- Raffle fields -->
             <div v-if="form.listingKind === 'raffle'"
-              class="bg-brand-success/5 border border-brand-success/15 rounded-2xl p-4 space-y-3">
+              class="bg-brand-success/5 border border-brand-success/15 rounded-2xl p-4 stack-y-3">
               <p class="flex items-center gap-1.5 text-xs font-bold text-brand-success uppercase tracking-wider">
                 <BIcon name="Gift" class="w-3.5 h-3.5" /> {{ langStore.t.dealersDenRaffleParamsTitle }}
               </p>
               <div>
                 <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenMaxTicketsLabel }}</label>
                 <input v-model.number="form.raffleMaxTickets" type="number" min="0"
-                  class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
+                  class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all" />
               </div>
             </div>
 
@@ -1237,7 +1237,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <div>
                 <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenQuantityLabel }}</label>
                 <input v-model.number="form.quantity" type="number" min="1"
-                  class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
+                  class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all" />
               </div>
               <div>
                 <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.statusFieldLabel }}</label>
@@ -1261,7 +1261,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 {{ langStore.t.dealersDenTagsLabel }} <span class="normal-case font-normal text-white/20">{{ langStore.t.dealersDenTagsHint }}</span>
               </label>
               <input v-model="form.tags" :placeholder="langStore.t.dealersDenTagsPlaceholder"
-                class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all" />
+                class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden transition-all" />
             </div>
 
             <!-- NSFW -->
@@ -1271,7 +1271,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 <p class="text-xs text-white/30 mt-0.5">{{ langStore.t.dealersDenNsfwBlurHint }}</p>
               </div>
               <button @click="form.isNsfw = !form.isNsfw"
-                class="w-12 h-6 rounded-full transition-all relative flex-shrink-0"
+                class="w-12 h-6 rounded-full transition-all relative shrink-0"
                 :class="form.isNsfw ? 'bg-brand-error' : 'bg-white/10'">
                 <div class="w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all shadow-md"
                   :class="form.isNsfw ? 'left-6' : 'left-0.5'" />
@@ -1304,11 +1304,11 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
     <Teleport to="body">
       <transition name="modal-fade">
       <div v-if="showEditModal"
-        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/75 backdrop-blur-sm"
+        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/75 backdrop-blur-xs"
         @click.self="tryCloseEdit()">
         <div class="modal-form bg-[#0e0e1c] border border-white/8 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[92vh] flex flex-col overflow-hidden">
 
-          <div class="relative overflow-hidden flex-shrink-0">
+          <div class="relative overflow-hidden shrink-0">
             <div class="absolute inset-0" style="background: linear-gradient(135deg, #1e0d00 0%, #100700 100%)" />
             <div class="absolute -top-4 -right-4 w-24 h-24 rounded-full opacity-25 blur-2xl" style="background: #F59E0B" />
             <div class="relative z-10 px-6 pt-5 pb-4 flex items-center justify-between">
@@ -1327,14 +1327,14 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             </div>
           </div>
 
-          <div class="flex-1 overflow-y-auto p-6 space-y-4">
+          <div class="flex-1 overflow-y-auto p-6 stack-y-4">
             <div>
               <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenTitleLabel }}</label>
-              <input v-model="editForm.title" maxlength="200" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
+              <input v-model="editForm.title" maxlength="200" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all" />
             </div>
             <div>
               <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.fursuitDescLabel }}</label>
-              <textarea v-model="editForm.description" rows="3" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all resize-none" />
+              <textarea v-model="editForm.description" rows="3" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all resize-none" />
             </div>
             <div>
               <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenPhotosLabel }}</label>
@@ -1352,11 +1352,11 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenPriceLabel }}</label>
-                <input v-model.number="editForm.price" type="number" min="0" step="0.01" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
+                <input v-model.number="editForm.price" type="number" min="0" step="0.01" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all" />
               </div>
               <div>
                 <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenCurrencyLabel }}</label>
-                <select v-model="editForm.currency" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all appearance-none">
+                <select v-model="editForm.currency" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all appearance-none">
                   <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
                 </select>
               </div>
@@ -1364,11 +1364,11 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenQuantityLabel }}</label>
-                <input v-model.number="editForm.quantity" type="number" min="1" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all" />
+                <input v-model.number="editForm.quantity" type="number" min="1" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all" />
               </div>
               <div>
                 <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.statusFieldLabel }}</label>
-                <select v-model="editForm.status" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-none transition-all appearance-none">
+                <select v-model="editForm.status" class="w-full rounded-2xl px-4 py-3 text-sm text-white outline-hidden transition-all appearance-none">
                   <option value="active">{{ langStore.t.dealersDenStatusActiveLabel }}</option>
                   <option value="sold">{{ langStore.t.dealersDenSoldBadge }}</option>
                   <option value="draft">{{ langStore.t.dealersDenDraftBadge }}</option>
@@ -1381,12 +1381,12 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 {{ langStore.t.dealersDenTagsLabel }} <span class="normal-case font-normal text-white/20">{{ langStore.t.dealersDenTagsHint }}</span>
               </label>
               <input v-model="editForm.tags" :placeholder="langStore.t.dealersDenTagsPlaceholder"
-                class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all" />
+                class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden transition-all" />
             </div>
             <div class="flex items-center justify-between p-4 rounded-2xl bg-brand-error/5 border border-brand-error/15">
               <p class="text-sm font-bold text-white">{{ langStore.t.dealersDenNsfwContentLabel }}</p>
               <button type="button" @click="editForm.isNsfw = !editForm.isNsfw"
-                class="w-12 h-6 rounded-full transition-all relative flex-shrink-0"
+                class="w-12 h-6 rounded-full transition-all relative shrink-0"
                 :class="editForm.isNsfw ? 'bg-brand-error' : 'bg-white/10'">
                 <div class="w-5 h-5 rounded-full bg-white absolute top-0.5 transition-all shadow-md"
                   :class="editForm.isNsfw ? 'left-6' : 'left-0.5'" />
@@ -1413,11 +1413,11 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
     <Teleport to="body">
       <transition name="modal-fade">
       <div v-if="showBidModal"
-        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/75 backdrop-blur-sm"
+        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/75 backdrop-blur-xs"
         @click.self="showBidModal = false">
         <div class="modal-form bg-[#0e0e1c] border border-white/8 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-md flex flex-col overflow-hidden">
 
-          <div class="relative overflow-hidden flex-shrink-0">
+          <div class="relative overflow-hidden shrink-0">
             <div class="absolute inset-0" style="background: linear-gradient(135deg, #1c1100 0%, #0e0900 100%)" />
             <div class="absolute -top-4 -right-4 w-28 h-28 rounded-full opacity-25 blur-2xl" style="background: #FFC01F" />
             <div class="relative z-10 px-6 pt-5 pb-4 flex items-center justify-between">
@@ -1436,7 +1436,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
             </div>
           </div>
 
-          <div class="p-6 space-y-4">
+          <div class="p-6 stack-y-4">
             <div v-if="bidListing" class="flex items-center justify-between bg-brand-yellow/8 border border-brand-yellow/15 rounded-2xl p-4">
               <div>
                 <p class="text-[9px] text-white/30 uppercase tracking-wider mb-1">{{ langStore.t.dealersDenCurrentBid }}</p>
@@ -1462,7 +1462,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               </label>
               <div class="relative">
                 <input v-model.number="bidAmount" type="number" min="0" step="0.01"
-                  class="w-full rounded-2xl px-4 py-3 pr-16 text-sm text-white outline-none transition-all" />
+                  class="w-full rounded-2xl px-4 py-3 pr-16 text-sm text-white outline-hidden transition-all" />
                 <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/20 font-bold">{{ bidListing?.currency }}</span>
               </div>
             </div>
@@ -1472,7 +1472,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 {{ langStore.t.helpMessageLabel }} <span class="text-white/15 normal-case font-normal">{{ langStore.t.dealersDenOptionalHint }}</span>
               </label>
               <textarea v-model="bidMessage" rows="2" :placeholder="langStore.t.dealersDenBidMessagePlaceholder"
-                class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/15 outline-none resize-none transition-all" />
+                class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/15 outline-hidden resize-none transition-all" />
             </div>
 
             <div v-if="bidError" class="text-brand-error text-xs font-medium bg-brand-error/8 border border-brand-error/15 rounded-xl px-4 py-3">
@@ -1499,7 +1499,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
     <Teleport to="body">
       <transition name="modal-fade">
         <div v-if="showNsfwConfirm"
-          class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          class="fixed inset-0 z-9999 flex items-center justify-center p-4"
           style="background: rgba(0,0,0,0.75); backdrop-filter: blur(8px)"
           @click.self="showNsfwConfirm = false">
           <div class="w-full max-w-sm rounded-3xl border border-brand-border shadow-2xl overflow-hidden"

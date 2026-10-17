@@ -16,13 +16,13 @@
       />
     </div>
 
-    <div v-if="draggable" class="w-full max-w-xs space-y-3">
+    <div v-if="draggable" class="w-full max-w-xs stack-y-3">
       <div class="flex items-center gap-3">
-        <span class="text-[10px] font-bold text-white/45 uppercase tracking-wider w-16 flex-shrink-0">Размер</span>
+        <span class="text-[10px] font-bold text-white/45 uppercase tracking-wider w-16 shrink-0">Размер</span>
         <input type="range" min="0.5" max="2" step="0.05" v-model.number="scale" class="flex-1 accent-brand-accent" />
       </div>
       <div class="flex items-center gap-3">
-        <span class="text-[10px] font-bold text-white/45 uppercase tracking-wider w-16 flex-shrink-0">Поворот</span>
+        <span class="text-[10px] font-bold text-white/45 uppercase tracking-wider w-16 shrink-0">Поворот</span>
         <input type="range" min="-180" max="180" step="1" v-model.number="rotation" class="flex-1 accent-brand-accent" />
       </div>
       <div class="flex items-center justify-between">

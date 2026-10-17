@@ -67,7 +67,7 @@ onActivated(fetchStatistics)
         class="flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-bold transition-all"
         :class="statsSubTab==='stickers'
           ? 'text-white border border-emerald-500/30'
-          : 'text-white/40 hover:text-white/70 bg-white/[0.03] border border-brand-border'"
+          : 'text-white/40 hover:text-white/70 bg-white/3 border border-brand-border'"
         :style="statsSubTab==='stickers' ? 'background:rgba(16,185,129,0.12)' : ''">
         <BIcon name="Sticker" class="w-4 h-4" /> {{ langStore.t.stickers }}
       </button>
@@ -75,7 +75,7 @@ onActivated(fetchStatistics)
         class="flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-bold transition-all"
         :class="statsSubTab==='network'
           ? 'text-white border border-emerald-500/30'
-          : 'text-white/40 hover:text-white/70 bg-white/[0.03] border border-brand-border'"
+          : 'text-white/40 hover:text-white/70 bg-white/3 border border-brand-border'"
         :style="statsSubTab==='network' ? 'background:rgba(16,185,129,0.12)' : ''">
         <BIcon name="Globe" class="w-4 h-4" /> {{ langStore.t.adminNetworkLabel }}
       </button>
@@ -83,12 +83,12 @@ onActivated(fetchStatistics)
         class="flex items-center gap-2 px-4 py-2 rounded-2xl text-sm font-bold transition-all"
         :class="statsSubTab==='infra'
           ? 'text-white border border-emerald-500/30'
-          : 'text-white/40 hover:text-white/70 bg-white/[0.03] border border-brand-border'"
+          : 'text-white/40 hover:text-white/70 bg-white/3 border border-brand-border'"
         :style="statsSubTab==='infra' ? 'background:rgba(16,185,129,0.12)' : ''">
         <BIcon name="Server" class="w-4 h-4" /> {{ langStore.t.adminNavInfra }}
       </button>
       <button @click="statsSubTab==='infra' ? (infraOverview=null, fetchInfraOverview()) : refreshStatistics()"
-        class="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs text-white/40 hover:text-white bg-white/[0.03] border border-brand-border transition-all">
+        class="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs text-white/40 hover:text-white bg-white/3 border border-brand-border transition-all">
         <BIcon name="RefreshCw" class="w-3.5 h-3.5" /> {{ langStore.t.adminRefreshBtn }}
       </button>
     </div>
@@ -97,8 +97,8 @@ onActivated(fetchStatistics)
     <template v-if="statsSubTab !== 'infra' && isLoadingStatistics">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div v-for="n in 4" :key="n" class="rounded-3xl border border-brand-border p-6 animate-pulse" style="background:#1F223C">
-          <div class="h-4 bg-white/[0.08] rounded-full w-32 mb-4" />
-          <div class="space-y-2">
+          <div class="h-4 bg-white/8 rounded-full w-32 mb-4" />
+          <div class="stack-y-2">
             <div v-for="i in 5" :key="i" class="h-6 bg-white/5 rounded-xl" :style="`width:${60+i*8}%`" />
           </div>
         </div>
@@ -107,7 +107,7 @@ onActivated(fetchStatistics)
 
     <!-- ─── INFRASTRUCTURE sub-tab loading ──────────────────────── -->
     <template v-else-if="statsSubTab === 'infra' && isLoadingInfra">
-      <div class="space-y-5">
+      <div class="stack-y-5">
         <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
           <div v-for="n in 3" :key="n" class="h-24 rounded-2xl bg-white/5 animate-pulse" />
         </div>
@@ -158,12 +158,12 @@ onActivated(fetchStatistics)
           <div class="divide-y divide-brand-border">
             <div v-for="(pack, idx) in stickerStats.topPacks.slice(0,10)" :key="pack.id"
               @click="openStickerPackDetail(pack.id)"
-              class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.05] transition-all cursor-pointer">
+              class="flex items-center gap-3 px-5 py-3 hover:bg-white/5 transition-all cursor-pointer">
               <span class="w-5 text-center text-xs font-black"
                 :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">
                 {{ idx+1 }}
               </span>
-              <div class="w-9 h-9 rounded-xl flex-shrink-0 overflow-hidden border border-white/10"
+              <div class="w-9 h-9 rounded-xl shrink-0 overflow-hidden border border-white/10"
                 :style="pack.cover_bg_color ? `background:${pack.cover_bg_color}` : 'background:rgba(255,255,255,0.05)'">
                 <img v-if="packThumb(pack)" :src="packThumb(pack)" class="w-full h-full object-cover" />
                 <div v-else class="w-full h-full flex items-center justify-center text-lg">🎭</div>
@@ -171,15 +171,15 @@ onActivated(fetchStatistics)
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-bold text-white truncate flex items-center gap-1.5">
                   {{ pack.name }}
-                  <span v-if="pack.is_nsfw" class="text-[9px] font-extrabold px-1 py-0.5 rounded bg-rose-500/20 text-rose-400">18+</span>
+                  <span v-if="pack.is_nsfw" class="text-[9px] font-extrabold px-1 py-0.5 rounded-sm bg-rose-500/20 text-rose-400">18+</span>
                 </p>
                 <p class="text-xs text-white/35 truncate">@{{ pack.author?.username ?? '—' }}</p>
               </div>
-              <div class="text-right flex-shrink-0">
+              <div class="text-right shrink-0">
                 <p class="text-sm font-black text-emerald-400">{{ formatNum(pack.use_count) }}</p>
                 <p class="text-[10px] text-white/25">{{ formatNum(pack.downloads_count) }} {{ langStore.t.adminDownloadsShortSuffix }}</p>
               </div>
-              <BIcon name="ChevronRight" class="w-4 h-4 text-white/20 flex-shrink-0" />
+              <BIcon name="ChevronRight" class="w-4 h-4 text-white/20 shrink-0" />
             </div>
           </div>
         </div>
@@ -216,7 +216,7 @@ onActivated(fetchStatistics)
             <BIcon name="CalendarDays" class="w-4 h-4 text-indigo-400" />
             <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminByAgeTitle }}</h3>
           </div>
-          <div v-if="stickerStats.byAge.length" class="space-y-2">
+          <div v-if="stickerStats.byAge.length" class="stack-y-2">
             <div v-for="item in stickerStats.byAge" :key="item.label" class="group">
               <div class="flex items-center justify-between text-xs mb-1">
                 <span class="text-white/60 font-semibold">{{ item.label }}</span>
@@ -237,7 +237,7 @@ onActivated(fetchStatistics)
             <BIcon name="PawPrint" class="w-4 h-4 text-amber-400" />
             <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminBySpeciesTitle }}</h3>
           </div>
-          <div v-if="stickerStats.bySpecies.length" class="space-y-2">
+          <div v-if="stickerStats.bySpecies.length" class="stack-y-2">
             <div v-for="item in stickerStats.bySpecies.slice(0,8)" :key="item.label" class="group">
               <div class="flex items-center justify-between text-xs mb-1">
                 <span class="text-white/60 font-semibold capitalize truncate max-w-[120px]">{{ item.label }}</span>
@@ -258,7 +258,7 @@ onActivated(fetchStatistics)
             <BIcon name="MapPin" class="w-4 h-4 text-rose-400" />
             <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminByCountryTitle }}</h3>
           </div>
-          <div v-if="stickerStats.byCountry.length" class="space-y-2">
+          <div v-if="stickerStats.byCountry.length" class="stack-y-2">
             <div v-for="item in stickerStats.byCountry.slice(0,8)" :key="item.label" class="group">
               <div class="flex items-center justify-between text-xs mb-1">
                 <span class="text-white/60 font-semibold truncate max-w-[120px]">{{ item.label }}</span>
@@ -284,7 +284,7 @@ onActivated(fetchStatistics)
         <div v-if="stickerStats.topStickers.length" class="grid grid-cols-3 sm:grid-cols-6 md:grid-cols-9 lg:grid-cols-12 gap-3">
           <div v-for="s in stickerStats.topStickers" :key="s.url"
             @click="s.packId && openStickerPackDetail(s.packId)"
-            class="group relative rounded-xl overflow-hidden border border-white/10 aspect-square bg-white/[0.03]"
+            class="group relative rounded-xl overflow-hidden border border-white/10 aspect-square bg-white/3"
             :class="s.packId ? 'cursor-pointer hover:border-fuchsia-400/40' : ''"
             :title="s.packName ?? ''">
             <img :src="s.url" class="w-full h-full object-contain p-1" loading="lazy" />
@@ -330,7 +330,7 @@ onActivated(fetchStatistics)
             <BIcon name="PawPrint" class="w-4 h-4 text-amber-400" />
             <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminUsersBySpeciesTitle }}</h3>
           </div>
-          <div v-if="networkStats.usersBySpecies.length" class="space-y-2.5">
+          <div v-if="networkStats.usersBySpecies.length" class="stack-y-2.5">
             <div v-for="item in networkStats.usersBySpecies.slice(0,10)" :key="item.label">
               <div class="flex items-center justify-between text-xs mb-1">
                 <span class="text-white/60 font-semibold capitalize truncate max-w-[140px]">{{ item.label }}</span>
@@ -354,7 +354,7 @@ onActivated(fetchStatistics)
             <BIcon name="CalendarDays" class="w-4 h-4 text-indigo-400" />
             <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminUsersByAgeTitle }}</h3>
           </div>
-          <div v-if="networkStats.usersByAge.length" class="space-y-2.5">
+          <div v-if="networkStats.usersByAge.length" class="stack-y-2.5">
             <div v-for="item in networkStats.usersByAge" :key="item.label">
               <div class="flex items-center justify-between text-xs mb-1">
                 <span class="text-white/60 font-semibold">{{ item.label }}</span>
@@ -375,7 +375,7 @@ onActivated(fetchStatistics)
             <BIcon name="Heart" class="w-4 h-4 text-pink-400" />
             <h3 class="font-extrabold text-sm text-white">{{ langStore.t.adminUsersByPronounTitle }}</h3>
           </div>
-          <div v-if="networkStats.usersByPronoun.length" class="space-y-2.5">
+          <div v-if="networkStats.usersByPronoun.length" class="stack-y-2.5">
             <div v-for="item in networkStats.usersByPronoun" :key="item.label">
               <div class="flex items-center justify-between text-xs mb-1">
                 <span class="text-white/60 font-semibold truncate max-w-[140px]">{{ item.label }}</span>
@@ -403,11 +403,11 @@ onActivated(fetchStatistics)
           <div class="divide-y divide-brand-border">
             <div v-for="(u, idx) in networkStats.topPosters" :key="u.userId"
               @click="u.username && router.push({ name: 'profile', params: { username: u.username } })"
-              class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.05] transition-all cursor-pointer">
+              class="flex items-center gap-3 px-5 py-3 hover:bg-white/5 transition-all cursor-pointer">
               <span class="w-5 text-center text-xs font-black"
                 :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">{{ idx+1 }}</span>
-              <img v-if="u.avatarUrl" :src="u.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-white/10 flex-shrink-0" />
-              <div v-else class="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/15 flex items-center justify-center text-xs font-bold text-indigo-300 flex-shrink-0">
+              <img v-if="u.avatarUrl" :src="u.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-white/10 shrink-0" />
+              <div v-else class="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/15 flex items-center justify-center text-xs font-bold text-indigo-300 shrink-0">
                 {{ (u.displayName || u.username || '?')[0].toUpperCase() }}
               </div>
               <div class="flex-1 min-w-0">
@@ -429,11 +429,11 @@ onActivated(fetchStatistics)
           <div class="divide-y divide-brand-border">
             <div v-for="(u, idx) in networkStats.mostFollowed" :key="u.userId"
               @click="u.username && router.push({ name: 'profile', params: { username: u.username } })"
-              class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.05] transition-all cursor-pointer">
+              class="flex items-center gap-3 px-5 py-3 hover:bg-white/5 transition-all cursor-pointer">
               <span class="w-5 text-center text-xs font-black"
                 :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">{{ idx+1 }}</span>
-              <img v-if="u.avatarUrl" :src="u.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-white/10 flex-shrink-0" />
-              <div v-else class="w-8 h-8 rounded-full bg-yellow-500/20 border border-yellow-500/15 flex items-center justify-center text-xs font-bold text-yellow-300 flex-shrink-0">
+              <img v-if="u.avatarUrl" :src="u.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-white/10 shrink-0" />
+              <div v-else class="w-8 h-8 rounded-full bg-yellow-500/20 border border-yellow-500/15 flex items-center justify-center text-xs font-bold text-yellow-300 shrink-0">
                 {{ (u.displayName || u.username || '?')[0].toUpperCase() }}
               </div>
               <div class="flex-1 min-w-0">
@@ -456,11 +456,11 @@ onActivated(fetchStatistics)
         <div class="divide-y divide-brand-border">
           <div v-for="(g, idx) in networkStats.topGroups" :key="g.id"
             @click="router.push({ name: 'group-detail', params: { slugOrId: g.id } })"
-            class="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.05] transition-all cursor-pointer">
+            class="flex items-center gap-3 px-5 py-3 hover:bg-white/5 transition-all cursor-pointer">
             <span class="w-5 text-center text-xs font-black"
               :class="idx===0?'text-yellow-400':idx===1?'text-slate-300':idx===2?'text-amber-600':'text-white/20'">{{ idx+1 }}</span>
-            <img v-if="g.avatarUrl" :src="g.avatarUrl" class="w-8 h-8 rounded-xl object-cover border border-white/10 flex-shrink-0" />
-            <div v-else class="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/15 flex items-center justify-center text-xs font-bold text-purple-300 flex-shrink-0">
+            <img v-if="g.avatarUrl" :src="g.avatarUrl" class="w-8 h-8 rounded-xl object-cover border border-white/10 shrink-0" />
+            <div v-else class="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/15 flex items-center justify-center text-xs font-bold text-purple-300 shrink-0">
               {{ g.name[0]?.toUpperCase() ?? '?' }}
             </div>
             <p class="flex-1 text-sm font-bold text-white truncate">{{ g.name }}</p>
@@ -500,7 +500,7 @@ onActivated(fetchStatistics)
               <span class="text-xs font-semibold text-white/60">{{ FOLDER_LABEL[f.folder] ?? f.folder }}</span>
               <span class="text-xs font-bold text-white">{{ formatBytes(f.bytes) }}</span>
             </div>
-            <div class="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+            <div class="h-1.5 rounded-full bg-white/6 overflow-hidden">
               <div class="h-full rounded-full bg-brand-accent" :style="`width:${Math.round((f.bytes / infraOverview.storage.totalBytes) * 100)}%`" />
             </div>
           </div>

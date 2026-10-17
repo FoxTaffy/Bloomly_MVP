@@ -113,7 +113,7 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <Transition name="vam-fade">
-      <div v-if="visible" class="fixed inset-0 z-[10000] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4" @click.self="close">
+      <div v-if="visible" class="fixed inset-0 z-10000 flex items-center justify-center bg-black/70 backdrop-blur-xs px-4" @click.self="close">
         <div role="dialog" aria-modal="true" aria-labelledby="verification-approved-title" class="relative w-full max-w-md bg-brand-card border border-brand-border rounded-3xl shadow-2xl p-6 text-center overflow-hidden">
           <div class="vam-halo" aria-hidden="true"></div>
           <div class="relative">

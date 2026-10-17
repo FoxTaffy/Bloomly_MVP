@@ -383,7 +383,7 @@ const vClickOutside = {
 </script>
 
 <template>
-  <div class="mt-4 space-y-3">
+  <div class="mt-4 stack-y-3">
     <!-- Comments disabled by author -->
     <div v-if="commentsDisabled" class="flex items-center gap-2 text-sm text-white/40 bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
       <BIcon name="MessageSquareOff" class="w-4 h-4" /> Комментарии отключены автором
@@ -391,10 +391,10 @@ const vClickOutside = {
 
     <!-- Comment input -->
     <div v-else-if="auth.user" class="flex gap-3 max-md:gap-2 items-start">
-      <div class="relative flex-shrink-0 mt-0.5">
+      <div class="relative shrink-0 mt-0.5">
         <!-- Clickable avatar — opens "comment as" picker if I manage any groups -->
         <button v-if="adminGroups.length" ref="entityBtnRef" @click.stop="toggleEntityPicker"
-          class="flex items-center gap-0.5 focus:outline-none group/av">
+          class="flex items-center gap-0.5 focus:outline-hidden group/av">
           <template v-if="commentAsEntity.type === 'group'">
             <img v-if="commentAsEntity.avatar_url" :src="commentAsEntity.avatar_url"
               class="w-8 h-8 rounded-xl border-2 object-cover transition-colors"
@@ -415,7 +415,7 @@ const vClickOutside = {
               {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
             </div>
           </template>
-          <BIcon name="ChevronDown" class="w-3 h-3 text-white/50 group-hover/av:text-white/80 transition-all flex-shrink-0"
+          <BIcon name="ChevronDown" class="w-3 h-3 text-white/50 group-hover/av:text-white/80 transition-all shrink-0"
             :class="showEntityPicker ? 'rotate-180 text-brand-accent' : ''" />
         </button>
 
@@ -431,29 +431,29 @@ const vClickOutside = {
         <Teleport to="body">
         <Transition name="popover-up">
           <div v-if="showEntityPicker" v-click-outside="() => showEntityPicker = false"
-            class="fixed z-[9998] min-w-[220px] bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1.5"
+            class="fixed z-9998 min-w-[220px] bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden py-1.5"
             :style="{ top: entityPickerPos.top, left: entityPickerPos.left }">
             <button class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
               :class="commentAsEntity.type === 'user' ? 'text-brand-accent' : 'text-white'"
               @click="commentAsEntity = { type: 'user' }; showEntityPicker = false">
-              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover flex-shrink-0" @error="onAvatarError" />
-              <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
+              <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover shrink-0" @error="onAvatarError" />
+              <div v-else class="w-7 h-7 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold shrink-0">
                 {{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}
               </div>
               <span class="font-semibold truncate flex-1 text-left">{{ auth.user?.display_name || auth.user?.username }}</span>
-              <BIcon v-if="commentAsEntity.type === 'user'" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+              <BIcon v-if="commentAsEntity.type === 'user'" name="Check" class="w-3.5 h-3.5 text-brand-accent shrink-0" />
             </button>
             <div class="h-px bg-brand-border mx-3 my-1" />
             <button v-for="grp in adminGroups" :key="grp.id"
               class="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-brand-bg/60 transition-colors text-sm"
               :class="commentAsEntity.type === 'group' && commentAsEntity.id === grp.id ? 'text-brand-accent' : 'text-white'"
               @click="commentAsEntity = { type: 'group', id: grp.id, slug: grp.slug, name: grp.name, avatar_url: grp.avatar_url }; showEntityPicker = false">
-              <img v-if="grp.avatar_url" :src="grp.avatar_url" class="w-7 h-7 rounded-xl object-cover flex-shrink-0" @error="onAvatarError" />
-              <div v-else class="w-7 h-7 rounded-xl bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold flex-shrink-0">
+              <img v-if="grp.avatar_url" :src="grp.avatar_url" class="w-7 h-7 rounded-xl object-cover shrink-0" @error="onAvatarError" />
+              <div v-else class="w-7 h-7 rounded-xl bg-brand-accent/20 flex items-center justify-center text-brand-accent text-sm font-bold shrink-0">
                 {{ (grp.name || '?')[0].toUpperCase() }}
               </div>
               <span class="font-semibold truncate flex-1 text-left">{{ grp.name }}</span>
-              <BIcon v-if="commentAsEntity.type === 'group' && commentAsEntity.id === grp.id" name="Check" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+              <BIcon v-if="commentAsEntity.type === 'group' && commentAsEntity.id === grp.id" name="Check" class="w-3.5 h-3.5 text-brand-accent shrink-0" />
             </button>
           </div>
         </Transition>
@@ -491,13 +491,13 @@ const vClickOutside = {
             @focus="showReplyStickerPanel = false"
             @paste="onCommentPaste"
             :placeholder="langStore.t.writeComment"
-            class="flex-1 max-md:min-w-0 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2 max-md:px-3 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
+            class="flex-1 max-md:min-w-0 bg-brand-bg border border-brand-border rounded-2xl px-4 py-2 max-md:px-3 text-sm text-white placeholder-brand-muted outline-hidden focus:border-brand-accent"
           />
           <!-- Media attach button -->
           <button
             type="button"
             @click="commentFileRef?.click()"
-            :class="['flex-shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center transition-all',
+            :class="['shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center transition-all',
               commentFilePreview ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/50 hover:text-brand-accent hover:bg-brand-bg border border-brand-border']"
             title="Фото / видео / GIF">
             <BIcon name="Image" class="w-4 h-4" />
@@ -506,7 +506,7 @@ const vClickOutside = {
           <button
             type="button"
             @click="showStickerPanel = !showStickerPanel; showReplyStickerPanel = false"
-            :class="['flex-shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center transition-all',
+            :class="['shrink-0 w-9 h-9 rounded-2xl flex items-center justify-center transition-all',
               showStickerPanel ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/50 hover:text-brand-accent hover:bg-brand-bg border border-brand-border']"
             title="Стикеры">
             <BIcon name="Sticker" class="w-4 h-4" />
@@ -516,7 +516,7 @@ const vClickOutside = {
             @click="submitComment"
             :disabled="(!commentText.trim() && !commentFileUrl) || submitting || commentFileUploading"
             :aria-label="langStore.t.send"
-            class="px-4 py-2 bg-brand-accent text-white text-sm font-bold rounded-2xl disabled:opacity-40 flex-shrink-0 max-md:w-9 max-md:h-9 max-md:p-0 max-md:flex max-md:items-center max-md:justify-center">
+            class="px-4 py-2 bg-brand-accent text-white text-sm font-bold rounded-2xl disabled:opacity-40 shrink-0 max-md:w-9 max-md:h-9 max-md:p-0 max-md:flex max-md:items-center max-md:justify-center">
             <BIcon v-if="submitting" name="Loader2" class="w-4 h-4 animate-spin" />
             <template v-else>
               <span class="max-md:hidden">{{ langStore.t.send }}</span>
@@ -538,11 +538,11 @@ const vClickOutside = {
     </div>
 
     <!-- Comment list -->
-    <div v-else class="space-y-3">
-      <div v-for="comment in comments" :key="comment.id" class="space-y-2">
+    <div v-else class="stack-y-3">
+      <div v-for="comment in comments" :key="comment.id" class="stack-y-2">
         <!-- Top-level comment -->
         <div class="flex gap-3">
-          <router-link :to="identityHref(comment)" class="flex-shrink-0 mt-0.5">
+          <router-link :to="identityHref(comment)" class="shrink-0 mt-0.5">
             <img v-if="identityAvatar(comment)"
               :src="identityAvatar(comment)!"
               class="w-8 h-8 object-cover border border-brand-border cursor-pointer"
@@ -657,21 +657,21 @@ const vClickOutside = {
               </div>
 
               <div class="flex gap-2 max-md:gap-1.5 items-center">
-                <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover border border-brand-border flex-shrink-0 max-md:hidden" />
-                <div v-else class="w-7 h-7 rounded-full border border-brand-border flex-shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px] max-md:hidden">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
+                <img v-if="auth.avatarUrl" :src="auth.avatarUrl" class="w-7 h-7 rounded-full object-cover border border-brand-border shrink-0 max-md:hidden" />
+                <div v-else class="w-7 h-7 rounded-full border border-brand-border shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-[10px] max-md:hidden">{{ (auth.user?.display_name || auth.user?.username || '?')[0].toUpperCase() }}</div>
                 <input
                   v-model="replyText"
                   @keydown.enter.prevent="submitReply"
                   @paste="onReplyPaste"
                   :placeholder="`@${replyingTo?.username}...`"
                   autofocus
-                  class="flex-1 max-md:min-w-0 bg-brand-bg border border-brand-border rounded-2xl px-3 py-1.5 text-sm text-white placeholder-brand-muted outline-none focus:border-brand-accent"
+                  class="flex-1 max-md:min-w-0 bg-brand-bg border border-brand-border rounded-2xl px-3 py-1.5 text-sm text-white placeholder-brand-muted outline-hidden focus:border-brand-accent"
                 />
                 <!-- Reply media attach button -->
                 <button
                   type="button"
                   @click="replyFileRef?.click()"
-                  :class="['flex-shrink-0 w-7 h-7 rounded-xl flex items-center justify-center transition-all',
+                  :class="['shrink-0 w-7 h-7 rounded-xl flex items-center justify-center transition-all',
                     replyFilePreview ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/50 hover:text-brand-accent hover:bg-brand-bg border border-brand-border']"
                   title="Фото / видео / GIF">
                   <BIcon name="Image" class="w-3.5 h-3.5" />
@@ -680,27 +680,27 @@ const vClickOutside = {
                 <button
                   type="button"
                   @click="showReplyStickerPanel = !showReplyStickerPanel; showStickerPanel = false"
-                  :class="['flex-shrink-0 w-7 h-7 rounded-xl flex items-center justify-center transition-all',
+                  :class="['shrink-0 w-7 h-7 rounded-xl flex items-center justify-center transition-all',
                     showReplyStickerPanel ? 'bg-brand-accent/15 text-brand-accent' : 'text-white/50 hover:text-brand-accent hover:bg-brand-bg border border-brand-border']"
                   title="Стикеры">
                   <BIcon name="Sticker" class="w-3.5 h-3.5" />
                 </button>
                 <button @click="submitReply" :disabled="(!replyText.trim() && !replyFileUrl) || submitting || replyFileUploading"
                   :aria-label="langStore.t.send"
-                  class="px-3 py-1.5 bg-brand-accent text-white text-xs font-bold rounded-xl disabled:opacity-40 max-md:flex-shrink-0 max-md:w-7 max-md:h-7 max-md:p-0 max-md:flex max-md:items-center max-md:justify-center">
+                  class="px-3 py-1.5 bg-brand-accent text-white text-xs font-bold rounded-xl disabled:opacity-40 max-md:shrink-0 max-md:w-7 max-md:h-7 max-md:p-0 max-md:flex max-md:items-center max-md:justify-center">
                   <span class="max-md:hidden">{{ langStore.t.send }}</span>
                   <BIcon name="SendHorizontal" class="w-3.5 h-3.5 md:hidden" />
                 </button>
-                <button @click="cancelReply" class="max-md:flex-shrink-0 p-1.5 text-white/55 hover:text-white rounded-xl hover:bg-brand-border">
+                <button @click="cancelReply" class="max-md:shrink-0 p-1.5 text-white/55 hover:text-white rounded-xl hover:bg-brand-border">
                   <BIcon name="X" class="w-4 h-4" />
                 </button>
               </div>
             </div>
 
             <!-- Nested replies -->
-            <div v-if="expandedReplies.has(comment.id) && comment.replies?.length" class="mt-2 space-y-2 pl-4 border-l-2 border-brand-border">
+            <div v-if="expandedReplies.has(comment.id) && comment.replies?.length" class="mt-2 stack-y-2 pl-4 border-l-2 border-brand-border">
               <div v-for="reply in comment.replies" :key="reply.id" class="flex gap-3">
-                <router-link :to="identityHref(reply)" class="flex-shrink-0 mt-0.5">
+                <router-link :to="identityHref(reply)" class="shrink-0 mt-0.5">
                   <img v-if="identityAvatar(reply)"
                     :src="identityAvatar(reply)!"
                     class="w-7 h-7 object-cover border border-brand-border cursor-pointer"

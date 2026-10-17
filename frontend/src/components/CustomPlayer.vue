@@ -323,7 +323,7 @@ defineExpose({
         </div>
       </div>
     </Transition>
-    <div class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-black/65 backdrop-blur-sm border border-white/10 text-white text-[11px] font-black tracking-widest uppercase pointer-events-none shadow-lg">
+    <div class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-black/65 backdrop-blur-xs border border-white/10 text-white text-[11px] font-black tracking-widest uppercase pointer-events-none shadow-lg">
       GIF
     </div>
   </div>
@@ -353,7 +353,7 @@ defineExpose({
         <div class="flex-1 flex flex-col gap-2">
           <div class="flex items-end gap-[3px] h-10 overflow-hidden">
             <div v-for="i in 36" :key="i"
-                 class="rounded-full flex-shrink-0"
+                 class="rounded-full shrink-0"
                  style="width:3px; background:linear-gradient(to top,#4C67CF,#A1B4FF)"
                  :style="{
                    height: isPlaying ? `${20 + Math.abs(Math.sin(i * 0.7)) * 70}%` : `${8 + (i % 6) * 4}%`,
@@ -429,7 +429,7 @@ defineExpose({
     v-else-if="type === 'video'"
     ref="container"
     tabindex="0"
-    class="relative w-full overflow-hidden bg-black select-none outline-none"
+    class="relative w-full overflow-hidden bg-black select-none outline-hidden"
     :class="[
       isPlaying && !showControls ? 'cursor-none' : '',
       isFullscreen ? 'h-full rounded-none' : 'rounded-2xl',
@@ -462,7 +462,7 @@ defineExpose({
     <Transition name="pop">
       <div v-if="!isPlaying && !isLoading"
            class="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div class="w-20 h-20 rounded-full bg-black/45 backdrop-blur-sm ring-1 ring-white/20 flex items-center justify-center shadow-2xl">
+        <div class="w-20 h-20 rounded-full bg-black/45 backdrop-blur-xs ring-1 ring-white/20 flex items-center justify-center shadow-2xl">
           <BIcon name="Play" class="w-10 h-10 text-white ml-1" />
         </div>
       </div>
@@ -475,7 +475,7 @@ defineExpose({
         v-show="!showControls && isPlaying"
         @click.stop="toggleMute"
         :title="isMuted ? 'Включить звук' : 'Выключить звук'"
-        class="absolute top-2.5 right-2.5 z-10 w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white hover:bg-black/80 transition-colors shadow-lg"
+        class="absolute top-2.5 right-2.5 z-10 w-9 h-9 rounded-full bg-black/60 backdrop-blur-xs border border-white/10 flex items-center justify-center text-white hover:bg-black/80 transition-colors shadow-lg"
       >
         <BIcon :name="volIcon" class="w-4 h-4" />
       </button>
@@ -502,7 +502,7 @@ defineExpose({
           <!-- Hover time -->
           <Transition name="bfade">
             <div v-if="showHoverTime"
-                 class="absolute -top-8 px-2 py-1 rounded bg-black/90 text-white text-[11px] font-mono whitespace-nowrap pointer-events-none shadow-xl -translate-x-1/2"
+                 class="absolute -top-8 px-2 py-1 rounded-sm bg-black/90 text-white text-[11px] font-mono whitespace-nowrap pointer-events-none shadow-xl -translate-x-1/2"
                  :style="{ left: hoverX + '%' }">{{ formattedHover }}</div>
           </Transition>
           <input type="range" min="0" :max="duration || 100" :value="currentTime"

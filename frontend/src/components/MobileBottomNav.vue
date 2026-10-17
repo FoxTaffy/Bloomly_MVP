@@ -51,7 +51,7 @@ function handleNewStory() {
 </script>
 
 <template>
-  <nav class="fixed bottom-0 inset-x-0 z-[200] md:hidden">
+  <nav class="fixed bottom-0 inset-x-0 z-200 md:hidden">
     <!-- Blur backdrop -->
     <div class="absolute inset-0 bg-brand-bg/90 backdrop-blur-xl border-t border-brand-border"></div>
 
@@ -63,7 +63,7 @@ function handleNewStory() {
         class="nav-item relative flex flex-col items-center justify-center gap-0.5 min-w-0 h-14 px-0.5 rounded-2xl transition-all duration-200 active:scale-95"
         :class="activeTab === 'home' ? 'text-white' : 'text-white/55'">
         <div class="relative">
-          <div v-if="activeTab === 'home'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-accent/30 blur-sm"></div>
+          <div v-if="activeTab === 'home'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-accent/30 blur-xs"></div>
           <BIcon name="Home" class="w-6 h-6 relative transition-transform duration-200"
             :class="activeTab === 'home' ? 'scale-110 text-white' : ''" />
         </div>
@@ -77,7 +77,7 @@ function handleNewStory() {
         class="nav-item relative flex flex-col items-center justify-center gap-0.5 min-w-0 h-14 px-0.5 rounded-2xl transition-all duration-200 active:scale-95"
         :class="activeTab === 'friends' ? 'text-white' : 'text-white/55'">
         <div class="relative">
-          <div v-if="activeTab === 'friends'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-purple/30 blur-sm"></div>
+          <div v-if="activeTab === 'friends'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-purple/30 blur-xs"></div>
           <BIcon name="Users" class="w-6 h-6 relative transition-transform duration-200"
             :class="activeTab === 'friends' ? 'scale-110 text-brand-purple' : ''" />
         </div>
@@ -91,7 +91,7 @@ function handleNewStory() {
         <Transition name="fade">
           <div
             v-if="mobileHubOpen"
-            class="fixed inset-0 z-[199] bg-black/50 backdrop-blur-sm"
+            class="fixed inset-0 z-199 bg-black/50 backdrop-blur-xs"
             @click="mobileHubOpen = false"
           ></div>
         </Transition>
@@ -100,7 +100,7 @@ function handleNewStory() {
         <Transition name="hub-pop">
           <div
             v-if="mobileHubOpen"
-            class="absolute bottom-[76px] left-1/2 -translate-x-1/2 z-[201] flex flex-col items-center gap-2 w-52 max-w-[calc(100vw-2rem)]"
+            class="absolute bottom-[76px] left-1/2 -translate-x-1/2 z-201 flex flex-col items-center gap-2 w-52 max-w-[calc(100vw-2rem)]"
           >
             <button
               @click="handleNewPost()"
@@ -128,7 +128,7 @@ function handleNewStory() {
         <!-- FAB button -->
         <button
           @click="mobileHubOpen = !mobileHubOpen"
-          class="relative z-[202] w-14 h-14 rounded-2xl bg-brand-accent flex items-center justify-center shadow-lg shadow-brand-accent/40 hover:bg-brand-accent-plus hover:shadow-brand-accent/60 active:scale-95 transition-all duration-150"
+          class="relative z-202 w-14 h-14 rounded-2xl bg-brand-accent flex items-center justify-center shadow-lg shadow-brand-accent/40 hover:bg-brand-accent-plus hover:shadow-brand-accent/60 active:scale-95 transition-all duration-150"
           :class="mobileHubOpen ? 'rotate-45 bg-brand-error shadow-brand-error/40' : ''">
           <BIcon name="Plus" class="w-7 h-7 text-white transition-transform duration-200" />
         </button>
@@ -140,7 +140,7 @@ function handleNewStory() {
         class="nav-item relative flex flex-col items-center justify-center gap-0.5 min-w-0 h-14 px-0.5 rounded-2xl transition-all duration-200 active:scale-95"
         :class="activeTab === 'messages' ? 'text-white' : 'text-white/55'">
         <div class="relative">
-          <div v-if="activeTab === 'messages'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-success/30 blur-sm"></div>
+          <div v-if="activeTab === 'messages'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-success/30 blur-xs"></div>
           <BIcon name="MessageCircle" class="w-6 h-6 relative transition-transform duration-200"
             :class="activeTab === 'messages' ? 'scale-110 text-brand-success' : ''" />
           <span v-if="messagesStore.unreadCount > 0"
@@ -158,7 +158,7 @@ function handleNewStory() {
         class="nav-item relative flex flex-col items-center justify-center gap-0.5 min-w-0 h-14 px-0.5 rounded-2xl transition-all duration-200 active:scale-95"
         :class="activeTab === 'profile' ? 'text-white' : 'text-white/55'">
         <div class="relative">
-          <div v-if="activeTab === 'profile'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-yellow/30 blur-sm"></div>
+          <div v-if="activeTab === 'profile'" class="absolute inset-0 -m-1.5 rounded-xl bg-brand-yellow/30 blur-xs"></div>
           <img
             v-if="auth.avatarUrl"
             :src="auth.avatarUrl"

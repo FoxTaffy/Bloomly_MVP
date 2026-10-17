@@ -149,7 +149,7 @@ onMounted(load)
 
     <!-- Header -->
     <div class="px-6 py-5 border-b border-brand-border flex items-center gap-3">
-      <div class="w-10 h-10 rounded-2xl bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center flex-shrink-0">
+      <div class="w-10 h-10 rounded-2xl bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center shrink-0">
         <BIcon name="Ticket" class="w-5 h-5 text-brand-accent" />
       </div>
       <div class="flex-1 min-w-0">
@@ -207,7 +207,7 @@ onMounted(load)
       </div>
 
       <!-- Tier form (inline modal) -->
-      <div v-if="showForm" class="mx-6 my-4 bg-brand-bg border border-brand-border rounded-2xl p-5 space-y-4">
+      <div v-if="showForm" class="mx-6 my-4 bg-brand-bg border border-brand-border rounded-2xl p-5 stack-y-4">
         <p class="text-sm font-bold text-white">{{ editingTier ? 'Редактировать билет' : 'Новый билет' }}</p>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -216,7 +216,7 @@ onMounted(load)
             <input
               v-model="form.name"
               placeholder="Стандартный, VIP, Пресс..."
-              class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/50" />
+              class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/50" />
           </div>
           <div>
             <label class="block text-xs font-semibold text-white/50 mb-1">Цена</label>
@@ -224,7 +224,7 @@ onMounted(load)
               v-model.number="form.price"
               type="number"
               min="0"
-              class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent/50" />
+              class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-hidden focus:border-brand-accent/50" />
           </div>
           <div>
             <label class="block text-xs font-semibold text-white/50 mb-1">Количество</label>
@@ -232,7 +232,7 @@ onMounted(load)
               v-model.number="form.totalCount"
               type="number"
               min="1"
-              class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent/50" />
+              class="w-full bg-brand-card border border-brand-border rounded-xl px-4 py-2.5 text-sm text-white focus:outline-hidden focus:border-brand-accent/50" />
           </div>
         </div>
 
@@ -253,7 +253,7 @@ onMounted(load)
       </div>
 
       <!-- Tiers list -->
-      <div class="p-6 space-y-3">
+      <div class="p-6 stack-y-3">
         <!-- Summary stats -->
         <div v-if="tiers.length" class="grid grid-cols-3 gap-3 mb-4">
           <div class="bg-brand-bg border border-brand-border rounded-2xl p-4 text-center">
@@ -288,13 +288,13 @@ onMounted(load)
                   class="h-full bg-brand-accent rounded-full transition-all"
                   :style="`width: ${soldPct(tier)}%`" />
               </div>
-              <span class="text-[11px] text-white/40 font-semibold flex-shrink-0">
+              <span class="text-[11px] text-white/40 font-semibold shrink-0">
                 {{ tier.sold_count }} / {{ tier.total_count }}
               </span>
             </div>
           </div>
 
-          <div class="flex items-center gap-1.5 flex-shrink-0">
+          <div class="flex items-center gap-1.5 shrink-0">
             <button
               @click="openEdit(tier)"
               class="p-2 rounded-xl border border-brand-border text-white/40 hover:text-white hover:border-white/20 transition-all">

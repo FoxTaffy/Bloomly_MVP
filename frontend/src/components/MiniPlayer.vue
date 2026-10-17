@@ -218,9 +218,9 @@ watch(() => props.src, async (newSrc) => {
       <img ref="gifImgEl" :src="src" class="w-full h-full object-cover block" :class="{ 'opacity-0': gifPaused }" loading="lazy" />
       <canvas v-show="gifPaused" ref="gifCanvasEl" class="absolute inset-0 w-full h-full object-cover" />
     </template>
-    <span class="absolute top-1.5 left-1.5 px-1.5 py-px rounded text-[9px] font-black tracking-widest text-white bg-black/55 uppercase pointer-events-none">GIF</span>
+    <span class="absolute top-1.5 left-1.5 px-1.5 py-px rounded-sm text-[9px] font-black tracking-widest text-white bg-black/55 uppercase pointer-events-none">GIF</span>
     <div v-if="gifPaused" class="absolute inset-0 flex items-center justify-center pointer-events-none">
-      <div class="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
+      <div class="w-12 h-12 rounded-full bg-black/50 backdrop-blur-xs flex items-center justify-center">
         <svg viewBox="0 0 15 15" fill="currentColor" class="w-5 h-5 text-white">
           <path d="M5 0C3.89543 0 3 0.895431 3 2V3C3 4.10457 3.89543 5 5 5C6.10457 5 7 4.10457 7 3V2C7 0.895431 6.10457 0 5 0Z"/>
           <path d="M10 0C8.89543 0 8 0.895431 8 2V3C8 4.10457 8.89543 5 10 5C11.1046 5 12 4.10457 12 3V2C12 0.895431 11.1046 0 10 0Z"/>
@@ -245,7 +245,7 @@ watch(() => props.src, async (newSrc) => {
 
     <!-- Paw play button -->
     <button @click="togglePlay"
-      class="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-md"
+      class="shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-95 shadow-md"
       :class="isMine ? 'bg-white/90 hover:bg-white' : (isPlaying ? 'bg-brand-accent' : 'bg-brand-accent/80 hover:bg-brand-accent')">
       <svg v-if="!isPlaying" viewBox="0 0 15 15" fill="currentColor" class="w-4 h-4" :class="isMine ? 'text-brand-accent' : 'text-white'">
         <path d="M5 0C3.89543 0 3 0.895431 3 2V3C3 4.10457 3.89543 5 5 5C6.10457 5 7 4.10457 7 3V2C7 0.895431 6.10457 0 5 0Z"/>
@@ -262,7 +262,7 @@ watch(() => props.src, async (newSrc) => {
       <div class="flex items-end gap-px h-7 cursor-pointer select-none"
         @click="(e) => { const bar = Math.floor(e.offsetX / (e.currentTarget as HTMLElement).clientWidth * BARS); seekByBar(bar) }">
         <div v-for="(h, i) in waveformBars" :key="i"
-          class="flex-1 rounded-sm min-w-0 transition-colors"
+          class="flex-1 rounded-xs min-w-0 transition-colors"
           :style="{ height: (h * 100) + '%' }"
           :class="[
             i < filledBars
@@ -274,7 +274,7 @@ watch(() => props.src, async (newSrc) => {
       <div class="flex items-center justify-between">
         <span class="text-[9px] tabular-nums" :class="isMine ? 'text-white/70' : 'text-white/55'">{{ isLoading ? '...' : (isPlaying ? fmtCurrent : fmtDuration) }}</span>
         <button @click.stop="cycleSpeed"
-          class="text-[9px] transition-colors font-bold tabular-nums px-1 rounded"
+          class="text-[9px] transition-colors font-bold tabular-nums px-1 rounded-sm"
           :class="isMine ? (playbackRate !== 1 ? 'text-white' : 'text-white/70 hover:text-white') : (playbackRate !== 1 ? 'text-brand-accent' : 'text-white/55 hover:text-brand-accent')">
           {{ playbackRate }}×
         </button>
@@ -290,7 +290,7 @@ watch(() => props.src, async (newSrc) => {
       @play="onPlay" @pause="onPause" @ended="onEnded" @canplay="onCanPlay" />
 
     <!-- Album art + play -->
-    <div class="relative flex-shrink-0 w-11 h-11">
+    <div class="relative shrink-0 w-11 h-11">
       <div class="w-11 h-11 rounded-xl overflow-hidden border border-brand-border/60 bg-brand-bg flex items-center justify-center shadow-md">
         <img v-if="albumArt" :src="albumArt" class="w-full h-full object-cover" />
         <svg v-else viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-brand-accent/60">
@@ -309,7 +309,7 @@ watch(() => props.src, async (newSrc) => {
     <div class="flex-1 min-w-0 flex flex-col gap-1">
       <div class="flex items-center justify-between gap-2">
         <button @click="togglePlay"
-          class="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-95"
+          class="shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-95"
           :class="isMine ? 'bg-white/90 hover:bg-white' : 'bg-brand-accent/80 hover:bg-brand-accent'">
           <svg v-if="!isPlaying" viewBox="0 0 15 15" fill="currentColor" class="w-3.5 h-3.5" :class="isMine ? 'text-brand-accent' : 'text-white'">
             <path d="M5 0C3.89543 0 3 0.895431 3 2V3C3 4.10457 3.89543 5 5 5C6.10457 5 7 4.10457 7 3V2C7 0.895431 6.10457 0 5 0Z"/>
@@ -325,7 +325,7 @@ watch(() => props.src, async (newSrc) => {
           <input type="range" min="0" :max="duration || 100" :value="currentTime"
             @input="seek" @mousedown="isDragging = true" @mouseup="isDragging = false" class="range-overlay" />
         </div>
-        <div class="relative flex-shrink-0" @mouseenter="openVol" @mouseleave="scheduleCloseVol">
+        <div class="relative shrink-0" @mouseenter="openVol" @mouseleave="scheduleCloseVol">
           <button @click="toggleMute" class="p-0.5 text-white/55 hover:text-brand-offwhite transition-colors">
             <BIcon :name="isMuted || volumeLevel === 0 ? 'VolumeX' : 'Volume2'" class="w-3.5 h-3.5" />
           </button>
@@ -339,7 +339,7 @@ watch(() => props.src, async (newSrc) => {
       </div>
       <div class="grid grid-cols-3 items-center">
         <span class="text-[9px] text-white/55 tabular-nums text-left">{{ fmtCurrent }}</span>
-        <button @click="cycleSpeed" class="text-[9px] font-bold tabular-nums px-1 py-px rounded transition-colors justify-self-center"
+        <button @click="cycleSpeed" class="text-[9px] font-bold tabular-nums px-1 py-px rounded-sm transition-colors justify-self-center"
           :class="playbackRate !== 1 ? 'text-brand-accent' : 'text-white/55 hover:text-brand-accent'">{{ playbackRate }}×</button>
         <span class="text-[9px] text-white/55 tabular-nums text-right">{{ fmtDuration }}</span>
       </div>
@@ -368,7 +368,7 @@ watch(() => props.src, async (newSrc) => {
       </svg>
     </div>
     <div v-if="!isPlaying && !isLoading" class="absolute inset-0 flex items-center justify-center pointer-events-none">
-      <div class="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
+      <div class="w-12 h-12 rounded-full bg-black/50 backdrop-blur-xs flex items-center justify-center">
         <svg viewBox="0 0 15 15" fill="currentColor" class="w-5 h-5 text-white">
           <path d="M5 0C3.89543 0 3 0.895431 3 2V3C3 4.10457 3.89543 5 5 5C6.10457 5 7 4.10457 7 3V2C7 0.895431 6.10457 0 5 0Z"/>
           <path d="M10 0C8.89543 0 8 0.895431 8 2V3C8 4.10457 8.89543 5 10 5C11.1046 5 12 4.10457 12 3V2C12 0.895431 11.1046 0 10 0Z"/>
@@ -390,7 +390,7 @@ watch(() => props.src, async (newSrc) => {
         <button @click="togglePlay" class="p-0.5 hover:text-white transition-colors active:scale-90">
           <BIcon :name="isPlaying ? 'Pause' : 'Play'" class="w-3.5 h-3.5" :class="{'ml-px':!isPlaying}" />
         </button>
-        <div class="relative flex-shrink-0" @mouseenter="openVol" @mouseleave="scheduleCloseVol">
+        <div class="relative shrink-0" @mouseenter="openVol" @mouseleave="scheduleCloseVol">
           <button @click.stop="toggleMute" class="p-0.5 hover:text-white transition-colors">
             <BIcon :name="isMuted || volumeLevel === 0 ? 'VolumeX' : volumeLevel < 0.5 ? 'Volume1' : 'Volume2'" class="w-3 h-3" />
           </button>

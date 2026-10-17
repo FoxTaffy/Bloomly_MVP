@@ -106,7 +106,7 @@ async function removeItem(id: string) {
 </script>
 
 <template>
-  <div class="space-y-3">
+  <div class="stack-y-3">
     <!-- Board header -->
     <div class="flex items-center justify-between px-1">
       <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
@@ -123,13 +123,13 @@ async function removeItem(id: string) {
     <!-- Kanban -->
     <div v-else class="flex gap-2.5 overflow-x-auto pb-2 -mx-1 px-1" style="scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.1) transparent">
       <div v-for="status in STATUSES" :key="status"
-        class="flex-shrink-0 w-48 flex flex-col rounded-2xl overflow-hidden"
+        class="shrink-0 w-48 flex flex-col rounded-2xl overflow-hidden"
         :class="STATUS_CONFIG[status].colBg">
 
         <!-- Column header -->
         <div class="flex items-center justify-between px-3 pt-2.5 pb-2">
           <div class="flex items-center gap-1.5">
-            <div class="w-2 h-2 rounded-full flex-shrink-0" :style="{ background: STATUS_CONFIG[status].dotColor }" />
+            <div class="w-2 h-2 rounded-full shrink-0" :style="{ background: STATUS_CONFIG[status].dotColor }" />
             <span class="text-[11px] font-bold uppercase tracking-wide" :class="STATUS_CONFIG[status].headerColor">
               {{ STATUS_CONFIG[status].label }}
             </span>
@@ -161,9 +161,9 @@ async function removeItem(id: string) {
           </div>
 
           <!-- Inline add -->
-          <div v-if="isAdmin && addingInCol === status" class="space-y-1.5 mt-0.5">
+          <div v-if="isAdmin && addingInCol === status" class="stack-y-1.5 mt-0.5">
             <textarea v-model="inlineTitle" autofocus rows="2" placeholder="Название карточки..."
-              class="w-full bg-brand-card border border-brand-accent/40 rounded-xl px-2.5 py-2 text-[12px] text-white placeholder:text-white/25 focus:outline-none resize-none leading-snug"
+              class="w-full bg-brand-card border border-brand-accent/40 rounded-xl px-2.5 py-2 text-[12px] text-white placeholder:text-white/25 focus:outline-hidden resize-none leading-snug"
               @keydown.enter.prevent="saveInline" @keydown.esc="cancelInline" />
             <div class="flex items-center gap-1">
               <button @click="saveInline" :disabled="saving || !inlineTitle.trim()"
@@ -189,9 +189,9 @@ async function removeItem(id: string) {
 
     <!-- Edit modal -->
     <Teleport to="body">
-      <div v-if="showModal" class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      <div v-if="showModal" class="fixed inset-0 z-9999 flex items-center justify-center p-4"
         style="background:rgba(0,0,0,.75)" @click.self="closeModal">
-        <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+        <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm p-6 stack-y-4">
           <div class="flex items-center justify-between">
             <h3 class="text-sm font-bold text-white">{{ editingId ? 'Редактировать' : 'Новая карточка' }}</h3>
             <button @click="closeModal" class="w-7 h-7 flex items-center justify-center rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-all">
@@ -199,10 +199,10 @@ async function removeItem(id: string) {
             </button>
           </div>
           <input v-model="form.title" placeholder="Название"
-            class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-brand-accent/60 transition-colors" />
+            class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-hidden focus:border-brand-accent/60 transition-colors" />
           <textarea v-model="form.description" placeholder="Описание (необязательно)" rows="3"
-            class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-brand-accent/60 transition-colors resize-none" />
-          <div class="space-y-1.5">
+            class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-hidden focus:border-brand-accent/60 transition-colors resize-none" />
+          <div class="stack-y-1.5">
             <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Колонка</p>
             <div class="flex flex-wrap gap-1.5">
               <button v-for="s in STATUSES" :key="s" @click="formStatus = s"

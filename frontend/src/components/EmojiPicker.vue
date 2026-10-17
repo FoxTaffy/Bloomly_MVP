@@ -1,26 +1,26 @@
 <template>
   <div class="emoji-picker w-72 bg-brand-card border border-brand-border rounded-2xl shadow-2xl overflow-hidden flex flex-col" style="max-height: 320px">
     <!-- Search -->
-    <div class="px-2 pt-2 pb-1 flex-shrink-0">
+    <div class="px-2 pt-2 pb-1 shrink-0">
       <div class="flex items-center gap-1.5 bg-brand-bg rounded-xl px-2.5 py-1.5 border border-brand-border/60">
-        <BIcon name="Search" class="w-3 h-3 text-white/55 flex-shrink-0" />
+        <BIcon name="Search" class="w-3 h-3 text-white/55 shrink-0" />
         <input
           v-model="search"
           type="text"
           placeholder="Поиск эмодзи..."
-          class="bg-transparent text-xs text-white placeholder-brand-muted outline-none w-full"
+          class="bg-transparent text-xs text-white placeholder-brand-muted outline-hidden w-full"
         />
       </div>
     </div>
 
     <!-- Category tabs -->
-    <div v-if="!search" class="flex items-center gap-0.5 px-2 pb-1 flex-shrink-0 overflow-x-auto hide-scrollbar">
+    <div v-if="!search" class="flex items-center gap-0.5 px-2 pb-1 shrink-0 overflow-x-auto hide-scrollbar">
       <button
         v-for="cat in CATEGORIES"
         :key="cat.id"
         @click="activeCat = cat.id"
         :class="[
-          'flex-shrink-0 w-7 h-7 rounded-lg text-base flex items-center justify-center transition-all',
+          'shrink-0 w-7 h-7 rounded-lg text-base flex items-center justify-center transition-all',
           activeCat === cat.id ? 'bg-brand-accent/20 ring-1 ring-brand-accent/40' : 'hover:bg-brand-bg',
         ]"
         :title="cat.label"

@@ -121,26 +121,26 @@ function close() {
 <template>
   <Teleport to="body">
     <Transition name="pay-fade">
-      <div class="fixed inset-0 z-[700] flex items-end sm:items-center justify-center" @click.self="close">
-        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="close" />
+      <div class="fixed inset-0 z-700 flex items-end sm:items-center justify-center" @click.self="close">
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-xs" @click="close" />
 
         <div class="relative w-full sm:max-w-sm bg-[#13131f] border border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden z-10 modal-glow">
-          <div class="h-1 w-full bg-gradient-to-r from-brand-accent via-brand-purple to-brand-pink" />
+          <div class="h-1 w-full bg-linear-to-r/srgb from-brand-accent via-brand-purple to-brand-pink" />
           <div class="w-10 h-1 bg-white/10 rounded-full mx-auto mt-3 mb-1 sm:hidden" />
 
           <!-- STEP: payment method -->
           <template v-if="step === 'method'">
-            <div class="px-6 pt-5 pb-6 space-y-5">
+            <div class="px-6 pt-5 pb-6 stack-y-5">
               <div class="flex items-center justify-between">
                 <h2 class="text-lg font-extrabold text-white">{{ langStore.t.payModalTitle }}</h2>
                 <button @click="close"
-                  class="w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all active:scale-90 flex-shrink-0">
+                  class="w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all active:scale-90 shrink-0">
                   <BIcon name="X" class="w-4 h-4" />
                 </button>
               </div>
 
               <!-- Plan / price row -->
-              <div class="px-4 py-3 rounded-2xl border border-white/10 bg-gradient-to-r from-white/[0.06] to-white/[0.02] space-y-1.5">
+              <div class="px-4 py-3 rounded-2xl border border-white/10 bg-linear-to-r/srgb from-white/6 to-white/2 stack-y-1.5">
                 <div class="flex items-center justify-between">
                   <span class="flex items-center gap-1.5 text-sm font-extrabold" :class="plan.color">
                     <BIcon name="Sparkles" class="w-3.5 h-3.5" />
@@ -162,7 +162,7 @@ function close() {
               </div>
 
               <template v-else>
-                <div class="space-y-2">
+                <div class="stack-y-2">
                   <p class="text-[11px] font-bold uppercase tracking-wider text-white/35">{{ langStore.t.payMethodTitle }}</p>
                   <button
                     v-for="m in METHODS" :key="m.id"
@@ -170,18 +170,18 @@ function close() {
                     :disabled="m.disabled"
                     class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all text-left disabled:opacity-40 disabled:cursor-not-allowed"
                     :class="method === m.id && !m.disabled ? 'border-brand-accent/60 bg-brand-accent/10' : 'border-white/10 bg-white/5 hover:border-white/20'">
-                    <BIcon :name="m.icon" class="w-4 h-4 text-white/70 flex-shrink-0" />
+                    <BIcon :name="m.icon" class="w-4 h-4 text-white/70 shrink-0" />
                     <span class="text-sm font-bold text-white/85 flex-1">{{ m.label }}</span>
                     <span v-if="m.id === 'wallet'" class="text-xs font-mono"
                       :class="canPayFromWallet ? 'text-white/45' : 'text-brand-error/80'">
                       {{ walletStore.balance.toFixed(2) }} / {{ totalBc.toFixed(2) }}
                     </span>
-                    <BIcon v-if="method === m.id && !m.disabled" name="CheckCircle2" class="w-4 h-4 text-brand-accent flex-shrink-0" />
+                    <BIcon v-if="method === m.id && !m.disabled" name="CheckCircle2" class="w-4 h-4 text-brand-accent shrink-0" />
                   </button>
                 </div>
 
                 <label v-if="canAutoRenew" class="flex items-start gap-3 px-4 py-3 rounded-2xl border border-white/10 bg-white/5 cursor-pointer select-none">
-                  <input v-model="autoRenew" type="checkbox" class="mt-0.5 w-4 h-4 accent-brand-accent flex-shrink-0" />
+                  <input v-model="autoRenew" type="checkbox" class="mt-0.5 w-4 h-4 accent-brand-accent shrink-0" />
                   <span class="min-w-0">
                     <span class="block text-sm font-bold text-white/85">{{ langStore.t.payAutoRenew }}</span>
                     <span class="block text-[11px] text-white/40 mt-0.5 leading-snug">{{ langStore.t.payAutoRenewHint }}</span>
@@ -216,7 +216,7 @@ function close() {
             <div class="relative px-6 pt-8 pb-6 text-center overflow-hidden">
               <div class="absolute inset-0 overflow-hidden pointer-events-none">
                 <span v-for="p in confettiPieces" :key="p.id" class="confetti-piece"
-                  :class="p.round ? 'rounded-full' : 'rounded-sm'"
+                  :class="p.round ? 'rounded-full' : 'rounded-xs'"
                   :style="{
                     left: p.left + '%',
                     width: p.size + 'px',
@@ -236,7 +236,7 @@ function close() {
                   <span class="absolute inset-0 rounded-full badge-ring badge-ring-delay" />
                   <div class="relative w-24 h-24 rounded-full flex items-center justify-center"
                     style="background: linear-gradient(135deg, #4C67CF 0%, #7C6FDB 55%, #CD83F5 100%); box-shadow: 0 10px 34px rgba(124,111,219,0.55), inset 0 1px 0 rgba(255,255,255,0.25);">
-                    <BIcon name="PartyPopper" class="w-10 h-10 text-white drop-shadow" />
+                    <BIcon name="PartyPopper" class="w-10 h-10 text-white drop-shadow-sm" />
                   </div>
                 </div>
 
@@ -248,11 +248,11 @@ function close() {
 
                 <div class="bg-white/5 border border-white/10 rounded-2xl p-4 text-left mb-6">
                   <p class="text-[11px] font-bold uppercase tracking-wider text-white/35 mb-3">{{ langStore.t.welcomePrivilegesTitle }}</p>
-                  <ul class="space-y-2.5">
+                  <ul class="stack-y-2.5">
                     <li v-for="(f, i) in plan.features" :key="f"
                       class="feature-pop flex items-center gap-2 text-sm text-white/80"
                       :style="{ animationDelay: `${300 + i * 100}ms` }">
-                      <BIcon name="Check" class="w-4 h-4 flex-shrink-0" :class="plan.color" />
+                      <BIcon name="Check" class="w-4 h-4 shrink-0" :class="plan.color" />
                       {{ f }}
                     </li>
                   </ul>

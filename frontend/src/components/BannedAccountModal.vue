@@ -55,7 +55,7 @@ async function downloadData() {
     leave-active-class="transition-all duration-150 ease-in"
     leave-to-class="opacity-0"
   >
-    <div v-if="show" class="fixed inset-0 z-[100] flex items-center justify-center p-4" style="background:rgba(5,8,20,0.72);backdrop-filter:blur(6px)">
+    <div v-if="show" class="fixed inset-0 z-100 flex items-center justify-center p-4" style="background:rgba(5,8,20,0.72);backdrop-filter:blur(6px)">
       <Transition
         appear
         enter-active-class="transition-all duration-300 ease-out"
@@ -67,13 +67,13 @@ async function downloadData() {
 
           <!-- Red banner -->
           <div class="relative px-8 pt-8 pb-6 text-center" style="background:linear-gradient(160deg,#be123c 0%,#e11d48 55%,#f43f5e 100%)">
-            <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-white/15 border border-white/25 flex items-center justify-center backdrop-blur-sm">
+            <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-white/15 border border-white/25 flex items-center justify-center backdrop-blur-xs">
               <BIcon name="CircleAlert" class="w-8 h-8 text-white" />
             </div>
             <h2 class="text-xl font-black text-white">Ваш аккаунт заблокирован</h2>
           </div>
 
-          <div class="p-7 space-y-3.5">
+          <div class="p-7 stack-y-3.5">
             <p v-if="reason" class="text-sm text-white/50 leading-relaxed">{{ reason }}</p>
             <p class="text-sm text-white/50 leading-relaxed">Если это произошло по ошибке, вы можете подать жалобу.</p>
 

@@ -36,10 +36,10 @@ watch(() => [props.src, props.source], async () => {
 
 <template>
   <div v-if="failed" role="img" :aria-label="label" :title="label"
-    class="flex items-center justify-center min-h-[3rem] min-w-[3rem] bg-white/[0.04] text-white/35 overflow-hidden">
-    <BIcon name="ImageOff" class="w-5 h-5 flex-shrink-0" />
+    class="flex items-center justify-center min-h-12 min-w-12 bg-white/4 text-white/35 overflow-hidden">
+    <BIcon name="ImageOff" class="w-5 h-5 shrink-0" />
   </div>
   <video v-else-if="kind === 'video' && resolved" :src="resolved" controls playsinline @error="failed = true" />
   <img v-else-if="resolved" :src="resolved" alt="" @error="failed = true" />
-  <div v-else class="min-h-[3rem] min-w-[3rem] bg-white/[0.04] animate-pulse" />
+  <div v-else class="min-h-12 min-w-12 bg-white/4 animate-pulse" />
 </template>

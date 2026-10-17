@@ -194,7 +194,7 @@ async function sendReply(ticketId: string) {
 
       <main class="flex-1 min-w-0 max-w-3xl">
         <div class="flex items-center gap-3 mb-6 max-md:mb-4">
-          <div class="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 bg-brand-accent/15">
+          <div class="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 bg-brand-accent/15">
             <BIcon name="CircleHelp" class="w-5 h-5 text-brand-accent" />
           </div>
           <div>
@@ -218,9 +218,9 @@ async function sendReply(ticketId: string) {
         <!-- ── FAQ ─────────────────────────────────────────────────── -->
         <section v-if="section === 'faq'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl divide-y divide-brand-border overflow-hidden">
           <div v-for="(item, i) in FAQ_ITEMS" :key="i">
-            <button @click="toggleFaq(i)" class="w-full flex items-center justify-between gap-3 px-5 py-4 text-left hover:bg-white/[0.02] transition-all">
+            <button @click="toggleFaq(i)" class="w-full flex items-center justify-between gap-3 px-5 py-4 text-left hover:bg-white/2 transition-all">
               <span class="text-sm font-bold text-white/85">{{ item.q }}</span>
-              <BIcon name="ChevronDown" class="w-4 h-4 text-white/30 flex-shrink-0 transition-transform duration-300" :class="openFaq === i ? 'rotate-180' : ''" />
+              <BIcon name="ChevronDown" class="w-4 h-4 text-white/30 shrink-0 transition-transform duration-300" :class="openFaq === i ? 'rotate-180' : ''" />
             </button>
             <Transition name="faq" @enter="onFaqEnter" @after-enter="onFaqAfterEnter" @leave="onFaqLeave">
               <div v-if="openFaq === i" class="px-5 pb-4 -mt-1 overflow-hidden">
@@ -241,7 +241,7 @@ async function sendReply(ticketId: string) {
                 class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all"
                 :class="form.type === t.value
                   ? 'bg-brand-accent/15 border-brand-accent/30 text-brand-accent'
-                  : 'bg-white/5 border-white/[0.08] text-white/40 hover:text-white/70'">
+                  : 'bg-white/5 border-white/8 text-white/40 hover:text-white/70'">
                 <BIcon :name="t.icon" class="w-3.5 h-3.5" />
                 {{ t.label }}
               </button>
@@ -251,13 +251,13 @@ async function sendReply(ticketId: string) {
           <div class="mb-4">
             <label class="block text-xs font-bold text-white/40 mb-2">{{ langStore.t.helpSubjectLabel }}</label>
             <input v-model="form.subject" type="text" maxlength="150" :placeholder="langStore.t.helpSubjectPlaceholder"
-              class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/[0.08] text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/40" />
+              class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/8 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/40" />
           </div>
 
           <div class="mb-4">
             <label class="block text-xs font-bold text-white/40 mb-2">{{ langStore.t.helpMessageLabel }}</label>
             <textarea v-model="form.message" rows="5" maxlength="3000" :placeholder="langStore.t.helpMessagePlaceholder"
-              class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/[0.08] text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/40 resize-none"></textarea>
+              class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/8 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/40 resize-none"></textarea>
           </div>
 
           <div class="mb-5">
@@ -268,7 +268,7 @@ async function sendReply(ticketId: string) {
           <div class="mb-5">
             <label class="block text-xs font-bold text-white/40 mb-2">{{ langStore.t.helpEmailLabel }}</label>
             <input v-model="form.contact_email" type="email" placeholder="you@example.com"
-              class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/[0.08] text-sm text-white placeholder-white/25 focus:outline-none focus:border-brand-accent/40" />
+              class="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/8 text-sm text-white placeholder-white/25 focus:outline-hidden focus:border-brand-accent/40" />
           </div>
 
           <button @click="submitTicket" :disabled="!canSubmit || isSubmitting"
@@ -281,8 +281,8 @@ async function sendReply(ticketId: string) {
         <section v-else-if="section === 'tickets'" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
           <div v-if="isLoadingTickets" class="divide-y divide-brand-border">
             <div v-for="n in 3" :key="n" class="flex gap-3 px-5 py-4 animate-pulse">
-              <div class="flex-1 space-y-2">
-                <div class="h-3 bg-white/[0.08] rounded-full w-48" /><div class="h-2 bg-white/5 rounded-full w-32" />
+              <div class="flex-1 stack-y-2">
+                <div class="h-3 bg-white/8 rounded-full w-48" /><div class="h-2 bg-white/5 rounded-full w-32" />
               </div>
             </div>
           </div>
@@ -304,10 +304,10 @@ async function sendReply(ticketId: string) {
               </div>
               <p class="text-sm font-bold text-white/85">{{ t.subject }}</p>
 
-              <div class="mt-3 space-y-2">
+              <div class="mt-3 stack-y-2">
                 <div v-for="m in t.messages" :key="m.id"
                   class="px-3 py-2 rounded-xl border"
-                  :class="m.sender_type === 'admin' ? 'bg-brand-accent/[0.06] border-brand-accent/20' : 'bg-white/5 border-white/[0.06]'">
+                  :class="m.sender_type === 'admin' ? 'bg-brand-accent/6 border-brand-accent/20' : 'bg-white/5 border-white/6'">
                   <p class="text-[10px] font-bold mb-0.5" :class="m.sender_type === 'admin' ? 'text-brand-accent/80' : 'text-white/30'">
                     {{ senderLabel(m) }}
                   </p>
@@ -319,7 +319,7 @@ async function sendReply(ticketId: string) {
               <div class="mt-3 flex gap-2">
                 <input v-model="replyDrafts[t.id]" type="text" :placeholder="langStore.t.helpTicketReplyPlaceholder"
                   @keydown.enter="sendReply(t.id)"
-                  class="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/[0.08] text-xs text-white/85 placeholder-white/25 focus:outline-none focus:border-brand-accent/40" />
+                  class="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/8 text-xs text-white/85 placeholder-white/25 focus:outline-hidden focus:border-brand-accent/40" />
                 <button @click="sendReply(t.id)" :disabled="!replyDrafts[t.id]?.trim() || sendingReply[t.id]"
                   class="px-4 py-2 rounded-xl text-xs font-bold bg-brand-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all">
                   {{ langStore.t.helpTicketSendBtn }}
@@ -330,12 +330,12 @@ async function sendReply(ticketId: string) {
         </section>
 
         <!-- ── Contacts ────────────────────────────────────────────────── -->
-        <section v-else-if="section === 'contacts'" class="space-y-4">
+        <section v-else-if="section === 'contacts'" class="stack-y-4">
           <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl p-5 md:p-6">
             <h2 class="font-bold text-white text-sm mb-4">{{ langStore.t.helpContactsDirectTitle }}</h2>
-            <div class="space-y-3">
-              <a href="mailto:support@bloomly.fun" class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5 border border-white/[0.08] hover:bg-white/[0.08] transition-all">
-                <div class="w-9 h-9 rounded-xl bg-brand-accent/15 flex items-center justify-center flex-shrink-0">
+            <div class="stack-y-3">
+              <a href="mailto:support@bloomly.fun" class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5 border border-white/8 hover:bg-white/8 transition-all">
+                <div class="w-9 h-9 rounded-xl bg-brand-accent/15 flex items-center justify-center shrink-0">
                   <BIcon name="Mail" class="w-4 h-4 text-brand-accent" />
                 </div>
                 <div>
@@ -343,8 +343,8 @@ async function sendReply(ticketId: string) {
                   <p class="text-xs text-white/35">{{ langStore.t.helpContactSupportDesc }}</p>
                 </div>
               </a>
-              <a href="mailto:privacy@bloomly.fun" class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5 border border-white/[0.08] hover:bg-white/[0.08] transition-all">
-                <div class="w-9 h-9 rounded-xl bg-brand-accent/15 flex items-center justify-center flex-shrink-0">
+              <a href="mailto:privacy@bloomly.fun" class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5 border border-white/8 hover:bg-white/8 transition-all">
+                <div class="w-9 h-9 rounded-xl bg-brand-accent/15 flex items-center justify-center shrink-0">
                   <BIcon name="ShieldCheck" class="w-4 h-4 text-brand-accent" />
                 </div>
                 <div>
@@ -357,9 +357,9 @@ async function sendReply(ticketId: string) {
 
           <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl p-5 md:p-6">
             <h2 class="font-bold text-white text-sm mb-4">{{ langStore.t.helpCommunityTitle }}</h2>
-            <div class="space-y-3">
-              <a href="https://t.me/Bloomly_news" target="_blank" rel="noopener noreferrer" class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5 border border-white/[0.08] hover:bg-white/[0.08] transition-all">
-                <div class="w-9 h-9 rounded-xl bg-[#26A5E4]/15 flex items-center justify-center flex-shrink-0">
+            <div class="stack-y-3">
+              <a href="https://t.me/Bloomly_news" target="_blank" rel="noopener noreferrer" class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5 border border-white/8 hover:bg-white/8 transition-all">
+                <div class="w-9 h-9 rounded-xl bg-[#26A5E4]/15 flex items-center justify-center shrink-0">
                   <svg viewBox="0 0 24 24" class="w-4 h-4" fill="#26A5E4" xmlns="http://www.w3.org/2000/svg"><path d="M21.94 4.11c.28-1.19-.87-2.16-1.99-1.72L2.4 9.63c-1.2.47-1.19 2.16.02 2.61l4.4 1.63 1.7 5.48c.24.76 1.2 1.01 1.79.46l2.51-2.36 4.47 3.34c.9.67 2.19.18 2.42-.93l3.23-15.75zM8.5 13.6l9.3-6.03c.24-.15.48.16.27.35l-7.7 7.05a1 1 0 0 0-.32.62l-.24 2.3-1.31-4.29z"/></svg>
                 </div>
                 <div>
@@ -367,8 +367,8 @@ async function sendReply(ticketId: string) {
                   <p class="text-xs text-white/35">{{ langStore.t.helpTelegramDesc }}</p>
                 </div>
               </a>
-              <a href="https://discord.gg/ARnCAYSEyr" target="_blank" rel="noopener noreferrer" class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5 border border-white/[0.08] hover:bg-white/[0.08] transition-all">
-                <div class="w-9 h-9 rounded-xl bg-[#5865F2]/15 flex items-center justify-center flex-shrink-0">
+              <a href="https://discord.gg/ARnCAYSEyr" target="_blank" rel="noopener noreferrer" class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white/5 border border-white/8 hover:bg-white/8 transition-all">
+                <div class="w-9 h-9 rounded-xl bg-[#5865F2]/15 flex items-center justify-center shrink-0">
                   <svg viewBox="0 0 24 24" class="w-4 h-4" fill="#5865F2" xmlns="http://www.w3.org/2000/svg"><path d="M20.32 4.37a19.8 19.8 0 0 0-4.89-1.52.07.07 0 0 0-.08.04c-.21.38-.45.87-.61 1.26a18.27 18.27 0 0 0-5.48 0 12.6 12.6 0 0 0-.62-1.26.08.08 0 0 0-.08-.04c-1.7.29-3.36.8-4.89 1.52a.07.07 0 0 0-.03.03C.53 9.05-.32 13.58.1 18.06a.08.08 0 0 0 .03.06 19.9 19.9 0 0 0 5.99 3.03.08.08 0 0 0 .08-.03c.46-.63.87-1.3 1.23-2a.08.08 0 0 0-.04-.11 13.1 13.1 0 0 1-1.87-.89.08.08 0 0 1-.01-.13c.13-.09.25-.19.37-.29a.07.07 0 0 1 .08-.01c3.93 1.79 8.18 1.79 12.06 0a.07.07 0 0 1 .08.01c.12.1.24.2.37.29a.08.08 0 0 1-.01.13c-.6.35-1.22.65-1.87.89a.08.08 0 0 0-.04.11c.36.7.78 1.37 1.23 2a.08.08 0 0 0 .08.03 19.83 19.83 0 0 0 6-3.03.08.08 0 0 0 .03-.06c.5-5.18-.83-9.67-3.53-13.66a.06.06 0 0 0-.03-.03zM8.02 15.33c-1.18 0-2.15-1.08-2.15-2.42 0-1.33.95-2.42 2.15-2.42 1.21 0 2.17 1.1 2.15 2.42 0 1.34-.95 2.42-2.15 2.42zm7.97 0c-1.18 0-2.15-1.08-2.15-2.42 0-1.33.95-2.42 2.15-2.42 1.21 0 2.17 1.1 2.15 2.42 0 1.34-.94 2.42-2.15 2.42z"/></svg>
                 </div>
                 <div>
@@ -382,8 +382,8 @@ async function sendReply(ticketId: string) {
           <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl p-5 md:p-6">
             <h2 class="font-bold text-white text-sm mb-3">{{ langStore.t.helpDocsTitle }}</h2>
             <div class="flex flex-wrap gap-2">
-              <router-link :to="{ name: 'terms' }" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/[0.08] text-white/60 hover:text-white transition-all">{{ langStore.t.termsTitle }}</router-link>
-              <router-link :to="{ name: 'privacy' }" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/[0.08] text-white/60 hover:text-white transition-all">{{ langStore.t.privacyTitle }}</router-link>
+              <router-link :to="{ name: 'terms' }" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/8 text-white/60 hover:text-white transition-all">{{ langStore.t.termsTitle }}</router-link>
+              <router-link :to="{ name: 'privacy' }" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/8 text-white/60 hover:text-white transition-all">{{ langStore.t.privacyTitle }}</router-link>
             </div>
           </div>
 

@@ -54,7 +54,7 @@ async function removeOrder(id: string) {
 </script>
 
 <template>
-  <div class="space-y-3">
+  <div class="stack-y-3">
     <div class="flex items-center justify-between px-1">
       <p class="text-xs font-bold text-white/55 uppercase tracking-wider flex items-center gap-1.5">
         <BIcon name="LayoutDashboard" class="w-3.5 h-3.5 text-brand-accent" /> Заказы
@@ -64,12 +64,12 @@ async function removeOrder(id: string) {
 
     <div class="flex gap-2.5 overflow-x-auto pb-2 -mx-1 px-1" style="scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.1) transparent">
       <div v-for="status in STATUSES" :key="status"
-        class="flex-shrink-0 w-52 flex flex-col rounded-2xl overflow-hidden"
+        class="shrink-0 w-52 flex flex-col rounded-2xl overflow-hidden"
         :class="STATUS_CONFIG[status].colBg">
 
         <div class="flex items-center justify-between px-3 pt-2.5 pb-2">
           <div class="flex items-center gap-1.5">
-            <div class="w-2 h-2 rounded-full flex-shrink-0" :style="{ background: STATUS_CONFIG[status].dotColor }" />
+            <div class="w-2 h-2 rounded-full shrink-0" :style="{ background: STATUS_CONFIG[status].dotColor }" />
             <span class="text-[11px] font-bold uppercase tracking-wide" :class="STATUS_CONFIG[status].headerColor">
               {{ STATUS_CONFIG[status].label }}
             </span>

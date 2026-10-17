@@ -105,19 +105,19 @@ onMounted(fetchPost)
     <main class="pt-16 md:pt-20 max-w-2xl mx-auto px-4 pb-28 md:pb-16">
 
       <!-- Loading skeleton -->
-      <div v-if="loading" class="mt-6 space-y-4">
+      <div v-if="loading" class="mt-6 stack-y-4">
         <div class="bg-brand-card border border-brand-border rounded-3xl p-6 animate-pulse">
           <div class="flex items-center gap-3 mb-4">
             <div class="w-11 h-11 rounded-full bg-brand-border"></div>
-            <div class="flex-1 space-y-2">
-              <div class="h-3 bg-brand-border rounded w-32"></div>
-              <div class="h-2 bg-brand-border rounded w-20"></div>
+            <div class="flex-1 stack-y-2">
+              <div class="h-3 bg-brand-border rounded-sm w-32"></div>
+              <div class="h-2 bg-brand-border rounded-sm w-20"></div>
             </div>
           </div>
-          <div class="space-y-2">
-            <div class="h-3 bg-brand-border rounded w-full"></div>
-            <div class="h-3 bg-brand-border rounded w-4/5"></div>
-            <div class="h-3 bg-brand-border rounded w-2/3"></div>
+          <div class="stack-y-2">
+            <div class="h-3 bg-brand-border rounded-sm w-full"></div>
+            <div class="h-3 bg-brand-border rounded-sm w-4/5"></div>
+            <div class="h-3 bg-brand-border rounded-sm w-2/3"></div>
           </div>
         </div>
       </div>
@@ -135,7 +135,7 @@ onMounted(fetchPost)
       </div>
 
       <!-- Post -->
-      <div v-else-if="post" class="mt-6 space-y-4">
+      <div v-else-if="post" class="mt-6 stack-y-4">
         <PostCard :post="post" start-expanded />
       </div>
 

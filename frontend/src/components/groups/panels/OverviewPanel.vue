@@ -36,7 +36,7 @@ const totalOrders = () => stats.value ? Object.values(stats.value.ordersByStatus
 <template>
   <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
     <div class="px-6 py-5 border-b border-brand-border flex items-center gap-3">
-      <div class="w-10 h-10 rounded-2xl bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center flex-shrink-0">
+      <div class="w-10 h-10 rounded-2xl bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center shrink-0">
         <BIcon name="BarChart3" class="w-5 h-5 text-brand-accent" />
       </div>
       <div class="flex-1 min-w-0">
@@ -49,7 +49,7 @@ const totalOrders = () => stats.value ? Object.values(stats.value.ordersByStatus
       <div class="w-8 h-8 border-2 border-brand-accent/30 border-t-brand-accent rounded-full animate-spin" />
     </div>
 
-    <div v-else-if="stats" class="p-6 space-y-6">
+    <div v-else-if="stats" class="p-6 stack-y-6">
       <!-- Stat tiles -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div class="bg-brand-bg border border-brand-border rounded-2xl p-4">
@@ -78,15 +78,15 @@ const totalOrders = () => stats.value ? Object.values(stats.value.ordersByStatus
       <!-- Orders by status breakdown -->
       <div v-if="totalOrders() > 0">
         <p class="text-xs font-bold text-white/55 uppercase tracking-wider mb-3 px-1">Заказы по статусам</p>
-        <div class="space-y-2">
+        <div class="stack-y-2">
           <div v-for="(count, status) in stats.ordersByStatus" :key="status" v-show="count > 0"
             class="flex items-center gap-3">
-            <span class="text-xs font-semibold text-white/60 w-24 flex-shrink-0">{{ STATUS_META[status].label }}</span>
+            <span class="text-xs font-semibold text-white/60 w-24 shrink-0">{{ STATUS_META[status].label }}</span>
             <div class="flex-1 h-2 bg-white/5 rounded-full overflow-hidden">
               <div class="h-full rounded-full transition-all"
                 :style="`width:${(count / totalOrders()) * 100}%; background:${STATUS_META[status].color}`" />
             </div>
-            <span class="text-xs font-bold text-white/50 w-6 text-right flex-shrink-0">{{ count }}</span>
+            <span class="text-xs font-bold text-white/50 w-6 text-right shrink-0">{{ count }}</span>
           </div>
         </div>
       </div>

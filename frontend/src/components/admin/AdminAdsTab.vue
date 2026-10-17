@@ -154,7 +154,7 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
 <template>
   <div>
     <!-- Segmented toggle: ad slots vs promo banners (merged from the old separate tab) -->
-    <div class="flex items-center gap-2 mb-5 p-1 rounded-2xl bg-white/[0.04] w-fit">
+    <div class="flex items-center gap-2 mb-5 p-1 rounded-2xl bg-white/4 w-fit">
       <button type="button" @click="switchAdsView('ads')"
         class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
         :class="adsViewMode === 'ads' ? 'bg-orange-500/20 text-orange-400' : 'text-white/40 hover:text-white/70'">
@@ -184,52 +184,52 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
       <p class="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">{{ langStore.t.adminAdShowsWhereTitle }}</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <!-- Лента (hero) -->
-        <div class="rounded-2xl border border-white/[0.08] p-3" style="background:#1F223C">
+        <div class="rounded-2xl border border-white/8 p-3" style="background:#1F223C">
           <div class="w-full h-14 rounded-xl bg-white/5 flex overflow-hidden mb-2">
-            <div class="w-10 h-full bg-white/10 flex-shrink-0" />
-            <div class="flex-1 px-2 py-1.5 space-y-1">
-              <div class="h-1.5 w-8 rounded-full bg-[#4C67CF]/50" />
+            <div class="w-10 h-full bg-white/10 shrink-0" />
+            <div class="flex-1 px-2 py-1.5 stack-y-1">
+              <div class="h-1.5 w-8 rounded-full bg-brand-accent/50" />
               <div class="h-1.5 w-16 rounded-full bg-white/25" />
             </div>
           </div>
           <p class="text-[11px] font-bold text-white/70">{{ langStore.t.adminAdSlotFeedTop }}</p>
           <p class="text-[10px] text-white/30">{{ langStore.t.adminAdSlotFeedTopDesc }}</p>
-          <p class="text-[10px] font-bold text-[#4C67CF] mt-1">{{ langStore.t.adminAdSlotFeedTopPrice }}</p>
+          <p class="text-[10px] font-bold text-brand-accent mt-1">{{ langStore.t.adminAdSlotFeedTopPrice }}</p>
         </div>
         <!-- Левый сайдбар -->
-        <div class="rounded-2xl border border-white/[0.08] p-3" style="background:#1F223C">
+        <div class="rounded-2xl border border-white/8 p-3" style="background:#1F223C">
           <div class="w-full h-14 rounded-xl bg-white/5 flex flex-col overflow-hidden mb-2 p-1.5 gap-1">
-            <div class="h-2 w-10 rounded bg-white/10" />
-            <div class="h-2 w-8 rounded bg-white/10" />
-            <div class="h-2 w-9 rounded bg-[#4C67CF]/40" />
+            <div class="h-2 w-10 rounded-sm bg-white/10" />
+            <div class="h-2 w-8 rounded-sm bg-white/10" />
+            <div class="h-2 w-9 rounded-sm bg-brand-accent/40" />
           </div>
           <p class="text-[11px] font-bold text-white/70">{{ langStore.t.adminAdSlotSidebarLeft }}</p>
           <p class="text-[10px] text-white/30">{{ langStore.t.adminAdSlotSidebarLeftDesc }}</p>
-          <p class="text-[10px] font-bold text-[#4C67CF] mt-1">{{ langStore.t.adminAdSlotSidebarLeftPrice }}</p>
+          <p class="text-[10px] font-bold text-brand-accent mt-1">{{ langStore.t.adminAdSlotSidebarLeftPrice }}</p>
         </div>
         <!-- Правый сайдбар -->
-        <div class="rounded-2xl border border-white/[0.08] p-3" style="background:#1F223C">
+        <div class="rounded-2xl border border-white/8 p-3" style="background:#1F223C">
           <div class="w-full h-14 rounded-xl bg-white/5 flex flex-col overflow-hidden mb-2 p-1.5 gap-1">
-            <div class="h-2 w-9 rounded bg-[#4C67CF]/40" />
-            <div class="h-2 w-full rounded bg-white/10" />
-            <div class="h-2 w-7 rounded bg-white/10" />
+            <div class="h-2 w-9 rounded-sm bg-brand-accent/40" />
+            <div class="h-2 w-full rounded-sm bg-white/10" />
+            <div class="h-2 w-7 rounded-sm bg-white/10" />
           </div>
           <p class="text-[11px] font-bold text-white/70">{{ langStore.t.adminAdSlotSidebarRight }}</p>
           <p class="text-[10px] text-white/30">{{ langStore.t.adminAdSlotSidebarRightDesc }}</p>
-          <p class="text-[10px] font-bold text-[#4C67CF] mt-1">{{ langStore.t.adminAdSlotSidebarRightPrice }}</p>
+          <p class="text-[10px] font-bold text-brand-accent mt-1">{{ langStore.t.adminAdSlotSidebarRightPrice }}</p>
         </div>
         <!-- Страница групп -->
-        <div class="rounded-2xl border border-white/[0.08] p-3" style="background:#1F223C">
+        <div class="rounded-2xl border border-white/8 p-3" style="background:#1F223C">
           <div class="w-full h-14 rounded-xl bg-white/5 flex overflow-hidden mb-2">
-            <div class="w-10 h-full bg-white/10 flex-shrink-0" />
-            <div class="flex-1 px-2 py-1.5 space-y-1">
-              <div class="h-1.5 w-8 rounded-full bg-[#4C67CF]/50" />
+            <div class="w-10 h-full bg-white/10 shrink-0" />
+            <div class="flex-1 px-2 py-1.5 stack-y-1">
+              <div class="h-1.5 w-8 rounded-full bg-brand-accent/50" />
               <div class="h-1.5 w-16 rounded-full bg-white/25" />
             </div>
           </div>
           <p class="text-[11px] font-bold text-white/70">{{ langStore.t.adminAdSlotGroupsPage }}</p>
           <p class="text-[10px] text-white/30">{{ langStore.t.adminAdSlotGroupsPageDesc }}</p>
-          <p class="text-[10px] font-bold text-[#4C67CF] mt-1">{{ langStore.t.adminAdSlotGroupsPagePrice }}</p>
+          <p class="text-[10px] font-bold text-brand-accent mt-1">{{ langStore.t.adminAdSlotGroupsPagePrice }}</p>
         </div>
       </div>
       <p class="text-[11px] text-white/25 mt-3">{{ langStore.t.adminAdSlotsDisclaimer }}</p>
@@ -238,10 +238,10 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
     <!-- Create form -->
     <Transition name="filter-expand">
       <div v-if="showAdForm"
-        class="rounded-3xl border border-[#4C67CF]/20 p-6 mb-5 shadow-xl"
+        class="rounded-3xl border border-brand-accent/20 p-6 mb-5 shadow-xl"
         style="background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.04))">
         <h4 class="font-extrabold text-sm text-white mb-4">{{ langStore.t.adminNewAdTitle }}</h4>
-        <div class="space-y-3">
+        <div class="stack-y-3">
           <input v-model="newAd.title" :placeholder="langStore.t.adminTitlePlaceholderRequired"
             class="adm-input" />
           <textarea v-model="newAd.description" :placeholder="langStore.t.adminDescriptionPlaceholder"
@@ -252,10 +252,10 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
             class="adm-input" />
           <div>
             <p class="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">{{ langStore.t.adminImageOptionalLabel }}</p>
-            <div v-if="newAd.imageUrl" class="flex items-center gap-3 p-3 bg-white/5 border border-white/[0.08] rounded-2xl">
-              <img :src="newAd.imageUrl" class="w-16 h-12 object-cover rounded-xl flex-shrink-0" />
+            <div v-if="newAd.imageUrl" class="flex items-center gap-3 p-3 bg-white/5 border border-white/8 rounded-2xl">
+              <img :src="newAd.imageUrl" class="w-16 h-12 object-cover rounded-xl shrink-0" />
               <span class="flex-1 text-xs text-white/45 truncate">{{ langStore.t.adminUploadedLabel }}</span>
-              <button @click="newAd.imageUrl = ''" class="w-7 h-7 rounded-full bg-white/[0.08] hover:bg-rose-500/20 flex items-center justify-center transition-all">
+              <button @click="newAd.imageUrl = ''" class="w-7 h-7 rounded-full bg-white/8 hover:bg-rose-500/20 flex items-center justify-center transition-all">
                 <BIcon name="X" class="w-3.5 h-3.5 text-white/60" />
               </button>
             </div>
@@ -272,14 +272,14 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
               <span class="text-[9px] font-bold uppercase tracking-wider text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">{{ langStore.t.adLabel }}</span>
               <p class="text-xs font-bold text-white leading-snug mt-1.5">{{ newAd.title }}</p>
               <p v-if="newAd.description" class="text-[11px] text-white/55 mt-0.5 line-clamp-2">{{ newAd.description }}</p>
-              <p v-if="newAd.priceLabel" class="text-[11px] font-bold text-[#4C67CF] mt-1">{{ newAd.priceLabel }}</p>
+              <p v-if="newAd.priceLabel" class="text-[11px] font-bold text-brand-accent mt-1">{{ newAd.priceLabel }}</p>
             </div>
           </div>
         </div>
 
         <div class="flex gap-2 justify-end mt-4">
           <button @click="showAdForm = false"
-            class="px-4 py-2 rounded-xl text-sm text-white/40 hover:text-white hover:bg-white/5 border border-white/[0.08] transition-all">{{ langStore.t.cancel }}</button>
+            class="px-4 py-2 rounded-xl text-sm text-white/40 hover:text-white hover:bg-white/5 border border-white/8 transition-all">{{ langStore.t.cancel }}</button>
           <button @click="submitAd" :disabled="isSubmittingAd || !newAd.title || !newAd.linkUrl"
             class="px-5 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-all shadow-lg"
             style="background:linear-gradient(135deg,#4C67CF,#31458F);box-shadow:0 4px 12px rgba(76,103,207,0.3)">
@@ -289,7 +289,7 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
       </div>
     </Transition>
 
-    <div v-if="isLoadingAds" class="space-y-3">
+    <div v-if="isLoadingAds" class="stack-y-3">
       <div v-for="n in 3" :key="n" class="h-24 rounded-3xl bg-white/5 animate-pulse" />
     </div>
     <div v-else-if="ads.length === 0"
@@ -297,12 +297,12 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
       <BIcon name="Megaphone" class="w-10 h-10 opacity-40" />
       <p class="text-sm font-semibold">{{ langStore.t.adminNoAdsFound }}</p>
     </div>
-    <div v-else class="space-y-3">
+    <div v-else class="stack-y-3">
       <div v-for="ad in ads" :key="ad.id"
         class="rounded-3xl border border-brand-border p-4 flex items-start gap-4 hover:border-white/10 transition-all"
         style="background:#1F223C">
-        <img v-if="ad.image_url" :src="ad.image_url" class="w-16 h-16 rounded-2xl object-cover border border-white/[0.08] flex-shrink-0" />
-        <div v-else class="w-16 h-16 rounded-2xl bg-white/5 border border-white/[0.08] flex-shrink-0 flex items-center justify-center">
+        <img v-if="ad.image_url" :src="ad.image_url" class="w-16 h-16 rounded-2xl object-cover border border-white/8 shrink-0" />
+        <div v-else class="w-16 h-16 rounded-2xl bg-white/5 border border-white/8 shrink-0 flex items-center justify-center">
           <BIcon name="Image" class="w-5 h-5 text-white/20" />
         </div>
         <div class="flex-1 min-w-0">
@@ -316,11 +316,11 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
               {{ ad.status }}
             </span>
             <span class="text-[10px] text-white/30">{{ ad.impressions ?? 0 }} {{ langStore.t.adminImpressionsSuffix }} · {{ ad.clicks ?? 0 }} {{ langStore.t.adminClicksSuffix }}</span>
-            <span v-if="ad.price_label" class="text-[10px] font-bold text-[#4C67CF] bg-[#4C67CF]/10 px-2 py-0.5 rounded-full border border-[#4C67CF]/20">{{ ad.price_label }}</span>
+            <span v-if="ad.price_label" class="text-[10px] font-bold text-brand-accent bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">{{ ad.price_label }}</span>
           </div>
           <p class="font-bold text-sm text-white">{{ ad.title }}</p>
           <p v-if="ad.description" class="text-xs text-white/40 mt-0.5 line-clamp-1">{{ ad.description }}</p>
-          <a :href="safeHref(ad.link_url)" target="_blank"class="text-xs text-[#4C67CF] hover:text-[#4C67CF]/80 mt-0.5 block truncate transition-colors">{{ ad.link_url }}</a>
+          <a :href="safeHref(ad.link_url)" target="_blank"class="text-xs text-brand-accent hover:text-brand-accent/80 mt-0.5 block truncate transition-colors">{{ ad.link_url }}</a>
           <div class="flex items-center gap-2 mt-1.5 flex-wrap">
             <router-link v-if="ad.requester" :to="`/profile/${ad.requester.username}`" target="_blank"
               class="text-[11px] text-white/35 hover:text-white/60 transition-colors">
@@ -329,7 +329,7 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
             <span v-if="ad.contact_info" class="text-[11px] text-white/25">· {{ langStore.t.adminContactLabel }} {{ ad.contact_info }}</span>
           </div>
         </div>
-        <div class="flex flex-col gap-2 flex-shrink-0">
+        <div class="flex flex-col gap-2 shrink-0">
           <template v-if="ad.status === 'pending'">
             <button @click="reviewAd(ad.id, 'active')"
               class="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
@@ -341,7 +341,7 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
             </button>
           </template>
           <button @click="deleteAd(ad.id)" :title="langStore.t.deleteBtn"
-            class="w-7 h-7 rounded-xl bg-white/5 border border-white/[0.08] text-white/40 hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-500/20 flex items-center justify-center transition-all self-end">
+            class="w-7 h-7 rounded-xl bg-white/5 border border-white/8 text-white/40 hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-500/20 flex items-center justify-center transition-all self-end">
             <BIcon name="Trash2" class="w-3.5 h-3.5" />
           </button>
         </div>
@@ -387,14 +387,14 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
         </div>
         <div class="sm:col-span-2">
           <label class="block text-[11px] font-bold text-white/40 uppercase tracking-wider mb-1.5">{{ langStore.t.adminBannerImageLabel }}</label>
-          <div v-if="bannerForm.image_url" class="flex items-center gap-3 p-3 bg-white/5 border border-white/[0.08] rounded-2xl">
-            <img :src="bannerForm.image_url" class="w-20 h-12 object-cover rounded-xl flex-shrink-0 border border-white/10" />
+          <div v-if="bannerForm.image_url" class="flex items-center gap-3 p-3 bg-white/5 border border-white/8 rounded-2xl">
+            <img :src="bannerForm.image_url" class="w-20 h-12 object-cover rounded-xl shrink-0 border border-white/10" />
             <div class="flex-1 min-w-0">
               <p class="text-xs text-white/60">{{ langStore.t.adminImageUploadedLabel }}</p>
               <p class="text-[10px] text-white/30 truncate mt-0.5">{{ bannerForm.image_url }}</p>
             </div>
             <button type="button" @click="bannerForm.image_url = ''"
-              class="w-7 h-7 rounded-full bg-white/[0.08] hover:bg-rose-500/20 flex items-center justify-center transition-all flex-shrink-0">
+              class="w-7 h-7 rounded-full bg-white/8 hover:bg-rose-500/20 flex items-center justify-center transition-all shrink-0">
               <BIcon name="X" class="w-3.5 h-3.5 text-white/60" />
             </button>
           </div>
@@ -417,7 +417,7 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
             class="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold border transition-all"
             :class="bannerForm.is_active
               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-              : 'bg-white/5 text-white/40 border-white/[0.08]'">
+              : 'bg-white/5 text-white/40 border-white/8'">
             <BIcon :name="bannerForm.is_active ? 'Eye' : 'EyeOff'" class="w-4 h-4" />
             {{ bannerForm.is_active ? langStore.t.activeLabel : langStore.t.adminHiddenLabel }}
           </button>
@@ -426,16 +426,16 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
 
       <!-- Live preview -->
       <div v-if="bannerForm.gradient || bannerForm.image_url"
-        class="mt-5 rounded-2xl overflow-hidden h-28 relative border border-white/[0.08]">
+        class="mt-5 rounded-2xl overflow-hidden h-28 relative border border-white/8">
         <img v-if="bannerForm.image_url" :src="bannerForm.image_url" class="absolute inset-0 w-full h-full object-cover" />
         <div class="absolute inset-0" :style="bannerForm.gradient ? `background:${bannerForm.gradient};opacity:0.65` : 'background:#1a1a2e'" />
         <div class="absolute inset-0 p-4 flex flex-col justify-end">
           <span v-if="bannerForm.tag_label"
-            class="self-start mb-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white backdrop-blur-sm">
+            class="self-start mb-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white backdrop-blur-xs">
             {{ bannerForm.tag_label }}
           </span>
-          <p class="text-white font-extrabold text-base leading-tight drop-shadow">{{ bannerForm.title || langStore.t.adminTitleFallbackLabel }}</p>
-          <p v-if="bannerForm.subtitle" class="text-white/75 text-xs mt-0.5 drop-shadow">{{ bannerForm.subtitle }}</p>
+          <p class="text-white font-extrabold text-base leading-tight drop-shadow-sm">{{ bannerForm.title || langStore.t.adminTitleFallbackLabel }}</p>
+          <p v-if="bannerForm.subtitle" class="text-white/75 text-xs mt-0.5 drop-shadow-sm">{{ bannerForm.subtitle }}</p>
         </div>
         <div class="absolute top-2 right-2 text-[9px] font-bold px-2 py-0.5 rounded-full bg-black/50 text-white/60">
           PREVIEW
@@ -451,14 +451,14 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
           {{ langStore.t.adminSaveBtn }}
         </button>
         <button @click="showBannerForm = false"
-          class="px-5 py-2.5 rounded-2xl text-sm font-bold bg-white/5 border border-white/[0.08] text-white/50 hover:text-white transition-all">
+          class="px-5 py-2.5 rounded-2xl text-sm font-bold bg-white/5 border border-white/8 text-white/50 hover:text-white transition-all">
           {{ langStore.t.cancel }}
         </button>
       </div>
     </div>
 
     <!-- Loading -->
-    <div v-if="isLoadingBanners" class="space-y-3">
+    <div v-if="isLoadingBanners" class="stack-y-3">
       <div v-for="n in 3" :key="n" class="h-28 rounded-3xl bg-white/5 animate-pulse" />
     </div>
 
@@ -473,18 +473,18 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
     </div>
 
     <!-- List -->
-    <div v-else class="space-y-3">
+    <div v-else class="stack-y-3">
       <div v-for="b in banners" :key="b.id"
         class="rounded-3xl border border-brand-border overflow-hidden hover:border-[#a78bfa]/20 transition-all group"
         style="background:#1F223C">
         <div class="flex items-center gap-4 p-4">
           <!-- Thumbnail -->
-          <div class="w-24 h-16 rounded-2xl overflow-hidden flex-shrink-0 border border-white/[0.08] relative">
+          <div class="w-24 h-16 rounded-2xl overflow-hidden shrink-0 border border-white/8 relative">
             <img v-if="b.image_url" :src="b.image_url" class="absolute inset-0 w-full h-full object-cover" />
             <div class="absolute inset-0"
               :style="b.gradient ? `background:${b.gradient};opacity:0.7` : 'background:#1a1a2e'" />
             <div class="absolute inset-0 p-1.5 flex flex-col justify-end">
-              <p class="text-white text-[9px] font-extrabold leading-tight drop-shadow line-clamp-2">{{ b.title }}</p>
+              <p class="text-white text-[9px] font-extrabold leading-tight drop-shadow-sm line-clamp-2">{{ b.title }}</p>
             </div>
           </div>
           <!-- Info -->
@@ -505,14 +505,14 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
             <p class="text-[10px] text-white/20 mt-0.5">{{ langStore.t.adminSortOrderLabel }} {{ b.sort_order }}{{ b.price_label ? ` · ${b.price_label}` : '' }}</p>
           </div>
           <!-- Actions -->
-          <div class="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div class="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
             <button @click="toggleBannerActive(b)"
               class="w-8 h-8 rounded-xl border flex items-center justify-center transition-all"
-              :class="b.is_active ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-white/5 border-white/[0.08] text-white/35 hover:text-white'">
+              :class="b.is_active ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20' : 'bg-white/5 border-white/8 text-white/35 hover:text-white'">
               <BIcon :name="b.is_active ? 'Eye' : 'EyeOff'" class="w-3.5 h-3.5" />
             </button>
             <button @click="openBannerEdit(b)"
-              class="w-8 h-8 rounded-xl bg-white/5 border border-white/[0.08] text-white/40 hover:text-white hover:border-[#a78bfa]/30 flex items-center justify-center transition-all">
+              class="w-8 h-8 rounded-xl bg-white/5 border border-white/8 text-white/40 hover:text-white hover:border-[#a78bfa]/30 flex items-center justify-center transition-all">
               <BIcon name="Pencil" class="w-3.5 h-3.5" />
             </button>
             <button @click="deleteBanner(b.id)"
@@ -527,7 +527,7 @@ watchEffect(() => { badges.ads = ads.value.filter((a: any) => a.status === 'pend
     <div v-if="banners.length >= 7"
       class="mt-4 flex items-center gap-3 px-4 py-3 rounded-2xl border"
       style="background:rgba(245,158,11,0.08);border-color:rgba(245,158,11,0.2)">
-      <BIcon name="AlertTriangle" class="w-4 h-4 text-amber-400 flex-shrink-0" />
+      <BIcon name="AlertTriangle" class="w-4 h-4 text-amber-400 shrink-0" />
       <p class="text-xs font-semibold text-amber-400">{{ langStore.t.adminBannerLimitReachedFull }}</p>
     </div>
     </template>

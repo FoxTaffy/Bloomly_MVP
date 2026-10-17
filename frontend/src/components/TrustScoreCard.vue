@@ -10,7 +10,7 @@
     <!-- Header -->
     <div class="flex items-center gap-3 mb-3">
       <!-- Tier icon -->
-      <div class="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
+      <div class="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
         :class="{
           'bg-brand-success/20': trust?.tier === 'green',
           'bg-brand-yellow/20':  trust?.tier === 'yellow',
@@ -33,7 +33,7 @@
 
       <!-- Percent badge -->
       <div v-if="trust?.total_finished > 0"
-        class="flex-shrink-0 px-3 py-1.5 rounded-xl text-sm font-extrabold"
+        class="shrink-0 px-3 py-1.5 rounded-xl text-sm font-extrabold"
         :class="{
           'bg-brand-success/20 text-brand-success': trust?.tier === 'green',
           'bg-brand-yellow/20 text-brand-yellow':   trust?.tier === 'yellow',
@@ -77,7 +77,7 @@
     <!-- Blacklist warning -->
     <div v-if="trust?.is_blacklisted"
       class="flex items-start gap-2 bg-brand-error/10 border border-brand-error/20 rounded-xl px-3 py-2 mt-2">
-      <BIcon name="ShieldOff" class="w-4 h-4 text-brand-error flex-shrink-0 mt-0.5" />
+      <BIcon name="ShieldOff" class="w-4 h-4 text-brand-error shrink-0 mt-0.5" />
       <div>
         <p class="text-xs font-bold text-brand-error">В чёрном списке интерактивов</p>
         <p v-if="trust?.blacklist_reason" class="text-[11px] text-brand-error/70 mt-0.5">{{ trust.blacklist_reason }}</p>

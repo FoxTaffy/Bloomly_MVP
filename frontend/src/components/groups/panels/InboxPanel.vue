@@ -72,8 +72,8 @@ defineExpose({ load })
 
     <!-- Header -->
     <div class="relative px-6 py-5 border-b border-brand-border flex items-center gap-3 overflow-hidden">
-      <div class="absolute inset-0 bg-gradient-to-br from-brand-accent/10 via-transparent to-transparent pointer-events-none" />
-      <div class="relative w-11 h-11 rounded-2xl bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center flex-shrink-0">
+      <div class="absolute inset-0 bg-linear-to-br/srgb from-brand-accent/10 via-transparent to-transparent pointer-events-none" />
+      <div class="relative w-11 h-11 rounded-2xl bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center shrink-0">
         <BIcon name="Inbox" class="w-5 h-5 text-brand-accent" />
         <span v-if="needsReplyCount > 0" class="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-brand-error border-2 border-brand-card text-white text-[10px] font-extrabold leading-none">
           {{ needsReplyCount > 99 ? '99+' : needsReplyCount }}
@@ -83,7 +83,7 @@ defineExpose({ load })
         <h1 class="text-lg font-extrabold text-white">Обращения</h1>
         <p class="text-xs text-white/40">Личные сообщения от подписчиков группе — ответить может любой админ</p>
       </div>
-      <div class="relative flex items-center gap-1.5 flex-shrink-0">
+      <div class="relative flex items-center gap-1.5 shrink-0">
         <span v-if="needsReplyCount > 0" class="px-2.5 py-1 rounded-xl bg-brand-accent/15 border border-brand-accent/30 text-xs font-bold text-brand-accent">
           {{ needsReplyCount }} ждёт{{ needsReplyCount === 1 ? '' : 'ут' }}
         </span>
@@ -115,9 +115,9 @@ defineExpose({ load })
         :disabled="opening === t.id"
         @click="openThread(t)"
         :class="['w-full px-6 py-4 flex items-center gap-3 transition-colors text-left disabled:opacity-50 border-l-2',
-          t.needs_reply ? 'bg-brand-accent/[0.04] hover:bg-brand-accent/[0.07] border-brand-accent' : 'hover:bg-white/[0.02] border-transparent']">
+          t.needs_reply ? 'bg-brand-accent/4 hover:bg-brand-accent/[0.07] border-brand-accent' : 'hover:bg-white/2 border-transparent']">
 
-        <div class="relative flex-shrink-0">
+        <div class="relative shrink-0">
           <img v-if="t.customer.avatar_url" :src="t.customer.avatar_url"
             :class="['w-11 h-11 rounded-2xl object-cover border', t.needs_reply ? 'border-brand-accent/50 ring-2 ring-brand-accent/20' : 'border-brand-border']" @error="onAvatarError" />
           <div v-else :class="['w-11 h-11 rounded-2xl bg-brand-accent/20 border flex items-center justify-center text-sm font-extrabold text-brand-accent', t.needs_reply ? 'border-brand-accent/50 ring-2 ring-brand-accent/20' : 'border-brand-border']">
@@ -129,16 +129,16 @@ defineExpose({ load })
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between gap-2">
             <p class="font-bold text-white text-sm truncate">{{ t.customer.display_name || t.customer.username }}</p>
-            <span class="text-[11px] text-white/40 flex-shrink-0 tabular-nums">{{ formatTime(t.last_message?.created_at ?? t.updated_at) }}</span>
+            <span class="text-[11px] text-white/40 shrink-0 tabular-nums">{{ formatTime(t.last_message?.created_at ?? t.updated_at) }}</span>
           </div>
           <p :class="['text-xs truncate mt-0.5', t.needs_reply ? 'text-white/80 font-medium' : 'text-white/40']">{{ preview(t.last_message) }}</p>
         </div>
 
-        <span v-if="t.needs_reply" class="flex-shrink-0 text-[10px] font-bold text-brand-accent bg-brand-accent/15 border border-brand-accent/25 px-2 py-1 rounded-full whitespace-nowrap">
+        <span v-if="t.needs_reply" class="shrink-0 text-[10px] font-bold text-brand-accent bg-brand-accent/15 border border-brand-accent/25 px-2 py-1 rounded-full whitespace-nowrap">
           Ждёт ответа
         </span>
 
-        <div v-if="opening === t.id" class="flex-shrink-0">
+        <div v-if="opening === t.id" class="shrink-0">
           <div class="w-4 h-4 border-2 border-brand-accent/30 border-t-brand-accent rounded-full animate-spin" />
         </div>
       </button>

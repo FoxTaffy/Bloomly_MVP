@@ -1,7 +1,7 @@
 <template>
   <div
     v-click-outside="() => emit('close')"
-    class="absolute bottom-full right-0 mb-1.5 z-30 w-80 max-md:top-full max-md:bottom-auto max-md:mt-2 max-md:mb-0 max-md:-right-12 max-md:w-[calc(100vw-2rem)] max-md:max-w-80 bg-brand-card border border-brand-border rounded-2xl shadow-2xl p-4 space-y-3"
+    class="absolute bottom-full right-0 mb-1.5 z-30 w-80 max-md:top-full max-md:bottom-auto max-md:mt-2 max-md:mb-0 max-md:-right-12 max-md:w-[calc(100vw-2rem)] max-md:max-w-80 bg-brand-card border border-brand-border rounded-2xl shadow-2xl p-4 stack-y-3"
   >
     <div class="flex items-center justify-between">
       <span class="text-sm font-bold text-white">Время отправки</span>
@@ -51,7 +51,7 @@
     </div>
 
     <!-- Calendar panel -->
-    <div v-if="showCalendar" class="bg-brand-bg border border-brand-border rounded-2xl p-3 space-y-2">
+    <div v-if="showCalendar" class="bg-brand-bg border border-brand-border rounded-2xl p-3 stack-y-2">
       <div class="flex items-center justify-between">
         <button type="button" @click="shiftMonth(-1)" class="p-1 rounded-lg text-white/50 hover:text-white hover:bg-brand-card transition-colors">
           <BIcon name="ChevronLeft" class="w-4 h-4" />
@@ -252,7 +252,8 @@ const vClickOutside = {
 </script>
 
 <style scoped>
+@reference "../assets/style.css";
 .time-part {
-  @apply w-9 bg-transparent border-0 border-b-2 border-brand-border text-center text-lg font-bold text-white placeholder-white/25 outline-none focus:border-brand-accent transition-colors;
+  @apply w-9 bg-transparent border-0 border-b-2 border-brand-border text-center text-lg font-bold text-white placeholder-white/25 outline-hidden focus:border-brand-accent transition-colors;
 }
 </style>

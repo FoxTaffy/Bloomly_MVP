@@ -12,12 +12,12 @@
           :maxlength="field === 'year' ? 4 : 2"
           :placeholder="placeholders[field]"
           class="date-part text-center"
-          :class="[field === 'year' ? 'w-20' : 'w-14', isInvalid ? '!border-rose-500 !text-rose-400' : '']"
+          :class="[field === 'year' ? 'w-20' : 'w-14', isInvalid ? 'border-rose-500! text-rose-400!' : '']"
           @input="onFieldInput(field, i)"
           @keydown.backspace="onFieldBackspace(field, i, $event)"
         />
       </template>
-      <BIcon name="Calendar" class="w-4 h-4 text-white/25 ml-1 flex-shrink-0" />
+      <BIcon name="Calendar" class="w-4 h-4 text-white/25 ml-1 shrink-0" />
     </div>
     <p v-if="isInvalid" class="text-[11px] text-rose-400 mt-1">{{ invalidReason }}</p>
   </div>
@@ -142,8 +142,9 @@ function tryEmit() {
 </script>
 
 <style scoped>
+@reference "../assets/style.css";
 .date-part {
-  @apply bg-brand-bg border border-brand-border rounded-xl py-2.5 text-sm font-semibold text-white placeholder-brand-muted/50 focus:outline-none focus:border-brand-accent/50 transition-all;
+  @apply bg-brand-bg border border-brand-border rounded-xl py-2.5 text-sm font-semibold text-white placeholder-brand-muted/50 focus:outline-hidden focus:border-brand-accent/50 transition-all;
 }
 
 @keyframes date-shake {

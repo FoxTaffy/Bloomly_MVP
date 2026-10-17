@@ -31,7 +31,7 @@ onActivated(fetchGroupsOverview)
 
 <template>
   <div>
-    <div v-if="isLoadingGroupsOverview" class="space-y-5">
+    <div v-if="isLoadingGroupsOverview" class="stack-y-5">
       <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <div v-for="n in 6" :key="n" class="h-24 rounded-2xl bg-white/5 animate-pulse" />
       </div>
@@ -67,7 +67,7 @@ onActivated(fetchGroupsOverview)
         </div>
         <div v-else class="divide-y divide-brand-border">
           <router-link v-for="e in groupsOverview.events" :key="e.id" :to="`/groups/${e.groupSlug}`" target="_blank"
-            class="grid grid-cols-1 lg:grid-cols-[2fr_1.5fr_1fr_1fr_0.8fr] gap-2 lg:gap-3 items-center px-5 py-3.5 hover:bg-white/[0.03] transition-all">
+            class="grid grid-cols-1 lg:grid-cols-[2fr_1.5fr_1fr_1fr_0.8fr] gap-2 lg:gap-3 items-center px-5 py-3.5 hover:bg-white/3 transition-all">
             <p class="text-sm font-bold text-white truncate">{{ e.title }}</p>
             <p class="text-xs text-white/50 truncate">{{ e.groupName }}</p>
             <p class="text-xs text-white/50">{{ formatDate(e.startsAt) }}</p>

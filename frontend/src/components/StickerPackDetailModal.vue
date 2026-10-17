@@ -41,19 +41,19 @@ onMounted(fetchDetail)
 <template>
   <Teleport to="body">
     <Transition name="resolve-fade" appear>
-      <div class="fixed inset-0 z-[750] flex items-end sm:items-center justify-center" @click.self="emit('close')">
-        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="emit('close')" />
+      <div class="fixed inset-0 z-750 flex items-end sm:items-center justify-center" @click.self="emit('close')">
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-xs" @click="emit('close')" />
 
         <div class="relative w-full sm:max-w-2xl bg-[#13131f] border border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden z-10 max-h-[90vh] flex flex-col">
-          <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/10 flex-shrink-0">
+          <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/10 shrink-0">
             <h2 class="text-lg font-extrabold text-white">Статистика стикер-пака</h2>
             <button @click="emit('close')"
-              class="w-8 h-8 flex items-center justify-center rounded-xl bg-white/[0.05] hover:bg-white/10 text-white/40 hover:text-white transition-all active:scale-90 flex-shrink-0">
+              class="w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all active:scale-90 shrink-0">
               <BIcon name="X" class="w-4 h-4" />
             </button>
           </div>
 
-          <div class="px-6 py-5 space-y-5 overflow-y-auto">
+          <div class="px-6 py-5 stack-y-5 overflow-y-auto">
             <div v-if="isLoading" class="flex items-center justify-center py-16">
               <div class="w-8 h-8 border-2 border-white/10 border-t-white/50 rounded-full animate-spin" />
             </div>
@@ -63,7 +63,7 @@ onMounted(fetchDetail)
             <template v-else-if="detail">
               <!-- Pack header -->
               <div class="flex items-center gap-3">
-                <div class="w-14 h-14 rounded-2xl flex-shrink-0 overflow-hidden border border-white/10"
+                <div class="w-14 h-14 rounded-2xl shrink-0 overflow-hidden border border-white/10"
                   :style="detail.pack.cover_bg_color ? `background:${detail.pack.cover_bg_color}` : 'background:rgba(255,255,255,0.05)'">
                   <img v-if="cover" :src="cover" class="w-full h-full object-cover" />
                   <div v-else class="w-full h-full flex items-center justify-center text-2xl">🎭</div>
@@ -71,12 +71,12 @@ onMounted(fetchDetail)
                 <div class="flex-1 min-w-0">
                   <p class="text-base font-extrabold text-white truncate flex items-center gap-1.5">
                     {{ detail.pack.name }}
-                    <span v-if="detail.pack.is_nsfw" class="text-[9px] font-extrabold px-1 py-0.5 rounded bg-rose-500/20 text-rose-400">18+</span>
+                    <span v-if="detail.pack.is_nsfw" class="text-[9px] font-extrabold px-1 py-0.5 rounded-sm bg-rose-500/20 text-rose-400">18+</span>
                   </p>
                   <p class="text-xs text-white/40 truncate">@{{ detail.pack.author?.username ?? '—' }}</p>
                   <div v-if="detail.pack.tags?.length" class="flex flex-wrap gap-1 mt-1.5">
                     <span v-for="tag in detail.pack.tags.slice(0,6)" :key="tag"
-                      class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-white/[0.06] text-white/40">#{{ tag }}</span>
+                      class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-white/6 text-white/40">#{{ tag }}</span>
                   </div>
                 </div>
               </div>
@@ -123,7 +123,7 @@ onMounted(fetchDetail)
                 <p class="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">Топ стикеров в паке</p>
                 <div class="grid grid-cols-6 sm:grid-cols-8 gap-2">
                   <div v-for="s in detail.topStickersInPack" :key="s.url"
-                    class="relative rounded-lg overflow-hidden border border-white/10 aspect-square bg-white/[0.03]">
+                    class="relative rounded-lg overflow-hidden border border-white/10 aspect-square bg-white/3">
                     <img :src="s.url" class="w-full h-full object-contain p-1" loading="lazy" />
                     <span class="absolute bottom-0 right-0 text-[8px] font-black text-white bg-black/70 px-1 rounded-tl-md">{{ formatNum(s.total) }}</span>
                   </div>
@@ -134,7 +134,7 @@ onMounted(fetchDetail)
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div v-if="detail.byAge.length">
                   <p class="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">По возрасту</p>
-                  <div class="space-y-1.5">
+                  <div class="stack-y-1.5">
                     <div v-for="item in detail.byAge" :key="item.label">
                       <div class="flex items-center justify-between text-[11px] mb-0.5">
                         <span class="text-white/60 font-semibold">{{ item.label }}</span>
@@ -148,7 +148,7 @@ onMounted(fetchDetail)
                 </div>
                 <div v-if="detail.byCountry.length">
                   <p class="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">По стране</p>
-                  <div class="space-y-1.5">
+                  <div class="stack-y-1.5">
                     <div v-for="item in detail.byCountry" :key="item.label">
                       <div class="flex items-center justify-between text-[11px] mb-0.5">
                         <span class="text-white/60 font-semibold truncate max-w-[140px]">{{ item.label }}</span>

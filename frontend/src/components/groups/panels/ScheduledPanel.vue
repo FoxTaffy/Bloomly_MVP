@@ -128,13 +128,13 @@ watch(() => props.groupId, fetchList)
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="stack-y-4">
     <p class="text-xs text-white/40">
       Черновики и запланированные публикации от имени группы — создаются через иконку часов в композере на главной странице (выберите группу в переключателе «от чьего имени»).
     </p>
 
     <div v-if="actionError" class="flex items-center gap-2 bg-brand-error/10 border border-brand-error/30 text-brand-error text-xs font-semibold rounded-2xl px-4 py-3">
-      <BIcon name="AlertTriangle" class="w-4 h-4 flex-shrink-0" /> {{ actionError }}
+      <BIcon name="AlertTriangle" class="w-4 h-4 shrink-0" /> {{ actionError }}
     </div>
 
     <div v-if="isLoading" class="text-center text-white/40 text-sm py-10">Загрузка…</div>
@@ -150,17 +150,17 @@ watch(() => props.groupId, fetchList)
           <h2 class="text-xs font-bold uppercase tracking-wide text-white/40 mb-2 px-1">
             {{ STATUS_LABELS[key] }} ({{ group.length }})
           </h2>
-          <div class="space-y-2 mb-4">
+          <div class="stack-y-2 mb-4">
             <div v-for="p in group" :key="p.id" class="bg-brand-card border border-brand-border rounded-2xl px-5 py-4">
-              <div v-if="editingId === p.id" class="space-y-2">
+              <div v-if="editingId === p.id" class="stack-y-2">
                 <textarea
                   v-model="editContent"
                   rows="3"
-                  class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-brand-accent transition-colors resize-none"
+                  class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-sm text-white outline-hidden focus:border-brand-accent transition-colors resize-none"
                 />
                 <div class="grid grid-cols-2 gap-2">
-                  <input v-model="editDate" type="date" class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-brand-accent transition-colors" />
-                  <input v-model="editTime" type="time" class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-brand-accent transition-colors" />
+                  <input v-model="editDate" type="date" class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white outline-hidden focus:border-brand-accent transition-colors" />
+                  <input v-model="editTime" type="time" class="bg-brand-bg border border-brand-border rounded-xl px-3 py-2 text-xs text-white outline-hidden focus:border-brand-accent transition-colors" />
                 </div>
                 <p class="text-[11px] text-white/35">Оставьте дату и время пустыми для черновика, или укажите их, чтобы запланировать публикацию.</p>
                 <p v-if="editError" class="text-[11px] text-brand-error">{{ editError }}</p>
@@ -171,7 +171,7 @@ watch(() => props.groupId, fetchList)
               </div>
               <div v-else class="flex items-start gap-3">
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm text-white/90 whitespace-pre-wrap break-words line-clamp-3">{{ p.content || '(без текста)' }}</p>
+                  <p class="text-sm text-white/90 whitespace-pre-wrap wrap-break-word line-clamp-3">{{ p.content || '(без текста)' }}</p>
                   <div class="flex flex-wrap items-center gap-2 mt-2 text-[11px] text-white/45">
                     <span v-if="p.scheduled_at" class="inline-flex items-center gap-1">
                       <BIcon name="Clock" class="w-3 h-3" /> {{ formatScheduled(p) }}
@@ -187,7 +187,7 @@ watch(() => props.groupId, fetchList)
                   </div>
                   <p v-if="p.status === 'failed' && p.last_error" class="text-[11px] text-brand-error mt-1.5">{{ p.last_error }}</p>
                 </div>
-                <div class="flex items-center gap-1.5 flex-shrink-0">
+                <div class="flex items-center gap-1.5 shrink-0">
                   <button @click="startEdit(p)" title="Редактировать" class="p-2 rounded-xl text-white/55 hover:text-white hover:bg-brand-bg transition-all">
                     <BIcon name="Pencil" class="w-4 h-4" />
                   </button>

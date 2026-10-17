@@ -73,7 +73,7 @@ onMounted(load)
 <template>
   <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
     <div class="px-6 py-5 border-b border-brand-border flex items-center gap-3">
-      <div class="w-10 h-10 rounded-2xl bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center flex-shrink-0">
+      <div class="w-10 h-10 rounded-2xl bg-brand-accent/15 border border-brand-accent/25 flex items-center justify-center shrink-0">
         <BIcon name="Briefcase" class="w-5 h-5 text-brand-accent" />
       </div>
       <div class="flex-1 min-w-0">
@@ -82,7 +82,7 @@ onMounted(load)
       </div>
     </div>
 
-    <div v-if="!businessEnabled" class="px-6 py-16 text-center space-y-3">
+    <div v-if="!businessEnabled" class="px-6 py-16 text-center stack-y-3">
       <BIcon name="Briefcase" class="w-8 h-8 text-white/20 mx-auto" />
       <p class="text-white/40 text-sm">Приём заказов не включён для этой группы</p>
       <button @click="router.push({ name: 'group-settings', params: { slugOrId: groupSlug } })"
@@ -116,14 +116,14 @@ onMounted(load)
       <!-- Deadlines -->
       <div v-if="deadlineList.length" class="mt-6">
         <p class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 px-1">Дедлайны</p>
-        <div class="space-y-1.5">
+        <div class="stack-y-1.5">
           <div v-for="order in deadlineList" :key="order.id"
             class="flex items-center justify-between bg-brand-bg border border-brand-border rounded-xl px-3.5 py-2.5">
             <div class="min-w-0">
               <p class="text-sm font-semibold text-white truncate">{{ order.title }}</p>
               <p class="text-[11px] text-white/40">{{ order.customer.display_name || order.customer.username }} · {{ STATUS_LABEL[order.status] }}</p>
             </div>
-            <span class="text-xs font-bold px-2 py-1 rounded-lg flex-shrink-0"
+            <span class="text-xs font-bold px-2 py-1 rounded-lg shrink-0"
               :class="{
                 'bg-brand-error/15 text-brand-error': deadlineState(order) === 'overdue',
                 'bg-amber-500/15 text-amber-400': deadlineState(order) === 'soon',

@@ -54,7 +54,7 @@ function open() {
 
 <template>
   <div
-    class="mb-0.5 w-[240px] rounded-2xl overflow-hidden border border-brand-border bg-brand-bg shadow-sm cursor-pointer hover:brightness-110 active:scale-[0.98] transition-all"
+    class="mb-0.5 w-[240px] rounded-2xl overflow-hidden border border-brand-border bg-brand-bg shadow-xs cursor-pointer hover:brightness-110 active:scale-[0.98] transition-all"
     :class="isMine ? 'rounded-br-md' : 'rounded-bl-md'"
     @click.stop="open"
   >
@@ -65,7 +65,7 @@ function open() {
       <BIcon name="FolderX" class="w-4 h-4" /> Группа недоступна
     </div>
     <template v-else>
-      <div class="relative w-full h-16 bg-gradient-to-br from-brand-accent/30 to-purple-900/40 overflow-hidden">
+      <div class="relative w-full h-16 bg-linear-to-br/srgb from-brand-accent/30 to-purple-900/40 overflow-hidden">
         <img v-if="group.banner_url" :src="group.banner_url" class="absolute inset-0 w-full h-full object-cover" />
       </div>
       <div class="px-3 pb-3 -mt-6">
@@ -77,7 +77,7 @@ function open() {
         </div>
         <p class="text-sm font-bold text-white truncate mt-1.5 flex items-center gap-1">
           {{ group.name }}
-          <BIcon v-if="group.is_verified" name="BadgeCheck" class="w-3.5 h-3.5 text-brand-accent flex-shrink-0" />
+          <BIcon v-if="group.is_verified" name="BadgeCheck" class="w-3.5 h-3.5 text-brand-accent shrink-0" />
         </p>
         <p class="text-[11px] text-white/50 mt-0.5">{{ membersCount }} участников</p>
         <div class="mt-2.5 flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-brand-accent/15 text-brand-accent text-xs font-bold">

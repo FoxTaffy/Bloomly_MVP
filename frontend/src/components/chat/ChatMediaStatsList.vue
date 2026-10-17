@@ -6,9 +6,9 @@
   <button v-for="stat in nonEmpty" :key="stat.key"
     @click="emit('open', stat.key)"
     :class="['w-full flex items-center gap-3 py-2.5 hover:bg-brand-bg/40 transition-colors text-left', rowClass]">
-    <BIcon :name="stat.icon" class="w-4 h-4 text-brand-accent flex-shrink-0" />
+    <BIcon :name="stat.icon" class="w-4 h-4 text-brand-accent shrink-0" />
     <span class="text-sm text-white/85">{{ stat.count }} {{ stat.label.toLowerCase() }}</span>
-    <BIcon name="ChevronRight" class="w-3.5 h-3.5 text-white/25 ml-auto flex-shrink-0" />
+    <BIcon name="ChevronRight" class="w-3.5 h-3.5 text-white/25 ml-auto shrink-0" />
   </button>
 </template>
 

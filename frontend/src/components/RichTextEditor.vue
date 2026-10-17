@@ -60,7 +60,7 @@ const exec = (command: string) => {
     <div
       ref="editor"
       contenteditable="true"
-      class="rte-content w-full px-4 py-2.5 text-sm text-white outline-none min-h-[80px] max-h-60 overflow-y-auto"
+      class="rte-content w-full px-4 py-2.5 text-sm text-white outline-hidden min-h-[80px] max-h-60 overflow-y-auto"
       :data-placeholder="placeholder ?? ''"
       @input="onInput"
     />

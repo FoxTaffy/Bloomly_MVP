@@ -32,7 +32,7 @@ function avatarInitial(name: string | null | undefined) {
     @click="router.push(`/profile/${friend.username}`)"
   >
     <!-- Avatar + online dot -->
-    <div class="relative flex-shrink-0">
+    <div class="relative shrink-0">
       <img
         v-if="friend.avatar_url"
         :src="friend.avatar_url"
@@ -72,7 +72,7 @@ function avatarInitial(name: string | null | undefined) {
     </div>
 
     <!-- Actions (visible on hover) -->
-    <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+    <div class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
       <button
         class="w-8 h-8 rounded-xl bg-brand-accent/15 hover:bg-brand-accent/30 flex items-center justify-center text-brand-accent transition-colors"
         :title="langStore.t.msgBtnTitle"

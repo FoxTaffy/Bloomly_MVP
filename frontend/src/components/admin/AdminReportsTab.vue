@@ -112,7 +112,7 @@ watchEffect(() => { badges.reports = reports.value.filter((r: any) => r.status =
 <template>
   <div>
     <!-- Segmented toggle: user reports vs ban/freeze appeals (merged from the old separate tab) -->
-    <div class="flex items-center gap-2 mb-5 p-1 rounded-2xl bg-white/[0.04] w-fit">
+    <div class="flex items-center gap-2 mb-5 p-1 rounded-2xl bg-white/4 w-fit">
       <button type="button" @click="switchReportsView('reports')"
         class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
         :class="reportsViewMode === 'reports' ? 'bg-amber-500/20 text-amber-400' : 'text-white/40 hover:text-white/70'">
@@ -140,7 +140,7 @@ watchEffect(() => { badges.reports = reports.value.filter((r: any) => r.status =
       </button>
     </div>
 
-    <div v-if="isLoadingReports" class="space-y-3">
+    <div v-if="isLoadingReports" class="stack-y-3">
       <div v-for="n in 4" :key="n" class="h-24 rounded-2xl border border-brand-border bg-brand-card animate-pulse" />
     </div>
     <div v-else-if="reports.length === 0"
@@ -148,14 +148,14 @@ watchEffect(() => { badges.reports = reports.value.filter((r: any) => r.status =
       <BIcon name="Flag" class="w-10 h-10 opacity-40" />
       <p class="text-sm font-semibold">{{ langStore.t.adminNoReports }}</p>
     </div>
-    <div v-else class="space-y-3">
+    <div v-else class="stack-y-3">
       <div v-for="folder in reports" :key="reportGroupKey(folder)"
         class="rounded-2xl border border-brand-border bg-brand-card p-4">
         <div class="flex items-start justify-between gap-4 flex-wrap">
           <div class="min-w-0 flex-1">
             <!-- Tag pills -->
             <div class="flex items-center gap-1.5 mb-2 flex-wrap">
-              <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-white/[0.08] text-white/60">
+              <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-white/8 text-white/60">
                 {{ REPORT_TARGET_LABEL[folder.target_type] ?? folder.target_type }}
               </span>
               <span v-if="folder.target_type === 'post' && folder.post?.is_nsfw"
@@ -182,7 +182,7 @@ watchEffect(() => { badges.reports = reports.value.filter((r: any) => r.status =
             <div v-if="folder.reports[0].evidence_urls?.length" class="flex gap-2 mt-2 flex-wrap">
               <button v-for="(url, ei) in folder.reports[0].evidence_urls" :key="ei" type="button"
                 @click="openReportEvidence(folder.reports[0].evidence_urls, ei)"
-                class="w-14 h-14 rounded-lg overflow-hidden border border-white/[0.08] flex-shrink-0">
+                class="w-14 h-14 rounded-lg overflow-hidden border border-white/8 shrink-0">
                 <SafeMedia :src="url" source="report-evidence" class="w-full h-full object-cover" />
               </button>
             </div>
@@ -204,7 +204,7 @@ watchEffect(() => { badges.reports = reports.value.filter((r: any) => r.status =
             </button>
             <Transition name="filter-expand">
               <div v-if="folder.count > 1 && expandedReportGroups.has(reportGroupKey(folder))"
-                class="mt-2 space-y-1.5 border-t border-brand-border pt-2 max-h-40 overflow-y-auto">
+                class="mt-2 stack-y-1.5 border-t border-brand-border pt-2 max-h-40 overflow-y-auto">
                 <p v-for="r in folder.reports" :key="r.id" class="text-xs text-white/50">
                   {{ r.reason }}
                   <span class="text-white/25">— @{{ r.reporter?.username }} · {{ formatDate(r.created_at) }}</span>
@@ -214,7 +214,7 @@ watchEffect(() => { badges.reports = reports.value.filter((r: any) => r.status =
           </div>
 
           <!-- Actions -->
-          <div class="flex items-center gap-2 flex-shrink-0">
+          <div class="flex items-center gap-2 shrink-0">
             <button @click="openResolveModal(folder)" :disabled="folder.status !== 'pending'"
               class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
               <BIcon name="TriangleAlert" class="w-3.5 h-3.5" /> {{ langStore.t.adminResolveProblemBtn }}
@@ -233,7 +233,7 @@ watchEffect(() => { badges.reports = reports.value.filter((r: any) => r.status =
     </template>
 
     <template v-else>
-    <div v-if="isLoadingAppeals" class="space-y-3">
+    <div v-if="isLoadingAppeals" class="stack-y-3">
       <div v-for="n in 3" :key="n" class="h-28 rounded-2xl border border-brand-border bg-brand-card animate-pulse" />
     </div>
     <div v-else-if="appeals.length === 0"
@@ -241,21 +241,21 @@ watchEffect(() => { badges.reports = reports.value.filter((r: any) => r.status =
       <BIcon name="Gavel" class="w-10 h-10 opacity-40" />
       <p class="text-sm font-semibold">{{ langStore.t.adminNoAppealsPending }}</p>
     </div>
-    <div v-else class="space-y-3">
+    <div v-else class="stack-y-3">
       <div v-for="a in appeals" :key="a.id" class="rounded-2xl border border-brand-border bg-brand-card p-4">
         <div class="flex items-start gap-3">
-          <img v-if="a.user?.avatar_url" :src="a.user.avatar_url" class="w-9 h-9 rounded-full object-cover border border-white/10 flex-shrink-0" />
-          <div v-else class="w-9 h-9 rounded-full border border-violet-500/20 bg-violet-500/10 flex items-center justify-center text-xs font-bold text-violet-400 flex-shrink-0">
+          <img v-if="a.user?.avatar_url" :src="a.user.avatar_url" class="w-9 h-9 rounded-full object-cover border border-white/10 shrink-0" />
+          <div v-else class="w-9 h-9 rounded-full border border-violet-500/20 bg-violet-500/10 flex items-center justify-center text-xs font-bold text-violet-400 shrink-0">
             {{ (a.user?.display_name || a.user?.username || '?')[0].toUpperCase() }}
           </div>
           <div class="min-w-0 flex-1">
             <p class="font-bold text-sm text-white truncate">{{ a.user?.display_name || a.user?.username }} <span class="text-white/30 font-normal">@{{ a.user?.username }}</span></p>
             <p class="text-xs text-white/40 mt-1"><span class="font-bold text-amber-400">{{ langStore.t.adminWarnReasonLabel }}</span> {{ a.reason }}</p>
             <img v-if="a.image_url" :src="a.image_url" class="mt-2 max-h-32 rounded-xl border border-white/10 object-cover" />
-            <p class="text-xs text-white/60 mt-2 bg-white/[0.03] border border-white/[0.08] rounded-xl p-2.5"><span class="font-bold text-violet-400">{{ langStore.t.adminAppealLabel }}</span> {{ a.appeal_text }}</p>
+            <p class="text-xs text-white/60 mt-2 bg-white/3 border border-white/8 rounded-xl p-2.5"><span class="font-bold text-violet-400">{{ langStore.t.adminAppealLabel }}</span> {{ a.appeal_text }}</p>
             <p class="text-[11px] text-white/25 mt-1.5">{{ formatDate(a.appeal_created_at) }}</p>
           </div>
-          <div class="flex flex-col gap-2 flex-shrink-0">
+          <div class="flex flex-col gap-2 shrink-0">
             <button @click="decideAppeal(a.id, 'accepted')" :disabled="decidingAppealId === a.id"
               class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-30 transition-all">
               <BIcon name="Check" class="w-3.5 h-3.5" /> {{ langStore.t.adminAcceptBtn }}

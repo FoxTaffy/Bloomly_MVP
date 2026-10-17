@@ -152,7 +152,7 @@ onBeforeUnmount(() => {
 
     <!-- Плитка, которая следует за пальцем -->
     <Teleport to="body">
-      <div v-if="ghost" class="fixed z-[200] pointer-events-none rounded-2xl overflow-hidden shadow-2xl ring-2 ring-brand-purple bg-[#1b1b30]/90 scale-105"
+      <div v-if="ghost" class="fixed z-200 pointer-events-none rounded-2xl overflow-hidden shadow-2xl ring-2 ring-brand-purple bg-[#1b1b30]/90 scale-105"
         :style="{ left: ghost.x + 'px', top: ghost.y + 'px', width: ghost.w + 'px', height: ghost.h + 'px' }">
         <slot name="ghost" :item="ghost.item" />
       </div>

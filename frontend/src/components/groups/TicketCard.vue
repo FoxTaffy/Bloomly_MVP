@@ -32,7 +32,7 @@ const priceFormatted = computed(() => {
     <div class="p-4 pb-3">
       <div class="flex items-start justify-between gap-2 mb-0.5">
         <h4 class="text-white font-bold text-sm leading-tight flex-1">{{ tier.name }}</h4>
-        <span class="text-[10px] font-bold px-2 py-0.5 rounded-lg flex-shrink-0 mt-0.5"
+        <span class="text-[10px] font-bold px-2 py-0.5 rounded-lg shrink-0 mt-0.5"
           :class="isSoldOut
             ? 'bg-brand-error/15 text-brand-error border border-brand-error/20'
             : 'bg-brand-border/60 text-white/55 border border-brand-border'">
@@ -60,10 +60,10 @@ const priceFormatted = computed(() => {
     </div>
 
     <!-- Perks list -->
-    <div v-if="tier.perks?.length" class="px-4 pb-3 space-y-1">
+    <div v-if="tier.perks?.length" class="px-4 pb-3 stack-y-1">
       <div v-for="(perk, i) in tier.perks" :key="i"
         class="flex items-center gap-2 text-[11px] text-white/50">
-        <span class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+        <span class="w-1.5 h-1.5 rounded-full shrink-0"
           :class="isSoldOut ? 'bg-white/20' : 'bg-brand-accent/60'" />
         {{ perk }}
       </div>

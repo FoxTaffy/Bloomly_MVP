@@ -81,10 +81,10 @@ onMounted(() => { walletStore.fetchBalance().catch(() => {}) })
 <template>
   <Teleport to="body">
     <Transition name="donate-fade">
-      <div class="fixed inset-0 z-[700] flex items-end sm:items-center justify-center"
+      <div class="fixed inset-0 z-700 flex items-end sm:items-center justify-center"
         @click.self="emit('close')">
         <!-- Backdrop -->
-        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" @click="emit('close')" />
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-xs" @click="emit('close')" />
 
         <!-- Sheet -->
         <div class="relative w-full sm:max-w-sm bg-[#13131f] border border-white/8 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden z-10"
@@ -100,7 +100,7 @@ onMounted(() => { walletStore.fetchBalance().catch(() => {}) })
           <template v-if="step === 'pick'">
             <!-- Group header -->
             <div class="px-6 pt-5 pb-4 flex items-center gap-4">
-              <div class="w-14 h-14 rounded-2xl overflow-hidden border-2 flex-shrink-0"
+              <div class="w-14 h-14 rounded-2xl overflow-hidden border-2 shrink-0"
                 :style="`border-color: ${accent}40`">
                 <img v-if="group.avatar_url" :src="group.avatar_url" class="w-full h-full object-cover" />
                 <div v-else class="w-full h-full flex items-center justify-center text-xl font-bold"
@@ -113,12 +113,12 @@ onMounted(() => { walletStore.fetchBalance().catch(() => {}) })
                 <p class="text-base font-extrabold text-white leading-tight truncate">{{ group.name }}</p>
               </div>
               <button @click="emit('close')"
-                class="w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all flex-shrink-0">
+                class="w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all shrink-0">
                 <BIcon name="X" class="w-4 h-4" />
               </button>
             </div>
 
-            <div class="px-6 pb-6 space-y-5">
+            <div class="px-6 pb-6 stack-y-5">
               <!-- Wallet balance -->
               <div class="flex items-center justify-center gap-1.5 text-xs text-white/35">
                 <BIcon name="Wallet" class="w-3.5 h-3.5" />
@@ -157,7 +157,7 @@ onMounted(() => { walletStore.fetchBalance().catch(() => {}) })
                   placeholder="Другая сумма"
                   :value="customAmount"
                   @input="onCustomInput"
-                  class="w-full bg-white/5 border rounded-2xl px-4 py-3.5 text-center text-white text-base font-bold placeholder-white/20 outline-none transition-all"
+                  class="w-full bg-white/5 border rounded-2xl px-4 py-3.5 text-center text-white text-base font-bold placeholder-white/20 outline-hidden transition-all"
                   :style="customAmount
                     ? `border-color: ${accent}50; box-shadow: 0 0 0 3px ${accent}12`
                     : 'border-color: rgba(255,255,255,0.08)'" />
@@ -170,7 +170,7 @@ onMounted(() => { walletStore.fetchBalance().catch(() => {}) })
                 type="text"
                 maxlength="280"
                 placeholder="Сообщение (необязательно)"
-                class="w-full bg-white/5 border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-white/20 transition-all" />
+                class="w-full bg-white/5 border border-white/8 rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-white/20 transition-all" />
 
               <!-- Min amount hint -->
               <p class="flex items-center justify-center gap-1 text-[11px] text-white/25 text-center">
@@ -197,7 +197,7 @@ onMounted(() => { walletStore.fetchBalance().catch(() => {}) })
 
           <!-- STEP: Insufficient balance -->
           <template v-else-if="step === 'insufficient'">
-            <div class="px-6 py-10 text-center space-y-5">
+            <div class="px-6 py-10 text-center stack-y-5">
               <div class="w-20 h-20 rounded-full flex items-center justify-center mx-auto bg-brand-error/15 border-2 border-brand-error/30">
                 <BIcon name="AlertCircle" class="w-9 h-9 text-brand-error" />
               </div>
@@ -225,7 +225,7 @@ onMounted(() => { walletStore.fetchBalance().catch(() => {}) })
 
           <!-- STEP: Success -->
           <template v-else-if="step === 'success'">
-            <div class="px-6 py-10 text-center space-y-5">
+            <div class="px-6 py-10 text-center stack-y-5">
               <div class="w-20 h-20 rounded-full flex items-center justify-center mx-auto"
                 :style="`background: ${accent}20; border: 2px solid ${accent}40`">
                 <BIcon name="Heart" class="w-9 h-9" :style="`color: ${accent}`" />

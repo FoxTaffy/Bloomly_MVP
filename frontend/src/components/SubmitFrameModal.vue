@@ -8,7 +8,7 @@
         </button>
       </div>
 
-      <div class="p-5 space-y-5">
+      <div class="p-5 stack-y-5">
         <div>
           <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.avatarFrameImageLabel }}</label>
           <MediaUpload folder="avatar-frames" accept="image/png" @uploaded="(urls: string[]) => { imageUrl = urls[0] ?? '' }" />
@@ -24,14 +24,14 @@
             {{ langStore.t.avatarFrameNameLabel }} <span class="text-brand-accent normal-case font-normal">*</span>
           </label>
           <input v-model="name" maxlength="120"
-            class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-brand-accent/50 transition-all" />
+            class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-accent/50 transition-all" />
         </div>
 
         <div>
           <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.avatarFramePriceLabel }}</label>
           <div class="relative">
             <input v-model.number="price" type="number" min="0" step="0.01" placeholder="0.00"
-              class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 pr-16 text-sm text-white placeholder-white/20 outline-none focus:border-brand-accent/50 transition-all" />
+              class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 pr-16 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-accent/50 transition-all" />
             <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-white/30 font-bold">{{ price === 0 ? 'FREE' : 'USD' }}</span>
           </div>
         </div>
@@ -41,7 +41,7 @@
             {{ langStore.t.dealersDenTagsLabel }} <span class="normal-case font-normal text-white/20">{{ langStore.t.dealersDenTagsHint }}</span>
           </label>
           <input v-model="tags" :placeholder="langStore.t.dealersDenTagsPlaceholder"
-            class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-brand-accent/50 transition-all" />
+            class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden focus:border-brand-accent/50 transition-all" />
         </div>
 
         <p v-if="error" class="text-xs text-red-400">{{ error }}</p>
