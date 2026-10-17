@@ -16,6 +16,7 @@ export interface YookassaPayment {
   paid: boolean;
   amount: { value: string; currency: string };
   income_amount?: { value: string; currency: string };
+  refunded_amount?: { value: string; currency: string };
   metadata?: Record<string, string>;
   cancellation_details?: { party?: string; reason?: string };
   confirmation?: { type: string; confirmation_url?: string };
@@ -35,7 +36,7 @@ export interface YookassaPaymentMethod {
 export interface YookassaNotification {
   type?: string;  // notification
   event?: string; // payment.succeeded | payment.canceled | payment.waiting_for_capture | …
-  object?: { id?: string };
+  object?: { id?: string; payment_id?: string };
 }
 
 async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, idempotenceKey?: string): Promise<T> {
@@ -53,7 +54,7 @@ async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, ide
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     logger.error({ status: res.status, path, body: text.slice(0, 300) }, '[payments] yookassa request failed');
-    throw Object.assign(new Error('PAYMENT_GATEWAY_ERROR'), { statusCode: 502 });
+    throw Object.assign(new Error('PAYMENT_GATEWAY_ERROR'), { statusCode: 502, upstreamStatus: res.status });
   }
   return res.json() as Promise<T>;
 }

@@ -16,6 +16,7 @@ const refunds: { payment_id: string; amount: { value: string } }[] = [];
 /** Чем ответит ЮKassa на автосписание по сохранённому способу. */
 let chargeOutcome: { status: 'succeeded' | 'canceled'; reason?: string } = { status: 'succeeded' };
 let seq = 0;
+let refundFails = false;
 
 const CARD: PM = {
   id: 'pm-card-1', type: 'bank_card', saved: true, title: 'Bank card *4444',
@@ -26,12 +27,14 @@ const realFetch = globalThis.fetch;
 function mockYookassa() {
   remote.clear();
   refunds.length = 0;
+  refundFails = false;
   chargeOutcome = { status: 'succeeded' };
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
     const u = String(url);
     if (!u.startsWith('https://api.yookassa.ru/v3')) return realFetch(url, init);
     const json = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' } });
     if (init?.method === 'POST' && u.endsWith('/refunds')) {
+      if (refundFails) return new Response('boom', { status: 500 });
       const body = JSON.parse(String(init.body));
       refunds.push(body);
       return json({ id: `rf-${++seq}`, status: 'succeeded' });
@@ -54,7 +57,8 @@ function mockYookassa() {
       remote.set(id, r);
       return json(r);
     }
-    return json(remote.get(u.split('/').pop()!));
+    const found = remote.get(u.split('/').pop()!);
+    return found ? json(found) : new Response('{"type":"error","code":"not_found"}', { status: 404 });
   }) as typeof fetch;
 }
 
@@ -160,17 +164,19 @@ describe('payments: ЮKassa', () => {
     expect(await balanceOf(user.id)).toBe(5);
   });
 
-  it('донат: сумма проверяется, после оплаты платёж succeeded и ничего не выдаётся', async () => {
+  it('донат: сумма проверяется, после оплаты платёж succeeded и выдаётся значок спонсора', async () => {
     const { user, auth } = await createUser();
     for (const amount of [5, 100, 499, 100.5, 10_000_000, 'abc']) {
       expect((await api('POST', '/api/payments/donate', { headers: auth, body: { amount, method: 'AC' } })).status).toBe(400);
     }
     const res = await api('POST', '/api/payments/donate', { headers: auth, body: { amount: 500, method: 'PC' } });
     expect(res.status).toBe(200);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).is_sponsor).toBe(false);
     await pay(await remoteIdOf(res.json.data.paymentId));
     const p = await prisma.payment.findUniqueOrThrow({ where: { id: res.json.data.paymentId } });
     expect(p.status).toBe('succeeded');
     expect(p.purpose).toBe('donation');
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).is_sponsor).toBe(true);
     expect(await balanceOf(user.id)).toBe(0);
   });
 
@@ -418,6 +424,200 @@ describe('payments: ЮKassa', () => {
         headers: auth, body: { cardNumber: '4242424242424242', expMonth: 12, expYear: 2030, holderName: 'Test' },
       });
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('надёжность зачисления и журнал', () => {
+    const later = () => new Date(Date.now() + 10 * 60_000);
+
+    it('журнал: каждое изменение баланса записано, остаток сходится', async () => {
+      const { user, auth } = await createUser();
+      const res = await api('POST', '/api/payments/topup', { headers: auth, body: { amount: 990, method: 'AC' } });
+      await pay(await remoteIdOf(res.json.data.paymentId));
+      await pay(await remoteIdOf(res.json.data.paymentId)); // повтор webhook
+      const sub = await api('POST', '/api/payments/subscription', { headers: auth, body: { tier: 'lite', period: 'month', method: 'wallet' } });
+      expect(sub.status).toBe(200);
+
+      const log = await prisma.walletTransaction.findMany({ where: { user_id: user.id }, orderBy: { created_at: 'asc' } });
+      expect(log.map((l) => [l.kind, Number(l.amount)])).toEqual([['topup', 10], ['subscription', -0.84]]);
+      expect(log[0].ref_id).toBe(res.json.data.paymentId);
+      expect(Number(log[1].balance_after)).toBe(await balanceOf(user.id));
+      expect(log.reduce((s, l) => s + Number(l.amount), 0)).toBeCloseTo(await balanceOf(user.id), 2);
+    });
+
+    it('два параллельных списания на один остаток: проходит одно, баланс не уходит в минус', async () => {
+      const { user, auth } = await createUser();
+      await prisma.wallet.upsert({ where: { user_id: user.id }, update: { balance: 0.84 }, create: { user_id: user.id, balance: 0.84 } });
+      const body = { tier: 'lite', period: 'month', method: 'wallet' };
+      const rs = await Promise.all([
+        api('POST', '/api/payments/subscription', { headers: auth, body }),
+        api('POST', '/api/payments/subscription', { headers: auth, body }),
+      ]);
+      expect(rs.map((r) => r.status).sort()).toEqual([200, 402]);
+      expect(await balanceOf(user.id)).toBe(0);
+      expect(await prisma.walletTransaction.count({ where: { user_id: user.id } })).toBe(1);
+    });
+
+    it('платёж создан в ЮKassa, но наша запись не получила его id: webhook находит её по metadata и зачисляет', async () => {
+      const { user, auth } = await createUser();
+      const res = await api('POST', '/api/payments/topup', { headers: auth, body: { amount: 540, method: 'AC' } });
+      const id = res.json.data.paymentId;
+      const rid = await remoteIdOf(id);
+      await prisma.payment.update({ where: { id }, data: { provider_operation_id: null, status: 'expired', failure_reason: 'gateway create failed' } });
+      expect((await pay(rid)).statusCode).toBe(200);
+      expect(await balanceOf(user.id)).toBe(5);
+      expect((await prisma.payment.findUniqueOrThrow({ where: { id } })).provider_operation_id).toBe(rid);
+    });
+
+    it('чужой/выдуманный id в webhook ничего не меняет и не вызывает повторов', async () => {
+      const { user } = await createUser();
+      expect((await webhook('does-not-exist')).statusCode).toBe(200);
+      expect(await balanceOf(user.id)).toBe(0);
+    });
+
+    it('webhook не пришёл: сверка по cron зачисляет оплаченный платёж один раз', async () => {
+      const { user, auth } = await createUser();
+      const res = await api('POST', '/api/payments/topup', { headers: auth, body: { amount: 540, method: 'AC' } });
+      Object.assign(remote.get(await remoteIdOf(res.json.data.paymentId))!, { status: 'succeeded', paid: true });
+      expect(await balanceOf(user.id)).toBe(0);
+      await paymentsService.reconcilePayments(later());
+      await paymentsService.reconcilePayments(later());
+      expect(await balanceOf(user.id)).toBe(5);
+      expect(await prisma.walletTransaction.count({ where: { user_id: user.id } })).toBe(1);
+    });
+
+    it('webhook не пришёл: страница возврата сама подтягивает статус', async () => {
+      const { user, auth } = await createUser();
+      const res = await api('POST', '/api/payments/topup', { headers: auth, body: { amount: 540, method: 'AC' } });
+      Object.assign(remote.get(await remoteIdOf(res.json.data.paymentId))!, { status: 'succeeded', paid: true });
+      const status = await api('GET', `/api/payments/${res.json.data.paymentId}`, { headers: auth });
+      expect(status.json.data.status).toBe('succeeded');
+      expect(await balanceOf(user.id)).toBe(5);
+    });
+
+    it('сверка не опрашивает повторно платежи, отменённые шлюзом', async () => {
+      const { auth } = await createUser();
+      const res = await api('POST', '/api/payments/topup', { headers: auth, body: { amount: 540, method: 'AC' } });
+      const id = res.json.data.paymentId;
+      await prisma.payment.update({ where: { id }, data: { status: 'expired' } }); // TTL
+      Object.assign(remote.get(await remoteIdOf(id))!, { status: 'canceled', paid: false });
+      await paymentsService.reconcilePayments(later());
+      expect((await prisma.payment.findUniqueOrThrow({ where: { id } })).failure_reason).toMatch(/^canceled/);
+    });
+
+    it('возврат проверочного 1 ₽ при привязке карты повторяется, пока не пройдёт', async () => {
+      const { auth } = await createUser();
+      const res = await api('POST', '/api/payments/card-binding', { headers: auth });
+      const id = res.json.data.paymentId;
+      refundFails = true;
+      await pay(await remoteIdOf(id), { payment_method: CARD });
+      expect((await prisma.payment.findUniqueOrThrow({ where: { id } })).status).toBe('succeeded'); // возврат не прошёл
+      refundFails = false;
+      await paymentsService.reconcilePayments(later());
+      expect((await prisma.payment.findUniqueOrThrow({ where: { id } })).status).toBe('refunded');
+      expect(refunds).toHaveLength(1);
+    });
+  });
+
+  describe('возвраты и ручной разбор', () => {
+    const refundEvent = async (rid: string, amount: string) => {
+      Object.assign(remote.get(rid)!, { refunded_amount: { value: amount, currency: 'RUB' } });
+      const a = await getApp();
+      return a.inject({
+        method: 'POST', url: '/api/payments/yookassa/notify', headers: { 'content-type': 'application/json' },
+        payload: { type: 'notification', event: 'refund.succeeded', object: { id: 'rf-x', payment_id: rid } },
+      });
+    };
+    const paidTopup = async (amount: number) => {
+      const { user, auth } = await createUser();
+      const res = await api('POST', '/api/payments/topup', { headers: auth, body: { amount, method: 'AC' } });
+      const rid = await remoteIdOf(res.json.data.paymentId);
+      await pay(rid);
+      return { user, auth, rid, id: res.json.data.paymentId as string };
+    };
+
+    it('полный возврат пополнения списывает Blooms; повтор события ничего не меняет', async () => {
+      const { user, rid, id } = await paidTopup(540);
+      expect((await refundEvent(rid, '540.00')).statusCode).toBe(200);
+      expect((await refundEvent(rid, '540.00')).statusCode).toBe(200);
+      expect(await balanceOf(user.id)).toBe(0);
+      expect((await prisma.payment.findUniqueOrThrow({ where: { id } })).status).toBe('refunded');
+      const log = await prisma.walletTransaction.findMany({ where: { user_id: user.id }, orderBy: { created_at: 'asc' } });
+      expect(log.map((l) => [l.kind, Number(l.amount)])).toEqual([['topup', 5], ['refund_clawback', -5]]);
+    });
+
+    it('если Blooms уже потрачены — списывается остаток, баланс не уходит в минус, платёж помечен', async () => {
+      const { user, rid, id } = await paidTopup(540);
+      await prisma.wallet.update({ where: { user_id: user.id }, data: { balance: 2 } });
+      await refundEvent(rid, '540.00');
+      expect(await balanceOf(user.id)).toBe(0);
+      const p = await prisma.payment.findUniqueOrThrow({ where: { id } });
+      expect(p.status).toBe('refunded');
+      expect(p.failure_reason).toMatch(/clawed back 2 of 5/);
+    });
+
+    it('частичный возврат ничего не отзывает, а помечается для разбора', async () => {
+      const { user, rid, id } = await paidTopup(540);
+      await refundEvent(rid, '100.00');
+      expect(await balanceOf(user.id)).toBe(5);
+      const p = await prisma.payment.findUniqueOrThrow({ where: { id } });
+      expect([p.status, p.failure_reason]).toEqual(['succeeded', 'partial refund 100']);
+    });
+
+    it('возврат доната снимает значок спонсора, возврат подписки выключает автопродление', async () => {
+      const { user, auth } = await createUser();
+      const d = await api('POST', '/api/payments/donate', { headers: auth, body: { amount: 500, method: 'AC' } });
+      const drid = await remoteIdOf(d.json.data.paymentId);
+      await pay(drid);
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).is_sponsor).toBe(true);
+      await refundEvent(drid, '500.00');
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).is_sponsor).toBe(false);
+
+      const sub = await api('POST', '/api/payments/subscription', { headers: auth, body: { tier: 'lite', period: 'month', method: 'AC', autoRenew: true } });
+      const srid = await remoteIdOf(sub.json.data.paymentId);
+      await pay(srid, { payment_method: CARD });
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).subscription_auto_renew).toBe(true);
+      await refundEvent(srid, String(sub.json.data.amount) + '.00');
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).subscription_auto_renew).toBe(false);
+    });
+
+    it('админ: review можно зачесть (платёж реально оплачен) или отклонить; обычному пользователю нельзя', async () => {
+      const { user, auth } = await createUser();
+      const admin = await createUser({ role: 'admin' });
+      const res = await api('POST', '/api/payments/topup', { headers: auth, body: { amount: 500, method: 'AC' } });
+      const id = res.json.data.paymentId;
+      // недоплата → review
+      await pay(await remoteIdOf(id), { amount: { value: '300.00', currency: 'RUB' } });
+      expect((await prisma.payment.findUniqueOrThrow({ where: { id } })).status).toBe('review');
+
+      expect((await api('POST', `/api/payments/admin/${id}/resolve`, { headers: auth, body: { action: 'approve' } })).status).toBe(403);
+      expect((await api('POST', `/api/payments/admin/${id}/resolve`, { headers: admin.auth, body: { action: 'approve' } })).status).toBe(200);
+      expect(await balanceOf(user.id)).toBe(2.77); // зачтено по фактической сумме 300 ₽
+      expect((await api('POST', `/api/payments/admin/${id}/resolve`, { headers: admin.auth, body: { action: 'approve' } })).status).toBe(409);
+
+      const r2 = await api('POST', '/api/payments/topup', { headers: auth, body: { amount: 500, method: 'AC' } });
+      await pay(await remoteIdOf(r2.json.data.paymentId), { amount: { value: '10.00', currency: 'RUB' } });
+      expect((await api('POST', `/api/payments/admin/${r2.json.data.paymentId}/resolve`, { headers: admin.auth, body: { action: 'reject' } })).status).toBe(200);
+      expect((await prisma.payment.findUniqueOrThrow({ where: { id: r2.json.data.paymentId } })).status).toBe('expired');
+      expect(await balanceOf(user.id)).toBe(2.77);
+    });
+
+    it('оплаченная подписка у пользователя с бессрочным тарифом от админа уходит на разбор, а не затирает подарок', async () => {
+      const { user, auth } = await createUser();
+      const res = await api('POST', '/api/payments/subscription', { headers: auth, body: { tier: 'lite', period: 'month', method: 'AC' } });
+      await prisma.user.update({ where: { id: user.id }, data: { subscription_tier: 'pro', subscription_expires_at: null } });
+      await pay(await remoteIdOf(res.json.data.paymentId));
+      expect((await prisma.payment.findUniqueOrThrow({ where: { id: res.json.data.paymentId } })).status).toBe('review');
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: user.id } })).subscription_tier).toBe('pro');
+    });
+
+    it('не больше 10 неоплаченных платежей в час', async () => {
+      const { auth } = await createUser();
+      for (let i = 0; i < 10; i++) {
+        expect((await api('POST', '/api/payments/topup', { headers: auth, body: { amount: 50, method: 'AC' } })).status).toBe(200);
+      }
+      const res = await api('POST', '/api/payments/topup', { headers: auth, body: { amount: 50, method: 'AC' } });
+      expect(res.status).toBe(429);
     });
   });
 });

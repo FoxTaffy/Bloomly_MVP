@@ -84,6 +84,15 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
     reply.send(ok(await paymentsService.listAll(status || undefined)));
   });
 
+  // POST /api/payments/admin/:id/resolve { action: 'approve' | 'reject' } — ручной разбор платежа в статусе review
+  fastify.post('/admin/:id/resolve', auth, async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!isAdmin(req.user.role)) return reply.code(403).send(err('FORBIDDEN', 'Forbidden'));
+    const { id } = req.params as { id: string };
+    const { action } = (req.body ?? {}) as { action?: unknown };
+    try { reply.send(ok(await paymentsService.resolveReview(req.user.id, id, action))); }
+    catch (e) { fail(reply, e, 'PAYMENT_RESOLVE_ERROR'); }
+  });
+
   // GET /api/payments/:id — статус платежа (страница возврата опрашивает его)
   fastify.get('/:id', auth, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -100,7 +109,7 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
   });
 
   // POST /api/payments/yookassa/notify — webhook ЮKassa (без авторизации; платёж перепроверяется через API).
-  // Адрес указывается в личном кабинете: Интеграция → HTTP-уведомления (события payment.succeeded, payment.canceled)
+  // Адрес указывается в личном кабинете: Интеграция → HTTP-уведомления (события payment.succeeded, payment.canceled, refund.succeeded)
   fastify.post('/yookassa/notify', { config: { rateLimit: { max: 300, timeWindow: '1 minute' } } } as RouteShorthandOptions,
     async (req: FastifyRequest, reply: FastifyReply) => {
       try {

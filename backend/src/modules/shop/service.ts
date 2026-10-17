@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma.js';
 import { ITEM_SELECT } from './types.js';
+import { debitWallet } from '../wallet/ledger.js';
 
 export async function listItems(opts: {
   type?: string;
@@ -64,15 +65,10 @@ export async function purchaseItem(userId: string, itemId: string) {
     // (e.g. "5" < "100" is false lexicographically) — always compare via Number()/toNumber().
     // The WHERE clause re-checks the balance at update time so two concurrent purchases
     // can't both pass a stale check and drive the wallet negative.
-    const price = Number(item.price);
     await prisma.$transaction(async (tx) => {
-      const debited = await tx.wallet.updateMany({
-        where: { user_id: userId, balance: { gte: price } },
-        data: { balance: { decrement: price } },
-      });
-      if (debited.count === 0) {
-        throw Object.assign(new Error('Insufficient balance'), { statusCode: 402 });
-      }
+      // Цену перечитываем внутри транзакции: её могли изменить после первого чтения
+      const fresh = await tx.shopItem.findUniqueOrThrow({ where: { id: itemId }, select: { price: true } });
+      await debitWallet(tx, userId, Number(fresh.price), { kind: 'shop_purchase', refId: itemId }, 'Insufficient balance');
       await tx.userShopItem.create({ data: { user_id: userId, item_id: itemId } });
       await tx.shopItem.update({ where: { id: itemId }, data: { downloads_count: { increment: 1 } } });
     });

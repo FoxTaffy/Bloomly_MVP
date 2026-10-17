@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma.js';
+import { creditWallet } from './ledger.js';
 
 // No payment gateway is wired up yet — this is a free/demo top-up so the rest of the
 // wallet-funded flows (group donations) can be exercised end-to-end. Capped per request
@@ -11,12 +12,8 @@ export async function topupWallet(userId: string, amount: number) {
   if (!Number.isFinite(clean) || clean < MIN_TOPUP || clean > MAX_TOPUP) {
     throw Object.assign(new Error(`Amount must be between ${MIN_TOPUP} and ${MAX_TOPUP}`), { statusCode: 400 });
   }
-  const wallet = await prisma.wallet.upsert({
-    where: { user_id: userId },
-    update: { balance: { increment: clean } },
-    create: { user_id: userId, balance: clean },
-  });
-  return { balance: wallet.balance };
+  const balance = await prisma.$transaction((tx) => creditWallet(tx, userId, clean, { kind: 'dev_topup' }));
+  return { balance };
 }
 
 export async function getWallet(userId: string) {

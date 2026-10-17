@@ -2,6 +2,7 @@ import prisma from '../../config/prisma.js';
 import { uploadRawToMinIO, recordMediaOwner, assertOwnedMedia } from '../media/service.js';
 import { notificationService } from '../notifications/service.js';
 import { randomBytes } from 'crypto';
+import { creditWallet, debitWallet } from '../wallet/ledger.js';
 import type { CreatePackInput, UpdatePackInput, GetPacksQuery, PackVisibility } from './types.js';
 
 export const MAX_STICKERS_PER_PACK = 120; // как в Telegram
@@ -481,19 +482,13 @@ export const stickersService = {
     });
     if (already) return true;
 
-    // Баланс — Decimal; сравниваем и списываем в одном условии UPDATE, чтобы два параллельных платежа не увели кошелёк в минус
-    const price = Number(pack.price);
     await prisma.$transaction(async (tx) => {
-      const debited = await tx.wallet.updateMany({
-        where: { user_id: userId, balance: { gte: price } },
-        data:  { balance: { decrement: price } },
-      });
-      if (debited.count === 0) throw httpError('Недостаточно средств на балансе', 402);
-      await tx.wallet.upsert({
-        where:  { user_id: pack.author_id },
-        create: { user_id: pack.author_id, balance: price },
-        update: { balance: { increment: price } },
-      });
+      // Цену перечитываем внутри транзакции: автор мог изменить её после первого чтения
+      const fresh = await tx.stickerPack.findUniqueOrThrow({ where: { id: packId }, select: { price: true } });
+      const price = Number(fresh.price);
+      if (!(price > 0)) throw httpError('Цена пака изменилась, попробуйте ещё раз', 409);
+      await debitWallet(tx, userId, price, { kind: 'sticker_purchase', refId: packId }, 'Недостаточно средств на балансе');
+      await creditWallet(tx, pack.author_id, price, { kind: 'sticker_sale', refId: packId });
       await tx.userStickerPack.create({ data: { user_id: userId, pack_id: packId } });
       await tx.stickerPack.update({ where: { id: packId }, data: { downloads_count: { increment: 1 } } });
     });
