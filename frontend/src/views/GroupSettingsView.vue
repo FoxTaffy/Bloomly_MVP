@@ -1197,7 +1197,7 @@ async function deleteGroup() {
           <div class="flex flex-row-reverse gap-6 items-start">
 
             <!-- ── Right sticky sidebar ──────────────────────────────── -->
-            <aside class="w-56 hidden xl:flex flex-col gap-3 sticky top-24 self-start flex-shrink-0 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-hide overscroll-contain">
+            <aside class="w-56 hidden xl:flex flex-col gap-3 sticky top-24 self-start flex-shrink-0 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-hide overscroll-contain [&>*]:shrink-0">
 
               <!-- Mini group preview card -->
               <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
