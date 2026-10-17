@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vStickyBottom } from '@/lib/stickyBottom'
 import LinkifiedText from '@/components/LinkifiedText.vue'
 import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { safeHref } from '@/utils/safeHref'
@@ -2142,7 +2143,7 @@ const vClickOutside = {
             <!-- / CENTER COLUMN -->
 
             <!-- ── RIGHT SIDEBAR (same structure as ProfileView) ────── -->
-            <div class="hidden xl:flex flex-col gap-3 w-60 flex-shrink-0 sticky top-24 self-start max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-hide overscroll-contain [&>*]:shrink-0">
+            <div v-sticky-bottom class="hidden xl:flex flex-col gap-3 w-60 flex-shrink-0 sticky top-24 self-start">
 
               <!-- Stats -->
               <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">

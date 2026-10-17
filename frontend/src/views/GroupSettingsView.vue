@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { vStickyBottom } from '@/lib/stickyBottom'
 import { apiErrorCode, apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { rubricOptionsFor } from '@/lib/groupRubrics'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
@@ -1197,7 +1198,7 @@ async function deleteGroup() {
           <div class="flex flex-row-reverse gap-6 items-start">
 
             <!-- ── Right sticky sidebar ──────────────────────────────── -->
-            <aside class="w-56 hidden xl:flex flex-col gap-3 sticky top-24 self-start flex-shrink-0 max-h-[calc(100vh-7rem)] overflow-y-auto scrollbar-hide overscroll-contain [&>*]:shrink-0">
+            <aside v-sticky-bottom class="w-56 hidden xl:flex flex-col gap-3 sticky top-24 self-start flex-shrink-0">
 
               <!-- Mini group preview card -->
               <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
