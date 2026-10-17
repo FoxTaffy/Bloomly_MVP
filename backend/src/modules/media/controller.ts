@@ -8,8 +8,11 @@ import { pipeline } from 'stream/promises';
 import {
   uploadFile, uploadStreamedFile, UploadValidationError, convertGifAvatarToWebm,
   reserveStorage, releaseStorage, recordMediaOwner, removeObjectByUrl,
-  canReadPrivateMedia, findPrivateMediaRow, openPrivateObject,
+  canReadPrivateMedia, findPrivateMediaRow, openPrivateObject, objectKeyFromRequestPath,
 } from './service.js';
+import { canViewMediaCached, type MediaViewer } from './access.js';
+import { viewerFromMediaCookie } from '../../lib/mediaCookie.js';
+import { resolveAccountIdentity } from '../../lib/accountAccess.js';
 import { sniffMatches } from '../../lib/fileSniff.js';
 import {
   FOLDER_MAX_BYTES, IMAGE_MAX_BYTES, MAX_CONCURRENT_UPLOADS_GLOBAL, MAX_CONCURRENT_UPLOADS_PER_USER,
@@ -334,4 +337,31 @@ export const getPrivateMediaHandler = async (request: FastifyRequest, reply: Fas
   }
   reply.header('Content-Length', size);
   return reply.send(stream);
+};
+
+/**
+ * GET /api/media/authz — проверка для внешнего nginx (auth_request) перед отдачей файла по
+ * прямой ссылке /s3/<bucket>/<key>. Путь приходит в X-Original-URI. Ответ без тела:
+ * 204 — отдать, 403 — запретить. Зритель: Bearer (мобильный клиент) или media-cookie (веб),
+ * иначе гость. Недействительный токен не ошибка — с ним видно то же, что гостю.
+ */
+export const mediaAuthzHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+  reply.header('Cache-Control', 'no-store');
+  const key = objectKeyFromRequestPath(request.headers['x-original-uri']);
+  if (!key) return reply.code(403).send();
+
+  let viewer: MediaViewer = null;
+  if (request.headers.authorization) {
+    try {
+      await request.jwtVerify();
+      const identity = await resolveAccountIdentity((request.user as { id: string }).id);
+      viewer = { id: identity.id, role: identity.role, is_adult: identity.is_adult };
+    } catch {
+      viewer = null;
+    }
+  }
+  if (!viewer) viewer = await viewerFromMediaCookie(request);
+
+  const allow = await canViewMediaCached(key, viewer);
+  return reply.code(allow ? 204 : 403).send();
 };

@@ -20,7 +20,7 @@ async function canManage(album: { user_id: string | null; group_id: string | nul
 }
 
 /** Может ли зритель видеть альбом (владелец/модерация видят всё). */
-async function canView(album: { user_id: string | null; group_id: string | null; privacy: string }, viewerId: string | null): Promise<boolean> {
+export async function canViewAlbum(album: { user_id: string | null; group_id: string | null; privacy: string }, viewerId: string | null): Promise<boolean> {
   if (await canManage(album, viewerId)) return true;
   if (album.group_id) {
     try { await assertGroupReadable(album.group_id, viewerId); } catch { return false; }
@@ -75,14 +75,14 @@ export const albumService = {
     });
     const visible = [];
     for (const a of albums) {
-      if (await canView(a, viewerId)) visible.push({ ...a, items: a.items.slice(0, 4), can_edit: await canManage(a, viewerId) });
+      if (await canViewAlbum(a, viewerId)) visible.push({ ...a, items: a.items.slice(0, 4), can_edit: await canManage(a, viewerId) });
     }
     return visible;
   },
 
   async get(id: string, viewerId: string | null) {
     const album = await prisma.album.findUnique({ where: { id }, include: albumInclude });
-    if (!album || !(await canView(album, viewerId))) return null;
+    if (!album || !(await canViewAlbum(album, viewerId))) return null;
     return { ...album, can_edit: await canManage(album, viewerId) };
   },
 

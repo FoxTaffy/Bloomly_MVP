@@ -940,7 +940,7 @@ const vClickOutside = {
                         : 'border-brand-border bg-brand-bg text-white/55 hover:border-brand-accent/60 hover:text-brand-accent'">
                       <BIcon :name="notifyPosts ? 'BellRing' : 'Bell'" class="w-4 h-4" />
                     </button>
-                    <button v-if="group.type === 'news' && isMember"
+                    <button v-if="group.type === 'news' && isMember && group.owner"
                       @click="router.push({ name: 'messages', query: { userId: group.owner.id } })"
                       class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border border-sky-500/30 text-sky-400 bg-sky-500/10 hover:bg-sky-500/20">
                       <BIcon name="Send" class="w-4 h-4" /> {{ langStore.t.groupDetailSuggestNewsBtn }}
@@ -1259,7 +1259,7 @@ const vClickOutside = {
                       </div>
                     </div>
                     <!-- Owner info -->
-                    <router-link :to="`/profile/${group.owner.username}`"
+                    <router-link v-if="group.owner" :to="`/profile/${group.owner.username}`"
                       class="flex items-center gap-3 px-4 py-3.5 bg-brand-bg border border-brand-border rounded-2xl hover:border-brand-accent/30 transition-colors group">
                       <div class="w-9 h-9 rounded-xl bg-brand-accent/20 overflow-hidden shrink-0 border border-brand-border/60">
                         <img v-if="group.owner.avatar_url" :src="group.owner.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
@@ -1536,7 +1536,7 @@ const vClickOutside = {
                       </router-link>
                     </template>
                     <template v-else>
-                      <router-link :to="`/profile/${group.owner.username}`"
+                      <router-link v-if="group.owner" :to="`/profile/${group.owner.username}`"
                         class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-sky-500/30 transition-all">
                         <div class="w-9 h-9 rounded-xl overflow-hidden bg-sky-500/20 flex-shrink-0">
                           <img v-if="group.owner.avatar_url" :src="group.owner.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
@@ -2370,14 +2370,14 @@ const vClickOutside = {
               </div>
 
               <!-- Owner / Organizer (redesigned to match screenshot) -->
-              <div v-if="!group.hide_admins && !JSON.parse(group.hidden_member_ids || '[]').includes(group.owner.id)" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
+              <div v-if="group.owner && !group.hide_admins && !JSON.parse(group.hidden_member_ids || '[]').includes(group.owner.id)" class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
                 <div class="px-4 pt-3.5 pb-2 flex items-center gap-2">
                   <BIcon name="Users" class="w-3.5 h-3.5 text-brand-purple" />
                   <p class="text-[11px] font-bold uppercase tracking-widest text-white/55">{{ langStore.t.groupSettingsSecOrganizers }}</p>
                 </div>
                 <!-- Organizer card -->
                 <div class="px-3 pb-2">
-                  <router-link :to="`/profile/${group.owner.username}`"
+                  <router-link v-if="group.owner" :to="`/profile/${group.owner.username}`"
                     class="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-brand-bg transition-all group cursor-pointer">
                     <div class="w-10 h-10 rounded-xl bg-brand-accent/20 overflow-hidden shrink-0 border border-brand-border/60">
                       <img v-if="group.owner.avatar_url" :src="group.owner.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />

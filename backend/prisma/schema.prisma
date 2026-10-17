@@ -341,6 +341,10 @@ model Post {
   @@index([author_id])
   @@index([deleted_at, created_at])
   @@index([rating])
+
+  // Проверка доступа к файлу по прямой ссылке (media/access.ts)
+  @@index([media_urls], type: Gin)
+  @@index([media_original_urls], type: Gin)
 }
 
 // Файл в хранилище и его владелец. Объекты без записи (загружены до введения учёта)
@@ -511,6 +515,10 @@ model Story {
 
   @@index([user_id])
   @@index([created_at])
+
+  // Проверка доступа к файлу по прямой ссылке (media/access.ts)
+  @@index([image_url])
+  @@index([video_url])
 }
 
 model StoryView {
@@ -624,6 +632,9 @@ model Comment {
   @@index([post_id])
   @@index([parent_id])
   @@index([group_id])
+
+  // Проверка доступа к файлу по прямой ссылке (media/access.ts)
+  @@index([file_url])
 }
 
 model CommentVote {
@@ -711,6 +722,9 @@ model MediaHistory {
   user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
+
+  // Проверка доступа к файлу по прямой ссылке (media/access.ts)
+  @@index([url])
 }
 
 model Report {
@@ -909,6 +923,9 @@ model Message {
   @@index([conversation_id, created_at(sort: Desc)])
   @@index([reply_to_id])
   @@index([sender_id, created_at])
+
+  // Проверка доступа к файлу по прямой ссылке (media/access.ts)
+  @@index([file_url])
 }
 
 // ── Groups ────────────────────────────────────────────────────────────────────
@@ -1868,6 +1885,9 @@ model FursonaReferenceImage {
 
   @@index([user_id])
   @@index([fursona_id])
+
+  // Проверка доступа к файлу по прямой ссылке (media/access.ts)
+  @@index([image_url])
 }
 
 // ── Fursuit (1:N with User) ──────────────────────────────────────────────────
@@ -1889,6 +1909,9 @@ model Fursuit {
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
+
+  // Проверка доступа к файлу по прямой ссылке (media/access.ts)
+  @@index([image_url])
 }
 
 // ── Bloomly Shop ─────────────────────────────────────────────────────────────
@@ -2046,4 +2069,7 @@ model AlbumItem {
   album Album @relation(fields: [album_id], references: [id], onDelete: Cascade)
 
   @@index([album_id, position])
+
+  // Проверка доступа к файлу по прямой ссылке (media/access.ts)
+  @@index([media_url])
 }

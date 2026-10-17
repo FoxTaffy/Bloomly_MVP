@@ -4,6 +4,7 @@ import { AuthService } from './service.js';
 import { buildOAuthUrl, handleOAuthCallback, findOrCreateOAuthUser, OAuthProvider } from './oauth.service.js';
 import { parseDeviceName, getClientIp } from './device.util.js';
 import { hashToken, authUsers, sessions, oauthAccounts } from './session.service.js';
+import { setMediaCookie, clearMediaCookie } from '../../lib/mediaCookie.js';
 import { getSetting } from '../../lib/settings.js';
 import { isAdult } from '../../lib/age.js';
 import { createMfaToken, verifyMfaToken } from '../../lib/mfaToken.js';
@@ -120,6 +121,8 @@ function setRefreshCookie(reply: FastifyReply, raw: string, remember: boolean) {
     path:     '/api/auth',
     ...(remember ? { maxAge: 30 * 24 * 60 * 60 } : {}),
   });
+  // Тот же срок жизни — у cookie для файлов по прямым ссылкам (см. lib/mediaCookie.ts)
+  setMediaCookie(reply, raw, remember);
 }
 
 function readRefreshCookie(request: FastifyRequest): string | undefined {
@@ -128,6 +131,7 @@ function readRefreshCookie(request: FastifyRequest): string | undefined {
 
 function clearRefreshCookie(reply: FastifyReply) {
   reply.clearCookie('refresh_token', { path: '/api/auth' });
+  clearMediaCookie(reply);
 }
 
 // ── Статистика ────────────────────────────────────────────────────────────────

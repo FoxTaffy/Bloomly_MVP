@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { uploadFileHandler, getPrivateMediaHandler } from './controller.js';
+import { uploadFileHandler, getPrivateMediaHandler, mediaAuthzHandler } from './controller.js';
 import type { RouteGenericOf } from '../../lib/routeTypes.js';
 
 export async function mediaRoutes(fastify: FastifyInstance) {
@@ -8,4 +8,7 @@ export async function mediaRoutes(fastify: FastifyInstance) {
   // GET /api/media/private?url=… — приватные файлы (улики, верификация) отдаёт только сервер по правам.
   // Без регистрации маршрута модераторы не могли открыть улики, а бакет эти объекты не отдаёт напрямую.
   fastify.get('/private', { onRequest: [fastify.authenticate] }, getPrivateMediaHandler);
+  // GET /api/media/authz — подзапрос nginx auth_request на каждый файл /s3/…; страница ленты
+  // даёт десятки таких запросов, поэтому общий rate-limit здесь не применяется (ответ кэшируется).
+  fastify.get('/authz', { config: { rateLimit: false } }, mediaAuthzHandler);
 }

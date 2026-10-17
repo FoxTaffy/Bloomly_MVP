@@ -575,6 +575,44 @@ export function urlToObjectKey(url: unknown): string | null {
   return url.slice(prefix.length);
 }
 
+/** Ключ: папка (возможно posts/originals) и имя файла. Ни «..», ни пустых сегментов, ни кодированных слэшей. */
+const OBJECT_KEY_PATTERN = /^[a-z-]+(?:\/[a-z-]+)?\/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9]{1,8})?$/;
+
+/**
+ * Ключ объекта по пути запроса к хранилищу через внешний nginx (/s3/<bucket>/<key>?…).
+ * Путь берётся из X-Original-URI, поэтому разбирается строго: чужой бакет, лишние сегменты
+ * или необычные символы — null (доступ не выдаётся).
+ */
+export function objectKeyFromRequestPath(uri: unknown): string | null {
+  if (typeof uri !== 'string' || uri.length > 1024) return null;
+  const pathOnly = uri.split(/[?#]/, 1)[0];
+  const prefix = `${new URL(PUBLIC_URL).pathname.replace(/\/$/, '')}/${BUCKET}/`;
+  if (!pathOnly.startsWith(prefix)) return null;
+  const key = pathOnly.slice(prefix.length);
+  return OBJECT_KEY_PATTERN.test(key) ? key : null;
+}
+
+/**
+ * Байты собственного объекта по сохранённому URL — напрямую из MinIO, а не через публичный
+ * адрес: закрытые папки по внешней ссылке без cookie зрителя не отдаются.
+ */
+export async function readStoredObject(url: string, maxBytes: number): Promise<Buffer> {
+  const key = urlToObjectKey(url);
+  if (!key || !OBJECT_KEY_PATTERN.test(key)) throw Object.assign(new Error('Not a stored media URL'), { statusCode: 400 });
+  await bucketReady;
+  const stat = await minioClient.statObject(BUCKET, key);
+  if (stat.size > maxBytes) throw Object.assign(new Error('Stored object is too large'), { statusCode: 413 });
+  const stream = await minioClient.getObject(BUCKET, key);
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  for await (const chunk of stream) {
+    bytes += (chunk as Buffer).length;
+    if (bytes > maxBytes) { stream.destroy(); throw Object.assign(new Error('Stored object is too large'), { statusCode: 413 }); }
+    chunks.push(chunk as Buffer);
+  }
+  return Buffer.concat(chunks, bytes);
+}
+
 // ── Чтение закрытых объектов ─────────────────────────────────────────────
 
 export type MediaActor = { id: string; role: string | null | undefined };

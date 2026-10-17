@@ -18,6 +18,8 @@ export function registerAuth(fastify: FastifyInstance) {
     if (request.url.startsWith('/api/auth') || request.url.startsWith('/api/admin')) return;
     // Уведомления платёжного шлюза: деньги уже списаны, их нужно зачислить и во время обслуживания
     if (request.url.startsWith('/api/payments/yookassa/notify')) return;
+    // Проверка файлов для nginx: права решает сама, а 503 сломал бы картинки и персоналу с cookie
+    if (request.url.startsWith('/api/media/authz')) return;
     if (!(await getSetting('maintenance_mode'))) return;
 
     try {

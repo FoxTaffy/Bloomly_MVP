@@ -63,6 +63,41 @@ function parseHiddenIds(raw: string | null | undefined): string[] {
   }
 }
 
+type MaskableGroup = { id: string; owner_id?: string | null; owner?: unknown; hide_admins?: boolean; hidden_member_ids?: string | null };
+
+/** Группы, где зритель — владелец или админ: им скрытая администрация видна. */
+async function adminGroupIds(groupIds: string[], viewerId?: string | null): Promise<Set<string>> {
+  if (!viewerId || !groupIds.length) return new Set();
+  const rows = await prisma.groupMember.findMany({
+    where: { user_id: viewerId, group_id: { in: groupIds }, role: { in: ['owner', 'admin'] } },
+    select: { group_id: true },
+  });
+  return new Set(rows.map((r) => r.group_id));
+}
+
+/**
+ * «Скрыть администрацию» и скрытые участники применяются на сервере, а не маской в браузере:
+ * зрителю ниже админа не уходят owner_id/owner скрытого владельца и сам список скрытых id.
+ */
+export async function maskGroupsForViewer<T extends MaskableGroup>(groups: T[], viewerId?: string | null): Promise<T[]> {
+  const admin = await adminGroupIds(groups.map((g) => g.id), viewerId);
+  return groups.map((g) => {
+    if (admin.has(g.id)) return g;
+    const hidden = parseHiddenIds(g.hidden_member_ids);
+    const ownerHidden = !!g.owner_id && g.owner_id !== viewerId && (!!g.hide_admins || hidden.includes(g.owner_id));
+    return {
+      ...g,
+      hidden_member_ids: null,
+      ...(ownerHidden ? { owner_id: null, owner: null } : {}),
+    };
+  });
+}
+
+/** Скрыт ли участник с этой ролью от посторонних (для списков групп чужого профиля). */
+function memberHiddenInGroup(group: MaskableGroup, userId: string, role: string): boolean {
+  return (!!group.hide_admins && (role === 'owner' || role === 'admin')) || parseHiddenIds(group.hidden_member_ids).includes(userId);
+}
+
 /**
  * Soft-deletes a group and its group-DM Conversation(s) together. Without this, a group going
  * away (auto-deleted once empty, or staff hard-delete) left its Conversation row(s) fully intact
@@ -157,6 +192,8 @@ const GROUP_LIST_SELECT = {
   members_count: true,
   created_at: true,
   business_enabled: true,
+  hide_admins: true,
+  hidden_member_ids: true,
   _count: { select: { members: true, events: true } },
   owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
 };
@@ -223,7 +260,7 @@ export const groupService = {
     ]);
 
     // Attach computed badge_level
-    const enriched = groups.map((g) => ({ ...g, badge_level: getGroupBadgeLevel(g.members_count) }));
+    const enriched = (await maskGroupsForViewer(groups, viewerId)).map((g) => ({ ...g, badge_level: getGroupBadgeLevel(g.members_count) }));
 
     return { groups: enriched, total, page, limit };
   },
@@ -250,7 +287,8 @@ export const groupService = {
     });
     if (!raw) return null;
     await this.ensureEventExpirySwept(raw.id);
-    return { ...raw, badge_level: getGroupBadgeLevel(raw.members_count) };
+    const [masked] = await maskGroupsForViewer([raw], viewerId);
+    return { ...masked, badge_level: getGroupBadgeLevel(raw.members_count) };
   },
 
   // ── event lifecycle: expiring event_date, SOON clear, participant → subscriber demotion ──
@@ -591,7 +629,8 @@ export const groupService = {
     }
     // A full member doesn't need a separate notification-only subscription anymore
     await prisma.groupSubscriber.deleteMany({ where: { group_id: groupId, user_id: userId } });
-    return membership;
+    const [maskedGroup] = await maskGroupsForViewer([membership.group], userId);
+    return { ...membership, group: maskedGroup };
   },
 
   async leave(groupId: string, userId: string) {
@@ -1100,7 +1139,9 @@ export const groupService = {
       include: { group: { select: GROUP_LIST_SELECT } },
       orderBy: { joined_at: 'desc' },
     });
-    return memberships.map((m) => ({ ...m.group, badge_level: getGroupBadgeLevel(m.group.members_count), role: m.role }));
+    const visible = memberships.filter((m) => !memberHiddenInGroup(m.group, userId, m.role));
+    const masked = await maskGroupsForViewer(visible.map((m) => m.group), null);
+    return masked.map((g, i) => ({ ...g, badge_level: getGroupBadgeLevel(g.members_count), role: visible[i].role }));
   },
 
   // ── Groups visible to viewer (privacy-gated) ──────────────────────────────
@@ -1130,11 +1171,15 @@ export const groupService = {
       orderBy: [{ is_pinned: 'desc' }, { joined_at: 'desc' }],
     });
 
-    const groups = memberships.map((m) => ({
-      ...m.group,
-      badge_level: getGroupBadgeLevel(m.group.members_count),
-      role: m.role,
-      is_pinned: m.is_pinned,
+    // Скрытый админ/участник не раскрывается через список групп своего профиля
+    const viewerAdminOf = isOwn ? new Set<string>() : await adminGroupIds(memberships.map((m) => m.group_id), requesterId);
+    const visible = isOwn ? memberships : memberships.filter((m) => viewerAdminOf.has(m.group_id) || !memberHiddenInGroup(m.group, userId, m.role));
+    const masked = await maskGroupsForViewer(visible.map((m) => m.group), requesterId);
+    const groups = masked.map((g, i) => ({
+      ...g,
+      badge_level: getGroupBadgeLevel(g.members_count),
+      role: visible[i].role,
+      is_pinned: visible[i].is_pinned,
     }));
 
     return { groups, count: groups.length, pinned_only: pinnedOnly, hidden: false };
@@ -1177,7 +1222,7 @@ export const groupService = {
       where: { id: { in: commonIds }, deleted_at: null },
       select: GROUP_LIST_SELECT,
     });
-    return groups.map((g) => ({ ...g, badge_level: getGroupBadgeLevel(g.members_count) }));
+    return (await maskGroupsForViewer(groups, currentUserId)).map((g) => ({ ...g, badge_level: getGroupBadgeLevel(g.members_count) }));
   },
 
   // ── Group Rating (Reddit-style: -1 / +1 toggle) ───────────────────────────
@@ -1498,7 +1543,7 @@ export const groupService = {
       }),
       prisma.group.count({ where }),
     ]);
-    return { groups, total };
+    return { groups: await maskGroupsForViewer(groups, userId), total };
   },
 
   // ── Artist Queue (Todo) ───────────────────────────────────────────────────
@@ -1767,7 +1812,7 @@ export const groupService = {
       }),
       prisma.group.count({ where: { deleted_at: null, is_public: true } }),
     ]);
-    return { groups: groups.map((g) => ({ ...g, badge_level: getGroupBadgeLevel(g.members_count) })), total };
+    return { groups: (await maskGroupsForViewer(groups, null)).map((g) => ({ ...g, badge_level: getGroupBadgeLevel(g.members_count) })), total };
   },
 
   // ── Toggle notification preference ───────────────────────────────────────

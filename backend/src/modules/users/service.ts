@@ -1,6 +1,6 @@
 import prisma from '../../config/prisma.js';
 import { fetchBytes } from '../../lib/boundedFetch.js';
-import { deleteFileByUrl, isTrustedMediaUrl, assertOwnedMedia } from '../media/service.js';
+import { deleteFileByUrl, isTrustedMediaUrl, assertOwnedMedia, readStoredObject } from '../media/service.js';
 import { getUserBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isBlockedBy, getBlockerIds } from '../../lib/blocks.js';
@@ -906,7 +906,7 @@ export const usersService = {
     const owner = await prisma.user.findUnique({ where: { id: userId }, select: { username: true } });
     const username = owner?.username ?? 'unknown';
 
-    const { buffer: srcBuffer } = await fetchBytes(ref.image_url, 25 * 1024 * 1024);
+    const srcBuffer = await readStoredObject(ref.image_url, 25 * 1024 * 1024);
 
     const metadata = await sharp(srcBuffer).metadata();
     const w = metadata.width  ?? 800;

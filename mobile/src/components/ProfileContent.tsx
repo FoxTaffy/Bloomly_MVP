@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, Text, Pressable, FlatList, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
+import { mediaSource } from '../api/client';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -65,7 +66,7 @@ export function ProfileContent({ username, isOwn }: { username: string; isOwn: b
       renderItem={({ item }) => (
         <Pressable style={{ width: GRID_ITEM, height: GRID_ITEM }} className="overflow-hidden rounded-lg bg-brand-card">
           {item.media_urls[0] ? (
-            <Image source={{ uri: item.media_urls[0] }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+            <Image source={mediaSource(item.media_urls[0])} style={{ width: '100%', height: '100%' }} contentFit="cover" />
           ) : (
             <View className="flex-1 items-center justify-center p-2">
               <Text numberOfLines={4} className="text-xs text-brand-muted">

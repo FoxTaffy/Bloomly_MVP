@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, Text, Pressable, ScrollView, NativeSyntheticEvent, NativeScrollEvent, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
+import { mediaSource } from '../api/client';
 import { Link, useRouter } from 'expo-router';
 import { Heart, MessageCircle, Repeat2, Pin } from 'lucide-react-native';
 import { Avatar } from './Avatar';
@@ -86,7 +87,7 @@ export function PostCard({ post, onVote, onRepaw, interactive = true }: PostCard
             {post.media_urls.map((url) => (
               <Image
                 key={url}
-                source={{ uri: url }}
+                source={mediaSource(url)}
                 style={{ width: mediaWidth, height: mediaWidth * 0.75 }}
                 contentFit="cover"
               />

@@ -20,6 +20,15 @@ export function configureApiClient(handlers: {
   onUnauthorized = handlers.onUnauthorized;
 }
 
+/**
+ * Источник картинки/видео для expo-image. Файлы постов, комментариев и переписки сервер
+ * отдаёт только тем, кому они видны, поэтому к запросу добавляется тот же Bearer, что и к API.
+ */
+export function mediaSource(uri: string) {
+  const token = getToken();
+  return token ? { uri, headers: { Authorization: `Bearer ${token}` } } : { uri };
+}
+
 api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) config.headers.set('Authorization', `Bearer ${token}`);
