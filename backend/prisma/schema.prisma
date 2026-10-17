@@ -2063,3 +2063,20 @@ model AlbumItem {
 
   @@index([album_id, position])
 }
+
+/// Журнал действий пользователей (заявки в друзья, подписки): по нему разбирают жалобы «нажал, а не сработало».
+model UserActionLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  action     String   @db.VarChar(50)
+  target_id  String?  @db.Uuid
+  ok         Boolean  @default(true)
+  error      String?  @db.VarChar(300)
+  before     Json?
+  after      Json?
+  created_at DateTime @default(now())
+
+  @@index([user_id, created_at])
+  @@index([target_id, created_at])
+  @@index([action, created_at])
+}

@@ -3,6 +3,7 @@ import { notificationService } from '../notifications/service.js';
 import { getBlockerIds, isBlockedBy } from '../../lib/blocks.js';
 import { redactBirthDate } from '../users/service.js';
 import { errCode } from '../../lib/httpErrors.js';
+import { logAction } from '../../lib/actionLog.js';
 
 /** Даты рождения друзей с учётом их настроек приватности. В общие ответы дата не попадает. */
 async function visibleBirthDates(userIds: string[]): Promise<Map<string, Date>> {
@@ -30,6 +31,15 @@ const FRIEND_USER_SELECT = {
 } as const;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Id заявки, которая на самом деле невзаимная подписка: `follow:<followerId>` */
+const FOLLOW_REQUEST_PREFIX = 'follow:';
+function parseFollowRequestId(id: string): string | null {
+  if (!id.startsWith(FOLLOW_REQUEST_PREFIX)) return null;
+  const followerId = id.slice(FOLLOW_REQUEST_PREFIX.length);
+  if (!UUID_RE.test(followerId)) throw new Error('Friend request not found');
+  return followerId;
+}
 
 export const friendsService = {
   /**
@@ -105,6 +115,9 @@ export const friendsService = {
 
   /** Accept an incoming friend request */
   async acceptRequest(friendshipId: string, addresseeId: string) {
+    const followerId = parseFollowRequestId(friendshipId);
+    if (followerId) return this._acceptFollowRequest(followerId, addresseeId);
+
     const friendship = await prisma.friendship.findUnique({ where: { id: friendshipId } });
     if (!friendship) throw new Error('Friend request not found');
     if (friendship.addressee_id !== addresseeId) throw new Error('Forbidden');
@@ -113,9 +126,22 @@ export const friendsService = {
       throw new Error('Cannot accept a request involving a blocked user');
     }
 
-    const updated = await prisma.friendship.update({
-      where: { id: friendshipId },
-      data:  { status: 'accepted' },
+    // «Друг» в приложении = взаимная подписка, поэтому принятие заявки обязано создать обе подписки
+    // в той же транзакции, что и смену статуса — иначе придёт уведомление, а друга в списке не будет.
+    const requesterId = friendship.requester_id;
+    const [updated, createdFollows] = await prisma.$transaction([
+      prisma.friendship.update({ where: { id: friendshipId }, data: { status: 'accepted' } }),
+      prisma.follow.createMany({
+        data: [
+          { follower_id: requesterId, following_id: addresseeId },
+          { follower_id: addresseeId, following_id: requesterId },
+        ],
+        skipDuplicates: true,
+      }),
+    ]);
+    await logAction({
+      userId: addresseeId, action: 'friend.accept', targetId: requesterId,
+      before: { status: friendship.status }, after: { status: updated.status, followsCreated: createdFollows.count },
     });
 
     await notificationService.create({
@@ -130,6 +156,14 @@ export const friendsService = {
 
   /** Reject an incoming friend request (deletes the record) */
   async rejectRequest(friendshipId: string, addresseeId: string) {
+    const followerId = parseFollowRequestId(friendshipId);
+    if (followerId) {
+      // Отклонить заявку-подписку = убрать человека из своих подписчиков
+      const { count } = await prisma.follow.deleteMany({ where: { follower_id: followerId, following_id: addresseeId } });
+      if (!count) throw new Error('Friend request not found');
+      return { rejected: true };
+    }
+
     const friendship = await prisma.friendship.findUnique({ where: { id: friendshipId } });
     if (!friendship) throw new Error('Friend request not found');
     if (friendship.addressee_id !== addresseeId) throw new Error('Forbidden');
@@ -181,19 +215,57 @@ export const friendsService = {
 
   /** Get incoming pending requests for a user */
   async getIncomingRequests(addresseeId: string) {
-    const rows = await prisma.friendship.findMany({
-      where:   { addressee_id: addresseeId, status: 'pending' },
-      include: {
-        requester: { select: FRIEND_USER_SELECT },
-      },
-      orderBy: { created_at: 'desc' },
-    });
-    return rows.map((r) => ({
+    const [rows, followers] = await Promise.all([
+      prisma.friendship.findMany({
+        where:   { addressee_id: addresseeId, status: 'pending' },
+        include: {
+          requester: { select: FRIEND_USER_SELECT },
+        },
+        orderBy: { created_at: 'desc' },
+      }),
+      this._getFollowerRows(addresseeId),
+    ]);
+    const requests = rows.map((r) => ({
       id:        r.id,
       status:    r.status,
       createdAt: r.created_at,
       user:      r.requester,
     }));
+    // «Друг» = взаимная подписка, поэтому невзаимный подписчик — это тоже заявка в друзья.
+    // Так счётчик заявок совпадает со вкладкой «Подписчики».
+    const requesterIds = new Set(rows.map((r) => r.requester_id));
+    const followRequests = followers
+      .filter((f) => !requesterIds.has(f.follower_id))
+      .map((f) => ({
+        id:        `${FOLLOW_REQUEST_PREFIX}${f.follower_id}`,
+        status:    'pending',
+        createdAt: f.created_at,
+        user:      f.follower,
+      }));
+    return [...requests, ...followRequests]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  },
+
+  /** Принять заявку-подписку: подписаться в ответ, после чего подписка становится взаимной (= друзья) */
+  async _acceptFollowRequest(followerId: string, userId: string) {
+    const follow = await prisma.follow.findUnique({
+      where: { follower_id_following_id: { follower_id: followerId, following_id: userId } },
+    });
+    if (!follow) throw new Error('Friend request not found');
+    if (await isBlockedBy(followerId, userId) || await isBlockedBy(userId, followerId)) {
+      throw new Error('Cannot accept a request involving a blocked user');
+    }
+    await prisma.follow.createMany({
+      data: [{ follower_id: userId, following_id: followerId }],
+      skipDuplicates: true,
+    });
+    await logAction({ userId, action: 'friend.accept', targetId: followerId, after: { via: 'follow' } });
+    await notificationService.create({
+      receiverId: followerId,
+      senderId:   userId,
+      type:       'FRIEND_ACCEPT',
+    });
+    return { accepted: true };
   },
 
   /** Get outgoing pending requests sent by a user */
@@ -258,13 +330,17 @@ export const friendsService = {
   },
 
   /** Followers: people who follow userId, excluding mutual friends */
-  async getFollowers(userId: string) {
+  async _getFollowerRows(userId: string) {
     const mutualIds = await this._getMutualIds(userId);
-    const rows = await prisma.follow.findMany({
+    return prisma.follow.findMany({
       where:   { following_id: userId, follower_id: { notIn: Array.from(mutualIds) } },
       include: { follower: { select: FRIEND_USER_SELECT } },
       orderBy: { created_at: 'desc' },
     });
+  },
+
+  async getFollowers(userId: string) {
+    const rows = await this._getFollowerRows(userId);
     // Non-mutual followers are not followed back, so there is no bell to ring.
     return rows.map((r) => ({ ...r.follower, notify_posts: false }));
   },

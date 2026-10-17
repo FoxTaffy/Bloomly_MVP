@@ -121,8 +121,14 @@ async function handleSendRequest(targetId: string) {
   } finally { addLoading.value = false }
 }
 
-async function handleAccept(id: string) { await friendsStore.acceptRequest(id) }
-async function handleReject(id: string) { await friendsStore.rejectRequest(id) }
+async function handleAccept(id: string) {
+  addError.value = null
+  try { await friendsStore.acceptRequest(id) } catch (e) { addError.value = apiErrorMessage(e) ?? 'Ошибка' }
+}
+async function handleReject(id: string) {
+  addError.value = null
+  try { await friendsStore.rejectRequest(id) } catch (e) { addError.value = apiErrorMessage(e) ?? 'Ошибка' }
+}
 
 function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0].toUpperCase() }
 </script>

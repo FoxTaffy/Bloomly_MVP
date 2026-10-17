@@ -3,6 +3,7 @@ import { followsService } from './service.js';
 import { requestIsAdult } from '../../lib/age.js';
 import { resolveNsfwMode } from '../../lib/contentFilters.js';
 import { errMessage, errStatus } from '../../lib/httpErrors.js';
+import { logAction } from '../../lib/actionLog.js';
 
 interface JwtUser { id: string; role: string }
 
@@ -13,8 +14,10 @@ export const toggleFollowHandler = async (
   try {
     const { id: followerId } = req.user as JwtUser;
     const result = await followsService.toggle(followerId, req.params.id);
+    await logAction({ userId: followerId, action: result.following ? 'follow.on' : 'follow.off', targetId: req.params.id });
     return reply.send({ success: true, data: result, error: null });
   } catch (e) {
+    await logAction({ userId: (req.user as JwtUser).id, action: 'follow.toggle', targetId: req.params.id, error: e });
     if (errStatus(e) === 403) {
       return reply.code(403).send({ success: false, data: null, error: { code: 'PROFILE_PRIVATE', message: errMessage(e) } });
     }

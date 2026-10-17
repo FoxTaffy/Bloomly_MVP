@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { friendsService } from './service.js';
 import { presence } from '../realtime/presence.js';
 import { errMessage } from '../../lib/httpErrors.js';
+import { logAction } from '../../lib/actionLog.js';
 
 type AuthRequest = FastifyRequest;
 
@@ -12,6 +13,7 @@ export async function sendRequestHandler(req: AuthRequest, reply: FastifyReply) 
     const result = await friendsService.sendRequest(req.user.id, targetId);
     return reply.code(201).send({ success: true, data: result });
   } catch (err) {
+    await logAction({ userId: req.user.id, action: 'friend.request', targetId: targetId as string, error: err });
     return reply.code(400).send({ success: false, error: errMessage(err) });
   }
 }
@@ -22,6 +24,7 @@ export async function acceptRequestHandler(req: AuthRequest, reply: FastifyReply
     const result = await friendsService.acceptRequest(id, req.user.id);
     return reply.send({ success: true, data: result });
   } catch (err) {
+    await logAction({ userId: req.user.id, action: 'friend.accept', targetId: id as string, error: err });
     return reply.code(400).send({ success: false, error: errMessage(err) });
   }
 }
@@ -32,6 +35,7 @@ export async function rejectRequestHandler(req: AuthRequest, reply: FastifyReply
     const result = await friendsService.rejectRequest(id, req.user.id);
     return reply.send({ success: true, data: result });
   } catch (err) {
+    await logAction({ userId: req.user.id, action: 'friend.reject', targetId: id as string, error: err });
     return reply.code(400).send({ success: false, error: errMessage(err) });
   }
 }
@@ -42,6 +46,7 @@ export async function cancelRequestHandler(req: AuthRequest, reply: FastifyReply
     const result = await friendsService.cancelRequest(id, req.user.id);
     return reply.send({ success: true, data: result });
   } catch (err) {
+    await logAction({ userId: req.user.id, action: 'friend.cancel', targetId: id as string, error: err });
     return reply.code(400).send({ success: false, error: errMessage(err) });
   }
 }
@@ -52,6 +57,7 @@ export async function removeFriendHandler(req: AuthRequest, reply: FastifyReply)
     const result = await friendsService.removeFriend(req.user.id, id);
     return reply.send({ success: true, data: result });
   } catch (err) {
+    await logAction({ userId: req.user.id, action: 'friend.remove', targetId: id as string, error: err });
     return reply.code(400).send({ success: false, error: errMessage(err) });
   }
 }
