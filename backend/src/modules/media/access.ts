@@ -43,21 +43,26 @@ export async function canViewMedia(key: string, viewer: MediaViewer): Promise<bo
   return false;
 }
 
-async function postAllows(url: string, viewer: MediaViewer) {
-  const count = await prisma.post.count({
-    where: {
-      OR: [{ media_urls: { has: url } }, { media_original_urls: { has: url } }],
-      AND: [await readablePostsWhere(viewer?.id)],
-    },
-  });
+// Сначала записи со ссылкой на файл — по индексу (обычно одна), затем политика чтения только
+// для них. Без take: Prisma добавляет к take ORDER BY id, и планировщик шёл по первичному ключу
+// вместо GIN-индекса по media_urls (28 мс против 0.2 мс на 50 тыс. постов).
+async function readablePostExists(postIds: string[], viewer: MediaViewer) {
+  if (!postIds.length) return false;
+  const count = await prisma.post.count({ where: { id: { in: postIds }, AND: [await readablePostsWhere(viewer?.id)] } });
   return count > 0;
 }
 
-async function commentAllows(url: string, viewer: MediaViewer) {
-  const count = await prisma.comment.count({
-    where: { file_url: url, deleted_at: null, post: { AND: [await readablePostsWhere(viewer?.id)] } },
+async function postAllows(url: string, viewer: MediaViewer) {
+  const posts = await prisma.post.findMany({
+    where: { OR: [{ media_urls: { has: url } }, { media_original_urls: { has: url } }] },
+    select: { id: true },
   });
-  return count > 0;
+  return readablePostExists(posts.map((p) => p.id), viewer);
+}
+
+async function commentAllows(url: string, viewer: MediaViewer) {
+  const comments = await prisma.comment.findMany({ where: { file_url: url, deleted_at: null }, select: { post_id: true } });
+  return readablePostExists([...new Set(comments.map((c) => c.post_id))], viewer);
 }
 
 /** Вложение переписки видят только её участники. Пересылка копирует file_url в новый чат. */
@@ -76,7 +81,6 @@ async function albumAllows(url: string, viewer: MediaViewer) {
   const albums = await prisma.album.findMany({
     where: { items: { some: { media_url: url } } },
     select: { user_id: true, group_id: true, privacy: true },
-    take: 20,
   });
   for (const album of albums) if (await canViewAlbum(album, viewer?.id ?? null)) return true;
   return false;
@@ -86,7 +90,6 @@ async function storyAllows(url: string, viewer: MediaViewer) {
   const stories = await prisma.story.findMany({
     where: { OR: [{ image_url: url }, { video_url: url }], deleted_at: null, expires_at: { gt: new Date() } },
     select: { user_id: true },
-    take: 20,
   });
   for (const s of stories) if (await profileReadable(s.user_id, viewer)) return true;
   return false;
@@ -96,9 +99,9 @@ async function storyAllows(url: string, viewer: MediaViewer) {
 async function profileMediaAllows(url: string, viewer: MediaViewer) {
   const adultOk = (nsfw: boolean, ownerId: string) => !nsfw || viewer?.is_adult || viewer?.id === ownerId;
   const [refs, suits, history] = await Promise.all([
-    prisma.fursonaReferenceImage.findMany({ where: { image_url: url, deleted_at: null }, select: { user_id: true, is_nsfw: true }, take: 20 }),
-    prisma.fursuit.findMany({ where: { image_url: url, deleted_at: null }, select: { user_id: true, is_nsfw: true }, take: 20 }),
-    prisma.mediaHistory.findMany({ where: { OR: [{ url }, { video_url: url }] }, select: { user_id: true }, take: 20 }),
+    prisma.fursonaReferenceImage.findMany({ where: { image_url: url, deleted_at: null }, select: { user_id: true, is_nsfw: true } }),
+    prisma.fursuit.findMany({ where: { image_url: url, deleted_at: null }, select: { user_id: true, is_nsfw: true } }),
+    prisma.mediaHistory.findMany({ where: { OR: [{ url }, { video_url: url }] }, select: { user_id: true } }),
   ]);
   const owners = [
     ...refs.filter((r) => adultOk(r.is_nsfw, r.user_id)).map((r) => r.user_id),

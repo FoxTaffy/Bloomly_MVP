@@ -52,17 +52,38 @@ async function assertProfileVisible(userId: string, viewerId?: string) {
 }
 
 /** Убирает посты авторов, чей профиль скрыт от смотрящего (настройка профиля и блокировки). */
-async function filterByProfilePrivacy<T extends { author_id: string }>(rows: T[], viewerId?: string): Promise<T[]> {
+export async function filterByProfilePrivacy<T extends { author_id: string }>(rows: T[], viewerId?: string): Promise<T[]> {
   const authorIds = [...new Set(rows.map((r) => r.author_id))].filter((id) => id !== viewerId);
   if (authorIds.length === 0) return rows;
   const owners = await prisma.user.findMany({
     where: { id: { in: authorIds } },
     select: { id: true, profile_visibility: true },
   });
+  // Пакетно, а не по запросу на автора: лента из 20 постов делала 20 проверок блокировки
+  // и по две на каждого автора с приватностью «друзья». Правила те же, что у isBlockedBy
+  // (автор заблокировал зрителя) и isAllowedByPrivacy (друзья = взаимная подписка).
+  const friendsOnly = owners.filter((o) => o.profile_visibility === 'friends').map((o) => o.id);
+  const [blockRows, viewerFollows, followsViewer] = viewerId ? await Promise.all([
+    prisma.block.findMany({ where: { blocked_id: viewerId, blocker_id: { in: authorIds } }, select: { blocker_id: true } }),
+    friendsOnly.length ? prisma.follow.findMany({ where: { follower_id: viewerId, following_id: { in: friendsOnly } }, select: { following_id: true } }) : [],
+    friendsOnly.length ? prisma.follow.findMany({ where: { following_id: viewerId, follower_id: { in: friendsOnly } }, select: { follower_id: true } }) : [],
+  ]) : [[], [], []];
+  const blockedBy = new Set(blockRows.map((b) => b.blocker_id));
+  const followed = new Set(viewerFollows.map((f) => f.following_id));
+  const friends = new Set(followsViewer.map((f) => f.follower_id).filter((id) => followed.has(id)));
   const visible = new Set<string>();
   for (const owner of owners) {
-    if (await isBlockedBy(owner.id, viewerId)) continue;
-    if (await isAllowedByPrivacy(owner.profile_visibility, owner.id, viewerId)) visible.add(owner.id);
+    if (blockedBy.has(owner.id)) continue;
+    switch (owner.profile_visibility) {
+      case 'nobody':
+      case 'only_me':
+        continue;
+      case 'friends':
+        if (friends.has(owner.id)) visible.add(owner.id);
+        continue;
+      default:
+        visible.add(owner.id);
+    }
   }
   return rows.filter((r) => r.author_id === viewerId || visible.has(r.author_id));
 }
