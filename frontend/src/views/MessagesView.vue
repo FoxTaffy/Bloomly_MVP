@@ -333,6 +333,9 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
+  // Вышли из раздела — чат больше не «открыт»: иначе новые сообщения не попадают в счётчик
+  // и сразу помечаются прочитанными, пока пользователь на другой странице.
+  store.closeConversation()
 })
 
 function onKeydown(e: KeyboardEvent) {
