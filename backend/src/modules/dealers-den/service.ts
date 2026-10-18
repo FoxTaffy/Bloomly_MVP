@@ -1,5 +1,6 @@
 import { randomInt } from 'crypto';
 import prisma from '../../config/prisma.js';
+import { Prisma } from '@prisma/client';
 import type { CreateListingInput, UpdateListingInput, GetListingsQuery, PlaceBidInput, CreateReviewInput, CreateBookingInput, UpdateBookingInput, CreateDisputeInput, ReplyDisputeInput } from './types.js';
 import { REVIEW_TAGS } from './types.js';
 import { recalcDenTrust } from './trust.service.js';
@@ -44,6 +45,8 @@ const LISTING_SELECT = {
   commission_slots_taken: true,
   commission_eta_days: true,
   commission_form_fields: true,
+  commission_details: true,
+  views_count: true,
   created_at: true,
   updated_at: true,
   seller: {
@@ -64,6 +67,18 @@ const LISTING_SELECT = {
     },
   },
 };
+
+// A viewer counts once per listing per 30 min (in-memory, per process: good enough for a vanity counter).
+const VIEW_TTL_MS = 30 * 60 * 1000;
+const recentViews = new Map<string, number>();
+function shouldCountView(key: string): boolean {
+  const now = Date.now();
+  if (recentViews.size > 5000) for (const [k, t] of recentViews) if (now - t > VIEW_TTL_MS) recentViews.delete(k);
+  const last = recentViews.get(key);
+  if (last !== undefined && now - last < VIEW_TTL_MS) return false;
+  recentViews.set(key, now);
+  return true;
+}
 
 export const dealersDenService = {
   // ── list listings ─────────────────────────────────────────────────────────
@@ -134,7 +149,7 @@ export const dealersDenService = {
   },
 
   // ── get single with extended info ─────────────────────────────────────────
-  async getById(id: string, currentUserId?: string, viewerIsAdult = false) {
+  async getById(id: string, currentUserId?: string, viewerIsAdult = false, viewerKey?: string) {
     const listing = await prisma.dealerListing.findFirst({
       where: { id, deleted_at: null },
       select: {
@@ -158,6 +173,12 @@ export const dealersDenService = {
       if (listing.is_nsfw && !viewerIsAdult) return null;
     }
 
+    let viewsCount = listing.views_count;
+    if (!isOwner && viewerKey && shouldCountView(`${id}:${viewerKey}`)) {
+      viewsCount += 1;
+      prisma.dealerListing.update({ where: { id }, data: { views_count: { increment: 1 } } }).catch(logError('[dealerListing.view] count failed'));
+    }
+
     const [wishlistCount, isWishlisted, reviews] = await Promise.all([
       prisma.denWishlist.count({ where: { listing_id: id } }),
       currentUserId ? prisma.denWishlist.findUnique({ where: { user_id_listing_id: { user_id: currentUserId, listing_id: id } } }).then(Boolean) : false,
@@ -176,6 +197,7 @@ export const dealersDenService = {
     const { seller, ...rest } = listing as any;
     return {
       ...rest,
+      views_count: viewsCount,
       seller: {
         ...seller,
         last_active_at: seller.updated_at ?? null,
@@ -220,6 +242,7 @@ export const dealersDenService = {
         commission_slots_total: input.commissionSlotsTotal,
         commission_eta_days:    input.commissionEtaDays,
         commission_form_fields: (input.commissionFormFields as any) ?? [],
+        commission_details:     (input.commissionDetails as any) ?? undefined,
       },
       select: LISTING_SELECT,
     });
@@ -254,6 +277,7 @@ export const dealersDenService = {
     if (input.commissionSlotsTotal !== undefined) data.commission_slots_total = input.commissionSlotsTotal;
     if (input.commissionEtaDays    !== undefined) data.commission_eta_days    = input.commissionEtaDays;
     if (input.commissionFormFields !== undefined) data.commission_form_fields = input.commissionFormFields;
+    if (input.commissionDetails    !== undefined) data.commission_details     = (input.commissionDetails as any) ?? Prisma.DbNull;
 
     const updated = await prisma.dealerListing.update({ where: { id }, data, select: LISTING_SELECT });
 

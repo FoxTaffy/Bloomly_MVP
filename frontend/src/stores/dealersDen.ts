@@ -151,6 +151,15 @@ export interface ReviewSummary {
   tags: { tag: string; count: number }[]
 }
 
+export interface CommissionDetails {
+  formats?: { name: string; price: number }[]
+  addons?: { name: string; hint?: string; price: number }[]
+  draws?: string[]
+  doesntDraw?: string[]
+  sections?: { title: string; items: { label: string; value: string }[] }[]
+  terms?: { revisions?: string; file?: string; rights?: string; refund?: string; languages?: string }
+}
+
 export interface DealerListing {
   id: string
   seller_id: string
@@ -184,6 +193,8 @@ export interface DealerListing {
   commission_slots_taken: number
   commission_eta_days: number | null
   commission_form_fields: { label: string; required: boolean; type: string }[] | null
+  commission_details?: CommissionDetails | null
+  views_count?: number
   created_at: string
   updated_at: string
   seller: ListingSeller
@@ -228,6 +239,7 @@ export interface CreateListingInput {
   commissionSlotsTotal?: number
   commissionEtaDays?: number
   commissionFormFields?: { label: string; required: boolean; type: string }[]
+  commissionDetails?: CommissionDetails | null
 }
 
 export const LISTINGS_PAGE_SIZE = 20

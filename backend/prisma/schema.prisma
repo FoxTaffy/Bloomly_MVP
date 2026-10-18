@@ -1444,6 +1444,8 @@ model DealerListing {
   commission_slots_taken Int       @default(0)
   commission_eta_days    Int?
   commission_form_fields Json?     @default("[]")
+  commission_details     Json?     // { formats, addons, draws, doesntDraw, sections, terms }
+  views_count            Int       @default(0)
   // ────────────────────────────────────────────────────────────────────────────
   created_at             DateTime  @default(now()) @db.Timestamp(6)
   updated_at             DateTime  @default(now()) @updatedAt @db.Timestamp(6)

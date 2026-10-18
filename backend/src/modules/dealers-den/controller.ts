@@ -34,7 +34,7 @@ export async function getListingHandler(req: FastifyRequest, reply: FastifyReply
   if (!UUID_RE.test(id)) return reply.status(404).send({ success: false, error: 'Listing not found' });
   const currentUserId = req.user?.id;
   try {
-    const listing = await dealersDenService.getById(id, currentUserId, requestIsAdult(req.user));
+    const listing = await dealersDenService.getById(id, currentUserId, requestIsAdult(req.user), currentUserId ?? req.ip);
     if (!listing) return reply.status(404).send({ success: false, error: 'Listing not found' });
     return reply.send({ success: true, data: { listing } });
   } catch (err) {

@@ -104,5 +104,21 @@ export function validateListingInput(input: Record<string, any>, mode: 'create' 
       typeof f.required === 'boolean' && (f.type === 'text' || f.type === 'textarea'));
     if (!ok) return `Поля формы: не более ${MAX_FORM_FIELDS}, у каждого название и тип text/textarea`;
   }
+  if (has('commissionDetails') && input.commissionDetails !== null) {
+    const d: any = input.commissionDetails;
+    const str = (v: unknown, max: number) => typeof v === 'string' && v.trim().length >= 1 && v.length <= max;
+    const price = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1_000_000;
+    const list = (v: unknown, max: number) => v === undefined || (Array.isArray(v) && v.length <= max && v.every(x => str(x, 40)));
+    const ok = d && typeof d === 'object' && !Array.isArray(d) &&
+      (d.formats === undefined || (Array.isArray(d.formats) && d.formats.length <= 8 && d.formats.every((f: any) => f && str(f.name, 40) && price(f.price)))) &&
+      (d.addons === undefined || (Array.isArray(d.addons) && d.addons.length <= 12 && d.addons.every((a: any) => a && str(a.name, 60) && price(a.price) && (a.hint === undefined || (typeof a.hint === 'string' && a.hint.length <= 120))))) &&
+      list(d.draws, 20) && list(d.doesntDraw, 20) &&
+      (d.sections === undefined || (Array.isArray(d.sections) && d.sections.length <= 4 && d.sections.every((sec: any) =>
+        sec && str(sec.title, 40) && Array.isArray(sec.items) && sec.items.length <= 12 &&
+        sec.items.every((it: any) => it && str(it.label, 40) && str(it.value, 80))))) &&
+      (d.terms === undefined || (d.terms && typeof d.terms === 'object' && ['revisions', 'file', 'rights', 'refund', 'languages']
+        .every(k => d.terms[k] === undefined || (typeof d.terms[k] === 'string' && d.terms[k].length <= 80))));
+    if (!ok) return 'Детали комиссии: неверный формат (форматы, допы, «рисую / не рисую», условия)';
+  }
   return null;
 }

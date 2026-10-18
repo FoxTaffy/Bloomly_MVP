@@ -1,6 +1,15 @@
 export type ListingStatus   = 'active' | 'sold' | 'draft' | 'archived';
 export type ListingCategory = 'art' | 'fursuit' | 'badge' | 'print' | 'music' | 'craft' | 'merch' | 'avatar_frame' | 'other';
 export type ListingType     = 'digital' | 'physical' | 'both';
+export interface CommissionDetails {
+  formats?: Array<{ name: string; price: number }>;
+  addons?: Array<{ name: string; hint?: string; price: number }>;
+  draws?: string[];
+  doesntDraw?: string[];
+  sections?: Array<{ title: string; items: Array<{ label: string; value: string }> }>;
+  terms?: { revisions?: string; file?: string; rights?: string; refund?: string; languages?: string };
+}
+
 export type ListingKind     = 'fixed' | 'auction' | 'ych' | 'raffle' | 'commission_queue';
 
 export const REVIEW_TAGS = ['быстро', 'качество', 'вежливый', 'точно как описано', 'рекомендую'] as const;
@@ -30,6 +39,7 @@ export interface CreateListingInput {
   commissionSlotsTotal?: number;
   commissionEtaDays?: number;
   commissionFormFields?: Array<{ label: string; required: boolean; type: string }>;
+  commissionDetails?: CommissionDetails | null;
 }
 
 export interface UpdateListingInput extends Partial<Omit<CreateListingInput, 'groupId'>> {}
