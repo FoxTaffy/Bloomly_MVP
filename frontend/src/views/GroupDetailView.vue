@@ -29,6 +29,7 @@ import { useNsfwMode } from '@/composables/useNsfwMode'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import { useMessagesStore } from '@/stores/messages'
 import api from '@/api'
+import { contrastText } from '@/utils/contrastText'
 const DonateModal = defineAsyncComponent(() => import('@/components/groups/DonateModal.vue'))
 
 const route = useRoute()
@@ -1034,8 +1035,8 @@ const vClickOutside = {
                       <BIcon name="Send" class="w-4 h-4" /> {{ langStore.t.groupDetailSuggestNewsBtn }}
                     </button>
                     <button v-if="group.type === 'event' && !isMember && !isOwner && !isEventExpired"
-                      class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-bold transition-all shadow-lg"
-                      :style="`background: ${group.accent_color || '#22c55e'}; box-shadow: 0 4px 14px ${group.accent_color || '#22c55e'}40`"
+                      class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg"
+                      :style="`color: ${contrastText(group.accent_color || '#22c55e')}; background: ${group.accent_color || '#22c55e'}; box-shadow: 0 4px 14px ${group.accent_color || '#22c55e'}40`"
                       @click="handleJoin">
                       <BIcon name="CalendarCheck" class="w-4 h-4" /> {{ langStore.t.groupDetailImGoingBtn }}
                     </button>
@@ -1804,7 +1805,7 @@ const vClickOutside = {
                           <!-- Timeline dot -->
                           <div class="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-1.5 z-10 border-2 border-brand-card"
                             :style="`background: ${group.accent_color || '#4C67CF'}`">
-                            <span class="w-1.5 h-1.5 rounded-full bg-white/90 block" />
+                            <span class="w-1.5 h-1.5 rounded-full block" :style="{ background: contrastText(group.accent_color) }" />
                           </div>
                           <!-- Content card -->
                           <div class="flex-1 min-w-0 bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 transition-all group/sched"
@@ -1835,9 +1836,9 @@ const vClickOutside = {
                 <button v-for="tab in contentTabs" :key="tab.key"
                   @click="activeContentTab = tab.key as any"
                   class="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold border transition-all duration-200 whitespace-nowrap"
-                  :class="activeContentTab === tab.key ? 'text-white' : 'bg-brand-card text-white/55 border-brand-border hover:text-white'"
+                  :class="activeContentTab === tab.key ? '' : 'bg-brand-card text-white/55 border-brand-border hover:text-white'"
                   :style="activeContentTab === tab.key
-                    ? `background: ${group.accent_color || '#4C67CF'}; border-color: ${group.accent_color || '#4C67CF'}; box-shadow: 0 4px 14px ${group.accent_color || '#4C67CF'}40`
+                    ? `color: ${contrastText(group.accent_color)}; background: ${group.accent_color || '#4C67CF'}; border-color: ${group.accent_color || '#4C67CF'}; box-shadow: 0 4px 14px ${group.accent_color || '#4C67CF'}40`
                     : `--accent: ${group.accent_color || '#4C67CF'}`">
                   <BIcon :name="tab.icon" class="w-4 h-4" />{{ tab.label }}
                 </button>
@@ -2327,7 +2328,7 @@ const vClickOutside = {
                       class="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-extrabold transition-all duration-200 disabled:opacity-60"
                       :style="myRsvpStatus === 'going'
                         ? `background: transparent; color: ${group.accent_color || '#4C67CF'}; border: 2px solid ${group.accent_color || '#4C67CF'}60; box-shadow: inset 0 0 24px ${group.accent_color || '#4C67CF'}15`
-                        : `background: ${group.accent_color || '#4C67CF'}; color: white; border: 2px solid transparent; box-shadow: 0 4px 18px ${group.accent_color || '#4C67CF'}40`">
+                        : `background: ${group.accent_color || '#4C67CF'}; color: ${contrastText(group.accent_color)}; border: 2px solid transparent; box-shadow: 0 4px 18px ${group.accent_color || '#4C67CF'}40`">
                       <BIcon :name="myRsvpStatus === 'going' ? 'CheckCircle2' : 'CalendarCheck'" class="w-4 h-4" />
                       {{ myRsvpStatus === 'going' ? langStore.t.groupDetailGoingConfirmedLabel : langStore.t.groupDetailGoBtn }}
                     </button>

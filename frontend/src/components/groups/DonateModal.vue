@@ -6,6 +6,7 @@ import BIcon from '@/components/BIcon.vue'
 import { useWalletStore } from '@/stores/wallet'
 import { useGroupsStore } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
+import { contrastText } from '@/utils/contrastText'
 
 const props = defineProps<{
   group: {
@@ -32,6 +33,7 @@ const sending = ref(false)
 const donateError = ref('')
 
 const accent = computed(() => props.group.accent_color || '#4C67CF')
+const onAccent = computed(() => contrastText(accent.value))
 
 const finalAmount = computed(() => {
   if (customAmount.value && !isNaN(Number(customAmount.value))) return Number(customAmount.value)
@@ -143,7 +145,7 @@ onMounted(() => { walletStore.fetchBalance().catch(() => {}) })
                   @click="pickPreset(preset)"
                   class="py-3 rounded-2xl text-sm font-bold transition-all"
                   :style="selectedAmount === preset
-                    ? `background: ${accent}; color: white; box-shadow: 0 4px 14px ${accent}40`
+                    ? `background: ${accent}; color: ${onAccent}; box-shadow: 0 4px 14px ${accent}40`
                     : 'background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.5)'">
                   {{ preset.toLocaleString('ru') }}
                 </button>
@@ -184,7 +186,7 @@ onMounted(() => { walletStore.fetchBalance().catch(() => {}) })
                 @click="sendDonate"
                 :disabled="finalAmount < 10 || sending"
                 class="w-full py-4 rounded-2xl text-base font-extrabold transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                :style="`background: ${accent}; color: white; box-shadow: 0 6px 20px ${accent}35`">
+                :style="`background: ${accent}; color: ${onAccent}; box-shadow: 0 6px 20px ${accent}35`">
                 <BIcon v-if="sending" name="Loader2" class="w-5 h-5 animate-spin" />
                 <span v-if="sending">Отправляем…</span>
                 <span v-else-if="!finalAmount">Поддержать · —</span>
@@ -211,8 +213,8 @@ onMounted(() => { walletStore.fetchBalance().catch(() => {}) })
               </div>
               <div class="flex flex-col gap-2">
                 <button @click="goToWallet"
-                  class="w-full py-3.5 rounded-2xl text-sm font-bold text-white transition-all"
-                  :style="`background: ${accent}`">
+                  class="w-full py-3.5 rounded-2xl text-sm font-bold transition-all"
+                  :style="`background: ${accent}; color: ${onAccent}`">
                   Пополнить кошелёк
                 </button>
                 <button @click="step = 'pick'"
