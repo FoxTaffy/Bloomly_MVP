@@ -189,7 +189,7 @@ const archetypeComposer = computed(() => {
   const t: string | undefined = group.value?.type
   if (t === 'news') return { postType: 'article', showTitle: true, placeholder: langStore.t.groupDetailArticlePlaceholder, label: langStore.t.groupDetailNewArticleLabel, icon: 'Newspaper' }
   if (t === 'artist') return { postType: 'artwork', showTitle: false, placeholder: langStore.t.groupDetailArtworkPlaceholder, label: langStore.t.groupDetailNewArtworkLabel, icon: 'Palette' }
-  if (t === 'creative') return { postType: 'commission_update', showTitle: false, placeholder: langStore.t.groupDetailCommissionUpdatePlaceholder, label: langStore.t.groupDetailUpdateLabel, icon: 'Scissors' }
+  if (t === 'creative') return { postType: 'commission_update', showTitle: false, placeholder: langStore.t.groupDetailCommissionUpdatePlaceholder, label: langStore.t.groupDetailUpdateLabel, icon: 'Palette' }
   if (t === 'event') return { postType: 'announcement', showTitle: false, placeholder: langStore.t.groupDetailAnnouncementPlaceholder, label: langStore.t.groupDetailAnnouncementLabel, icon: 'Megaphone' }
   return { postType: 'general', showTitle: false, placeholder: langStore.t.groupDetailGeneralPostPlaceholder, label: langStore.t.groupDetailPostLabel, icon: 'PenLine' }
 })
@@ -963,7 +963,7 @@ const vClickOutside = {
             <div class="absolute bottom-8 right-4 z-10 flex gap-2">
               <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-xs border"
                 :class="typeColors[group.type] || 'bg-brand-accent/15 text-brand-accent border-brand-accent/25'">
-                <BIcon :name="{ event: 'CalendarDays', creative: 'Scissors', artist: 'Palette', static: 'Rss', news: 'Newspaper', shop: 'ShoppingBag', community: 'Users', brand: 'Building2' }[group.type] || 'Image'" class="w-3 h-3" />
+                <BIcon :name="{ event: 'CalendarDays', creative: 'Palette', artist: 'Palette', static: 'Rss', news: 'Newspaper', shop: 'ShoppingBag', community: 'Users', brand: 'Building2' }[group.type] || 'Image'" class="w-3 h-3" />
                 {{ typeLabels[group.type] || langStore.t.groupDetailGenericTypeFallback }}
               </span>
             </div>
@@ -996,7 +996,7 @@ const vClickOutside = {
                       @click="group.avatar_url && (showAvatarViewer = true)">
                       <img v-if="group.avatar_url" :src="group.avatar_url" class="w-full h-full object-cover" @error="onAvatarError" />
                       <div v-else class="w-full h-full flex items-center justify-center">
-                        <BIcon :name="{ event: 'CalendarDays', creative: 'Scissors', artist: 'Palette', static: 'Rss', news: 'Newspaper', shop: 'ShoppingBag', community: 'Users', brand: 'Building2' }[group.type] || 'Image'"
+                        <BIcon :name="{ event: 'CalendarDays', creative: 'Palette', artist: 'Palette', static: 'Rss', news: 'Newspaper', shop: 'ShoppingBag', community: 'Users', brand: 'Building2' }[group.type] || 'Image'"
                           class="w-10 h-10" :style="{ color: group.accent_color || '#4C67CF' }" />
                       </div>
                     </div>
