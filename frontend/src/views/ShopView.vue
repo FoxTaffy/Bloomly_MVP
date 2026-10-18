@@ -9,6 +9,7 @@ import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useLangStore } from '@/stores/lang'
 import AppHeader  from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
+import WalletCard from '@/components/WalletCard.vue'
 import BIcon      from '@/components/BIcon.vue'
 import StickerPackEditor from '@/components/StickerPackEditor.vue'
 import SubmitFrameModal  from '@/components/SubmitFrameModal.vue'
@@ -328,6 +329,7 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
               </div>
 
               <div class="flex flex-col gap-2 min-w-[220px] max-md:min-w-0 max-md:w-full">
+                <WalletCard v-if="auth.user" />
                 <div class="flex items-center gap-2 bg-white/10 backdrop-blur-xs border border-white/15 rounded-2xl px-4 py-2.5">
                   <BIcon name="Search" class="w-4 h-4 text-white/50 shrink-0" />
                   <input v-model="searchQuery"

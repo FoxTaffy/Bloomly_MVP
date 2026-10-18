@@ -13,6 +13,7 @@ import AppHeader    from '@/components/AppHeader.vue'
 import AppSidebar   from '@/components/AppSidebar.vue'
 import ListingDetailsEditor from '@/components/ListingDetailsEditor.vue'
 import { emptyDraft, draftFrom, cleanDraft, type DetailsDraft } from '@/lib/listingDetails'
+import WalletCard from '@/components/WalletCard.vue'
 import BIcon        from '@/components/BIcon.vue'
 import MediaUpload  from '@/components/MediaUpload.vue'
 import DenWeeklyTop from '@/components/DenWeeklyTop.vue'
@@ -466,6 +467,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 
               <!-- Search + CTA -->
               <div class="flex flex-col gap-2 min-w-[220px] max-md:min-w-0 max-md:w-full">
+                <WalletCard v-if="auth.user" />
                 <div class="flex items-center gap-2 bg-white/10 backdrop-blur-xs border border-white/15 rounded-2xl px-4 py-2.5">
                   <BIcon name="Search" class="w-4 h-4 text-white/50 shrink-0" />
                   <input v-model="searchQuery" :placeholder="langStore.t.dealersDenSearchPlaceholderHero"
