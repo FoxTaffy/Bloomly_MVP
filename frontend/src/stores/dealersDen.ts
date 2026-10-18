@@ -537,6 +537,11 @@ export const useDealersDenStore = defineStore('dealersDen', () => {
     return data.data.owned as OwnedAvatarFrame
   }
 
+  async function listAvatarFrames() {
+    const { data } = await api.get('/avatar-frames')
+    return data.data.frames as (AvatarFrame & { owned: boolean })[]
+  }
+
   async function getMyAvatarFrames() {
     const { data } = await api.get('/avatar-frames/mine')
     return data.data.frames as OwnedAvatarFrame[]
@@ -577,7 +582,7 @@ export const useDealersDenStore = defineStore('dealersDen', () => {
     // Fairs
     getCurrentFair, getFair, applyToFair,
     // Avatar frames
-    createAvatarFrame, claimAvatarFrame, updateFrameCalibration, getMyAvatarFrames,
+    createAvatarFrame, claimAvatarFrame, updateFrameCalibration, getMyAvatarFrames, listAvatarFrames,
     adminGetFrameSubmissions, adminReviewFrame, getTrendingTags,
   }
 })

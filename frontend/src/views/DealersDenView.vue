@@ -74,7 +74,6 @@ const CATS = computed(() => [
   { key: 'music',   label: langStore.t.dealersDenCatMusic, icon: 'Music'     },
   { key: 'craft',   label: langStore.t.dealersDenCatCraft, icon: 'Scissors'   },
   { key: 'merch',   label: langStore.t.dealersDenCatMerch, icon: 'Shirt'     },
-  { key: 'avatar_frame', label: langStore.t.dealersDenCatFrame, icon: 'CircleDashed' },
   { key: 'other',   label: langStore.t.other,             icon: 'Package'    },
 ])
 const selectedCategory = ref('all')

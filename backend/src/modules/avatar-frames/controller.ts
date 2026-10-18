@@ -23,6 +23,16 @@ export async function createFrameHandler(req: FastifyRequest, reply: FastifyRepl
   }
 }
 
+export async function listFramesHandler(req: FastifyRequest, reply: FastifyReply) {
+  try {
+    const frames = await avatarFramesService.listApproved(req.user.id);
+    return reply.send({ success: true, data: { frames } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ success: false, error: 'Failed to list avatar frames' });
+  }
+}
+
 export async function claimFrameHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const { id } = req.params as { id: string };

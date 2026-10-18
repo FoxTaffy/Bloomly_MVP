@@ -42,24 +42,10 @@ export const avatarFramesService = {
     }
 
     const now = new Date();
+    // Рамки живут только в магазине — лот в Dealers' Den больше не создаётся
     const result = await prisma.$transaction(async (tx) => {
-      const listing = await tx.dealerListing.create({
-        data: {
-          seller_id: userId,
-          title: input.name.trim(),
-          price: input.price ?? 0,
-          category: 'avatar_frame',
-          type: 'digital',
-          listing_kind: 'fixed',
-          images: [input.imageUrl],
-          tags: (input.tags ?? []).map((t) => t.trim().toLowerCase()).filter(Boolean),
-          status: admin ? 'active' : 'draft',
-        },
-      });
-
       const frame = await tx.avatarFrame.create({
         data: {
-          listing_id: listing.id,
           creator_id: userId,
           name: input.name.trim(),
           image_url: input.imageUrl,
@@ -79,6 +65,21 @@ export const avatarFramesService = {
     });
 
     return result;
+  },
+
+  // ── каталог одобренных рамок для магазина ────────────────────────────────────
+  async listApproved(userId: string) {
+    const [frames, owned] = await Promise.all([
+      prisma.avatarFrame.findMany({
+        where: { status: 'approved', deleted_at: null },
+        select: FRAME_SELECT,
+        orderBy: { created_at: 'desc' },
+        take: 100,
+      }),
+      prisma.userAvatarFrame.findMany({ where: { user_id: userId }, select: { frame_id: true } }),
+    ]);
+    const ownedIds = new Set(owned.map((o) => o.frame_id));
+    return frames.map((f) => ({ ...f, owned: ownedIds.has(f.id) }));
   },
 
   // ── claim (free instant grant, once approved) ───────────────────────────────

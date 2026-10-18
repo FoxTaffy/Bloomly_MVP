@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useShopStore, type ShopItem } from '@/stores/shop'
 import { useStickersStore } from '@/stores/stickers'
+import { useDealersDenStore, type AvatarFrame } from '@/stores/dealersDen'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useLangStore } from '@/stores/lang'
 import AppHeader  from '@/components/AppHeader.vue'
@@ -19,6 +20,7 @@ const router       = useRouter()
 const auth         = useAuthStore()
 const shopStore    = useShopStore()
 const stickerStore = useStickersStore()
+const denStore     = useDealersDenStore()
 const langStore    = useLangStore()
 const { nsfwEnabled } = useNsfwMode()
 const { confirmDialog } = useConfirm()
@@ -67,6 +69,29 @@ async function acquire(item: ShopItem, e: Event) {
   flashTimer = setTimeout(() => (purchaseMsg.value = null), 4000)
 }
 
+// ── Рамки аватара (одобренные, бесплатно забираются в коллекцию) ────────────
+const frames = ref<(AvatarFrame & { owned: boolean })[]>([])
+const claimingFrameId = ref<string | null>(null)
+
+async function loadFrames() {
+  try { frames.value = await denStore.listAvatarFrames() } catch { frames.value = [] }
+}
+
+async function claimFrame(f: AvatarFrame & { owned: boolean }) {
+  if (claimingFrameId.value) return
+  claimingFrameId.value = f.id
+  try {
+    await denStore.claimAvatarFrame(f.id)
+    f.owned = true
+  } catch (err: any) {
+    clearTimeout(flashTimer)
+    purchaseMsg.value = { type: 'err', text: err?.response?.data?.error ?? 'Не удалось забрать рамку' }
+    flashTimer = setTimeout(() => (purchaseMsg.value = null), 4000)
+  } finally {
+    claimingFrameId.value = null
+  }
+}
+
 // ── Load ──────────────────────────────────────────────────────────────────
 async function loadData() {
   const cat = activeCategory.value
@@ -82,6 +107,7 @@ async function loadData() {
       promises.push(stickerStore.loadMyCollection())
     }
   }
+  if (cat === 'frame' && auth.user) promises.push(loadFrames())
   if (auth.user) {
     promises.push(shopStore.loadMyItems())
     promises.push(stickerStore.loadIncomingRequests())
@@ -200,6 +226,7 @@ const showFrameModal = ref(false)
 
 function onFrameCreated() {
   clearTimeout(flashTimer)
+  loadFrames()
   purchaseMsg.value = { type: 'ok', text: 'Рамка загружена и отправлена на модерацию' }
   flashTimer = setTimeout(() => (purchaseMsg.value = null), 4000)
 }
@@ -440,6 +467,28 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
           class="w-full flex items-center justify-center gap-2 py-3 text-white text-sm font-bold rounded-2xl transition-all shadow-lg hover:opacity-90 border border-brand-border bg-brand-card">
           <BIcon name="CircleDashed" class="w-4 h-4" /> {{ langStore.t.avatarFrameSubmitBtn }}
         </button>
+
+        <!-- AVATAR FRAMES -->
+        <div v-if="activeCategory === 'frame' && frames.length" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 mb-4">
+          <div v-for="f in frames" :key="f.id"
+            class="bg-brand-card border border-brand-border rounded-2xl overflow-hidden shadow-lg hover:-translate-y-0.5 transition-all">
+            <div class="w-full bg-brand-bg flex items-center justify-center p-4" style="aspect-ratio: 1/1">
+              <img :src="f.image_url" :alt="f.name" class="max-w-full max-h-full object-contain" />
+            </div>
+            <div class="p-3 stack-y-2">
+              <p class="text-sm font-bold text-white truncate">{{ f.name }}</p>
+              <p class="text-[11px] text-white/40 truncate">{{ f.creator.display_name ?? f.creator.username }}</p>
+              <button v-if="f.owned" disabled
+                class="w-full py-2 rounded-xl bg-brand-success/15 text-brand-success text-xs font-bold flex items-center justify-center gap-1">
+                <BIcon name="Check" class="w-3.5 h-3.5" /> {{ langStore.t.avatarFrameClaimedBtn }}
+              </button>
+              <button v-else @click="claimFrame(f)" :disabled="claimingFrameId === f.id"
+                class="w-full py-2 rounded-xl bg-brand-accent text-white text-xs font-bold hover:bg-brand-accent-plus transition-colors disabled:opacity-50">
+                {{ langStore.t.avatarFrameClaimBtn }}
+              </button>
+            </div>
+          </div>
+        </div>
 
         <!-- SHOP ITEMS GRID -->
         <template v-if="!shopStore.loading && activeCategory !== 'sticker_pack'">

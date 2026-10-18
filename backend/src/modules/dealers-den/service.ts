@@ -99,7 +99,8 @@ export const dealersDenService = {
       where.status = query.status;
     }
 
-    if (query.category)    where.category    = query.category;
+    // Рамки аватара — только в магазине
+    where.category = query.category && query.category !== 'avatar_frame' ? query.category : { not: 'avatar_frame' };
     if (query.type)        where.type        = query.type;
     if (query.listingKind) where.listing_kind = query.listingKind;
     if (query.sellerId)    where.seller_id   = query.sellerId;
