@@ -139,6 +139,13 @@ const AUTHOR_DIVERSITY_MIN_GAP = 2;
  * signal, not an absolute override of everything else.
  */
 const UNSEEN_BOOST = 40;
+/**
+ * Flat bonus for a brand-new post, halving every FRESHNESS_HALF_LIFE_HOURS. Sized above UNSEEN_BOOST
+ * so that posts from the last hour or two lead the feed (as in most social networks), then give way
+ * to affinity/popularity within about half a day.
+ */
+const FRESHNESS_BOOST = 80;
+const FRESHNESS_HALF_LIFE_HOURS = 4;
 
 export type PostTerm = { term: string; source: 'tag' | 'keyword'; weight: number };
 export type AffinityMap = Map<string, { score: number; likes: number; dislikes: number }>;
@@ -300,11 +307,13 @@ function rankByAffinity<T extends PostLike & { id: string; rating: number; creat
       const decay = Math.pow(0.5, ageHours / RECENCY_HALF_LIFE_HOURS);
       const trending = trendingMap.get(post.id) ?? 0;
       const unseenBonus = seenIds.has(post.id) ? 0 : UNSEEN_BOOST;
+      const freshness = FRESHNESS_BOOST * Math.pow(0.5, Math.max(0, ageHours) / FRESHNESS_HALF_LIFE_HOURS);
       const score = post.rating * decay
         + behavioral * AFFINITY_RANK_WEIGHT
         + interestBoost * INTEREST_RANK_WEIGHT
         + trending * TRENDING_WEIGHT
-        + unseenBonus;
+        + unseenBonus
+        + freshness;
       return { post, score };
     })
     .sort((a, b) => b.score - a.score)

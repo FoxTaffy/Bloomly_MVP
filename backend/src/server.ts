@@ -82,7 +82,14 @@ const MAX_UPLOAD_BYTES = 4_300 * 1024 * 1024;
 const fastify = Fastify({
   // Shared with background jobs (lib/logger.ts); silent under tests
   loggerInstance: logger,
-  bodyLimit: 1024 * 1024,
+  // Лимит для буферизуемых тел (JSON, urlencoded, text). Раньше здесь стояли 4.3 ГБ, и один
+  // запрос с огромным JSON мог съесть всю память процесса. Multipart-загрузки стримятся и
+  // ограничены отдельно (`multipart.limits.fileSize` ниже).
+  bodyLimit: Number(process.env.JSON_BODY_LIMIT_BYTES) || 5 * 1024 * 1024,
+  // Против slowloris: клиент, который не присылает заголовки/тело, не держит сокет вечно.
+  // requestTimeout не задаём: он обрывает и медленные многогигабайтные аплоады.
+  keepAliveTimeout: 30_000,
+  maxRequestsPerSocket: 1000,
   trustProxy: process.env.TRUST_PROXY || 'loopback,uniquelocal',
 });
 

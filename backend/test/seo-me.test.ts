@@ -9,9 +9,18 @@ describe('sitemap, OG-превью и /auth/me', () => {
     const post = await prisma.post.create({ data: { content: 'Post body', author_id: user.id } as any });
     const group = await prisma.group.create({ data: { slug: 'g-seo', name: 'Seo Group', type: 'static', owner_id: user.id } });
 
-    const sm = await api('GET', '/sitemap.xml');
-    expect(sm.status).toBe(200);
-    for (const part of [`/profile/${user.username}`, `/post/${post.id}`, '/groups/g-seo']) expect(sm.res.body).toContain(part);
+    // /sitemap.xml — индекс; сами адреса лежат в файлах sitemap-{profiles|posts|groups}-N.xml
+    const index = await api('GET', '/sitemap.xml');
+    expect(index.status).toBe(200);
+    const files = [...index.res.body.matchAll(/<loc>[^<]*\/(sitemap-[a-z]+(?:-\d+)?\.xml)<\/loc>/g)].map((m) => m[1]);
+    expect(files).toContain('sitemap-static.xml');
+    let all = '';
+    for (const f of files) {
+      const page = await api('GET', `/${f}`);
+      expect(page.status, f).toBe(200);
+      all += page.res.body;
+    }
+    for (const part of [`/profile/${user.username}`, `/post/${post.id}`, '/groups/g-seo']) expect(all).toContain(part);
 
     expect((await api('GET', `/og/post/${post.id}`)).res.body).toContain('Post body');
     expect((await api('GET', `/og/profile/${user.username}`)).res.body).toContain('Hello bio');

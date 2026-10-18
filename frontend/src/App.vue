@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
+import { useHead } from '@unhead/vue'
 import { usePresence } from '@/composables/usePresence'
 import { useAuthStore } from '@/stores/auth'
 import MobileBottomNav from '@/components/MobileBottomNav.vue'
@@ -16,6 +17,18 @@ usePresence()
 const auth  = useAuthStore()
 const route = useRoute()
 const cookieConsent = ref(false)
+
+// Значения по умолчанию для <head>: каноничный URL текущего маршрута (без query/hash) и noindex для закрытых
+// разделов. Страницы постов, профилей и групп переопределяют их своим useHead.
+const SEO_BASE = 'https://bloomly.fun'
+const NOINDEX_ROUTES = new Set(['login', 'auth', 'oauth-callback', 'onboarding', 'not-found'])
+useHead({
+  link: [{ rel: 'canonical', href: () => `${SEO_BASE}${route.path === '/' ? '/' : route.path.replace(/\/+$/, '')}` }],
+  meta: [
+    { property: 'og:url', content: () => `${SEO_BASE}${route.path}` },
+    { name: 'robots', content: () => (route.meta?.requiresAuth || NOINDEX_ROUTES.has(String(route.name ?? ''))) ? 'noindex, nofollow' : 'index, follow' },
+  ],
+})
 
 onMounted(() => {
   const saved = localStorage.getItem('cookie_consent')

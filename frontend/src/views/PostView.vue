@@ -27,7 +27,7 @@ useHead({
   },
   meta: [
     { name: 'description', content: () => post.value?.content?.slice(0, 160)?.replace(/\n/g, ' ') || 'A post on Bloomly — the creative social network.' },
-    { name: 'robots', content: 'index, follow' },
+    { name: 'robots', content: () => (notFound.value || post.value?.is_nsfw || post.value?.is_archived) ? 'noindex, nofollow' : 'index, follow' },
     { property: 'og:type', content: 'article' },
     { property: 'og:site_name', content: 'Bloomly' },
     { property: 'og:title', content: () => {
