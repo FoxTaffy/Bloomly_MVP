@@ -107,7 +107,7 @@ async function loadData() {
       promises.push(stickerStore.loadMyCollection())
     }
   }
-  if (cat === 'frame' && auth.user) promises.push(loadFrames())
+  if ((cat === 'frame' || cat === 'all') && auth.user) promises.push(loadFrames())
   if (auth.user) {
     promises.push(shopStore.loadMyItems())
     promises.push(stickerStore.loadIncomingRequests())
@@ -140,10 +140,10 @@ const displayedStickers = computed(() => {
 })
 
 const shopStats = computed(() => [
-  { icon: 'ShoppingBag', label: 'Товаров',  value: shopStore.total },
+  { icon: 'ShoppingBag', label: 'Товаров',  value: shopStore.total + frames.value.length },
   { icon: 'Image',       label: 'Фонов',    value: shopStore.items.filter(i => i.type === 'background').length },
   { icon: 'Palette',     label: 'Тем',      value: shopStore.items.filter(i => i.type === 'theme').length },
-  { icon: 'CircleDot',   label: 'Рамок',    value: shopStore.items.filter(i => i.type === 'frame').length },
+  { icon: 'CircleDot',   label: 'Рамок',    value: shopStore.items.filter(i => i.type === 'frame').length + frames.value.length },
 ])
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -312,7 +312,7 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
                       Bloomly Shop
                     </h1>
                     <p class="text-white/50 text-xs mt-0.5 font-medium">
-                      {{ shopStore.loading ? '…' : `${shopStore.total} товаров` }}
+                      {{ shopStore.loading ? '…' : `${shopStore.total + frames.length} товаров` }}
                       &nbsp;·&nbsp; официальный магазин сообщества
                     </p>
                   </div>
@@ -445,7 +445,7 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
             {{ CATEGORIES.find(c => c.key === activeCategory)?.label ?? 'Все' }}
           </h2>
           <span v-if="activeCategory !== 'sticker_pack'" class="text-xs text-white/35 font-medium">
-            {{ filteredItems.length }} шт.
+            {{ filteredItems.length + (activeCategory === "all" || activeCategory === "frame" ? frames.length : 0) }} шт.
           </span>
         </div>
 
@@ -469,7 +469,13 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
         </button>
 
         <!-- AVATAR FRAMES -->
-        <div v-if="activeCategory === 'frame' && frames.length" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 mb-4">
+        <div v-if="(activeCategory === 'all' || activeCategory === 'frame') && frames.length" class="flex items-center justify-between mt-2 mb-3">
+          <h2 v-if="activeCategory === 'all'" class="text-sm font-bold text-white/60 uppercase tracking-widest flex items-center gap-2">
+            <BIcon name="CircleDot" class="w-4 h-4 text-brand-yellow" />
+            Рамки
+          </h2>
+        </div>
+        <div v-if="(activeCategory === 'all' || activeCategory === 'frame') && frames.length" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 mb-4">
           <div v-for="f in frames" :key="f.id"
             class="bg-brand-card border border-brand-border rounded-2xl overflow-hidden shadow-lg hover:-translate-y-0.5 transition-all">
             <div class="w-full bg-brand-bg flex items-center justify-center p-4" style="aspect-ratio: 1/1">
@@ -492,7 +498,7 @@ const VISIBILITY_BADGE: Record<string, { label: string; icon: string; cls: strin
 
         <!-- SHOP ITEMS GRID -->
         <template v-if="!shopStore.loading && activeCategory !== 'sticker_pack'">
-          <div v-if="filteredItems.length === 0 && activeCategory !== 'all'"
+          <div v-if="filteredItems.length === 0 && activeCategory !== 'all' && !(activeCategory === 'frame' && frames.length)"
             class="text-center py-20 bg-brand-card border border-brand-border rounded-3xl shadow-xl">
             <div class="w-20 h-20 bg-brand-bg rounded-full flex items-center justify-center mx-auto mb-5">
               <BIcon name="ShoppingBag" class="w-10 h-10 text-white/20" />
