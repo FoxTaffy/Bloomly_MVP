@@ -43,7 +43,7 @@ export interface CreateGroupPayload {
   bannerUrl?: string
 }
 
-const props = defineProps<{ initialType?: GroupType }>()
+const props = defineProps<{ initialType?: GroupType; submitting?: boolean; error?: string }>()
 
 const emit = defineEmits<{
   (e: 'create', val: CreateGroupPayload): void
@@ -249,7 +249,7 @@ watch(name, (n) => {
 
 // ── Submit ──────────────────────────────────────────────────────────────────
 function submit() {
-  if (!step1Valid.value || !step2Valid.value || !honestyConfirmed.value) return
+  if (props.submitting || !step1Valid.value || !step2Valid.value || !honestyConfirmed.value) return
   const payload: CreateGroupPayload = {
     name: name.value.trim(),
     slug: slug.value.trim() || autoSlug.value,
@@ -931,6 +931,8 @@ function submit() {
           <span class="text-white/60 text-xs leading-snug">Я подтверждаю, что не являюсь мошенником или злоумышленником и обязуюсь вести себя честно: не обманывать участников и не нарушать правила платформы.</span>
         </label>
 
+        <p v-if="error" class="mt-4 text-xs text-brand-error bg-brand-error/10 border border-brand-error/30 rounded-2xl px-4 py-3">{{ error }}</p>
+
         <!-- ── Navigation Buttons ────────────────────────────────────────── -->
         <div class="flex gap-3 mt-6">
           <button v-if="step > 1"
@@ -945,8 +947,8 @@ function submit() {
           </button>
           <button v-if="step === totalSteps"
             class="flex-1 py-3 rounded-2xl bg-brand-success text-white font-bold text-sm hover:bg-brand-success/80 transition-colors shadow-lg shadow-brand-success/20 disabled:opacity-40"
-            :disabled="!step1Valid || !honestyConfirmed" @click="submit">
-            <BIcon name="Sparkles" class="w-4 h-4 inline mr-1.5 -mt-0.5" /> Создать группу
+            :disabled="!step1Valid || !honestyConfirmed || submitting" @click="submit">
+            <BIcon :name="submitting ? 'Loader2' : 'Sparkles'" class="w-4 h-4 inline mr-1.5 -mt-0.5" :class="submitting ? 'animate-spin' : ''" /> {{ submitting ? 'Создаём…' : 'Создать группу' }}
           </button>
         </div>
       </div>

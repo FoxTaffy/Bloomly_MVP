@@ -207,51 +207,74 @@ onMounted(() => {
 })
 onUnmounted(() => window.removeEventListener('resize', updateTabSlider))
 
+const creatingGroup = ref(false)
+const createError = ref('')
+
 async function handleCreateGroup(input: any) {
-  const group = await groupsStore.createGroup({
-    name: input.name,
-    slug: input.slug,
-    type: input.type,
-    description: input.description,
-    isPublic: input.isPublic,
-    accentColor: input.accentColor,
-    avatarUrl: input.avatarUrl || undefined,
-    bannerUrl: input.bannerUrl || undefined,
-    socialLinks: input.socialLinks || undefined,
-  })
-  if (!group) return
-
-  if (input.aboutText) {
-    await groupsStore.updateGroup(group.id, { aboutText: input.aboutText })
-  }
-
-  if (input.type === 'event' && input.eventTitle) {
-    await groupsStore.createEvent(group.id, {
-      title: input.eventTitle,
-      shortCode: input.eventShortCode,
-      startsAt: input.eventStartsAt,
-      endsAt: input.eventEndsAt,
-      locationName: input.eventLocation || undefined,
-      isRecurring: input.eventIsRecurring || false,
-      isTop: input.eventIsTop || false,
+  if (creatingGroup.value) return
+  creatingGroup.value = true
+  createError.value = ''
+  let group: any
+  try {
+    group = await groupsStore.createGroup({
+      name: input.name,
+      slug: input.slug,
+      type: input.type,
+      description: input.description,
+      isPublic: input.isPublic,
+      accentColor: input.accentColor,
+      avatarUrl: input.avatarUrl || undefined,
+      bannerUrl: input.bannerUrl || undefined,
+      socialLinks: input.socialLinks || undefined,
     })
+  } catch (err: any) {
+    createError.value = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Не удалось создать группу'
+    creatingGroup.value = false
+    return
+  }
+  if (!group) {
+    createError.value = 'Не удалось создать группу'
+    creatingGroup.value = false
+    return
   }
 
-  if (input.type === 'creative' && input.commissionStatus) {
-    await groupsStore.updateCommission(group.id, {
-      status: input.commissionStatus,
-      currency: 'USD',
-      maxQueue: input.commissionMaxQueue || 5,
-    })
+  // Группа уже создана: сбой дополнительных настроек не должен оставлять окно открытым
+  try {
+    if (input.aboutText) {
+      await groupsStore.updateGroup(group.id, { aboutText: input.aboutText })
+    }
+
+    if (input.type === 'event' && input.eventTitle) {
+      await groupsStore.createEvent(group.id, {
+        title: input.eventTitle,
+        shortCode: input.eventShortCode,
+        startsAt: input.eventStartsAt,
+        endsAt: input.eventEndsAt,
+        locationName: input.eventLocation || undefined,
+        isRecurring: input.eventIsRecurring || false,
+        isTop: input.eventIsTop || false,
+      })
+    }
+
+    if (input.type === 'creative' && input.commissionStatus) {
+      await groupsStore.updateCommission(group.id, {
+        status: input.commissionStatus,
+        currency: 'USD',
+        maxQueue: input.commissionMaxQueue || 5,
+      })
+    }
+
+    if (input.type === 'shop') {
+      await groupsStore.updateCommission(group.id, {
+        status: 'open',
+        currency: 'USD',
+      })
+    }
+  } catch (err) {
+    console.error('[groups] post-create setup failed', err)
   }
 
-  if (input.type === 'shop') {
-    await groupsStore.updateCommission(group.id, {
-      status: 'open',
-      currency: 'USD',
-    })
-  }
-
+  creatingGroup.value = false
   showCreateModal.value = false
   router.push({ name: 'group-detail', params: { slugOrId: group.slug } })
 }
@@ -416,6 +439,8 @@ function fmtMembers(n: number): string {
     <CreateGroupModal
       v-if="showCreateModal"
       :initial-type="createInitialType"
+      :submitting="creatingGroup"
+      :error="createError"
       @create="handleCreateGroup"
       @close="showCreateModal = false"
     />
