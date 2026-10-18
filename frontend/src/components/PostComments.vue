@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LinkifiedText from '@/components/LinkifiedText.vue'
 import { ref, computed, watch, onMounted } from 'vue'
 import api from '@/api'
 import { useAuthStore } from '@/stores/auth'
@@ -576,7 +577,7 @@ const vClickOutside = {
               <div class="rounded-2xl overflow-hidden border border-brand-border/50 max-w-[280px] bg-black/20">
                 <SafeMedia :src="comment.file_url" :kind="comment.type === 'video' ? 'video' : 'image'" class="w-full h-auto max-h-72 object-contain" />
               </div>
-              <p v-if="comment.content" class="text-white/85 text-sm leading-relaxed mt-1.5 px-1">{{ getCommentText(comment.id, comment.content) }}</p>
+              <p v-if="comment.content" class="text-white/85 text-sm leading-relaxed mt-1.5 px-1"><LinkifiedText :text="getCommentText(comment.id, comment.content)" /></p>
             </template>
 
             <!-- Text comment — with bubble -->
@@ -586,7 +587,7 @@ const vClickOutside = {
                 <span class="text-white/55 text-xs">{{ identityHandle(comment) }}</span>
                 <span class="text-white/55 text-xs ml-auto">{{ formatDate(comment.created_at) }}</span>
               </div>
-              <p class="text-white/85 text-sm leading-relaxed">{{ getCommentText(comment.id, comment.content) }}</p>
+              <p class="text-white/85 text-sm leading-relaxed"><LinkifiedText :text="getCommentText(comment.id, comment.content)" /></p>
             </div>
 
             <!-- Actions row -->
@@ -731,7 +732,7 @@ const vClickOutside = {
                     <div class="rounded-2xl overflow-hidden border border-brand-border/50 max-w-[240px] bg-black/20">
                       <SafeMedia :src="reply.file_url" :kind="reply.type === 'video' ? 'video' : 'image'" class="w-full h-auto max-h-64 object-contain" />
                     </div>
-                    <p v-if="reply.content" class="text-white/85 text-sm leading-relaxed mt-1 px-1">{{ getCommentText(reply.id, reply.content) }}</p>
+                    <p v-if="reply.content" class="text-white/85 text-sm leading-relaxed mt-1 px-1"><LinkifiedText :text="getCommentText(reply.id, reply.content)" /></p>
                   </template>
 
                   <!-- Text reply -->
@@ -740,7 +741,7 @@ const vClickOutside = {
                       <router-link :to="identityHref(reply)" class="font-bold text-white text-xs cursor-pointer hover:underline">{{ identityName(reply) }}</router-link>
                       <span class="text-white/55 text-[11px] ml-auto">{{ formatDate(reply.created_at) }}</span>
                     </div>
-                    <p class="text-white/85 text-sm leading-relaxed">{{ getCommentText(reply.id, reply.content) }}</p>
+                    <p class="text-white/85 text-sm leading-relaxed"><LinkifiedText :text="getCommentText(reply.id, reply.content)" /></p>
                   </div>
 
                   <div class="flex items-center gap-3 mt-1 pl-1">

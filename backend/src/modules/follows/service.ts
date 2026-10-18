@@ -1,3 +1,4 @@
+import { logAction } from '../../lib/actionLog.js';
 import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
@@ -80,7 +81,10 @@ export const followsService = {
         const alreadyBack = await prisma.follow.findUnique({
           where: { follower_id_following_id: { follower_id: followingId, following_id: followerId } },
         });
-        if (!alreadyBack) await this.toggle(followingId, followerId).catch(() => {});
+        if (!alreadyBack) {
+          await this.toggle(followingId, followerId).catch((err) =>
+            logAction({ userId: followingId, action: 'follow.auto_back', targetId: followerId, error: err }));
+        }
       }
 
       return { following: true };

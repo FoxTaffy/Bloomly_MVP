@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { vStickyBottom } from '@/lib/stickyBottom'
+import LinkifiedText from '@/components/LinkifiedText.vue'
 import { apiErrorMessage, apiErrorStatus, errorMessage } from '@/lib/apiError'
 import { safeHref } from '@/utils/safeHref'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
@@ -1967,7 +1969,7 @@ const vClickOutside = {
                             <BIcon name="X" class="w-4 h-4" />
                           </button>
                         </div>
-                        <p v-if="expandedGroupMediaPost.content" class="text-sm text-white/80 mb-3 whitespace-pre-wrap">{{ expandedGroupMediaPost.content }}</p>
+                        <p v-if="expandedGroupMediaPost.content" class="text-sm text-white/80 mb-3 whitespace-pre-wrap"><LinkifiedText :text="expandedGroupMediaPost.content" /></p>
                         <div class="grid gap-2" :class="expandedGroupMediaPost.media_urls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'">
                           <template v-for="(url, i) in expandedGroupMediaPost.media_urls" :key="i">
                             <div class="relative">
@@ -2108,7 +2110,7 @@ const vClickOutside = {
             <!-- / CENTER COLUMN -->
 
             <!-- ── RIGHT SIDEBAR (same structure as ProfileView) ────── -->
-            <div class="hidden xl:flex flex-col gap-3 w-60 shrink-0 sticky top-24 self-start">
+            <div v-sticky-bottom class="hidden xl:flex flex-col gap-3 w-60 shrink-0 sticky top-24 self-start">
 
               <!-- Stats -->
               <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">

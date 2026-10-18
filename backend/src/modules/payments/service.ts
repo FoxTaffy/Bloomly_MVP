@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma.js';
 import { logger } from '../../lib/logger.js';
+import { creditWallet, debitWallet } from '../wallet/ledger.js';
 import {
   yookassaConfig, TOPUP_MIN, TOPUP_STEP, TOPUP_MAX, DONATE_MIN, DONATE_MAX, PENDING_TTL_MS,
   CARD_BINDING_AMOUNT, RENEW_AHEAD_MS, RENEW_RETRY_MS, RENEW_MAX_ATTEMPTS, RENEW_GRACE_MS,
@@ -94,14 +95,13 @@ async function openGatewayPayment(
   cfg: ReturnType<typeof requireGateway>,
   payment: { id: string; user_id: string; save_method?: boolean }, amount: number, description: string,
 ) {
-  const buyer = cfg.receipt.enabled
-    ? await prisma.user.findUnique({ where: { id: payment.user_id }, select: { email: true } })
-    : null;
+  const buyer = await prisma.user.findUnique({ where: { id: payment.user_id }, select: { email: true, username: true } });
   try {
     const remote = await createYookassaPayment({
       paymentId: payment.id, amount, description,
       returnUrl: `${cfg.returnUrl}?id=${payment.id}`,
-      customerEmail: buyer?.email,
+      customerEmail: cfg.receipt.enabled ? buyer?.email : undefined,
+      payerUsername: buyer?.username,
       savePaymentMethod: payment.save_method,
     });
     const confirmationUrl = remote.confirmation?.confirmation_url;
@@ -126,12 +126,13 @@ async function openGatewayPayment(
  */
 async function applySubscription(tx: Tx, userId: string, tier: PaidTier, period: BillingPeriod, now = new Date()) {
   const months = PERIOD_MONTHS[period];
-  // Different payment rows can target the same account simultaneously.
-  // Lock the account before calculating its new expiry, not only the payment.
-  await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId}::uuid FOR UPDATE`;
+  // Разные платежи могут продлевать один аккаунт одновременно: блокируем строку до расчёта срока.
+  // NO KEY UPDATE, а не UPDATE: вставка платежа уже держит KEY SHARE на User (внешний ключ),
+  // и FOR UPDATE с ней конфликтует — два параллельных списания с баланса давали deadlock.
+  await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId}::uuid FOR NO KEY UPDATE`;
   const u = await tx.user.findUniqueOrThrow({
     where: { id: userId },
-    select: { subscription_tier: true, subscription_expires_at: true },
+    select: { subscription_tier: true, subscription_expires_at: true, subscription_period: true },
   });
   let start = now;
   let bonusMs = 0;
@@ -141,7 +142,10 @@ async function applySubscription(tx: Tx, userId: string, tier: PaidTier, period:
     if (current === tier) {
       start = expires;
     } else {
-      bonusMs = Math.floor((expires.getTime() - now.getTime()) * PLAN_PRICES[current].month / PLAN_PRICES[tier].month);
+      // Остаток переводится по тому, сколько в месяц платил пользователь (с учётом годовой скидки), к цене нового тарифа
+      // за выбранный период — иначе годовую скидку можно «перекачать» в чужой тариф.
+      const paidPerMonth = PLAN_PRICES[current][u.subscription_period === 'year' ? 'year' : 'month'];
+      bonusMs = Math.floor((expires.getTime() - now.getTime()) * paidPerMonth / PLAN_PRICES[tier][period]);
     }
   }
   const expiresAt = new Date(addMonths(start, months).getTime() + bonusMs);
@@ -167,30 +171,37 @@ function assertNotComped(user: { subscription_tier: string; subscription_expires
 }
 
 /** Атомарно переводит платёж в succeeded и применяет эффект. false — уже обработан. */
-async function fulfill(paymentId: string, extra: Prisma.PaymentUpdateManyMutationInput = {}) {
+async function fulfill(paymentId: string, extra: Prisma.PaymentUpdateManyMutationInput = {}, fromReview = false) {
   return prisma.$transaction(async (tx) => {
     const flipped = await tx.payment.updateMany({
-      // expired тоже: деньги могли прийти позже TTL, их нужно зачесть
-      where: { id: paymentId, status: { in: ['pending', 'expired'] } },
-      data: { ...extra, status: 'succeeded', paid_at: new Date() },
+      // expired тоже: деньги могли прийти позже TTL, их нужно зачесть; review — только по решению админа
+      where: { id: paymentId, status: { in: fromReview ? ['review'] : ['pending', 'expired'] } },
+      data: { ...extra, status: 'succeeded', failure_reason: null, paid_at: new Date() },
     });
     if (flipped.count === 0) return false;
     const p = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
     if (p.purpose === 'wallet_topup') {
-      await tx.wallet.upsert({
-        where: { user_id: p.user_id },
-        update: { balance: { increment: rubToBc(Number(p.amount)) } },
-        create: { user_id: p.user_id, balance: rubToBc(Number(p.amount)) },
-      });
+      await creditWallet(tx, p.user_id, rubToBc(Number(p.amount)), { kind: 'topup', refId: p.id });
     } else if (p.purpose === 'subscription' && p.tier && isPaidTier(p.tier)) {
       await applySubscription(tx, p.user_id, p.tier, parsePeriod(p.period));
-    } else if (p.purpose === 'donation' || p.purpose === 'card_binding') {
-      // Донат — только фиксируем факт оплаты; привязка — способ сохраняется после транзакции, 1 ₽ возвращается
+    } else if (p.purpose === 'donation') {
+      // Успешный донат (≥ DONATE_MIN проверено при создании) — выдаём значок спонсора
+      await tx.user.update({ where: { id: p.user_id }, data: { is_sponsor: true } });
+    } else if (p.purpose === 'card_binding') {
+      // Привязка — способ сохраняется после транзакции, 1 ₽ возвращается
     } else {
       throw new Error(`Payment ${p.id}: unknown purpose ${p.purpose}`);
     }
     return true;
   });
+}
+
+/** Защита от засорения БД: у пользователя не может быть больше 10 неоплаченных платежей за час. */
+async function assertNotFlooded(userId: string) {
+  const pending = await prisma.payment.count({
+    where: { user_id: userId, status: 'pending', created_at: { gt: new Date(Date.now() - 60 * 60 * 1000) } },
+  });
+  if (pending >= 10) throw httpError('TOO_MANY_PENDING', 429);
 }
 
 async function markReview(paymentId: string, reason: string, extra: Prisma.PaymentUpdateManyMutationInput) {
@@ -273,11 +284,17 @@ async function onRenewalFailed(payment: PaymentRow, remote: YookassaPayment) {
  */
 async function settle(payment: PaymentRow, remote: YookassaPayment) {
   if (remote.status === 'canceled') {
+    const failure_reason = `canceled: ${remote.cancellation_details?.reason ?? 'unknown'}`.slice(0, 200);
     const res = await prisma.payment.updateMany({
       where: { id: payment.id, status: 'pending' },
-      data: { status: 'expired', failure_reason: `canceled: ${remote.cancellation_details?.reason ?? 'unknown'}`.slice(0, 200) },
+      data: { status: 'expired', failure_reason },
     });
-    if (res.count && payment.recurring) await onRenewalFailed(payment, remote);
+    if (res.count) {
+      if (payment.recurring) await onRenewalFailed(payment, remote);
+    } else {
+      // Уже expired по TTL — только фиксируем, что ЮKassa отменила платёж (сверка перестанет его опрашивать)
+      await prisma.payment.updateMany({ where: { id: payment.id, status: 'expired', failure_reason: null }, data: { failure_reason } });
+    }
     return 'canceled';
   }
   if (remote.status !== 'succeeded' || !remote.paid) return 'ignored';
@@ -297,12 +314,103 @@ async function settle(payment: PaymentRow, remote: YookassaPayment) {
     return 'review';
   }
 
+  // Платёж, который мы не сможем исполнить, не должен вечно падать в 5xx — отправляем на ручной разбор
+  if (payment.purpose === 'subscription') {
+    if (!payment.tier || !isPaidTier(payment.tier) || (payment.period !== 'month' && payment.period !== 'year')) {
+      await markReview(payment.id, 'subscription payment without valid tier/period', extra);
+      return 'review';
+    }
+    const owner = await prisma.user.findUnique({ where: { id: payment.user_id }, select: { subscription_tier: true, subscription_expires_at: true } });
+    if (owner && owner.subscription_tier !== 'free' && !owner.subscription_expires_at) {
+      await markReview(payment.id, 'user has permanent (admin-granted) tier', extra);
+      return 'review';
+    }
+  } else if (!['wallet_topup', 'donation', 'card_binding'].includes(payment.purpose)) {
+    await markReview(payment.id, `unknown purpose ${payment.purpose}`, extra);
+    return 'review';
+  }
+
   const done = await fulfill(payment.id, extra);
   if (!done) return 'duplicate';
   logger.info({ paymentId: payment.id, purpose: payment.purpose, amount: paid, recurring: payment.recurring }, '[payments] payment succeeded');
   await afterSuccess(payment, remote);
   return 'succeeded';
 }
+
+/** Достаёт платёж из API ЮKassa и применяет итог. Единая точка для webhook, сверки по cron и опроса страницы возврата. */
+async function syncWithGateway(payment: PaymentRow, known?: YookassaPayment) {
+  if (!payment.provider_operation_id) return 'unknown';
+  const remote = known ?? await fetchYookassaPayment(payment.provider_operation_id);
+  if (remote.metadata?.payment_id !== payment.id) {
+    logger.warn({ remoteId: remote.id, paymentId: payment.id }, '[payments] yookassa payment metadata mismatch');
+    return 'unknown';
+  }
+  if (payment.status === 'succeeded') {
+    // Деньги уже зачтены. Не доделанным мог остаться только возврат проверочного 1 ₽ (идемпотентен по ключу refund-<id>)
+    if (payment.purpose === 'card_binding') {
+      await afterSuccess(payment, remote);
+    } else if (payment.save_method && remote.payment_method?.saved && remote.payment_method.id) {
+      // Сохранение способа после зачисления могло не дойти до конца — доделываем, но только если его ещё нет
+      // (иначе повторный webhook заново включал бы автопродление, которое пользователь мог выключить)
+      const have = await prisma.paymentMethod.count({ where: { provider_method_id: remote.payment_method.id } });
+      if (!have) await afterSuccess(payment, remote);
+    }
+    return 'duplicate';
+  }
+  return settle(payment, remote);
+}
+
+/**
+ * Возврат денег плательщику (refund.succeeded: из кабинета ЮKassa, по чарджбэку). Полный возврат отзывает то, что было выдано:
+ * пополнение — Blooms (сколько ещё есть на балансе), подписка — автопродление, донат — значок спонсора.
+ * Частичный возврат только помечается для ручного разбора. Идемпотентно: смена статуса — атомарный захват.
+ */
+async function handleRefund(remotePaymentId: string) {
+  const payment = await prisma.payment.findUnique({ where: { provider_operation_id: remotePaymentId } });
+  if (!payment || payment.provider !== 'yookassa') return 'unknown';
+  // Свой возврат проверочного платежа уже учтён статусом refunded
+  if (payment.status !== 'succeeded' || payment.purpose === 'card_binding') return 'duplicate';
+  const remote = await fetchYookassaPayment(remotePaymentId);
+  if (remote.metadata?.payment_id !== payment.id) return 'unknown';
+  const refunded = Number(remote.refunded_amount?.value);
+  if (!Number.isFinite(refunded) || refunded <= 0) return 'ignored';
+
+  if (refunded + 0.001 < Number(payment.amount)) {
+    await prisma.payment.updateMany({ where: { id: payment.id, status: 'succeeded' }, data: { failure_reason: `partial refund ${refunded}`.slice(0, 200) } });
+    logger.error({ paymentId: payment.id, refunded }, '[payments] partial refund — manual review');
+    return 'partial';
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const flipped = await tx.payment.updateMany({ where: { id: payment.id, status: 'succeeded' }, data: { status: 'refunded' } });
+    if (!flipped.count) return 'duplicate';
+    let note: string | null = null;
+    if (payment.purpose === 'wallet_topup') {
+      const bc = rubToBc(Number(payment.amount));
+      // Блокируем строку кошелька, чтобы между чтением остатка и списанием его не потратили
+      const rows = await tx.$queryRaw<{ balance: Prisma.Decimal }[]>`SELECT balance FROM "Wallet" WHERE user_id = ${payment.user_id}::uuid FOR UPDATE`;
+      const have = rows[0] ? Number(rows[0].balance) : 0;
+      const take = Math.min(have, bc);
+      if (take > 0) await debitWallet(tx, payment.user_id, take, { kind: 'refund_clawback', refId: payment.id });
+      if (take < bc) note = `refund: clawed back ${take} of ${bc} BC, user already spent the rest`;
+    } else if (payment.purpose === 'subscription') {
+      await tx.user.update({ where: { id: payment.user_id }, data: { subscription_auto_renew: false, subscription_next_renew_at: null } });
+      note = 'refund: subscription left as is, autorenew off — review manually';
+    } else if (payment.purpose === 'donation') {
+      const other = await tx.payment.count({ where: { user_id: payment.user_id, purpose: 'donation', status: 'succeeded', id: { not: payment.id } } });
+      if (!other) await tx.user.update({ where: { id: payment.user_id }, data: { is_sponsor: false } });
+    }
+    if (note) {
+      await tx.payment.update({ where: { id: payment.id }, data: { failure_reason: note.slice(0, 200) } });
+      logger.error({ paymentId: payment.id, note }, '[payments] refund needs attention');
+    }
+    logger.info({ paymentId: payment.id, purpose: payment.purpose }, '[payments] payment refunded');
+    return 'refunded';
+  });
+}
+
+const SYNC_MIN_INTERVAL_MS = 5_000;
+const lastSync = new Map<string, number>();
 
 export const paymentsService = {
   getConfig: async (userId: string) => {
@@ -346,6 +454,7 @@ export const paymentsService = {
     }
     const method = parseMethod(rawMethod ?? 'AC');
     await loadBuyer(userId);
+    await assertNotFlooded(userId);
     const payment = await prisma.payment.create({
       data: { user_id: userId, provider: 'yookassa', purpose: 'wallet_topup', amount, method },
     });
@@ -361,6 +470,7 @@ export const paymentsService = {
     }
     const method = parseMethod(rawMethod ?? 'AC');
     await loadBuyer(userId);
+    await assertNotFlooded(userId);
     const payment = await prisma.payment.create({
       data: { user_id: userId, provider: 'yookassa', purpose: 'donation', amount, method },
     });
@@ -384,18 +494,13 @@ export const paymentsService = {
     if (rawMethod === 'wallet') {
       const bcCharge = rubToBcCharge(q.amount);
       return prisma.$transaction(async (tx) => {
-        // Условное списание: два параллельных запроса не уведут баланс в минус
-        const debited = await tx.wallet.updateMany({
-          where: { user_id: userId, balance: { gte: bcCharge } },
-          data: { balance: { decrement: bcCharge } },
-        });
-        if (debited.count === 0) throw httpError('INSUFFICIENT_FUNDS', 402);
         const payment = await tx.payment.create({
           data: {
             user_id: userId, provider: 'wallet', purpose: 'subscription', status: 'succeeded',
             amount: q.amount, tier, period, paid_at: new Date(),
           },
         });
+        await debitWallet(tx, userId, bcCharge, { kind: 'subscription', refId: payment.id });
         const sub = await applySubscription(tx, userId, tier, period);
         if (autoRenew && await tx.paymentMethod.count({ where: { user_id: userId, ...CHARGEABLE } })) {
           await tx.user.update({ where: { id: userId }, data: { subscription_auto_renew: true } });
@@ -406,6 +511,7 @@ export const paymentsService = {
 
     const cfg = requireGateway();
     const method = parseMethod(rawMethod);
+    await assertNotFlooded(userId);
     const payment = await prisma.payment.create({
       data: {
         user_id: userId, provider: 'yookassa', purpose: 'subscription', amount: q.amount, method, tier, period,
@@ -421,6 +527,7 @@ export const paymentsService = {
     const cfg = requireGateway();
     if (!cfg.recurring) throw httpError('RECURRING_DISABLED', 503);
     await loadBuyer(userId);
+    await assertNotFlooded(userId);
     const payment = await prisma.payment.create({
       data: {
         user_id: userId, provider: 'yookassa', purpose: 'card_binding', amount: CARD_BINDING_AMOUNT,
@@ -453,8 +560,23 @@ export const paymentsService = {
 
   getPayment: async (userId: string, id: string) => {
     if (!UUID_RE.test(id)) throw httpError('Payment not found', 404);
-    const payment = await prisma.payment.findFirst({ where: { id, user_id: userId }, select: PUBLIC_SELECT });
+    let payment = await prisma.payment.findFirst({ where: { id, user_id: userId }, select: PUBLIC_SELECT });
     if (!payment) throw httpError('Payment not found', 404);
+    if (payment.status === 'pending' && yookassaConfig().enabled) {
+      // Webhook мог не дойти (или ещё в пути) — не заставляем пользователя ждать: спрашиваем шлюз сами, не чаще раза в 5 с
+      const now = Date.now();
+      if (now - (lastSync.get(id) ?? 0) >= SYNC_MIN_INTERVAL_MS) {
+        if (lastSync.size > 1000) lastSync.clear();
+        lastSync.set(id, now);
+        try {
+          const full = await prisma.payment.findUnique({ where: { id } });
+          if (full?.provider === 'yookassa') await syncWithGateway(full);
+          payment = await prisma.payment.findFirst({ where: { id, user_id: userId }, select: PUBLIC_SELECT }) ?? payment;
+        } catch (e) {
+          logger.warn({ err: e, paymentId: id }, '[payments] on-demand gateway sync failed');
+        }
+      }
+    }
     return withBc(payment);
   },
 
@@ -483,21 +605,107 @@ export const paymentsService = {
     const cfg = yookassaConfig();
     if (!cfg.enabled) throw httpError('PAYMENTS_DISABLED', 503);
     const remoteId = n.object?.id;
-    if (!remoteId || (n.event !== 'payment.succeeded' && n.event !== 'payment.canceled')) return { handled: 'ignored' };
-
-    const payment = await prisma.payment.findUnique({ where: { provider_operation_id: remoteId } });
-    if (!payment || payment.provider !== 'yookassa') {
-      logger.warn({ remoteId }, '[payments] yookassa notification for unknown payment');
-      return { handled: 'unknown' };
+    if (n.event === 'refund.succeeded') {
+      const pid = n.object?.payment_id;
+      if (typeof pid !== 'string' || !pid || pid.length > 100) return { handled: 'ignored' };
+      return { handled: await handleRefund(pid) };
     }
-    if (['succeeded', 'review', 'refunded'].includes(payment.status)) return { handled: 'duplicate' };
+    if (typeof remoteId !== 'string' || !remoteId || remoteId.length > 100
+      || (n.event !== 'payment.succeeded' && n.event !== 'payment.canceled')) return { handled: 'ignored' };
 
-    const remote = await fetchYookassaPayment(remoteId);
-    if (remote.metadata?.payment_id !== payment.id) {
-      logger.warn({ remoteId, paymentId: payment.id }, '[payments] yookassa payment metadata mismatch');
-      return { handled: 'unknown' };
+    let payment = await prisma.payment.findUnique({ where: { provider_operation_id: remoteId } });
+    let remote: YookassaPayment | undefined;
+    if (!payment) {
+      // Платёж у ЮKassa есть, а наша запись не получила его id (сбой БД после создания, таймаут ответа).
+      // Верим только API: по metadata находим свою строку без id и привязываем.
+      try {
+        remote = await fetchYookassaPayment(remoteId);
+      } catch (e) {
+        // ЮKassa не знает такого платежа (чужой/выдуманный id) — повторять нечего; остальные сбои → 5xx и повтор
+        if ((e as { upstreamStatus?: number }).upstreamStatus === 404) return { handled: 'unknown' };
+        throw e;
+      }
+      const ownId = remote.metadata?.payment_id;
+      const orphan = ownId && UUID_RE.test(ownId)
+        ? await prisma.payment.findFirst({ where: { id: ownId, provider: 'yookassa', provider_operation_id: null } })
+        : null;
+      if (!orphan) {
+        logger.warn({ remoteId }, '[payments] yookassa notification for unknown payment');
+        return { handled: 'unknown' };
+      }
+      payment = await prisma.payment.update({ where: { id: orphan.id }, data: { provider_operation_id: remoteId } });
     }
-    return { handled: await settle(payment, remote) };
+    if (payment.provider !== 'yookassa') return { handled: 'unknown' };
+    if (['review', 'refunded'].includes(payment.status)) return { handled: 'duplicate' };
+    if (payment.status === 'succeeded' && payment.purpose !== 'card_binding' && !payment.save_method) return { handled: 'duplicate' };
+
+    return { handled: await syncWithGateway(payment, remote) };
+  },
+
+  /**
+   * Сверка с ЮKassa по cron: подбирает платежи, по которым webhook не пришёл или не отработал
+   * (pending, expired по TTL, непроведённый возврат проверочного платежа). Без этого оплата зависела бы
+   * от доставки webhook. Платежи, отменённые шлюзом, не опрашиваются повторно.
+   */
+  reconcilePayments: async (now = new Date()) => {
+    if (!yookassaConfig().enabled) return 0;
+    const from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const to = new Date(now.getTime() - 3 * 60 * 1000);
+    const rows = await prisma.payment.findMany({
+      where: {
+        provider: 'yookassa', provider_operation_id: { not: null }, created_at: { gt: from, lt: to },
+        OR: [
+          { status: 'pending' },
+          { status: 'expired', failure_reason: null },
+          { status: 'succeeded', purpose: 'card_binding' },
+        ],
+      },
+      orderBy: { created_at: 'asc' },
+      take: 100,
+    });
+    let fixed = 0;
+    for (const p of rows) {
+      try {
+        const res = await syncWithGateway(p);
+        if (res === 'succeeded' || (p.status === 'succeeded' && res === 'duplicate')) fixed++;
+      } catch (e) {
+        logger.warn({ err: e, paymentId: p.id }, '[payments] reconcile failed');
+      }
+    }
+    return fixed;
+  },
+
+  /**
+   * Ручной разбор платежа в статусе review (админ). approve — зачесть: деньги должны реально прийти по данным ЮKassa;
+   * недоплату можно зачесть только за пополнение (по фактической сумме). reject — не зачитывать (вернуть деньги нужно в кабинете ЮKassa).
+   */
+  resolveReview: async (adminId: string, paymentId: string, action: unknown) => {
+    if (!UUID_RE.test(paymentId)) throw httpError('Payment not found', 404);
+    if (action !== 'approve' && action !== 'reject') throw httpError('INVALID_ACTION', 400);
+    const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw httpError('Payment not found', 404);
+    if (payment.status !== 'review') throw httpError('NOT_IN_REVIEW', 409);
+
+    if (action === 'reject') {
+      await prisma.payment.updateMany({ where: { id: paymentId, status: 'review' }, data: { status: 'expired', failure_reason: `rejected by admin ${adminId}` } });
+      logger.warn({ paymentId, adminId }, '[payments] review payment rejected');
+      return { status: 'expired' };
+    }
+
+    if (!payment.provider_operation_id || !yookassaConfig().enabled) throw httpError('CANNOT_VERIFY', 409);
+    const remote = await fetchYookassaPayment(payment.provider_operation_id);
+    const paid = Number(remote.amount.value);
+    if (remote.metadata?.payment_id !== payment.id || remote.status !== 'succeeded' || !remote.paid
+      || remote.amount.currency !== 'RUB' || !Number.isFinite(paid)) throw httpError('NOT_PAID', 409);
+    let fix: Prisma.PaymentUpdateManyMutationInput = {};
+    if (paid + 0.001 < Number(payment.amount)) {
+      if (payment.purpose !== 'wallet_topup') throw httpError('UNDERPAID', 409);
+      fix = { amount: paid }; // пополнение — по фактической сумме
+    }
+    if (!await fulfill(paymentId, fix, true)) throw httpError('NOT_IN_REVIEW', 409);
+    logger.warn({ paymentId, adminId, paid }, '[payments] review payment approved');
+    await afterSuccess({ ...payment, ...(fix.amount !== undefined ? { amount: new Prisma.Decimal(paid) } : {}) }, remote);
+    return { status: 'succeeded' };
   },
 
   /** Только dev/test: подтверждает платёж так, будто пришёл webhook от ЮKassa. */
@@ -571,7 +779,7 @@ export const paymentsService = {
         OR: [{ subscription_next_renew_at: null }, { subscription_next_renew_at: { lte: now } }],
       },
       select: {
-        id: true, email: true, created_at: true, subscription_tier: true, subscription_period: true,
+        id: true, email: true, username: true, created_at: true, subscription_tier: true, subscription_period: true,
         subscription_renew_attempts: true, subscription_next_renew_at: true,
       },
       take: 200,
@@ -617,6 +825,7 @@ export const paymentsService = {
           amount: q.amount,
           description: `${subscriptionLabel(tier, period)}, автопродление`,
           customerEmail: cfg.receipt.enabled ? u.email ?? undefined : undefined,
+          payerUsername: u.username,
         });
         await prisma.payment.update({ where: { id: payment.id }, data: { provider_operation_id: remote.id } });
         // Обычно ответ сразу succeeded/canceled; pending дождётся webhook

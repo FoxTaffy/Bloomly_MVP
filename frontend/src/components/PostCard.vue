@@ -268,9 +268,11 @@
             <template v-else>
               <template v-for="seg in displayContent" :key="seg.key">
                 <span v-if="seg.type === 'text'">{{ seg.text }}</span>
+                <a v-else-if="seg.type === 'url'" :href="seg.href" target="_blank" rel="noopener noreferrer nofollow ugc"
+                  class="text-brand-accent hover:underline break-all" @click.stop>{{ seg.text }}</a>
                 <!-- ── MENTION PILL ── -->
                 <router-link v-else
-                  :to="mentionHref(seg.username!)"
+                  :to="mentionHref(seg.username)"
                   class="mention-pill inline-flex items-center gap-1 pl-0.5 pr-2 py-0.5 bg-brand-accent/15 border border-brand-accent/30 text-brand-accent text-[13px] font-semibold cursor-pointer hover:bg-brand-accent/25 transition-all align-middle"
                   :class="mentionGroups[seg.username!] ? 'rounded-xl' : 'rounded-full'"
                   style="vertical-align: middle; white-space: nowrap;"
@@ -699,6 +701,7 @@ import PostLightbox from '@/components/PostLightbox.vue'
 import ReportModal from '@/components/ReportModal.vue'
 import PostStatsModal from '@/components/PostStatsModal.vue'
 import SharePostModal from '@/components/SharePostModal.vue'
+import { parsePostSegments, type PostSeg } from '@/lib/postText'
 
 // ── Module-level mention user cache (shared across all PostCard instances) ──
 type MentionUser = { id: string; username: string; display_name: string | null; avatar_url: string | null; banner_url: string | null }
@@ -1053,15 +1056,8 @@ const gridExtraCount = computed(() =>
   Math.max(0, (props.post.media_urls?.length ?? 0) - 4)
 )
 
-type Seg = { type: 'text' | 'mention'; key: number; text: string; username?: string }
-
-function parseSegments(text: string): Seg[] {
-  return text.split(/(@\w+(?:-\w+)*)/g).map((part: string, i: number) =>
-    /^@\w+(?:-\w+)*$/.test(part)
-      ? { type: 'mention' as const, key: i, text: part, username: part.slice(1) }
-      : { type: 'text' as const, key: i, text: part }
-  )
-}
+type Seg = PostSeg
+const parseSegments = parsePostSegments
 
 const parsedContent = computed<Seg[]>(() => parseSegments(props.post.content ?? ''))
 

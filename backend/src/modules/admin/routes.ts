@@ -12,7 +12,7 @@ import {
   getAutoModLogsHandler, unfreezeUserHandler, freezeUserHandler, clearWarnsHandler, warnUserHandler,
   markDeceasedHandler, unmarkDeceasedHandler,
   getStickerStatsHandler, getNetworkStatsHandler, getStickerPackDetailHandler, togglePostPinHandler,
-  getGroupsOverviewHandler, getPremiumOverviewHandler, getInfraOverviewHandler,
+  getGroupsOverviewHandler, getPremiumOverviewHandler, getFinanceReportHandler, getInfraOverviewHandler,
   getStaffHandler, promoteToStaffHandler,
   sendBroadcastHandler, getBroadcastsHandler,
   getSettingsHandler, updateSettingHandler,
@@ -119,5 +119,6 @@ export async function adminRoutes(fastify: FastifyInstance) {
   // Groups & events / premium / infra overview
   fastify.get<RouteGenericOf<typeof getGroupsOverviewHandler>>('/groups-overview',  auth, getGroupsOverviewHandler);
   fastify.get<RouteGenericOf<typeof getPremiumOverviewHandler>>('/premium-overview', auth, getPremiumOverviewHandler);
+  fastify.get<RouteGenericOf<typeof getFinanceReportHandler>>('/finance', { onRequest: [fastify.authenticate], config: { rateLimit: { max: 30, timeWindow: '1 minute' } } } as RouteShorthandOptions, getFinanceReportHandler);
   fastify.get<RouteGenericOf<typeof getInfraOverviewHandler>>('/infra-overview',   auth, getInfraOverviewHandler);
 }

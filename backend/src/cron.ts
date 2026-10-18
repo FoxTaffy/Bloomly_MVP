@@ -63,6 +63,12 @@ const JOBS: CronJob[] = [
     if (renewed > 0) logger.info(`[CRON] Subscriptions: ${renewed} auto-renewed`);
   } },
 
+  // Сверка с ЮKassa: догоняет платежи, по которым webhook не дошёл (оплата не должна зависеть от доставки webhook)
+  { name: 'payments reconcile', schedule: '*/10 * * * *', run: async () => {
+    const fixed = await paymentsService.reconcilePayments();
+    if (fixed > 0) logger.info(`[CRON] Payments: reconciled ${fixed}`);
+  } },
+
   // Брошенные платежи (не дошли до оплаты за сутки) → expired
   { name: 'stale payments', schedule: '15 * * * *', run: () => paymentsService.expireStalePayments() },
 ];

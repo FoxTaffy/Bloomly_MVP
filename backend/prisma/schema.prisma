@@ -249,10 +249,11 @@ model SubscriptionPlan {
 /// Платёж: пополнение кошелька, оплата подписки или донат. Через внешний шлюз (ЮKassa) или с баланса.
 /// Строка создаётся до редиректа на шлюз; id уходит в metadata.payment_id и возвращается в API.
 model Payment {
-  id                    String    @id @default(uuid()) @db.Uuid
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id               String    @db.Uuid
   provider              String    @db.VarChar(20) // yoomoney | wallet
   purpose               String    @db.VarChar(20) // wallet_topup | subscription | donation | card_binding
+  // pending → succeeded | expired | review | refunded (возврат денег плательщику)
   // pending → succeeded | expired | review (деньги пришли, но что-то не сходится — разобрать вручную)
   // card_binding: succeeded → refunded (проверочный 1 ₽ возвращается)
   status                String    @default("pending") @db.VarChar(20)
@@ -270,7 +271,7 @@ model Payment {
   paid_at               DateTime?
   created_at            DateTime  @default(now())
   updated_at            DateTime  @updatedAt
-  user                  User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user                  User      @relation(fields: [user_id], references: [id], onDelete: Restrict)
 
   @@index([user_id, created_at])
   @@index([status, created_at])
@@ -594,6 +595,21 @@ model Wallet {
   updated_at DateTime  @updatedAt
   deleted_at DateTime?
   user       User      @relation(fields: [user_id], references: [id])
+}
+
+/// Журнал движения Bloom: каждая запись — одно изменение баланса (amount со знаком), balance_after — остаток после него.
+/// Только дописывается; баланс кошелька всегда равен сумме записей (кроме истории до появления журнала).
+model WalletTransaction {
+  id            String   @id @default(uuid()) @db.Uuid
+  user_id       String   @db.Uuid
+  amount        Decimal  @db.Decimal(18, 2)
+  balance_after Decimal  @db.Decimal(18, 2)
+  kind          String   @db.VarChar(30) // topup | subscription | sticker_purchase | sticker_sale | shop_purchase | group_donation | dev_topup
+  ref_id        String?  @db.VarChar(100) // платёж / пак / товар / группа
+  created_at    DateTime @default(now())
+
+  @@index([user_id, created_at])
+  @@index([kind, ref_id])
 }
 
 model UserActivity {
@@ -2074,4 +2090,21 @@ model AlbumItem {
 
   // Проверка доступа к файлу по прямой ссылке (media/access.ts)
   @@index([media_url])
+}
+
+/// Журнал действий пользователей (заявки в друзья, подписки): по нему разбирают жалобы «нажал, а не сработало».
+model UserActionLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  action     String   @db.VarChar(50)
+  target_id  String?  @db.Uuid
+  ok         Boolean  @default(true)
+  error      String?  @db.VarChar(300)
+  before     Json?
+  after      Json?
+  created_at DateTime @default(now())
+
+  @@index([user_id, created_at])
+  @@index([target_id, created_at])
+  @@index([action, created_at])
 }

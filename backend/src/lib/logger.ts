@@ -16,6 +16,13 @@ export function redactedRequestUrl(url: string): string {
   } catch { return '[invalid URL]'; }
 }
 
+/**
+ * EventSource не умеет слать заголовки, поэтому JWT приходит в query (/notifications/stream?token=…).
+ * Для строк вне сериализатора запроса: те же параметры, что и в redactedRequestUrl.
+ */
+export const redactUrlSecrets = (v: unknown) =>
+  typeof v === 'string' ? v.replace(/([?&](?:token|refreshToken|access_token)=)[^&#\s]*/gi, '$1[redacted]') : v;
+
 export const logger: FastifyBaseLogger = pino({
   enabled: process.env.NODE_ENV !== 'test',
   redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers.set-cookie', 'password', 'token', 'refreshToken', 'secret', 'authorization'],

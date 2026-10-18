@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { vStickyBottom } from '@/lib/stickyBottom'
+import { computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useFriendsStore } from '@/stores/friends'
@@ -282,7 +283,7 @@ const categoryItems = computed(() => [
   </Teleport>
 
   <!-- ── Desktop sidebar ────────────────────────────────────────── -->
-  <aside class="w-64 hidden lg:block sticky top-24 self-start stack-y-6 shrink-0">
+  <aside v-sticky-bottom class="w-64 hidden lg:block sticky top-24 self-start stack-y-6 shrink-0">
 
     <!-- User profile block -->
     <router-link

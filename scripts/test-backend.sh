@@ -15,8 +15,10 @@ docker rm -f "$PG" >/dev/null 2>&1 || true
   docker run -d --name "$PG" --network "$NET" --tmpfs /var/lib/postgresql/data \
     -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=bloomly_test \
     postgres:16-alpine >/dev/null
-  until docker exec "$PG" pg_isready -U test -d bloomly_test >/dev/null 2>&1; do sleep 1; done
-  sleep 1
+  # При инициализации postgres сначала поднимает временный сервер, гасит его и стартует настоящий:
+  # pg_isready отвечает уже на временном, поэтому ждём второго «ready to accept connections».
+  until [ "$(docker logs "$PG" 2>&1 | grep -c 'ready to accept connections')" -ge 2 ] \
+    && docker exec "$PG" pg_isready -U test -d bloomly_test >/dev/null 2>&1; do sleep 1; done
 }
 trap 'docker rm -f "$PG" >/dev/null 2>&1 || true' EXIT
 

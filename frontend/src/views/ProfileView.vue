@@ -1658,7 +1658,7 @@
             </Teleport>
 
             <!-- ── RIGHT SIDEBAR ────────────────────────────────────────── -->
-            <div class="hidden xl:flex flex-col gap-3 w-72 shrink-0 sticky top-24 self-start">
+            <div v-sticky-bottom class="hidden xl:flex flex-col gap-3 w-72 shrink-0 sticky top-24 self-start">
 
               <!-- Stats: 3-column grid, clicks open modals -->
               <div class="bg-brand-card border border-brand-border rounded-3xl shadow-xl overflow-hidden">
@@ -2427,6 +2427,7 @@
 </template>
 
 <script setup lang="ts">
+import { vStickyBottom } from '@/lib/stickyBottom'
 import { invalidateFriendsCache } from '@/stores/friends'
 import { safeHref } from '@/utils/safeHref'
 import { ref, computed, onMounted, onUnmounted, watch, reactive, type Component, type Directive } from 'vue'

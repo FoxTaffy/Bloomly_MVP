@@ -121,8 +121,14 @@ async function handleSendRequest(targetId: string) {
   } finally { addLoading.value = false }
 }
 
-async function handleAccept(id: string) { await friendsStore.acceptRequest(id) }
-async function handleReject(id: string) { await friendsStore.rejectRequest(id) }
+async function handleAccept(id: string) {
+  addError.value = null
+  try { await friendsStore.acceptRequest(id) } catch (e) { addError.value = apiErrorMessage(e) ?? 'Ошибка' }
+}
+async function handleReject(id: string) {
+  addError.value = null
+  try { await friendsStore.rejectRequest(id) } catch (e) { addError.value = apiErrorMessage(e) ?? 'Ошибка' }
+}
 
 function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0].toUpperCase() }
 </script>
@@ -232,6 +238,18 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
             </div>
           </div>
 
+          <!-- Заявки — на узких экранах правая панель скрыта, показываем их здесь -->
+          <div v-if="friendsStore.requests.length" class="xl:hidden bg-brand-card border border-brand-border rounded-3xl p-4">
+            <h2 class="font-bold text-brand-offwhite text-sm mb-3 flex items-center gap-2">
+              <BIcon name="UserPlus" class="w-4 h-4 text-brand-accent" />
+              {{ langStore.t.rightPanelRequests }}
+              <span class="bg-brand-accent text-white rounded-full text-[10px] px-1.5 font-bold">{{ friendsStore.requests.length }}</span>
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <FriendRequestCard v-for="req in friendsStore.requests" :key="req.id" :request="req" @accept="handleAccept" @reject="handleReject" />
+            </div>
+          </div>
+
           <!-- List -->
           <div v-if="friendsStore.isLoading" class="flex items-center justify-center py-16">
             <div class="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
@@ -275,7 +293,12 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
               >
                 <BIcon name="UserPlus" class="w-3.5 h-3.5" />
                 {{ langStore.t.rightPanelRequests }}
-                <span v-if="friendsStore.requests.length" class="bg-white/20 rounded-full text-[10px] px-1.5">{{ friendsStore.requests.length }}</span>
+                <span
+                  :class="[
+                    'rounded-full text-[10px] px-1.5 font-bold',
+                    rightPanel === 'requests' ? 'bg-white/20 text-white' : friendsStore.requests.length ? 'bg-brand-accent text-white' : 'bg-brand-muted/30 text-white/55'
+                  ]"
+                >{{ friendsStore.requests.length }}</span>
               </button>
               <button
                 :class="['flex-1 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1.5', rightPanel === 'suggestions' ? 'bg-brand-yellow/20 text-brand-yellow' : 'text-white/55 hover:text-brand-offwhite']"

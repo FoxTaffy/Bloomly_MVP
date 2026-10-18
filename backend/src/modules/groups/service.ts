@@ -26,6 +26,7 @@ import type {
   OrderStatus,
 } from './types.js';
 import { logError } from '../../lib/logger.js';
+import { debitWallet } from '../wallet/ledger.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 // Group role hierarchy: owner > admin > moderator > everyone else (member/dealer/volunteer/guest_of_honor).
@@ -1760,13 +1761,7 @@ export const groupService = {
     // vice versa). The WHERE clause on the debit re-checks the balance at update time,
     // so two concurrent donations can't both pass a stale check and drive the wallet negative.
     return prisma.$transaction(async (tx) => {
-      const debited = await tx.wallet.updateMany({
-        where: { user_id: userId, balance: { gte: clean } },
-        data: { balance: { decrement: clean } },
-      });
-      if (debited.count === 0) {
-        throw Object.assign(new Error('Insufficient wallet balance'), { statusCode: 402 });
-      }
+      await debitWallet(tx, userId, clean, { kind: 'group_donation', refId: groupId }, 'Insufficient wallet balance');
 
       const updatedGroup = await tx.group.update({ where: { id: groupId }, data: { balance: { increment: clean } } });
       const transaction = await tx.groupTransaction.create({
