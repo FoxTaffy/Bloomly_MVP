@@ -204,7 +204,7 @@ onMounted(() => { walletStore.fetchBalance().catch(() => {}) })
                 <BIcon name="AlertCircle" class="w-9 h-9 text-brand-error" />
               </div>
               <div>
-                <p class="text-xl font-extrabold text-white">Недостаточно Blooms</p>
+                <p class="text-xl font-extrabold text-white">Недостаточно BLM</p>
                 <p class="text-white/50 text-sm mt-1.5">
                   Не хватает
                   <span class="inline-flex items-center gap-1 font-bold text-brand-error">{{ insufficientBy.toFixed(2) }} <BIcon name="Flower2" class="w-3 h-3" /></span>

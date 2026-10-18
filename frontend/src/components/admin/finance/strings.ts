@@ -4,7 +4,7 @@ import { useLangStore } from '@/stores/lang'
 // остальные языки интерфейса показывают английский.
 const S = {
   title: { ru: 'Финансы и Premium', en: 'Finance & Premium' },
-  subtitle: { ru: 'Деньги через ЮKassa, подписки, карты и Bloom. Сутки — московские.', en: 'YooKassa money, subscriptions, cards and Bloom. Days are Moscow time.' },
+  subtitle: { ru: 'Деньги через ЮKassa, подписки, карты и BLM. Сутки — московские.', en: 'YooKassa money, subscriptions, cards and BLM. Days are Moscow time.' },
   days7: { ru: '7 дней', en: '7 days' }, days30: { ru: '30 дней', en: '30 days' }, days90: { ru: '90 дней', en: '90 days' }, days365: { ru: 'Год', en: 'Year' },
   refresh: { ru: 'Обновить', en: 'Refresh' },
   loadFailed: { ru: 'Не удалось загрузить отчёт', en: 'Could not load the report' },
@@ -31,7 +31,7 @@ const S = {
   noData: { ru: 'За этот период данных нет', en: 'No data for this period' },
 
   tierTitle: { ru: 'Оборот по уровням Premium', en: 'Turnover by Premium tier' },
-  tierDesc: { ru: 'Рубли через ЮKassa и покупки за Bloom', en: 'Rubles via YooKassa and purchases with Bloom' },
+  tierDesc: { ru: 'Рубли через ЮKassa и покупки за BLM', en: 'Rubles via YooKassa and purchases with BLM' },
   tRevenue: { ru: 'Выручка', en: 'Revenue' }, tActive: { ru: 'Активных', en: 'Active' }, tMrr: { ru: 'MRR', en: 'MRR' },
   tPayments: { ru: 'Платежей', en: 'Payments' }, tNew: { ru: 'Новых подписчиков', en: 'New subscribers' },
   tRenewals: { ru: 'Автопродлений', en: 'Auto-renewals' }, tManual: { ru: 'Ручных оплат', en: 'Manual payments' },
@@ -71,7 +71,7 @@ const S = {
   methodsDesc: { ru: 'Способы оплаты по выручке за период', en: 'Payment methods by revenue in the period' },
 
   refundsTitle: { ru: 'Возвраты', en: 'Refunds' },
-  refundsDesc: { ru: 'Полный возврат отзывает Blooms, автопродление и значок спонсора', en: 'A full refund revokes Blooms, auto-renew and the sponsor badge' },
+  refundsDesc: { ru: 'Полный возврат отзывает BLM, автопродление и значок спонсора', en: 'A full refund revokes BLM, auto-renew and the sponsor badge' },
   refRate: { ru: 'Доля возвратов', en: 'Refund rate' }, refPartial: { ru: 'Частичных возвратов (разобрать вручную)', en: 'Partial refunds (review manually)' },
   refNone: { ru: 'Возвратов нет', en: 'No refunds' },
 
@@ -83,9 +83,9 @@ const S = {
   confirmReject: { ru: 'Отклонить без зачисления? Деньги нужно будет вернуть вручную в кабинете ЮKassa.', en: 'Reject without crediting? You will have to refund the money in the YooKassa dashboard.' },
   resolveFailed: { ru: 'Не удалось: ', en: 'Failed: ' },
 
-  walletTitle: { ru: 'Кошелёк Bloom', en: 'Bloom wallet' },
+  walletTitle: { ru: 'Кошелёк BLM', en: 'BLM wallet' },
   walletDesc: { ru: 'Баланс пользователей и движение за период (по журналу кошелька)', en: 'User balances and movement in the period (wallet ledger)' },
-  wTotal: { ru: 'Blooms на балансах', en: 'Blooms in wallets' }, wHolders: { ru: 'Кошельков с балансом', en: 'Wallets with balance' },
+  wTotal: { ru: 'BLM на балансах', en: 'BLM in wallets' }, wHolders: { ru: 'Кошельков с балансом', en: 'Wallets with balance' },
   wMovement: { ru: 'Движение за период', en: 'Movement in period' }, wTop: { ru: 'Крупнейшие балансы', en: 'Largest balances' },
   wNone: { ru: 'Операций за период не было', en: 'No operations in the period' },
   kind_topup: { ru: 'Пополнение', en: 'Top-up' }, kind_subscription: { ru: 'Подписка', en: 'Subscription' },

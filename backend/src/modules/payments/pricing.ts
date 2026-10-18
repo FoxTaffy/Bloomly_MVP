@@ -43,27 +43,25 @@ export function quote(tier: PaidTier, period: BillingPeriod, earlyUser: boolean)
   return { tier, period, months, perMonth, amount: perMonth * months, discounted: earlyUser };
 }
 
-/** Базовый курс игровой валюты: 1 Bloom = 90 ₽ (по нему считается списание за подписки с баланса и цена крупных пакетов). */
-export const BC_RATE = 90;
-/** Розничная цена Bloom при пополнении «своей суммой» — выгоднее брать пакет. */
-export const RETAIL_RATE = 108;
+/** Размеры пакетов пополнения в BLM (1 BLM = 1 $); рублёвая цена считается по текущему курсу. */
+const TOPUP_PACKAGE_SIZES = [5, 10, 25, 50];
+export const topupPackages = (rate: number) =>
+  TOPUP_PACKAGE_SIZES.map((bc) => ({ bc, rub: Math.ceil(bc * rate), ...(bc === 10 ? { popular: true } : {}) }));
 
-/** Пакеты пополнения (маркетинг: чем крупнее пакет, тем ближе к базовому курсу). Популярный выделяется на фронте. */
-export const TOPUP_PACKAGES = [
-  { bc: 5,  rub: 540 },
-  { bc: 10, rub: 990, popular: true },
-  { bc: 25, rub: 2250 },
-  { bc: 50, rub: 4500 },
-];
-
-/** Сколько Bloom зачислить за рубли: пакет — по его размеру, своя сумма — по розничному курсу (вниз до сотых). */
-export function rubToBc(rub: number): number {
-  const pkg = TOPUP_PACKAGES.find((p) => p.rub === rub);
-  if (pkg) return pkg.bc;
-  return Math.floor((rub / RETAIL_RATE) * 100 + 1e-6) / 100;
+/** Сколько BLM зачислить за рубли по курсу (вниз до сотых). */
+export function rubToBlm(rub: number, rate: number): number {
+  return Math.floor((rub / rate) * 100 + 1e-6) / 100;
 }
 
-/** Сколько Bloom списать за товар, оценённый в рублях (вверх до сотых, по базовому курсу). */
-export function rubToBcCharge(rub: number): number {
-  return Math.ceil((rub / BC_RATE) * 100 - 1e-6) / 100;
+/** Сколько BLM списать за товар, оценённый в рублях (вверх до сотых). */
+export function rubToBlmCharge(rub: number, rate: number): number {
+  return Math.ceil((rub / rate) * 100 - 1e-6) / 100;
+}
+
+/** Старый курс (1 Bloom = 90 ₽, пакеты и розница 108 ₽) — только для платежей, созданных до появления BLM. */
+const LEGACY_BC_PACKAGES = [{ bc: 5, rub: 540 }, { bc: 10, rub: 990 }, { bc: 25, rub: 2250 }, { bc: 50, rub: 4500 }];
+export function legacyRubToBc(rub: number): number {
+  const pkg = LEGACY_BC_PACKAGES.find((p) => p.rub === rub);
+  if (pkg) return pkg.bc;
+  return Math.floor((rub / 108) * 100 + 1e-6) / 100;
 }

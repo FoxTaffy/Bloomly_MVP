@@ -73,8 +73,9 @@
                 {{ walletStore.balance.toFixed(2) }}
               </p>
               <p class="flex items-center justify-center gap-1 text-sm text-brand-accent-minus font-semibold mt-1 relative">
-                <BIcon name="Flower2" class="w-3.5 h-3.5" /> Blooms
+                <BIcon name="Flower2" class="w-3.5 h-3.5" /> BLM
               </p>
+              <p class="text-[11px] text-white/45 mt-1 relative">1 BLM = $1</p>
             </div>
 
             <!-- Top-up preset picker -->
@@ -85,7 +86,7 @@
                   class="relative py-3 rounded-xl border bg-brand-card text-center transition-all disabled:opacity-40 hover:border-brand-accent/60"
                   :class="pkg.popular ? 'border-brand-accent shadow-[0_0_0_1px_rgba(76,103,207,.5)]' : 'border-brand-border'">
                   <span v-if="pkg.popular" class="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-brand-accent text-[9px] font-extrabold uppercase tracking-wide text-white whitespace-nowrap">{{ langStore.t.topupPopular }}</span>
-                  <span class="block text-base font-extrabold text-white">{{ pkg.bc }} Blooms</span>
+                  <span class="block text-base font-extrabold text-white">{{ pkg.bc }} BLM</span>
                   <span class="block text-xs font-semibold text-white/50">{{ pkg.rub }} ₽</span>
                 </button>
               </div>
@@ -1783,7 +1784,7 @@
                   <span class="text-2xl font-extrabold text-white leading-none">
                     {{ Number(viewedProfile?.wallet?.balance ?? 0).toFixed(2) }}
                   </span>
-                  <span class="text-xs font-semibold text-brand-accent-minus">Blooms</span>
+                  <span class="text-xs font-semibold text-brand-accent-minus">BLM</span>
                 </div>
                 <p class="flex items-center gap-1 text-[10px] text-white/55 mt-1">
                   <BIcon name="Flower2" class="w-3 h-3" /> {{ langStore.t.internalCurrency }}

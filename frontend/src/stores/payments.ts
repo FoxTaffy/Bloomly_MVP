@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '../api'
 
-export type PayMethod = 'AC' | 'PC' | 'wallet' // AC — карта, PC — кошелёк ЮMoney, wallet — баланс Blooms
+export type PayMethod = 'AC' | 'PC' | 'wallet' // AC — карта, PC — кошелёк ЮMoney, wallet — баланс BLM
 export type BillingPeriod = 'month' | 'year'
 
 export interface PlanQuote {

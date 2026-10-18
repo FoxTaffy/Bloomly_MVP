@@ -271,6 +271,8 @@ model Payment {
   raw_notification      Json?
   save_method           Boolean   @default(false) // просили ЮKassa сохранить способ оплаты (привязка / автопродление)
   recurring             Boolean   @default(false) // автосписание по сохранённому способу, без участия пользователя
+  blm_amount            Decimal?  @db.Decimal(18, 2) // сколько BLM зачислено/списано (фиксируется при создании)
+  blm_rate              Decimal?  @db.Decimal(10, 4) // курс ₽ за 1 BLM на момент создания
   paid_at               DateTime?
   created_at            DateTime  @default(now())
   updated_at            DateTime  @updatedAt
@@ -278,6 +280,16 @@ model Payment {
 
   @@index([user_id, created_at])
   @@index([status, created_at])
+}
+
+/// История курса ₽ за 1 BLM (1 BLM = 1 $), обновляется по cron из курса ЦБ
+model BlmRate {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usd_rub    Decimal  @db.Decimal(10, 4)
+  source     String   @default("cbr") @db.VarChar(20)
+  created_at DateTime @default(now())
+
+  @@index([created_at])
 }
 
 model OAuthAccount {

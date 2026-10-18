@@ -17,7 +17,7 @@ const router = useRouter()
 const ft = useFinanceT()
 const { reportAdminError } = useAdminContext()
 
-// ── Финансовый отчёт (платежи, подписки, карты, возвраты, кошелёк Bloom) ──────────
+// ── Финансовый отчёт (платежи, подписки, карты, возвраты, кошелёк BLM) ──────────
 const RANGES = [7, 30, 90, 365] as const
 const days = ref<number>(30)
 const report = ref<any>(null)

@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma.js';
-import { monthlyPrice, quote, isPaidTier, PURCHASABLE_TIERS, EARLY_USER_CUTOFF, BC_RATE, type BillingPeriod, type PaidTier } from '../payments/pricing.js';
+import { getBlmRate } from '../payments/rate.js';
+import { monthlyPrice, quote, isPaidTier, PURCHASABLE_TIERS, EARLY_USER_CUTOFF, type BillingPeriod, type PaidTier } from '../payments/pricing.js';
 
 // Отчёт «Финансы и Premium» для админки. Только чтение.
 //
@@ -53,14 +54,14 @@ async function windowTotals(from: Date, to: Date): Promise<Window> {
 
 type PaymentListRow = {
   id: string; purpose: string; provider: string; status: string; amount: number; tier: string | null; period: string | null;
-  recurring: boolean; failure_reason: string | null; created_at: Date; paid_at: Date | null; method_type: string | null;
+  recurring: boolean; failure_reason: string | null; created_at: Date; paid_at: Date | null; method_type: string | null; blm_amount: number | null;
   user_id: string; username: string; display_name: string | null; avatar_url: string | null;
 };
 
 function listPayments(where: Prisma.Sql, order: Prisma.Sql, limit: number) {
   return prisma.$queryRaw<PaymentListRow[]>`
     SELECT p.id, p.purpose, p.provider, p.status, p.amount::float8 AS amount, p.tier, p.period, p.recurring, p.failure_reason,
-           p.created_at, p.paid_at, p.raw_notification->'payment_method'->>'type' AS method_type,
+           p.created_at, p.paid_at, p.raw_notification->'payment_method'->>'type' AS method_type, p.blm_amount::float8 AS blm_amount,
            u.id AS user_id, u.username, u.display_name, u.avatar_url
     FROM "Payment" p JOIN "User" u ON u.id = p.user_id
     WHERE ${where}
@@ -68,7 +69,7 @@ function listPayments(where: Prisma.Sql, order: Prisma.Sql, limit: number) {
     LIMIT ${limit}
   `.then((rows) => rows.map((r) => ({
     id: r.id, purpose: r.purpose, provider: r.provider, status: r.status, amount: r2(r.amount), tier: r.tier, period: r.period,
-    recurring: r.recurring, reason: r.failure_reason, createdAt: r.created_at, paidAt: r.paid_at, method: r.method_type,
+    recurring: r.recurring, reason: r.failure_reason, createdAt: r.created_at, paidAt: r.paid_at, method: r.method_type, blmAmount: r.blm_amount,
     user: { id: r.user_id, username: r.username, display_name: r.display_name, avatar_url: r.avatar_url },
   })));
 }
@@ -306,7 +307,7 @@ export async function getFinanceReport(rawDays: number) {
     },
     methods: shareRows.map((r) => ({ method: r.method, sum: r2(r.sum), count: r.cnt })),
     wallet: {
-      balanceTotal: r2(Number(walletAgg._sum.balance ?? 0)), holders: walletAgg._count._all, bcRate: BC_RATE,
+      balanceTotal: r2(Number(walletAgg._sum.balance ?? 0)), holders: walletAgg._count._all, bcRate: await getBlmRate(),
       ledger,
       topHolders: topHolders.map((h) => ({ balance: r2(Number(h.balance)), user: h.user })),
     },

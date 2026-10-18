@@ -62,7 +62,7 @@ async function topupWallet(amount: number) {
           <p class="text-[10px] font-bold uppercase tracking-widest text-white/55 leading-none">{{ langStore.t.walletLabel }}</p>
           <p class="flex items-baseline gap-1 mt-1">
             <span class="text-lg font-extrabold text-white leading-none">{{ walletStore.balance.toFixed(2) }}</span>
-            <span class="text-[11px] font-semibold text-brand-accent-minus">Blooms</span>
+            <span class="text-[11px] font-semibold text-brand-accent-minus">BLM</span>
           </p>
         </div>
       </div>
@@ -88,8 +88,9 @@ async function topupWallet(amount: number) {
               <p class="text-xs font-bold text-brand-accent uppercase tracking-widest mb-2 relative">{{ langStore.t.balanceLabel }}</p>
               <p class="text-4xl font-extrabold text-white leading-none relative">{{ walletStore.balance.toFixed(2) }}</p>
               <p class="flex items-center justify-center gap-1 text-sm text-brand-accent-minus font-semibold mt-1 relative">
-                <BIcon name="Flower2" class="w-3.5 h-3.5" /> Blooms
+                <BIcon name="Flower2" class="w-3.5 h-3.5" /> BLM
               </p>
+              <p class="text-[11px] text-white/45 mt-1 relative">1 BLM = $1</p>
             </div>
 
             <div v-if="showTopupPicker" class="bg-brand-bg border border-brand-border rounded-2xl p-4 stack-y-3">
@@ -99,7 +100,7 @@ async function topupWallet(amount: number) {
                   class="relative py-3 rounded-xl border bg-brand-card text-center transition-all disabled:opacity-40 hover:border-brand-accent/60"
                   :class="pkg.popular ? 'border-brand-accent shadow-[0_0_0_1px_rgba(76,103,207,.5)]' : 'border-brand-border'">
                   <span v-if="pkg.popular" class="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-brand-accent text-[9px] font-extrabold uppercase tracking-wide text-white whitespace-nowrap">{{ langStore.t.topupPopular }}</span>
-                  <span class="block text-base font-extrabold text-white">{{ pkg.bc }} Blooms</span>
+                  <span class="block text-base font-extrabold text-white">{{ pkg.bc }} BLM</span>
                   <span class="block text-xs font-semibold text-white/50">{{ pkg.rub }} ₽</span>
                 </button>
               </div>

@@ -65,8 +65,9 @@ onMounted(load)
         <p class="text-xs font-bold text-brand-accent uppercase tracking-widest mb-2">Баланс группы</p>
         <p class="text-4xl font-extrabold text-white leading-none">{{ balance.toFixed(2) }}</p>
         <p class="flex items-center justify-center gap-1 text-sm text-brand-accent-minus font-semibold mt-1">
-          <BIcon name="Flower2" class="w-3.5 h-3.5" /> Blooms
+          <BIcon name="Flower2" class="w-3.5 h-3.5" /> BLM
         </p>
+        <p class="text-[11px] text-white/45 mt-1 relative">1 BLM = $1</p>
       </div>
 
       <p class="text-[11px] text-white/30 text-center">

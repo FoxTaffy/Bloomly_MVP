@@ -100,7 +100,7 @@ onUnmounted(() => { if (timer) clearTimeout(timer) })
           </div>
           <h1 class="text-xl font-extrabold">{{ langStore.t.payResultSuccessTitle }}</h1>
           <p v-if="payment?.purpose === 'wallet_topup'" class="text-sm text-white/60">
-            {{ langStore.t.payResultTopupDesc }} {{ payment.bc?.toFixed(2) }} Blooms
+            {{ langStore.t.payResultTopupDesc }} {{ payment.bc?.toFixed(2) }} BLM
           </p>
           <p v-else-if="payment?.purpose === 'donation'" class="text-sm text-white/60">
             {{ langStore.t.payResultDonationDesc }}

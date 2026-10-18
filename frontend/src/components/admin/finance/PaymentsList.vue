@@ -4,7 +4,7 @@ import { rub, bc, dateTime, STATUS_STYLE } from './financeFormat'
 
 export interface PaymentRowData {
   id: string; purpose: string; provider: string; status: string; amount: number; tier: string | null; period: string | null
-  recurring: boolean; reason: string | null; createdAt: string; paidAt: string | null; method: string | null
+  recurring: boolean; reason: string | null; createdAt: string; paidAt: string | null; method: string | null; blmAmount?: number | null
   user: { id: string; username: string; display_name: string | null; avatar_url: string | null }
 }
 defineProps<{ rows: PaymentRowData[]; empty: string; busyId?: string | null }>()
@@ -16,8 +16,8 @@ const what = (p: PaymentRowData) => {
   if (p.purpose !== 'subscription' || !p.tier) return base
   return `${base} ${p.tier[0].toUpperCase()}${p.tier.slice(1)} · ${p.period === 'year' ? t('sYear') : t('sMonth')}`
 }
-// Оплата подписки с баланса хранится в рублях, но списаны Blooms — показываем в Bloom по базовому курсу
-const money = (p: PaymentRowData) => (p.provider === 'wallet' ? bc(Math.ceil((p.amount / 90) * 100 - 1e-6) / 100) : rub(p.amount))
+// Оплата подписки с баланса хранится в рублях, но списаны BLM — показываем зафиксированную сумму (старые платежи — по прежнему курсу 90 ₽)
+const money = (p: PaymentRowData) => (p.provider === 'wallet' ? bc(p.blmAmount ?? Math.ceil((p.amount / 90) * 100 - 1e-6) / 100) : rub(p.amount))
 const methodLabel = (p: PaymentRowData) => (p.provider === 'wallet' ? t('viaBalance') : t(`mType_${p.method ?? 'unknown'}`))
 </script>
 

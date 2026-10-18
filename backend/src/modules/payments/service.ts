@@ -12,9 +12,10 @@ import {
 } from './yookassa.js';
 import {
   PLAN_PRICES, PURCHASABLE_TIERS, PERIOD_MONTHS, isPaidTier, isEarlyUser, quote,
-  BC_RATE, TOPUP_PACKAGES, rubToBc, rubToBcCharge,
+  topupPackages, rubToBlm, rubToBlmCharge, legacyRubToBc,
   type PaidTier, type BillingPeriod,
 } from './pricing.js';
+import { getBlmRate } from './rate.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -22,19 +23,23 @@ const httpError = (msg: string, statusCode: number) => Object.assign(new Error(m
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Для пополнения добавляем зачисленные BC (amount хранится в рублях). */
-const withBc = <T extends { purpose: string; amount: Prisma.Decimal }>(p: T) =>
-  ({ ...p, bc: p.purpose === 'wallet_topup' ? rubToBc(Number(p.amount)) : null });
+/** Сколько BLM зачислено за пополнение: зафиксированное в платеже, а для старых платежей — по прежнему курсу. */
+const topupBlm = (p: { amount: Prisma.Decimal; blm_amount: Prisma.Decimal | null }) =>
+  p.blm_amount != null ? Number(p.blm_amount) : legacyRubToBc(Number(p.amount));
+
+/** Для пополнения добавляем зачисленные BLM (amount хранится в рублях). */
+const withBc = <T extends { purpose: string; amount: Prisma.Decimal; blm_amount: Prisma.Decimal | null }>(p: T) =>
+  ({ ...p, bc: p.purpose === 'wallet_topup' ? topupBlm(p) : null });
 
 /** Цена подписки в рублях + эквивалент в BC для оплаты с баланса. */
-const quoteWithBc = (tier: PaidTier, period: BillingPeriod, early: boolean) => {
+const quoteWithBc = (tier: PaidTier, period: BillingPeriod, early: boolean, rate: number) => {
   const q = quote(tier, period, early);
-  return { ...q, bcAmount: rubToBcCharge(q.amount) };
+  return { ...q, bcAmount: rubToBlmCharge(q.amount, rate) };
 };
 
 const PUBLIC_SELECT = {
   id: true, provider: true, purpose: true, status: true, amount: true, currency: true,
-  method: true, tier: true, period: true, recurring: true, paid_at: true, created_at: true,
+  method: true, tier: true, period: true, recurring: true, paid_at: true, blm_amount: true, created_at: true,
 } as const;
 
 /** Способ оплаты, по которому можно списывать: есть токен ЮKassa. Старые «карты» без токена не годятся. */
@@ -181,7 +186,7 @@ async function fulfill(paymentId: string, extra: Prisma.PaymentUpdateManyMutatio
     if (flipped.count === 0) return false;
     const p = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
     if (p.purpose === 'wallet_topup') {
-      await creditWallet(tx, p.user_id, rubToBc(Number(p.amount)), { kind: 'topup', refId: p.id });
+      await creditWallet(tx, p.user_id, topupBlm(p), { kind: 'topup', refId: p.id });
     } else if (p.purpose === 'subscription' && p.tier && isPaidTier(p.tier)) {
       await applySubscription(tx, p.user_id, p.tier, parsePeriod(p.period));
     } else if (p.purpose === 'donation') {
@@ -362,7 +367,7 @@ async function syncWithGateway(payment: PaymentRow, known?: YookassaPayment) {
 
 /**
  * Возврат денег плательщику (refund.succeeded: из кабинета ЮKassa, по чарджбэку). Полный возврат отзывает то, что было выдано:
- * пополнение — Blooms (сколько ещё есть на балансе), подписка — автопродление, донат — значок спонсора.
+ * пополнение — BLM (сколько ещё есть на балансе), подписка — автопродление, донат — значок спонсора.
  * Частичный возврат только помечается для ручного разбора. Идемпотентно: смена статуса — атомарный захват.
  */
 async function handleRefund(remotePaymentId: string) {
@@ -386,7 +391,7 @@ async function handleRefund(remotePaymentId: string) {
     if (!flipped.count) return 'duplicate';
     let note: string | null = null;
     if (payment.purpose === 'wallet_topup') {
-      const bc = rubToBc(Number(payment.amount));
+      const bc = topupBlm(payment);
       // Блокируем строку кошелька, чтобы между чтением остатка и списанием его не потратили
       const rows = await tx.$queryRaw<{ balance: Prisma.Decimal }[]>`SELECT balance FROM "Wallet" WHERE user_id = ${payment.user_id}::uuid FOR UPDATE`;
       const have = rows[0] ? Number(rows[0].balance) : 0;
@@ -417,18 +422,19 @@ export const paymentsService = {
     const cfg = yookassaConfig();
     const user = await loadBuyer(userId);
     const early = isEarlyUser(user.created_at);
+    const rate = await getBlmRate();
     return {
       enabled: cfg.enabled,
       recurring: cfg.recurring,
       provider: 'yookassa',
       methods: ['AC', 'PC'] as PayMethod[],
-      bcRate: BC_RATE,
-      topup: { min: TOPUP_MIN, max: TOPUP_MAX, step: TOPUP_STEP, packages: TOPUP_PACKAGES },
+      bcRate: rate,
+      topup: { min: TOPUP_MIN, max: TOPUP_MAX, step: TOPUP_STEP, packages: topupPackages(rate) },
       donate: { min: DONATE_MIN, max: DONATE_MAX },
       plans: PURCHASABLE_TIERS.map((tier) => ({
         tier,
-        month: quoteWithBc(tier, 'month', early),
-        year: quoteWithBc(tier, 'year', early),
+        month: quoteWithBc(tier, 'month', early, rate),
+        year: quoteWithBc(tier, 'year', early, rate),
       })),
       subscription: {
         tier: user.subscription_tier,
@@ -442,23 +448,24 @@ export const paymentsService = {
 
   quote: async (userId: string, tier: unknown, period: unknown) => {
     const user = await loadBuyer(userId);
-    return quoteWithBc(parseTier(tier), parsePeriod(period), isEarlyUser(user.created_at));
+    return quoteWithBc(parseTier(tier), parsePeriod(period), isEarlyUser(user.created_at), await getBlmRate());
   },
 
   createTopup: async (userId: string, rawAmount: unknown, rawMethod: unknown) => {
     const cfg = requireGateway();
+    const rate = await getBlmRate();
     const amount = Number(rawAmount);
     if (!Number.isInteger(amount) || amount < TOPUP_MIN || amount > TOPUP_MAX
-      || (amount % TOPUP_STEP !== 0 && !TOPUP_PACKAGES.some((p) => p.rub === amount))) {
+      || (amount % TOPUP_STEP !== 0 && !topupPackages(rate).some((p) => p.rub === amount))) {
       throw httpError(`Сумма — от ${TOPUP_MIN} до ${TOPUP_MAX} ₽ с шагом ${TOPUP_STEP}`, 400);
     }
     const method = parseMethod(rawMethod ?? 'AC');
     await loadBuyer(userId);
     await assertNotFlooded(userId);
     const payment = await prisma.payment.create({
-      data: { user_id: userId, provider: 'yookassa', purpose: 'wallet_topup', amount, method },
+      data: { user_id: userId, provider: 'yookassa', purpose: 'wallet_topup', amount, method, blm_amount: rubToBlm(amount, rate), blm_rate: rate },
     });
-    const checkout = await openGatewayPayment(cfg, payment, amount, `Пополнение баланса Bloomly: ${rubToBc(amount)} Blooms`);
+    const checkout = await openGatewayPayment(cfg, payment, amount, `Пополнение баланса Bloomly: ${rubToBlm(amount, rate)} BLM`);
     return { paymentId: payment.id, amount, ...checkout };
   },
 
@@ -492,12 +499,13 @@ export const paymentsService = {
     const label = subscriptionLabel(tier, period);
 
     if (rawMethod === 'wallet') {
-      const bcCharge = rubToBcCharge(q.amount);
+      const rate = await getBlmRate();
+      const bcCharge = rubToBlmCharge(q.amount, rate);
       return prisma.$transaction(async (tx) => {
         const payment = await tx.payment.create({
           data: {
             user_id: userId, provider: 'wallet', purpose: 'subscription', status: 'succeeded',
-            amount: q.amount, tier, period, paid_at: new Date(),
+            amount: q.amount, tier, period, paid_at: new Date(), blm_amount: bcCharge, blm_rate: rate,
           },
         });
         await debitWallet(tx, userId, bcCharge, { kind: 'subscription', refId: payment.id });

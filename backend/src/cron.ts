@@ -8,6 +8,7 @@ import { scheduledPostService } from './modules/posts/scheduledService.js';
 import { cleanupSoftDeletedRows, cleanupExpiredStories } from './jobs/cleanup.js';
 import { logger } from './lib/logger.js';
 import { paymentsService } from './modules/payments/service.js';
+import { refreshBlmRate } from './modules/payments/rate.js';
 
 interface CronJob {
   name: string;
@@ -20,6 +21,9 @@ interface CronJob {
 const JOBS: CronJob[] = [
   // DB keepalive — prevents idle connection drops (failures are reconnected by Prisma)
   { name: 'DB keepalive', schedule: '*/5 * * * *', run: () => prisma.$queryRaw`SELECT 1` },
+
+  // Курс BLM (1 BLM = 1 $): обновляем из курса ЦБ 2 раза в сутки
+  { name: 'BLM rate update', schedule: '0 9,21 * * *', announce: true, run: refreshBlmRate },
 
   { name: 'daily DB cleanup', schedule: '0 3 * * *', announce: true, run: async () => {
     await cleanupSoftDeletedRows();
