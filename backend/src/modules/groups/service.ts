@@ -1546,7 +1546,7 @@ export const groupService = {
     const clean = sanitizeDisplayText(text ?? '', 2000);
     if (!clean) throw httpError('Напишите текст отзыва', 400);
     if (containsToxicLanguage(clean)) throw httpError('Отзыв содержит недопустимый контент', 400);
-    const group = await prisma.group.findFirst({ where: { id: groupId, deleted_at: null }, select: { owner_id: true } });
+    const group = await prisma.group.findFirst({ where: { id: groupId, deleted_at: null }, select: { owner_id: true, type: true } });
     if (!group) throw httpError('Group not found', 404);
     if (group.owner_id === userId) throw httpError('Нельзя оставить отзыв на свою группу', 400);
     const member = await prisma.groupMember.findUnique({
@@ -1559,6 +1559,14 @@ export const groupService = {
       update: { rating, text: clean },
       create: { group_id: groupId, user_id: userId, rating, text: clean },
     });
+    // В группах с заказами отзыв — только по итогам сделки: заказ выполнен или закрыт (отменён, не завершён)
+    if (group.type === 'creative' || group.type === 'shop') {
+      const deal = await prisma.order.findFirst({
+        where: { group_id: groupId, customer_id: userId, OR: [{ status: 'FINISHED' }, { deleted_at: { not: null } }] },
+        select: { id: true },
+      });
+      if (!deal) throw httpError('Отзыв можно оставить только после выполненного или закрытого заказа', 403);
+    }
   },
 
   async deleteReview(groupId: string, reviewId: string, actorId: string) {
