@@ -2,7 +2,7 @@
 import { errorMessage } from '@/lib/apiError'
 import { ref, computed, onMounted, watch } from 'vue'
 import BIcon from '@/components/BIcon.vue'
-import { useGroupsStore, type GroupMember, type MemberRole } from '@/stores/groups'
+import { useGroupsStore, type GroupMember, type MemberRole, type JoinRequest } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirm } from '@/composables/useConfirm'
 
@@ -80,6 +80,33 @@ const pageDesc = computed(() => {
   return 'Управление участниками группы'
 })
 
+// ── Applications to join a closed group ──────────────────────────────────
+const joinRequests = ref<JoinRequest[]>([])
+const resolvingRequest = ref<string | null>(null)
+
+async function loadJoinRequests() {
+  if (!props.groupId) return
+  try {
+    joinRequests.value = await groupsStore.fetchJoinRequests(props.groupId)
+  } catch {
+    joinRequests.value = []
+  }
+}
+
+async function resolveRequest(req: JoinRequest, approve: boolean) {
+  if (!props.groupId) return
+  resolvingRequest.value = req.id
+  try {
+    await groupsStore.resolveJoinRequest(props.groupId, req.id, approve)
+    joinRequests.value = joinRequests.value.filter(r => r.id !== req.id)
+    if (approve) await loadMembers()
+  } catch (e) {
+    alert('Ошибка: ' + errorMessage(e))
+  } finally {
+    resolvingRequest.value = null
+  }
+}
+
 async function loadMembers() {
   if (!props.groupId) return
   loading.value = true
@@ -129,12 +156,14 @@ function toggleDropdown(userId: string) {
 
 watch(() => props.groupId, () => {
   members.value = []
+  joinRequests.value = []
   loadMembers()
+  loadJoinRequests()
 })
 
 onMounted(async () => {
   if (!groupsStore.myGroups.length) await groupsStore.loadMyGroups()
-  await loadMembers()
+  await Promise.all([loadMembers(), loadJoinRequests()])
 })
 
 defineExpose({ loadMembers })
@@ -162,6 +191,33 @@ defineExpose({ loadMembers })
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-brand-border text-xs font-semibold text-white/55 hover:text-white hover:border-brand-accent/50 transition-all">
           <BIcon name="ArrowLeft" class="w-3.5 h-3.5" /> Назад
         </button>
+      </div>
+    </div>
+
+    <!-- Pending applications (closed groups) -->
+    <div v-if="joinRequests.length" class="px-6 pt-4">
+      <p class="text-xs font-bold uppercase tracking-wider text-white/40 mb-2">Заявки на вступление · {{ joinRequests.length }}</p>
+      <div class="space-y-2">
+        <div v-for="req in joinRequests" :key="req.id"
+          class="flex items-center gap-3 px-4 py-3 rounded-2xl bg-brand-bg border border-brand-border">
+          <img v-if="req.user.avatar_url" :src="req.user.avatar_url" class="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
+          <div v-else class="w-10 h-10 rounded-xl bg-brand-accent/20 flex items-center justify-center text-sm font-extrabold text-brand-accent flex-shrink-0">
+            {{ (req.user.display_name || req.user.username || '?')[0].toUpperCase() }}
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-bold text-white truncate">{{ req.user.display_name || req.user.username }}</p>
+            <p class="text-xs text-white/40 truncate">@{{ req.user.username }}</p>
+            <p v-if="req.message" class="text-xs text-white/60 mt-1 break-words">{{ req.message }}</p>
+          </div>
+          <button @click="resolveRequest(req, true)" :disabled="resolvingRequest === req.id"
+            class="px-3 py-1.5 rounded-xl bg-brand-success/15 border border-brand-success/30 text-brand-success text-xs font-bold hover:bg-brand-success/25 disabled:opacity-40 transition-all">
+            Принять
+          </button>
+          <button @click="resolveRequest(req, false)" :disabled="resolvingRequest === req.id"
+            class="px-3 py-1.5 rounded-xl border border-brand-border text-white/50 text-xs font-bold hover:text-red-400 hover:border-red-400/40 disabled:opacity-40 transition-all">
+            Отклонить
+          </button>
+        </div>
       </div>
     </div>
 
@@ -223,6 +279,10 @@ defineExpose({ loadMembers })
           <p class="text-xs text-white/40 truncate">@{{ member.user.username }}</p>
         </div>
 
+        <span v-if="member.customRole" class="px-2.5 py-1 rounded-xl border border-white/10 text-[11px] font-bold"
+          :style="`color:${member.customRole.color};background:${member.customRole.color}20`">
+          {{ member.customRole.icon }} {{ member.customRole.name }}
+        </span>
         <!-- Role badge -->
         <span :class="['px-2.5 py-1 rounded-xl border text-[11px] font-bold', ROLE_COLORS[member.role] ?? ROLE_COLORS.member]">
           {{ ROLE_LABELS[member.role] ?? member.role }}

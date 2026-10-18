@@ -7,7 +7,9 @@ import { groupService } from '../groups/service.js';
 import { extractKeywords } from '../../lib/textKeywords.js';
 import { interestsToTerms } from '../../lib/interestTags.js';
 import { normalizeTag } from '../../lib/tagRules.js';
-import { expandTag, synonymGroups } from '../../lib/tagSynonyms.js';
+import { expandTag, groupKeyOf, synonymGroups } from '../../lib/tagSynonyms.js';
+import { parseSearchQuery, textScore } from '../../lib/searchQuery.js';
+import { resolveTagsForTerm } from '../../lib/tagSearch.js';
 import { muteKeywordsWhere, nsfwWhere, type NsfwMode } from '../../lib/contentFilters.js';
 import { analyzeContent } from '../automod/service.js';
 import type { CreatePostInput, GetPostsQuery } from './types.js';
@@ -15,6 +17,8 @@ import { errCode } from '../../lib/httpErrors.js';
 import { logError } from '../../lib/logger.js';
 
 const MAX_MEDIA_PER_POST = 20;
+/** Сколько самых свежих подходящих постов ранжируется при поиске. */
+const SEARCH_WINDOW = 300;
 
 // A group owner/admin/moderator may moderate (delete) content posted inside their own group,
 // even if they didn't author it — this is separate from the site-wide staff role.
@@ -604,34 +608,97 @@ export const postService = {
     return (await filterByProfilePrivacy(posts, viewerId)).map(maskGroupAuthor);
   },
 
-  async searchPosts(query: string, nsfwMode: NsfwMode = 'hide', pageNum: number = 1, limitNum: number = 20, viewerId?: string, withSynonyms = false) {
-    const q = query.trim();
-    if (!q) return [];
-    const tagQuery = q.replace(/^#/, '');
-    // "лиса" with synonyms on also finds posts tagged fox / foxes / лисица…
-    const synonymTags = withSynonyms ? await expandTag(tagQuery) : [];
+  /**
+   * Поиск постов: каждое слово запроса должно найтись в тексте, заголовке или теге (с учётом
+   * синонимов, исправления раскладки и опечаток в тегах). Результаты ранжируются по релевантности
+   * (совпадение в теге/заголовке > в тексте), затем по популярности и свежести; sort='new' — по дате.
+   * Ранжируется окно из SEARCH_WINDOW самых свежих подходящих постов.
+   */
+  async searchPosts(
+    query: string,
+    nsfwMode: NsfwMode = 'hide',
+    pageNum: number = 1,
+    limitNum: number = 20,
+    viewerId?: string,
+    withSynonyms = true,
+    sort: 'relevance' | 'new' = 'relevance',
+  ) {
+    const parsed = parseSearchQuery(query);
+    if (!parsed.terms.length) return [];
+    const page = Math.max(1, pageNum || 1);
+    const limit = Math.min(50, Math.max(1, limitNum || 20));
+
+    const tagScores = await Promise.all(parsed.terms.map((t) => resolveTagsForTerm(t, withSynonyms)));
+    const blockerIds = await getBlockerIds(viewerId);
 
     const where: any = {
-      deleted_at: null,
-      is_archived: false,
-      ...NOT_DELETED_GROUP_FILTER,
-      OR: [
-        { content: { contains: q, mode: 'insensitive' } },
-        { title: { contains: q, mode: 'insensitive' } },
-        { tags: { some: { tag: { name: { contains: tagQuery, mode: 'insensitive' } } } } },
-        ...(synonymTags.length ? [{ tags: { some: { tag: { name: { in: synonymTags } } } } }] : []),
+      AND: [
+        { deleted_at: null, is_archived: false },
+        NOT_DELETED_GROUP_FILTER,
+        nsfwWhere(nsfwMode),
+        ...(blockerIds.length > 0 ? [{ author_id: { notIn: blockerIds } }] : []),
+        ...parsed.terms.map((t, i) => {
+          const tagNames = [...tagScores[i].keys()];
+          return {
+            OR: [
+              ...[t.text, ...t.variants].flatMap((w) => [
+                { content: { contains: w, mode: 'insensitive' } },
+                { title: { contains: w, mode: 'insensitive' } },
+              ]),
+              ...(tagNames.length ? [{ tags: { some: { tag: { name: { in: tagNames } } } } }] : []),
+            ],
+          };
+        }),
       ],
     };
-    Object.assign(where, nsfwWhere(nsfwMode));
 
-    const blockerIds = await getBlockerIds(viewerId);
-    if (blockerIds.length > 0) where.author_id = { notIn: blockerIds };
-
-    const posts = await prisma.post.findMany({
+    const window = await prisma.post.findMany({
       where,
       orderBy: { created_at: 'desc' },
-      skip: (pageNum - 1) * limitNum,
-      take: limitNum,
+      take: SEARCH_WINDOW,
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        created_at: true,
+        tags: { select: { tag: { select: { name: true } } } },
+        _count: { select: { votes: true } },
+      },
+    });
+
+    let ids: string[];
+    if (sort === 'new') {
+      ids = window.map((p) => p.id);
+    } else {
+      const now = Date.now();
+      const scored = window.map((p) => {
+        const names = p.tags.map((t) => t.tag.name);
+        let score = 0;
+        parsed.terms.forEach((t, i) => {
+          let best = 0;
+          for (const n of names) best = Math.max(best, tagScores[i].get(n) ?? 0);
+          for (const w of [t.text, ...t.variants]) {
+            best = Math.max(best, textScore(p.title, w) * 0.8, textScore(p.content, w) * 0.5);
+          }
+          score += best;
+        });
+        if (parsed.terms.length > 1) {
+          if (textScore(p.title, parsed.phrase) > 0) score += 4;
+          if (textScore(p.content, parsed.phrase) > 0) score += 2;
+        }
+        score += Math.log1p(Math.max(0, p._count.votes)) * 0.7;
+        score += 3 * Math.exp(-(now - p.created_at.getTime()) / (30 * 24 * 3600 * 1000));
+        return { id: p.id, score };
+      });
+      // sort стабилен: при равной оценке сохраняется порядок «свежие выше»
+      scored.sort((a, b) => b.score - a.score);
+      ids = scored.map((x) => x.id);
+    }
+
+    const pageIds = ids.slice((page - 1) * limit, page * limit);
+    if (!pageIds.length) return [];
+    const full = await prisma.post.findMany({
+      where: { id: { in: pageIds } },
       include: {
         author: { select: AUTHOR_SELECT },
         rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
@@ -640,7 +707,55 @@ export const postService = {
         groupPosts: { include: { group: { select: { id: true, slug: true, name: true, avatar_url: true, accent_color: true } } } },
       },
     });
-    return (await filterByProfilePrivacy(posts, viewerId)).map(maskGroupAuthor);
+    const order = new Map(pageIds.map((id, i) => [id, i]));
+    full.sort((a, b) => order.get(a.id)! - order.get(b.id)!);
+    return (await filterByProfilePrivacy(full, viewerId)).map(maskGroupAuthor);
+  },
+
+  /** Подсказки тегов для поиска: подходящие теги (синонимы склеены в основной) с числом постов. */
+  async searchTags(query: string, nsfwMode: NsfwMode = 'hide', limit = 8) {
+    const parsed = parseSearchQuery(query);
+    if (!parsed.terms.length) return [];
+    // Подсказываем по последнему набираемому слову.
+    const term = parsed.terms[parsed.terms.length - 1];
+    const scores = await resolveTagsForTerm(term, true);
+    if (!scores.size) return [];
+
+    // Склеиваем варианты и синонимы в группы; показываем канонический тег (или лучший по оценке).
+    const { groupName } = await synonymGroups();
+    const groups = new Map<string, { names: string[]; score: number; best: string; bestScore: number }>();
+    for (const [name, score] of scores) {
+      const key = await groupKeyOf(name);
+      const g = groups.get(key) ?? { names: [], score: 0, best: name, bestScore: 0 };
+      g.names.push(name);
+      g.score = Math.max(g.score, score);
+      if (score > g.bestScore) { g.best = name; g.bestScore = score; }
+      groups.set(key, g);
+    }
+    const top = [...groups.entries()].sort((a, b) => b[1].score - a[1].score).slice(0, Math.min(20, limit * 2));
+
+    const counted = await Promise.all(top.map(async ([key, g]) => {
+      // В счёт идёт вся группа, а не только найденные по запросу теги (по «fo» не находится «лис»).
+      const names = [...new Set([...g.names, ...(await expandTag(g.best))])];
+      return {
+        name: groupName.get(key) ?? g.best,
+        score: g.score,
+        count: await prisma.post.count({
+          where: {
+            deleted_at: null,
+            is_archived: false,
+            ...NOT_DELETED_GROUP_FILTER,
+            ...nsfwWhere(nsfwMode),
+            tags: { some: { tag: { name: { in: names } } } },
+          },
+        }),
+      };
+    }));
+    return counted
+      .filter((t) => t.count > 0)
+      .sort((a, b) => b.score - a.score || b.count - a.count)
+      .slice(0, limit)
+      .map(({ name, count }) => ({ name, count }));
   },
 
   async getPersonalizedPosts(userId: string, nsfwMode: NsfwMode = 'hide', pageNum: number = 1, limitNum: number = 30) {

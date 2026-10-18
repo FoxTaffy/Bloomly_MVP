@@ -128,6 +128,8 @@ model User {
   soonBadges                     SoonBadge[]
   verificationRequests           VerificationRequest[]
   groupRatings                   GroupRating[]
+  groupReviews                   GroupReview[]
+  groupJoinRequests              GroupJoinRequest[]
   dealerListings                 DealerListing[]
   dealerBids                     DealerBid[]
   dealerListingComments          DealerListingComment[]
@@ -1013,6 +1015,8 @@ model Group {
   posts             GroupPost[]
   comments          Comment[]
   ratings           GroupRating[]
+  reviews           GroupReview[]
+  joinRequests      GroupJoinRequest[]
   groupMessages     GroupMessage[]
   groupDmThreads    Conversation[]     @relation("GroupCommunityChat")
   activities        Activity[]
@@ -1058,6 +1062,38 @@ model GroupRating {
 
   @@unique([group_id, user_id])
   @@index([group_id])
+}
+
+// Text review with 1..5 stars (separate from the up/down GroupRating score)
+model GroupReview {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  group_id   String   @db.Uuid
+  user_id    String   @db.Uuid
+  rating     Int // 1..5
+  text       String   @db.VarChar(2000)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  group Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([group_id, user_id])
+  @@index([group_id, created_at])
+}
+
+// Join application for closed groups (is_public = false): admins approve or reject it
+model GroupJoinRequest {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  group_id   String   @db.Uuid
+  user_id    String   @db.Uuid
+  message    String?  @db.VarChar(500)
+  created_at DateTime @default(now())
+
+  group Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([group_id, user_id])
+  @@index([group_id, created_at])
 }
 
 enum TodoStatus {
@@ -1121,7 +1157,8 @@ model GroupCustomRole {
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
 
-  group Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  group   Group         @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  members GroupMember[]
 
   @@index([group_id])
 }
@@ -1133,12 +1170,16 @@ model GroupMember {
   joined_at    DateTime @default(now())
   is_pinned    Boolean  @default(false)
   notify_posts Boolean  @default(true)
+  // Optional custom role from the group's own role list: adds its permissions on top of `role`
+  custom_role_id String? @db.Uuid
 
-  group Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  group      Group            @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  customRole GroupCustomRole? @relation(fields: [custom_role_id], references: [id], onDelete: SetNull)
 
   @@id([group_id, user_id])
   @@index([user_id])
+  @@index([custom_role_id])
 }
 
 // Notification-only follower — created when a participant is demoted after their group's

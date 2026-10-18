@@ -88,6 +88,8 @@ const displayedList = computed(() => {
 })
 
 const isFriendsTab  = computed(() => mainTab.value === 'friends')
+// Показываем не больше 2 заявок — после ответа на одну на её место встаёт следующая
+const visibleRequests = computed(() => friendsStore.requests.slice(0, 2))
 const onlineCount   = computed(() => friendsStore.friends.filter(f => f.online).length)
 
 // ── Tab configs ───────────────────────────────────────────────────────────────
@@ -246,7 +248,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
               <span class="bg-brand-accent text-white rounded-full text-[10px] px-1.5 font-bold">{{ friendsStore.requests.length }}</span>
             </h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <FriendRequestCard v-for="req in friendsStore.requests" :key="req.id" :request="req" @accept="handleAccept" @reject="handleReject" />
+              <FriendRequestCard v-for="req in visibleRequests" :key="req.id" :request="req" @accept="handleAccept" @reject="handleReject" />
             </div>
           </div>
 
@@ -311,7 +313,7 @@ function avatarInitial(name: string | null | undefined) { return (name ?? '?')[0
 
             <template v-if="rightPanel === 'requests'">
               <div v-if="friendsStore.requests.length" class="flex flex-col gap-3">
-                <FriendRequestCard v-for="req in friendsStore.requests" :key="req.id" :request="req" @accept="handleAccept" @reject="handleReject" />
+                <FriendRequestCard v-for="req in visibleRequests" :key="req.id" :request="req" @accept="handleAccept" @reject="handleReject" />
               </div>
               <div v-else class="flex flex-col items-center gap-2 py-6 text-white/55">
                 <BIcon name="UserCheck" class="w-8 h-8 opacity-30" />

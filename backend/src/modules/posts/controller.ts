@@ -97,16 +97,16 @@ export const votePostHandler = async (
 };
 
 export const searchPostsHandler = async (
-  request: FastifyRequest<{ Querystring: { q?: string; safeMode?: string; nsfw?: string; page?: string; limit?: string; synonyms?: string } }>,
+  request: FastifyRequest<{ Querystring: { q?: string; safeMode?: string; nsfw?: string; page?: string; limit?: string; synonyms?: string; sort?: string } }>,
   reply: FastifyReply,
 ) => {
   try {
-    const { q = '', safeMode, nsfw, page, limit, synonyms } = request.query;
+    const { q = '', safeMode, nsfw, page, limit, synonyms, sort } = request.query;
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
     const nsfwMode = resolveNsfwMode({ nsfw, safeMode, isAdult: requestIsAdult(request.user) });
     const viewerId = (request.user as JwtUser | undefined)?.id;
-    const posts = await postService.searchPosts(q, nsfwMode, pageNum, limitNum, viewerId, synonyms === 'true');
+    const posts = await postService.searchPosts(q, nsfwMode, pageNum, limitNum, viewerId, synonyms !== 'false', sort === 'new' ? 'new' : 'relevance');
     return reply.send({ success: true, data: { posts }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to search posts';
@@ -115,6 +115,22 @@ export const searchPostsHandler = async (
       data: null,
       error: { code: 'SEARCH_POSTS_ERROR', message },
     });
+  }
+};
+
+export const searchTagsHandler = async (
+  request: FastifyRequest<{ Querystring: { q?: string; safeMode?: string; nsfw?: string; limit?: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { q = '', safeMode, nsfw, limit } = request.query;
+    const nsfwMode = resolveNsfwMode({ nsfw, safeMode, isAdult: requestIsAdult(request.user) });
+    const limitNum = Math.min(20, Math.max(1, limit ? parseInt(limit, 10) || 8 : 8));
+    const tags = await postService.searchTags(q, nsfwMode, limitNum);
+    return reply.send({ success: true, data: { tags }, error: null });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to search tags';
+    return reply.code(500).send({ success: false, data: null, error: { code: 'SEARCH_TAGS_ERROR', message } });
   }
 };
 

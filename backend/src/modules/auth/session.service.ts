@@ -14,7 +14,7 @@ export const FULL_USER_SELECT = {
   subscription_tier: true, subscription_expires_at: true, profile_theme: true, profile_bg_url: true,
   profile_frame: true, is_verified: true, verification_type: true,
   badge_type: true, email_verified: true, onboarding_done: true,
-  payment_region: true, birth_date: true, two_factor_method: true,
+  payment_region: true, birth_date: true, two_factor_method: true, created_at: true,
 } as const;
 
 export const authUsers = {

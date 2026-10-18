@@ -29,6 +29,7 @@ export interface User {
   two_factor_method?: 'totp' | 'email' | null
   job_title?: string | null
   birth_date?: string | null
+  created_at?: string
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -23,7 +23,7 @@ const EventCard = defineAsyncComponent(() => import('@/components/groups/EventCa
 const TicketCard = defineAsyncComponent(() => import('@/components/groups/TicketCard.vue'))
 const TodoQueue = defineAsyncComponent(() => import('@/components/groups/TodoQueue.vue'))
 const GroupKanban = defineAsyncComponent(() => import('@/components/groups/GroupKanban.vue'))
-import { useGroupsStore } from '@/stores/groups'
+import { useGroupsStore, type GroupReview, type GroupMember } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { onAvatarError } from '@/composables/useAvatarFallback'
@@ -380,16 +380,46 @@ const reviewHover = ref(0)
 const reviewSubmitting = ref(false)
 const reviewDismissed = ref(false)
 
+const reviewError = ref('')
 async function submitReview() {
   if (!group.value || !reviewText.value.trim() || reviewRating.value < 1 || reviewSubmitting.value) return
   reviewSubmitting.value = true
+  reviewError.value = ''
   try {
-    // FIXME: reviewRating is 1..5 stars but the API only accepts 1 | -1 (backend throws otherwise)
-    await groupsStore.rateGroup(group.value.id, reviewRating.value as 1 | -1)
+    await groupsStore.submitReview(group.value.id, reviewRating.value, reviewText.value.trim())
     showReviewModal.value = false
     reviewDismissed.value = true
-  } catch (e) { console.error('Review failed', e) }
+    reviewText.value = ''
+    reviewRating.value = 0
+    await loadAboutTabData('reviews')
+  } catch (e) { reviewError.value = apiErrorMessage(e) || errorMessage(e) }
   finally { reviewSubmitting.value = false }
+}
+
+async function removeReview(reviewId: string) {
+  if (!group.value) return
+  try {
+    await groupsStore.deleteReview(group.value.id, reviewId)
+    await loadAboutTabData('reviews')
+  } catch (e) { console.error('Review delete failed', e) }
+}
+
+// ── Real data behind the About tabs (reviews / digest / rubrics / team) ───
+const reviewsLoaded = ref(false)
+const reviewsData = ref<{ reviews: GroupReview[]; average: number; total: number }>({ reviews: [], average: 0, total: 0 })
+const digestItems = ref<{ id: string; title: string; category: string | null; image: string | null; created_at: string }[]>([])
+const categoryItems = ref<{ name: string; post_count: number }[]>([])
+const teamItems = ref<GroupMember[]>([])
+
+async function loadAboutTabData(tab: string) {
+  if (!group.value) return
+  const id = group.value.id
+  try {
+    if (tab === 'reviews') { reviewsData.value = await groupsStore.fetchReviews(id); reviewsLoaded.value = true }
+    else if (tab === 'digest') digestItems.value = await groupsStore.fetchDigest(id)
+    else if (tab === 'categories') categoryItems.value = await groupsStore.fetchCategories(id)
+    else if (tab === 'team') teamItems.value = await groupsStore.fetchTeam(id)
+  } catch (e) { console.error(`about tab ${tab} failed`, e) }
 }
 
 // ── About tab (inside the About tabs card) ──────────────────────────────
@@ -410,10 +440,6 @@ const aboutNavs = computed(() => {
     navs.push({ key: 'sponsors', label: langStore.t.groupDetailSponsorsNav, icon: 'Star' })
     navs.push({ key: 'contacts', label: langStore.t.groupDetailContactsNav, icon: 'MapPin' })
     if ((group.value?.events?.length ?? 0) > 1) navs.push({ key: 'nearest', label: langStore.t.groupDetailNearestNav, icon: 'CalendarCheck' })
-  } else if (t === 'artist') {
-    navs.push({ key: 'about', label: langStore.t.groupDetailAboutArtist, icon: 'Info' })
-    navs.push({ key: 'prices', label: langStore.t.groupDetailPricesNavShort, icon: 'Tag' })
-    navs.push({ key: 'queue', label: langStore.t.groupDetailQueueNav, icon: 'ClipboardList' })
     navs.push({ key: 'reviews', label: langStore.t.groupDetailReviewsNav, icon: 'Star' })
   } else if (t === 'news') {
     navs.push({ key: 'about', label: langStore.t.groupDetailAboutNews, icon: 'Info' })
@@ -426,6 +452,7 @@ const aboutNavs = computed(() => {
       navs.push({ key: 'orders', label: langStore.t.groupDetailOrdersNav, icon: 'ClipboardList' })
     navs.push({ key: 'prices', label: langStore.t.groupDetailPricesNav, icon: 'Tag' })
     navs.push({ key: 'dealers-den', label: langStore.t.groupDetailDealersDenNav, icon: 'ShoppingBag' })
+    navs.push({ key: 'reviews', label: langStore.t.groupDetailReviewsNav, icon: 'Star' })
   } else {
     navs.push({ key: 'about', label: langStore.t.groupDetailAboutGeneric, icon: 'Info' })
   }
@@ -446,6 +473,8 @@ watch(
   },
   { immediate: true }
 )
+
+watch(aboutTab, (tab) => { if (['reviews', 'digest', 'categories', 'team'].includes(tab)) loadAboutTabData(tab) })
 
 // ── Content tabs (floating pills like profile) ─────────────────────────
 const activeContentTab = ref<'posts' | 'media' | 'archive' | 'posts_archive' | 'members' | 'events'>('posts')
@@ -590,8 +619,11 @@ async function load() {
   activeContentTab.value = 'posts'
   await groupsStore.loadGroup(route.params.slugOrId as string)
   loadMyRating()
+  loadJoinPending()
   loadGroupPosts()
   loadMemberPreview()
+  reviewsLoaded.value = false
+  if (['reviews', 'digest', 'categories', 'team'].includes(aboutTab.value)) loadAboutTabData(aboutTab.value)
   if (authStore.user && !isOwner.value) checkGroupBookmark()
   if (group.value?.type === 'event' && activeEvent.value) {
     loadMyRsvp()
@@ -641,10 +673,23 @@ async function setRsvp(status: 'going' | 'maybe' | 'not_going') {
   finally { rsvpLoading.value = false }
 }
 
+// Closed groups take an application instead of an instant join
+const joinPending = ref(false)
+async function loadJoinPending() {
+  joinPending.value = false
+  if (!group.value || !authStore.user || isMember.value || isOwner.value || group.value.is_public) return
+  try { joinPending.value = await groupsStore.getMyJoinRequest(group.value.id) } catch { /* not critical */ }
+}
 async function handleJoin() {
   if (!group.value) return
   try {
-    await groupsStore.joinGroup(group.value.id)
+    if (joinPending.value) {
+      await groupsStore.cancelJoinRequest(group.value.id)
+      joinPending.value = false
+      return
+    }
+    const joined = await groupsStore.joinGroup(group.value.id)
+    if (!joined) { joinPending.value = true; return }
     // Membership is now updated in the store directly — just bump local count
     if (group.value._count) group.value._count.members++
   } catch (e) {
@@ -944,8 +989,12 @@ const vClickOutside = {
                       {{ isSubscribed ? langStore.t.groupDetailSubscribedLabel : langStore.t.groupDetailFollowUpdatesBtn }}
                     </button>
                     <button v-else-if="group.type !== 'event' && !isMember && !isOwner" @click="handleJoin"
-                      class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-all shadow-lg shadow-brand-accent/25">
-                      <BIcon name="UserPlus" class="w-4 h-4" /> {{ langStore.t.subscribe }}
+                      class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all"
+                      :class="joinPending
+                        ? 'border border-brand-border bg-brand-bg text-white/60 hover:bg-brand-border/50'
+                        : 'bg-brand-accent text-white hover:bg-brand-accent-plus shadow-lg shadow-brand-accent/25'">
+                      <BIcon :name="joinPending ? 'Clock' : 'UserPlus'" class="w-4 h-4" />
+                      {{ joinPending ? 'Заявка отправлена · отменить' : (group.is_public ? langStore.t.subscribe : 'Подать заявку') }}
                     </button>
                     <button v-else-if="isMember && !isOwner" @click="handleLeave"
                       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-border bg-brand-bg text-white/55 text-sm font-bold hover:bg-brand-border/50 transition-all">
@@ -1473,10 +1522,19 @@ const vClickOutside = {
                     />
                   </div>
 
-                  <!-- Artist: Отзывы -->
+                  <!-- Отзывы -->
                   <div v-else-if="aboutTab === 'reviews'" class="space-y-3">
-                    <template v-if="(group as any).reviews?.length">
-                      <div v-for="review in (group as any).reviews" :key="review.id"
+                    <div v-if="reviewsData.total" class="flex items-center gap-2 text-sm text-white/70">
+                      <BIcon name="Star" class="w-4 h-4 text-brand-yellow fill-brand-yellow" />
+                      <span class="font-bold text-white">{{ reviewsData.average.toFixed(1) }}</span>
+                      <span class="text-white/40">· {{ reviewsData.total }}</span>
+                    </div>
+                    <button v-if="isMember && !isOwner" @click="showReviewModal = true"
+                      class="px-4 py-2 rounded-xl bg-brand-yellow text-black text-sm font-bold hover:bg-brand-yellow/90 transition-all">
+                      {{ langStore.t.groupDetailWriteReviewBtn }}
+                    </button>
+                    <template v-if="reviewsData.reviews.length">
+                      <div v-for="review in reviewsData.reviews" :key="review.id"
                         class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
                         <div class="flex items-center gap-2 mb-2">
                           <div class="w-7 h-7 rounded-full overflow-hidden bg-brand-accent/20 flex-shrink-0">
@@ -1489,7 +1547,9 @@ const vClickOutside = {
                               :class="i <= review.rating ? 'text-brand-yellow fill-brand-yellow' : 'text-white/15'" />
                           </div>
                         </div>
-                        <p class="text-xs text-white/60 leading-relaxed">{{ review.text }}</p>
+                        <p class="text-xs text-white/60 leading-relaxed whitespace-pre-line">{{ review.text }}</p>
+                        <button v-if="review.author?.id === authStore.user?.id || isAdmin" @click="removeReview(review.id)"
+                          class="mt-2 text-[11px] text-white/30 hover:text-red-400 transition-colors">Удалить</button>
                       </div>
                     </template>
                     <div v-else class="py-8 text-center">
@@ -1501,8 +1561,8 @@ const vClickOutside = {
 
                   <!-- News: Дайджест -->
                   <div v-else-if="aboutTab === 'digest'" class="space-y-3">
-                    <template v-if="(group as any).digest?.length">
-                      <div v-for="item in (group as any).digest" :key="item.id"
+                    <template v-if="digestItems.length">
+                      <div v-for="item in digestItems" :key="item.id" @click="$router.push('/post/' + item.id)"
                         class="flex gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-sky-500/30 transition-all cursor-pointer">
                         <div class="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-brand-border/40">
                           <img v-if="item.image" :src="item.image" class="w-full h-full object-cover" />
@@ -1511,7 +1571,7 @@ const vClickOutside = {
                         <div class="flex-1 min-w-0">
                           <span v-if="item.category" class="text-[10px] font-bold uppercase tracking-wider text-sky-400">{{ item.category }}</span>
                           <p class="text-sm font-bold text-white leading-snug mt-0.5 line-clamp-2">{{ item.title }}</p>
-                          <p class="text-[10px] text-white/35 mt-1">{{ item.date }}</p>
+                          <p class="text-[10px] text-white/35 mt-1">{{ new Date(item.created_at).toLocaleDateString() }}</p>
                         </div>
                       </div>
                     </template>
@@ -1524,39 +1584,25 @@ const vClickOutside = {
 
                   <!-- News: Рубрики -->
                   <div v-else-if="aboutTab === 'categories'" class="space-y-2">
-                    <template v-if="(group as any).categories?.length">
-                      <button v-for="cat in (group as any).categories" :key="cat.id"
-                        class="w-full flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-sky-500/30 transition-all text-left">
-                        <span class="text-xl flex-shrink-0">{{ cat.emoji }}</span>
+                    <template v-if="categoryItems.length">
+                      <div v-for="cat in categoryItems" :key="cat.name"
+                        class="w-full flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl text-left">
                         <div class="flex-1 min-w-0">
                           <p class="text-sm font-bold text-white">{{ cat.name }}</p>
-                          <p v-if="cat.description" class="text-xs text-white/40">{{ cat.description }}</p>
                         </div>
                         <span class="text-[10px] font-bold text-white/30 flex-shrink-0">{{ cat.post_count }}</span>
-                      </button>
-                    </template>
-                    <template v-else>
-                      <div v-for="cat in [
-                        ['🎪', langStore.t.groupDetailCatConventions, langStore.t.groupDetailCatConventionsDesc],
-                        ['😂', langStore.t.groupDetailCatMemes, langStore.t.groupDetailCatMemesDesc],
-                        ['🎤', langStore.t.groupDetailCatInterviews, langStore.t.groupDetailCatInterviewsDesc],
-                        ['🎨', langStore.t.groupDetailCatArtSelections, langStore.t.groupDetailCatArtSelectionsDesc],
-                        ['📢', langStore.t.groupDetailCatOfficial, langStore.t.groupDetailCatOfficialDesc],
-                      ]" :key="cat[0]"
-                        class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-sky-500/30 transition-all cursor-pointer">
-                        <span class="text-xl flex-shrink-0">{{ cat[0] }}</span>
-                        <div class="flex-1 min-w-0">
-                          <p class="text-sm font-bold text-white">{{ cat[1] }}</p>
-                          <p class="text-xs text-white/40">{{ cat[2] }}</p>
-                        </div>
                       </div>
                     </template>
+                    <div v-else class="py-8 text-center">
+                      <BIcon name="FolderOpen" class="w-8 h-8 mx-auto mb-2 text-white/20" />
+                      <p class="text-white/40 text-sm font-semibold">Рубрики появятся, когда редакция укажет категорию в постах</p>
+                    </div>
                   </div>
 
                   <!-- News: Команда редакции -->
                   <div v-else-if="aboutTab === 'team'" class="space-y-2">
-                    <template v-if="(group as any).editorialTeam?.length">
-                      <router-link v-for="member in (group as any).editorialTeam" :key="member.user_id"
+                    <template v-if="teamItems.length">
+                      <router-link v-for="member in teamItems" :key="member.user_id"
                         :to="`/profile/${member.user?.username}`"
                         class="flex items-center gap-3 px-4 py-3 bg-brand-bg border border-brand-border rounded-2xl hover:border-sky-500/30 transition-all">
                         <div class="w-9 h-9 rounded-xl overflow-hidden bg-brand-accent/20 flex-shrink-0">
@@ -1565,7 +1611,7 @@ const vClickOutside = {
                         </div>
                         <div class="flex-1 min-w-0">
                           <p class="text-sm font-bold text-white truncate">{{ member.user?.display_name || member.user?.username }}</p>
-                          <p class="text-xs text-white/40">{{ member.role || langStore.t.groupDetailEditorRoleFallback }}</p>
+                          <p class="text-xs text-white/40">{{ member.customRole ? `${member.customRole.icon} ${member.customRole.name}` : (member.role === 'owner' ? langStore.t.groupDetailChiefEditor : member.role === 'admin' ? langStore.t.roleAdmin : langStore.t.groupSettingsRoleModerator) }}</p>
                         </div>
                         <BIcon name="ChevronRight" class="w-4 h-4 text-white/20 flex-shrink-0" />
                       </router-link>
@@ -1586,11 +1632,13 @@ const vClickOutside = {
                     </template>
                   </div>
 
-                  <!-- Creative: Dealers' Den (no group↔listing link in schema yet → empty state) -->
+                  <!-- Creative: Dealers' Den — the owner's storefront -->
                   <div v-else-if="aboutTab === 'dealers-den'" class="py-10 text-center">
                     <BIcon name="ShoppingBag" class="w-10 h-10 mx-auto mb-3 text-white/20" />
-                    <p class="text-white/40 text-sm font-semibold">{{ langStore.t.groupDetailMarketEmptyTitle }}</p>
-                    <p class="text-white/25 text-xs mt-1">{{ langStore.t.groupDetailMarketEmptyHint }}</p>
+                    <router-link :to="`/dealers-den/seller/${group.owner.username}`"
+                      class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-all">
+                      <BIcon name="ShoppingBag" class="w-4 h-4" /> {{ langStore.t.groupDetailDealersDenNav }}
+                    </router-link>
                   </div>
 
                   <!-- Event: Спонсоры -->
@@ -2539,6 +2587,7 @@ const vClickOutside = {
               class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-sm text-white placeholder-white/30 resize-none outline-none focus:border-brand-accent/50 transition-colors"
               rows="4"
               :placeholder="langStore.t.groupDetailReviewPlaceholder" />
+            <p v-if="reviewError" class="mt-2 text-xs text-brand-error">{{ reviewError }}</p>
           </div>
           <!-- Actions -->
           <div class="px-6 py-4 border-t border-brand-border flex items-center justify-between gap-3">

@@ -5,6 +5,7 @@ import { messageService } from '../messages/service.js';
 import { moderatePost, moderateGroupMessage } from '../automod/service.js';
 import { isModerator } from '../../lib/roles.js';
 import { isMemberRole, isOrderStatus } from './types.js';
+import type { GroupPermission } from './service.js';
 import { errMessage, errStatus } from '../../lib/httpErrors.js';
 import type { JwtUser, GetGroupsQuery, CreateGroupInput, UpdateGroupInput, CreateEventInput, UpdateEventInput, CreateTicketTierInput, UpdateCommissionInput, RateGroupInput, CreateGroupPostInput, RsvpEventInput, SubEventInput, UpdateSubEventInput, CreateOrderInput } from './types.js';
 import { logError } from '../../lib/logger.js';
@@ -22,6 +23,25 @@ async function requireGroupAdmin(request: FastifyRequest, reply: FastifyReply, g
   const { id: userId } = request.user as JwtUser;
   const isAdmin = await groupService.isOwnerOrAdmin(groupId, userId);
   if (!isAdmin) { fail(reply, 403, 'FORBIDDEN', 'You are not an admin of this group'); return false; }
+  return true;
+}
+
+async function requirePermission(request: FastifyRequest, reply: FastifyReply, groupId: string, permission: GroupPermission) {
+  const { id: userId } = request.user as JwtUser;
+  if (!(await groupService.hasPermission(groupId, userId, permission))) {
+    fail(reply, 403, 'FORBIDDEN', 'You do not have permission to do this in this group');
+    return false;
+  }
+  return true;
+}
+
+/** Closed groups hide their content from non-members. */
+async function requireContentAccess(request: FastifyRequest, reply: FastifyReply, groupId: string) {
+  const viewerId = (request.user as JwtUser | undefined)?.id ?? null;
+  if (!(await groupService.canViewContent(groupId, viewerId))) {
+    fail(reply, 403, 'GROUP_CLOSED', 'Это закрытая группа — содержимое доступно только участникам');
+    return false;
+  }
   return true;
 }
 
@@ -61,7 +81,7 @@ export const createGroupHandler = async (
     const group = await groupService.create(ownerId, request.body);
     return ok(reply, { group }, 201);
   } catch (e) {
-    return fail(reply, 400, 'CREATE_GROUP_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'CREATE_GROUP_ERROR', errMessage(e));
   }
 };
 
@@ -70,7 +90,7 @@ export const updateGroupHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    if (!(await requirePermission(request, reply, request.params.id, 'can_manage_settings'))) return;
     // The verified badge is a platform-staff-only grant — a group's own admin/owner must not be able to self-award it.
     if (request.body.isVerified !== undefined) {
       const user = request.user as JwtUser;
@@ -92,8 +112,10 @@ export const updateGroupHandler = async (
     const BUSINESS_TIER_FIELDS: (keyof UpdateGroupInput)[] = ['groupBgUrl', 'groupFrame', 'groupTheme'];
     const touchesBusinessField = BUSINESS_TIER_FIELDS.some((f) => request.body[f] !== undefined && request.body[f] !== null && request.body[f] !== '');
     if (touchesBusinessField) {
-      const { id: userId } = request.user as JwtUser;
-      if ((await userLookup.subscriptionTier(userId)) !== 'business') {
+      // The perk belongs to the group's owner, whoever of the staff presses "save"
+      const owner = await groupService.getGroupOwner(request.params.id);
+      if (!owner) return fail(reply, 404, 'NOT_FOUND', 'Group not found');
+      if ((await userLookup.subscriptionTier(owner.owner_id)) !== 'business') {
         return fail(reply, 402, 'BUSINESS_REQUIRED', 'Group customization requires a Business subscription');
       }
     }
@@ -103,7 +125,7 @@ export const updateGroupHandler = async (
     if (e instanceof Error && errMessage(e) === 'CATEGORY_CHANGE_COOLDOWN') {
       return fail(reply, 429, 'CATEGORY_CHANGE_COOLDOWN', 'Категорию можно менять не чаще одного раза в месяц');
     }
-    return fail(reply, 400, 'UPDATE_GROUP_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'UPDATE_GROUP_ERROR', errMessage(e));
   }
 };
 
@@ -133,18 +155,19 @@ export const deleteGroupHandler = async (
 // ── Membership ──────────────────────────────────────────────────────────────
 
 export const joinGroupHandler = async (
-  request: FastifyRequest<{ Params: { id: string } }>,
+  request: FastifyRequest<{ Params: { id: string }; Body?: { message?: string } }>,
   reply: FastifyReply,
 ) => {
   try {
     const { id: userId } = request.user as JwtUser;
-    const membership = await groupService.join(request.params.id, userId);
-    return ok(reply, { membership });
+    const message = typeof request.body?.message === 'string' ? request.body.message : undefined;
+    const { membership, pending } = await groupService.join(request.params.id, userId, message);
+    return ok(reply, { membership, pending });
   } catch (e) {
     if (e instanceof Error && errMessage(e) === 'EVENT_EXPIRED') {
       return fail(reply, 409, 'EVENT_EXPIRED', 'Мероприятие завершилось. Пока доступна только подписка на уведомления — участие и SOON откроются, когда организатор назначит новую дату.');
     }
-    return fail(reply, 400, 'JOIN_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'JOIN_ERROR', errMessage(e));
   }
 };
 
@@ -192,7 +215,7 @@ export const setEventDateHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    if (!(await requirePermission(request, reply, request.params.id, 'can_manage_events'))) return;
     const eventDate = request.body.eventDate ? new Date(request.body.eventDate) : null;
     if (eventDate && Number.isNaN(eventDate.getTime())) {
       return fail(reply, 400, 'INVALID_DATE', 'eventDate is not a valid date');
@@ -213,7 +236,7 @@ export const leaveGroupHandler = async (
     await groupService.leave(request.params.id, userId);
     return ok(reply, { left: true });
   } catch (e) {
-    return fail(reply, 400, 'LEAVE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'LEAVE_ERROR', errMessage(e));
   }
 };
 
@@ -224,6 +247,7 @@ export const getMembersHandler = async (
   try {
     const page = Math.max(1, parseInt(request.query.page ?? '1', 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(request.query.limit ?? '30', 10) || 30));
+    if (!(await requireContentAccess(request, reply, request.params.id))) return;
     const viewerId = (request.user as JwtUser | undefined)?.id ?? null;
     const members = await groupService.getMembers(request.params.id, page, limit, viewerId);
     return ok(reply, { members });
@@ -237,7 +261,6 @@ export const setMemberRoleHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
     const { id: requesterId } = request.user as JwtUser;
     const { role } = request.body;
     if (!isMemberRole(role)) return fail(reply, 400, 'INVALID_ROLE', 'Unknown member role');
@@ -258,7 +281,7 @@ export const removeMemberHandler = async (
     await groupService.removeMember(request.params.id, requesterId, request.params.userId);
     return ok(reply, { removed: true });
   } catch (e) {
-    const status = /not authorized/i.test(errMessage(e)) ? 403 : 400;
+    const status = errStatus(e) ?? (/not authorized/i.test(errMessage(e)) ? 403 : 400);
     return fail(reply, status, 'REMOVE_MEMBER_ERROR', errMessage(e));
   }
 };
@@ -282,11 +305,11 @@ export const createCustomRoleHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
-    const role = await groupService.createCustomRole(request.params.id, request.body);
+    const { id: userId } = request.user as JwtUser;
+    const role = await groupService.createCustomRole(request.params.id, userId, request.body);
     return ok(reply, { role }, 201);
   } catch (e) {
-    return fail(reply, 400, 'CREATE_ROLE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'CREATE_ROLE_ERROR', errMessage(e));
   }
 };
 
@@ -295,11 +318,11 @@ export const updateCustomRoleHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
-    const role = await groupService.updateCustomRole(request.params.id, request.params.roleId, request.body);
+    const { id: userId } = request.user as JwtUser;
+    const role = await groupService.updateCustomRole(request.params.id, userId, request.params.roleId, request.body);
     return ok(reply, { role });
   } catch (e) {
-    return fail(reply, 400, 'UPDATE_ROLE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'UPDATE_ROLE_ERROR', errMessage(e));
   }
 };
 
@@ -308,11 +331,11 @@ export const deleteCustomRoleHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    if (!(await requirePermission(request, reply, request.params.id, 'can_manage_roles'))) return;
     await groupService.deleteCustomRole(request.params.id, request.params.roleId);
     return ok(reply, { deleted: true });
   } catch (e) {
-    return fail(reply, 400, 'DELETE_ROLE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'DELETE_ROLE_ERROR', errMessage(e));
   }
 };
 
@@ -323,11 +346,11 @@ export const createEventHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    if (!(await requirePermission(request, reply, request.params.id, 'can_manage_events'))) return;
     const event = await groupService.createEvent({ ...request.body, groupId: request.params.id });
     return ok(reply, { event }, 201);
   } catch (e) {
-    return fail(reply, 400, 'CREATE_EVENT_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'CREATE_EVENT_ERROR', errMessage(e));
   }
 };
 
@@ -338,11 +361,11 @@ export const updateEventHandler = async (
   try {
     const event = await groupService.getEvent(request.params.eventId);
     if (!event) return fail(reply, 404, 'NOT_FOUND', 'Event not found');
-    if (!(await requireGroupAdmin(request, reply, event.group_id))) return;
+    if (!(await requirePermission(request, reply, event.group_id, 'can_manage_events'))) return;
     const updated = await groupService.updateEvent(request.params.eventId, request.body);
     return ok(reply, { event: updated });
   } catch (e) {
-    return fail(reply, 400, 'UPDATE_EVENT_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'UPDATE_EVENT_ERROR', errMessage(e));
   }
 };
 
@@ -389,11 +412,11 @@ export const createTicketTierHandler = async (
   try {
     const event = await groupService.getEvent(request.params.eventId);
     if (!event) return fail(reply, 404, 'NOT_FOUND', 'Event not found');
-    if (!(await requireGroupAdmin(request, reply, event.group_id))) return;
+    if (!(await requirePermission(request, reply, event.group_id, 'can_manage_events'))) return;
     const tier = await groupService.createTicketTier({ ...request.body, eventId: request.params.eventId });
     return ok(reply, { tier }, 201);
   } catch (e) {
-    return fail(reply, 400, 'CREATE_TICKET_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'CREATE_TICKET_ERROR', errMessage(e));
   }
 };
 
@@ -404,11 +427,11 @@ export const updateTicketTierHandler = async (
   try {
     const tier = await groupService.getTicketTierWithGroupId(request.params.tierId);
     if (!tier) return fail(reply, 404, 'NOT_FOUND', 'Ticket tier not found');
-    if (!(await requireGroupAdmin(request, reply, tier.event.group_id))) return;
+    if (!(await requirePermission(request, reply, tier.event.group_id, 'can_manage_events'))) return;
     const updated = await groupService.updateTicketTier(request.params.tierId, request.body);
     return ok(reply, { tier: updated });
   } catch (e) {
-    return fail(reply, 400, 'UPDATE_TICKET_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'UPDATE_TICKET_ERROR', errMessage(e));
   }
 };
 
@@ -419,7 +442,7 @@ export const deleteTicketTierHandler = async (
   try {
     const tier = await groupService.getTicketTierWithGroupId(request.params.tierId);
     if (!tier) return fail(reply, 404, 'NOT_FOUND', 'Ticket tier not found');
-    if (!(await requireGroupAdmin(request, reply, tier.event.group_id))) return;
+    if (!(await requirePermission(request, reply, tier.event.group_id, 'can_manage_events'))) return;
     await groupService.deleteTicketTier(request.params.tierId);
     return ok(reply, { deleted: true });
   } catch (e) {
@@ -441,7 +464,7 @@ export const toggleSoonBadgeHandler = async (
     if (e instanceof Error && errMessage(e) === 'EVENT_EXPIRED') {
       return fail(reply, 409, 'EVENT_EXPIRED', 'Мероприятие завершилось. SOON откроется, когда организатор назначит новую дату.');
     }
-    return fail(reply, 400, 'SOON_BADGE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'SOON_BADGE_ERROR', errMessage(e));
   }
 };
 
@@ -477,7 +500,7 @@ export const upsertCommissionHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    if (!(await requirePermission(request, reply, request.params.id, 'can_manage_settings'))) return;
     const commission = await groupService.upsertCommission(request.params.id, request.body);
     return ok(reply, { commission });
   } catch (e) {
@@ -492,8 +515,9 @@ export const getGroupPostsHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const page = parseInt(request.query.page ?? '1', 10);
-    const limit = parseInt(request.query.limit ?? '20', 10);
+    const page = Math.max(1, parseInt(request.query.page ?? '1', 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(request.query.limit ?? '20', 10) || 20));
+    if (!(await requireContentAccess(request, reply, request.params.id))) return;
     const hasMedia = request.query.hasMedia === 'true';
     const viewerId = (request.user as JwtUser | undefined)?.id ?? null;
     const archived = request.query.archived === 'true';
@@ -573,7 +597,7 @@ export const rateGroupHandler = async (
     const result = await groupService.rateGroup(request.params.id, userId, request.body.value);
     return ok(reply, result);
   } catch (e) {
-    return fail(reply, 400, 'RATE_GROUP_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'RATE_GROUP_ERROR', errMessage(e));
   }
 };
 
@@ -605,7 +629,7 @@ export const createGroupPostHandler = async (
     }
     return ok(reply, { post }, 201);
   } catch (e) {
-    return fail(reply, 400, 'CREATE_GROUP_POST_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'CREATE_GROUP_POST_ERROR', errMessage(e));
   }
 };
 // ── Creative Kanban ───────────────────────────────────────────────────────────
@@ -615,6 +639,7 @@ export const getKanbanHandler = async (
   reply: FastifyReply,
 ) => {
   try {
+    if (!(await requireContentAccess(request, reply, request.params.id))) return;
     const columns = await groupService.getKanban(request.params.id);
     return ok(reply, { columns });
   } catch (e) {
@@ -708,7 +733,7 @@ export const getGroupEventsHandler = async (
     const result = await groupService.listEvents({ groupId: request.params.id, status: request.query.status, page: String(page), limit: String(limit) });
     return ok(reply, result);
   } catch (e) {
-    return fail(reply, 500, 'GROUP_EVENTS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'GROUP_EVENTS_ERROR', errMessage(e));
   }
 };
 
@@ -733,11 +758,11 @@ export const createSubEventHandler = async (
   try {
     const event = await groupService.getEvent(request.params.eventId);
     if (!event) return fail(reply, 404, 'NOT_FOUND', 'Event not found');
-    if (!(await requireGroupAdmin(request, reply, event.group_id))) return;
+    if (!(await requirePermission(request, reply, event.group_id, 'can_manage_events'))) return;
     const sub = await groupService.createSubEvent(request.params.eventId, request.body);
     return ok(reply, { subEvent: sub }, 201);
   } catch (e) {
-    return fail(reply, 400, 'SUBEVENT_CREATE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'SUBEVENT_CREATE_ERROR', errMessage(e));
   }
 };
 
@@ -748,11 +773,11 @@ export const updateSubEventHandler = async (
   try {
     const event = await groupService.getEvent(request.params.eventId);
     if (!event) return fail(reply, 404, 'NOT_FOUND', 'Event not found');
-    if (!(await requireGroupAdmin(request, reply, event.group_id))) return;
-    const sub = await groupService.updateSubEvent(request.params.subId, request.body);
+    if (!(await requirePermission(request, reply, event.group_id, 'can_manage_events'))) return;
+    const sub = await groupService.updateSubEvent(request.params.eventId, request.params.subId, request.body);
     return ok(reply, { subEvent: sub });
   } catch (e) {
-    return fail(reply, 400, 'SUBEVENT_UPDATE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'SUBEVENT_UPDATE_ERROR', errMessage(e));
   }
 };
 
@@ -763,11 +788,11 @@ export const deleteSubEventHandler = async (
   try {
     const event = await groupService.getEvent(request.params.eventId);
     if (!event) return fail(reply, 404, 'NOT_FOUND', 'Event not found');
-    if (!(await requireGroupAdmin(request, reply, event.group_id))) return;
-    await groupService.deleteSubEvent(request.params.subId);
+    if (!(await requirePermission(request, reply, event.group_id, 'can_manage_events'))) return;
+    await groupService.deleteSubEvent(request.params.eventId, request.params.subId);
     return ok(reply, { deleted: true });
   } catch (e) {
-    return fail(reply, 400, 'SUBEVENT_DELETE_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 400, 'SUBEVENT_DELETE_ERROR', errMessage(e));
   }
 };
 
@@ -841,6 +866,7 @@ export const getGroupTodoColumnsHandler = async (
   reply: FastifyReply,
 ) => {
   try {
+    if (!(await requireContentAccess(request, reply, request.params.id))) return;
     const columns = await groupService.getTodoColumns(request.params.id);
     return ok(reply, { columns });
   } catch (e) {
@@ -853,14 +879,14 @@ export const updateGroupTodoColumnsHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    if (!(await requireGroupAdmin(request, reply, request.params.id))) return;
+    if (!(await requirePermission(request, reply, request.params.id, 'can_manage_settings'))) return;
     if (!Array.isArray(request.body?.columns) || !request.body.columns.length) {
       return fail(reply, 400, 'EMPTY_COLUMNS', 'At least one column is required');
     }
     const columns = await groupService.updateTodoColumns(request.params.id, request.body.columns);
     return ok(reply, { columns });
   } catch (e) {
-    return fail(reply, 500, 'UPDATE_TODO_COLUMNS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'UPDATE_TODO_COLUMNS_ERROR', errMessage(e));
   }
 };
 
@@ -869,6 +895,7 @@ export const getGroupTodoHandler = async (
   reply: FastifyReply,
 ) => {
   try {
+    if (!(await requireContentAccess(request, reply, request.params.id))) return;
     const items = await groupService.getTodoItems(request.params.id);
     return ok(reply, { items });
   } catch (e) {
@@ -881,10 +908,7 @@ export const createGroupTodoHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const { id: userId } = request.user as JwtUser;
-    const group = await groupService.getGroupOwner(request.params.id);
-    if (!group) return fail(reply, 404, 'NOT_FOUND', 'Group not found');
-    if (group.owner_id !== userId) return fail(reply, 403, 'FORBIDDEN', 'Only group owner can manage the queue');
+    if (!(await requirePermission(request, reply, request.params.id, 'can_manage_settings'))) return;
     const { title, description, status } = request.body;
     if (!title?.trim()) return fail(reply, 400, 'EMPTY_TITLE', 'Title is required');
     const item = await groupService.createTodoItem(request.params.id, { title, description, status });
@@ -899,10 +923,7 @@ export const updateGroupTodoHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const { id: userId } = request.user as JwtUser;
-    const group = await groupService.getGroupOwner(request.params.id);
-    if (!group) return fail(reply, 404, 'NOT_FOUND', 'Group not found');
-    if (group.owner_id !== userId) return fail(reply, 403, 'FORBIDDEN', 'Only group owner can manage the queue');
+    if (!(await requirePermission(request, reply, request.params.id, 'can_manage_settings'))) return;
     const item = await groupService.updateTodoItem(request.params.id, request.params.itemId, request.body);
     return ok(reply, { item });
   } catch (e) {
@@ -915,14 +936,11 @@ export const deleteGroupTodoHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const { id: userId } = request.user as JwtUser;
-    const group = await groupService.getGroupOwner(request.params.id);
-    if (!group) return fail(reply, 404, 'NOT_FOUND', 'Group not found');
-    if (group.owner_id !== userId) return fail(reply, 403, 'FORBIDDEN', 'Only group owner can manage the queue');
+    if (!(await requirePermission(request, reply, request.params.id, 'can_manage_settings'))) return;
     await groupService.deleteTodoItem(request.params.id, request.params.itemId);
     return ok(reply, { success: true });
   } catch (e) {
-    return fail(reply, 500, 'DELETE_TODO_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'DELETE_TODO_ERROR', errMessage(e));
   }
 };
 
@@ -931,14 +949,11 @@ export const reorderGroupTodoHandler = async (
   reply: FastifyReply,
 ) => {
   try {
-    const { id: userId } = request.user as JwtUser;
-    const group = await groupService.getGroupOwner(request.params.id);
-    if (!group) return fail(reply, 404, 'NOT_FOUND', 'Group not found');
-    if (group.owner_id !== userId) return fail(reply, 403, 'FORBIDDEN', 'Only group owner can manage the queue');
+    if (!(await requirePermission(request, reply, request.params.id, 'can_manage_settings'))) return;
     await groupService.reorderTodoItems(request.params.id, request.body.orderedIds);
     return ok(reply, { success: true });
   } catch (e) {
-    return fail(reply, 500, 'REORDER_TODO_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'REORDER_TODO_ERROR', errMessage(e));
   }
 };
 
@@ -1077,5 +1092,165 @@ export const toggleGroupNotificationHandler = async (
   } catch (e) {
     const code = errMessage(e) === 'Not a member' ? 403 : 500;
     return fail(reply, code, 'NOTIFY_TOGGLE_ERROR', errMessage(e));
+  }
+};
+
+// ── Ownership transfer ──────────────────────────────────────────────────────
+
+export const transferOwnershipHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Body: { userId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    if (typeof request.body?.userId !== 'string') return fail(reply, 400, 'INVALID_USER', 'userId is required');
+    const result = await groupService.transferOwnership(request.params.id, userId, request.body.userId);
+    return ok(reply, result);
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'TRANSFER_OWNERSHIP_ERROR', errMessage(e));
+  }
+};
+
+export const setMemberCustomRoleHandler = async (
+  request: FastifyRequest<{ Params: { id: string; userId: string }; Body: { roleId: string | null } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: requesterId } = request.user as JwtUser;
+    const roleId = request.body?.roleId ?? null;
+    if (roleId !== null && typeof roleId !== 'string') return fail(reply, 400, 'INVALID_ROLE', 'roleId must be a string or null');
+    const member = await groupService.setMemberCustomRole(request.params.id, requesterId, request.params.userId, roleId);
+    return ok(reply, { member });
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'SET_CUSTOM_ROLE_ERROR', errMessage(e));
+  }
+};
+
+// ── Join applications (closed groups) ───────────────────────────────────────
+
+export const getMyJoinRequestHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    return ok(reply, { pending: await groupService.hasPendingJoinRequest(request.params.id, userId) });
+  } catch (e) {
+    return fail(reply, 500, 'JOIN_REQUEST_ERROR', errMessage(e));
+  }
+};
+
+export const cancelJoinRequestHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    return ok(reply, await groupService.cancelJoinRequest(request.params.id, userId));
+  } catch (e) {
+    return fail(reply, 500, 'JOIN_REQUEST_ERROR', errMessage(e));
+  }
+};
+
+export const listJoinRequestsHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    if (!(await requirePermission(request, reply, request.params.id, 'can_manage_members'))) return;
+    return ok(reply, { requests: await groupService.listJoinRequests(request.params.id) });
+  } catch (e) {
+    return fail(reply, 500, 'JOIN_REQUESTS_ERROR', errMessage(e));
+  }
+};
+
+export const resolveJoinRequestHandler = async (
+  request: FastifyRequest<{ Params: { id: string; requestId: string }; Body: { approve: boolean } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    if (!(await requirePermission(request, reply, request.params.id, 'can_manage_members'))) return;
+    if (typeof request.body?.approve !== 'boolean') return fail(reply, 400, 'INVALID_BODY', 'approve must be a boolean');
+    return ok(reply, await groupService.resolveJoinRequest(request.params.id, request.params.requestId, request.body.approve));
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'RESOLVE_JOIN_REQUEST_ERROR', errMessage(e));
+  }
+};
+
+// ── Reviews, digest, categories, team ───────────────────────────────────────
+
+export const listReviewsHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Querystring: { page?: string; limit?: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const page = Math.max(1, parseInt(request.query.page ?? '1', 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(request.query.limit ?? '20', 10) || 20));
+    return ok(reply, await groupService.listReviews(request.params.id, page, limit));
+  } catch (e) {
+    return fail(reply, 500, 'REVIEWS_ERROR', errMessage(e));
+  }
+};
+
+export const upsertReviewHandler = async (
+  request: FastifyRequest<{ Params: { id: string }; Body: { rating: number; text: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const review = await groupService.upsertReview(request.params.id, userId, Number(request.body?.rating), String(request.body?.text ?? ''));
+    return ok(reply, { review }, 201);
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'REVIEW_ERROR', errMessage(e));
+  }
+};
+
+export const deleteReviewHandler = async (
+  request: FastifyRequest<{ Params: { id: string; reviewId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    return ok(reply, await groupService.deleteReview(request.params.id, request.params.reviewId, userId));
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'REVIEW_ERROR', errMessage(e));
+  }
+};
+
+export const getDigestHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    if (!(await requireContentAccess(request, reply, request.params.id))) return;
+    const viewerId = (request.user as JwtUser | undefined)?.id ?? null;
+    return ok(reply, { digest: await groupService.getDigest(request.params.id, viewerId) });
+  } catch (e) {
+    return fail(reply, 500, 'DIGEST_ERROR', errMessage(e));
+  }
+};
+
+export const getCategoriesHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    if (!(await requireContentAccess(request, reply, request.params.id))) return;
+    return ok(reply, { categories: await groupService.getCategories(request.params.id) });
+  } catch (e) {
+    return fail(reply, 500, 'CATEGORIES_ERROR', errMessage(e));
+  }
+};
+
+export const getTeamHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    if (!(await requireContentAccess(request, reply, request.params.id))) return;
+    const viewerId = (request.user as JwtUser | undefined)?.id ?? null;
+    return ok(reply, { team: await groupService.getMembers(request.params.id, 1, 50, viewerId, true) });
+  } catch (e) {
+    return fail(reply, 500, 'TEAM_ERROR', errMessage(e));
   }
 };
