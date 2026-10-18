@@ -221,6 +221,10 @@ async function handleCreateGroup(input: any) {
   })
   if (!group) return
 
+  if (input.aboutText) {
+    await groupsStore.updateGroup(group.id, { aboutText: input.aboutText })
+  }
+
   if (input.type === 'event' && input.eventTitle) {
     await groupsStore.createEvent(group.id, {
       title: input.eventTitle,
