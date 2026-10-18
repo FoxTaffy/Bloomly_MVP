@@ -13,20 +13,26 @@ async function groupFor(ownerId: string, isPublic = false) {
 describe('security: приватность контента во всех каналах чтения', () => {
   beforeEach(resetDb);
 
-  it('закрытая группа не выдаёт контент, участников, задачи, посты и не допускает самостоятельного вступления', async () => {
+  it('закрытая группа: по ссылке видна только шапка; контент, участники, задачи и посты скрыты, вступление — только заявкой', async () => {
     const owner = await createUser();
     const outsider = await createUser();
     const group = await groupFor(owner.user.id);
     const secret = 'group-secret-' + randomUUID();
     const post = await prisma.post.create({ data: { author_id: owner.user.id, content: secret, post_type: 'commission_update', groupPosts: { create: { group_id: group.id } } } });
-    for (const path of [`/api/groups/${group.id}`, `/api/groups/${group.id}/posts`, `/api/groups/${group.id}/members`, `/api/groups/${group.id}/kanban`, `/api/posts/${post.id}`, `/api/posts/${post.id}/comments`]) {
+    const header = await api('GET', `/api/groups/${group.id}`, { headers: outsider.auth });
+    expect(header.status).toBe(200);
+    expect(header.res.body).not.toContain(secret);
+    expect(header.json.data.group?.events ?? header.json.data.events ?? []).toEqual([]);
+    for (const path of [`/api/groups/${group.id}/posts`, `/api/groups/${group.id}/members`, `/api/groups/${group.id}/kanban`, `/api/posts/${post.id}`, `/api/posts/${post.id}/comments`]) {
       const response = await api('GET', path, { headers: outsider.auth });
       expect([403, 404], path).toContain(response.status);
       expect(response.res.body).not.toContain(secret);
     }
     const catalogue = await api('GET', '/api/groups', { headers: outsider.auth });
     expect(catalogue.res.body).not.toContain(group.id);
-    expect((await api('POST', `/api/groups/${group.id}/join`, { headers: outsider.auth })).status).toBe(403);
+    const join = await api('POST', `/api/groups/${group.id}/join`, { headers: outsider.auth });
+    expect(join.status).toBe(200);
+    expect(join.json.data.pending).toBe(true);
     expect([400, 403]).toContain((await api('POST', `/api/groups/${group.id}/subscribe`, { headers: outsider.auth })).status);
     expect(await prisma.groupSubscriber.count({ where: { group_id: group.id } })).toBe(0);
     expect(await prisma.groupMember.count({ where: { group_id: group.id } })).toBe(1);

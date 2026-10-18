@@ -393,6 +393,7 @@ const showSearchModal = ref(false)
 const searchModalQuery = ref('')
 const searchModalUsers = ref<any[]>([])
 const searchModalGroups = ref<any[]>([])
+const searchModalTags = ref<any[]>([])
 const searchModalLoading = ref(false)
 let searchModalDebounce: ReturnType<typeof setTimeout>
 
@@ -410,21 +411,24 @@ const clearSearchModal = () => {
   searchModalQuery.value = ''
   searchModalUsers.value = []
   searchModalGroups.value = []
+  searchModalTags.value = []
   const el = document.getElementById('app-search-modal-input')
   if (el) (el as HTMLInputElement).focus()
 }
 
 const onSearchModalInput = () => {
   clearTimeout(searchModalDebounce)
-  if (!searchModalQuery.value.trim()) { searchModalUsers.value = []; searchModalGroups.value = []; return }
+  if (!searchModalQuery.value.trim()) { searchModalUsers.value = []; searchModalGroups.value = []; searchModalTags.value = []; return }
   searchModalDebounce = setTimeout(async () => {
     searchModalLoading.value = true
     try {
       const q = encodeURIComponent(searchModalQuery.value)
-      const [usersRes, groupsRes] = await Promise.all([
+      const [usersRes, groupsRes, tagsRes] = await Promise.all([
         api.get(`/users/search?q=${q}&limit=5`),
         api.get(`/groups/search?q=${q}&limit=5`),
+        api.get(`/posts/search/tags?q=${q}&limit=4`).catch(() => null),
       ])
+      searchModalTags.value = tagsRes?.data?.success ? tagsRes.data.data.tags ?? [] : []
       if (usersRes.data.success) searchModalUsers.value = usersRes.data.data.users ?? []
       if (groupsRes.data.success) searchModalGroups.value = groupsRes.data.data.groups ?? []
     } catch {} finally { searchModalLoading.value = false }
@@ -648,11 +652,25 @@ onUnmounted(() => {
             </div>
             <!-- Live preview: Люди first, then Группы (VK-style) -->
             <template v-else>
-              <div v-if="searchModalUsers.length === 0 && searchModalGroups.length === 0"
+              <div v-if="searchModalUsers.length === 0 && searchModalGroups.length === 0 && searchModalTags.length === 0"
                 class="flex flex-col items-center justify-center py-14 text-white/55">
                 <BIcon name="SearchX" class="h-8 w-8 mb-2 opacity-30" /><p class="text-sm">Ничего не найдено</p>
               </div>
               <template v-else>
+                <!-- Теги -->
+                <div v-if="searchModalTags.length" class="px-3 pt-3 flex flex-col gap-2">
+                  <p class="text-[10px] font-bold uppercase tracking-widest text-white/35 px-1">Теги</p>
+                  <router-link v-for="tag in searchModalTags" :key="tag.name" :to="{ path: '/search', query: { q: tag.name } }" @click="closeSearchModal()"
+                    class="w-full flex items-center gap-3 p-3 bg-brand-bg/60 border border-brand-border rounded-2xl hover:border-brand-accent/40 transition-all text-left">
+                    <div class="w-10 h-10 rounded-full bg-brand-accent/15 flex items-center justify-center shrink-0">
+                      <BIcon name="Hash" class="w-4 h-4 text-brand-accent" />
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-semibold text-white truncate">#{{ tag.name }}</p>
+                      <p class="text-xs text-white/55">{{ tag.count }} постов</p>
+                    </div>
+                  </router-link>
+                </div>
                 <!-- Люди -->
                 <div v-if="searchModalUsers.length" class="px-3 pt-3 flex flex-col gap-2">
                   <p class="text-[10px] font-bold uppercase tracking-widest text-white/35 px-1">Люди</p>

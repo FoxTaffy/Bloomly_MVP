@@ -174,6 +174,38 @@ async function doSetRole(userId: string, role: MemberRole) {
   }
 }
 
+async function doSetCustomRole(userId: string, roleId: string | null) {
+  if (!group.value?.id) return
+  memberSaving.value[userId] = true
+  roleDropdownFor.value = null
+  try {
+    const updated = await groupsStore.setMemberCustomRole(group.value.id, userId, roleId)
+    const idx = membersList.value.findIndex(m => m.user_id === userId)
+    if (idx !== -1) membersList.value[idx] = { ...membersList.value[idx], customRole: updated.customRole ?? null, custom_role_id: roleId }
+    showToast('success', langStore.t.groupSettingsRoleUpdated)
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) || errorMessage(e) || langStore.t.groupSettingsErrorGeneric)
+  } finally {
+    delete memberSaving.value[userId]
+  }
+}
+
+async function doTransferOwnership(userId: string) {
+  if (!group.value?.id) return
+  const target = membersList.value.find(m => m.user_id === userId)
+  const name = target?.user.display_name || target?.user.username || ''
+  roleDropdownFor.value = null
+  if (!(await confirmDialog(`Передать владение группой пользователю ${name}? Вы останетесь администратором, вернуть владение сможет только новый владелец.`, { danger: true }))) return
+  try {
+    await groupsStore.transferOwnership(group.value.id, userId)
+    showToast('success', 'Владение передано')
+    await groupsStore.loadGroup(group.value.slug ?? group.value.id)
+    router.replace({ name: 'group-detail', params: { slugOrId: group.value?.slug ?? group.value?.id } })
+  } catch (e) {
+    showToast('error', apiErrorMessage(e) || errorMessage(e) || langStore.t.groupSettingsErrorGeneric)
+  }
+}
+
 async function doKickMember(userId: string) {
   if (!group.value?.id) return
   memberKicking.value[userId] = true
@@ -190,6 +222,7 @@ async function doKickMember(userId: string) {
 
 watch(openSection, (val) => {
   if ((val === 'sec-members' || val === 'sec-organizers') && !membersLoaded.value) loadMembers()
+  if ((val === 'sec-members' || val === 'sec-organizers') && !customRolesLoaded.value) loadCustomRoles()
   if (val === 'sec-roles' && !customRolesLoaded.value) loadCustomRoles()
   if (val === 'sec-customize') shopStore.loadMyItems()
 })
@@ -252,8 +285,6 @@ const roleForm           = reactive({ name: '', color: '#a78bfa', icon: '🎖️
 
 const PERMISSIONS_LIST = computed<{ id: GroupPermission; label: string; iconPath: string; group: string }[]>(() => [
   { id: 'can_post',            label: langStore.t.groupSettingsPermCanPost,            iconPath: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z', group: langStore.t.groupSettingsSecContent },
-  { id: 'can_comment',         label: langStore.t.groupSettingsPermCanComment,             iconPath: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z', group: langStore.t.groupSettingsSecContent },
-  { id: 'can_invite',          label: langStore.t.groupSettingsPermCanInvite,      iconPath: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z', group: langStore.t.groupSettingsPermGroupParticipants },
   { id: 'can_moderate_posts',  label: langStore.t.groupSettingsPermCanModeratePosts, iconPath: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16', group: langStore.t.groupSettingsPermGroupModeration },
   { id: 'can_manage_members',  label: langStore.t.groupSettingsPermCanManageMembers,      iconPath: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', group: langStore.t.groupSettingsPermGroupManagement },
   { id: 'can_manage_events',   label: langStore.t.groupSettingsPermCanManageEvents,        iconPath: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', group: langStore.t.groupSettingsPermGroupManagement },
@@ -262,10 +293,10 @@ const PERMISSIONS_LIST = computed<{ id: GroupPermission; label: string; iconPath
 ])
 
 const SYSTEM_ROLE_PERMISSIONS: Record<string, string[]> = {
-  owner:     ['can_post', 'can_comment', 'can_invite', 'can_moderate_posts', 'can_manage_members', 'can_manage_events', 'can_manage_roles', 'can_manage_settings'],
-  admin:     ['can_post', 'can_comment', 'can_invite', 'can_moderate_posts', 'can_manage_members', 'can_manage_events', 'can_manage_roles', 'can_manage_settings'],
-  moderator: ['can_post', 'can_comment', 'can_invite', 'can_moderate_posts'],
-  member:    ['can_post', 'can_comment'],
+  owner:     ['can_post', 'can_moderate_posts', 'can_manage_members', 'can_manage_events', 'can_manage_roles', 'can_manage_settings'],
+  admin:     ['can_post', 'can_moderate_posts', 'can_manage_members', 'can_manage_events', 'can_manage_roles', 'can_manage_settings'],
+  moderator: ['can_post', 'can_moderate_posts'],
+  member:    [],
 }
 
 const EMOJI_OPTIONS = ['🎖️', '⭐', '🌟', '💫', '🔥', '❄️', '🎨', '🎭', '🦸', '🛡️', '⚔️', '🔑', '💎', '🏆', '🎯', '🌸', '🦊', '🐺', '🐲', '🦋', '🌈', '🎪', '🚀', '💜', '🎵']
@@ -2790,6 +2821,10 @@ async function deleteGroup() {
                           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="(ROLE_META[m.role] ?? ROLE_META.member).iconPath"/></svg>
                           {{ (ROLE_META[m.role] ?? ROLE_META.member).label }}
                         </span>
+                        <span v-if="m.customRole" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-white/10 shrink-0"
+                          :style="`background:${m.customRole.color}20;color:${m.customRole.color}`">
+                          {{ m.customRole.icon }} {{ m.customRole.name }}
+                        </span>
                         <!-- Eye toggle (hide/show from public) - owner-only, for non-members only -->
                         <button v-if="isOwner && ['owner','admin','moderator'].includes(m.role)"
                           type="button"
@@ -3186,6 +3221,29 @@ async function deleteGroup() {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
         </svg>
       </button>
+      <!-- Custom roles: extra permissions on top of the base role -->
+      <div v-if="customRolesList.length" class="border-t border-brand-border mt-1 pt-1">
+        <p class="px-3.5 pb-1 pt-0.5 text-xs font-semibold text-white/40">Особая роль</p>
+        <button v-for="cr in customRolesList" :key="cr.id"
+          @click="doSetCustomRole(roleDropdownMember!.user_id, cr.id)"
+          class="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm hover:bg-white/5 transition-colors text-left"
+          :class="roleDropdownMember!.customRole?.id === cr.id ? 'text-white font-bold' : 'text-white/70'">
+          <span class="shrink-0 w-5 text-center">{{ cr.icon }}</span>
+          <span class="flex-1 truncate" :style="`color:${cr.color}`">{{ cr.name }}</span>
+          <span v-if="roleDropdownMember!.customRole?.id === cr.id" class="text-xs" style="color:#a78bfa">✓</span>
+        </button>
+        <button v-if="roleDropdownMember!.customRole"
+          @click="doSetCustomRole(roleDropdownMember!.user_id, null)"
+          class="w-full px-3.5 py-2 text-sm text-white/50 hover:bg-white/5 transition-colors text-left">
+          Снять особую роль
+        </button>
+      </div>
+      <div v-if="isOwner" class="border-t border-brand-border mt-1 pt-1">
+        <button @click="doTransferOwnership(roleDropdownMember!.user_id)"
+          class="w-full px-3.5 py-2 text-sm text-amber-400 hover:bg-amber-500/10 transition-colors text-left">
+          👑 Передать владение
+        </button>
+      </div>
       <!-- Admins may not remove other admins — only the owner can -->
       <div v-if="isOwner || roleDropdownMember!.role !== 'admin'" class="border-t border-brand-border mt-1 pt-1">
         <button @click="doKickMember(roleDropdownMember!.user_id); closeRoleDropdown()"

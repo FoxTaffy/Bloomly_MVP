@@ -70,6 +70,18 @@ import {
   unsubscribeGroupHandler,
   getMySubscriptionsHandler,
   setEventDateHandler,
+  transferOwnershipHandler,
+  setMemberCustomRoleHandler,
+  getMyJoinRequestHandler,
+  cancelJoinRequestHandler,
+  listJoinRequestsHandler,
+  resolveJoinRequestHandler,
+  listReviewsHandler,
+  upsertReviewHandler,
+  deleteReviewHandler,
+  getDigestHandler,
+  getCategoriesHandler,
+  getTeamHandler,
 } from './controller.js';
 import { groupService } from './service.js';
 
@@ -102,6 +114,23 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof getMembersHandler>>('/:id/members', { onRequest: [fastify.tryAuthenticate] }, getMembersHandler);
   fastify.patch<RouteGenericOf<typeof setMemberRoleHandler>>('/:id/members/:userId/role', auth, setMemberRoleHandler);
   fastify.delete<RouteGenericOf<typeof removeMemberHandler>>('/:id/members/:userId', auth, removeMemberHandler);
+  fastify.post<RouteGenericOf<typeof transferOwnershipHandler>>('/:id/transfer-owner', auth, transferOwnershipHandler);
+  fastify.patch<RouteGenericOf<typeof setMemberCustomRoleHandler>>('/:id/members/:userId/custom-role', auth, setMemberCustomRoleHandler);
+
+  // ── Join applications (closed groups) ───────────────────────────────────
+  fastify.get<RouteGenericOf<typeof getMyJoinRequestHandler>>('/:id/join-request', auth, getMyJoinRequestHandler);
+  fastify.delete<RouteGenericOf<typeof cancelJoinRequestHandler>>('/:id/join-request', auth, cancelJoinRequestHandler);
+  fastify.get<RouteGenericOf<typeof listJoinRequestsHandler>>('/:id/join-requests', auth, listJoinRequestsHandler);
+  fastify.post<RouteGenericOf<typeof resolveJoinRequestHandler>>('/:id/join-requests/:requestId', auth, resolveJoinRequestHandler);
+
+  // ── Reviews / digest / categories / team ────────────────────────────────
+  fastify.get<RouteGenericOf<typeof listReviewsHandler>>('/:id/reviews', listReviewsHandler);
+  fastify.post<RouteGenericOf<typeof upsertReviewHandler>>('/:id/reviews', auth, upsertReviewHandler);
+  fastify.delete<RouteGenericOf<typeof deleteReviewHandler>>('/:id/reviews/:reviewId', auth, deleteReviewHandler);
+  fastify.get<RouteGenericOf<typeof getDigestHandler>>('/:id/digest', { onRequest: [fastify.tryAuthenticate] }, getDigestHandler);
+  fastify.get<RouteGenericOf<typeof getCategoriesHandler>>('/:id/categories', { onRequest: [fastify.tryAuthenticate] }, getCategoriesHandler);
+  fastify.get<RouteGenericOf<typeof getTeamHandler>>('/:id/team', { onRequest: [fastify.tryAuthenticate] }, getTeamHandler);
+
   fastify.post<RouteGenericOf<typeof subscribeGroupHandler>>('/:id/subscribe', auth, subscribeGroupHandler);
   fastify.delete<RouteGenericOf<typeof unsubscribeGroupHandler>>('/:id/subscribe', auth, unsubscribeGroupHandler);
 

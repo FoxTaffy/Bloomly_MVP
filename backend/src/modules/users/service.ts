@@ -9,6 +9,7 @@ import { normalizeSafeLink, requireSafeLink } from '../../lib/safeLink.js';
 import sharp from 'sharp';
 import { freeDeletedUsername } from '../auth/unverifiedRelease.js';
 import type { UpdateUserInput, UpsertFursonaInput, UpsertFursuitInput, UpsertReferenceImageInput } from './types.js';
+import { parseSearchQuery, textScore, trigramAvailable } from '../../lib/searchQuery.js';
 
 const MUSIC_MAX_BYTES = 15 * 1024 * 1024;
 
@@ -418,22 +419,43 @@ export const usersService = {
     });
   },
 
+  /**
+   * Поиск людей: все слова запроса должны найтись в нике или имени (с учётом раскладки), плюс близкие
+   * по написанию ники (опечатки). Порядок: точное совпадение ника > начало ника/имени > вхождение.
+   * Приоритет платных тарифов (Lite+) — это бонус к оценке, а не безусловное «выше всех».
+   */
   async searchUsers(query: string, limit = 8, page = 1) {
-    const q = query.trim();
-    if (!q) return [];
+    const parsed = parseSearchQuery(query.trim().replace(/^@/, ''));
+    if (!parsed.terms.length) return [];
     const skip = (Math.max(1, page) - 1) * limit;
-
-    // Priority search (Lite+ perk): paid-tier profiles are ranked above free ones.
-    // Prisma can't order by an arbitrary tier-rank expression, so we overfetch a
-    // candidate page ordered by recency and re-sort by tier in application code;
-    // Array#sort is stable, so ties keep their original (recency) order.
     const overfetch = Math.min(200, Math.max((skip + limit) * 5, limit * 5));
+
+    let fuzzyIds: string[] = [];
+    if (parsed.phrase.length >= 3 && (await trigramAvailable())) {
+      const words = [parsed.phrase, ...parsed.terms.flatMap((t) => t.variants).slice(0, 1)];
+      const rows = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "User"
+        WHERE deleted_at IS NULL
+          AND GREATEST(similarity(username, ${words[0]}), similarity(COALESCE(display_name, ''), ${words[0]})) >= 0.35
+        ORDER BY GREATEST(similarity(username, ${words[0]}), similarity(COALESCE(display_name, ''), ${words[0]})) DESC
+        LIMIT 30
+      `.catch(() => []);
+      fuzzyIds = rows.map((r) => r.id);
+    }
+
     const candidates = await prisma.user.findMany({
       where: {
         deleted_at: null,
         OR: [
-          { username: { contains: q, mode: 'insensitive' } },
-          { display_name: { contains: q, mode: 'insensitive' } },
+          {
+            AND: parsed.terms.map((t) => ({
+              OR: [t.text, ...t.variants].flatMap((w) => [
+                { username: { contains: w, mode: 'insensitive' as const } },
+                { display_name: { contains: w, mode: 'insensitive' as const } },
+              ]),
+            })),
+          },
+          ...(fuzzyIds.length ? [{ id: { in: fuzzyIds } }] : []),
         ],
       },
       select: PUBLIC_SELECT,
@@ -441,10 +463,22 @@ export const usersService = {
       orderBy: { created_at: 'desc' },
     });
 
-    const tierRank: Record<string, number> = { business: 3, pro: 2, lite: 1, free: 0 };
-    candidates.sort((a, b) => (tierRank[b.subscription_tier] ?? 0) - (tierRank[a.subscription_tier] ?? 0));
-
-    return candidates.slice(skip, skip + limit);
+    const tierBonus: Record<string, number> = { business: 6, pro: 4, lite: 2, free: 0 };
+    const fuzzySet = new Set(fuzzyIds);
+    const scored = candidates.map((u) => {
+      let score = 0;
+      for (const t of parsed.terms) {
+        let best = 0;
+        for (const w of [t.text, ...t.variants]) {
+          best = Math.max(best, textScore(u.username, w), textScore(u.display_name, w) * 0.9);
+        }
+        score += best;
+      }
+      if (score === 0 && fuzzySet.has(u.id)) score = 3; // нашёлся только по близости написания
+      return { u, score: score + (tierBonus[u.subscription_tier] ?? 0) };
+    });
+    scored.sort((a, b) => b.score - a.score); // стабильно: при равенстве — новые выше
+    return scored.slice(skip, skip + limit).map((x) => x.u);
   },
 
   async getRecommendedUsers(currentUserId: string, limit = 6) {
