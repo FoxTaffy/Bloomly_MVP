@@ -2,7 +2,7 @@
 // checks, so bad values reached Postgres and came back as 500s (or junk rows were stored).
 import type { ListingKind } from './types.js';
 
-export const LISTING_CATEGORIES = ['art', 'fursuit', 'badge', 'print', 'music', 'craft', 'merch', 'sticker', 'other'] as const;
+export const LISTING_CATEGORIES = ['art', 'fursuit', 'badge', 'print', 'music', 'craft', 'merch', 'other'] as const;
 export const LISTING_TYPES = ['digital', 'physical', 'both'] as const;
 export const LISTING_KINDS: readonly ListingKind[] = ['fixed', 'auction', 'ych', 'raffle', 'commission_queue'];
 export const LISTING_CURRENCIES = ['USD', 'EUR', 'RUB', 'GBP', 'JPY', 'CNY'] as const;

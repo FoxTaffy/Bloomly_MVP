@@ -41,14 +41,14 @@ onMounted(fetchDetail)
 <template>
   <Teleport to="body">
     <Transition name="resolve-fade" appear>
-      <div class="fixed inset-0 z-750 flex items-end sm:items-center justify-center" @click.self="emit('close')">
-        <div class="absolute inset-0 bg-black/70 backdrop-blur-xs" @click="emit('close')" />
+      <div class="fixed inset-0 z-999 flex items-center justify-center p-4" @click.self="emit('close')">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-xs" @click="emit('close')" />
 
-        <div class="relative w-full sm:max-w-2xl bg-[#13131f] border border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden z-10 max-h-[90vh] flex flex-col">
-          <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/10 shrink-0">
-            <h2 class="text-lg font-extrabold text-white">Статистика стикер-пака</h2>
+        <div class="relative w-full max-w-2xl bg-brand-card border border-brand-border rounded-3xl shadow-2xl overflow-hidden z-10 max-h-[90vh] flex flex-col">
+          <div class="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
+            <h2 class="text-xl font-extrabold text-white">Статистика стикер-пака</h2>
             <button @click="emit('close')"
-              class="w-8 h-8 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all active:scale-90 shrink-0">
+              class="w-8 h-8 flex items-center justify-center rounded-xl bg-brand-bg/60 hover:bg-brand-bg text-white/50 transition-colors shrink-0">
               <BIcon name="X" class="w-4 h-4" />
             </button>
           </div>

@@ -3,10 +3,10 @@
     <Transition name="fade">
       <div
         v-if="show"
-        class="fixed inset-0 z-80 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs"
+        class="fixed inset-0 z-999 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
         @click.self="$emit('close')"
       >
-        <div class="bg-brand-card border border-brand-border rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-sm flex flex-col overflow-hidden"
+        <div class="bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden"
           style="max-height: 90vh">
 
           <!-- Drag pill (mobile) -->

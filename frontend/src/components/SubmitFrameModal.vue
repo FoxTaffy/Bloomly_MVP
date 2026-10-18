@@ -1,14 +1,14 @@
 <template>
-  <div v-if="modelValue" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" @click.self="close">
-    <div class="bg-brand-card border border-brand-border rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto overflow-x-hidden" style="overscroll-behavior: contain;">
-      <div class="p-5 border-b border-brand-border flex items-center justify-between sticky top-0 bg-brand-card z-10">
-        <h2 class="text-lg font-black text-white">{{ langStore.t.avatarFrameSubmitTitle }}</h2>
-        <button @click="close" class="w-9 h-9 rounded-full bg-white/8 hover:bg-white/15 flex items-center justify-center transition-all">
-          <BIcon name="X" class="w-4 h-4 text-white/60" />
-        </button>
-      </div>
+  <Teleport to="body">
+  <div v-if="modelValue" class="fixed inset-0 z-999 flex items-center justify-center p-4" @click.self="close">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-xs" />
+    <div class="relative bg-brand-card border border-brand-border rounded-3xl p-6 max-w-lg w-full shadow-2xl z-10 max-h-[90vh] overflow-y-auto" style="overscroll-behavior: contain;">
+      <button @click="close" class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-brand-bg/60 flex items-center justify-center hover:bg-brand-bg transition-colors z-20">
+        <BIcon name="X" class="w-4 h-4 text-white/50" />
+      </button>
+      <h2 class="text-xl font-extrabold text-white mb-4">{{ langStore.t.avatarFrameSubmitTitle }}</h2>
 
-      <div class="p-5 stack-y-5">
+      <div class="stack-y-4">
         <div>
           <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.avatarFrameImageLabel }}</label>
           <MediaUpload folder="avatar-frames" accept="image/png" @uploaded="(urls: string[]) => { imageUrl = urls[0] ?? '' }" />
@@ -55,6 +55,7 @@
       </div>
     </div>
   </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">

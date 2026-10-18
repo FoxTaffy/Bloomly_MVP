@@ -69,7 +69,6 @@ const CATS = computed(() => [
   { key: 'all',     label: langStore.t.tabAll,           icon: 'LayoutGrid' },
   { key: 'art',     label: langStore.t.dealersDenCatArt,  icon: 'Palette'    },
   { key: 'fursuit', label: langStore.t.fursuitTab,        icon: 'Sparkles'   },
-  { key: 'sticker', label: langStore.t.stickers,          icon: 'Smile'      },
   { key: 'badge',   label: langStore.t.dealersDenCatBadges, icon: 'Award'    },
   { key: 'print',   label: langStore.t.dealersDenCatPrints, icon: 'Printer'  },
   { key: 'music',   label: langStore.t.dealersDenCatMusic, icon: 'Music'     },
@@ -1078,28 +1077,16 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
     <Teleport to="body">
       <transition name="modal-fade">
       <div v-if="showCreateModal"
-        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/75 backdrop-blur-xs"
+        class="fixed inset-0 z-999 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
         @click.self="tryCloseCreate()">
-        <div class="modal-form bg-[#0e0e1c] border border-white/8 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-2xl max-h-[94vh] flex flex-col overflow-hidden">
+        <div class="modal-form relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-2xl max-h-[94vh] flex flex-col overflow-hidden">
 
-          <div class="relative overflow-hidden shrink-0">
-            <div class="absolute inset-0" style="background: linear-gradient(135deg, #0b1540 0%, #07102a 100%)" />
-            <div class="absolute -top-8 -right-8 w-36 h-36 rounded-full opacity-20 blur-3xl" style="background: #3148FF" />
-            <div class="absolute -bottom-4 left-6 w-24 h-24 rounded-full opacity-15 blur-2xl" style="background: #4C67CF" />
-            <div class="relative z-10 px-6 pt-5 pb-4 flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg" style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
-                  <BIcon name="ShoppingBag" class="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h2 class="text-lg font-black text-white">{{ langStore.t.dealersDenNewListingTitle }}</h2>
-                  <p class="text-xs text-white/35 mt-0.5">Dealers' Den · Bloomly</p>
-                </div>
-              </div>
-              <button @click="tryCloseCreate()" class="w-9 h-9 rounded-full bg-white/8 hover:bg-white/15 flex items-center justify-center transition-all">
-                <BIcon name="X" class="w-4 h-4 text-white/60" />
-              </button>
-            </div>
+          <div class="relative px-6 pt-6 pb-4 shrink-0">
+            <button @click="tryCloseCreate()" class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-brand-bg/60 flex items-center justify-center hover:bg-brand-bg transition-colors z-20">
+              <BIcon name="X" class="w-4 h-4 text-white/50" />
+            </button>
+            <h2 class="text-xl font-extrabold text-white mb-1">{{ langStore.t.dealersDenNewListingTitle }}</h2>
+            <p class="text-white/40 text-xs line-clamp-1">Dealers' Den · Bloomly</p>
           </div>
 
           <div class="flex-1 overflow-y-auto p-6 stack-y-5">
@@ -1352,27 +1339,16 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
     <Teleport to="body">
       <transition name="modal-fade">
       <div v-if="showEditModal"
-        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/75 backdrop-blur-xs"
+        class="fixed inset-0 z-999 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
         @click.self="tryCloseEdit()">
-        <div class="modal-form bg-[#0e0e1c] border border-white/8 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-lg max-h-[92vh] flex flex-col overflow-hidden">
+        <div class="modal-form relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden">
 
-          <div class="relative overflow-hidden shrink-0">
-            <div class="absolute inset-0" style="background: linear-gradient(135deg, #1e0d00 0%, #100700 100%)" />
-            <div class="absolute -top-4 -right-4 w-24 h-24 rounded-full opacity-25 blur-2xl" style="background: #F59E0B" />
-            <div class="relative z-10 px-6 pt-5 pb-4 flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #F59E0B, #EF4444)">
-                  <BIcon name="Pencil" class="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <h2 class="text-base font-black text-white">{{ langStore.t.dealersDenEditTitle }}</h2>
-                  <p class="text-xs text-white/25 mt-0.5">Dealers' Den · Bloomly</p>
-                </div>
-              </div>
-              <button @click="tryCloseEdit()" class="w-9 h-9 rounded-full bg-white/8 hover:bg-white/15 flex items-center justify-center transition-all">
-                <BIcon name="X" class="w-4 h-4 text-white/60" />
-              </button>
-            </div>
+          <div class="relative px-6 pt-6 pb-4 shrink-0">
+            <button @click="tryCloseEdit()" class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-brand-bg/60 flex items-center justify-center hover:bg-brand-bg transition-colors z-20">
+              <BIcon name="X" class="w-4 h-4 text-white/50" />
+            </button>
+            <h2 class="text-xl font-extrabold text-white mb-1">{{ langStore.t.dealersDenEditTitle }}</h2>
+            <p class="text-white/40 text-xs line-clamp-1">Dealers' Den · Bloomly</p>
           </div>
 
           <div class="flex-1 overflow-y-auto p-6 stack-y-4">
@@ -1462,27 +1438,16 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
     <Teleport to="body">
       <transition name="modal-fade">
       <div v-if="showBidModal"
-        class="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/75 backdrop-blur-xs"
+        class="fixed inset-0 z-999 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
         @click.self="showBidModal = false">
-        <div class="modal-form bg-[#0e0e1c] border border-white/8 rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-md flex flex-col overflow-hidden">
+        <div class="modal-form relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
 
-          <div class="relative overflow-hidden shrink-0">
-            <div class="absolute inset-0" style="background: linear-gradient(135deg, #1c1100 0%, #0e0900 100%)" />
-            <div class="absolute -top-4 -right-4 w-28 h-28 rounded-full opacity-25 blur-2xl" style="background: #FFC01F" />
-            <div class="relative z-10 px-6 pt-5 pb-4 flex items-center justify-between">
-              <div class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #FFC01F, #E76F51)">
-                  <BIcon name="Hammer" class="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <h2 class="text-base font-black text-white">{{ langStore.t.dealersDenPlaceBidTitle }}</h2>
-                  <p v-if="bidListing" class="text-xs text-white/25 mt-0.5 line-clamp-1">{{ bidListing.title }}</p>
-                </div>
-              </div>
-              <button @click="showBidModal = false" class="w-9 h-9 rounded-full bg-white/8 hover:bg-white/15 flex items-center justify-center transition-all">
-                <BIcon name="X" class="w-4 h-4 text-white/60" />
-              </button>
-            </div>
+          <div class="relative px-6 pt-6 pb-4 shrink-0">
+            <button @click="showBidModal = false" class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-brand-bg/60 flex items-center justify-center hover:bg-brand-bg transition-colors z-20">
+              <BIcon name="X" class="w-4 h-4 text-white/50" />
+            </button>
+            <h2 class="text-xl font-extrabold text-white mb-1">{{ langStore.t.dealersDenPlaceBidTitle }}</h2>
+            <p v-if="bidListing" class="text-white/40 text-xs line-clamp-1">{{ bidListing.title }}</p>
           </div>
 
           <div class="p-6 stack-y-4">
@@ -1597,14 +1562,14 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
 .modal-form input,
 .modal-form textarea,
 .modal-form select {
-  background-color: #0a0a1a !important;
-  border: 1px solid rgba(255,255,255,0.08) !important;
+  background-color: var(--color-brand-bg) !important;
+  border: 1px solid var(--color-brand-border) !important;
 }
 .modal-form input:focus,
 .modal-form textarea:focus,
 .modal-form select:focus {
-  border-color: rgba(76, 103, 207, 0.45) !important;
-  background-color: rgba(49, 72, 255, 0.04) !important;
+  border-color: var(--color-brand-accent) !important;
+  background-color: var(--color-brand-bg) !important;
 }
 .modal-fade-enter-active,  .modal-fade-leave-active  { transition: opacity 0.2s ease; }
 .modal-fade-enter-from,    .modal-fade-leave-to      { opacity: 0; }

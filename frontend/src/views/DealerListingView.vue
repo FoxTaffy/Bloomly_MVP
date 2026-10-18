@@ -212,7 +212,7 @@ async function removeComment(comment: DealerListingComment) {
 
 // ── Meta ─────────────────────────────────────────────────────────────────────
 const CAT_LABELS = computed<Record<string, string>>(() => ({
-  art: langStore.t.dealerListingCatArt, fursuit: langStore.t.dealerListingCatFursuit, sticker: langStore.t.dealerListingCatSticker, badge: langStore.t.dealerListingCatBadge,
+  art: langStore.t.dealerListingCatArt, fursuit: langStore.t.dealerListingCatFursuit, badge: langStore.t.dealerListingCatBadge,
   print: langStore.t.dealerListingCatPrint, music: langStore.t.dealerListingCatMusic, craft: 'Handmade', merch: langStore.t.dealerListingCatMerch, other: langStore.t.other,
 }))
 const TYPE_LABELS = computed<Record<string, string>>(() => ({
@@ -1330,20 +1330,15 @@ async function submitReport() {
     ═══════════════════════════════════════════════════════════ -->
     <Teleport to="body">
       <Transition name="modal">
-        <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div class="absolute inset-0 bg-black/70 backdrop-blur-xs" @click="showEditModal = false" />
+        <div v-if="showEditModal" class="fixed inset-0 z-999 flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-black/60 backdrop-blur-xs" @click="showEditModal = false" />
           <div class="relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto scrollbar-none">
             <!-- Header -->
-            <div class="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-brand-border bg-brand-card rounded-t-3xl">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
-                  <BIcon name="Pencil" class="w-4 h-4 text-white" />
-                </div>
-                <h2 class="text-sm font-extrabold text-white uppercase tracking-widest">{{ langStore.t.editPost }}</h2>
-              </div>
-              <button @click="showEditModal = false" class="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-all">
-                <BIcon name="X" class="w-4 h-4 text-white/60" />
+            <div class="relative px-6 pt-6 pb-2">
+              <button @click="showEditModal = false" class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-brand-bg/60 flex items-center justify-center hover:bg-brand-bg transition-colors z-20">
+                <BIcon name="X" class="w-4 h-4 text-white/50" />
               </button>
+              <h2 class="text-xl font-extrabold text-white">{{ langStore.t.editPost }}</h2>
             </div>
 
             <div class="p-5 stack-y-4">
@@ -1473,20 +1468,15 @@ async function submitReport() {
     ═══════════════════════════════════════════════════════════ -->
     <Teleport to="body">
       <Transition name="modal">
-        <div v-if="showReportModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div class="absolute inset-0 bg-black/70 backdrop-blur-xs" @click="showReportModal = false" />
+        <div v-if="showReportModal" class="fixed inset-0 z-999 flex items-center justify-center p-4">
+          <div class="absolute inset-0 bg-black/60 backdrop-blur-xs" @click="showReportModal = false" />
           <div class="relative bg-brand-card border border-brand-border rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden">
             <!-- Header -->
-            <div class="flex items-center justify-between px-5 py-4 border-b border-brand-border">
-              <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-xl bg-brand-error/15 flex items-center justify-center">
-                  <BIcon name="Flag" class="w-4 h-4 text-brand-error" />
-                </div>
-                <h2 class="text-sm font-extrabold text-white">{{ langStore.t.report }}</h2>
-              </div>
-              <button @click="showReportModal = false" class="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-all">
-                <BIcon name="X" class="w-4 h-4 text-white/60" />
+            <div class="relative px-6 pt-6 pb-2">
+              <button @click="showReportModal = false" class="absolute top-3 right-3 w-8 h-8 rounded-xl bg-brand-bg/60 flex items-center justify-center hover:bg-brand-bg transition-colors z-20">
+                <BIcon name="X" class="w-4 h-4 text-white/50" />
               </button>
+              <h2 class="text-xl font-extrabold text-white">{{ langStore.t.report }}</h2>
             </div>
 
             <!-- Success state -->
