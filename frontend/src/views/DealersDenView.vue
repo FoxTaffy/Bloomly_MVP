@@ -11,6 +11,8 @@ import { listingShop } from '@/lib/dealerShop'
 import { useConfirm } from '@/composables/useConfirm'
 import AppHeader    from '@/components/AppHeader.vue'
 import AppSidebar   from '@/components/AppSidebar.vue'
+import ListingDetailsEditor from '@/components/ListingDetailsEditor.vue'
+import { emptyDraft, draftFrom, cleanDraft, type DetailsDraft } from '@/lib/listingDetails'
 import BIcon        from '@/components/BIcon.vue'
 import MediaUpload  from '@/components/MediaUpload.vue'
 import DenWeeklyTop from '@/components/DenWeeklyTop.vue'
@@ -220,6 +222,7 @@ const liveAuctions = computed(() =>
 const showCreateModal = ref(false)
 const isCreating      = ref(false)
 const createError     = ref('')
+const createDetails = ref<DetailsDraft>(emptyDraft())
 const form = ref({
   title: '', description: '', price: 0, currency: 'USD',
   category: 'art' as any, type: 'digital' as any, listingKind: 'fixed' as ListingKind,
@@ -230,6 +233,7 @@ const form = ref({
 })
 
 function resetForm() {
+  createDetails.value = emptyDraft()
   form.value = {
     title: '', description: '', price: 0, currency: 'USD',
     category: 'art', type: 'digital', listingKind: 'fixed',
@@ -285,6 +289,7 @@ async function submitCreate() {
       bidIncrement:     form.value.bidIncrement     || 1,
       autoBuyPrice:     form.value.autoBuyPrice     || undefined,
       raffleMaxTickets: form.value.raffleMaxTickets || undefined,
+      commissionDetails: cleanDraft(createDetails.value, form.value.listingKind === 'commission_queue'),
       ...(form.value.listingKind === 'commission_queue' ? {
         commissionSlotsTotal: Number(form.value.commissionSlotsTotal),
         commissionEtaDays:    form.value.commissionEtaDays === '' ? undefined : Number(form.value.commissionEtaDays),
@@ -302,6 +307,8 @@ const showEditModal = ref(false)
 const isUpdating    = ref(false)
 const editError     = ref('')
 const editingId     = ref('')
+const editKind      = ref<ListingKind>('fixed')
+const editDetails   = ref<DetailsDraft>(emptyDraft())
 const editForm      = ref({ title: '', description: '', price: 0, currency: 'USD', quantity: 1, status: 'active' as any, tags: '', isNsfw: false })
 // Photos: already-saved ones (removable) plus anything uploaded in this session.
 const editKeptImages = ref<string[]>([])
@@ -309,6 +316,8 @@ const editNewImages  = ref<string[]>([])
 
 function openEdit(listing: DealerListing) {
   editingId.value = listing.id
+  editKind.value = listing.listing_kind
+  editDetails.value = draftFrom(listing.commission_details)
   editForm.value  = {
     title: listing.title, description: listing.description ?? '',
     price: parseFloat(String(listing.price)), currency: listing.currency,
@@ -333,6 +342,7 @@ async function submitEdit() {
       quantity: editForm.value.quantity,
       tags: editForm.value.tags.split(',').map(t => t.trim()).filter(Boolean),
       isNsfw: editForm.value.isNsfw,
+      commissionDetails: cleanDraft(editDetails.value, editKind.value === 'commission_queue'),
       images: [...editKeptImages.value, ...editNewImages.value],
     })
     showEditModal.value = false
@@ -1219,6 +1229,8 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               </div>
             </div>
 
+            <ListingDetailsEditor :draft="createDetails" :commission="form.listingKind === 'commission_queue'" />
+
             <!-- Raffle fields -->
             <div v-if="form.listingKind === 'raffle'"
               class="bg-brand-success/5 border border-brand-success/15 rounded-2xl p-4 stack-y-3">
@@ -1419,6 +1431,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <input v-model="editForm.tags" :placeholder="langStore.t.dealersDenTagsPlaceholder"
                 class="w-full rounded-2xl px-4 py-3 text-sm text-white placeholder-white/20 outline-hidden transition-all" />
             </div>
+            <ListingDetailsEditor :draft="editDetails" :commission="editKind === 'commission_queue'" />
             <div class="flex items-center justify-between p-4 rounded-2xl bg-brand-error/5 border border-brand-error/15">
               <p class="text-sm font-bold text-white">{{ langStore.t.dealersDenNsfwContentLabel }}</p>
               <button type="button" @click="editForm.isNsfw = !editForm.isNsfw"

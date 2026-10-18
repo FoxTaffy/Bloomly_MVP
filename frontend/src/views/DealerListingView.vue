@@ -20,6 +20,8 @@ import CommissionInfoBlocks from '@/components/CommissionInfoBlocks.vue'
 import CommissionReviews   from '@/components/CommissionReviews.vue'
 import ListingPanelHead    from '@/components/ListingPanelHead.vue'
 import ListingSpecs        from '@/components/ListingSpecs.vue'
+import ListingDetailsEditor from '@/components/ListingDetailsEditor.vue'
+import { emptyDraft, draftFrom, cleanDraft } from '@/lib/listingDetails'
 import DenReviewCard      from '@/components/DenReviewCard.vue'
 import FrameEditor        from '@/components/FrameEditor.vue'
 import api from '@/api'
@@ -324,6 +326,7 @@ async function claimFrame() {
 
 // ── Edit ─────────────────────────────────────────────────────────────────────
 const showEditModal = ref(false)
+const editDetails   = ref(emptyDraft())
 const isUpdating    = ref(false)
 const editForm = ref({
   title: '', description: '', price: 0, currency: 'USD',
@@ -344,6 +347,7 @@ function openEdit() {
     tags:        listing.value.tags.join(', '),
     isNsfw:      listing.value.is_nsfw,
   }
+  editDetails.value = draftFrom(listing.value.commission_details)
   showEditModal.value = true
 }
 
@@ -361,6 +365,7 @@ async function submitEdit() {
       images:      editForm.value.images,
       tags:        editForm.value.tags.split(',').map(t => t.trim()).filter(Boolean),
       isNsfw:      editForm.value.isNsfw,
+      commissionDetails: cleanDraft(editDetails.value, isCommission.value),
     })
     await store.loadListing(listing.value.id)
     showEditModal.value = false
@@ -1416,6 +1421,8 @@ async function submitReport() {
                 </div>
                 <div v-if="!editForm.images.length" class="text-xs text-white/20 italic">{{ langStore.t.dealerListingNoImages }}</div>
               </div>
+
+              <ListingDetailsEditor :draft="editDetails" :commission="isCommission" />
 
               <!-- NSFW toggle -->
               <div class="flex items-center justify-between bg-brand-bg/50 border border-brand-border rounded-2xl px-4 py-3">
