@@ -86,7 +86,7 @@ const BASE = 'https://bloomly.fun'
 useHead({
   title: () => group.value ? `${group.value.name} — Bloomly` : 'Community — Bloomly',
   meta: [
-    { name: 'robots', content: 'index, follow' },
+    { name: 'robots', content: () => (!group.value || group.value.is_public === false || group.value.is_nsfw) ? 'noindex, nofollow' : 'index, follow' },
     { name: 'description', content: () => {
         if (!group.value) return 'Bloomly — Creative Social Network.'
         const members = group.value._count?.members
@@ -119,17 +119,15 @@ useHead({
       innerHTML: () => {
         if (!group.value) return ''
         const seg = group.value.slug || group.value.id
-        const members = group.value._count?.members
         return JSON.stringify({
           '@context': 'https://schema.org',
-          '@type': 'Organization',
+          '@type': 'WebPage',
           name: group.value.name,
           url: `${BASE}/groups/${seg}`,
           description: group.value.description || '',
           ...(group.value.avatar_url ? {
-            logo: { '@type': 'ImageObject', url: group.value.avatar_url },
+            primaryImageOfPage: { '@type': 'ImageObject', url: group.value.avatar_url },
           } : {}),
-          ...(members ? { numberOfEmployees: members } : {}),
         })
       },
     },
