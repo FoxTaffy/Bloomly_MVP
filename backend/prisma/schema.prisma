@@ -967,6 +967,8 @@ model Group {
   created_at   DateTime  @default(now())
   updated_at   DateTime  @updatedAt
   deleted_at   DateTime?
+  den_enabled   Boolean   @default(false) // Dealers Den подключён: от имени группы можно создавать лоты
+  den_agreed_at DateTime? @db.Timestamp(6) // когда владелец подтвердил, что не скамер, и принял правила
 
   // Extended fields
   rules_text    String? // Правила группы (markdown)
@@ -1047,6 +1049,7 @@ model Group {
   transactions      GroupTransaction[]
   sentNotifications Notification[]     @relation("NotificationSenderGroup")
   scheduledPosts    ScheduledPost[]
+  dealerListings    DealerListing[]
 
   @@index([owner_id])
   @@index([type])
@@ -1413,6 +1416,7 @@ model VerificationRequest {
 model DealerListing {
   id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   seller_id              String    @db.Uuid
+  group_id               String?   @db.Uuid // группа-продавец; null у старых лотов до привязки
   title                  String    @db.VarChar(200)
   description            String?
   price                  Decimal   @default(0) @db.Decimal(12, 2)
@@ -1446,6 +1450,7 @@ model DealerListing {
   deleted_at             DateTime? @db.Timestamp(6)
 
   seller           User                   @relation(fields: [seller_id], references: [id], onDelete: Cascade)
+  group            Group?                 @relation(fields: [group_id], references: [id], onDelete: SetNull)
   bids             DealerBid[]
   comments         DealerListingComment[]
   reviews          DenReview[]
@@ -1457,6 +1462,7 @@ model DealerListing {
   avatarFrame      AvatarFrame?
 
   @@index([seller_id])
+  @@index([group_id])
   @@index([status])
   @@index([category])
   @@index([listing_kind])

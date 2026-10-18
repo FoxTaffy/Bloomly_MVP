@@ -455,6 +455,7 @@ const aboutNavs = computed(() => {
   } else if (t === 'shop') {
     navs.push({ key: 'about', label: langStore.t.groupDetailAboutGeneric, icon: 'Info' })
     navs.push({ key: 'prices', label: langStore.t.groupDetailPricesNav, icon: 'Tag' })
+    navs.push({ key: 'dealers-den', label: langStore.t.groupDetailDealersDenNav, icon: 'ShoppingBag' })
   } else if (t === 'creative') {
     navs.push({ key: 'about', label: langStore.t.groupDetailAboutCreative, icon: 'Info' })
     if (group.value?.commissionInfo)
@@ -483,7 +484,49 @@ watch(
   { immediate: true }
 )
 
-watch(aboutTab, (tab) => { if (['reviews', 'digest', 'categories', 'team'].includes(tab)) loadAboutTabData(tab) })
+// ── Dealers' Den: подключение группы и её лоты ──────────────────────────
+type DenStatus = { denEnabled: boolean; isOwner: boolean; canConnect: boolean; isVerified: boolean; typeSupported: boolean }
+const denStatus = ref<DenStatus | null>(null)
+const denListings = ref<any[]>([])
+const denLoading = ref(false)
+const denConfirm = ref(false)
+const denConnecting = ref(false)
+const denError = ref('')
+
+async function loadDen() {
+  const id = group.value?.id
+  if (!id) return
+  denLoading.value = true
+  try {
+    const { data } = await api.get(`/dealers-den/groups/${id}/status`)
+    denStatus.value = data.data
+    if (data.data.denEnabled) {
+      const res = await api.get('/dealers-den', { params: { groupId: id, limit: 24 } })
+      denListings.value = res.data.data.listings
+    } else {
+      denListings.value = []
+    }
+  } catch { denStatus.value = null } finally { denLoading.value = false }
+}
+
+async function connectDen() {
+  if (!group.value?.id || !denConfirm.value) return
+  denConnecting.value = true
+  denError.value = ''
+  try {
+    await api.post(`/dealers-den/groups/${group.value.id}/connect`, { confirmNotScammer: true })
+    denConfirm.value = false
+    await loadDen()
+  } catch (e: any) {
+    denError.value = e?.response?.data?.error ?? langStore.t.groupDenConnectFailed
+  } finally { denConnecting.value = false }
+}
+
+watch(aboutTab, (tab) => {
+  if (['reviews', 'digest', 'categories', 'team'].includes(tab)) loadAboutTabData(tab)
+  if (tab === 'dealers-den') loadDen()
+}, { immediate: true })
+watch(() => group.value?.id, () => { if (aboutTab.value === 'dealers-den') loadDen() })
 
 // ── Content tabs (floating pills like profile) ─────────────────────────
 const activeContentTab = ref<'posts' | 'media' | 'archive' | 'posts_archive' | 'members' | 'events'>('posts')
@@ -1597,13 +1640,61 @@ const vClickOutside = {
                     </template>
                   </div>
 
-                  <!-- Creative: Dealers' Den — the owner's storefront -->
-                  <div v-else-if="aboutTab === 'dealers-den'" class="py-10 text-center">
-                    <BIcon name="ShoppingBag" class="w-10 h-10 mx-auto mb-3 text-white/20" />
-                    <router-link :to="`/dealers-den/seller/${group.owner.username}`"
-                      class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-all">
-                      <BIcon name="ShoppingBag" class="w-4 h-4" /> {{ langStore.t.groupDetailDealersDenNav }}
-                    </router-link>
+                  <!-- Creative / Shop: Dealers' Den — лоты группы и подключение -->
+                  <div v-else-if="aboutTab === 'dealers-den'" class="stack-y-4">
+                    <div v-if="denLoading && !denStatus" class="py-10 text-center text-white/30 text-sm">…</div>
+
+                    <!-- Подключён: лоты группы -->
+                    <template v-else-if="denStatus?.denEnabled">
+                      <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <router-link to="/dealers-den"
+                          class="inline-flex items-center gap-2 text-xs font-bold text-brand-accent hover:underline">
+                          <BIcon name="ShoppingBag" class="w-4 h-4" /> {{ langStore.t.groupDenOpenDen }}
+                        </router-link>
+                        <router-link v-if="denStatus.isOwner" to="/dealers-den?create=1"
+                          class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-accent text-white text-xs font-bold hover:bg-brand-accent-plus transition-all">
+                          <BIcon name="Plus" class="w-4 h-4" /> {{ langStore.t.groupDenCreateListingBtn }}
+                        </router-link>
+                      </div>
+                      <div v-if="denListings.length" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <router-link v-for="l in denListings" :key="l.id" :to="`/dealers-den/${l.id}`"
+                          class="rounded-2xl overflow-hidden bg-brand-bg border border-brand-border/60 hover:border-brand-accent/60 transition-all">
+                          <div class="aspect-square bg-brand-border/30">
+                            <img v-if="l.images?.[0]" :src="l.images[0]" class="w-full h-full object-cover" loading="lazy" />
+                          </div>
+                          <div class="p-2.5">
+                            <p class="text-xs font-bold text-white truncate">{{ l.title }}</p>
+                            <p class="text-xs text-white/50 mt-0.5">{{ l.price }} {{ l.currency }}</p>
+                          </div>
+                        </router-link>
+                      </div>
+                      <p v-else class="py-8 text-center text-white/40 text-sm">{{ langStore.t.groupDenEmpty }}</p>
+                    </template>
+
+                    <!-- Не подключён, владелец может подключить -->
+                    <div v-else-if="denStatus?.canConnect" class="rounded-2xl border border-brand-border bg-brand-bg p-5 stack-y-3">
+                      <div class="flex items-center gap-2.5">
+                        <BIcon name="ShoppingBag" class="w-5 h-5 text-brand-accent" />
+                        <p class="text-sm font-bold text-white">{{ langStore.t.groupDenConnectTitle }}</p>
+                      </div>
+                      <p class="text-xs text-white/50">{{ langStore.t.groupDenConnectHint }}</p>
+                      <label class="flex items-start gap-2.5 cursor-pointer">
+                        <input v-model="denConfirm" type="checkbox" class="mt-0.5 w-4 h-4 accent-brand-accent" />
+                        <span class="text-xs text-white/70">{{ langStore.t.groupDenScamConfirm }}</span>
+                      </label>
+                      <p v-if="denError" class="text-xs text-brand-error">{{ denError }}</p>
+                      <button @click="connectDen" :disabled="!denConfirm || denConnecting"
+                        class="px-5 py-2.5 rounded-xl bg-brand-accent text-white text-sm font-bold hover:bg-brand-accent-plus transition-all disabled:opacity-40">
+                        {{ langStore.t.groupDenConnectBtn }}
+                      </button>
+                    </div>
+
+                    <!-- Не подключён, подключить нельзя -->
+                    <div v-else class="py-10 text-center">
+                      <BIcon name="ShoppingBag" class="w-10 h-10 mx-auto mb-3 text-white/20" />
+                      <p class="text-white/40 text-sm font-semibold">{{ langStore.t.groupDenNotConnected }}</p>
+                      <p v-if="denStatus?.isOwner" class="text-white/30 text-xs mt-1">{{ langStore.t.groupDenNeedVerification }}</p>
+                    </div>
                   </div>
 
                   <!-- Event: Спонсоры -->

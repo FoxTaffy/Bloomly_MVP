@@ -34,7 +34,15 @@ function handleEnableNsfw() {
 }
 
 // ── Permission ─────────────────────────────────────────────────────────────────
-const sellerAccess = ref<{ canSell: boolean; ownsShop: boolean; frozen: boolean } | null>(null)
+type DenGroupRef = { id: string; slug: string; name: string; avatar_url: string | null; type: string }
+const sellerAccess = ref<{ canSell: boolean; ownsShop: boolean; frozen: boolean; groups: DenGroupRef[]; connectable: DenGroupRef[] } | null>(null)
+const denGroups = computed(() => sellerAccess.value?.groups ?? [])
+const hasDenGroup = computed(() => denGroups.value.length > 0)
+// Where "connect" sends the user: a suitable group that has not joined yet, else the group list
+const connectLink = computed(() => {
+  const g = sellerAccess.value?.connectable?.[0]
+  return g ? `/groups/${g.slug}?tab=dealers-den` : '/groups'
+})
 const canSell = computed(() => auth.user?.is_verified === true && sellerAccess.value?.canSell === true)
 const hasSellerRole = computed(() => canSellInDen(auth.user, sellerAccess.value?.ownsShop === true))
 let accessGeneration = 0
@@ -217,6 +225,7 @@ const form = ref({
   images: [] as string[], quantity: 1, isNsfw: false, tags: '', status: 'active' as any,
   auctionEndsAt: '', bidIncrement: 5, autoBuyPrice: 0, raffleMaxTickets: 0,
   commissionSlotsTotal: 1 as number | '', commissionEtaDays: '' as number | '', commissionFieldsText: '',
+  groupId: '',
 })
 
 function resetForm() {
@@ -226,6 +235,7 @@ function resetForm() {
     images: [], quantity: 1, isNsfw: false, tags: '', status: 'active',
     auctionEndsAt: '', bidIncrement: 5, autoBuyPrice: 0, raffleMaxTickets: 0,
   commissionSlotsTotal: 1 as number | '', commissionEtaDays: '' as number | '', commissionFieldsText: '',
+    groupId: denGroups.value[0]?.id ?? '',
   }
 }
 
@@ -246,16 +256,23 @@ function openCreateModal() {
   resetForm()
   showCreateModal.value = true
 }
+// ?create=1 (ссылка из группы) сразу открывает форму нового лота
+watch([sellerAccess, () => route.query.create], ([acc, c]) => {
+  if (c !== '1' || !acc) return
+  router.replace({ query: { ...route.query, create: undefined } })
+  openCreateModal()
+})
 async function tryCloseCreate() {
   if (isFormDirty() && !(await confirmDialog(langStore.t.dealersDenUnsavedCloseConfirm))) return
   showCreateModal.value = false
 }
 async function submitCreate() {
-  if (!form.value.title.trim()) return
+  if (!form.value.title.trim() || !form.value.groupId) return
   isCreating.value = true
   createError.value = ''
   try {
     await store.createListing({
+      groupId: form.value.groupId,
       title: form.value.title, description: form.value.description || undefined,
       price: Number(form.value.price), currency: form.value.currency,
       category: form.value.category, type: form.value.type,
@@ -966,8 +983,17 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                   :class="hasSellerRole ? 'text-brand-success' : 'text-brand-border'" />
                 <span :class="hasSellerRole ? 'text-white/60' : 'text-white/25'">{{ langStore.t.dealersDenArtistMasterLabel }}</span>
               </div>
+              <div class="flex items-center gap-2">
+                <BIcon :name="hasDenGroup ? 'CheckCircle2' : 'Circle'" class="w-4 h-4 shrink-0"
+                  :class="hasDenGroup ? 'text-brand-success' : 'text-brand-border'" />
+                <span :class="hasDenGroup ? 'text-white/60' : 'text-white/25'">{{ langStore.t.dealersDenReqGroupLabel }}</span>
+              </div>
             </div>
-            <button @click="router.push({ name: 'settings' })"
+            <button v-if="auth.user.is_verified && hasSellerRole" @click="router.push(connectLink)"
+              class="w-full text-center py-2 rounded-xl text-xs font-bold text-brand-accent bg-brand-accent/8 border border-brand-accent/20 hover:bg-brand-accent/15 transition-all">
+              {{ langStore.t.dealersDenConnectGroupBtn }}
+            </button>
+            <button v-else @click="router.push({ name: 'settings' })"
               class="w-full text-center py-2 rounded-xl text-xs font-bold text-brand-accent bg-brand-accent/8 border border-brand-accent/20 hover:bg-brand-accent/15 transition-all">
               {{ langStore.t.dealersDenApplyBtn }}
             </button>
@@ -1066,6 +1092,15 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
           </div>
 
           <div class="flex-1 overflow-y-auto p-6 stack-y-5">
+
+            <!-- Seller group -->
+            <div v-if="denGroups.length">
+              <label class="block text-xs font-bold text-white/35 uppercase tracking-wider mb-2">{{ langStore.t.dealersDenGroupLabel }}</label>
+              <select v-model="form.groupId"
+                class="w-full bg-brand-bg border border-brand-border rounded-xl px-3 py-2.5 text-sm text-white outline-hidden focus:border-brand-accent/50">
+                <option v-for="g in denGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
+              </select>
+            </div>
 
             <!-- Kind -->
             <div>

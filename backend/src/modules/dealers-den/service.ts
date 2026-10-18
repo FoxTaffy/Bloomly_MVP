@@ -16,6 +16,7 @@ function normalizeTags(tags: string[] | undefined): string[] {
 const LISTING_SELECT = {
   id: true,
   seller_id: true,
+  group_id: true,
   title: true,
   description: true,
   price: true,
@@ -55,6 +56,7 @@ const LISTING_SELECT = {
       verification_type: true,
     },
   },
+  group: { select: { id: true, slug: true, name: true, avatar_url: true } },
   avatarFrame: {
     select: {
       id: true, status: true, rejection_reason: true,
@@ -86,6 +88,7 @@ export const dealersDenService = {
     if (query.type)        where.type        = query.type;
     if (query.listingKind) where.listing_kind = query.listingKind;
     if (query.sellerId)    where.seller_id   = query.sellerId;
+    if (query.groupId)     where.group_id    = query.groupId;
     if (query.excludeNsfw === '1') where.is_nsfw = false;
 
     if (query.minPrice !== undefined || query.maxPrice !== undefined) {
@@ -195,6 +198,7 @@ export const dealersDenService = {
     return prisma.dealerListing.create({
       data: {
         seller_id:    sellerId,
+        group_id:     input.groupId,
         title:        input.title,
         description:  input.description,
         price:        input.price,

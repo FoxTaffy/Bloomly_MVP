@@ -7,6 +7,7 @@ export const REVIEW_TAGS = ['быстро', 'качество', 'вежливы�
 export type ReviewTag = typeof REVIEW_TAGS[number];
 
 export interface CreateListingInput {
+  groupId: string; // группа-продавец (с подключённым Dealers Den)
   title: string;
   description?: string;
   price: number;
@@ -31,7 +32,7 @@ export interface CreateListingInput {
   commissionFormFields?: Array<{ label: string; required: boolean; type: string }>;
 }
 
-export interface UpdateListingInput extends Partial<CreateListingInput> {}
+export interface UpdateListingInput extends Partial<Omit<CreateListingInput, 'groupId'>> {}
 
 export interface GetListingsQuery {
   page?: string;
@@ -42,6 +43,7 @@ export interface GetListingsQuery {
   status?: string;
   search?: string;
   sellerId?: string;
+  groupId?: string;
   minPrice?: string;
   maxPrice?: string;
   currency?: string;

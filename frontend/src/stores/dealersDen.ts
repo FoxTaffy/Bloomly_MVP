@@ -154,6 +154,8 @@ export interface ReviewSummary {
 export interface DealerListing {
   id: string
   seller_id: string
+  group_id: string | null
+  group?: { id: string; slug: string; name: string; avatar_url: string | null } | null
   title: string
   description: string | null
   price: string
@@ -203,6 +205,7 @@ export interface DealerListing {
 }
 
 export interface CreateListingInput {
+  groupId: string
   title: string
   description?: string
   price: number
@@ -230,7 +233,7 @@ export interface CreateListingInput {
 export const LISTINGS_PAGE_SIZE = 20
 
 export interface ListingsParams {
-  category?: string; type?: string; search?: string; sellerId?: string
+  category?: string; type?: string; search?: string; sellerId?: string; groupId?: string
   minPrice?: number; maxPrice?: number; currency?: string
   listingKind?: string; sort?: string; excludeNsfw?: string
 }

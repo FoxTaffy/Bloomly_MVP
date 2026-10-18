@@ -25,3 +25,15 @@ export function canSellInDen(user: VerificationIdentity | null | undefined, owns
   return user?.is_verified === true &&
     (user.verification_type === 'artist' || user.verification_type === 'master' || ownsShop);
 }
+
+export const DEN_GROUP_TYPES = ['creative', 'shop'] as const;
+
+/**
+ * Можно ли подключить Dealers Den к группе такого типа: владелец верифицирован как художник/мастер
+ * (группа «Творческая»/«Магазин») либо как владелец магазина (группа «Магазин»).
+ */
+export function canConnectDen(user: VerificationIdentity | null | undefined, groupType: string): boolean {
+  return (DEN_GROUP_TYPES as readonly string[]).includes(groupType) &&
+    canCreateGroup(user, groupType) &&
+    canSellInDen(user, groupType === 'shop');
+}

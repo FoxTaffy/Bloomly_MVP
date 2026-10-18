@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { getSellerAccess } from './access.js';
+import { getSellerAccess, connectGroupToDen, getGroupDenStatus } from './access.js';
 import { dealersDenService } from './service.js';
 import { fairService } from './fair.service.js';
 import type {
@@ -47,6 +47,23 @@ export async function sellerEligibilityHandler(req: FastifyRequest, reply: Fasti
   return reply.send({ success: true, data: await getSellerAccess(req.user.id) });
 }
 
+export async function connectGroupHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { groupId } = req.params as { groupId: string };
+  if (!UUID_RE.test(groupId)) return reply.status(404).send({ success: false, error: 'Группа не найдена' });
+  const { confirmNotScammer } = (req.body ?? {}) as { confirmNotScammer?: boolean };
+  const result = await connectGroupToDen(req.user.id, groupId, confirmNotScammer === true);
+  if (!result.ok) return reply.status(result.status).send({ success: false, error: result.error });
+  return reply.send({ success: true });
+}
+
+export async function groupDenStatusHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { groupId } = req.params as { groupId: string };
+  if (!UUID_RE.test(groupId)) return reply.status(404).send({ success: false, error: 'Группа не найдена' });
+  const status = await getGroupDenStatus(groupId, req.user?.id);
+  if (!status) return reply.status(404).send({ success: false, error: 'Группа не найдена' });
+  return reply.send({ success: true, data: status });
+}
+
 export async function createListingHandler(req: FastifyRequest, reply: FastifyReply) {
   const user = req.user;
   const access = await getSellerAccess(user.id);
@@ -54,9 +71,12 @@ export async function createListingHandler(req: FastifyRequest, reply: FastifyRe
     return reply.status(403).send({ success: false, error: 'Ваш аккаунт в Ярмарке заморожен' });
   }
   if (!access.canSell) {
-    return reply.status(403).send({ success: false, error: 'Объявления доступны верифицированным художникам, мастерам и владельцам групп «Магазин»' });
+    return reply.status(403).send({ success: false, error: 'Чтобы продавать, подключите Dealers Den в своей группе «Творческая» или «Магазин» (нужна верификация художника, мастера или владельца магазина)' });
   }
   const input = req.body as CreateListingInput;
+  if (!input.groupId || !access.groups.some(g => g.id === input.groupId)) {
+    return reply.status(400).send({ success: false, error: 'Выберите свою группу с подключённым Dealers Den, от имени которой создаётся лот' });
+  }
   // Avatar frames have their own approval-gated pipeline (POST /api/avatar-frames) that
   // creates the linked AvatarFrame row and enforces admin-vs-artist review — creating this
   // category through the generic listing endpoint would produce an unreviewable listing
