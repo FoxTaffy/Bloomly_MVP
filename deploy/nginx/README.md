@@ -19,7 +19,8 @@ Cloudflare и проверки после запуска.
    cookie `bloomly_media` при каждом обновлении сессии (раз в ≤15 минут у открытой вкладки),
    поэтому к моменту переключения nginx у активных пользователей cookie уже будет.
    Миграции применяются сами (`prisma migrate deploy` в команде api): два индекса,
-   `20261017180000_media_access_indexes` и `20261017190000_post_created_at_index`.
+   `20261017200000_media_access_indexes` и `20261017200100_post_created_at_index` (вместе с миграциями
+   поиска, ролей групп и журнала кошелька из fix/support-tickets).
    На текущем объёме данных создаются мгновенно.
 2. **`.env`**: должен быть задан существующий `POSTGRES_PASSWORD`, совпадающий с паролем в
    `DATABASE_URL` (compose без него не стартует). Проверено 17.10.2026: в рабочем `.env` задан
@@ -30,8 +31,9 @@ Cloudflare и проверки после запуска.
    cp deploy/nginx/bloomly.conf /etc/nginx/sites-available/bloomly
    nginx -t && systemctl reload nginx
    ```
-   Сниппеты `security-headers.conf`/`bloomly-auth.conf` в `deploy/nginx/` — копии текущих
-   из `/etc/nginx/snippets/`, менять их не нужно.
+   `bloomly.conf` — текущий рабочий конфиг (SEO для ботов, лимиты против флуда, WebSocket) плюс раздел
+   «Файлы /s3/». Сниппеты `security-headers.conf`/`bloomly-auth.conf` и `conf.d/seo-bots.conf`,
+   `conf.d/ddos-protection.conf` в `deploy/nginx/` — копии установленных, менять их не нужно.
 4. **Cloudflare: Purge Cache по префиксу** `https://bloomly.fun/s3/bloomly/posts/`,
    `…/comments/`, `…/messages/` (или Purge Everything). Иначе ранее закэшированные копии
    закрытых файлов продолжат отдаваться с CDN без проверки. Новые ответы помечены
