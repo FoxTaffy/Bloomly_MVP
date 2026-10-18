@@ -424,11 +424,11 @@ function submit() {
           <div>
             <div class="flex items-center justify-between mb-1.5">
               <label class="text-xs font-bold text-white/50 uppercase tracking-wider block">Краткое описание</label>
-              <span class="text-[11px] tabular-nums" :class="description.length > 230 ? 'text-brand-error/80' : 'text-white/35'">
-                {{ description.length }}<span class="opacity-50">/255</span>
+              <span class="text-[11px] tabular-nums" :class="description.length > 200 ? 'text-brand-error/80' : 'text-white/35'">
+                {{ description.length }}<span class="opacity-50">/225</span>
               </span>
             </div>
-            <textarea v-model="description" placeholder="Коротко о группе…" rows="2" maxlength="255"
+            <textarea v-model="description" placeholder="Коротко о группе…" rows="2" maxlength="225"
               class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden resize-none" />
           </div>
 

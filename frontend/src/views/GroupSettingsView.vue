@@ -1378,9 +1378,9 @@ async function deleteGroup() {
                     <div>
                       <div class="flex items-center justify-between mb-2">
                         <label class="text-xs font-bold text-white/55 uppercase tracking-wider block">{{ langStore.t.groupSettingsShortDescription }}</label>
-                        <span class="text-[11px] tabular-nums" :class="(form.description?.length ?? 0) > 229 ? 'text-brand-error/80' : 'text-white/35'">{{ form.description?.length ?? 0 }}<span class="opacity-50">/255</span></span>
+                        <span class="text-[11px] tabular-nums" :class="(form.description?.length ?? 0) > 199 ? 'text-brand-error/80' : 'text-white/35'">{{ form.description?.length ?? 0 }}<span class="opacity-50">/225</span></span>
                       </div>
-                      <textarea v-model="form.description" rows="2" maxlength="255" class="field-input resize-none" />
+                      <textarea v-model="form.description" rows="2" maxlength="225" class="field-input resize-none" />
                     </div>
                     <div>
                       <div class="flex items-center justify-between mb-2">
