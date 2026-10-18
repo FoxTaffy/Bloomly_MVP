@@ -7,6 +7,7 @@ const supported = typeof window !== 'undefined'
 const enabled = ref(false)
 const permission = ref<NotificationPermission>(supported ? Notification.permission : 'denied')
 const busy = ref(false)
+const prefs = ref({ messages: true, events: true })
 
 function urlBase64ToUint8Array(base64: string) {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4)
@@ -22,6 +23,25 @@ async function refresh() {
     const reg = await navigator.serviceWorker.getRegistration('/sw.js')
     enabled.value = !!(await reg?.pushManager.getSubscription()) && Notification.permission === 'granted'
   } catch { enabled.value = false }
+}
+
+async function loadPrefs() {
+  try {
+    const { data } = await api.get('/push/prefs')
+    prefs.value = { messages: !!data.data.messages, events: !!data.data.events }
+  } catch { /* остаются значения по умолчанию */ }
+}
+
+async function setPref(key: 'messages' | 'events', value: boolean) {
+  const prev = prefs.value[key]
+  prefs.value = { ...prefs.value, [key]: value }
+  try {
+    const { data } = await api.patch('/push/prefs', { [key]: value })
+    prefs.value = { messages: !!data.data.messages, events: !!data.data.events }
+  } catch (e) {
+    prefs.value = { ...prefs.value, [key]: prev }
+    throw e
+  }
 }
 
 async function enable(): Promise<'ok' | 'denied' | 'unsupported' | 'unavailable'> {
@@ -65,5 +85,5 @@ async function disable() {
 }
 
 export function usePushNotifications() {
-  return { supported, enabled, permission, busy, refresh, enable, disable }
+  return { supported, enabled, permission, busy, prefs, refresh, loadPrefs, setPref, enable, disable }
 }

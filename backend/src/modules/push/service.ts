@@ -1,6 +1,7 @@
 import webpush from 'web-push';
 import prisma from '../../config/prisma.js';
 import { logger } from '../../lib/logger.js';
+import type { PushKind } from './texts.js';
 
 const PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY ?? '';
 const PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ?? '';
@@ -39,8 +40,28 @@ export const pushService = {
   },
 
   /** Fire-and-forget: ошибки доставки не должны ломать основной сценарий. */
-  async sendToUser(userId: string, payload: PushPayload) {
+  async getPrefs(userId: string) {
+    const u = await prisma.user.findUnique({ where: { id: userId }, select: { push_messages: true, push_events: true } });
+    return { messages: u?.push_messages ?? true, events: u?.push_events ?? true };
+  },
+
+  async setPrefs(userId: string, prefs: { messages?: boolean; events?: boolean }) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(prefs.messages !== undefined ? { push_messages: prefs.messages } : {}),
+        ...(prefs.events !== undefined ? { push_events: prefs.events } : {}),
+      },
+    });
+  },
+
+  /** `critical` (модерация, рассылки администрации) приходит независимо от настроек. */
+  async sendToUser(userId: string, payload: PushPayload, kind: PushKind = 'event') {
     if (!enabled) return;
+    if (kind !== 'critical') {
+      const prefs = await this.getPrefs(userId);
+      if (kind === 'message' ? !prefs.messages : !prefs.events) return;
+    }
     const subs = await prisma.pushSubscription.findMany({ where: { user_id: userId } });
     if (subs.length === 0) return;
     const body = JSON.stringify(payload);

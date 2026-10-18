@@ -550,7 +550,7 @@ export const messageService = {
         url: `/messages?c=${conversationId}`,
         tag: `conv-${conversationId}`,
         icon: message.sender?.avatar_url ?? undefined,
-      });
+      }, 'message').catch(logError('[push] message'));
     }
   },
 

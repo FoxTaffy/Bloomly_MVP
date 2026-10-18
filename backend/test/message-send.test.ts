@@ -33,7 +33,6 @@ describe('отправка сообщений', () => {
     expect((await send({ file_url: await ownedFile(a.user.id, 'mp3') })).json.data.message.type).toBe('audio');
     expect((await send({ file_url: await ownedFile(a.user.id, 'webp') })).json.data.message.type).toBe('image');
     expect((await send({ file_url: await ownedFile(a.user.id, 'webm'), media_type: 'voice' })).json.data.message.type).toBe('voice');
-    expect((await send({ file_url: await ownedFile(a.user.id, 'webp'), media_type: 'sticker' })).json.data.message.type).toBe('sticker');
 
     const reply = await send({ content: 'reply', reply_to_id: text.json.data.message.id });
     expect(reply.json.data.message.reply_to).toMatchObject({ id: text.json.data.message.id, text: 'hi' });
@@ -67,5 +66,28 @@ describe('отправка сообщений', () => {
     const blocked = await send({ content: 'hey' });
     expect(blocked.status).toBe(403);
     expect(blocked.json.error.message).toBe('MESSAGES_DISABLED');
+  });
+
+  it('стикер: автор пака и владелец пака в библиотеке отправляют, остальные получают 403', async () => {
+    const { a, b, convId } = await setup();
+    const url = await ownedFile(b.user.id, 'webp');
+    const pack = await prisma.stickerPack.create({ data: { author_id: b.user.id, name: 'pack', stickers: [url] } });
+    const send = (who: typeof a, file_url: string) =>
+      api('POST', `/api/messages/conversations/${convId}/messages`, { headers: who.auth, body: { file_url, media_type: 'sticker' } });
+
+    // a не автор и пака в библиотеке нет
+    expect((await send(a, url)).status).toBe(403);
+    expect((await send(b, url)).json.data.message.type).toBe('sticker');
+
+    await prisma.userStickerPack.create({ data: { user_id: a.user.id, pack_id: pack.id } });
+    const viaLibrary = await send(a, url);
+    expect(viaLibrary.status).toBe(201);
+    expect(viaLibrary.json.data.message).toMatchObject({ type: 'sticker', file_url: url });
+
+    // файл, который не входит ни в один пак, стикером не отправить (даже свой)
+    expect((await send(a, await ownedFile(a.user.id, 'webp'))).status).toBe(403);
+    // удалённый пак больше не даёт доступ
+    await prisma.stickerPack.update({ where: { id: pack.id }, data: { deleted_at: new Date() } });
+    expect((await send(a, url)).status).toBe(403);
   });
 });

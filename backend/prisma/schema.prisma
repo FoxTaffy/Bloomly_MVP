@@ -138,6 +138,8 @@ model User {
   stickerUsages                  StickerUsage[]
   stickerFavorites               StickerFavorite[]
   pushSubscriptions              PushSubscription[]
+  push_messages                  Boolean                   @default(true)
+  push_events                    Boolean                   @default(true)
   stickerAccessRequests          StickerAccessRequest[]
   autoModLogs                    AutoModLog[]
   autoModActorLogs               AutoModLog[]              @relation("AutoModActor")

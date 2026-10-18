@@ -1422,6 +1422,7 @@
               </section>
 
               <!-- ── § 6: БЕЗОПАСНОСТЬ / Способы входа ─────────────── -->
+              <SettingsNotificationsSection v-show="openSection === 'sec-notifications'" @toast="showToast" />
               <SettingsSecuritySection v-show="openSection === 'sec-security'" @toast="showToast" />
 
               <!-- ── § 6.5: ОПЛАТА / Сохранённые карты ──────────────── -->
@@ -1541,6 +1542,7 @@ import AvatarFrameOverlay from '@/components/AvatarFrameOverlay.vue'
 import FrameEditor, { type FrameCalibration } from '@/components/FrameEditor.vue'
 import { useDealersDenStore, type OwnedAvatarFrame } from '@/stores/dealersDen'
 import SettingsSecuritySection from '@/components/settings/SettingsSecuritySection.vue'
+import SettingsNotificationsSection from '@/components/settings/SettingsNotificationsSection.vue'
 import SettingsBillingSection from '@/components/settings/SettingsBillingSection.vue'
 
 const userStore   = useUserStore()
@@ -2443,6 +2445,7 @@ const sections = computed(() => [
   { id: 'sec-privacy',       label: langStore.t.secPrivacy,       color: '#ec4899', iconPath: 'M12 11c0-1.104.896-2 2-2s2 .896 2 2-.896 2-2 2-2-.896-2-2zm-6 0a6 6 0 1112 0 6 6 0 01-12 0zM3 21c0-3.314 4.03-6 9-6s9 2.686 9 6' },
   { id: 'sec-interests',     label: langStore.t.secInterests,     color: '#34d399', iconPath: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
   { id: 'sec-lang',          label: langStore.t.secLang,          color: '#f59e0b', iconPath: 'M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' },
+  { id: 'sec-notifications', label: (langStore.t as Record<string, string | undefined>).notifications ?? 'Уведомления', color: '#f59e0b', iconPath: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
   { id: 'sec-security',      label: langStore.t.secSecurity,      color: '#10b981', iconPath: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z' },
   { id: 'sec-billing',       label: langStore.t.secBilling,       color: '#4C67CF', iconPath: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
   { id: 'sec-danger',        label: langStore.t.secAccount,       color: '#ef4444', iconPath: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
