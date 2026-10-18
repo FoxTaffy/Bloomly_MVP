@@ -155,6 +155,7 @@ export const ru = {
   // Groups
   mySubscriptions: 'Мои подписки',
   forYou: 'Для вас',
+  feedNewPosts: 'Новые посты',
   managed: 'Управляемые',
   createGroup: 'Создать группу',
   upcoming: 'Скоро!',

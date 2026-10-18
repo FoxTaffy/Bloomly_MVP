@@ -179,7 +179,7 @@ const setPostRef = (el: any, postId: string) => {
 }
 const cleanupObservers = () => { postObservers.forEach(u => u()); postObservers.clear() }
 
-onUnmounted(() => { cleanupObservers(); disconnectWebSocket(); closeStory(); if (onlineFetchTimer) clearTimeout(onlineFetchTimer) })
+onUnmounted(() => { stopNewPostsWatch(); cleanupObservers(); disconnectWebSocket(); closeStory(); if (onlineFetchTimer) clearTimeout(onlineFetchTimer) })
 
 const newPost = ref({ content: '', tags: [] as string[], isNsfw: false, isAiGenerated: false, visibility: 'public' as 'public' | 'subscriber_only' | 'paid', price: '' as string, videoTitle: '', videoDescription: '' })
 const tagInput = ref('')
@@ -269,6 +269,36 @@ const currentPage = ref(1)
 const isFetchingMore = ref(false)
 const hasMorePosts = ref(true)
 
+// URL запроса ленты для текущей вкладки; общий для загрузки страниц и проверки новых постов.
+const feedRequestUrl = (page: number): string => {
+  const params = new URLSearchParams()
+  params.append('page', page.toString())
+  params.append('nsfw', nsfwMode.value)
+  switch (feedMode.value) {
+    case 'for-you': return `/posts/personalized?${params}`
+    case 'subscriptions': return `/follows/feed?${params}`
+    case 'trending':
+      params.append('sort', 'hot')
+      if (selectedTag.value) params.append('tag', selectedTag.value)
+      return `/posts?${params}`
+    case 'news':
+      params.append('sort', 'new')
+      if (selectedTag.value) params.append('tag', selectedTag.value)
+      return `/posts?${params}`
+    case 'photos':
+      params.append('hasMedia', 'true')
+      return `/posts?${params}`
+    case 'nsfw':
+      return `/posts?nsfw=show&page=${page}`
+    default:
+      if (searchQuery.value) params.append('search', searchQuery.value)
+      if (selectedCategory.value) params.append('category', selectedCategory.value)
+      if (selectedTag.value) params.append('tag', selectedTag.value)
+      params.append('sort', sortBy.value)
+      return `/posts?${params}`
+  }
+}
+
 const fetchPosts = async (loadMore = false) => {
   if (loadMore) {
     if (isFetchingMore.value || !hasMorePosts.value) return;
@@ -281,58 +311,11 @@ const fetchPosts = async (loadMore = false) => {
   }
   
   try {
+    const res = await api.get(feedRequestUrl(currentPage.value))
     let loadedPosts: any[] = []
-    if (feedMode.value === 'for-you') {
-      const params = new URLSearchParams()
-      params.append('page', currentPage.value.toString())
-      params.append('nsfw', nsfwMode.value)
-      const res = await api.get(`/posts/personalized?${params.toString()}`)
-      if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
-    } else if (feedMode.value === 'subscriptions') {
-      const params = new URLSearchParams()
-      params.append('page', currentPage.value.toString())
-      params.append('nsfw', nsfwMode.value)
-      const res = await api.get(`/follows/feed?${params.toString()}`)
-      if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
-    } else if (feedMode.value === 'trending') {
-      const params = new URLSearchParams()
-      params.append('sort', 'hot')
-      params.append('page', currentPage.value.toString())
-      params.append('nsfw', nsfwMode.value)
-      if (selectedTag.value) params.append('tag', selectedTag.value)
-      const res = await api.get(`/posts?${params.toString()}`)
-      if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
-    } else if (feedMode.value === 'news') {
-      const params = new URLSearchParams()
-      params.append('sort', 'new')
-      params.append('page', currentPage.value.toString())
-      params.append('nsfw', nsfwMode.value)
-      if (selectedTag.value) params.append('tag', selectedTag.value)
-      const res = await api.get(`/posts?${params.toString()}`)
-      if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
-    } else if (feedMode.value === 'photos') {
-      const params = new URLSearchParams()
-      params.append('hasMedia', 'true')
-      params.append('page', currentPage.value.toString())
-      params.append('nsfw', nsfwMode.value)
-      const res = await api.get(`/posts?${params.toString()}`)
-      if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
-    } else if (feedMode.value === 'nsfw') {
-      const res = await api.get(`/posts?nsfw=show&page=${currentPage.value}`)
-      if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
-    } else {
-      // fallback: general posts
-      const params = new URLSearchParams()
-      if (searchQuery.value) params.append('search', searchQuery.value)
-      if (selectedCategory.value) params.append('category', selectedCategory.value)
-      if (selectedTag.value) params.append('tag', selectedTag.value)
-      params.append('sort', sortBy.value)
-      params.append('page', currentPage.value.toString())
-      params.append('nsfw', nsfwMode.value)
-      const res = await api.get(`/posts?${params.toString()}`)
-      if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
-    }
-    
+    if (res.data.success) { if (!loadMore) cleanupObservers(); loadedPosts = res.data.data.posts }
+    if (!loadMore) { newPostsCount.value = 0; lastFeedCheck = Date.now() }
+
     // Отфильтровываем посты с удалёнными/null авторами — но не групповые (у них author
     // намеренно скрыт бэкендом через maskGroupAuthor, это не значит "автор удалён")
     // «Есть ли ещё страницы» решаем по ответу сервера, а не по результату клиентской фильтрации:
@@ -344,7 +327,10 @@ const fetchPosts = async (loadMore = false) => {
       hasMorePosts.value = false;
     } else {
       if (loadMore) {
-        posts.value = [...posts.value, ...loadedPosts];
+        // Лента сдвигается, пока пользователь читает (появляются новые посты) — отсекаем повторы на стыке страниц
+        const known = new Set(posts.value.map((p: any) => p.id))
+        const fresh = loadedPosts.filter((p: any) => !known.has(p.id))
+        posts.value = [...posts.value, ...fresh];
       } else {
         posts.value = loadedPosts;
       }
@@ -357,6 +343,49 @@ const fetchPosts = async (loadMore = false) => {
     isLoadingPosts.value = false
     isFetchingMore.value = false
   }
+}
+
+
+// ── Свежесть ленты (как в большинстве соцсетей) ──────────────────────────────
+// Раз в минуту и при возврате на вкладку тихо проверяем первую страницу; если есть посты новее
+// самого свежего из показанных — не двигаем ленту под пальцем, а показываем плашку «Новые посты».
+const NEW_POSTS_POLL_MS = 60_000
+const newPostsCount = ref(0)
+let lastFeedCheck = Date.now()
+let newPostsTimer: ReturnType<typeof setInterval> | null = null
+
+const checkNewPosts = async () => {
+  if (isLoadingPosts.value || isFetchingMore.value || activeNav.value !== 'home') return
+  const newest = posts.value.reduce((m: number, p: any) => Math.max(m, new Date(p.created_at).getTime() || 0), 0)
+  if (!newest) return
+  lastFeedCheck = Date.now()
+  const mode = feedMode.value
+  try {
+    const res = await api.get(feedRequestUrl(1))
+    if (mode !== feedMode.value || !res.data.success) return
+    const fresh = (res.data.data.posts as any[]).filter((p) => p && new Date(p.created_at).getTime() > newest)
+    newPostsCount.value = fresh.length
+  } catch {}
+}
+
+const showNewPosts = () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+  fetchPosts()
+}
+
+const onVisibilityChange = () => {
+  if (document.visibilityState === 'visible' && Date.now() - lastFeedCheck > NEW_POSTS_POLL_MS) checkNewPosts()
+}
+
+const startNewPostsWatch = () => {
+  stopNewPostsWatch()
+  newPostsTimer = setInterval(() => { if (document.visibilityState === 'visible') checkNewPosts() }, NEW_POSTS_POLL_MS)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+}
+const stopNewPostsWatch = () => {
+  if (newPostsTimer) clearInterval(newPostsTimer)
+  newPostsTimer = null
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 }
 
 // Global infinite scroll listener
@@ -875,6 +904,8 @@ onActivated(() => {
   wsDestroyed = false
   connectWebSocket()
   window.addEventListener('scroll', handleScroll)
+  startNewPostsWatch()
+  if (Date.now() - lastFeedCheck > NEW_POSTS_POLL_MS) checkNewPosts()
   if (savedScrollY !== null) {
     const y = savedScrollY
     savedScrollY = null
@@ -886,6 +917,7 @@ onActivated(() => {
 onDeactivated(() => {
   savedScrollY = window.scrollY
   disconnectWebSocket()
+  stopNewPostsWatch()
   window.removeEventListener('scroll', handleScroll)
 })
 </script>
@@ -1286,6 +1318,13 @@ onDeactivated(() => {
             </div>
           </div>
         </div>
+
+        <!-- Плашка «Новые посты» -->
+        <button v-if="newPostsCount > 0 && activeNav === 'home'" @click="showNewPosts"
+            class="fixed top-20 md:top-24 left-1/2 -translate-x-1/2 z-[400] flex items-center gap-2 px-5 py-2.5 rounded-full bg-brand-accent text-white text-sm font-bold shadow-xl hover:brightness-110 transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7"/></svg>
+            {{ langStore.t.feedNewPosts }}
+        </button>
 
         <!-- Feed Filters -->
         <div class="flex flex-wrap gap-2 px-2 m-scroll-row max-md:-mx-1 max-md:gap-1.5">

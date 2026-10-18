@@ -157,6 +157,7 @@ export const cn: Translation = {
   // Groups
   mySubscriptions: '我的订阅',
   forYou: '推荐',
+  feedNewPosts: '新帖子',
   managed: '管理中',
   createGroup: '创建群组',
   upcoming: '即将到来！',

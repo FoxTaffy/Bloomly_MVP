@@ -157,6 +157,7 @@ export const jp: Translation = {
   // Groups
   mySubscriptions: 'マイ登録',
   forYou: 'おすすめ',
+  feedNewPosts: '新しい投稿',
   managed: '管理中',
   createGroup: 'グループ作成',
   upcoming: 'もうすぐ！',

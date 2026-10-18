@@ -157,6 +157,7 @@ export const en: Translation = {
   // Groups
   mySubscriptions: 'My subscriptions',
   forYou: 'For you',
+  feedNewPosts: 'New posts',
   managed: 'Managed',
   createGroup: 'Create group',
   upcoming: 'Coming up!',

@@ -155,6 +155,7 @@ export const pt: Translation = {
   emptyBio: 'Ainda não há nada aqui',
   mySubscriptions: 'Minhas assinaturas',
   forYou: 'Para você',
+  feedNewPosts: 'Novas publicações',
   managed: 'Gerenciado',
   createGroup: 'Criar grupo',
   upcoming: 'Em breve!',

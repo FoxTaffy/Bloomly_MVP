@@ -837,7 +837,7 @@ export const postService = {
       // 60% from favourite categories
       personalizedPosts = await prisma.post.findMany({
         where: { ...feedWhere, ...bellExcludeFilter, category: { in: topCategories } },
-        orderBy: { rating: 'desc' },
+        orderBy: [{ created_at: 'desc' }, { rating: 'desc' }],
         skip: pSkip,
         take: pLimit,
         include: postInclude,
@@ -846,7 +846,7 @@ export const postService = {
       // 40% from other categories (discovery)
       discoverPosts = await prisma.post.findMany({
         where: { ...feedWhere, ...bellExcludeFilter, OR: [{ category: { notIn: topCategories } }, { category: null }] },
-        orderBy: [{ rating: 'desc' }, { created_at: 'desc' }],
+        orderBy: [{ created_at: 'desc' }, { rating: 'desc' }],
         skip: dSkip,
         take: dLimit,
         include: postInclude,
@@ -855,13 +855,15 @@ export const postService = {
       // No activity yet — show popular new content
       discoverPosts = await prisma.post.findMany({
         where: { ...feedWhere, ...bellExcludeFilter },
-        orderBy: [{ rating: 'desc' }, { created_at: 'desc' }],
+        orderBy: [{ created_at: 'desc' }, { rating: 'desc' }],
         skip: (pageNum - 1) * limitNum,
         take: limitNum,
         include: postInclude,
       });
     }
 
+    // Candidates are pulled newest-first (a rating-ordered pull never let fresh, not-yet-voted posts
+    // into the pool); rankByAffinity below only reorders within the fetched page.
     // Weigh the fetched pool by the user's behavioral tag/keyword affinity (like a scale — terms
     // they keep liking/reposting float up, terms they keep disliking sink) and their declared
     // Interests, before interleaving. Also pull the real "have I ever opened this" signal from
