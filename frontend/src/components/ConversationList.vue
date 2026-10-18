@@ -153,6 +153,7 @@
               <span :class="['font-semibold text-sm truncate', isUnread(conv) ? 'text-white' : 'text-brand-offwhite/80']">
                   {{ conv.type === 'community' ? (conv.name || 'Группа') : conv.is_group ? (conv.name || langStore.t.tabGroups) : isNotes(conv) ? langStore.t.notesBtn : (getOther(conv)?.display_name || getOther(conv)?.username || '?') }}
               </span>
+              <UserBadges v-if="conv.type !== 'community' && !conv.is_group && !isNotes(conv)" :user="getOther(conv) as any" />
               <BIcon v-if="conv.type === 'community'" name="Globe" class="w-3 h-3 text-white/55 shrink-0" />
               <BIcon v-else-if="conv.is_group" name="Users" class="w-3 h-3 text-white/55 shrink-0" />
               <span v-if="conv.type !== 'community' && !conv.is_group && (getOther(conv) as any)?.deceased_at" title="Светлая память" class="shrink-0">🪦</span>
@@ -551,6 +552,7 @@ import { useMessagesStore, type Conversation, type MsgSender } from '@/stores/me
 import { useAuthStore } from '@/stores/auth'
 import { useGroupsStore } from '@/stores/groups'
 import BIcon from '@/components/BIcon.vue'
+import UserBadges from '@/components/UserBadges.vue'
 import api from '@/api'
 import { compressImageForUpload } from '@/lib/utils'
 import { isEncrypted } from '@/lib/e2e'

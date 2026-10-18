@@ -27,6 +27,7 @@
             </div>
             <h3 class="relative text-base font-bold text-white truncate mt-2.5 flex items-center justify-center gap-1.5 drop-shadow-sm">
               {{ other?.display_name || other?.username }}
+              <UserBadges :user="other as any" size="md" class="ml-1" />
               <span v-if="other?.deceased_at" :title="langStore.t.chatRipTitle">🪦</span>
             </h3>
             <p class="relative text-xs mt-0.5 flex items-center justify-center gap-1 drop-shadow-sm" :class="online ? 'text-green-400' : 'text-white/70'">
@@ -88,6 +89,7 @@
 <script setup lang="ts">
 import { useLangStore } from '@/stores/lang'
 import type { Conversation, MsgSender } from '@/stores/messages'
+import UserBadges from '@/components/UserBadges.vue'
 import BIcon from '@/components/BIcon.vue'
 import OnlineIndicator from '@/components/OnlineIndicator.vue'
 import ChatMediaStatsList, { type MediaStat } from '@/components/chat/ChatMediaStatsList.vue'

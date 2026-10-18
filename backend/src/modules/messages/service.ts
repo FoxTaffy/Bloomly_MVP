@@ -40,6 +40,10 @@ const senderSelect = {
   avatar_url: true,
   banner_url: true,
   badge_type: true,
+  role: true,
+  is_verified: true,
+  verification_type: true,
+  subscription_tier: true,
   deceased_at: true,
 } as const;
 

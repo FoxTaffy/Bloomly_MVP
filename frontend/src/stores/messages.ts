@@ -14,6 +14,10 @@ export interface MsgSender {
   avatar_url: string | null
   banner_url?: string | null
   badge_type?: string | null
+  role?: string | null
+  is_verified?: boolean | null
+  verification_type?: string | null
+  subscription_tier?: string | null
   deceased_at?: string | null
 }
 

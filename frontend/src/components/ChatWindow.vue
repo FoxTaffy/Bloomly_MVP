@@ -74,6 +74,7 @@
             </template>
             <template v-else>
               {{ other?.display_name || other?.username || langStore.t.chatInterlocutorFallback }}
+              <UserBadges :user="other as any" class="ml-1" />
               <span v-if="other?.deceased_at" :title="langStore.t.chatRipTitle">🪦</span>
             </template>
           </template>
@@ -417,6 +418,7 @@
               class="text-[11px] font-semibold mb-1 ml-1 truncate"
               :style="getSenderColor(msg.sender_id)">
               {{ msg.sender?.display_name || msg.sender?.username }}
+              <UserBadges :user="msg.sender" class="ml-1" />
             </p>
 
             <!-- Reply quote -->
@@ -1348,6 +1350,7 @@ import SharedPostCard from '@/components/SharedPostCard.vue'
 import GroupShareCard from '@/components/GroupShareCard.vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import StickerPanel from '@/components/StickerPanel.vue'
+import UserBadges from '@/components/UserBadges.vue'
 import StickerRenderer from '@/components/StickerRenderer.vue'
 import StickerPackPreviewModal from '@/components/StickerPackPreviewModal.vue'
 import SpamSlowdownModal from '@/components/SpamSlowdownModal.vue'
