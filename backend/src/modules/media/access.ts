@@ -36,8 +36,8 @@ export async function canViewMedia(key: string, viewer: MediaViewer): Promise<bo
   const url = mediaUrlForKey(key);
   if (folder === 'messages') return messageAllows(url, viewer);
   if (folder === 'comments') return commentAllows(url, viewer);
-  // posts/ — общая папка: посты, отложенные посты, альбомы, истории, персонажи, фурсьюты, история аватаров
-  for (const check of [postAllows, albumAllows, storyAllows, profileMediaAllows, scheduledAllows]) {
+  // posts/ — общая папка: посты, отложенные посты, лоты Dealers Den, альбомы, истории, персонажи, фурсьюты, история аватаров
+  for (const check of [postAllows, albumAllows, storyAllows, profileMediaAllows, scheduledAllows, dealerListingAllows]) {
     if (await check(url, viewer)) return true;
   }
   return false;
@@ -119,6 +119,19 @@ async function scheduledAllows(url: string, viewer: MediaViewer) {
     where: { author_id: viewer.id, OR: [{ media_urls: { has: url } }, { media_original_urls: { has: url } }] },
   });
   return count > 0;
+}
+
+/** Фото лота Dealers Den: активные и проданные видны всем (18+ — только совершеннолетним), черновики и архив — автору. */
+async function dealerListingAllows(url: string, viewer: MediaViewer) {
+  const listings = await prisma.dealerListing.findMany({
+    where: { images: { has: url }, deleted_at: null },
+    select: { seller_id: true, status: true, is_nsfw: true },
+  });
+  return listings.some((l) => {
+    if (viewer?.id === l.seller_id) return true;
+    if (l.status !== 'active' && l.status !== 'sold') return false;
+    return !l.is_nsfw || viewer?.is_adult === true;
+  });
 }
 
 async function profileReadable(userId: string, viewer: MediaViewer) {

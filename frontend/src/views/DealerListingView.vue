@@ -8,6 +8,8 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDealersDenStore, type DealerListingComment, type DenReview, REVIEW_TAGS } from '@/stores/dealersDen'
 import { useConfirm } from '@/composables/useConfirm'
+import { useNsfwMode } from '@/composables/useNsfwMode'
+import { listingShop } from '@/lib/dealerShop'
 import AppHeader          from '@/components/AppHeader.vue'
 import AppSidebar         from '@/components/AppSidebar.vue'
 import BIcon              from '@/components/BIcon.vue'
@@ -23,8 +25,10 @@ const route  = useRoute()
 const auth   = useAuthStore()
 const store  = useDealersDenStore()
 const { confirmDialog } = useConfirm()
+const { nsfwEnabled } = useNsfwMode()
 
 const listing    = computed(() => store.currentListing)
+const shop = computed(() => listingShop(listing.value!))
 const activeImage = ref(0)
 
 // ── Countdown ────────────────────────────────────────────────────────────────
@@ -537,7 +541,7 @@ async function submitReport() {
                   <div v-if="isSoldOut(listing)" class="absolute inset-0 bg-black/60 flex items-center justify-center">
                     <span class="bg-brand-error text-white font-extrabold text-2xl px-8 py-3 rounded-full tracking-wide">{{ langStore.t.dealerListingSoldOutBadge }}</span>
                   </div>
-                  <div v-else-if="listing.is_nsfw" class="absolute inset-0 backdrop-blur-2xl flex flex-col items-center justify-center gap-2">
+                  <div v-else-if="listing.is_nsfw && !nsfwEnabled" class="absolute inset-0 backdrop-blur-2xl flex flex-col items-center justify-center gap-2">
                     <BIcon name="EyeOff" class="w-14 h-14 text-white/40" />
                     <span class="text-white/60 font-bold">{{ langStore.t.dealerListingNsfwContent }}</span>
                   </div>
@@ -589,26 +593,30 @@ async function submitReport() {
                 </div>
               </div>
 
-              <!-- Seller -->
-              <div class="bg-brand-card border border-brand-border rounded-2xl p-4 stack-y-3 shadow-lg">
-                <div class="flex items-center justify-between gap-4 flex-wrap">
-                  <div class="flex items-center gap-3 cursor-pointer" @click="router.push(`/dealers-den/seller/${listing.seller.username}`)">
-                    <img v-if="listing.seller.avatar_url" :src="listing.seller.avatar_url"
-                      class="w-11 h-11 rounded-full object-cover border-2 border-brand-border hover:border-brand-accent transition-colors" />
-                    <div v-else class="w-11 h-11 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-extrabold border-2 border-brand-border hover:border-brand-accent transition-colors">
-                      {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
+              <!-- Seller (группа, привязанная к Dealers Den; у старых лотов — автор) -->
+              <div class="relative overflow-hidden bg-brand-card border border-brand-border rounded-2xl shadow-lg">
+                <div class="absolute inset-0 pointer-events-none opacity-60"
+                  style="background: radial-gradient(120% 140% at 0% 0%, rgba(49,72,255,0.14), transparent 60%)" />
+                <div class="relative flex items-center justify-between gap-4 flex-wrap p-4">
+                  <RouterLink :to="shop.to" class="group flex items-center gap-3.5 min-w-0">
+                    <img v-if="shop.avatar" :src="shop.avatar"
+                      class="w-14 h-14 shrink-0 object-cover border-2 border-brand-border group-hover:border-brand-accent transition-colors"
+                      :class="shop.isGroup ? 'rounded-2xl' : 'rounded-full'" />
+                    <div v-else class="w-14 h-14 shrink-0 bg-brand-accent/20 flex items-center justify-center text-brand-accent text-xl font-extrabold border-2 border-brand-border group-hover:border-brand-accent transition-colors"
+                      :class="shop.isGroup ? 'rounded-2xl' : 'rounded-full'">
+                      {{ shop.name[0].toUpperCase() }}
                     </div>
-                    <div>
-                      <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="font-bold text-white text-sm hover:text-brand-accent transition-colors">
-                          {{ listing.seller.display_name ?? listing.seller.username }}
-                        </span>
-                        <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-4 h-4 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-1.5">
+                        <span class="font-extrabold text-white text-base truncate group-hover:text-brand-accent transition-colors">{{ shop.name }}</span>
+                        <BIcon v-if="shop.verified" name="BadgeCheck" class="w-4 h-4 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                        <BIcon name="ChevronRight" class="w-4 h-4 text-white/30 shrink-0 group-hover:translate-x-0.5 group-hover:text-brand-accent transition-all" />
                       </div>
-                      <p class="text-xs text-white/35">@{{ listing.seller.username }}</p>
+                      <p v-if="listing.group" class="text-xs text-white/35 truncate">@{{ listing.group.slug }}</p>
+                      <p v-else class="text-xs text-white/35 truncate">@{{ listing.seller.username }}</p>
                       <DenTrustBadge v-if="listing.seller.den_trust_score" :trust="listing.seller.den_trust_score" class="mt-1" />
                     </div>
-                  </div>
+                  </RouterLink>
                   <div class="flex items-center gap-2">
                     <DenWishlistButton
                       :listingId="listing.id"

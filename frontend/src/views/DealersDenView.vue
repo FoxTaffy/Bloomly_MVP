@@ -7,6 +7,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDealersDenStore, type DealerListing, type ListingKind } from '@/stores/dealersDen'
 import { useNsfwMode } from '@/composables/useNsfwMode'
+import { listingShop } from '@/lib/dealerShop'
 import { useConfirm } from '@/composables/useConfirm'
 import AppHeader    from '@/components/AppHeader.vue'
 import AppSidebar   from '@/components/AppSidebar.vue'
@@ -612,7 +613,7 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <div class="p-2.5">
                 <p class="text-white text-xs font-bold line-clamp-1">{{ listing.title }}</p>
                 <p class="text-white/40 text-[10px] mt-0.5 truncate">
-                  {{ listing.seller.display_name ?? listing.seller.username }}
+                  {{ listingShop(listing).name }}
                 </p>
               </div>
             </div>
@@ -748,13 +749,13 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <div class="px-3 pt-2.5 pb-1.5">
                 <h3 class="font-extrabold text-white text-xs leading-tight line-clamp-1">{{ listing.title }}</h3>
                 <div class="flex items-center gap-1 mt-0.5">
-                  <img v-if="listing.seller.avatar_url" :src="listing.seller.avatar_url"
+                  <img v-if="listingShop(listing).avatar" :src="listingShop(listing).avatar!"
                     class="w-4 h-4 rounded-full object-cover shrink-0 border border-brand-yellow/20" />
                   <div v-else class="w-4 h-4 rounded-full bg-brand-yellow/15 flex items-center justify-center shrink-0 text-[7px] text-brand-yellow font-extrabold border border-brand-yellow/20">
-                    {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
+                    {{ listingShop(listing).name[0].toUpperCase() }}
                   </div>
-                  <span class="text-[10px] text-brand-yellow/80 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
-                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                  <span class="text-[10px] text-brand-yellow/80 truncate font-medium">{{ listingShop(listing).name }}</span>
+                  <BIcon v-if="listingShop(listing).verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                 </div>
               </div>
               <!-- Auction live panel -->
@@ -786,13 +787,13 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <div class="px-3 pt-2.5 pb-1.5">
                 <h3 class="font-extrabold text-white text-xs leading-tight line-clamp-1">{{ listing.title }}</h3>
                 <div class="flex items-center gap-1 mt-0.5">
-                  <img v-if="listing.seller.avatar_url" :src="listing.seller.avatar_url"
+                  <img v-if="listingShop(listing).avatar" :src="listingShop(listing).avatar!"
                     class="w-4 h-4 rounded-full object-cover shrink-0 border border-brand-purple/20" />
                   <div v-else class="w-4 h-4 rounded-full bg-brand-purple/15 flex items-center justify-center shrink-0 text-[7px] text-brand-purple font-extrabold border border-brand-purple/20">
-                    {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
+                    {{ listingShop(listing).name[0].toUpperCase() }}
                   </div>
-                  <span class="text-[10px] text-brand-purple/90 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
-                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                  <span class="text-[10px] text-brand-purple/90 truncate font-medium">{{ listingShop(listing).name }}</span>
+                  <BIcon v-if="listingShop(listing).verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                 </div>
               </div>
               <!-- YCH slot panel -->
@@ -832,13 +833,13 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <div class="px-3 pt-2.5 pb-1.5">
                 <h3 class="font-extrabold text-white text-xs leading-tight line-clamp-1">{{ listing.title }}</h3>
                 <div class="flex items-center gap-1 mt-0.5">
-                  <img v-if="listing.seller.avatar_url" :src="listing.seller.avatar_url"
+                  <img v-if="listingShop(listing).avatar" :src="listingShop(listing).avatar!"
                     class="w-4 h-4 rounded-full object-cover shrink-0 border border-brand-success/20" />
                   <div v-else class="w-4 h-4 rounded-full bg-brand-success/15 flex items-center justify-center shrink-0 text-[7px] text-brand-success font-extrabold border border-brand-success/20">
-                    {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
+                    {{ listingShop(listing).name[0].toUpperCase() }}
                   </div>
-                  <span class="text-[10px] text-brand-success/80 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
-                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                  <span class="text-[10px] text-brand-success/80 truncate font-medium">{{ listingShop(listing).name }}</span>
+                  <BIcon v-if="listingShop(listing).verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                 </div>
               </div>
               <!-- Raffle ticket panel -->
@@ -884,8 +885,8 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
               <div class="px-3 pt-2.5 pb-1.5">
                 <h3 class="font-extrabold text-white text-xs leading-tight line-clamp-1">{{ listing.title }}</h3>
                 <div class="flex items-center gap-1 mt-0.5">
-                  <span class="text-[10px] text-violet-300/80 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
-                  <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                  <span class="text-[10px] text-violet-300/80 truncate font-medium">{{ listingShop(listing).name }}</span>
+                  <BIcon v-if="listingShop(listing).verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                 </div>
               </div>
               <div class="mx-2 mb-2 rounded-xl px-2.5 py-2 flex items-center justify-between gap-2"
@@ -910,13 +911,13 @@ async function submitRaffleTicket(listing: DealerListing, e: Event) {
                 <div class="min-w-0">
                   <h3 class="font-extrabold text-white text-xs leading-tight line-clamp-1">{{ listing.title }}</h3>
                   <div class="flex items-center gap-1 mt-0.5">
-                    <img v-if="listing.seller.avatar_url" :src="listing.seller.avatar_url"
+                    <img v-if="listingShop(listing).avatar" :src="listingShop(listing).avatar!"
                       class="w-4 h-4 rounded-full object-cover shrink-0 border border-brand-accent/20" />
                     <div v-else class="w-4 h-4 rounded-full bg-brand-accent/15 flex items-center justify-center shrink-0 text-[7px] text-brand-accent font-extrabold border border-brand-accent/20">
-                      {{ (listing.seller.display_name ?? listing.seller.username)[0].toUpperCase() }}
+                      {{ listingShop(listing).name[0].toUpperCase() }}
                     </div>
-                    <span class="text-[10px] text-brand-accent/80 truncate font-medium">{{ listing.seller.display_name ?? listing.seller.username }}</span>
-                    <BIcon v-if="listing.seller.is_verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
+                    <span class="text-[10px] text-brand-accent/80 truncate font-medium">{{ listingShop(listing).name }}</span>
+                    <BIcon v-if="listingShop(listing).verified" name="BadgeCheck" class="w-2.5 h-2.5 text-brand-accent shrink-0" :title="langStore.t.verBadgeGenericLabel" />
                   </div>
                 </div>
                 <div class="shrink-0 flex flex-col items-end gap-0.5" @click.stop>
