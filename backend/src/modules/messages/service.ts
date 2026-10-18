@@ -342,7 +342,24 @@ export const messageService = {
    * Send a message, persist it and broadcast to all conversation participants.
    */
   async sendMessage({ conversationId, senderId, content, encrypted_text, file_url, media_type, reply_to_id, type, metadata, attachments }: SendMessageInput) {
-    const conv = await this._assertCanSend(conversationId, senderId, [file_url, ...(attachments ?? []).map((a) => a.url)]);
+    // Стикер — файл автора пака, а не отправителя: владение проверяем только для обычных вложений.
+    const isSticker = media_type === 'sticker' && !!file_url;
+    if (isSticker) {
+      const inPack = await prisma.stickerPack.findFirst({
+        where: {
+          stickers: { has: file_url! },
+          deleted_at: null,
+          OR: [{ author_id: senderId }, { userCollections: { some: { user_id: senderId } } }],
+        },
+        select: { id: true },
+      });
+      if (!inPack) throw Object.assign(new Error('Этот стикерпак не добавлен в вашу библиотеку'), { statusCode: 403 });
+    }
+    const conv = await this._assertCanSend(
+      conversationId,
+      senderId,
+      [isSticker ? null : file_url, ...(attachments ?? []).map((a) => a.url)],
+    );
 
     const text = content?.trim() ?? '';
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;

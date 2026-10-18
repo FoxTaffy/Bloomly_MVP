@@ -1711,7 +1711,11 @@ async function showMentionCard(username: string, e: MouseEvent) {
 // Scroll to a message by id
 function scrollToMsg(msgId: string) {
   const el = document.getElementById(`msg-${msgId}`)
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  const box = scrollEl.value
+  if (el && box) {
+    const top = el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop
+    box.scrollTo({ top: top - (box.clientHeight - el.clientHeight) / 2, behavior: 'smooth' })
+  }
 }
 
 // Forward
@@ -1904,7 +1908,11 @@ function openAlbumImageLightbox(msg: Message, url: string) {
 const getDisplayText = (msg: Message) => displayTextOf(msg, langStore.t.encryptedMessagePreview)
 
 function scrollToBottom(smooth = false) {
-  nextTick(() => { bottomEl.value?.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant' }) })
+  // Крутим только контейнер чата: scrollIntoView сдвигал ещё и страницу целиком.
+  nextTick(() => {
+    const el = scrollEl.value
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'instant' })
+  })
 }
 
 // Set whenever the conversation switches so the very first population of its
