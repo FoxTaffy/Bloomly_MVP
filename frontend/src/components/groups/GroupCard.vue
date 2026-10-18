@@ -13,7 +13,7 @@ const emit = defineEmits<{
 const showMenu = ref(false)
 
 const typeLabel: Record<string, string> = {
-  event: 'Ивент', creative: 'Художник', static: 'Паблик',
+  event: 'Ивент', creative: 'Творческая', static: 'Паблик',
   news: 'Новости', shop: 'Магазин', community: 'Сообщество', brand: 'Бренд',
 }
 const typeColor: Record<string, string> = {
