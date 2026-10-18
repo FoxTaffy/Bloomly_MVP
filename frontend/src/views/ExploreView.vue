@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useTagSynonyms } from '@/composables/useTagSynonyms'
 import { useRouter } from 'vue-router'
 import { useLangStore } from '@/stores/lang'
@@ -44,11 +44,13 @@ interface Tile {
   images: string[]
   originalImages: string[]
   startIndex: number
+  ratio: number   // width / height, known before the tile is shown
+  delay: number   // fade-in stagger within a batch, ms
 }
 
-const tiles = computed<Tile[]>(() => {
-  const list: Tile[] = []
-  for (const post of posts.value) {
+function buildTiles(source: any[]): Omit<Tile, 'ratio' | 'delay'>[] {
+  const list: Omit<Tile, 'ratio' | 'delay'>[] = []
+  for (const post of source) {
     const media = (post.media_urls ?? []) as string[]
     const original = (post.media_original_urls ?? []) as string[]
     const imgIdxs: number[] = []
@@ -68,6 +70,61 @@ const tiles = computed<Tile[]>(() => {
     })
   }
   return list
+}
+
+// ── Background preloading: tiles enter the grid only once their image is decoded,
+// so the layout never reflows after the fact.
+function preloadTile(t: Omit<Tile, 'ratio' | 'delay'>): Promise<number | null> {
+  return new Promise(resolve => {
+    const img = new Image()
+    const timer = setTimeout(() => resolve(null), 10000)
+    const done = (r: number | null) => { clearTimeout(timer); resolve(r) }
+    img.onerror = () => done(null)
+    img.onload = () => {
+      const r = img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1
+      // decode off the main thread so the paint doesn't stutter
+      ;(img.decode ? img.decode().catch(() => {}) : Promise.resolve()).then(() => done(r))
+    }
+    img.src = t.url
+  })
+}
+
+const shownTiles = ref<Tile[]>([])
+
+async function preloadBatch(source: any[]): Promise<Tile[]> {
+  const raw = buildTiles(source)
+  const ratios = await Promise.all(raw.map(preloadTile))
+  const out: Tile[] = []
+  raw.forEach((t, i) => {
+    const ratio = ratios[i]
+    if (ratio == null) return
+    out.push({ ...t, ratio: Math.min(Math.max(ratio, 0.25), 4), delay: Math.min(out.length * 25, 500) })
+  })
+  return out
+}
+
+// ── Masonry columns (greedy shortest-column): appending never moves existing tiles
+const colCount = ref(2)
+function updateColCount() {
+  const w = window.innerWidth
+  colCount.value = w >= 1280 ? 5 : w >= 1024 ? 4 : w >= 640 ? 3 : 2
+}
+let resizeRaf = 0
+function onResize() {
+  cancelAnimationFrame(resizeRaf)
+  resizeRaf = requestAnimationFrame(updateColCount)
+}
+
+const columns = computed<Tile[][]>(() => {
+  const cols: Tile[][] = Array.from({ length: colCount.value }, () => [])
+  const heights = new Array(colCount.value).fill(0)
+  for (const t of shownTiles.value) {
+    let c = 0
+    for (let i = 1; i < heights.length; i++) if (heights[i] < heights[c]) c = i
+    cols[c].push(t)
+    heights[c] += 1 / t.ratio
+  }
+  return cols
 })
 
 // Per-post viewer status (vote/repaw/favourite) — same pattern as MainLayout/ProfileView
@@ -88,7 +145,9 @@ async function fetchStatusFor(loadedPosts: any[]) {
   } catch { /* non-critical */ }
 }
 
+let requestId = 0
 async function fetchPosts(reset = true) {
+  const myId = ++requestId
   if (reset) {
     isLoading.value = true
     page.value = 1
@@ -113,18 +172,37 @@ async function fetchPosts(reset = true) {
     }
 
     const res = await api.get('/posts', { params })
+    if (myId !== requestId) return
     if (res.data.success) {
       const loaded = (res.data.data.posts ?? []).filter((p: any) => p && p.author)
-      posts.value = reset ? loaded : [...posts.value, ...loaded]
       hasMore.value = loaded.length === PAGE_SIZE
       fetchStatusFor(loaded)
+      const batch = await preloadBatch(loaded)
+      if (myId !== requestId) return
+      posts.value = reset ? loaded : [...posts.value, ...loaded]
+      const seen = new Set(reset ? [] : shownTiles.value.map(t => t.key))
+      const fresh = batch.filter(t => !seen.has(t.key))
+      shownTiles.value = reset ? fresh : [...shownTiles.value, ...fresh]
     }
   } catch (e) {
     console.error('fetchPosts', e)
   } finally {
-    isLoading.value = false
-    isLoadingMore.value = false
+    if (myId === requestId) {
+      isLoading.value = false
+      isLoadingMore.value = false
+      // sentinel may still be in view after a short batch — re-check
+      nextTick(rearmObserver)
+    }
   }
+}
+
+// ── Infinite scroll: start loading well before the user reaches the bottom
+const sentinel = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
+function rearmObserver() {
+  if (!observer || !sentinel.value) return
+  observer.unobserve(sentinel.value)
+  observer.observe(sentinel.value)
 }
 
 interface TrendingTag { name: string; totalCount: number; trend: 'up' | 'down' | 'stable' }
@@ -154,8 +232,24 @@ watch([sortKey, selectedTag, nsfwMode], () => fetchPosts(true))
 watch(tagSynonyms, () => { if (selectedTag.value) fetchPosts(true) })
 
 onMounted(() => {
+  updateColCount()
+  window.addEventListener('resize', onResize, { passive: true })
+  observer = new IntersectionObserver(entries => {
+    if (entries.some(e => e.isIntersecting) && hasMore.value && !isLoading.value && !isLoadingMore.value) {
+      fetchPosts(false)
+    }
+  }, { rootMargin: '1500px 0px' })
   fetchPosts(true)
   fetchTrendingTags()
+})
+
+watch(sentinel, el => { if (el && observer) observer.observe(el) })
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onResize)
+  cancelAnimationFrame(resizeRaf)
+  observer?.disconnect()
+  requestId++
 })
 </script>
 
@@ -226,7 +320,7 @@ onMounted(() => {
         </div>
 
         <!-- Empty state -->
-        <div v-else-if="tiles.length === 0"
+        <div v-else-if="shownTiles.length === 0"
           class="text-center py-20 bg-brand-card border border-brand-border rounded-3xl shadow-xl">
           <div class="w-20 h-20 bg-brand-border rounded-full flex items-center justify-center mx-auto mb-5">
             <BIcon name="Compass" class="w-10 h-10 text-white/55" />
@@ -241,11 +335,13 @@ onMounted(() => {
 
         <!-- Tile grid -->
         <template v-else>
-          <div class="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-4">
-            <div v-for="tile in tiles" :key="tile.key"
+          <div class="flex gap-4 items-start">
+           <div v-for="(col, ci) in columns" :key="ci" class="flex-1 min-w-0 flex flex-col gap-4">
+            <div v-for="tile in col" :key="tile.key"
               @click="openTile(tile)"
-              class="mb-4 break-inside-avoid group relative rounded-2xl overflow-hidden bg-brand-card border border-brand-border cursor-pointer shadow-xs hover:shadow-xl hover:shadow-black/40 hover:ring-2 hover:ring-brand-accent/50 hover:-translate-y-0.5 transition-all duration-200">
-              <img :src="tile.url" loading="lazy" class="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.04]" />
+              :style="{ aspectRatio: String(tile.ratio), animationDelay: tile.delay + 'ms' }"
+              class="tile-in group relative rounded-2xl overflow-hidden bg-brand-card border border-brand-border cursor-pointer shadow-xs hover:shadow-xl hover:shadow-black/40 hover:ring-2 hover:ring-brand-accent/50 hover:-translate-y-0.5 transition-all duration-200">
+              <img :src="tile.url" decoding="async" class="w-full h-full object-cover block transition-transform duration-300 group-hover:scale-[1.04]" />
 
               <!-- Rating badge (hot sort) -->
               <div v-if="sortKey === 'hot' && tile.post.rating > 0"
@@ -279,14 +375,12 @@ onMounted(() => {
                 </div>
               </div>
             </div>
+           </div>
           </div>
 
-          <div class="flex justify-center pt-2 pb-4">
-            <button v-if="hasMore" @click="fetchPosts(false)" :disabled="isLoadingMore"
-              class="flex items-center gap-2 px-6 py-2.5 bg-brand-card border border-brand-border text-white/70 hover:text-white hover:border-brand-accent/40 text-sm font-semibold rounded-full transition-all disabled:opacity-40">
-              <BIcon :name="isLoadingMore ? 'Loader2' : 'ChevronDown'" class="w-4 h-4" :class="isLoadingMore ? 'animate-spin' : ''" />
-              {{ isLoadingMore ? '…' : langStore.t.bookmarksLoadMore }}
-            </button>
+          <div ref="sentinel" class="flex justify-center pt-2 pb-4 min-h-10">
+            <BIcon v-if="hasMore" name="Loader2" class="w-5 h-5 text-white/35 transition-opacity"
+              :class="isLoadingMore ? 'animate-spin opacity-100' : 'opacity-0'" />
             <p v-else class="text-xs text-white/35 flex items-center gap-1.5">
               <BIcon name="CheckCircle" class="w-3.5 h-3.5" /> Это все посты
             </p>
@@ -331,6 +425,16 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.tile-in {
+  animation: tile-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+@keyframes tile-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile-in { animation: none; }
+}
 .hide-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
