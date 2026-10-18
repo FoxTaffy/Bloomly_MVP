@@ -17,6 +17,8 @@ import AdminAdsTab from '@/components/admin/AdminAdsTab.vue'
 import AdminVerificationTab from '@/components/admin/AdminVerificationTab.vue'
 import AdminAutoModTab from '@/components/admin/AdminAutoModTab.vue'
 import AdminUpdatesTab from '@/components/admin/AdminUpdatesTab.vue'
+import AdminShopTab from '@/components/admin/AdminShopTab.vue'
+import AdminDenTab from '@/components/admin/AdminDenTab.vue'
 import AdminGroupsTab from '@/components/admin/AdminGroupsTab.vue'
 import AdminFinanceTab from '@/components/admin/AdminFinanceTab.vue'
 import AdminSettingsTab from '@/components/admin/AdminSettingsTab.vue'
@@ -37,16 +39,18 @@ const pickTab = (tab: AdminTab) => {
   mobileNavOpen.value = false
 }
 
-// Guard: staff only (moderator and above)
+// Guard: staff only (moderator and above). Роутер уже проверил роль, но здесь сверяем
+// ещё раз с сервером и ничего не рисуем, пока роль не подтверждена.
+const staffVerified = ref(false)
 onMounted(async () => {
   await auth.fetchMe()
-  const role = auth.user?.role
-  if (!isModerator(role)) {
+  if (!isModerator(auth.user?.role)) {
     router.replace({ name: 'home' })
-  } else {
-    fetchStats()
-    fetchStatistics()
+    return
   }
+  staffVerified.value = true
+  fetchStats()
+  fetchStatistics()
 })
 
 // Each tab owns its data and loads it the first time it is opened;
@@ -63,6 +67,8 @@ const TAB_COMPONENTS: Record<AdminTab, Component> = {
   automod: AdminAutoModTab,
   updates: AdminUpdatesTab,
   groups: AdminGroupsTab,
+  shop: AdminShopTab,
+  den: AdminDenTab,
   finance: AdminFinanceTab,
   settings: AdminSettingsTab,
 }
@@ -79,6 +85,8 @@ const navItems = computed(() => [
   { tab: 'ads'          as const, label: langStore.t.adLabel,                icon: 'Megaphone',       color: '#f97316', group: langStore.t.adminGroupContent,    badge: badges.ads || null, minRole: 'admin' },
   { tab: 'updates'      as const, label: langStore.t.adminNavBroadcasts,     icon: 'Send',            color: '#4C67CF', group: langStore.t.adminGroupContent,    badge: null, minRole: 'admin' },
   { tab: 'groups'       as const, label: langStore.t.adminNavGroupsEvents,   icon: 'LayoutGrid',      color: '#4C67CF', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'moderator' },
+  { tab: 'shop'         as const, label: 'Bloomly Shop',                      icon: 'ShoppingBag',     color: '#f59e0b', group: langStore.t.adminGroupPlatform,   badge: badges.shop || null, minRole: 'admin' },
+  { tab: 'den'          as const, label: "Dealers' Den",                      icon: 'Store',           color: '#f97316', group: langStore.t.adminGroupPlatform,   badge: badges.den || null, minRole: 'admin' },
   { tab: 'finance'      as const, label: langStore.t.adminNavFinancePremium, icon: 'Wallet',          color: '#a78bfa', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'admin' },
   { tab: 'settings'     as const, label: langStore.t.adminNavLogsSettings,   icon: 'Settings',        color: '#94a3b8', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'admin' },
 ].filter(item => myRoleRank.value >= ROLE_RANK[item.minRole]))
@@ -109,6 +117,8 @@ const tabSubtitle = computed<Record<string, string>>(() => ({
   automod: langStore.t.adminTabSubAutomod,
   updates: langStore.t.adminTabSubBroadcasts,
   groups: langStore.t.adminTabSubGroups,
+  shop: 'Каталог товаров, паки стикеров, покупки и заявки на доступ',
+  den: 'Лоты, споры, ярмарки, заявки на рамки и группы-продавцы',
   finance: langStore.t.adminTabSubFinance,
   settings: langStore.t.adminTabSubSettings,
 }))
@@ -133,7 +143,7 @@ const totalPendingBadge = computed(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-brand-bg text-white font-nunito flex relative isolate">
+  <div v-if="staffVerified" class="min-h-screen bg-brand-bg text-white font-nunito flex relative isolate">
 
     <!-- ═══════════════════ SIDEBAR ═══════════════════════════════════════ -->
     <aside class="w-64 shrink-0 hidden md:flex flex-col fixed top-0 left-0 h-full z-30

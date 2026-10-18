@@ -17,11 +17,38 @@ import {
   sendBroadcastHandler, getBroadcastsHandler,
   getSettingsHandler, updateSettingHandler,
 } from './controller.js';
+import {
+  shopOverviewHandler, shopItemsHandler, shopCreateItemHandler, shopUpdateItemHandler, shopDeleteItemHandler,
+  shopPacksHandler, shopPackStatusHandler, shopAccessRequestsHandler,
+  denOverviewHandler, denListingsHandler, denListingStatusHandler, denListingDeleteHandler,
+  denDisputesHandler, denFairsHandler, denFairStatusHandler, denGroupsHandler, denGroupDisconnectHandler,
+} from './market.controller.js';
 
 export async function adminRoutes(fastify: FastifyInstance) {
   // Explicitly typed to avoid @fastify/websocket overload ambiguity
   // Общий массив onRequest: плагин лимитов дописывает свои хуки в routeOptions.onRequest, поэтому маршруты с config.rateLimit берут свой массив
   const auth: RouteShorthandOptions = { onRequest: [fastify.authenticate] };
+
+  // Bloomly Shop (admin+)
+  fastify.get<RouteGenericOf<typeof shopOverviewHandler>>('/shop/overview', auth, shopOverviewHandler);
+  fastify.get<RouteGenericOf<typeof shopItemsHandler>>('/shop/items', auth, shopItemsHandler);
+  fastify.post<RouteGenericOf<typeof shopCreateItemHandler>>('/shop/items', auth, shopCreateItemHandler);
+  fastify.patch<RouteGenericOf<typeof shopUpdateItemHandler>>('/shop/items/:id', auth, shopUpdateItemHandler);
+  fastify.delete<RouteGenericOf<typeof shopDeleteItemHandler>>('/shop/items/:id', auth, shopDeleteItemHandler);
+  fastify.get<RouteGenericOf<typeof shopPacksHandler>>('/shop/packs', auth, shopPacksHandler);
+  fastify.patch<RouteGenericOf<typeof shopPackStatusHandler>>('/shop/packs/:id/status', auth, shopPackStatusHandler);
+  fastify.get<RouteGenericOf<typeof shopAccessRequestsHandler>>('/shop/access-requests', auth, shopAccessRequestsHandler);
+
+  // Dealers' Den (admin+); споры, ярмарки (создание, участники) и рамки — в своих модулях
+  fastify.get<RouteGenericOf<typeof denOverviewHandler>>('/den/overview', auth, denOverviewHandler);
+  fastify.get<RouteGenericOf<typeof denListingsHandler>>('/den/listings', auth, denListingsHandler);
+  fastify.patch<RouteGenericOf<typeof denListingStatusHandler>>('/den/listings/:id/status', auth, denListingStatusHandler);
+  fastify.delete<RouteGenericOf<typeof denListingDeleteHandler>>('/den/listings/:id', auth, denListingDeleteHandler);
+  fastify.get<RouteGenericOf<typeof denDisputesHandler>>('/den/disputes', auth, denDisputesHandler);
+  fastify.get<RouteGenericOf<typeof denFairsHandler>>('/den/fairs', auth, denFairsHandler);
+  fastify.patch<RouteGenericOf<typeof denFairStatusHandler>>('/den/fairs/:id/status', auth, denFairStatusHandler);
+  fastify.get<RouteGenericOf<typeof denGroupsHandler>>('/den/groups', auth, denGroupsHandler);
+  fastify.post<RouteGenericOf<typeof denGroupDisconnectHandler>>('/den/groups/:id/disconnect', auth, denGroupDisconnectHandler);
 
   // Stats
   fastify.get<RouteGenericOf<typeof getStatsHandler>>('/stats', auth, getStatsHandler);

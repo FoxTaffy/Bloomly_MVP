@@ -142,106 +142,102 @@ watchEffect(() => { badges.verification = verRequests.value.filter((r: any) => r
         <BIcon name="BadgeCheck" class="w-10 h-10 opacity-40" />
         <p class="text-sm font-semibold">{{ langStore.t.adminNoRequestsFound }}</p>
       </div>
-      <div v-else class="stack-y-3">
-        <div v-for="req in verRequests" :key="req.id"
-          class="w-full max-w-full rounded-2xl border overflow-hidden transition-colors"
-          :class="req.status==='pending'
-            ? 'border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50'
-            : req.status==='approved'
-              ? 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50'
-              : 'border-rose-500/30 bg-rose-500/5 hover:border-rose-500/50'">
+      <div v-else class="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+        <article v-for="req in verRequests" :key="req.id"
+          class="relative w-full max-w-full rounded-2xl border border-brand-border bg-brand-card overflow-hidden flex flex-col transition-colors hover:border-white/15">
+          <!-- Цветная полоса статуса слева -->
+          <span class="absolute left-0 top-0 bottom-0 w-1"
+            :class="req.status === 'pending' ? 'bg-amber-400' : req.status === 'approved' ? 'bg-emerald-400' : 'bg-rose-400'" />
 
-          <!-- Header -->
-          <div class="flex items-center gap-2.5 px-4 pt-3.5 pb-2.5 min-w-0">
-            <router-link :to="`/profile/${req.user?.username}`" target="_blank"
-              class="flex items-center gap-2.5 group/user min-w-0">
-              <img v-if="req.user?.avatar_url" :src="req.user.avatar_url"
-                class="w-9 h-9 rounded-xl object-cover border border-white/10 shrink-0" />
-              <div v-else class="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-xs shrink-0">
+          <!-- Шапка: пользователь слева, статус и дата справа -->
+          <div class="flex items-center gap-3 pl-5 pr-4 pt-4 pb-3 min-w-0">
+            <router-link :to="`/profile/${req.user?.username}`" target="_blank" class="flex items-center gap-3 group/user min-w-0 flex-1">
+              <img v-if="req.user?.avatar_url" :src="req.user.avatar_url" alt=""
+                class="w-11 h-11 rounded-xl object-cover border border-white/10 shrink-0" />
+              <div v-else class="w-11 h-11 rounded-xl bg-blue-500/15 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-sm shrink-0">
                 {{ (req.user?.display_name || req.user?.username || '?')[0].toUpperCase() }}
               </div>
               <div class="min-w-0">
-                <p class="font-bold text-[13px] text-white group-hover/user:text-blue-400 transition-colors flex items-center gap-1 truncate">
+                <p class="font-bold text-sm text-white group-hover/user:text-blue-400 transition-colors flex items-center gap-1.5 min-w-0">
                   <span class="truncate">{{ req.user?.display_name || req.user?.username }}</span>
                   <BIcon name="ExternalLink" class="w-3 h-3 opacity-0 group-hover/user:opacity-60 transition-opacity shrink-0" />
                 </p>
-                <p class="text-[11px] text-white/35 truncate">@{{ req.user?.username }}</p>
+                <p class="text-xs text-white/35 truncate">@{{ req.user?.username }}</p>
               </div>
             </router-link>
-
-              <div class="flex items-center gap-2 shrink-0">
-                <span class="text-xs font-extrabold px-2.5 py-1 rounded-full border"
-                  :class="req.status==='pending'
-                    ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
-                    : req.status==='approved'
-                      ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                      : 'text-rose-400 bg-rose-500/10 border-rose-500/20'">
-                  {{ {pending: langStore.t.adminVerStatusPending, approved: langStore.t.adminVerStatusApproved, rejected: langStore.t.adminVerStatusRejected}[req.status as 'pending' | 'approved' | 'rejected'] }}
-                </span>
-                <span class="text-[10px] text-white/25 whitespace-nowrap">{{ formatDate(req.created_at) }}</span>
-              </div>
+            <div class="flex flex-col items-end gap-1 shrink-0">
+              <span class="text-[11px] font-extrabold px-2.5 py-1 rounded-full border"
+                :class="req.status==='pending'
+                  ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                  : req.status==='approved'
+                    ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                    : 'text-rose-400 bg-rose-500/10 border-rose-500/20'">
+                {{ {pending: langStore.t.adminVerStatusPending, approved: langStore.t.adminVerStatusApproved, rejected: langStore.t.adminVerStatusRejected}[req.status as 'pending' | 'approved' | 'rejected'] }}
+              </span>
+              <span class="text-[11px] text-white/30 whitespace-nowrap">{{ formatDate(req.created_at) }}</span>
             </div>
+          </div>
 
-            <div v-if="req.verification_type" class="mt-2.5">
-              <span class="text-xs font-bold pl-1.5 pr-2.5 py-1 rounded-full border inline-flex items-center gap-1.5"
+          <div class="pl-5 pr-4 pb-4 flex flex-col gap-3 min-w-0">
+            <!-- Тип бейджа -->
+            <div v-if="req.verification_type">
+              <span class="text-xs font-bold pl-1.5 pr-3 py-1 rounded-full border inline-flex items-center gap-1.5"
                 :class="verTypeColors[req.verification_type] || 'text-blue-400 bg-blue-400/10 border-blue-400/20'">
                 <img :src="verTypeIconUrl(req.verification_type)" :alt="req.verification_type" class="w-4 h-4 rounded-xs shrink-0 object-cover" />
                 {{ verTypeLabels[req.verification_type] || req.verification_type }}
               </span>
             </div>
 
-          <!-- Criteria: single wrapping row, never overflows -->
-          <div class="px-4 flex flex-wrap items-center gap-1 min-w-0">
-            <span v-for="chip in [
-              {label: req.account_age_days+' '+langStore.t.adminDaysSuffixShort, ok: req.account_age_days>=14},
-              {label: req.post_count+' '+langStore.t.posts, ok: req.post_count>=3},
-              {label: langStore.t.avatarBtnLabel, ok: req.has_avatar},
-              {label: langStore.t.complBioLabel, ok: req.has_bio},
-              {label: 'Email', ok: req.has_email},
-              {label: req.follower_count+' '+langStore.t.adminFollowersSuffixShort, ok: req.follower_count>=5},
-            ]" :key="chip.label"
-              class="text-[10.5px] font-semibold inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md shrink-0"
-              :class="chip.ok ? 'text-emerald-400/90 bg-emerald-500/[0.07]' : 'text-rose-400/80 bg-rose-500/6'">
-              <BIcon :name="chip.ok ? 'Check' : 'X'" class="w-2.5 h-2.5 shrink-0" /> {{ chip.label }}
-            </span>
+            <!-- Критерии -->
+            <div class="flex flex-wrap items-center gap-1.5 min-w-0">
+              <span v-for="chip in [
+                {label: req.account_age_days+' '+langStore.t.adminDaysSuffixShort, ok: req.account_age_days>=14},
+                {label: req.post_count+' '+langStore.t.posts, ok: req.post_count>=3},
+                {label: langStore.t.avatarBtnLabel, ok: req.has_avatar},
+                {label: langStore.t.complBioLabel, ok: req.has_bio},
+                {label: 'Email', ok: req.has_email},
+                {label: req.follower_count+' '+langStore.t.adminFollowersSuffixShort, ok: req.follower_count>=5},
+              ]" :key="chip.label"
+                class="text-[11px] font-semibold inline-flex items-center gap-1 px-2 py-1 rounded-lg shrink-0"
+                :class="chip.ok ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'">
+                <BIcon :name="chip.ok ? 'Check' : 'X'" class="w-3 h-3 shrink-0" /> {{ chip.label }}
+              </span>
+            </div>
+
+            <!-- Доказательства -->
+            <div v-if="req.evidence_urls?.length || req.evidence_text" class="rounded-xl bg-black/15 border border-white/5 p-3 flex flex-col gap-2.5 min-w-0">
+              <p v-if="req.evidence_text" class="text-sm text-white/75 whitespace-pre-line wrap-break-word leading-relaxed">{{ req.evidence_text }}</p>
+              <div v-if="req.evidence_urls?.length" class="flex items-center flex-wrap gap-2 min-w-0">
+                <template v-for="(url,i) in req.evidence_urls" :key="i">
+                  <button v-if="isPrivateEvidence(url)"
+                    @click="openEvidenceLightbox(req.evidence_urls, i)"
+                    class="relative w-16 h-16 rounded-xl overflow-hidden border border-white/10 hover:border-blue-500/50 transition-colors shrink-0 group/ev">
+                    <SafeMedia :src="url" :kind="isVideoUrl(url) ? 'video' : 'image'" source="verification-evidence" class="w-full h-full object-cover pointer-events-none" />
+                    <div class="absolute inset-0 bg-black/0 group-hover/ev:bg-black/20 transition-colors" />
+                  </button>
+                  <a v-else :href="url" target="_blank" rel="noopener noreferrer"
+                    class="h-8 px-2.5 rounded-lg bg-white/5 border border-white/8 hover:border-blue-500/40 text-xs font-semibold text-blue-400 flex items-center gap-1.5 shrink-0 max-w-52">
+                    <BIcon name="ExternalLink" class="w-3.5 h-3.5 shrink-0" />
+                    <span class="truncate">{{ linkHost(url) }}</span>
+                  </a>
+                </template>
+              </div>
+            </div>
+            <p v-else class="text-xs text-white/25">{{ langStore.t.adminNoEvidenceLabel }}</p>
           </div>
 
-          <!-- Evidence -->
-          <div v-if="req.evidence_urls?.length || req.evidence_text" class="px-4 mt-2.5 flex flex-col gap-2 min-w-0">
-            <div v-if="req.evidence_text" class="min-w-0">
-              <p class="text-sm text-white/75 whitespace-pre-line wrap-break-word">{{ req.evidence_text }}</p>
-            </div>
-            <div v-if="req.evidence_urls?.length" class="flex items-center gap-1.5 overflow-x-auto min-w-0 pb-0.5">
-              <template v-for="(url,i) in req.evidence_urls" :key="i">
-                <button v-if="isPrivateEvidence(url)"
-                  @click="openEvidenceLightbox(req.evidence_urls, i)"
-                  class="relative w-14 h-14 rounded-lg overflow-hidden border border-white/8 hover:border-blue-500/40 transition-colors shrink-0 group/ev">
-                  <SafeMedia :src="url" :kind="isVideoUrl(url) ? 'video' : 'image'" source="verification-evidence" class="w-full h-full object-cover pointer-events-none" />
-                  <div class="absolute inset-0 bg-black/0 group-hover/ev:bg-black/20 transition-colors" />
-                </button>
-                <a v-else :href="url" target="_blank" rel="noopener noreferrer"
-                  class="h-7 px-2 rounded-lg border border-white/8 hover:border-blue-500/40 text-[11px] font-semibold text-blue-400 flex items-center gap-1 shrink-0 max-w-40">
-                  <BIcon name="ExternalLink" class="w-3 h-3 shrink-0" />
-                  <span class="truncate">{{ linkHost(url) }}</span>
-                </a>
-              </template>
-            </div>
-          </div>
-          <p v-else class="px-4 mt-2 text-[11px] text-white/25">{{ langStore.t.adminNoEvidenceLabel }}</p>
-
-          <!-- Footer actions -->
-          <div v-if="req.status === 'pending'" class="mt-3 border-t border-white/6 bg-white/1.5 px-4 py-2.5 flex gap-2">
+          <!-- Действия -->
+          <div v-if="req.status === 'pending'" class="mt-auto border-t border-white/6 bg-white/2 pl-5 pr-4 py-3 flex gap-2">
             <button @click="reviewVerRequest(req.id,'approve')" :disabled="verBusy[req.id]"
-              class="disabled:opacity-50 disabled:pointer-events-none flex-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors flex items-center justify-center gap-1.5">
+              class="disabled:opacity-50 disabled:pointer-events-none flex-1 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-colors flex items-center justify-center gap-1.5">
               <BIcon name="Check" class="w-3.5 h-3.5" /> {{ langStore.t.adminApproveBtn }}
             </button>
             <button @click="rejectVerRequest(req.id)" :disabled="verBusy[req.id]"
-              class="disabled:opacity-50 disabled:pointer-events-none flex-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 transition-colors flex items-center justify-center gap-1.5">
+              class="disabled:opacity-50 disabled:pointer-events-none flex-1 px-3 py-2 rounded-xl text-xs font-bold bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 transition-colors flex items-center justify-center gap-1.5">
               <BIcon name="X" class="w-3.5 h-3.5" /> {{ langStore.t.adminRejectBtn }}
             </button>
           </div>
-          <div v-else class="h-3.5" />
-        </div>
+        </article>
       </div>
     </div>
 
