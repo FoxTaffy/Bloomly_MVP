@@ -1180,6 +1180,8 @@ const vClickOutside = {
                     </span>
                   </div>
 
+                  <p v-if="group.description" class="text-sm text-white/65 leading-snug mb-2 max-w-2xl wrap-break-word wrap-anywhere">{{ group.description }}</p>
+
                   <!-- Sub-info chips row -->
                   <div class="flex items-center gap-1.5 flex-wrap mt-1">
                     <!-- Slug -->
