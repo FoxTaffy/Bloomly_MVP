@@ -147,15 +147,17 @@ export const useFriendsStore = defineStore('friends', () => {
 
   async function acceptRequest(id: string) {
     await api.post(`/friends/requests/${id}/accept`)
+    // Заявка может быть невзаимной подпиской — после принятия человек уходит из подписчиков в друзья
     await Promise.all([
       loadRequests(),
       loadFriends(undefined, true),
+      loadFollowers(true),
     ])
   }
 
   async function rejectRequest(id: string) {
     await api.post(`/friends/requests/${id}/reject`)
-    await loadRequests()
+    await Promise.all([loadRequests(), loadFollowers(true)])
   }
 
   async function removeFriend(friendId: string) {
