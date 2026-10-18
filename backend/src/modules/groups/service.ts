@@ -33,6 +33,43 @@ function roleWeight(role?: string | null): number {
   return role ? (ROLE_WEIGHT[role] ?? 0) : 0;
 }
 
+// ── permissions ───────────────────────────────────────────────────────────────
+// Every capability that can be switched on for a custom role. Owner/admin always hold all of them;
+// the system roles below get a fixed subset, and a custom role adds its own on top of the base role.
+export const GROUP_PERMISSIONS = [
+  'can_post',
+  'can_moderate_posts',
+  'can_manage_members',
+  'can_manage_events',
+  'can_manage_roles',
+  'can_manage_settings',
+] as const;
+export type GroupPermission = typeof GROUP_PERMISSIONS[number];
+export const isGroupPermission = (v: unknown): v is GroupPermission => (GROUP_PERMISSIONS as readonly unknown[]).includes(v);
+
+const SYSTEM_ROLE_PERMISSIONS: Record<string, readonly GroupPermission[]> = {
+  owner: GROUP_PERMISSIONS,
+  admin: GROUP_PERMISSIONS,
+  moderator: ['can_post', 'can_moderate_posts'],
+};
+
+const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
+const MAX_CUSTOM_ROLES = 20;
+
+function permissionsOf(role: string | null | undefined, customPerms: unknown): Set<GroupPermission> {
+  const set = new Set<GroupPermission>(SYSTEM_ROLE_PERMISSIONS[role ?? ''] ?? []);
+  if (Array.isArray(customPerms)) for (const p of customPerms) if (isGroupPermission(p)) set.add(p);
+  return set;
+}
+
+function cleanPermissions(raw: unknown): GroupPermission[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw) || raw.some((p) => !isGroupPermission(p))) {
+    throw Object.assign(new Error('Unknown permission in role'), { statusCode: 400 });
+  }
+  return [...new Set(raw as GroupPermission[])];
+}
+
 // One slug format for create and update: lowercase, dash-separated, no leading/trailing dashes.
 function normalizeSlug(raw: string): string {
   return raw.toLowerCase().replace(NON_TAG_CHAR_RE, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
@@ -40,10 +77,24 @@ function normalizeSlug(raw: string): string {
 
 // Rubrics are the type-specific sub-categories picked when creating news / brand groups.
 // They live in their own column and never touch `category` (the general category with cooldown).
+export const GROUP_TYPES: readonly string[] = ['event', 'creative', 'static', 'news', 'shop', 'community', 'brand'];
+
 export const GROUP_RUBRICS: Partial<Record<string, readonly string[]>> = {
   news: ['general', 'fandom', 'tech', 'art', 'events', 'gaming'],
   brand: ['studio', 'convention', 'agency', 'publisher', 'service', 'other'],
 };
+
+// A slug must be unique among live slugs and among the redirect aliases of other groups.
+async function assertSlugFree(slug: string, exceptGroupId?: string) {
+  const clash = await prisma.group.findFirst({
+    where: {
+      id: exceptGroupId ? { not: exceptGroupId } : undefined,
+      OR: [{ slug }, { slug_aliases: { has: slug } }],
+    },
+    select: { id: true },
+  });
+  if (clash) throw httpError('Этот адрес группы уже занят', 409);
+}
 
 function resolveRubric(type: string, rubric: string | null | undefined): string | null {
   const allowed = GROUP_RUBRICS[type];
@@ -53,6 +104,13 @@ function resolveRubric(type: string, rubric: string | null | undefined): string 
 }
 
 // hidden_member_ids is stored as a JSON string array; tolerate malformed values.
+// Role icon is stored in a short column: keep a handful of characters (an emoji can be several code units).
+function cleanRoleIcon(icon: string | undefined): string | undefined {
+  if (icon === undefined) return undefined;
+  const trimmed = Array.from(icon.trim()).slice(0, 4).join('');
+  return trimmed || undefined;
+}
+
 function parseHiddenIds(raw: string | null | undefined): string[] {
   try {
     const v = JSON.parse(raw || '[]');
@@ -73,6 +131,40 @@ async function softDeleteGroupAndConversations(groupId: string) {
     prisma.group.update({ where: { id: groupId }, data: { deleted_at: new Date() } }),
     prisma.conversation.updateMany({ where: { group_id: groupId, deleted_at: null }, data: { deleted_at: new Date() } }),
   ]);
+}
+
+type Tx = Prisma.TransactionClient;
+
+// members_count is a denormalised counter; recounting (instead of ±1) heals any past drift and
+// can't be skewed by concurrent join/leave/kick.
+async function syncMembersCount(tx: Tx, groupId: string): Promise<number> {
+  const members_count = await tx.groupMember.count({ where: { group_id: groupId } });
+  await tx.group.update({ where: { id: groupId }, data: { members_count } });
+  return members_count;
+}
+
+function httpError(message: string, statusCode: number) {
+  return Object.assign(new Error(message), { statusCode });
+}
+
+const EVENT_STATUSES: readonly string[] = ['announced', 'tickets_open', 'sold_out', 'active', 'finished', 'teaser'];
+
+function assertEventWindow(startsAt: string | Date | null, endsAt: string | Date | null) {
+  if (!startsAt || !endsAt) throw httpError("Укажите начало и конец", 400);
+  const start = new Date(startsAt);
+  const end = new Date(endsAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) throw httpError('Некорректная дата мероприятия', 400);
+  if (end <= start) throw httpError('Мероприятие должно заканчиваться после начала', 400);
+}
+
+function assertTierNumbers(price: number, total: number) {
+  if (!Number.isFinite(price) || price < 0) throw httpError('Цена билета не может быть отрицательной', 400);
+  if (total !== Infinity && (!Number.isInteger(total) || total < 1)) throw httpError('Количество билетов должно быть целым числом от 1', 400);
+}
+
+function assertCoords(lat?: number | null, lng?: number | null) {
+  if (lat != null && !(lat >= -90 && lat <= 90)) throw httpError('Некорректная широта', 400);
+  if (lng != null && !(lng >= -180 && lng <= 180)) throw httpError('Некорректная долгота', 400);
 }
 
 // Default Todolist kanban columns — used whenever a group hasn't customized its own.
@@ -209,7 +301,8 @@ export const groupService = {
     const limit = Math.min(50, Math.max(1, parseInt(query.limit ?? '20', 10)));
     const skip = (page - 1) * limit;
 
-    const where: Prisma.GroupWhereInput = { deleted_at: null };
+    // Closed groups are reachable by link only — they never appear in public listings
+    const where: Prisma.GroupWhereInput = { deleted_at: null, is_public: true };
     if (query.type) where.type = query.type;
     if (query.search) {
       where.OR = [
@@ -274,35 +367,40 @@ export const groupService = {
 
   async sweepExpiredEvent(groupId: string) {
     await prisma.$transaction(async (tx) => {
+      // Claim the sweep: of two concurrent readers only one gets count 1 and does the work,
+      // so SOON badges / attendee counts are never decremented twice.
+      const claimed = await tx.group.updateMany({
+        where: { id: groupId, event_expired_at: null },
+        data: { event_expired_at: new Date() },
+      });
+      if (claimed.count === 0) return;
+
       const soonBadges = await tx.soonBadge.findMany({
         where: { event: { group_id: groupId } },
-        select: { id: true, event_id: true },
+        select: { event_id: true },
       });
-      for (const badge of soonBadges) {
-        await tx.soonBadge.delete({ where: { id: badge.id } });
-        await tx.event.update({ where: { id: badge.event_id }, data: { attendee_count: { decrement: 1 } } });
+      if (soonBadges.length > 0) {
+        const perEvent = new Map<string, number>();
+        for (const b of soonBadges) perEvent.set(b.event_id, (perEvent.get(b.event_id) ?? 0) + 1);
+        await tx.soonBadge.deleteMany({ where: { event: { group_id: groupId } } });
+        for (const [eventId, n] of perEvent) {
+          await tx.event.updateMany({ where: { id: eventId, attendee_count: { gte: n } }, data: { attendee_count: { decrement: n } } });
+          await tx.event.updateMany({ where: { id: eventId, attendee_count: { lt: n } }, data: { attendee_count: 0 } });
+        }
       }
 
       const plainMembers = await tx.groupMember.findMany({
-        where: { group_id: groupId, role: 'member' },
+        where: { group_id: groupId, role: 'member', custom_role_id: null },
         select: { user_id: true },
       });
-      for (const m of plainMembers) {
-        await tx.groupSubscriber.upsert({
-          where: { group_id_user_id: { group_id: groupId, user_id: m.user_id } },
-          update: {},
-          create: { group_id: groupId, user_id: m.user_id },
-        });
-      }
       if (plainMembers.length > 0) {
-        await tx.groupMember.deleteMany({ where: { group_id: groupId, role: 'member' } });
-        await tx.group.update({
-          where: { id: groupId },
-          data: { members_count: { decrement: plainMembers.length } },
+        await tx.groupSubscriber.createMany({
+          data: plainMembers.map((m) => ({ group_id: groupId, user_id: m.user_id })),
+          skipDuplicates: true,
         });
+        await tx.groupMember.deleteMany({ where: { group_id: groupId, role: 'member', custom_role_id: null } });
+        await syncMembersCount(tx, groupId);
       }
-
-      await tx.group.update({ where: { id: groupId }, data: { event_expired_at: new Date() } });
     });
   },
 
@@ -339,9 +437,11 @@ export const groupService = {
   // ── create ────────────────────────────────────────────────────────────────
   async create(ownerId: string, input: CreateGroupInput) {
     const name = sanitizeDisplayText(input.name ?? '', 120);
-    if (!name) throw new Error('Group name is required');
-    const slug = normalizeSlug(input.slug);
-    if (!slug) throw new Error('Group slug is required');
+    if (!name) throw httpError('Group name is required', 400);
+    if (!GROUP_TYPES.includes(input.type)) throw httpError('Unknown group type', 400);
+    const slug = normalizeSlug(input.slug ?? '').slice(0, 60);
+    if (!slug) throw httpError('Group slug is required', 400);
+    await assertSlugFree(slug);
     return prisma.$transaction(async (tx) => {
       const group = await tx.group.create({
         data: {
@@ -411,16 +511,17 @@ export const groupService = {
     if (input.completedWorks !== undefined) data.completed_works = input.completedWorks;
     if (input.guaranteeText !== undefined) data.guarantee_text = input.guaranteeText;
     if (input.slug !== undefined) {
-      const newSlug = normalizeSlug(input.slug);
-      if (!newSlug) throw new Error('Group slug is required');
+      const newSlug = normalizeSlug(input.slug).slice(0, 60);
+      if (!newSlug) throw httpError('Group slug is required', 400);
       // Fetch current slug to save as alias
       const current = await prisma.group.findUnique({ where: { id: groupId }, select: { slug: true, slug_aliases: true } });
       if (current && current.slug !== newSlug) {
-        // Append old slug to aliases (avoid duplicates and limit to 10)
-        const aliases = [...new Set([...current.slug_aliases, current.slug])].slice(-10);
+        await assertSlugFree(newSlug, groupId);
+        // Old slug becomes a redirect alias (limit 10); the slug we move to stops being an alias
+        const aliases = [...new Set([...current.slug_aliases.filter((a) => a !== newSlug), current.slug])].slice(-10);
         data.slug_aliases = aliases;
+        data.slug = newSlug;
       }
-      data.slug = newSlug;
     }
     if (input.category !== undefined) {
       const newCategory = input.category || null;
@@ -449,14 +550,15 @@ export const groupService = {
     if (input.hiddenMemberIds !== undefined) data.hidden_member_ids = JSON.stringify(input.hiddenMemberIds);
     if (input.donationsEnabled !== undefined || input.bankCardMasked !== undefined) {
       // Пожертвования без карты для выплат принимались бы в никуда: проверяем на сервере, а не только в UI
-      const current = await prisma.group.findUnique({ where: { id: groupId }, select: { bank_card_masked: true } });
+      const current = await prisma.group.findUnique({ where: { id: groupId }, select: { bank_card_masked: true, donations_enabled: true } });
       const card = input.bankCardMasked !== undefined ? input.bankCardMasked : current?.bank_card_masked;
+      const enabled = input.donationsEnabled !== undefined ? input.donationsEnabled : !!current?.donations_enabled;
       if (input.donationsEnabled === true && !card) {
         throw Object.assign(new Error('Чтобы принимать пожертвования, привяжите карту для выплат'), { statusCode: 400 });
       }
-      if (input.bankCardMasked !== undefined && !input.bankCardMasked) data.donations_enabled = false;
+      // Removing the payout card switches donations off, even if the same request tried to keep them on
+      data.donations_enabled = card ? enabled : false;
     }
-    if (input.donationsEnabled !== undefined) data.donations_enabled = input.donationsEnabled;
     if (input.bankCardMasked !== undefined) data.bank_card_masked = input.bankCardMasked || null;
     if (input.supportTiers !== undefined) data.support_tiers = input.supportTiers;
     if (input.businessEnabled !== undefined) data.business_enabled = input.businessEnabled;
@@ -517,8 +619,7 @@ export const groupService = {
       ? await prisma.post.findMany({ where: { id: { in: postIds } }, select: { media_urls: true, media_original_urls: true } })
       : [];
 
-    // Best-effort: wipe the actual files from storage before removing the DB rows, so deleting
-    // a group never leaves the media behind as orphaned MinIO objects.
+    // Collect every file URL first: after the rows are gone the storage objects would be orphaned.
     const sponsors = Array.isArray(group.sponsors) ? (group.sponsors as Array<{ logo_url?: string | null } | null>) : [];
     const mediaUrls = [
       ...posts.flatMap((p) => [...p.media_urls, ...p.media_original_urls]),
@@ -527,8 +628,6 @@ export const groupService = {
       group.group_bg_url,
       ...sponsors.map((s) => s?.logo_url),
     ].filter((url): url is string => !!url);
-    await Promise.all(mediaUrls.map((url) => deleteFileByUrl(url, group.owner_id).catch(() => {})));
-
     await prisma.$transaction([
       prisma.post.deleteMany({ where: { id: { in: postIds } } }),
       // Conversation.group_id is only SET NULL by the FK cascade below — soft-delete it here
@@ -537,98 +636,190 @@ export const groupService = {
       prisma.group.delete({ where: { id: groupId } }),
     ]);
 
+    // Files go only after the rows are really gone: a failed transaction must not leave a live group with dead media
+    await Promise.all(mediaUrls.map((url) => deleteFileByUrl(url, group.owner_id).catch(() => {})));
+
     return { deleted: true, postsDeleted: postIds.length };
   },
 
-  // ── membership ────────────────────────────────────────────────────────────
-  async join(groupId: string, userId: string) {
-    const group = await this.ensureEventExpirySwept(groupId);
-    if (!group || group.deleted_at) throw new Error('Group not found');
-    if (this.isEventExpired(group)) throw new Error('EVENT_EXPIRED');
+  // ── access / permissions ──────────────────────────────────────────────────
+  /** Role + effective permissions of a user in a live (not deleted) group, or null for non-members. */
+  async getAccess(groupId: string, userId: string) {
+    const m = await prisma.groupMember.findFirst({
+      where: { group_id: groupId, user_id: userId, group: { deleted_at: null } },
+      select: { role: true, custom_role_id: true, customRole: { select: { permissions: true } } },
+    });
+    if (!m) return null;
+    const permissions = permissionsOf(m.role, m.customRole?.permissions);
+    // Rank decides who may act on whom: owner 3 > admin 2 > moderator 1; a plain member holding
+    // a custom role with "manage members" counts as a moderator for that purpose only.
+    const base = roleWeight(m.role);
+    const rank = base >= 1 ? base : permissions.has('can_manage_members') ? 1 : 0;
+    return { role: m.role, customRoleId: m.custom_role_id, permissions, rank };
+  },
 
-    // Create the membership row directly (instead of a separate "does it exist?" read
-    // followed by an upsert) so the unique constraint is the single source of truth for
-    // whether this call actually created a new member. Doing a read-then-upsert here left
-    // a TOCTOU window: two concurrent join requests could both see "not a member yet" and
-    // both increment members_count, even though only one membership row can ever exist —
-    // permanently inflating the count above the real member total.
-    let membership;
-    let created = false;
-    try {
-      membership = await prisma.groupMember.create({
-        data: { group_id: groupId, user_id: userId, role: 'member' },
+  async hasPermission(groupId: string, userId: string, permission: GroupPermission): Promise<boolean> {
+    return !!(await groupService.getAccess(groupId, userId))?.permissions.has(permission);
+  },
+
+  /** Closed groups show their content (posts, members, queue) to members only. */
+  async canViewContent(groupId: string, viewerId: string | null): Promise<boolean> {
+    const group = await prisma.group.findFirst({ where: { id: groupId, deleted_at: null }, select: { is_public: true } });
+    if (!group) return false;
+    if (group.is_public) return true;
+    if (!viewerId) return false;
+    return !!(await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: viewerId } },
+      select: { user_id: true },
+    }));
+  },
+
+  // ── membership ────────────────────────────────────────────────────────────
+  /**
+   * Open group: the user becomes a member. Closed group: an application is filed instead
+   * (`pending: true`) and the owner/admins approve it from the group tools.
+   */
+  async join(groupId: string, userId: string, message?: string) {
+    const group = await this.ensureEventExpirySwept(groupId);
+    if (!group || group.deleted_at) throw httpError('Group not found', 404);
+    if (this.isEventExpired(group)) throw new Error('EVENT_EXPIRED');
+    const info = await prisma.group.findUniqueOrThrow({ where: { id: groupId }, select: { is_public: true } });
+
+    const existing = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      include: { group: { select: GROUP_LIST_SELECT } },
+    });
+    if (existing) return { membership: existing, pending: false };
+
+    if (!info.is_public) {
+      const text = message ? sanitizeDisplayText(message, 500) || null : null;
+      await prisma.groupJoinRequest.upsert({
+        where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+        update: { message: text },
+        create: { group_id: groupId, user_id: userId, message: text },
+      });
+      return { membership: null, pending: true };
+    }
+
+    const membership = await this.addMember(groupId, userId);
+    return { membership, pending: false };
+  },
+
+  // The unique key is the single source of truth for "did this call create the member";
+  // the counter is recounted so concurrent joins can never inflate it.
+  async addMember(groupId: string, userId: string) {
+    return prisma.$transaction(async (tx) => {
+      await tx.groupMember.upsert({
+        where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+        update: {},
+        create: { group_id: groupId, user_id: userId, role: 'member' },
+      });
+      // A full member doesn't need a separate notification-only subscription or a pending application
+      await tx.groupSubscriber.deleteMany({ where: { group_id: groupId, user_id: userId } });
+      await tx.groupJoinRequest.deleteMany({ where: { group_id: groupId, user_id: userId } });
+      await syncMembersCount(tx, groupId);
+      return tx.groupMember.findUniqueOrThrow({
+        where: { group_id_user_id: { group_id: groupId, user_id: userId } },
         include: { group: { select: GROUP_LIST_SELECT } },
       });
-      created = true;
-    } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        membership = await prisma.groupMember.findUniqueOrThrow({
-          where: { group_id_user_id: { group_id: groupId, user_id: userId } },
-          include: { group: { select: GROUP_LIST_SELECT } },
-        });
-      } else {
-        throw err;
-      }
+    });
+  },
+
+  async hasPendingJoinRequest(groupId: string, userId: string): Promise<boolean> {
+    return !!(await prisma.groupJoinRequest.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      select: { id: true },
+    }));
+  },
+
+  async cancelJoinRequest(groupId: string, userId: string) {
+    await prisma.groupJoinRequest.deleteMany({ where: { group_id: groupId, user_id: userId } });
+    return { pending: false };
+  },
+
+  async listJoinRequests(groupId: string) {
+    return prisma.groupJoinRequest.findMany({
+      where: { group_id: groupId },
+      include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
+      orderBy: { created_at: 'asc' },
+      take: 200,
+    });
+  },
+
+  async resolveJoinRequest(groupId: string, requestId: string, approve: boolean) {
+    const request = await prisma.groupJoinRequest.findFirst({ where: { id: requestId, group_id: groupId } });
+    if (!request) throw httpError('Application not found', 404);
+    if (!approve) {
+      await prisma.groupJoinRequest.deleteMany({ where: { id: requestId } });
+      return { approved: false };
     }
-    // Increment members_count only if this call actually created the membership
-    if (created) {
-      await prisma.group.update({
-        where: { id: groupId },
-        data: { members_count: { increment: 1 } },
-      });
-    }
-    // A full member doesn't need a separate notification-only subscription anymore
-    await prisma.groupSubscriber.deleteMany({ where: { group_id: groupId, user_id: userId } });
-    return membership;
+    await this.addMember(groupId, request.user_id);
+    return { approved: true };
   },
 
   async leave(groupId: string, userId: string) {
-    // Allow owner to leave only if they are the LAST member (transfers to deletion)
-    const totalMembers = await prisma.groupMember.count({ where: { group_id: groupId } });
-    const membership = await prisma.groupMember.findUnique({
-      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
-    });
-
-    if (!membership) return { count: 0 };
-
-    const isOwner = membership.role === 'owner';
-    // Owner can only leave if they are the last member (group will be deleted)
-    if (isOwner && totalMembers > 1) {
-      throw new Error('Owner cannot leave while other members exist. Transfer ownership first.');
-    }
-
-    const result = await prisma.groupMember.deleteMany({
-      where: { group_id: groupId, user_id: userId },
-    });
-
-    if (result.count > 0) {
-      const updated = await prisma.group.update({
-        where: { id: groupId },
-        data: { members_count: { decrement: result.count } },
-        select: { id: true, members_count: true },
+    const outcome = await prisma.$transaction(async (tx) => {
+      const membership = await tx.groupMember.findUnique({
+        where: { group_id_user_id: { group_id: groupId, user_id: userId } },
       });
-      // Auto-delete (soft) group if no members remain
-      if (updated.members_count <= 0) {
-        await softDeleteGroupAndConversations(groupId);
+      if (!membership) return { count: 0, empty: false };
+      // The owner may only leave as the very last member (the group then goes away)
+      if (membership.role === 'owner' && (await tx.groupMember.count({ where: { group_id: groupId } })) > 1) {
+        throw new Error('Owner cannot leave while other members exist. Transfer ownership first.');
       }
-    }
-    return result;
+      await tx.groupMember.delete({ where: { group_id_user_id: { group_id: groupId, user_id: userId } } });
+      const left = await syncMembersCount(tx, groupId);
+      return { count: 1, empty: left <= 0 };
+    });
+    // Auto-delete (soft) group if no members remain
+    if (outcome.empty) await softDeleteGroupAndConversations(groupId);
+    return { count: outcome.count };
   },
 
-  async getMembers(groupId: string, page = 1, limit = 30, viewerId: string | null = null) {
+  /** Owner hands the group over to another member; the previous owner stays on as admin. */
+  async transferOwnership(groupId: string, currentOwnerId: string, newOwnerId: string) {
+    if (newOwnerId === currentOwnerId) throw httpError('Вы уже владелец этой группы', 400);
+    return prisma.$transaction(async (tx) => {
+      const group = await tx.group.findFirst({ where: { id: groupId, deleted_at: null }, select: { owner_id: true } });
+      if (!group) throw httpError('Group not found', 404);
+      if (group.owner_id !== currentOwnerId) throw httpError('Only the group owner can transfer ownership', 403);
+      const target = await tx.groupMember.findUnique({
+        where: { group_id_user_id: { group_id: groupId, user_id: newOwnerId } },
+      });
+      if (!target) throw httpError('Новый владелец должен быть участником группы', 400);
+      await tx.groupMember.update({
+        where: { group_id_user_id: { group_id: groupId, user_id: currentOwnerId } },
+        data: { role: 'admin' },
+      });
+      await tx.groupMember.update({
+        where: { group_id_user_id: { group_id: groupId, user_id: newOwnerId } },
+        data: { role: 'owner', custom_role_id: null },
+      });
+      await tx.group.update({ where: { id: groupId }, data: { owner_id: newOwnerId } });
+      return { owner_id: newOwnerId };
+    });
+  },
+
+  async getMembers(groupId: string, page = 1, limit = 30, viewerId: string | null = null, staffOnly = false) {
     const skip = (page - 1) * limit;
     const where: Prisma.GroupMemberWhereInput = { group_id: groupId };
     // Owner's "hide admins" / "hide members" settings apply to everyone below admin level.
     const viewerWeight = viewerId ? await groupService.getRoleWeight(groupId, viewerId) : 0;
+    const andNot: Prisma.GroupMemberWhereInput[] = [];
     if (viewerWeight < 2) {
       const group = await prisma.group.findUnique({ where: { id: groupId }, select: { hide_admins: true, hidden_member_ids: true } });
       const hiddenIds = parseHiddenIds(group?.hidden_member_ids);
       if (hiddenIds.length) where.user_id = { notIn: hiddenIds };
-      if (group?.hide_admins) where.role = { notIn: ['owner', 'admin'] };
+      if (group?.hide_admins) andNot.push({ role: { in: ['owner', 'admin'] } });
     }
+    if (andNot.length) where.NOT = andNot;
+    if (staffOnly) where.OR = [{ role: { in: ['owner', 'admin', 'moderator'] } }, { custom_role_id: { not: null } }];
     return prisma.groupMember.findMany({
       where,
-      include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true, banner_url: true } } },
+      include: {
+        user: { select: { id: true, username: true, display_name: true, avatar_url: true, banner_url: true } },
+        customRole: { select: { id: true, name: true, color: true, icon: true } },
+      },
       orderBy: { joined_at: 'asc' },
       skip,
       take: limit,
@@ -637,32 +828,47 @@ export const groupService = {
 
   async setMemberRole(groupId: string, requesterId: string, userId: string, role: MemberRole) {
     if (role === 'owner') throw new Error('Cannot assign owner role via this endpoint');
-    // Cannot change the role of the current owner
-    const current = await prisma.groupMember.findUnique({
-      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
-    });
-    if (!current) throw Object.assign(new Error('Member not found'), { statusCode: 404 });
+    const requester = await groupService.getAccess(groupId, requesterId);
+    if (!requester?.permissions.has('can_manage_members')) throw new Error('Not authorized');
+    const current = await groupService.getAccess(groupId, userId);
+    if (!current) throw httpError('Member not found', 404);
     if (current.role === 'owner') throw new Error('Cannot change the role of the group owner');
-
-    const requester = await prisma.groupMember.findUnique({
-      where: { group_id_user_id: { group_id: groupId, user_id: requesterId } },
-    });
-    const requesterWeight = roleWeight(requester?.role);
-    if (requesterWeight < 2) throw new Error('Not authorized'); // must be admin or owner
     // Admins (not owner) may only grant roles below admin — they cannot create peer admins.
-    if (requesterWeight < 3 && role === 'admin') {
-      throw new Error('Only the group owner can assign the admin role');
-    }
-    // Same rule as removeMember: can only change the role of a member with a strictly
-    // lower role weight — otherwise an admin could demote/reshuffle their peer admins.
-    const targetWeight = roleWeight(current?.role);
-    if (targetWeight >= requesterWeight) {
+    if (role === 'admin' && requester.rank < 3) throw new Error('Only the group owner can assign the admin role');
+    // Same rule as removeMember: only members strictly below the requester can be changed,
+    // and nobody can hand out a role as high as their own (unless they are the owner).
+    if (current.rank >= requester.rank) {
       throw new Error('Not authorized to change the role of a member with an equal or higher role');
+    }
+    if (roleWeight(role) >= requester.rank && requester.rank < 3) {
+      throw new Error('Not authorized to grant a role equal to your own');
     }
 
     return prisma.groupMember.update({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
       data: { role },
+    });
+  },
+
+  /** Gives a member one of the group's custom roles (or takes it away with `roleId = null`). */
+  async setMemberCustomRole(groupId: string, requesterId: string, userId: string, roleId: string | null) {
+    const requester = await groupService.getAccess(groupId, requesterId);
+    if (!requester?.permissions.has('can_manage_members')) throw httpError('Not authorized', 403);
+    const target = await groupService.getAccess(groupId, userId);
+    if (!target) throw httpError('Member not found', 404);
+    if (target.rank >= requester.rank) throw httpError('Not authorized to change a member with an equal or higher role', 403);
+
+    if (roleId) {
+      const customRole = await prisma.groupCustomRole.findFirst({ where: { id: roleId, group_id: groupId } });
+      if (!customRole) throw httpError('Custom role not found', 404);
+      // Nobody can hand out powers they don't have themselves
+      const missing = cleanPermissions(customRole.permissions).filter((p) => !requester.permissions.has(p));
+      if (missing.length) throw httpError('Нельзя выдать роль с правами, которых нет у вас', 403);
+    }
+    return prisma.groupMember.update({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      data: { custom_role_id: roleId },
+      include: { customRole: { select: { id: true, name: true, color: true, icon: true } } },
     });
   },
 
@@ -673,91 +879,106 @@ export const groupService = {
   },
 
   async removeMember(groupId: string, requesterId: string, targetUserId: string) {
-    const target = await prisma.groupMember.findUnique({
-      where: { group_id_user_id: { group_id: groupId, user_id: targetUserId } },
-    });
-    if (!target) throw new Error('Member not found');
+    const target = await groupService.getAccess(groupId, targetUserId);
+    if (!target) throw httpError('Member not found', 404);
     if (target.role === 'owner') throw new Error('Cannot remove the group owner');
-    const requester = await prisma.groupMember.findUnique({
-      where: { group_id_user_id: { group_id: groupId, user_id: requesterId } },
-    });
-    const requesterWeight = roleWeight(requester?.role);
-    const targetWeight = roleWeight(target.role);
-    if (requesterWeight < 1) throw new Error('Not authorized'); // must be at least moderator
-    // Can only remove members with a strictly lower role weight (moderators can kick plain
+    const requester = await groupService.getAccess(groupId, requesterId);
+    if (!requester || requester.rank < 1) throw new Error('Not authorized'); // must be at least moderator
+    // Can only remove members with a strictly lower rank (moderators can kick plain
     // members, admins can kick moderators/members but not other admins, etc).
-    if (targetWeight >= requesterWeight) {
+    if (target.rank >= requester.rank) {
       throw new Error('Not authorized to remove a member with an equal or higher role');
     }
-    const result = await prisma.groupMember.delete({
-      where: { group_id_user_id: { group_id: groupId, user_id: targetUserId } },
-    });
-    const updated = await prisma.group.update({
-      where: { id: groupId },
-      data: { members_count: { decrement: 1 } },
-      select: { id: true, members_count: true },
+    const left = await prisma.$transaction(async (tx) => {
+      await tx.groupMember.delete({ where: { group_id_user_id: { group_id: groupId, user_id: targetUserId } } });
+      return syncMembersCount(tx, groupId);
     });
     // Auto-delete (soft) group if no members remain
-    if (updated.members_count <= 0) {
-      await softDeleteGroupAndConversations(groupId);
-    }
-    return result;
+    if (left <= 0) await softDeleteGroupAndConversations(groupId);
+    return { removed: true };
   },
 
   // ── Custom roles ──────────────────────────────────────────────────────────
   async getCustomRoles(groupId: string) {
     return prisma.groupCustomRole.findMany({
       where: { group_id: groupId },
+      include: { _count: { select: { members: true } } },
       orderBy: { position: 'asc' },
     });
   },
 
-  async createCustomRole(groupId: string, data: { name: string; color?: string; icon?: string; permissions?: string[] }) {
+  // Nobody can put powers into a role that they don't hold themselves.
+  async assertCanGrant(groupId: string, actorId: string, permissions: GroupPermission[]) {
+    const access = await groupService.getAccess(groupId, actorId);
+    if (!access?.permissions.has('can_manage_roles')) throw httpError('Not authorized', 403);
+    if (permissions.some((p) => !access.permissions.has(p))) {
+      throw httpError('Нельзя выдать роли права, которых нет у вас', 403);
+    }
+  },
+
+  async createCustomRole(groupId: string, actorId: string, data: { name: string; color?: string; icon?: string; permissions?: string[] }) {
     const name = sanitizeDisplayText(data.name ?? '', 50);
-    if (!name) throw new Error('Role name is required');
+    if (!name) throw httpError('Role name is required', 400);
+    const permissions = cleanPermissions(data.permissions);
+    await groupService.assertCanGrant(groupId, actorId, permissions);
+    if (data.color !== undefined && !HEX_COLOR_RE.test(data.color)) throw httpError('Invalid role color', 400);
     const count = await prisma.groupCustomRole.count({ where: { group_id: groupId } });
+    if (count >= MAX_CUSTOM_ROLES) throw httpError(`Не больше ${MAX_CUSTOM_ROLES} ролей в группе`, 400);
     return prisma.groupCustomRole.create({
       data: {
         group_id: groupId,
         name,
         color: data.color ?? '#9ca3af',
-        icon: data.icon ?? '🎖️',
-        permissions: data.permissions ?? [],
+        icon: cleanRoleIcon(data.icon) ?? '🎖️',
+        permissions,
         position: count,
       },
     });
   },
 
-  async updateCustomRole(groupId: string, roleId: string, data: { name?: string; color?: string; icon?: string; permissions?: string[] }) {
+  async updateCustomRole(groupId: string, actorId: string, roleId: string, data: { name?: string; color?: string; icon?: string; permissions?: string[] }) {
+    const role = await prisma.groupCustomRole.findFirst({ where: { id: roleId, group_id: groupId } });
+    if (!role) throw httpError('Custom role not found', 404);
     let name: string | undefined;
     if (data.name !== undefined) {
       name = sanitizeDisplayText(data.name ?? '', 50);
-      if (!name) throw new Error('Role name is required');
+      if (!name) throw httpError('Role name is required', 400);
     }
+    if (data.color !== undefined && !HEX_COLOR_RE.test(data.color)) throw httpError('Invalid role color', 400);
+    const permissions = data.permissions !== undefined ? cleanPermissions(data.permissions) : undefined;
+    // The role may already hold powers the editor lacks — only newly added ones must be covered.
+    const added = (permissions ?? []).filter((p) => !cleanPermissions(role.permissions).includes(p));
+    await groupService.assertCanGrant(groupId, actorId, added);
     return prisma.groupCustomRole.update({
-      where: { id: roleId, group_id: groupId },
+      where: { id: roleId },
       data: {
         ...(name !== undefined && { name }),
         ...(data.color !== undefined && { color: data.color }),
-        ...(data.icon !== undefined && { icon: data.icon }),
-        ...(data.permissions !== undefined && { permissions: data.permissions }),
+        ...(data.icon !== undefined && { icon: cleanRoleIcon(data.icon) ?? role.icon }),
+        ...(permissions !== undefined && { permissions }),
       },
     });
   },
 
   async deleteCustomRole(groupId: string, roleId: string) {
-    return prisma.groupCustomRole.delete({
-      where: { id: roleId, group_id: groupId },
-    });
+    const removed = await prisma.groupCustomRole.deleteMany({ where: { id: roleId, group_id: groupId } });
+    if (removed.count === 0) throw httpError('Custom role not found', 404);
+    return { deleted: true };
   },
 
   // ── events ────────────────────────────────────────────────────────────────
   async createEvent(input: CreateEventInput) {
+    const title = sanitizeDisplayText(input.title ?? '', 200);
+    if (!title) throw httpError('Event title is required', 400);
+    const shortCode = String(input.shortCode ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+    if (!shortCode) throw httpError('Event short code is required', 400);
+    assertEventWindow(input.startsAt, input.endsAt);
+    assertCoords(input.locationLat, input.locationLng);
     return prisma.event.create({
       data: {
         group_id: input.groupId,
-        title: input.title,
-        short_code: input.shortCode.toUpperCase(),
+        title,
+        short_code: shortCode,
         description: input.description,
         banner_url: input.bannerUrl,
         location_name: input.locationName,
@@ -776,7 +997,18 @@ export const groupService = {
 
   async updateEvent(eventId: string, input: UpdateEventInput) {
     const data: Prisma.EventUpdateInput = {};
-    if (input.title !== undefined) data.title = input.title;
+    if (input.title !== undefined) {
+      const title = sanitizeDisplayText(input.title ?? '', 200);
+      if (!title) throw httpError('Event title is required', 400);
+      data.title = title;
+    }
+    if (input.status !== undefined && !EVENT_STATUSES.includes(input.status)) throw httpError('Unknown event status', 400);
+    assertCoords(input.locationLat, input.locationLng);
+    if (input.startsAt !== undefined || input.endsAt !== undefined) {
+      const current = await prisma.event.findUnique({ where: { id: eventId }, select: { starts_at: true, ends_at: true } });
+      if (!current) throw httpError('Event not found', 404);
+      assertEventWindow(input.startsAt ?? current.starts_at, input.endsAt ?? current.ends_at);
+    }
     if (input.description !== undefined) data.description = input.description;
     if (input.bannerUrl !== undefined) data.banner_url = input.bannerUrl;
     if (input.locationName !== undefined) data.location_name = input.locationName;
@@ -788,7 +1020,10 @@ export const groupService = {
     if (input.theme !== undefined) data.theme = input.theme;
     if (input.isTop !== undefined) data.is_top = input.isTop;
     if (input.registrationUrl !== undefined) data.registration_url = requireSafeLink(input.registrationUrl, 'регистрация');
-    if (input.shortCode !== undefined && input.shortCode.trim()) data.short_code = input.shortCode.trim().toUpperCase();
+    if (input.shortCode !== undefined) {
+      const code = input.shortCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+      if (code) data.short_code = code;
+    }
 
     return prisma.event.update({ where: { id: eventId }, data, select: EVENT_SELECT });
   },
@@ -841,10 +1076,13 @@ export const groupService = {
 
   // ── Ticket tiers ──────────────────────────────────────────────────────────
   async createTicketTier(input: CreateTicketTierInput) {
+    const name = sanitizeDisplayText(input.name ?? '', 100);
+    if (!name) throw httpError('Ticket name is required', 400);
+    assertTierNumbers(input.price, input.totalCount);
     return prisma.ticketTier.create({
       data: {
         event_id: input.eventId,
-        name: sanitizeDisplayText(input.name ?? '', 100),
+        name,
         price: input.price,
         currency: input.currency ?? 'USD',
         total_count: input.totalCount,
@@ -856,7 +1094,19 @@ export const groupService = {
 
   async updateTicketTier(tierId: string, input: Partial<Omit<CreateTicketTierInput, 'eventId'>>) {
     const data: Prisma.TicketTierUpdateInput = {};
-    if (input.name !== undefined) data.name = sanitizeDisplayText(input.name ?? '', 100);
+    if (input.name !== undefined) {
+      const name = sanitizeDisplayText(input.name ?? '', 100);
+      if (!name) throw httpError('Ticket name is required', 400);
+      data.name = name;
+    }
+    if (input.price !== undefined || input.totalCount !== undefined) {
+      const tier = await prisma.ticketTier.findUnique({ where: { id: tierId }, select: { price: true, sold_count: true } });
+      if (!tier) throw httpError('Ticket tier not found', 404);
+      assertTierNumbers(input.price ?? Number(tier.price), input.totalCount ?? Infinity);
+      if (input.totalCount !== undefined && input.totalCount < tier.sold_count) {
+        throw httpError('Нельзя поставить количество меньше уже проданных билетов', 400);
+      }
+    }
     if (input.price !== undefined) data.price = input.price;
     if (input.currency !== undefined) data.currency = input.currency;
     if (input.totalCount !== undefined) data.total_count = input.totalCount;
@@ -871,28 +1121,26 @@ export const groupService = {
 
   // ── SOON Badge ────────────────────────────────────────────────────────────
   async toggleSoonBadge(userId: string, eventId: string) {
-    const existing = await prisma.soonBadge.findUnique({
-      where: { user_id_event_id: { user_id: userId, event_id: eventId } },
-    });
-
-    if (existing) {
-      await Promise.all([
-        prisma.soonBadge.delete({ where: { id: existing.id } }),
-        prisma.event.update({ where: { id: eventId }, data: { attendee_count: { decrement: 1 } } }),
-      ]);
-      return { added: false };
-    }
-
-    const event = await prisma.event.findUnique({ where: { id: eventId }, select: { group_id: true } });
-    if (!event) throw new Error('Event not found');
+    const event = await prisma.event.findFirst({ where: { id: eventId, group: { deleted_at: null } }, select: { group_id: true } });
+    if (!event) throw httpError('Event not found', 404);
     const group = await this.ensureEventExpirySwept(event.group_id);
-    if (group && this.isEventExpired(group)) throw new Error('EVENT_EXPIRED');
 
-    await Promise.all([
-      prisma.soonBadge.create({ data: { user_id: userId, event_id: eventId } }),
-      prisma.event.update({ where: { id: eventId }, data: { attendee_count: { increment: 1 } } }),
-    ]);
-    return { added: true };
+    return prisma.$transaction(async (tx) => {
+      // Same row lock as RSVP: parallel toggles must not double-count attendees
+      await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId}::uuid FOR UPDATE`;
+      const existing = await tx.soonBadge.findUnique({
+        where: { user_id_event_id: { user_id: userId, event_id: eventId } },
+      });
+      if (existing) {
+        await tx.soonBadge.delete({ where: { id: existing.id } });
+        await tx.event.updateMany({ where: { id: eventId, attendee_count: { gt: 0 } }, data: { attendee_count: { decrement: 1 } } });
+        return { added: false };
+      }
+      if (group && this.isEventExpired(group)) throw new Error('EVENT_EXPIRED');
+      await tx.soonBadge.create({ data: { user_id: userId, event_id: eventId } });
+      await tx.event.update({ where: { id: eventId }, data: { attendee_count: { increment: 1 } } });
+      return { added: true };
+    });
   },
 
   async toggleSoonBadgeVisibility(userId: string, eventId: string) {
@@ -987,9 +1235,14 @@ export const groupService = {
     return !!sub;
   },
 
-  // owner/admin/moderator can moderate content (delete others' posts/comments) in this group.
+  // Moderation (delete others' posts/comments, view the archive): owner/admin/moderator or a custom role with the right.
   async isAtLeastModerator(groupId: string, userId: string): Promise<boolean> {
-    return (await groupService.getRoleWeight(groupId, userId)) >= 1;
+    return groupService.hasPermission(groupId, userId, 'can_moderate_posts');
+  },
+
+  // Publishing on behalf of the group.
+  async canPost(groupId: string, userId: string): Promise<boolean> {
+    return groupService.hasPermission(groupId, userId, 'can_post');
   },
 
   // ── Group posts ──────────────────────────────────────────────────────────
@@ -1153,47 +1406,33 @@ export const groupService = {
 
   // ── Group Rating (Reddit-style: -1 / +1 toggle) ───────────────────────────
   async rateGroup(groupId: string, userId: string, value: number) {
-    if (value !== 1 && value !== -1) throw new Error('value must be 1 or -1');
-    const group = await prisma.group.findUnique({ where: { id: groupId }, select: { owner_id: true } });
-    if (group?.owner_id === userId) throw new Error('You cannot vote on your own group');
+    if (value !== 1 && value !== -1) throw httpError('value must be 1 or -1', 400);
+    const group = await prisma.group.findFirst({ where: { id: groupId, deleted_at: null }, select: { owner_id: true } });
+    if (!group) throw httpError('Group not found', 404);
+    if (group.owner_id === userId) throw httpError('You cannot vote on your own group', 400);
 
-    const existing = await prisma.groupRating.findUnique({
-      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
-    });
-
-    let delta = 0;
-    let finalVote: number = value;
-
-    if (existing) {
-      if (existing.value === value) {
-        // Toggle off — remove vote
-        await prisma.groupRating.delete({ where: { group_id_user_id: { group_id: groupId, user_id: userId } } });
-        delta = -value;
+    return prisma.$transaction(async (tx) => {
+      // Serialise votes per group so score/count stay consistent with the rows
+      await tx.$queryRaw`SELECT id FROM "Group" WHERE id = ${groupId}::uuid FOR UPDATE`;
+      const key = { group_id_user_id: { group_id: groupId, user_id: userId } };
+      const existing = await tx.groupRating.findUnique({ where: key });
+      let finalVote: number = value;
+      if (existing && existing.value === value) {
+        await tx.groupRating.delete({ where: key }); // toggle off
         finalVote = 0;
+      } else if (existing) {
+        await tx.groupRating.update({ where: key, data: { value, updated_at: new Date() } });
       } else {
-        // Flip vote direction
-        await prisma.groupRating.update({
-          where: { group_id_user_id: { group_id: groupId, user_id: userId } },
-          data: { value, updated_at: new Date() },
-        });
-        delta = value * 2; // e.g. was -1, now +1 → net +2
+        await tx.groupRating.create({ data: { group_id: groupId, user_id: userId, value } });
       }
-    } else {
-      await prisma.groupRating.create({ data: { group_id: groupId, user_id: userId, value } });
-      delta = value;
-    }
-
-    const newCountDelta = existing ? (existing.value === value ? -1 : 0) : 1;
-    const updated = await prisma.group.update({
-      where: { id: groupId },
-      data: {
-        rating: { increment: delta },
-        rating_count: { increment: newCountDelta },
-      },
-      select: { rating: true, rating_count: true },
+      const agg = await tx.groupRating.aggregate({ where: { group_id: groupId }, _sum: { value: true }, _count: true });
+      const updated = await tx.group.update({
+        where: { id: groupId },
+        data: { rating: agg._sum.value ?? 0, rating_count: agg._count },
+        select: { rating: true, rating_count: true },
+      });
+      return { score: updated.rating, voteCount: updated.rating_count, myVote: finalVote };
     });
-
-    return { score: updated.rating, voteCount: updated.rating_count, myVote: finalVote };
   },
 
   async getMyRating(groupId: string, userId: string) {
@@ -1203,14 +1442,90 @@ export const groupService = {
     return r?.value ?? 0;
   },
 
-  // ── Create post in group ──────────────────────────────────────────────────
-  async createGroupPost(groupId: string, userId: string, input: { content: string; title?: string; postType?: string; isNsfw?: boolean; isAiGenerated?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; mediaOriginalUrls?: string[]; tags?: string[]; visibility?: string; category?: string }) {
-    // Check user is admin/owner
+  // ── Reviews (1..5 stars + text) ────────────────────────────────────────────
+  async listReviews(groupId: string, page = 1, limit = 20) {
+    const [reviews, agg] = await Promise.all([
+      prisma.groupReview.findMany({
+        where: { group_id: groupId },
+        include: { user: { select: { id: true, username: true, display_name: true, avatar_url: true } } },
+        orderBy: { created_at: 'desc' },
+        skip: (Math.max(1, page) - 1) * limit,
+        take: limit,
+      }),
+      prisma.groupReview.aggregate({ where: { group_id: groupId }, _avg: { rating: true }, _count: true }),
+    ]);
+    return {
+      reviews: reviews.map((r) => ({ id: r.id, rating: r.rating, text: r.text, created_at: r.created_at, author: r.user })),
+      average: agg._avg.rating ?? 0,
+      total: agg._count,
+    };
+  },
+
+  async upsertReview(groupId: string, userId: string, rating: number, text: string) {
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw httpError('Оценка — от 1 до 5', 400);
+    const clean = sanitizeDisplayText(text ?? '', 2000);
+    if (!clean) throw httpError('Напишите текст отзыва', 400);
+    if (containsToxicLanguage(clean)) throw httpError('Отзыв содержит недопустимый контент', 400);
+    const group = await prisma.group.findFirst({ where: { id: groupId, deleted_at: null }, select: { owner_id: true } });
+    if (!group) throw httpError('Group not found', 404);
+    if (group.owner_id === userId) throw httpError('Нельзя оставить отзыв на свою группу', 400);
     const member = await prisma.groupMember.findUnique({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      select: { user_id: true },
     });
-    if (roleWeight(member?.role) < 1) {
-      throw new Error('Only owners, admins and moderators can post in the group');
+    if (!member) throw httpError('Отзывы могут оставлять только участники группы', 403);
+    return prisma.groupReview.upsert({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      update: { rating, text: clean },
+      create: { group_id: groupId, user_id: userId, rating, text: clean },
+    });
+  },
+
+  async deleteReview(groupId: string, reviewId: string, actorId: string) {
+    const review = await prisma.groupReview.findFirst({ where: { id: reviewId, group_id: groupId } });
+    if (!review) throw httpError('Review not found', 404);
+    if (review.user_id !== actorId && !(await groupService.isAtLeastModerator(groupId, actorId))) {
+      throw httpError('Not authorized', 403);
+    }
+    await prisma.groupReview.delete({ where: { id: reviewId } });
+    return { deleted: true };
+  },
+
+  // ── News digest / categories (derived from the group's own posts) ──────────
+  async getDigest(groupId: string, viewerId: string | null, limit = 10) {
+    const hasSubscriberAccess = viewerId ? await groupService.hasSubscriberAccess(groupId, viewerId) : false;
+    const rows = await prisma.groupPost.findMany({
+      where: {
+        group_id: groupId,
+        post: { deleted_at: null, is_archived: false, ...(hasSubscriberAccess ? {} : { subscriber_only: false }) },
+      },
+      select: { post: { select: { id: true, title: true, content: true, category: true, media_urls: true, created_at: true } } },
+      orderBy: [{ pinned: 'desc' }, { created_at: 'desc' }],
+      take: limit,
+    });
+    return rows.map(({ post }) => ({
+      id: post.id,
+      title: post.title?.trim() || post.content.trim().split('\n')[0].slice(0, 120),
+      category: post.category,
+      image: post.media_urls[0] ?? null,
+      created_at: post.created_at,
+    }));
+  },
+
+  async getCategories(groupId: string) {
+    const grouped = await prisma.post.groupBy({
+      by: ['category'],
+      where: { deleted_at: null, is_archived: false, subscriber_only: false, category: { not: null }, groupPosts: { some: { group_id: groupId } } },
+      _count: true,
+      orderBy: { _count: { category: 'desc' } },
+    });
+    return grouped.filter((g) => g.category).map((g) => ({ name: g.category as string, post_count: g._count }));
+  },
+
+  // ── Create post in group ──────────────────────────────────────────────────
+  async createGroupPost(groupId: string, userId: string, input: { content: string; title?: string; postType?: string; isNsfw?: boolean; isAiGenerated?: boolean; isAnnouncement?: boolean; mediaUrls?: string[]; mediaOriginalUrls?: string[]; tags?: string[]; visibility?: string; category?: string }) {
+    if (!(await groupService.canPost(groupId, userId))) {
+      throw httpError('You are not allowed to post in this group', 403);
     }
 
     const content = (input.content ?? '').trim();
@@ -1377,10 +1692,13 @@ export const groupService = {
   },
 
   async createSubEvent(eventId: string, input: SubEventInput) {
+    const title = sanitizeDisplayText(input.title ?? '', 200);
+    if (!title) throw httpError('Sub-event title is required', 400);
+    assertEventWindow(input.startsAt, input.endsAt);
     return prisma.subEvent.create({
       data: {
         event_id: eventId,
-        title: input.title,
+        title,
         type: input.type ?? 'panel',
         speaker: input.speaker,
         location_name: input.locationName,
@@ -1391,9 +1709,19 @@ export const groupService = {
     });
   },
 
-  async updateSubEvent(subEventId: string, input: UpdateSubEventInput) {
+  async updateSubEvent(eventId: string, subEventId: string, input: UpdateSubEventInput) {
+    // The sub-event must belong to the event whose group the caller was authorised for
+    const current = await prisma.subEvent.findFirst({ where: { id: subEventId, event_id: eventId }, select: { starts_at: true, ends_at: true } });
+    if (!current) throw httpError('Sub-event not found', 404);
     const data: Prisma.SubEventUpdateInput = {};
-    if (input.title !== undefined) data.title = input.title;
+    if (input.startsAt !== undefined || input.endsAt !== undefined) {
+      assertEventWindow(input.startsAt ?? current.starts_at, input.endsAt ?? current.ends_at);
+    }
+    if (input.title !== undefined) {
+      const title = sanitizeDisplayText(input.title ?? '', 200);
+      if (!title) throw httpError('Sub-event title is required', 400);
+      data.title = title;
+    }
     if (input.type !== undefined) data.type = input.type;
     if (input.speaker !== undefined) data.speaker = input.speaker;
     if (input.locationName !== undefined) data.location_name = input.locationName;
@@ -1403,15 +1731,17 @@ export const groupService = {
     return prisma.subEvent.update({ where: { id: subEventId }, data });
   },
 
-  async deleteSubEvent(subEventId: string) {
-    return prisma.subEvent.delete({ where: { id: subEventId } });
+  async deleteSubEvent(eventId: string, subEventId: string) {
+    const removed = await prisma.subEvent.deleteMany({ where: { id: subEventId, event_id: eventId } });
+    if (removed.count === 0) throw httpError('Sub-event not found', 404);
+    return { deleted: true };
   },
 
   // ── Group Messages ─────────────────────────────────────────────────────────
   /** Чат группы видят и пишут только её участники (is_public на чат не влияет). */
   async assertGroupMember(groupId: string, userId: string) {
-    const member = await prisma.groupMember.findUnique({
-      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+    const member = await prisma.groupMember.findFirst({
+      where: { group_id: groupId, user_id: userId, group: { deleted_at: null } },
       select: { role: true },
     });
     if (!member) throw Object.assign(new Error('Чат доступен только участникам группы'), { statusCode: 403 });
@@ -1580,7 +1910,7 @@ export const groupService = {
     return prisma.groupTodoItem.create({
       data: {
         group_id: groupId,
-        title: data.title.trim(),
+        title: sanitizeDisplayText(data.title ?? '', 200),
         description: data.description?.trim() || null,
         status,
         position: data.position,
@@ -1593,7 +1923,11 @@ export const groupService = {
     const owned = await prisma.groupTodoItem.findFirst({ where: { id: itemId, group_id: groupId, deleted_at: null }, select: { id: true } });
     if (!owned) throw Object.assign(new Error('Todo item not found'), { statusCode: 404 });
     const update: Prisma.GroupTodoItemUpdateInput = {};
-    if (data.title !== undefined) update.title = data.title.trim();
+    if (data.title !== undefined) {
+      const title = sanitizeDisplayText(data.title ?? '', 200);
+      if (!title) throw httpError('Title is required', 400);
+      update.title = title;
+    }
     if (data.description !== undefined) update.description = data.description?.trim() || null;
     if (data.status !== undefined) {
       const cols = await groupService.getTodoColumns(groupId);
@@ -1614,10 +1948,13 @@ export const groupService = {
   },
 
   async reorderTodoItems(groupId: string, orderedIds: string[]) {
-    await Promise.all(
+    if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== 'string')) {
+      throw httpError('orderedIds must be a list of ids', 400);
+    }
+    await prisma.$transaction(
       orderedIds.map((id, idx) =>
         prisma.groupTodoItem.updateMany({
-          where: { id, group_id: groupId },
+          where: { id, group_id: groupId, deleted_at: null },
           data: { position: idx },
         })
       )

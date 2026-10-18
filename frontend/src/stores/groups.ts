@@ -23,6 +23,8 @@ export interface GroupMember {
     display_name: string | null
     avatar_url: string | null
   }
+  customRole?: { id: string; name: string; color: string; icon: string } | null
+  custom_role_id?: string | null
 }
 
 export interface GroupOwner {
@@ -284,8 +286,6 @@ export interface GroupTransaction {
 
 export type GroupPermission =
   | 'can_post'
-  | 'can_comment'
-  | 'can_invite'
   | 'can_moderate_posts'
   | 'can_manage_members'
   | 'can_manage_events'
@@ -302,6 +302,24 @@ export interface CustomRole {
   position: number
   created_at: string
   updated_at: string
+  _count?: { members: number }
+}
+
+export interface JoinRequest {
+  id: string
+  group_id: string
+  user_id: string
+  message: string | null
+  created_at: string
+  user: { id: string; username: string; display_name: string | null; avatar_url: string | null }
+}
+
+export interface GroupReview {
+  id: string
+  rating: number
+  text: string
+  created_at: string
+  author: { id: string; username: string; display_name: string | null; avatar_url: string | null }
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -396,8 +414,10 @@ export const useGroupsStore = defineStore('groups', () => {
     groups.value = groups.value.filter(g => g.id !== id)
   }
 
-  async function joinGroup(id: string) {
-    const { data } = await api.post(`/groups/${id}/join`)
+  /** Resolves `true` when the user was added, `false` when an application was filed (closed group). */
+  async function joinGroup(id: string, message?: string): Promise<boolean> {
+    const { data } = await api.post(`/groups/${id}/join`, message ? { message } : {})
+    if (data.data.pending) return false
     // Use returned membership directly — avoid re-fetching all memberships
     const membership = data.data.membership
     if (membership) {
@@ -407,6 +427,63 @@ export const useGroupsStore = defineStore('groups', () => {
     } else {
       await loadMyGroups()
     }
+    return true
+  }
+
+  async function getMyJoinRequest(id: string): Promise<boolean> {
+    const { data } = await api.get(`/groups/${id}/join-request`)
+    return !!data.data.pending
+  }
+
+  async function cancelJoinRequest(id: string) {
+    await api.delete(`/groups/${id}/join-request`)
+  }
+
+  async function fetchJoinRequests(id: string): Promise<JoinRequest[]> {
+    const { data } = await api.get(`/groups/${id}/join-requests`)
+    return data.data.requests as JoinRequest[]
+  }
+
+  async function resolveJoinRequest(id: string, requestId: string, approve: boolean) {
+    await api.post(`/groups/${id}/join-requests/${requestId}`, { approve })
+  }
+
+  async function transferOwnership(id: string, userId: string) {
+    await api.post(`/groups/${id}/transfer-owner`, { userId })
+    await loadMyGroups()
+  }
+
+  async function setMemberCustomRole(id: string, userId: string, roleId: string | null): Promise<GroupMember> {
+    const { data } = await api.patch(`/groups/${id}/members/${userId}/custom-role`, { roleId })
+    return data.data.member as GroupMember
+  }
+
+  async function fetchReviews(id: string, page = 1): Promise<{ reviews: GroupReview[]; average: number; total: number }> {
+    const { data } = await api.get(`/groups/${id}/reviews`, { params: { page } })
+    return data.data
+  }
+
+  async function submitReview(id: string, rating: number, text: string) {
+    await api.post(`/groups/${id}/reviews`, { rating, text })
+  }
+
+  async function deleteReview(id: string, reviewId: string) {
+    await api.delete(`/groups/${id}/reviews/${reviewId}`)
+  }
+
+  async function fetchDigest(id: string) {
+    const { data } = await api.get(`/groups/${id}/digest`)
+    return data.data.digest as { id: string; title: string; category: string | null; image: string | null; created_at: string }[]
+  }
+
+  async function fetchCategories(id: string) {
+    const { data } = await api.get(`/groups/${id}/categories`)
+    return data.data.categories as { name: string; post_count: number }[]
+  }
+
+  async function fetchTeam(id: string): Promise<GroupMember[]> {
+    const { data } = await api.get(`/groups/${id}/team`)
+    return data.data.team as GroupMember[]
   }
 
   async function leaveGroup(id: string) {
@@ -763,6 +840,9 @@ export const useGroupsStore = defineStore('groups', () => {
     eventGroups, creativeGroups, staticGroups, newsGroups, shopGroups, communityGroups, brandGroups,
     loadGroups, loadGroup, loadMyGroups, createGroup, updateGroup, deleteGroup,
     joinGroup, leaveGroup, togglePinGroup,
+    getMyJoinRequest, cancelJoinRequest, fetchJoinRequests, resolveJoinRequest,
+    transferOwnership, setMemberCustomRole,
+    fetchReviews, submitReview, deleteReview, fetchDigest, fetchCategories, fetchTeam,
     loadMySubscriptions, subscribeGroup, unsubscribeGroup,
     loadEvents, loadEvent, createEvent, updateEvent,
     toggleSoonBadge, toggleSoonBadgeVisibility, loadMySoonBadges,

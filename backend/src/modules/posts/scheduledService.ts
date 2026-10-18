@@ -41,7 +41,7 @@ function normalizeTags(tags?: string[]): string[] {
 }
 
 async function assertGroupPermission(groupId: string, userId: string) {
-  if (!(await groupService.isAtLeastModerator(groupId, userId))) {
+  if (!(await groupService.canPost(groupId, userId))) {
     throw Object.assign(new Error('Not authorized to post as this group'), { statusCode: 403 });
   }
 }
