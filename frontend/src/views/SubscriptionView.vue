@@ -21,7 +21,7 @@ const EARLY_USER_CUTOFF = '2027-01-01T00:00:00Z'
 const EARLY_USER_DISCOUNT = 50 // %
 
 const isEarlyUser = computed(() => {
-  const created = (auth.user as any)?.created_at
+  const created = auth.user?.created_at
   if (!created) return false
   return new Date(created) < new Date(EARLY_USER_CUTOFF)
 })
@@ -196,11 +196,36 @@ function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
             {{ langStore.t.subHeroDesc }}
           </p>
 
-          <!-- Early user badge -->
-          <div v-if="isEarlyUser"
-            class="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-full bg-amber-400/10 border border-amber-400/20 text-amber-400 text-sm font-bold">
-            <BIcon name="Star" class="w-4 h-4 fill-amber-400" />
-            {{ langStore.t.subEarlyBadge }}
+          <!-- Early user: постоянная скидка -50% -->
+          <div v-if="isEarlyUser" class="early-banner relative mx-auto mt-8 max-w-2xl rounded-3xl p-[1.5px] text-left">
+            <div class="relative overflow-hidden rounded-[22px] bg-brand-card/95 px-6 py-5 flex items-center gap-5">
+              <div class="absolute -top-16 -right-10 w-48 h-48 rounded-full bg-amber-400/20 blur-3xl pointer-events-none" />
+              <div class="relative shrink-0 w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-300 to-orange-500 flex flex-col items-center justify-center shadow-[0_0_32px_rgba(251,191,36,0.45)]">
+                <span class="text-2xl font-black text-white leading-none">−50%</span>
+                <BIcon name="Star" class="w-3.5 h-3.5 mt-1 fill-white text-white" />
+              </div>
+              <div class="relative min-w-0">
+                <div class="text-[10px] font-bold uppercase tracking-widest text-amber-400 mb-1">{{ langStore.t.subEarlyBadge }}</div>
+                <div class="text-lg font-extrabold text-white leading-tight">{{ langStore.t.subEarlyTitle }}</div>
+                <p class="text-sm text-white/55 mt-1">{{ langStore.t.subEarlyDesc }}</p>
+                <div class="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold text-amber-300/90">
+                  <BIcon name="Check" class="w-3.5 h-3.5" />
+                  {{ langStore.t.subEarlySince }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Поздние пользователи: скидки нет -->
+          <div v-else-if="auth.user && auth.user.created_at"
+            class="mx-auto mt-8 max-w-2xl rounded-3xl border border-dashed border-white/15 bg-white/[0.03] px-6 py-5 flex items-center gap-5 text-left">
+            <div class="shrink-0 w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+              <span class="text-lg font-black text-white/30 line-through">−50%</span>
+            </div>
+            <div class="min-w-0">
+              <div class="text-base font-bold text-white/80">{{ langStore.t.subLateTitle }}</div>
+              <p class="text-sm text-white/45 mt-1">{{ langStore.t.subLateDesc }}</p>
+            </div>
           </div>
 
           <!-- Billing toggle -->
@@ -414,6 +439,17 @@ function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
 }
 .ticket-card:hover {
   filter: drop-shadow(0 8px 32px rgba(0,0,0,0.5));
+}
+
+.early-banner {
+  background: linear-gradient(120deg, #fbbf24, #f97316, #fbbf24, #f97316);
+  background-size: 300% 300%;
+  animation: early-shine 6s linear infinite;
+  box-shadow: 0 8px 40px rgba(251,191,36,0.18);
+}
+@keyframes early-shine {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
 }
 
 .featured-pulse {

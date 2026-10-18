@@ -2,14 +2,17 @@
  * SEO Module — Bloomly
  *
  * Endpoints:
- *  GET /sitemap.xml   — динамический XML-sitemap (публичные страницы)
- *  GET /og/post/:id   — минимальный HTML с OG-тегами для поста (для ботов Telegram/VK/etc)
- *  GET /og/profile/:username — минимальный HTML с OG-тегами для профиля
- *  GET /og/group/:slugOrId   — минимальный HTML с OG-тегами для группы
+ *  GET /sitemap.xml            — sitemap-index
+ *  GET /sitemap-static.xml     — статические публичные страницы
+ *  GET /sitemap-{profiles|posts|groups}-:n.xml — публичный контент, по SITEMAP_PAGE_SIZE URL в файле
+ *  GET /og/post/:id            — HTML с контентом и OG-тегами поста (боты-превьюшки и поисковые краулеры;
+ *  GET /og/profile/:username     nginx направляет их сюда по User-Agent)
+ *  GET /og/group/:slugOrId     — то же для группы
+ *  Несуществующий / закрытый объект → настоящий 404 (а не soft-404 с оболочкой SPA).
  */
 
-import type { FastifyInstance } from 'fastify'
-import { seoService } from './service.js'
+import type { FastifyInstance, FastifyReply } from 'fastify'
+import { seoService, SITEMAP_PAGE_SIZE } from './service.js'
 
 const BASE_URL = 'https://bloomly.fun'
 
@@ -36,14 +39,16 @@ function buildOgHtml(opts: {
   image?: string
   url: string
   type?: string
-  redirectUrl?: string
+  robots?: string
+  jsonLd?: Record<string, unknown>
 }): string {
-  const { title, description, image, url, type = 'website', redirectUrl } = opts
+  const { title, description, image, url, type = 'website', robots = 'index, follow', jsonLd } = opts
   const safeTitle = htmlEscape(title)
   const safeDesc = htmlEscape(description.slice(0, 200))
   const safeImage = image ? htmlEscape(image) : `${BASE_URL}/og-default.png`
   const safeUrl = htmlEscape(url)
-  const canonicalRedirect = redirectUrl || url
+  // "</" в JSON-LD закрыл бы <script> раньше времени (контент пользовательский).
+  const ld = jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, '\\u003c')}</script>\n` : ''
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -52,6 +57,7 @@ function buildOgHtml(opts: {
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${safeTitle} — Bloomly</title>
 <meta name="description" content="${safeDesc}"/>
+<meta name="robots" content="${htmlEscape(robots)}"/>
 <link rel="canonical" href="${safeUrl}"/>
 <meta property="og:title" content="${safeTitle}"/>
 <meta property="og:description" content="${safeDesc}"/>
@@ -65,92 +71,132 @@ function buildOgHtml(opts: {
 <meta name="twitter:title" content="${safeTitle}"/>
 <meta name="twitter:description" content="${safeDesc}"/>
 <meta name="twitter:image" content="${safeImage}"/>
-<meta http-equiv="refresh" content="0;url=${htmlEscape(canonicalRedirect)}"/>
-</head>
+${ld}</head>
 <body>
-<p>Loading… <a href="${htmlEscape(canonicalRedirect)}">Click here if you are not redirected</a></p>
+<main>
+<h1>${safeTitle}</h1>
+<p>${safeDesc}</p>
+<p><a href="${safeUrl}">${safeUrl}</a></p>
+</main>
 </body>
 </html>`
 }
 
+const IMAGE_EXT = /\.(jpe?g|png|gif|webp|avif)(\?|$)/i
+
+function urlEntry(loc: string, opts: { lastmod?: Date; changefreq?: string; priority?: string; image?: string } = {}): string {
+  const { lastmod, changefreq, priority, image } = opts
+  return `  <url>\n    <loc>${xmlEscape(loc)}</loc>`
+    + (lastmod ? `\n    <lastmod>${lastmod.toISOString()}</lastmod>` : '')
+    + (changefreq ? `\n    <changefreq>${changefreq}</changefreq>` : '')
+    + (priority ? `\n    <priority>${priority}</priority>` : '')
+    + (image ? `\n    <image:image><image:loc>${xmlEscape(image)}</image:loc></image:image>` : '')
+    + '\n  </url>'
+}
+
+function urlset(entries: string[]): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${entries.join('\n')}\n</urlset>`
+}
+
 export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
-  // ── Sitemap ──────────────────────────────────────────────────────────────
-  fastify.get('/sitemap.xml', async (_req, reply) => {
-    // Публичные статические URL
-    const staticUrls = [
-      { loc: BASE_URL, priority: '1.0', changefreq: 'daily' },
-      { loc: `${BASE_URL}/login`, priority: '0.5', changefreq: 'monthly' },
-      { loc: `${BASE_URL}/groups`, priority: '0.8', changefreq: 'daily' },
-      { loc: `${BASE_URL}/dealers-den`, priority: '0.7', changefreq: 'daily' },
-    ]
-
-    // Публичные профили
-    const users = await seoService.sitemapUsers()
-
-    // Публичные посты (не NSFW, не удалённые)
-    const posts = await seoService.sitemapPosts()
-
-    // Публичные группы
-    const groups = await seoService.sitemapGroups()
-
-    const urls: string[] = [...staticUrls.map(({ loc, priority, changefreq }) =>
-      `  <url>\n    <loc>${xmlEscape(loc)}</loc>\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>`
-    )]
-
-    for (const u of users) {
-      const lastmod = u.updated_at.toISOString().split('T')[0]
-      urls.push(`  <url>\n    <loc>${xmlEscape(`${BASE_URL}/profile/${u.username}`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.7</priority>\n  </url>`)
-    }
-
-    for (const p of posts) {
-      const lastmod = p.updated_at.toISOString().split('T')[0]
-      urls.push(`  <url>\n    <loc>${xmlEscape(`${BASE_URL}/post/${p.id}`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.6</priority>\n  </url>`)
-    }
-
-    for (const g of groups) {
-      const seg = g.slug || g.id
-      const lastmod = g.updated_at.toISOString().split('T')[0]
-      urls.push(`  <url>\n    <loc>${xmlEscape(`${BASE_URL}/groups/${seg}`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.65</priority>\n  </url>`)
-    }
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>`
-
+  function sendXml(reply: FastifyReply, xml: string) {
     reply.header('Content-Type', 'application/xml; charset=utf-8')
     reply.header('Cache-Control', 'public, max-age=3600')
     return reply.send(xml)
+  }
+
+  const pages = (count: number) => Math.max(1, Math.ceil(count / SITEMAP_PAGE_SIZE))
+
+  // ── Sitemap index ────────────────────────────────────────────────────────
+  fastify.get('/sitemap.xml', async (_req, reply) => {
+    const counts = await seoService.sitemapCounts()
+    const files = ['sitemap-static.xml']
+    for (const kind of ['profiles', 'posts', 'groups'] as const) {
+      const n = counts[kind === 'profiles' ? 'users' : kind]
+      if (n === 0) continue
+      for (let i = 1; i <= pages(n); i++) files.push(`sitemap-${kind}-${i}.xml`)
+    }
+    const items = files.map(f => `  <sitemap>\n    <loc>${BASE_URL}/${f}</loc>\n  </sitemap>`)
+    return sendXml(reply, `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${items.join('\n')}\n</sitemapindex>`)
   })
 
-  // ── OG Proxy: Post ───────────────────────────────────────────────────────
-  fastify.get<{ Params: { id: string } }>('/og/post/:id', async (req, reply) => {
-    const { id } = req.params
-    const post = await seoService.postForOg(id)
+  fastify.get('/sitemap-static.xml', async (_req, reply) => {
+    const staticUrls = [
+      { loc: BASE_URL, priority: '1.0', changefreq: 'daily' },
+      { loc: `${BASE_URL}/groups`, priority: '0.8', changefreq: 'daily' },
+      { loc: `${BASE_URL}/dealers-den`, priority: '0.7', changefreq: 'daily' },
+      { loc: `${BASE_URL}/terms`, priority: '0.2', changefreq: 'yearly' },
+      { loc: `${BASE_URL}/privacy`, priority: '0.2', changefreq: 'yearly' },
+    ]
+    return sendXml(reply, urlset(staticUrls.map(({ loc, ...o }) => urlEntry(loc, o))))
+  })
 
-    if (!post) {
-      return reply.status(404).send('Not found')
+  fastify.get<{ Params: { kind: string; n: string } }>('/sitemap-:kind-:n.xml', async (req, reply) => {
+    const page = Number(req.params.n) - 1
+    if (!Number.isInteger(page) || page < 0) return reply.status(404).send('Not found')
+
+    if (req.params.kind === 'profiles') {
+      const users = await seoService.sitemapUsers(page)
+      return sendXml(reply, urlset(users.map(u =>
+        urlEntry(`${BASE_URL}/profile/${u.username}`, { lastmod: u.updated_at, changefreq: 'weekly', priority: '0.7' }))))
+    }
+    if (req.params.kind === 'posts') {
+      const posts = await seoService.sitemapPosts(page)
+      return sendXml(reply, urlset(posts.map(p => {
+        const img = (p.media_urls ?? []).find(m => IMAGE_EXT.test(String(m)))
+        return urlEntry(`${BASE_URL}/post/${p.id}`, { lastmod: p.updated_at, changefreq: 'monthly', priority: '0.6', image: img ? String(img) : undefined })
+      })))
+    }
+    if (req.params.kind === 'groups') {
+      const groups = await seoService.sitemapGroups(page)
+      return sendXml(reply, urlset(groups.map(g =>
+        urlEntry(`${BASE_URL}/groups/${g.slug || g.id}`, { lastmod: g.updated_at, changefreq: 'weekly', priority: '0.65' }))))
+    }
+    return reply.status(404).send('Not found')
+  })
+
+  // ── Crawler pages ────────────────────────────────────────────────────────
+  // Публичный, но неподходящий для индекса контент (NSFW и т.п.) отдаётся с noindex;
+  // закрытый или удалённый — 404, как и положено.
+  fastify.get<{ Params: { id: string } }>('/og/post/:id', async (req, reply) => {
+    const post = await seoService.postForOg(req.params.id)
+    if (!post || post.author?.profile_visibility !== 'everyone' || post.subscriber_only || post.is_paid) {
+      return reply.status(404).header('X-Robots-Tag', 'noindex').send('Not found')
     }
 
     const authorName = post.author?.display_name || post.author?.username || 'A user'
     const title = `${authorName} on Bloomly`
-    const description = post.content
-      ? post.content.slice(0, 200).replace(/\n/g, ' ')
-      : `A post by ${authorName} on Bloomly.`
-    const image = (post.media_urls && Array.isArray(post.media_urls) && post.media_urls.length > 0)
+    const description = post.is_nsfw
+      ? `A post by ${authorName} on Bloomly.`
+      : (post.content ? post.content.slice(0, 200).replace(/\n/g, ' ') : `A post by ${authorName} on Bloomly.`)
+    const image = !post.is_nsfw && Array.isArray(post.media_urls) && post.media_urls.length > 0
       ? String(post.media_urls[0])
       : undefined
     const url = `${BASE_URL}/post/${post.id}`
+    const noindex = post.is_nsfw || post.is_archived
 
     reply.header('Content-Type', 'text/html; charset=utf-8')
     reply.header('Cache-Control', 'public, max-age=600')
-    return reply.send(buildOgHtml({ title, description, image, url, type: 'article', redirectUrl: url }))
+    return reply.send(buildOgHtml({
+      title, description, image, url, type: 'article',
+      robots: noindex ? 'noindex, follow' : 'index, follow',
+      jsonLd: noindex ? undefined : {
+        '@context': 'https://schema.org',
+        '@type': 'SocialMediaPosting',
+        url,
+        headline: title,
+        articleBody: description,
+        datePublished: post.created_at.toISOString(),
+        author: { '@type': 'Person', name: authorName, url: `${BASE_URL}/profile/${post.author?.username}` },
+        ...(image ? { image } : {}),
+      },
+    }))
   })
 
-  // ── OG Proxy: Profile ────────────────────────────────────────────────────
   fastify.get<{ Params: { username: string } }>('/og/profile/:username', async (req, reply) => {
-    const { username } = req.params
-    const user = await seoService.profileForOg(username)
-
-    if (!user) {
-      return reply.status(404).send('Not found')
+    const user = await seoService.profileForOg(req.params.username)
+    if (!user || user.profile_visibility !== 'everyone') {
+      return reply.status(404).header('X-Robots-Tag', 'noindex').send('Not found')
     }
 
     const name = user.display_name || user.username
@@ -162,16 +208,20 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
 
     reply.header('Content-Type', 'text/html; charset=utf-8')
     reply.header('Cache-Control', 'public, max-age=600')
-    return reply.send(buildOgHtml({ title, description, image: user.avatar_url ?? undefined, url, type: 'profile', redirectUrl: url }))
+    return reply.send(buildOgHtml({
+      title, description, image: user.avatar_url ?? undefined, url, type: 'profile',
+      jsonLd: {
+        '@context': 'https://schema.org',
+        '@type': 'ProfilePage',
+        mainEntity: { '@type': 'Person', name, alternateName: user.username, url, ...(user.avatar_url ? { image: user.avatar_url } : {}) },
+      },
+    }))
   })
 
-  // ── OG Proxy: Group ──────────────────────────────────────────────────────
   fastify.get<{ Params: { slugOrId: string } }>('/og/group/:slugOrId', async (req, reply) => {
-    const { slugOrId } = req.params
-    const group = await seoService.groupForOg(slugOrId)
-
-    if (!group) {
-      return reply.status(404).send('Not found')
+    const group = await seoService.groupForOg(req.params.slugOrId)
+    if (!group || !group.is_public) {
+      return reply.status(404).header('X-Robots-Tag', 'noindex').send('Not found')
     }
 
     const seg = group.slug || group.id
@@ -183,6 +233,17 @@ export async function seoRoutes(fastify: FastifyInstance): Promise<void> {
 
     reply.header('Content-Type', 'text/html; charset=utf-8')
     reply.header('Cache-Control', 'public, max-age=600')
-    return reply.send(buildOgHtml({ title: group.name, description, image: group.avatar_url ?? undefined, url, redirectUrl: url }))
+    return reply.send(buildOgHtml({
+      title: group.name, description, image: group.avatar_url ?? undefined, url,
+      robots: group.is_nsfw ? 'noindex, follow' : 'index, follow',
+      jsonLd: group.is_nsfw ? undefined : {
+        '@context': 'https://schema.org',
+        '@type': 'WebPage',
+        name: group.name,
+        url,
+        description,
+        ...(group.avatar_url ? { primaryImageOfPage: { '@type': 'ImageObject', url: group.avatar_url } } : {}),
+      },
+    }))
   })
 }

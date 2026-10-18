@@ -6,6 +6,7 @@ import { useRoute } from 'vue-router'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import { useAuthStore } from '@/stores/auth'
 import { useWalletStore } from '@/stores/wallet'
+import { useUserStore } from '@/stores/user'
 import { usePaymentsStore, type PaymentInfo } from '@/stores/payments'
 import { apiErrorStatus } from '@/lib/apiError'
 import AppHeader from '@/components/AppHeader.vue'
@@ -15,6 +16,7 @@ const route = useRoute()
 const langStore = useLangStore()
 const auth = useAuthStore()
 const walletStore = useWalletStore()
+const userStore = useUserStore()
 const payments = usePaymentsStore()
 
 const paymentId = String(route.query.id ?? '')
@@ -36,7 +38,12 @@ const expiresLabel = computed(() => {
 })
 
 async function onSucceeded() {
-  await Promise.all([auth.fetchMe(), walletStore.fetchBalance().catch(() => {})])
+  await Promise.all([
+    auth.fetchMe(),
+    walletStore.fetchBalance().catch(() => {}),
+    // Донат выдаёт значок спонсора — подтягиваем свежий профиль, чтобы он сразу появился
+    payment.value?.purpose === 'donation' ? userStore.fetchMyProfile() : Promise.resolve(),
+  ])
 }
 
 async function poll() {
