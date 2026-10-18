@@ -1368,22 +1368,6 @@ async function deleteGroup() {
                         <p class="text-[10px] text-white/25 mt-1">{{ langStore.t.groupSettingsSlugChangeNotice }}</p>
                       </div>
                     </div>
-                    <div>
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.category }}</label>
-                      <select v-model="form.category" :disabled="categoryLocked"
-                        class="field-input appearance-none"
-                        :class="categoryLocked ? 'cursor-not-allowed opacity-60' : ''">
-                        <option value="">{{ langStore.t.groupSettingsCategoryNotSelected }}</option>
-                        <option v-for="opt in CATEGORY_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                      </select>
-                      <p v-if="categoryLocked" class="text-white/30 text-xs mt-1.5 flex items-center gap-1.5">
-                        <svg class="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                        {{ langStore.t.groupSettingsCategoryNextChange }} {{ categoryNextChangeAt?.toLocaleDateString(LANG_TO_LOCALE[langStore.currentLang]) }}.
-                      </p>
-                      <p v-else class="text-white/30 text-xs mt-1.5">
-                        {{ langStore.t.groupSettingsCategoryLimit }}
-                      </p>
-                    </div>
                     <div v-if="rubricOptionsFor(group?.type).length">
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">Рубрика</label>
                       <select v-model="form.rubric" class="field-input appearance-none">
