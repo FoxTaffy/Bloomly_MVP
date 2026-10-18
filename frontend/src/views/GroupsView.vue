@@ -236,15 +236,15 @@ async function handleCreateGroup(input: any) {
   if (input.type === 'creative' && input.commissionStatus) {
     await groupsStore.updateCommission(group.id, {
       status: input.commissionStatus,
-      currency: input.commissionCurrency || 'USD',
+      currency: 'USD',
       maxQueue: input.commissionMaxQueue || 5,
     })
   }
 
-  if (input.type === 'shop' && input.shopCurrency) {
+  if (input.type === 'shop') {
     await groupsStore.updateCommission(group.id, {
       status: 'open',
-      currency: input.shopCurrency,
+      currency: 'USD',
     })
   }
 

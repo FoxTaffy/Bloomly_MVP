@@ -31,14 +31,12 @@ export interface CreateGroupPayload {
   // Creative-specific
   commissionStatus?: 'open' | 'closed' | 'waitlist'
   commissionStyles?: string[]
-  commissionCurrency?: string
   commissionMaxQueue?: number
   // Social / static / community
   socialLinks?: Record<string, string>
   // News / brand rubric (separate from the general category)
   rubric?: string
   // Shop
-  shopCurrency?: string
   // Media
   avatarUrl?: string
   bannerUrl?: string
@@ -113,7 +111,6 @@ const eventIsTop = ref(false)
 
 // Creative
 const commissionStatus = ref<'open' | 'closed' | 'waitlist'>('closed')
-const commissionCurrency = ref('USD')
 const commissionMaxQueue = ref(5)
 const commissionStyles = ref<string[]>([])
 
@@ -143,7 +140,6 @@ function toggleStyle(key: string) {
 const rubric = ref('')
 
 // Shop
-const shopCurrency = ref('RUB')
 
 // Social (for static, community)
 const socialTelegram = ref('')
@@ -274,13 +270,11 @@ function submit() {
 
   if (type.value === 'creative') {
     payload.commissionStatus = commissionStatus.value
-    payload.commissionCurrency = commissionCurrency.value
     payload.commissionMaxQueue = commissionMaxQueue.value
     payload.commissionStyles = commissionStyles.value
   }
 
   if (type.value === 'news' || type.value === 'brand') payload.rubric = rubric.value
-  if (type.value === 'shop') payload.shopCurrency = shopCurrency.value
 
   // Social links for static, community, news, brand
   if (['static', 'community', 'news', 'brand', 'shop'].includes(type.value)) {
@@ -573,18 +567,11 @@ function submit() {
               <p class="text-white/20 text-[10px] mt-2">Выбрано: {{ commissionStyles.length }}</p>
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 gap-3">
               <div>
                 <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 block">Макс. очередь</label>
                 <input v-model.number="commissionMaxQueue" type="number" min="1" max="100"
                   class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm focus:border-brand-accent focus:outline-hidden" />
-              </div>
-              <div>
-                <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 block">Валюта</label>
-                <select v-model="commissionCurrency"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm focus:border-brand-accent focus:outline-hidden appearance-none">
-                  <option value="USD">USD ($)</option><option value="EUR">EUR (€)</option><option value="RUB">RUB (₽)</option>
-                </select>
               </div>
             </div>
           </template>
@@ -644,18 +631,6 @@ function submit() {
               <div>
                 <p class="text-white font-bold text-sm">Создание магазина</p>
                 <p class="text-white/40 text-xs">Продавайте мерч, принты, фурсьюты — всё для фандома!</p>
-              </div>
-            </div>
-
-            <div>
-              <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-2 block">Основная валюта</label>
-              <div class="grid grid-cols-3 gap-2">
-                <button v-for="cur in ['RUB', 'USD', 'EUR']" :key="cur"
-                  class="py-2.5 rounded-xl border text-xs font-bold transition-all"
-                  :class="shopCurrency === cur ? 'bg-brand-warning/10 border-brand-warning/40 text-brand-warning' : 'bg-brand-bg/40 border-brand-border text-white/40'"
-                  @click="shopCurrency = cur">
-                  {{ cur === 'RUB' ? '₽ RUB' : cur === 'USD' ? '$ USD' : '€ EUR' }}
-                </button>
               </div>
             </div>
 
