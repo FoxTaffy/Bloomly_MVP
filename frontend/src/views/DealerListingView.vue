@@ -18,6 +18,7 @@ import CommissionOrderPanel from '@/components/CommissionOrderPanel.vue'
 import CommissionInfoBlocks from '@/components/CommissionInfoBlocks.vue'
 import CommissionReviews   from '@/components/CommissionReviews.vue'
 import ListingPanelHead    from '@/components/ListingPanelHead.vue'
+import ListingApplicationModal from '@/components/ListingApplicationModal.vue'
 import ListingSpecs        from '@/components/ListingSpecs.vue'
 import ListingDetailsEditor from '@/components/ListingDetailsEditor.vue'
 import { emptyDraft, draftFrom, cleanDraft } from '@/lib/listingDetails'
@@ -325,6 +326,7 @@ async function claimFrame() {
 
 // ── Edit ─────────────────────────────────────────────────────────────────────
 const showEditModal = ref(false)
+const showApplyModal = ref(false)
 const editDetails   = ref(emptyDraft())
 const isUpdating    = ref(false)
 const editForm = ref({
@@ -1118,10 +1120,10 @@ async function submitReport() {
                     </template>
                     <template v-else>
                       <button v-if="auth.user && auth.user.id !== listing.seller_id"
-                        @click="contactSeller"
+                        @click="showApplyModal = true"
                         class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm"
                         style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
-                        <BIcon name="MessageCircle" class="w-4 h-4" /> {{ langStore.t.dealerListingMessageSellerBtn }}
+                        <BIcon name="Send" class="w-4 h-4" /> Отправить заявку
                       </button>
                       <button v-else-if="!auth.user" @click="router.push({ name: 'login' })"
                         class="w-full flex items-center justify-center gap-2 py-3.5 text-white/60 font-bold rounded-2xl border border-brand-border hover:border-brand-accent/40 hover:text-white transition-all text-sm">
@@ -1320,6 +1322,8 @@ async function submitReport() {
         </template>
       </main>
     </div>
+
+    <ListingApplicationModal v-if="showApplyModal && listing" :listing="listing" :seller-id="listing.seller_id" @close="showApplyModal = false" />
 
     <!-- ═══════════════════════════════════════════════════════════
          EDIT MODAL
