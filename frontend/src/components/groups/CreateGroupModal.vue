@@ -424,11 +424,11 @@ function submit() {
           <div>
             <div class="flex items-center justify-between mb-1.5">
               <label class="text-xs font-bold text-white/50 uppercase tracking-wider block">Краткое описание</label>
-              <span class="text-[11px] tabular-nums" :class="description.length > 24 ? 'text-brand-error/80' : 'text-white/35'">
-                {{ description.length }}<span class="opacity-50">/30</span>
+              <span class="text-[11px] tabular-nums" :class="description.length > 230 ? 'text-brand-error/80' : 'text-white/35'">
+                {{ description.length }}<span class="opacity-50">/255</span>
               </span>
             </div>
-            <textarea v-model="description" placeholder="Коротко о группе…" rows="1" maxlength="30"
+            <textarea v-model="description" placeholder="Коротко о группе…" rows="2" maxlength="255"
               class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden resize-none" />
           </div>
 
@@ -436,11 +436,11 @@ function submit() {
           <div>
             <div class="flex items-center justify-between mb-1.5">
               <label class="text-xs font-bold text-white/50 uppercase tracking-wider block">Подробное описание</label>
-              <span class="text-[11px] tabular-nums" :class="aboutText.length > 270 ? 'text-brand-error/80' : 'text-white/35'">
-                {{ aboutText.length }}<span class="opacity-50">/300</span>
+              <span class="text-[11px] tabular-nums" :class="aboutText.length > 3600 ? 'text-brand-error/80' : 'text-white/35'">
+                {{ aboutText.length }}<span class="opacity-50">/4000</span>
               </span>
             </div>
-            <textarea v-model="aboutText" placeholder="Расскажите о группе подробно: чем занимаетесь, условия, правила работы…" rows="6" maxlength="300"
+            <textarea v-model="aboutText" placeholder="Расскажите о группе подробно: чем занимаетесь, условия, правила работы…" rows="6" maxlength="4000"
               class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden resize-none" />
           </div>
 

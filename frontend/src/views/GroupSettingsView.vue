@@ -1376,12 +1376,18 @@ async function deleteGroup() {
                       </select>
                     </div>
                     <div>
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsShortDescription }}</label>
-                      <textarea v-model="form.description" rows="2" maxlength="30" class="field-input resize-none" />
+                      <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider block">{{ langStore.t.groupSettingsShortDescription }}</label>
+                        <span class="text-[11px] tabular-nums" :class="(form.description?.length ?? 0) > 229 ? 'text-brand-error/80' : 'text-white/35'">{{ form.description?.length ?? 0 }}<span class="opacity-50">/255</span></span>
+                      </div>
+                      <textarea v-model="form.description" rows="2" maxlength="255" class="field-input resize-none" />
                     </div>
                     <div>
-                      <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsAboutDescription }}</label>
-                      <textarea v-model="form.aboutText" rows="5" maxlength="300" :placeholder="langStore.t.groupSettingsAboutPlaceholder" class="field-input resize-none" />
+                      <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-bold text-white/55 uppercase tracking-wider block">{{ langStore.t.groupSettingsAboutDescription }}</label>
+                        <span class="text-[11px] tabular-nums" :class="(form.aboutText?.length ?? 0) > 3600 ? 'text-brand-error/80' : 'text-white/35'">{{ form.aboutText?.length ?? 0 }}<span class="opacity-50">/4000</span></span>
+                      </div>
+                      <textarea v-model="form.aboutText" rows="5" maxlength="4000" :placeholder="langStore.t.groupSettingsAboutPlaceholder" class="field-input resize-none" />
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label class="flex items-center gap-3 cursor-pointer select-none bg-brand-bg/40 border border-brand-border rounded-2xl p-3">
