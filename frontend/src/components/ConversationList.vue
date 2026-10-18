@@ -876,7 +876,8 @@ async function toggleArchive(conv: Conversation) {
   const newVal = !conv.my_participant?.archived
   try {
     await store.setArchived(conv.id, newVal)
-    if (newVal && !showArchived.value) emit('select', store.conversations[0]?.id ?? '')
+    // Archived chat leaves this list — close it instead of jumping to an arbitrary conversation
+    if (newVal && !showArchived.value && store.activeId === conv.id) store.closeConversation()
   } catch { /* silent */ }
 }
 </script>

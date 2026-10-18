@@ -12,6 +12,7 @@ let ws: WebSocket | null = null
 let pingTimer: ReturnType<typeof setInterval> | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let destroyed = false
+let hasConnectedBefore = false
 let tokenCache = ''
 
 function send(data: unknown) {
@@ -40,6 +41,9 @@ function connect() {
     tokenCache = auth.token ?? ''
     if (tokenCache) send({ type: 'auth', token: tokenCache })
     pingTimer = setInterval(() => send({ type: 'ping' }), 25_000)
+    // Frames sent while the socket was down are gone — let subscribers resync their state.
+    if (hasConnectedBefore) handlers.get('ws_reconnected')?.forEach((fn) => { try { fn({ type: 'ws_reconnected' }) } catch { /**/ } })
+    hasConnectedBefore = true
   }
 
   ws.onclose = () => {
@@ -66,6 +70,7 @@ export const wsClient = {
 
   disconnect() {
     destroyed = true
+    hasConnectedBefore = false
     stopTimers()
     if (ws) {
       ws.onopen = ws.onclose = ws.onerror = ws.onmessage = null

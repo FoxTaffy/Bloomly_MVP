@@ -351,8 +351,12 @@ onMounted(() => {
 
 watch(activeConvId, async (id) => {
   if (id && !store.messages[id]) {
-    await store.fetchMessages(id)
-    await store.markRead(id)
+    try {
+      await store.fetchMessages(id)
+      await store.markRead(id)
+    } catch {
+      // selectConversation() already resets the active chat on a failed load
+    }
   }
   if (!syncingUrl && !route.query.userId) syncUrl(id)
 }, { immediate: true })

@@ -155,6 +155,7 @@ export const useMessagesStore = defineStore('messages', () => {
   let unsubReadReceipt: (() => void) | null = null
   let unsubMessageUpdated: (() => void) | null = null
   let unsubMessageDeleted: (() => void) | null = null
+  let unsubReconnect: (() => void) | null = null
 
   // ── WebSocket ───────────────────────────────────────────────────────────
   function startListening() {
@@ -221,6 +222,11 @@ export const useMessagesStore = defineStore('messages', () => {
       // Group staff: a member just wrote (or the thread got a new reply) — refresh the
       // "Обращения" badge count for that group so tabs/buttons stay in sync live.
       if (!isOwn && isStaffSide && groupDm) fetchGroupInboxCount(groupDm.groupId)
+      // The chat is open right now — mark it read on the server too, otherwise the sender
+      // never gets their "read" checkmark and the message shows as unread after a reload.
+      if (!isOwn && !isStaffSide && activeId.value === convId && document.visibilityState === 'visible') {
+        void markRead(convId)
+      }
       if (!isOwn) {
         if (!isConvSoundMuted(conv)) playNotificationSound()
         // Only pop a toast for conversations the user isn't currently looking at, and
@@ -303,9 +309,27 @@ export const useMessagesStore = defineStore('messages', () => {
         conv.unread_count = 0
       }
     })
+
+    // Frames sent while the socket was down are lost for good: refresh the list and the open
+    // chat, and drop every other cached history so it is refetched the next time it's opened.
+    unsubReconnect = wsClient.on('ws_reconnected', () => {
+      for (const id of Object.keys(messages.value)) {
+        if (id === activeId.value) continue
+        delete messages.value[id]
+        delete hasMoreMessages.value[id]
+      }
+      void fetchConversations()
+      void fetchUnreadCount()
+      if (activeId.value) {
+        const id = activeId.value
+        void fetchMessages(id).then(() => markRead(id)).catch(() => { /* retried on next open */ })
+      }
+    })
   }
 
   function stopListening() {
+    unsubReconnect?.()
+    unsubReconnect = null
     unsubWs?.()
     unsubTyping?.()
     unsubReadReceipt?.()
@@ -386,13 +410,33 @@ export const useMessagesStore = defineStore('messages', () => {
 
   async function selectConversation(convId: string) {
     activeId.value = convId
-    if (!messages.value[convId]) {
-      await fetchMessages(convId)
+    try {
+      if (!messages.value[convId]) {
+        await fetchMessages(convId)
+      }
+    } catch (err) {
+      // Don't leave an empty chat window open for a conversation that failed to load
+      // (bad/foreign id in ?c=, deleted conversation, no access).
+      if (activeId.value === convId) activeId.value = null
+      throw err
     }
     await markRead(convId)
   }
 
-  async function fetchMessages(convId: string, before?: string) {
+  // Concurrent first-page loads of the same conversation share one request
+  // (onMounted + the activeConvId watcher in MessagesView both ask for it).
+  const initialFetches = new Map<string, Promise<void>>()
+
+  function fetchMessages(convId: string, before?: string): Promise<void> {
+    if (before) return fetchMessagesPage(convId, before)
+    const pending = initialFetches.get(convId)
+    if (pending) return pending
+    const p = fetchMessagesPage(convId).finally(() => initialFetches.delete(convId))
+    initialFetches.set(convId, p)
+    return p
+  }
+
+  async function fetchMessagesPage(convId: string, before?: string) {
     messagesLoading.value = true
     try {
       const params: Record<string, unknown> = { limit: 40 }
