@@ -91,3 +91,13 @@ describe('отправка сообщений', () => {
     expect((await send(a, url)).status).toBe(403);
   });
 });
+
+describe('отправка сообщений: пустые и лимиты', () => {
+  beforeEach(resetDb);
+
+  it('неизвестный type без содержимого не создаёт пустое сообщение', async () => {
+    const { convId, send } = await setup();
+    expect((await send({ type: 'bogus' })).status).toBe(400);
+    expect(await prisma.message.count({ where: { conversation_id: convId } })).toBe(0);
+  });
+});

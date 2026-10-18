@@ -368,7 +368,10 @@ export const messageService = {
 
     const text = content?.trim() ?? '';
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-    if (!text && !encrypted_text && !file_url && !type && !hasAttachments) throw new Error('Message must have text or media');
+    const isCard = type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share';
+    if (!text && !encrypted_text && !file_url && !isCard && !hasAttachments) {
+      throw Object.assign(new Error('Message must have text or media'), { statusCode: 400 });
+    }
     const base = { conversation_id: conversationId, sender_id: senderId, text: text || null, reply_to_id: reply_to_id ?? null };
 
     let data: Prisma.MessageUncheckedCreateInput;
@@ -418,7 +421,8 @@ export const messageService = {
       const startOfDay = new Date();
       startOfDay.setHours(0, 0, 0, 0);
       const sentToday = await prisma.message.count({
-        where: { sender_id: senderId, created_at: { gte: startOfDay }, deleted_at: null },
+        // Удалённые тоже считаются: иначе лимит обходится «отправил — удалил — отправил».
+        where: { sender_id: senderId, created_at: { gte: startOfDay } },
       });
       if (sentToday >= FREE_DAILY_MESSAGE_LIMIT) {
         throw Object.assign(new Error('DAILY_MESSAGE_LIMIT_REACHED'), { statusCode: 402 });

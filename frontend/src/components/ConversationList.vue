@@ -797,9 +797,7 @@ function isUnread(conv: Conversation): boolean {
 /** Whether our own last message in a DM has been read by the other participant. */
 function isLastReadByOther(conv: Conversation): boolean {
   if (!conv.last_message) return false
-  const theirLastRead = conv.other_participants?.[0]?.last_read_at
-  if (!theirLastRead) return false
-  return new Date(conv.last_message.created_at) <= new Date(theirLastRead)
+  return store.isReadByPartner(conv.id, conv.last_message.created_at)
 }
 
 /** Number of unread conversations in a category (for the tab badge). */

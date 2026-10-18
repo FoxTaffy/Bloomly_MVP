@@ -1766,9 +1766,7 @@ async function openDM(userId: string) {
 }
 
 function isRead(msg: Message): boolean {
-  const pRead = store.partnerLastRead[props.convId]
-  if (!pRead) return false
-  return new Date(msg.created_at) <= new Date(pRead)
+  return store.isReadByPartner(props.convId, msg.created_at)
 }
 
 function formatMsgTime(iso: string) {
@@ -1923,13 +1921,21 @@ function scrollToBottom(smooth = false) {
 // bottom, instead of being judged against a stale scrollTop=0 from before the load.
 let justOpenedConv = true
 
+// id последнего сообщения: подгрузка старой истории меняет длину списка, но не последнее сообщение —
+// на неё не должны реагировать ни автопрокрутка вниз, ни счётчик «новых».
+let lastNewestId: string | null = null
+
 watch(() => msgList.value.length, (newLen, oldLen) => {
   if (!scrollEl.value) return
+  const newestId = msgList.value[msgList.value.length - 1]?.id ?? null
+  const newestChanged = newestId !== lastNewestId
+  lastNewestId = newestId
   if (justOpenedConv) {
     justOpenedConv = false
     scrollToBottom(false)
     return
   }
+  if (!newestChanged && newLen >= (oldLen ?? 0)) return
   const el = scrollEl.value
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100
   const grew = newLen > (oldLen ?? 0)
@@ -1945,6 +1951,8 @@ watch(() => msgList.value.length, (newLen, oldLen) => {
 }, { flush: 'post' })
 
 watch(() => props.convId, () => {
+  lastNewestId = null
+  store.viewAtBottom = true
   // If the history is already cached, msgList's length won't change when we
   // switch — nothing will clear the flag, so clear it here to avoid a later
   // incoming message force-scrolling the user away from a spot they scrolled up to.
@@ -1966,6 +1974,12 @@ async function onScroll() {
   const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
   showScrollDown.value = distFromBottom > 240
   if (distFromBottom < 100) unreadInChat.value = 0
+  // Дочитали до низа — теперь входящие считаются прочитанными (и те, что пришли, пока читали историю выше)
+  const atBottomNow = distFromBottom < 100
+  if (atBottomNow !== store.viewAtBottom) {
+    store.viewAtBottom = atBottomNow
+    if (atBottomNow && (props.conv?.unread_count ?? 0) > 0 && store.isViewing(props.convId)) void store.markRead(props.convId)
+  }
 
   if (el.scrollTop < 80 && store.hasMoreMessages[props.convId] && !store.messagesLoading) {
     prevScrollHeight = el.scrollHeight
@@ -2043,6 +2057,12 @@ async function submit() {
 
 function retrySend(msg: Message) {
   store.removeLocalMessage(props.convId, msg.id)
+  if (msg.type === 'album') {
+    const files = (msg.metadata?.files ?? []) as Array<{ url: string; type?: string }>
+    store.sendMessage(props.convId, msg.text ?? '', undefined, undefined, msg.reply_to_id ?? null,
+      files.map((f) => ({ url: f.url, media_type: f.type })))
+    return
+  }
   store.sendMessage(props.convId, msg.text ?? '', msg.file_url, msg.type === 'text' ? undefined : msg.type, msg.reply_to_id ?? null)
 }
 

@@ -118,8 +118,39 @@ export const useMessagesStore = defineStore('messages', () => {
   const typingUsers = ref<Record<string, string[]>>({})
   const typingTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
-  // Read receipts: convId → partner's last_read_at (ISO)
+  // Read receipts: convId → partner's last_read_at (ISO). Единственный источник для галочек «прочитано»
+  // и в списке диалогов, и в самом чате — иначе они расходятся.
   const partnerLastRead = ref<Record<string, string | null>>({})
+
+  /** Запоминает отметку прочтения собеседника; назад по времени не двигается (кадры могут прийти не по порядку). */
+  function setPartnerRead(convId: string, userId: string | null, iso: string | null) {
+    if (!iso) return
+    const cur = partnerLastRead.value[convId]
+    if (!cur || new Date(iso).getTime() > new Date(cur).getTime()) partnerLastRead.value[convId] = iso
+    const conv = conversations.value.find((c) => c.id === convId)
+    const p = conv?.other_participants?.find((o) => !userId || o.user_id === userId)
+    if (p && (!p.last_read_at || new Date(iso).getTime() > new Date(p.last_read_at).getTime())) p.last_read_at = iso
+  }
+
+  /** Прочитано ли собеседником сообщение, отправленное в `createdAt`. */
+  function isReadByPartner(convId: string, createdAt: string): boolean {
+    const read = partnerLastRead.value[convId]
+    return !!read && new Date(createdAt).getTime() <= new Date(read).getTime()
+  }
+
+  // Открытый чат прокручен к последним сообщениям (выставляет ChatWindow). Если пользователь читает историю
+  // выше, новые сообщения не считаются прочитанными, пока он не вернётся вниз.
+  const viewAtBottom = ref(true)
+
+  /** Новые сообщения в этом чате пользователь видит прямо сейчас: чат открыт, вкладка видима и лента внизу. */
+  function isReadingNow(convId: string): boolean {
+    return isViewing(convId) && viewAtBottom.value
+  }
+
+  /** Пользователь прямо сейчас смотрит этот чат: он открыт и вкладка видима. */
+  function isViewing(convId: string): boolean {
+    return activeId.value === convId && (typeof document === 'undefined' || document.visibilityState === 'visible')
+  }
 
   // ── Client-side "slow down" spam nag (Discord-style) ────────────────────────
   // Purely a UX nudge — the real enforcement (warn/freeze) happens server-side
@@ -161,10 +192,19 @@ export const useMessagesStore = defineStore('messages', () => {
   let unsubMessageDeleted: (() => void) | null = null
   let unsubReconnect: (() => void) | null = null
 
+  // Сообщения, пришедшие в открытый чат, пока вкладка была скрыта, отмечаем прочитанными при возврате.
+  function onVisibilityChange() {
+    const id = activeId.value
+    if (document.visibilityState !== 'visible' || !id || !viewAtBottom.value) return
+    const conv = conversations.value.find((c) => c.id === id)
+    if ((conv?.unread_count ?? 0) > 0) void markRead(id)
+  }
+
   // ── WebSocket ───────────────────────────────────────────────────────────
   function startListening() {
     if (unsubWs) return
     wsClient.connect()
+    document.addEventListener('visibilitychange', onVisibilityChange)
 
     unsubWs = wsClient.on('new_message', (frame) => {
       const msg = frame.data as Message
@@ -197,7 +237,7 @@ export const useMessagesStore = defineStore('messages', () => {
       if (conv) {
         conv.last_message = msg
         conv.updated_at = msg.created_at
-        if (msg.sender_id !== auth.user?.id && activeId.value !== convId) {
+        if (msg.sender_id !== auth.user?.id && !isReadingNow(convId)) {
           conv.unread_count = (conv.unread_count ?? 0) + 1
         }
         conversations.value.sort(
@@ -213,7 +253,7 @@ export const useMessagesStore = defineStore('messages', () => {
       // only count real incoming messages from someone else. Staff-side "Обращения" traffic
       // has its own groupInboxCounts badge (see below) and must not also pollute the
       // ЛС/групповой-чат sidebar counters, which are for the staff member's own conversations.
-      if (!isOwn && !isStaffSide && activeId.value !== convId) {
+      if (!isOwn && !isStaffSide && !isReadingNow(convId)) {
         if (conv) {
           if (conv.is_group) groupUnreadCount.value++
           else unreadCount.value++
@@ -228,14 +268,14 @@ export const useMessagesStore = defineStore('messages', () => {
       if (!isOwn && isStaffSide && groupDm) fetchGroupInboxCount(groupDm.groupId)
       // The chat is open right now — mark it read on the server too, otherwise the sender
       // never gets their "read" checkmark and the message shows as unread after a reload.
-      if (!isOwn && !isStaffSide && activeId.value === convId && document.visibilityState === 'visible') {
+      if (!isOwn && !isStaffSide && isReadingNow(convId)) {
         void markRead(convId)
       }
       if (!isOwn) {
         if (!isConvSoundMuted(conv)) playNotificationSound()
         // Only pop a toast for conversations the user isn't currently looking at, and
         // never for a fully muted one (sound-only mute still shows the toast).
-        if (activeId.value !== convId && !isConvMuted(conv)) {
+        if (!isViewing(convId) && !isConvMuted(conv)) {
           const preview = msg.text
             ? msg.text
             : msg.type === 'sticker' ? '🎭 Стикер'
@@ -305,7 +345,7 @@ export const useMessagesStore = defineStore('messages', () => {
       const auth = useAuthStore()
       if (userId !== auth.user?.id) {
         // Partner's receipt — used to render the "read" checkmark on our own messages.
-        partnerLastRead.value[conversationId] = last_read_at
+        setPartnerRead(conversationId, userId, last_read_at)
       } else if (conv.my_participant) {
         // Our own read receipt, echoed back (e.g. read on another device/tab) — keeps
         // the conversation list's unread dot/bold state in sync without a full refetch.
@@ -332,6 +372,7 @@ export const useMessagesStore = defineStore('messages', () => {
   }
 
   function stopListening() {
+    document.removeEventListener('visibilitychange', onVisibilityChange)
     unsubReconnect?.()
     unsubReconnect = null
     unsubWs?.()
@@ -363,9 +404,7 @@ export const useMessagesStore = defineStore('messages', () => {
       // Seed partnerLastRead from loaded conversations
       for (const conv of conversations.value) {
         const partner = conv.other_participants?.[0]
-        if (partner?.last_read_at !== undefined) {
-          partnerLastRead.value[conv.id] = partner.last_read_at ?? null
-        }
+        if (partner?.last_read_at) setPartnerRead(conv.id, partner.user_id, partner.last_read_at)
       }
     } finally {
       loading.value = false
@@ -447,10 +486,15 @@ export const useMessagesStore = defineStore('messages', () => {
       if (before) params.before = before
       const res = await api.get(`/messages/conversations/${convId}/messages`, { params })
       const fetched: Message[] = (res.data.data.messages ?? []).reverse()
+      const current = messages.value[convId] ?? []
       if (!before) {
-        messages.value[convId] = fetched
+        // Не теряем сообщения, которые ещё отправляются, и те, что пришли по WS, пока шёл запрос.
+        const ids = new Set(fetched.map((m) => m.id))
+        const newer = current.filter((m) => !ids.has(m.id) && (m._sending || m._failed || (fetched.length && new Date(m.created_at) > new Date(fetched[fetched.length - 1].created_at))))
+        messages.value[convId] = [...fetched, ...newer]
       } else {
-        messages.value[convId] = [...fetched, ...(messages.value[convId] ?? [])]
+        const have = new Set(current.map((m) => m.id))
+        messages.value[convId] = [...fetched.filter((m) => !have.has(m.id)), ...current]
       }
       hasMoreMessages.value[convId] = fetched.length === 40
     } finally {
@@ -833,6 +877,9 @@ export const useMessagesStore = defineStore('messages', () => {
     hasMoreMessages,
     typingUsers,
     partnerLastRead,
+    isReadByPartner,
+    isViewing,
+    viewAtBottom,
     spamNagActive,
     spamNagCooldownUntil,
     checkSpamGate,
