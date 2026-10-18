@@ -61,7 +61,8 @@ export const adminService = {
   async getStats() {
     const now = new Date();
     const dayAgo   = new Date(now.getTime() - 86_400_000);
-    const weekAgo  = new Date(now.getTime() - 7 * 86_400_000);
+    // Начало суток 6 дней назад (UTC): то же окно, что у недельного графика (fillDays), чтобы итоги сходились
+    const weekAgo  = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 6));
     const monthAgo = new Date(now.getTime() - 30 * 86_400_000);
 
     const [
@@ -105,7 +106,7 @@ export const adminService = {
     // Months with no rows are zero-filled so the frontend always gets 12 ordered points and
     // can turn them into a cumulative "total" curve; `month` is the first day, as YYYY-MM-DD.
     const firstMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1));
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
+    const sevenDaysAgo = weekAgo;
     const [usersByMonth, postsByMonth, postsPerDay, votesPerDay, commentsPerDay] = await Promise.all([
       countByPeriod('User', 'month', firstMonth),
       countByPeriod('Post', 'month', firstMonth),
@@ -319,7 +320,7 @@ export const adminService = {
         orderBy: { deleted_at: 'desc' },
         select: {
           id: true, username: true, display_name: true, email: true,
-          role: true, badge_type: true, avatar_url: true,
+          role: true, badge_type: true, avatar_url: true, is_banned: true,
           created_at: true, deleted_at: true, frozen_reason: true,
           _count: { select: { posts: true, followers: true, following: true } },
         },
@@ -358,7 +359,7 @@ export const adminService = {
 
   async getSponsors(page = 1, limit = 30, search?: string) {
     const skip = (page - 1) * limit;
-    const where: any = { is_sponsor: true };
+    const where: any = { is_sponsor: true, deleted_at: null };
     if (search) where.OR = [
       { username:     { contains: search, mode: 'insensitive' } },
       { display_name: { contains: search, mode: 'insensitive' } },

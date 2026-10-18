@@ -297,6 +297,7 @@ const freezeUser = async (userId: string) => {
 }
 
 const markDeceased = async (userId: string) => {
+  if (!(await confirmDialog(langStore.t.adminConfirmMarkDeceased, { danger: true }))) return
   const note = prompt(langStore.t.adminOptionalNotePrompt) ?? undefined
   try {
     await api.post(`/admin/users/${userId}/deceased`, { note: note || undefined })
@@ -652,29 +653,29 @@ watchEffect(() => { badges.users = userTotal.value })
               </Transition>
             </Teleport>
             <!-- deceased / alive -->
-            <button v-if="user.deceased_at" @click="unmarkDeceased(user.id)" :title="langStore.t.adminUndoDeceasedTooltip"
+            <button v-if="user.deceased_at" @click="unmarkDeceased(user.id)" :title="langStore.t.adminUndoDeceasedTooltip" :aria-label="langStore.t.adminUndoDeceasedTooltip"
               class="w-7 h-7 rounded-full bg-white/10 border border-white/15 text-white/60 hover:bg-white/20 flex items-center justify-center transition-all text-xs shrink-0">
               ↺
             </button>
-            <button v-else @click="markDeceased(user.id)" :title="langStore.t.adminMarkDeceasedTooltip"
+            <button v-else @click="markDeceased(user.id)" :title="langStore.t.adminMarkDeceasedTooltip" :aria-label="langStore.t.adminMarkDeceasedTooltip"
               class="w-7 h-7 rounded-full bg-white/5 border border-white/10 text-white/40 hover:bg-white/15 hover:text-white/60 flex items-center justify-center transition-all text-xs shrink-0">
               🪦
             </button>
             <!-- freeze / unfreeze -->
-            <button v-if="user.frozen_at" @click="unfreezeUser(user.id)" :title="langStore.t.adminUnfreezeTooltip"
+            <button v-if="user.frozen_at" @click="unfreezeUser(user.id)" :title="langStore.t.adminUnfreezeTooltip" :aria-label="langStore.t.adminUnfreezeTooltip"
               class="w-7 h-7 rounded-full bg-sky-500/10 border border-sky-500/15 text-sky-400 hover:bg-sky-500/20 flex items-center justify-center transition-all text-xs shrink-0">
               🔓
             </button>
-            <button v-else @click="freezeUser(user.id)" :title="langStore.t.adminFreezeTooltip"
+            <button v-else @click="freezeUser(user.id)" :title="langStore.t.adminFreezeTooltip" :aria-label="langStore.t.adminFreezeTooltip"
               class="w-7 h-7 rounded-full bg-sky-500/10 border border-sky-500/15 text-sky-400 hover:bg-sky-500/20 flex items-center justify-center transition-all text-xs shrink-0">
               🧊
             </button>
             <!-- clear warns -->
-            <button v-if="user.warn_count > 0" @click="clearUserWarns(user.id)" :title="langStore.t.adminClearWarnsTooltip"
+            <button v-if="user.warn_count > 0" @click="clearUserWarns(user.id)" :title="langStore.t.adminClearWarnsTooltip" :aria-label="langStore.t.adminClearWarnsTooltip"
               class="w-7 h-7 rounded-full bg-amber-500/10 border border-amber-500/15 text-amber-400 hover:bg-amber-500/20 flex items-center justify-center transition-all text-xs shrink-0">
               ✖
             </button>
-            <button @click="deleteUser(user.id)" :title="langStore.t.deleteBtn"
+            <button @click="deleteUser(user.id)" :title="langStore.t.deleteBtn" :aria-label="langStore.t.deleteBtn"
               class="w-7 h-7 rounded-full bg-rose-500/10 border border-rose-500/15 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center transition-all shrink-0">
               <BIcon name="Trash2" class="w-3.5 h-3.5" />
             </button>
@@ -828,11 +829,11 @@ watchEffect(() => { badges.users = userTotal.value })
             <p v-if="user.frozen_reason" class="text-[11px] text-sky-400/70 truncate mt-0.5">{{ user.frozen_reason }}</p>
           </div>
           <div class="flex items-center gap-2 shrink-0">
-            <button @click="unfreezeUser(user.id)" :title="langStore.t.adminUnfreezeTooltip"
+            <button @click="unfreezeUser(user.id)" :title="langStore.t.adminUnfreezeTooltip" :aria-label="langStore.t.adminUnfreezeTooltip"
               class="w-8 h-8 rounded-xl bg-sky-500/10 border border-sky-500/15 text-sky-400 hover:bg-sky-500/20 flex items-center justify-center transition-all text-xs">
               🔓
             </button>
-            <button v-if="user.warn_count > 0" @click="clearUserWarns(user.id)" :title="langStore.t.adminClearWarnsTooltip"
+            <button v-if="user.warn_count > 0" @click="clearUserWarns(user.id)" :title="langStore.t.adminClearWarnsTooltip" :aria-label="langStore.t.adminClearWarnsTooltip"
               class="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/15 text-amber-400 hover:bg-amber-500/20 flex items-center justify-center transition-all text-xs">
               ✖
             </button>
@@ -945,7 +946,10 @@ watchEffect(() => { badges.users = userTotal.value })
             {{ (user.display_name || user.username || '?')[0].toUpperCase() }}
           </div>
           <div class="flex-1 min-w-0">
-            <p class="font-bold text-sm text-white/70 truncate">{{ user.display_name || user.username }}</p>
+            <p class="font-bold text-sm text-white/70 truncate">{{ user.display_name || user.username }}
+              <span class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full border align-middle"
+                :class="user.is_banned ? 'bg-rose-500/15 text-rose-400 border-rose-500/20' : 'bg-white/8 text-white/50 border-white/10'">{{ user.is_banned ? langStore.t.adminBadgeBanned : langStore.t.adminBadgeDeleted }}</span>
+            </p>
             <p class="text-xs text-white/30">@{{ user.username }} · {{ langStore.t.adminDeletedOnPrefix }} {{ formatDate(user.deleted_at) }}</p>
             <p v-if="user.frozen_reason" class="text-[11px] text-rose-400/70 truncate mt-0.5">{{ user.frozen_reason }}</p>
           </div>
