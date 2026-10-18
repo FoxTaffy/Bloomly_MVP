@@ -424,19 +424,24 @@ function submit() {
           <div>
             <div class="flex items-center justify-between mb-1.5">
               <label class="text-xs font-bold text-white/50 uppercase tracking-wider block">Краткое описание</label>
-              <span class="text-[11px] tabular-nums" :class="description.length > 270 ? 'text-brand-error/80' : 'text-white/35'">
-                {{ description.length }}<span class="opacity-50">/300</span>
+              <span class="text-[11px] tabular-nums" :class="description.length > 24 ? 'text-brand-error/80' : 'text-white/35'">
+                {{ description.length }}<span class="opacity-50">/30</span>
               </span>
             </div>
-            <textarea v-model="description" placeholder="Расскажите о группе…" rows="3" maxlength="300"
+            <textarea v-model="description" placeholder="Коротко о группе…" rows="1" maxlength="30"
               class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden resize-none" />
           </div>
 
           <!-- About (detailed) -->
           <div>
-            <label class="text-xs font-bold text-white/50 uppercase tracking-wider mb-1.5 block">Подробное описание</label>
-            <textarea v-model="aboutText" placeholder="Расскажите о группе подробно: чем занимаетесь, условия, правила работы…" rows="6"
-              class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden resize-y" />
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="text-xs font-bold text-white/50 uppercase tracking-wider block">Подробное описание</label>
+              <span class="text-[11px] tabular-nums" :class="aboutText.length > 270 ? 'text-brand-error/80' : 'text-white/35'">
+                {{ aboutText.length }}<span class="opacity-50">/300</span>
+              </span>
+            </div>
+            <textarea v-model="aboutText" placeholder="Расскажите о группе подробно: чем занимаетесь, условия, правила работы…" rows="6" maxlength="300"
+              class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/30 focus:border-brand-accent focus:outline-hidden resize-none" />
           </div>
 
           <!-- Visibility -->

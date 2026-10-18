@@ -1377,11 +1377,11 @@ async function deleteGroup() {
                     </div>
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsShortDescription }}</label>
-                      <textarea v-model="form.description" rows="2" class="field-input resize-none" />
+                      <textarea v-model="form.description" rows="2" maxlength="30" class="field-input resize-none" />
                     </div>
                     <div>
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider mb-2 block">{{ langStore.t.groupSettingsAboutDescription }}</label>
-                      <textarea v-model="form.aboutText" rows="5" :placeholder="langStore.t.groupSettingsAboutPlaceholder" class="field-input resize-none" />
+                      <textarea v-model="form.aboutText" rows="5" maxlength="300" :placeholder="langStore.t.groupSettingsAboutPlaceholder" class="field-input resize-none" />
                     </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label class="flex items-center gap-3 cursor-pointer select-none bg-brand-bg/40 border border-brand-border rounded-2xl p-3">
