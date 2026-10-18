@@ -51,6 +51,7 @@ const emit = defineEmits<{
 
 // ── Steps ────────────────────────────────────────────────────────────────────
 const step = ref(1)
+const honestyConfirmed = ref(false)
 const totalSteps = 4
 
 // ── Step 1: Основа ──────────────────────────────────────────────────────────
@@ -246,7 +247,7 @@ watch(name, (n) => {
 
 // ── Submit ──────────────────────────────────────────────────────────────────
 function submit() {
-  if (!step1Valid.value || !step2Valid.value) return
+  if (!step1Valid.value || !step2Valid.value || !honestyConfirmed.value) return
   const payload: CreateGroupPayload = {
     name: name.value.trim(),
     slug: slug.value.trim() || autoSlug.value,
@@ -910,6 +911,11 @@ function submit() {
           </div>
         </div>
 
+        <label v-if="step === totalSteps" class="flex items-start gap-3 cursor-pointer select-none bg-brand-bg/40 border border-brand-border rounded-2xl p-3 mt-4">
+          <input v-model="honestyConfirmed" type="checkbox" class="mt-0.5 w-4 h-4 accent-brand-accent shrink-0" />
+          <span class="text-white/60 text-xs leading-snug">Я подтверждаю, что не являюсь мошенником или злоумышленником и обязуюсь вести себя честно: не обманывать участников и не нарушать правила платформы.</span>
+        </label>
+
         <!-- ── Navigation Buttons ────────────────────────────────────────── -->
         <div class="flex gap-3 mt-6">
           <button v-if="step > 1"
@@ -924,7 +930,7 @@ function submit() {
           </button>
           <button v-if="step === totalSteps"
             class="flex-1 py-3 rounded-2xl bg-brand-success text-white font-bold text-sm hover:bg-brand-success/80 transition-colors shadow-lg shadow-brand-success/20 disabled:opacity-40"
-            :disabled="!step1Valid" @click="submit">
+            :disabled="!step1Valid || !honestyConfirmed" @click="submit">
             <BIcon name="Sparkles" class="w-4 h-4 inline mr-1.5 -mt-0.5" /> Создать группу
           </button>
         </div>
