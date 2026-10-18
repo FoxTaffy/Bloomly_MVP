@@ -5,6 +5,7 @@ import { isBlockedBy } from '../../lib/blocks.js';
 import { deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import type { SendMessageInput, GetMessagesQuery } from './types.js';
 import { logError } from '../../lib/logger.js';
+import { pushService } from '../push/service.js';
 
 // Group roles that answer the group's inbox (group DMs) on its behalf.
 const CHAT_STAFF_ROLES: readonly string[] = ['owner', 'admin', 'moderator'];
@@ -514,6 +515,42 @@ export const messageService = {
     const wsPayload = { type: 'new_message', data: message, groupDm };
     for (const user_id of recipients) {
       messageSubscriptions.push(user_id, wsPayload);
+    }
+    void this._pushNewMessage(conversationId, message as any, participants.map((p) => p.user_id), groupDm).catch(logError('[push] message'));
+  },
+
+  /** Системное уведомление о новом сообщении (когда вкладка закрыта/в фоне). Только участникам, без отправителя и без заглушивших чат. */
+  async _pushNewMessage(
+    conversationId: string,
+    message: { sender_id: string; type: string; text: string | null; encrypted_text?: string | null; sender?: { display_name: string | null; username: string; avatar_url: string | null } | null },
+    participantIds: string[],
+    groupDm: { groupName: string | null } | null,
+  ) {
+    if (groupDm) return; // обращения в группу — через её inbox, не через личный push
+    const now = new Date();
+    const rows = await prisma.conversationParticipant.findMany({
+      where: { conversation_id: conversationId, user_id: { in: participantIds.filter((id) => id !== message.sender_id) } },
+      select: { user_id: true, muted_until: true },
+    });
+    const preview = message.encrypted_text ? 'Новое сообщение'
+      : message.text ? message.text.slice(0, 140)
+      : message.type === 'sticker' ? '🎭 Стикер'
+      : message.type === 'voice' ? '🎤 Голосовое сообщение'
+      : message.type === 'audio' ? '🎵 Аудио'
+      : message.type === 'album' ? '📎 Альбом'
+      : message.type === 'image' ? '🖼 Фото'
+      : message.type === 'video' ? '🎬 Видео'
+      : 'Новое сообщение';
+    const title = message.sender?.display_name || message.sender?.username || 'Bloomly';
+    for (const r of rows) {
+      if (r.muted_until && r.muted_until > now) continue;
+      void pushService.sendToUser(r.user_id, {
+        title,
+        body: preview,
+        url: `/messages?c=${conversationId}`,
+        tag: `conv-${conversationId}`,
+        icon: message.sender?.avatar_url ?? undefined,
+      });
     }
   },
 

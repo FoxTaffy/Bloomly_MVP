@@ -1,4 +1,6 @@
 import prisma from '../../config/prisma.js';
+import { pushService } from '../push/service.js';
+import { logError } from '../../lib/logger.js';
 
 // In-memory subscriber map for real-time push: receiverId → Set of send functions
 type PushFn = (data: string) => void;
@@ -80,6 +82,19 @@ export const notificationService = {
     // Real-time push — suppressed during quiet hours, but the row is still written so it's there on catch-up.
     if (!quietHoursOn || !isWithinQuietHours(quietFrom, quietTo)) {
       this.push(receiverId, { type: 'notification', data: notif });
+      const who = notif.senderGroup?.name ?? notif.sender?.display_name ?? notif.sender?.username ?? 'Bloomly';
+      const text: Record<string, string> = {
+        FOLLOW: 'подписался на вас',
+        COMMENT: 'прокомментировал вашу запись',
+        REPAW: 'сделал репост вашей записи',
+      };
+      void pushService.sendToUser(receiverId, {
+        title: who,
+        body: text[type] ?? 'Новое уведомление',
+        url: '/notifications',
+        tag: `notif-${notif.id}`,
+        icon: notif.senderGroup?.avatar_url ?? notif.sender?.avatar_url ?? undefined,
+      }).catch(logError('[push] notification'));
     }
     return notif;
   },

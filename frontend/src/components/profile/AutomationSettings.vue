@@ -4,6 +4,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import BIcon from '@/components/BIcon.vue'
 import api from '@/api'
+import { usePushNotifications } from '@/composables/usePushNotifications'
 
 const router    = useRouter()
 const toast     = ref('')
@@ -83,7 +84,26 @@ function fromApi(data: Record<string, any>): Partial<AutoSettings> {
   }
 }
 
+const push = usePushNotifications()
+async function togglePush() {
+  try {
+    if (push.enabled.value) {
+      await push.disable()
+      showToast('Уведомления в браузере выключены')
+      return
+    }
+    const r = await push.enable()
+    if (r === 'ok') showToast('Уведомления в браузере включены')
+    else if (r === 'denied') showToast('Разрешите уведомления для сайта в настройках браузера')
+    else if (r === 'unsupported') showToast('Браузер не поддерживает уведомления')
+    else showToast('Уведомления на сервере не настроены')
+  } catch (e) {
+    showToast(apiErrorMessage(e) || 'Не удалось изменить уведомления')
+  }
+}
+
 onMounted(async () => {
+  void push.refresh()
   try {
     const { data } = await api.get('/automation/me')
     Object.assign(s.value, fromApi(data.data.settings))
@@ -217,6 +237,24 @@ const sections = computed(() => [
     </Transition>
 
     <p class="text-white/45 text-sm">Настрой правила и автодействия для своего аккаунта</p>
+
+    <!-- Browser push -->
+    <div v-if="push.supported" class="bg-brand-bg border border-brand-border rounded-2xl px-5 py-4 flex items-center gap-4">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center bg-brand-accent/10">
+        <BIcon name="Bell" class="w-4.5 h-4.5 text-brand-accent" />
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="font-bold text-white text-sm">Уведомления в браузере</div>
+        <div class="text-white/45 text-xs">
+          {{ push.permission.value === 'denied' ? 'Заблокированы в браузере: разрешите для этого сайта' : 'Сообщения и события приходят системным уведомлением, даже если вкладка закрыта' }}
+        </div>
+      </div>
+      <button type="button" :disabled="push.busy.value" @click="togglePush"
+        class="px-4 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+        :class="push.enabled.value ? 'bg-white/10 text-white hover:bg-white/15' : 'bg-brand-accent text-white hover:opacity-90'">
+        {{ push.enabled.value ? 'Выключить' : 'Включить' }}
+      </button>
+    </div>
 
     <!-- Sections -->
     <div v-for="sec in sections" :key="sec.id"
