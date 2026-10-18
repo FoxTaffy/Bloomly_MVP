@@ -380,6 +380,18 @@ const reviewSubmitting = ref(false)
 const reviewDismissed = ref(false)
 
 const reviewError = ref('')
+const canWriteReview = ref(false)
+const reviewBlockReason = ref('')
+async function loadCanReview() {
+  canWriteReview.value = false
+  reviewBlockReason.value = ''
+  if (!group.value || !authStore.user || isOwner.value) return
+  try {
+    const r = await groupsStore.canReview(group.value.id)
+    canWriteReview.value = r.canReview
+    reviewBlockReason.value = r.canReview ? '' : (r.reason || '')
+  } catch { /* кнопка просто не покажется */ }
+}
 async function submitReview() {
   if (!group.value || !reviewText.value.trim() || reviewRating.value < 1 || reviewSubmitting.value) return
   reviewSubmitting.value = true
@@ -683,6 +695,7 @@ async function load() {
   loadJoinPending()
   loadGroupPosts()
   loadMemberPreview()
+  loadCanReview()
   reviewsLoaded.value = false
   if (['reviews', 'digest', 'categories', 'team'].includes(aboutTab.value)) loadAboutTabData(aboutTab.value)
   if (authStore.user && !isOwner.value) checkGroupBookmark()
@@ -1540,10 +1553,11 @@ const vClickOutside = {
                       <span class="font-bold text-white">{{ reviewsData.average.toFixed(1) }}</span>
                       <span class="text-white/40">· {{ reviewsData.total }}</span>
                     </div>
-                    <button v-if="isMember && !isOwner" @click="showReviewModal = true"
+                    <button v-if="isMember && !isOwner && canWriteReview" @click="showReviewModal = true"
                       class="px-4 py-2 rounded-xl bg-brand-yellow text-black text-sm font-bold hover:bg-brand-yellow/90 transition-all">
                       {{ langStore.t.groupDetailWriteReviewBtn }}
                     </button>
+                    <p v-else-if="isMember && !isOwner && reviewBlockReason" class="text-white/40 text-xs max-w-xs">{{ reviewBlockReason }}</p>
                     <template v-if="reviewsData.reviews.length">
                       <div v-for="review in reviewsData.reviews" :key="review.id"
                         class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">

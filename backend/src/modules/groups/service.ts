@@ -1541,37 +1541,48 @@ export const groupService = {
     };
   },
 
-  async upsertReview(groupId: string, userId: string, rating: number, text: string) {
-    if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw httpError('Оценка — от 1 до 5', 400);
-    const clean = sanitizeDisplayText(text ?? '', 2000);
-    if (!clean) throw httpError('Напишите текст отзыва', 400);
-    if (containsToxicLanguage(clean)) throw httpError('Отзыв содержит недопустимый контент', 400);
+  /** Почему пользователь не может оставить отзыв (null — может). В группах с заказами отзыв — только по итогам сделки: заказ выполнен или закрыт. */
+  async reviewBlock(groupId: string, userId: string): Promise<{ status: number; message: string } | null> {
     const group = await prisma.group.findFirst({ where: { id: groupId, deleted_at: null }, select: { owner_id: true, type: true } });
-    if (!group) throw httpError('Group not found', 404);
-    if (group.owner_id === userId) throw httpError('Нельзя оставить отзыв на свою группу', 400);
+    if (!group) return { status: 404, message: 'Group not found' };
+    if (group.owner_id === userId) return { status: 400, message: 'Нельзя оставить отзыв на свою группу' };
     const member = await prisma.groupMember.findUnique({
       where: { group_id_user_id: { group_id: groupId, user_id: userId } },
       select: { user_id: true },
     });
-    if (!member) throw httpError('Отзывы могут оставлять только участники группы', 403);
-    return prisma.groupReview.upsert({
-      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
-      update: { rating, text: clean },
-      create: { group_id: groupId, user_id: userId, rating, text: clean },
-    });
-    // В группах с заказами отзыв — только по итогам сделки: заказ выполнен или закрыт (отменён, не завершён)
+    if (!member) return { status: 403, message: 'Отзывы могут оставлять только участники группы' };
     if (group.type === 'creative' || group.type === 'shop') {
       const deal = await prisma.order.findFirst({
         where: { group_id: groupId, customer_id: userId, OR: [{ status: 'FINISHED' }, { deleted_at: { not: null } }] },
         select: { id: true },
       });
-      if (!deal) throw httpError('Отзыв можно оставить только после выполненного или закрытого заказа', 403);
+      if (!deal) return { status: 403, message: 'Отзыв можно оставить только после выполненного или закрытого заказа' };
     }
   },
 
   async deleteReview(groupId: string, reviewId: string, actorId: string) {
     const review = await prisma.groupReview.findFirst({ where: { id: reviewId, group_id: groupId } });
     if (!review) throw httpError('Review not found', 404);
+    return null;
+  },
+
+  async canReview(groupId: string, userId: string) {
+    const block = await groupService.reviewBlock(groupId, userId);
+    return { canReview: !block, reason: block?.message ?? null };
+  },
+
+  async upsertReview(groupId: string, userId: string, rating: number, text: string) {
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw httpError('Оценка — от 1 до 5', 400);
+    const clean = sanitizeDisplayText(text ?? '', 2000);
+    if (!clean) throw httpError('Напишите текст отзыва', 400);
+    if (containsToxicLanguage(clean)) throw httpError('Отзыв содержит недопустимый контент', 400);
+    const block = await groupService.reviewBlock(groupId, userId);
+    if (block) throw httpError(block.message, block.status);
+    return prisma.groupReview.upsert({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      update: { rating, text: clean },
+      create: { group_id: groupId, user_id: userId, rating, text: clean },
+    });
     if (review.user_id !== actorId && !(await groupService.isAtLeastModerator(groupId, actorId))) {
       throw httpError('Not authorized', 403);
     }

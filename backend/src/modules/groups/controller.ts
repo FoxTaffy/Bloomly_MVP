@@ -1196,6 +1196,18 @@ export const listReviewsHandler = async (
   }
 };
 
+export const canReviewHandler = async (
+  request: FastifyRequest<{ Params: { id: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    return ok(reply, await groupService.canReview(request.params.id, userId));
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'REVIEW_ERROR', errMessage(e));
+  }
+};
+
 export const upsertReviewHandler = async (
   request: FastifyRequest<{ Params: { id: string }; Body: { rating: number; text: string } }>,
   reply: FastifyReply,

@@ -467,6 +467,11 @@ export const useGroupsStore = defineStore('groups', () => {
     return data.data
   }
 
+  async function canReview(id: string): Promise<{ canReview: boolean; reason: string | null }> {
+    const { data } = await api.get(`/groups/${id}/reviews/can-review`)
+    return data.data
+  }
+
   async function submitReview(id: string, rating: number, text: string) {
     await api.post(`/groups/${id}/reviews`, { rating, text })
   }
@@ -846,7 +851,7 @@ export const useGroupsStore = defineStore('groups', () => {
     joinGroup, leaveGroup, togglePinGroup,
     getMyJoinRequest, cancelJoinRequest, fetchJoinRequests, resolveJoinRequest,
     transferOwnership, setMemberCustomRole,
-    fetchReviews, submitReview, deleteReview, fetchDigest, fetchCategories, fetchTeam,
+    fetchReviews, canReview, submitReview, deleteReview, fetchDigest, fetchCategories, fetchTeam,
     loadMySubscriptions, subscribeGroup, unsubscribeGroup,
     loadEvents, loadEvent, createEvent, updateEvent,
     toggleSoonBadge, toggleSoonBadgeVisibility, loadMySoonBadges,
