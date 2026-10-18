@@ -132,10 +132,20 @@ export const useMessagesStore = defineStore('messages', () => {
     if (p && (!p.last_read_at || new Date(iso).getTime() > new Date(p.last_read_at).getTime())) p.last_read_at = iso
   }
 
-  /** Прочитано ли собеседником сообщение, отправленное в `createdAt`. */
+  /**
+   * Прочитано ли сообщение, отправленное в `createdAt`. В личной переписке — собеседником, в группе —
+   * только когда его прочли все остальные участники (если список участников известен целиком).
+   */
   function isReadByPartner(convId: string, createdAt: string): boolean {
+    const t = new Date(createdAt).getTime()
+    const conv = conversations.value.find((c) => c.id === convId)
+    if (conv?.is_group) {
+      const others = conv.other_participants ?? []
+      if (!others.length || (conv.participants_count ?? others.length + 1) > others.length + 1) return false
+      return others.every((o) => !!o.last_read_at && t <= new Date(o.last_read_at).getTime())
+    }
     const read = partnerLastRead.value[convId]
-    return !!read && new Date(createdAt).getTime() <= new Date(read).getTime()
+    return !!read && t <= new Date(read).getTime()
   }
 
   // Открытый чат прокручен к последним сообщениям (выставляет ChatWindow). Если пользователь читает историю
@@ -366,7 +376,7 @@ export const useMessagesStore = defineStore('messages', () => {
       void fetchUnreadCount()
       if (activeId.value) {
         const id = activeId.value
-        void fetchMessages(id).then(() => markRead(id)).catch(() => { /* retried on next open */ })
+        void fetchMessages(id).then(() => { if (isReadingNow(id)) return markRead(id) }).catch(() => { /* retried on next open */ })
       }
     })
   }
@@ -463,7 +473,8 @@ export const useMessagesStore = defineStore('messages', () => {
       if (activeId.value === convId) activeId.value = null
       throw err
     }
-    await markRead(convId)
+    // Прочитанным чат становится не при открытии, а когда пользователь доходит до последних
+    // сообщений: ChatWindow сам прокручивает к первому непрочитанному и вызывает markRead.
   }
 
   // Concurrent first-page loads of the same conversation share one request

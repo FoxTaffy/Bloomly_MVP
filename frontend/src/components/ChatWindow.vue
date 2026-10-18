@@ -311,7 +311,7 @@
     </Transition>
 
     <!-- ── Message list ────────────────────────────────────────────────────── -->
-    <div ref="scrollEl" class="chat-wallpaper flex-1 overflow-y-auto min-h-0 px-3 sm:px-5 py-4 stack-y-0.5 relative" @scroll="onScroll" @click="onMsgListClick">
+    <div ref="scrollEl" class="chat-wallpaper flex-1 overflow-y-auto min-h-0 px-3 sm:px-5 py-4 stack-y-0.5 relative" @scroll="onScroll" @click="onMsgListClick" @load.capture="onMediaLoad" @loadedmetadata.capture="onMediaLoad">
 
       <!-- Notes banner -->
       <div v-if="!conv?.is_group && !other" class="flex flex-col items-center gap-3 py-6 px-4 mb-2">
@@ -359,6 +359,13 @@
       <!-- Messages -->
       <template v-else>
         <template v-for="(msg, idx) in displayList" :key="msg.id">
+        <!-- Unread divider: первое непрочитанное сообщение на момент открытия чата -->
+        <div v-if="msg.id === unreadDividerId" data-testid="unread-divider"
+          class="flex items-center gap-3 my-3 px-2 select-none">
+          <span class="flex-1 h-px bg-brand-accent/30" />
+          <span class="text-[10px] font-bold uppercase tracking-wider text-brand-accent/80">Новые сообщения</span>
+          <span class="flex-1 h-px bg-brand-accent/30" />
+        </div>
         <!-- Date divider -->
         <div v-if="shouldShowDateDivider(idx)" class="sticky top-1 z-5 flex items-center justify-center my-3 select-none">
           <span class="px-3 py-1 rounded-full bg-brand-card/80 backdrop-blur-md border border-white/10 text-[10px] font-bold text-white/60 tracking-wide uppercase shadow-lg">
@@ -1908,7 +1915,18 @@ function openAlbumImageLightbox(msg: Message, url: string) {
 
 const getDisplayText = (msg: Message) => displayTextOf(msg, langStore.t.encryptedMessagePreview)
 
+// Лента «прилипла» к низу: стикеры, фото и видео догружаются уже после прокрутки и увеличивают высоту,
+// поэтому на их загрузке, пока пользователь не ушёл вверх, дотягиваем ленту до конца.
+let stickToBottom = true
+let smoothScrollUntil = 0 // пока идёт плавная прокрутка вниз, промежуточные положения не считаем «ушёл вверх»
+function onMediaLoad() {
+  const el = scrollEl.value
+  if (stickToBottom && el) el.scrollTop = el.scrollHeight
+}
+
 function scrollToBottom(smooth = false) {
+  stickToBottom = true
+  if (smooth) smoothScrollUntil = Date.now() + 700
   // Крутим только контейнер чата: scrollIntoView сдвигал ещё и страницу целиком.
   nextTick(() => {
     const el = scrollEl.value
@@ -1925,6 +1943,35 @@ let justOpenedConv = true
 // на неё не должны реагировать ни автопрокрутка вниз, ни счётчик «новых».
 let lastNewestId: string | null = null
 
+// Первое непрочитанное сообщение на момент открытия: к нему прокручиваем и над ним рисуем разделитель.
+const unreadDividerId = ref<string | null>(null)
+
+/** Позиция при открытии чата: к первому непрочитанному, а если непрочитанного нет — вниз. */
+function positionOnOpen() {
+  const me = auth.user?.id
+  const lastRead = props.conv?.my_participant?.last_read_at
+  const first = (props.conv?.unread_count ?? 0) > 0
+    ? msgList.value.find((m) => m.sender_id !== me && m.type !== 'system' && (!lastRead || new Date(m.created_at) > new Date(lastRead)))
+    : undefined
+  unreadDividerId.value = first?.id ?? null
+  nextTick(() => {
+    const box = scrollEl.value
+    if (!box) return
+    const target = first ? document.getElementById('msg-' + first.id) : null
+    if (target) {
+      const top = target.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop
+      box.scrollTo({ top: Math.max(0, top - 48), behavior: 'instant' })
+    } else {
+      box.scrollTo({ top: box.scrollHeight, behavior: 'instant' })
+    }
+    const atBottomNow = box.scrollHeight - box.scrollTop - box.clientHeight < 100
+    stickToBottom = !target && atBottomNow
+    store.viewAtBottom = atBottomNow
+    // Непрочитанное целиком на экране (или его нет) — читаем сразу; иначе ждём, пока долистают до низа.
+    if (atBottomNow && (props.conv?.unread_count ?? 0) > 0 && store.isViewing(props.convId)) void store.markRead(props.convId)
+  })
+}
+
 watch(() => msgList.value.length, (newLen, oldLen) => {
   if (!scrollEl.value) return
   const newestId = msgList.value[msgList.value.length - 1]?.id ?? null
@@ -1932,7 +1979,7 @@ watch(() => msgList.value.length, (newLen, oldLen) => {
   lastNewestId = newestId
   if (justOpenedConv) {
     justOpenedConv = false
-    scrollToBottom(false)
+    positionOnOpen()
     return
   }
   if (!newestChanged && newLen >= (oldLen ?? 0)) return
@@ -1952,12 +1999,14 @@ watch(() => msgList.value.length, (newLen, oldLen) => {
 
 watch(() => props.convId, () => {
   lastNewestId = null
+  unreadDividerId.value = null
   store.viewAtBottom = true
   // If the history is already cached, msgList's length won't change when we
   // switch — nothing will clear the flag, so clear it here to avoid a later
   // incoming message force-scrolling the user away from a spot they scrolled up to.
   justOpenedConv = msgList.value.length === 0
-  scrollToBottom()
+  if (justOpenedConv) scrollToBottom()
+  else positionOnOpen()
   searchQuery.value = ''
   showScrollDown.value = false
   unreadInChat.value = 0
@@ -1976,6 +2025,7 @@ async function onScroll() {
   if (distFromBottom < 100) unreadInChat.value = 0
   // Дочитали до низа — теперь входящие считаются прочитанными (и те, что пришли, пока читали историю выше)
   const atBottomNow = distFromBottom < 100
+  if (atBottomNow || Date.now() > smoothScrollUntil) stickToBottom = atBottomNow
   if (atBottomNow !== store.viewAtBottom) {
     store.viewAtBottom = atBottomNow
     if (atBottomNow && (props.conv?.unread_count ?? 0) > 0 && store.isViewing(props.convId)) void store.markRead(props.convId)

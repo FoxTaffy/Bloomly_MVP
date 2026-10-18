@@ -629,10 +629,12 @@ export const messageService = {
     const now = new Date();
     // updateMany (not update): group staff reading a member's group-DM thread from the
     // inbox aren't a ConversationParticipant, so there's no row to stamp — no-op for them.
-    await prisma.conversationParticipant.updateMany({
+    const stamped = await prisma.conversationParticipant.updateMany({
       where: { conversation_id: conversationId, user_id: userId },
       data: { last_read_at: now },
     });
+    // Не участник (персонал группы в чужом треде): прочитано «за» клиента не считается, чекмарки не трогаем.
+    if (stamped.count === 0) return;
     // Broadcast read receipt to other participants so they can update checkmarks,
     // and to the reader's own other devices/sessions so their unread badges sync too
     const others = await prisma.conversationParticipant.findMany({

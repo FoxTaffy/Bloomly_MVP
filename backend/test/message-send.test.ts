@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { randomUUID } from 'crypto';
 import { createUser, prisma, resetDb, api } from './helpers.js';
 import { mediaUrlForKey } from '../src/modules/media/service.js';
+import { messageService, messageSubscriptions } from '../src/modules/messages/service.js';
 
 async function ownedFile(ownerId: string, ext: string) {
   const key = `messages/${randomUUID()}.${ext}`;
@@ -99,5 +100,27 @@ describe('отправка сообщений: пустые и лимиты', ()
     const { convId, send } = await setup();
     expect((await send({ type: 'bogus' })).status).toBe(400);
     expect(await prisma.message.count({ where: { conversation_id: convId } })).toBe(0);
+  });
+});
+
+describe('прочтение', () => {
+  beforeEach(resetDb);
+
+  it('участник отмечает прочитанным и рассылает read_receipt, не участник — нет', async () => {
+    const { a, b, convId } = await setup();
+    const outsider = await createUser();
+    const frames: Record<string, unknown>[] = [];
+    const off = messageSubscriptions.subscribe(a.user.id, (raw) => frames.push(JSON.parse(raw)));
+
+    await messageService.markRead(convId, outsider.user.id);
+    expect(frames.filter((f) => f.type === 'read_receipt')).toHaveLength(0);
+
+    await messageService.markRead(convId, b.user.id);
+    off();
+    const receipts = frames.filter((f) => f.type === 'read_receipt');
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]).toMatchObject({ conversationId: convId, userId: b.user.id });
+    const row = await prisma.conversationParticipant.findFirst({ where: { conversation_id: convId, user_id: b.user.id } });
+    expect(row?.last_read_at).not.toBeNull();
   });
 });

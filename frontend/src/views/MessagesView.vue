@@ -356,7 +356,6 @@ watch(activeConvId, async (id) => {
   if (id && !store.messages[id]) {
     try {
       await store.fetchMessages(id)
-      await store.markRead(id)
     } catch {
       // selectConversation() already resets the active chat on a failed load
     }
