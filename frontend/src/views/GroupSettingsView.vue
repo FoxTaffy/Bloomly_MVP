@@ -17,7 +17,7 @@ import { useShopStore } from '@/stores/shop'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { useConfirm } from '@/composables/useConfirm'
 import { readRawDataUrl, readScaledDataUrl } from '@/lib/utils'
-import { sanitizeTagInput } from '@/lib/tagRules'
+import { sanitizeSlugInput } from '@/lib/tagRules'
 import api from '@/api'
 
 const route = useRoute()
@@ -588,7 +588,7 @@ const form = reactive({
 // Slug: санитизация только того, что ввёл пользователь (не при загрузке из БД)
 function onSlugInput(e: Event) {
   const input = e.target as HTMLInputElement
-  form.slug = sanitizeTagInput(input.value).slice(0, 60)
+  form.slug = sanitizeSlugInput(input.value).slice(0, 60)
   input.value = form.slug
 }
 

@@ -10,7 +10,7 @@ import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isTrustedMediaUrl, deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import { notificationService } from '../notifications/service.js';
 import { requireSafeLink, sanitizeLinkRecord } from '../../lib/safeLink.js';
-import { NON_TAG_CHAR_RE, normalizeTag } from '../../lib/tagRules.js';
+import { normalizeTag } from '../../lib/tagRules.js';
 import type {
   CreateGroupInput,
   UpdateGroupInput,
@@ -75,7 +75,7 @@ function cleanPermissions(raw: unknown): GroupPermission[] {
 
 // One slug format for create and update: lowercase, dash-separated, no leading/trailing dashes.
 function normalizeSlug(raw: string): string {
-  return raw.toLowerCase().replace(NON_TAG_CHAR_RE, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return raw.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 }
 
 // Rubrics are the type-specific sub-categories picked when creating news / brand groups.

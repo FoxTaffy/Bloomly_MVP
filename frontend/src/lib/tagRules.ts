@@ -17,3 +17,22 @@ export const TAG_RE = new RegExp(`^[${TAG_CLASS}]+$`, 'u')
 export function sanitizeTagInput(raw: string): string {
   return raw.toLowerCase().replace(NON_TAG_CHAR_RE, '')
 }
+
+/** Slug группы — только английские буквы, цифры, «_» и «-» (в отличие от тегов). */
+export const NON_SLUG_CHAR_RE = /[^a-z0-9_-]/g
+
+/** Ввод slug: нижний регистр, всё кроме a-z, 0-9, «_» и «-» удаляется. */
+export function sanitizeSlugInput(raw: string): string {
+  return raw.toLowerCase().replace(NON_SLUG_CHAR_RE, '')
+}
+
+const CYR_TO_LAT: Record<string, string> = {
+  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm',
+  н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch',
+  ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya', і: 'i', ї: 'yi', є: 'ye', ґ: 'g',
+}
+
+/** Транслитерация кириллицы в латиницу — для автогенерации slug из названия. */
+export function transliterate(raw: string): string {
+  return raw.toLowerCase().replace(/[а-яёіїєґ]/g, (c) => CYR_TO_LAT[c] ?? '')
+}

@@ -7,7 +7,7 @@ import type { GroupType } from '@/stores/groups'
 import api from '@/api'
 import { compressImageForUpload } from '@/lib/utils'
 import { GROUP_RUBRIC_OPTIONS, DEFAULT_RUBRIC } from '@/lib/groupRubrics'
-import { sanitizeTagInput } from '@/lib/tagRules'
+import { sanitizeSlugInput, transliterate } from '@/lib/tagRules'
 import { useAuthStore } from '@/stores/auth'
 import { canCreateGroup, ROLE_GROUPS } from '@/lib/verificationPolicy'
 const auth = useAuthStore()
@@ -63,12 +63,12 @@ const type = ref<GroupType>(props.initialType && canCreateGroup(auth.user, props
 const isPublic = ref(true)
 
 const autoSlug = computed(() =>
-  sanitizeTagInput(name.value.trim().replace(/\s+/g, '-')).slice(0, 60)
+  sanitizeSlugInput(transliterate(name.value.trim()).replace(/\s+/g, '-')).slice(0, 60)
 )
 
 // Slug auto-sanitize: remove invalid chars, force lowercase, limit length
 watch(slug, (v) => {
-  const clean = sanitizeTagInput(v).slice(0, 60)
+  const clean = sanitizeSlugInput(v).slice(0, 60)
   if (clean !== v) slug.value = clean
 })
 
