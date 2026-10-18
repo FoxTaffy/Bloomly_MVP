@@ -1,31 +1,56 @@
 import prisma from '../../config/prisma.js'
 
+export const SITEMAP_PAGE_SIZE = 10000
+
+// Only what a logged-out visitor can really open: everyone-visible profiles, public SFW posts/groups.
+const SITEMAP_USER_WHERE = { deleted_at: null, profile_visibility: 'everyone' }
+const SITEMAP_POST_WHERE = {
+  deleted_at: null,
+  is_nsfw: false,
+  is_archived: false,
+  subscriber_only: false,
+  is_paid: false,
+  author: { deleted_at: null, profile_visibility: 'everyone' },
+}
+const SITEMAP_GROUP_WHERE = { deleted_at: null, is_public: true, is_nsfw: false }
+
 // Public data for the sitemap and the OpenGraph previews served to link-unfurling bots.
 export const seoService = {
-  sitemapUsers() {
+  sitemapCounts() {
+    return Promise.all([
+      prisma.user.count({ where: SITEMAP_USER_WHERE }),
+      prisma.post.count({ where: SITEMAP_POST_WHERE }),
+      prisma.group.count({ where: SITEMAP_GROUP_WHERE }),
+    ]).then(([users, posts, groups]) => ({ users, posts, groups }))
+  },
+
+  sitemapUsers(page: number) {
     return prisma.user.findMany({
-      where: { deleted_at: null },
+      where: SITEMAP_USER_WHERE,
       select: { username: true, updated_at: true },
-      orderBy: { updated_at: 'desc' },
-      take: 5000,
+      orderBy: [{ updated_at: 'desc' }, { id: 'asc' }],
+      skip: page * SITEMAP_PAGE_SIZE,
+      take: SITEMAP_PAGE_SIZE,
     })
   },
 
-  sitemapPosts() {
+  sitemapPosts(page: number) {
     return prisma.post.findMany({
-      where: { deleted_at: null, is_nsfw: false },
-      select: { id: true, updated_at: true },
-      orderBy: { updated_at: 'desc' },
-      take: 10000,
+      where: SITEMAP_POST_WHERE,
+      select: { id: true, updated_at: true, media_urls: true },
+      orderBy: [{ updated_at: 'desc' }, { id: 'asc' }],
+      skip: page * SITEMAP_PAGE_SIZE,
+      take: SITEMAP_PAGE_SIZE,
     })
   },
 
-  sitemapGroups() {
+  sitemapGroups(page: number) {
     return prisma.group.findMany({
-      where: { deleted_at: null },
+      where: SITEMAP_GROUP_WHERE,
       select: { slug: true, id: true, updated_at: true },
-      orderBy: { updated_at: 'desc' },
-      take: 2000,
+      orderBy: [{ updated_at: 'desc' }, { id: 'asc' }],
+      skip: page * SITEMAP_PAGE_SIZE,
+      take: SITEMAP_PAGE_SIZE,
     })
   },
 
@@ -37,7 +62,11 @@ export const seoService = {
         content: true,
         media_urls: true,
         created_at: true,
-        author: { select: { display_name: true, username: true, avatar_url: true } },
+        is_nsfw: true,
+        is_archived: true,
+        subscriber_only: true,
+        is_paid: true,
+        author: { select: { display_name: true, username: true, avatar_url: true, profile_visibility: true } },
       },
     })
   },
@@ -45,7 +74,7 @@ export const seoService = {
   profileForOg(username: string) {
     return prisma.user.findFirst({
       where: { username, deleted_at: null },
-      select: { display_name: true, username: true, bio: true, avatar_url: true },
+      select: { display_name: true, username: true, bio: true, avatar_url: true, profile_visibility: true },
     })
   },
 
@@ -55,7 +84,7 @@ export const seoService = {
         deleted_at: null,
         OR: [{ slug: slugOrId }, { id: slugOrId }],
       },
-      select: { id: true, slug: true, name: true, description: true, avatar_url: true, _count: { select: { members: true } } },
+      select: { id: true, slug: true, name: true, description: true, avatar_url: true, is_public: true, is_nsfw: true, _count: { select: { members: true } } },
     })
   },
 }

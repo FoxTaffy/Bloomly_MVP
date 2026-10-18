@@ -12,7 +12,7 @@ export function useProfileSeo(viewedProfile: Ref<UserProfile | null>, routeUsern
       return `${name} (@${viewedProfile.value.username}) — Bloomly`
     },
     meta: [
-      { name: 'robots', content: 'index, follow' },
+      { name: 'robots', content: () => (!viewedProfile.value || (viewedProfile.value as { profile_visibility?: string }).profile_visibility === 'friends' || (viewedProfile.value as { profile_visibility?: string }).profile_visibility === 'only_me') ? 'noindex, nofollow' : 'index, follow' },
       { name: 'description', content: () => {
           if (!viewedProfile.value) return 'Bloomly — Creative Social Network.'
           const name = viewedProfile.value.display_name || viewedProfile.value.username

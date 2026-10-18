@@ -236,6 +236,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/MyTodolistView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    // Всё, что не подошло выше: SPA отдаёт 200 на любой URL, поэтому страница сама помечается noindex.
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: () => import('@/views/NotFoundView.vue'),
+  },
 ]
 
 const router = createRouter({
