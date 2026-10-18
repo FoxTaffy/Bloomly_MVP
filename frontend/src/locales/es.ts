@@ -626,6 +626,7 @@ export const es: Translation = {
   verPendingDesc: 'Los moderadores están revisando tu solicitud manualmente. La revisión tarda hasta 2 días.',
   verSentLabel: 'Enviado',
   verGroupLockedHint: 'Los grupos temáticos se desbloquean tras aprobar la verificación del rol correspondiente.',
+  verGroupLockedRoles: 'Disponible tras solicitar la verificación como:',
   groupPriceEmpty: 'El propietario todavía no ha añadido precios.',
   verCongratsTitle: '¡Felicidades! 🎉',
   verCongratsSub: 'Ahora estás verificado como «{role}»',

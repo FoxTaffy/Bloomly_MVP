@@ -626,6 +626,7 @@ export const fr: Translation = {
   verPendingDesc: 'Les modérateurs examinent manuellement votre demande. L\'examen prend jusqu\'à 2 jours.',
   verSentLabel: 'Envoyé',
   verGroupLockedHint: 'Les groupes spécialisés sont débloqués après validation du rôle correspondant.',
+  verGroupLockedRoles: 'Disponible après demande de vérification en tant que :',
   groupPriceEmpty: 'Le propriétaire n’a pas encore ajouté de tarifs.',
   verCongratsTitle: 'Félicitations ! 🎉',
   verCongratsSub: 'Vous êtes maintenant vérifié comme « {role} »',

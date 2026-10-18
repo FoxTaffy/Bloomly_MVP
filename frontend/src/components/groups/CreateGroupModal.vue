@@ -9,7 +9,7 @@ import { compressImageForUpload } from '@/lib/utils'
 import { GROUP_RUBRIC_OPTIONS, DEFAULT_RUBRIC } from '@/lib/groupRubrics'
 import { sanitizeTagInput } from '@/lib/tagRules'
 import { useAuthStore } from '@/stores/auth'
-import { canCreateGroup } from '@/lib/verificationPolicy'
+import { canCreateGroup, ROLE_GROUPS } from '@/lib/verificationPolicy'
 const auth = useAuthStore()
 
 // ── Emit ─────────────────────────────────────────────────────────────────────
@@ -91,6 +91,15 @@ const types: { value: GroupType; label: string; icon: string; desc: string; colo
   { value: 'brand',     label: 'Бренд',       icon: 'Building2',    desc: 'Бизнес, компания, проект',    color: '#00D4AA' },
   { value: 'static',    label: 'Паблик',      icon: 'Image',        desc: 'Мемы, арты, контент',         color: '#F7A9E2' },
 ]
+
+// Roles whose verification unlocks a group type (for the hover hint on locked types)
+function rolesForType(groupType: string): string {
+  const t = langStore.t as Record<string, string>
+  return Object.entries(ROLE_GROUPS)
+    .filter(([role, groups]) => role !== 'event' && groups.includes(groupType))
+    .map(([role]) => t[`verType${role[0].toUpperCase()}${role.slice(1)}`] ?? role)
+    .join(', ')
+}
 
 // ── Step 2: Специфика по типу ───────────────────────────────────────────────
 // Event
@@ -331,13 +340,11 @@ function submit() {
           <div>
             <p class="text-xs font-bold text-white/50 uppercase tracking-wider mb-2">Тип группы</p>
             <p class="text-xs text-white/45 mb-3">{{ langStore.t.verGroupLockedHint }}</p>
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[280px] overflow-y-auto pr-1 scrollbar-thin">
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div v-for="t in types" :key="t.value" class="relative group/type">
               <button
-                v-for="t in types"
-                :key="t.value"
                 :disabled="!canCreateGroup(auth.user, t.value)"
-                :title="canCreateGroup(auth.user, t.value) ? t.desc : langStore.t.verGroupLockedHint"
-                class="p-3 rounded-2xl border text-center transition-all duration-200 relative overflow-hidden disabled:opacity-40 disabled:cursor-not-allowed"
+                class="w-full p-3 rounded-2xl border text-center transition-all duration-200 relative overflow-hidden disabled:opacity-40 disabled:cursor-not-allowed"
                 :class="type === t.value
                   ? 'border-brand-accent text-white'
                   : 'bg-brand-bg/40 border-brand-border text-white/50 hover:border-brand-accent/30'"
@@ -355,6 +362,11 @@ function submit() {
                   <BIcon name="Check" class="w-2.5 h-2.5 text-white" />
                 </div>
               </button>
+              <div v-if="!canCreateGroup(auth.user, t.value)"
+                class="pointer-events-none absolute left-1/2 top-full -translate-x-1/2 mt-1 w-52 z-20 rounded-xl bg-black/90 border border-brand-border px-3 py-2 text-[11px] leading-snug text-white/90 text-center opacity-0 group-hover/type:opacity-100 transition-opacity shadow-xl">
+                {{ langStore.t.verGroupLockedRoles }} {{ rolesForType(t.value) }}
+              </div>
+              </div>
             </div>
           </div>
 

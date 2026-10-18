@@ -626,6 +626,7 @@ export const de: Translation = {
   verPendingDesc: 'Moderatoren prüfen deinen Antrag manuell. Die Prüfung dauert bis zu 2 Tage.',
   verSentLabel: 'Gesendet',
   verGroupLockedHint: 'Thematische Gruppen werden nach der Bestätigung der passenden Verifizierung freigeschaltet.',
+  verGroupLockedRoles: 'Verfügbar nach Verifizierungsantrag als:',
   groupPriceEmpty: 'Der Inhaber hat noch keine Preise hinzugefügt.',
   verCongratsTitle: 'Glückwunsch! 🎉',
   verCongratsSub: 'Du bist jetzt als „{role}“ verifiziert',

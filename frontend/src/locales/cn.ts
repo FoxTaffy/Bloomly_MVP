@@ -630,6 +630,7 @@ export const cn: Translation = {
   verPendingDesc: '审核人员正在手动审核您的申请，审核最多需要2天。',
   verSentLabel: '提交于',
   verGroupLockedHint: '相应身份认证通过后，即可创建对应的主题群组。',
+  verGroupLockedRoles: '提交以下身份认证后可用：',
   groupPriceEmpty: '群主尚未添加价格。',
   verCongratsTitle: '恭喜！🎉',
   verCongratsSub: '您已通过「{role}」认证',

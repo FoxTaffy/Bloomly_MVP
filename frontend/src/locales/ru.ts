@@ -628,6 +628,7 @@ export const ru = {
   verPendingDesc: 'Модераторы вручную проверяют вашу заявку. Рассмотрение занимает до 2 дней.',
   verSentLabel: 'Отправлено',
   verGroupLockedHint: 'Тематические группы открываются после одобрения верификации соответствующей роли.',
+  verGroupLockedRoles: 'Доступно после подачи на верификацию:',
   groupPriceEmpty: 'Владелец пока не добавил цены.',
   verCongratsTitle: 'Поздравляем! 🎉',
   verCongratsSub: 'Вы получили статус «{role}»',

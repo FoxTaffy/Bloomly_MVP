@@ -630,6 +630,7 @@ export const jp: Translation = {
   verPendingDesc: 'モデレーターが手動で申請を審査しています。審査には最大2日かかります。',
   verSentLabel: '送信日',
   verGroupLockedHint: '対応する役割の認証が承認されると、テーマ別グループを作成できます。',
+  verGroupLockedRoles: '次の認証を申請すると利用できます：',
   groupPriceEmpty: 'オーナーはまだ料金を追加していません。',
   verCongratsTitle: 'おめでとうございます！🎉',
   verCongratsSub: '「{role}」として認証されました',

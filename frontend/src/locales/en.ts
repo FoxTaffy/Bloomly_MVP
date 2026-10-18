@@ -630,6 +630,7 @@ export const en: Translation = {
   verPendingDesc: 'Moderators are manually reviewing your application. Review takes up to 2 days.',
   verSentLabel: 'Sent',
   verGroupLockedHint: 'Specialized groups unlock after verification of the corresponding role is approved.',
+  verGroupLockedRoles: 'Available after applying for verification as:',
   groupPriceEmpty: 'The owner has not added any prices yet.',
   verCongratsTitle: 'Congratulations! 🎉',
   verCongratsSub: 'You are now verified as “{role}”',
