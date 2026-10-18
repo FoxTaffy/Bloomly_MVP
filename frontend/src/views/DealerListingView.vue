@@ -13,7 +13,6 @@ import { listingShop } from '@/lib/dealerShop'
 import AppHeader          from '@/components/AppHeader.vue'
 import AppSidebar         from '@/components/AppSidebar.vue'
 import BIcon              from '@/components/BIcon.vue'
-import DenTrustBadge      from '@/components/DenTrustBadge.vue'
 import DenWishlistButton  from '@/components/DenWishlistButton.vue'
 import CommissionOrderPanel from '@/components/CommissionOrderPanel.vue'
 import CommissionInfoBlocks from '@/components/CommissionInfoBlocks.vue'
@@ -529,8 +528,11 @@ async function submitReport() {
             <!-- Gallery (3/5) -->
             <div class="lg:col-span-3 stack-y-3">
               <div class="bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-xl">
+                <div class="grid gap-1.5" :class="listing.images.length > 1 ? 'grid-cols-3' : ''"
+                  :style="listing.images.length > 1 ? 'aspect-ratio: 16/10; background: #090d20' : ''">
                 <!-- Main image -->
-                <div class="relative w-full" style="aspect-ratio: 4/3; background: #090d20">
+                <div class="relative w-full min-h-0" :class="listing.images.length > 1 ? 'col-span-2 h-full' : ''"
+                  :style="listing.images.length > 1 ? 'background: #090d20' : 'aspect-ratio: 4/3; background: #090d20'">
                   <img v-if="listing.images[activeImage]" :src="listing.images[activeImage]" :alt="listing.title"
                     class="w-full h-full object-contain" />
                   <div v-else class="w-full h-full flex items-center justify-center">
@@ -555,34 +557,33 @@ async function submitReport() {
                     {{ activeImage + 1 }}/{{ listing.images.length }}
                   </div>
                 </div>
-                <!-- Thumbnails -->
-                <div v-if="listing.images.length > 1" class="flex gap-2 p-3 bg-black/20 overflow-x-auto scrollbar-none">
-                  <button v-for="(img, i) in listing.images" :key="i" @click="activeImage = i"
-                    class="w-14 h-14 rounded-xl overflow-hidden shrink-0 border-2 transition-all"
-                    :class="activeImage === i ? 'border-brand-accent' : 'border-transparent opacity-55 hover:opacity-90'">
-                    <img :src="img" class="w-full h-full object-cover" />
+                <!-- Side tiles -->
+                <div v-if="listing.images.length > 1" class="grid grid-rows-2 gap-1.5 min-h-0">
+                  <button v-for="(img, k) in listing.images.slice(1, 3)" :key="k" type="button" @click="activeImage = k + 1"
+                    class="relative overflow-hidden min-h-0 bg-black/30 transition-opacity"
+                    :class="activeImage === k + 1 ? 'ring-2 ring-brand-accent ring-inset' : 'opacity-80 hover:opacity-100'">
+                    <img :src="img" class="w-full h-full object-cover" :class="listing.is_nsfw && !nsfwEnabled && !nsfwRevealed ? 'blur-xl' : ''" />
+                    <span v-if="k === 1 && listing.images.length > 3"
+                      class="absolute inset-0 bg-black/55 flex items-center justify-center text-white font-extrabold text-lg">+{{ listing.images.length - 3 }}</span>
                   </button>
+                </div>
                 </div>
               </div>
 
               <!-- Description -->
               <CommissionInfoBlocks v-if="isCommission" :listing="listing" @tag="goToTag" />
+              <div v-if="(listing.description || listing.tags.length) && !isCommission"
+                class="bg-brand-card border border-brand-border rounded-3xl p-5 shadow-xl stack-y-3">
+                <h3 class="text-[10px] font-bold text-white/35 uppercase tracking-widest">{{ langStore.t.fursuitDescLabel }}</h3>
+                <p v-if="listing.description" class="text-sm text-white/75 leading-relaxed whitespace-pre-line">{{ listing.description }}</p>
+                <div v-if="listing.tags.length" class="flex flex-wrap gap-2">
+                  <button v-for="tag in listing.tags" :key="tag" type="button" @click="goToTag(tag)"
+                    class="text-xs text-brand-accent bg-brand-accent/8 hover:bg-brand-accent/15 border border-brand-accent/20 px-3 py-1 rounded-full transition-colors">
+                    #{{ tag }}
+                  </button>
+                </div>
+              </div>
               <ListingSpecs v-if="!isCommission" :listing="listing" />
-              <div v-if="listing.description && !isCommission"
-                class="bg-brand-card border border-brand-border rounded-3xl p-5 shadow-xl">
-                <h3 class="text-xs font-bold text-white/35 uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <BIcon name="AlignLeft" class="w-3.5 h-3.5" /> {{ langStore.t.fursuitDescLabel }}
-                </h3>
-                <p class="text-sm text-white/75 leading-relaxed whitespace-pre-line">{{ listing.description }}</p>
-              </div>
-
-              <!-- Tags -->
-              <div v-if="listing.tags.length && !isCommission" class="flex flex-wrap gap-2">
-                <button v-for="tag in listing.tags" :key="tag" type="button" @click="goToTag(tag)"
-                  class="text-xs text-brand-accent bg-brand-accent/8 hover:bg-brand-accent/15 border border-brand-accent/20 px-3 py-1 rounded-full transition-colors">
-                  #{{ tag }}
-                </button>
-              </div>
 
               <!-- Meta -->
               <!-- Seller (группа, привязанная к Dealers Den; у старых лотов — автор) -->
@@ -606,7 +607,12 @@ async function submitReport() {
                       </div>
                       <p v-if="listing.group" class="text-xs text-white/35 truncate">@{{ listing.group.slug }}</p>
                       <p v-else class="text-xs text-white/35 truncate">@{{ listing.seller.username }}</p>
-                      <DenTrustBadge v-if="listing.seller.den_trust_score" :trust="listing.seller.den_trust_score" class="mt-1" />
+                      <p v-if="listing.seller.den_trust_score" class="flex items-center gap-1.5 text-xs text-white/45 mt-1">
+                        <span class="text-brand-yellow">★</span>
+                        <span class="font-bold text-white/80">{{ Number(listing.seller.den_trust_score.avg_rating).toFixed(1) }}</span>
+                        <template v-if="listing.seller.den_trust_score.completed_deals">· {{ listing.seller.den_trust_score.completed_deals }} сделок</template>
+                        <template v-if="listing.seller.avg_response_hours != null">· отвечает ~{{ Math.max(1, Math.round(listing.seller.avg_response_hours)) }}ч</template>
+                      </p>
                     </div>
                   </RouterLink>
                   <div class="flex items-center gap-2">
@@ -1066,6 +1072,9 @@ async function submitReport() {
                           :class="isSoldOut(listing) ? 'text-white/30 line-through' : 'text-brand-yellow'">
                           {{ parseFloat(String(listing.price)) === 0 ? langStore.t.dealerListingFreePrice : formatPrice(listing.price, listing.currency) }}
                         </p>
+                        <p v-if="!isSoldOut(listing) && listing.type !== 'digital'" class="text-xs font-bold text-brand-yellow mt-1.5">
+                          {{ listing.quantity === 1 ? 'Единственный экземпляр' : `В наличии: ${listing.quantity - (listing.quantity_sold ?? 0)}` }}
+                        </p>
                       </div>
                       <div v-if="listing.quantity > 1" class="text-right">
                         <p class="text-[9px] text-white/35 uppercase tracking-wider font-bold mb-1">{{ langStore.t.dealerListingInStockLabel }}</p>
@@ -1111,7 +1120,7 @@ async function submitReport() {
                       <button v-if="auth.user && auth.user.id !== listing.seller_id"
                         @click="contactSeller"
                         class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm"
-                        style="background: linear-gradient(135deg, #3148FF, #4C67CF)">
+                        style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
                         <BIcon name="MessageCircle" class="w-4 h-4" /> {{ langStore.t.dealerListingMessageSellerBtn }}
                       </button>
                       <button v-else-if="!auth.user" @click="router.push({ name: 'login' })"
@@ -1119,17 +1128,9 @@ async function submitReport() {
                         <BIcon name="LogIn" class="w-4 h-4" /> {{ langStore.t.dealerListingLoginToBuy }}
                       </button>
                     </template>
-                    <div class="flex gap-2 flex-wrap">
-                      <span class="flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-full border"
-                        :class="listing.type === 'digital'  ? 'bg-brand-accent/10 border-brand-accent/25 text-brand-accent'
-                               : listing.type === 'physical' ? 'bg-brand-success/10 border-brand-success/25 text-brand-success'
-                               : 'bg-brand-yellow/10 border-brand-yellow/25 text-brand-yellow'">
-                        <BIcon :name="listing.type === 'digital' ? 'Download' : listing.type === 'physical' ? 'Package' : 'Layers'" class="w-3 h-3" />
-                        {{ TYPE_LABELS[listing.type] }}
-                      </span>
-                      <span v-if="listing.is_nsfw" class="flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-full border bg-brand-error/10 border-brand-error/25 text-brand-error">
-                        <BIcon name="EyeOff" class="w-3 h-3" /> 18+
-                      </span>
+                    <div v-if="listing.type !== 'digital'" class="flex items-start gap-2.5 rounded-2xl bg-black/20 border border-brand-border px-3.5 py-3">
+                      <BIcon name="ShieldCheck" class="w-4 h-4 text-brand-success shrink-0 mt-0.5" />
+                      <p class="text-[11px] text-white/45 leading-relaxed">Деньги уходят продавцу после того, как ты подтвердишь получение.</p>
                     </div>
                   </div>
                 </div>
