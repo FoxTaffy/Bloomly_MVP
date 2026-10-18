@@ -15,7 +15,6 @@ import AdminReportsTab from '@/components/admin/AdminReportsTab.vue'
 import AdminSupportTab from '@/components/admin/AdminSupportTab.vue'
 import AdminAdsTab from '@/components/admin/AdminAdsTab.vue'
 import AdminVerificationTab from '@/components/admin/AdminVerificationTab.vue'
-import AdminFramesTab from '@/components/admin/AdminFramesTab.vue'
 import AdminAutoModTab from '@/components/admin/AdminAutoModTab.vue'
 import AdminUpdatesTab from '@/components/admin/AdminUpdatesTab.vue'
 import AdminGroupsTab from '@/components/admin/AdminGroupsTab.vue'
@@ -61,7 +60,6 @@ const TAB_COMPONENTS: Record<AdminTab, Component> = {
   support: AdminSupportTab,
   ads: AdminAdsTab,
   verification: AdminVerificationTab,
-  frames: AdminFramesTab,
   automod: AdminAutoModTab,
   updates: AdminUpdatesTab,
   groups: AdminGroupsTab,
@@ -78,9 +76,8 @@ const navItems = computed(() => [
   { tab: 'posts'        as const, label: langStore.t.posts,                 icon: 'FileText',        color: '#94a3b8', group: langStore.t.adminGroupContent,    badge: null, minRole: 'moderator' },
   { tab: 'tags'         as const, label: 'Синонимы тегов',                    icon: 'Hash',            color: '#94a3b8', group: langStore.t.adminGroupContent,    badge: null, minRole: 'moderator' },
   { tab: 'verification' as const, label: langStore.t.secVerification,        icon: 'BadgeCheck',      color: '#2dd4bf', group: langStore.t.adminGroupContent,    badge: badges.verification || null, minRole: 'moderator' },
-  { tab: 'frames'       as const, label: langStore.t.adminFramesTabLabel,    icon: 'CircleDashed',    color: '#c084fc', group: langStore.t.adminGroupContent,    badge: badges.frames || null, minRole: 'admin' },
   { tab: 'ads'          as const, label: langStore.t.adLabel,                icon: 'Megaphone',       color: '#f97316', group: langStore.t.adminGroupContent,    badge: badges.ads || null, minRole: 'admin' },
-  { tab: 'updates'      as const, label: langStore.t.adminNavUpdates,        icon: 'Sparkles',        color: '#4C67CF', group: langStore.t.adminGroupContent,    badge: badges.updates || null, minRole: 'admin' },
+  { tab: 'updates'      as const, label: langStore.t.adminNavBroadcasts,     icon: 'Send',            color: '#4C67CF', group: langStore.t.adminGroupContent,    badge: null, minRole: 'admin' },
   { tab: 'groups'       as const, label: langStore.t.adminNavGroupsEvents,   icon: 'LayoutGrid',      color: '#4C67CF', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'moderator' },
   { tab: 'finance'      as const, label: langStore.t.adminNavFinancePremium, icon: 'Wallet',          color: '#a78bfa', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'admin' },
   { tab: 'settings'     as const, label: langStore.t.adminNavLogsSettings,   icon: 'Settings',        color: '#94a3b8', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'admin' },
@@ -110,7 +107,7 @@ const tabSubtitle = computed<Record<string, string>>(() => ({
   ads: langStore.t.adminTabSubAds,
   verification: langStore.t.adminTabSubVerification,
   automod: langStore.t.adminTabSubAutomod,
-  updates: langStore.t.adminTabSubUpdates,
+  updates: langStore.t.adminTabSubBroadcasts,
   groups: langStore.t.adminTabSubGroups,
   finance: langStore.t.adminTabSubFinance,
   settings: langStore.t.adminTabSubSettings,

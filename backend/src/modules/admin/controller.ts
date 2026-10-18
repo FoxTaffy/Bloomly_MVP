@@ -608,9 +608,16 @@ export const getInfraOverviewHandler = async (req: FastifyRequest, reply: Fastif
   return reply.send({ success: true, data, error: null });
 };
 
-export const getGroupsOverviewHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+export const getGroupsOverviewHandler = async (
+  req: FastifyRequest<{ Querystring: { search?: string; type?: string; sort?: string; page?: string; limit?: string; events?: string } }>,
+  reply: FastifyReply,
+) => {
   if (!requireModerator(req, reply)) return;
-  const data = await adminService.getGroupsOverview();
+  const { search, type, sort, events } = req.query;
+  const data = await adminService.getGroupsOverview({
+    search: search?.trim() || undefined, type: type || undefined, sort, events,
+    page: parseInt(req.query.page || '1') || 1, limit: parseInt(req.query.limit || '12') || 12,
+  });
   return reply.send({ success: true, data, error: null });
 };
 

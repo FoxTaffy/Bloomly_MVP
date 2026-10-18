@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
 import { ROLE_RANK } from './adminHelpers'
 
-export type AdminTab = 'overview' | 'users' | 'posts' | 'reports' | 'support' | 'ads' | 'verification' | 'frames'
+export type AdminTab = 'overview' | 'users' | 'posts' | 'reports' | 'support' | 'ads' | 'verification'
   | 'automod' | 'updates' | 'groups' | 'finance' | 'settings' | 'tags'
 
 // Users tab has five views: the user list, team & roles, frozen accounts, banned accounts, sponsors
@@ -32,7 +32,7 @@ export function createAdminContext() {
   }
 
   // Sidebar counters, filled in by each tab once it has loaded its list
-  const badges = reactive({ users: 0, reports: 0, support: 0, automod: 0, verification: 0, frames: 0, ads: 0, updates: 0 })
+  const badges = reactive({ users: 0, reports: 0, support: 0, automod: 0, verification: 0, ads: 0, updates: 0 })
 
   // Bumped by actions that write AutoMod log entries (e.g. unfreeze) so the AutoMod tab refetches
   const automodVersion = ref(0)

@@ -8,6 +8,7 @@ import BIcon from '@/components/BIcon.vue'
 import PostLightbox from '@/components/PostLightbox.vue'
 import ResolveReportModal from '@/components/ResolveReportModal.vue'
 import SafeMedia from '@/components/SafeMedia.vue'
+import AdminMediaPreview from './AdminMediaPreview.vue'
 import { formatDate } from './adminHelpers'
 import { useAdminContext } from './adminContext'
 
@@ -59,6 +60,25 @@ const onFolderResolved = () => {
   folder.status = 'resolved'
   folder.reports.forEach((r: any) => { if (r.status === 'pending') r.status = 'resolved' })
 }
+
+// Фото из всех жалоб папки, а не только из первой: каждый заявитель мог приложить свои
+const folderEvidence = (folder: any): string[] =>
+  [...new Set<string>(folder.reports.flatMap((r: any) => r.evidence_urls ?? []))]
+
+// Оценка AutoMod: самая уверенная категория среди жалоб папки
+const AI_CATEGORY_LABEL = computed<Record<string, string>>(() => ({
+  spam: langStore.t.adminCategorySpam, toxic: langStore.t.adminCategoryToxic, duplicate: langStore.t.adminCategoryDuplicate,
+  fraud: langStore.t.adminCategoryFraud, suspicious: langStore.t.adminCategorySuspicious, manual: langStore.t.adminCategoryManual,
+}))
+const folderAi = (folder: any) => {
+  const best = [...folder.reports].filter((r: any) => r.ai_category && r.ai_score > 0).sort((a: any, b: any) => b.ai_score - a.ai_score)[0]
+  return best ? { label: AI_CATEGORY_LABEL.value[best.ai_category] ?? best.ai_category, pct: Math.round(best.ai_score * 100) } : null
+}
+
+// Кто и как закрыл папку
+const folderResolution = (folder: any) => folder.reports.find((r: any) => r.status !== 'pending' && r.resolver) ?? null
+
+const openPostMedia = (images: string[], start: number) => { evidenceLightbox.value = { images, start } }
 
 const REPORT_TARGET_LABEL = computed<Record<string, string>>(() => ({ post: langStore.t.adminReportTargetPost, group: langStore.t.adminReportTargetGroup, listing: langStore.t.adminReportTargetListing, message: langStore.t.messageBtn, user: langStore.t.viewProfile }))
 
@@ -168,6 +188,12 @@ watchEffect(() => { badges.reports = reports.value.filter((r: any) => r.status =
                     : 'bg-white/5 text-white/30'">
                 {{ { pending: langStore.t.reportStatusPending, resolved: langStore.t.reportStatusResolved, dismissed: langStore.t.reportStatusDismissed }[folder.status as 'pending' | 'resolved' | 'dismissed'] }}
               </span>
+              <span v-if="folderAi(folder)"
+                class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-300" title="AutoMod">
+                AI: {{ folderAi(folder)!.label }} {{ folderAi(folder)!.pct }}%
+              </span>
+              <span v-if="folder.target_type === 'post' && folder.post?.deleted_at"
+                class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-white/8 text-white/50">{{ langStore.t.adminReportedPostDeleted }}</span>
               <span v-if="folder.count > 1"
                 class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400"
                 :title="`${folder.count} ${langStore.t.adminSameTargetReportsTooltip}`">
@@ -178,10 +204,48 @@ watchEffect(() => { badges.reports = reports.value.filter((r: any) => r.status =
             <!-- Title = complaint reason -->
             <p class="font-bold text-white">{{ folder.reports[0].reason }}</p>
 
+            <!-- Что именно оспаривают: превью поста / профиля / группы -->
+            <div v-if="folder.target_type === 'post'" class="mt-3 flex gap-3 rounded-xl border border-white/8 bg-white/3 p-2.5 max-w-xl">
+              <template v-if="folder.post">
+                <button v-if="folder.post.media_urls?.length" type="button" @click="openPostMedia(folder.post.media_urls, 0)"
+                  class="relative w-20 h-20 rounded-lg overflow-hidden bg-black/20 shrink-0"
+                  :class="{ 'blur-sm hover:blur-none transition': folder.post.is_nsfw }">
+                  <AdminMediaPreview :src="folder.post.media_urls[0]" />
+                  <span v-if="folder.post.media_urls.length > 1"
+                    class="absolute bottom-1 right-1 flex items-center gap-0.5 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-black/65 text-white">
+                    <BIcon name="Images" class="w-2.5 h-2.5" /> {{ folder.post.media_urls.length }}
+                  </span>
+                </button>
+                <div class="min-w-0 flex-1">
+                  <p class="text-[11px] font-semibold text-white/50 truncate">{{ folder.post.author?.display_name || folder.post.author?.username }}
+                    <span class="text-white/25">@{{ folder.post.author?.username }}</span></p>
+                  <p class="text-xs text-white/70 line-clamp-3 break-words mt-0.5" :class="{ 'italic text-white/30': !folder.post.content }">{{ folder.post.content || langStore.t.adminReportNoText }}</p>
+                  <router-link :to="`/post/${folder.target_id}`" target="_blank"
+                    class="inline-flex items-center gap-1 text-[11px] font-bold text-brand-accent hover:underline mt-1">
+                    <BIcon name="ExternalLink" class="w-3 h-3" /> {{ langStore.t.adminOpenPostBtn }}
+                  </router-link>
+                </div>
+              </template>
+              <p v-else class="text-xs text-white/35 italic">{{ langStore.t.adminReportedPostDeleted }}</p>
+            </div>
+            <router-link v-else-if="folder.target_type === 'user' && folder.reportedUser" :to="`/profile/${folder.reportedUser.username}`" target="_blank"
+              class="mt-3 flex items-center gap-2.5 rounded-xl border border-white/8 bg-white/3 p-2.5 max-w-xs hover:border-brand-accent/30 transition-colors">
+              <img v-if="folder.reportedUser.avatar_url" :src="folder.reportedUser.avatar_url" class="w-9 h-9 rounded-full object-cover shrink-0" />
+              <span v-else class="w-9 h-9 rounded-full bg-white/8 flex items-center justify-center text-xs font-bold text-white/40 shrink-0">{{ (folder.reportedUser.display_name || folder.reportedUser.username || '?')[0].toUpperCase() }}</span>
+              <span class="min-w-0 text-xs font-bold text-white/70 truncate">{{ folder.reportedUser.display_name || folder.reportedUser.username }}
+                <span class="font-normal text-white/30">@{{ folder.reportedUser.username }}</span></span>
+            </router-link>
+            <router-link v-else-if="folder.target_type === 'group' && folder.reportedGroup" :to="`/groups/${folder.reportedGroup.slug}`" target="_blank"
+              class="mt-3 flex items-center gap-2.5 rounded-xl border border-white/8 bg-white/3 p-2.5 max-w-xs hover:border-brand-accent/30 transition-colors">
+              <img v-if="folder.reportedGroup.avatar_url" :src="folder.reportedGroup.avatar_url" class="w-9 h-9 rounded-xl object-cover shrink-0" />
+              <span v-else class="w-9 h-9 rounded-xl bg-white/8 flex items-center justify-center text-xs font-bold text-white/40 shrink-0">{{ (folder.reportedGroup.name || '?')[0].toUpperCase() }}</span>
+              <span class="min-w-0 text-xs font-bold text-white/70 truncate">{{ folder.reportedGroup.name }}</span>
+            </router-link>
+
             <!-- Evidence attached by the reporter -->
-            <div v-if="folder.reports[0].evidence_urls?.length" class="flex gap-2 mt-2 flex-wrap">
-              <button v-for="(url, ei) in folder.reports[0].evidence_urls" :key="ei" type="button"
-                @click="openReportEvidence(folder.reports[0].evidence_urls, ei)"
+            <div v-if="folderEvidence(folder).length" class="flex gap-2 mt-2 flex-wrap">
+              <button v-for="(url, ei) in folderEvidence(folder)" :key="ei" type="button"
+                @click="openReportEvidence(folderEvidence(folder), ei)"
                 class="w-14 h-14 rounded-lg overflow-hidden border border-white/8 shrink-0">
                 <SafeMedia :src="url" source="report-evidence" class="w-full h-full object-cover" />
               </button>
@@ -196,6 +260,10 @@ watchEffect(() => { badges.reports = reports.value.filter((r: any) => r.status =
               <router-link v-else-if="folder.target_type === 'group' && folder.reportedGroup" :to="`/groups/${folder.reportedGroup.slug}`" target="_blank" class="font-semibold text-brand-accent hover:underline">{{ folder.reportedGroup.name }}</router-link>
               <span v-else class="font-semibold text-white/50">{{ folder.target_id.slice(0, 8) }}…</span>
               · {{ formatDate(folder.created_at) }}
+            </p>
+
+            <p v-if="folderResolution(folder)" class="text-[11px] text-white/35 mt-1">
+              {{ langStore.t.adminReportResolvedByPrefix }} <span class="font-semibold text-white/55">@{{ folderResolution(folder).resolver.username }}</span><template v-if="folderResolution(folder).note"> — {{ folderResolution(folder).note }}</template>
             </p>
 
             <button v-if="folder.count > 1" @click="toggleReportGroup(folder)"

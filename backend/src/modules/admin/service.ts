@@ -755,41 +755,146 @@ export const adminService = {
   },
 
   // ── Groups & Events overview ────────────────────────────────────────────────
-  async getGroupsOverview() {
+  // Сводка + постраничный список групп и список событий. Все счётчики считаются по живым группам (deleted_at IS NULL).
+  async getGroupsOverview(opts: { search?: string; type?: string; sort?: string; page?: number; limit?: number; events?: string } = {}) {
     const now = new Date();
+    const weekAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 6));
+    const page = Math.max(1, opts.page ?? 1);
+    const limit = Math.min(60, Math.max(1, opts.limit ?? 12));
+    const skip = (page - 1) * limit;
 
-    type GroupRow = { id: string; slug: string; name: string; type: string; member_count: bigint };
-    const groups = await prisma.$queryRaw<GroupRow[]>`
-      SELECT g.id, g.slug, g.name, g.type, COUNT(gm.user_id)::bigint AS member_count
-      FROM "Group" g
-      LEFT JOIN "GroupMember" gm ON gm.group_id = g.id
-      WHERE g.deleted_at IS NULL
-      GROUP BY g.id, g.slug, g.name, g.type
-      ORDER BY member_count DESC
-      LIMIT 6
-    `;
+    const searchClause = opts.search
+      ? Prisma.sql`AND (g.name ILIKE ${'%' + opts.search + '%'} OR g.slug ILIKE ${'%' + opts.search + '%'} OR o.username ILIKE ${'%' + opts.search + '%'})`
+      : Prisma.empty;
+    const typeClause = opts.type ? Prisma.sql`AND g.type = ${opts.type}` : Prisma.empty;
 
-    const [upcoming, recentPast] = await Promise.all([
-      prisma.event.findMany({
-        where: { starts_at: { gte: now }, group: { deleted_at: null } },
-        orderBy: { starts_at: 'asc' },
-        take: 5,
-        select: { id: true, title: true, starts_at: true, attendee_count: true, group: { select: { name: true, slug: true } } },
-      }),
-      prisma.event.findMany({
-        where: { starts_at: { lt: now }, group: { deleted_at: null } },
-        orderBy: { starts_at: 'desc' },
-        take: 5,
-        select: { id: true, title: true, starts_at: true, attendee_count: true, group: { select: { name: true, slug: true } } },
-      }),
+    const orderMap: Record<string, Prisma.Sql> = {
+      members:   Prisma.sql`members DESC, g.created_at DESC`,
+      growth:    Prisma.sql`new_members DESC, members DESC`,
+      posts:     Prisma.sql`posts DESC, members DESC`,
+      events:    Prisma.sql`events_total DESC, members DESC`,
+      rating:    Prisma.sql`g.rating DESC, g.rating_count DESC`,
+      newest:    Prisma.sql`g.created_at DESC`,
+      requests:  Prisma.sql`pending_requests DESC, members DESC`,
+    };
+    const orderSql = orderMap[opts.sort ?? 'members'] ?? orderMap.members;
+
+    type GroupRow = {
+      id: string; slug: string; name: string; type: string; category: string | null; description: string | null;
+      avatar_url: string | null; banner_url: string | null; accent_color: string | null;
+      is_public: boolean; is_nsfw: boolean; is_verified: boolean; den_enabled: boolean; donations_enabled: boolean; business_enabled: boolean;
+      rating: number; rating_count: number; created_at: Date;
+      owner_id: string; owner_username: string; owner_display_name: string | null; owner_avatar_url: string | null;
+      members: bigint; new_members: bigint; subscribers: bigint; pending_requests: bigint; posts: bigint; posts_week: bigint;
+      events_total: bigint; events_upcoming: bigint; next_event_at: Date | null; next_event_title: string | null; attendees_total: bigint;
+    };
+
+    const [rows, totalRow] = await Promise.all([
+      prisma.$queryRaw<GroupRow[]>`
+        SELECT g.id, g.slug, g.name, g.type, g.category, g.description, g.avatar_url, g.banner_url, g.accent_color,
+               g.is_public, g.is_nsfw, g.is_verified, g.den_enabled, g.donations_enabled, g.business_enabled,
+               g.rating, g.rating_count, g.created_at,
+               o.id AS owner_id, o.username AS owner_username, o.display_name AS owner_display_name, o.avatar_url AS owner_avatar_url,
+               (SELECT COUNT(*) FROM "GroupMember" m WHERE m.group_id = g.id)::bigint AS members,
+               (SELECT COUNT(*) FROM "GroupMember" m WHERE m.group_id = g.id AND m.joined_at >= ${weekAgo})::bigint AS new_members,
+               (SELECT COUNT(*) FROM "GroupSubscriber" s WHERE s.group_id = g.id)::bigint AS subscribers,
+               (SELECT COUNT(*) FROM "GroupJoinRequest" r WHERE r.group_id = g.id)::bigint AS pending_requests,
+               (SELECT COUNT(*) FROM "GroupPost" gp JOIN "Post" p ON p.id = gp.post_id WHERE gp.group_id = g.id AND p.deleted_at IS NULL)::bigint AS posts,
+               (SELECT COUNT(*) FROM "GroupPost" gp JOIN "Post" p ON p.id = gp.post_id WHERE gp.group_id = g.id AND p.deleted_at IS NULL AND gp.created_at >= ${weekAgo})::bigint AS posts_week,
+               (SELECT COUNT(*) FROM "Event" e WHERE e.group_id = g.id)::bigint AS events_total,
+               (SELECT COUNT(*) FROM "Event" e WHERE e.group_id = g.id AND e.starts_at >= ${now})::bigint AS events_upcoming,
+               (SELECT e.starts_at FROM "Event" e WHERE e.group_id = g.id AND e.starts_at >= ${now} ORDER BY e.starts_at ASC LIMIT 1) AS next_event_at,
+               (SELECT e.title FROM "Event" e WHERE e.group_id = g.id AND e.starts_at >= ${now} ORDER BY e.starts_at ASC LIMIT 1) AS next_event_title,
+               (SELECT COALESCE(SUM(e.attendee_count), 0) FROM "Event" e WHERE e.group_id = g.id)::bigint AS attendees_total
+        FROM "Group" g
+        JOIN "User" o ON o.id = g.owner_id
+        WHERE g.deleted_at IS NULL ${typeClause} ${searchClause}
+        ORDER BY ${orderSql}
+        LIMIT ${limit} OFFSET ${skip}
+      `,
+      prisma.$queryRaw<{ total: bigint }[]>`
+        SELECT COUNT(*)::bigint AS total FROM "Group" g JOIN "User" o ON o.id = g.owner_id
+        WHERE g.deleted_at IS NULL ${typeClause} ${searchClause}
+      `,
     ]);
-    const events = [...upcoming, ...recentPast].slice(0, 5);
+    const total = Number(totalRow[0]?.total ?? 0);
+
+    // ── Сводка по всей платформе (не зависит от поиска и фильтра) ──
+    const liveGroup = { deleted_at: null } as const;
+    const [
+      totalGroups, newGroupsWeek, publicGroups, verifiedGroups, nsfwGroups, denGroups, byType,
+      totalMembers, newMembersWeek, pendingRequests, groupPosts,
+      totalEvents, upcomingEvents, attendeesAgg, topEvents,
+    ] = await Promise.all([
+      prisma.group.count({ where: liveGroup }),
+      prisma.group.count({ where: { ...liveGroup, created_at: { gte: weekAgo } } }),
+      prisma.group.count({ where: { ...liveGroup, is_public: true } }),
+      prisma.group.count({ where: { ...liveGroup, is_verified: true } }),
+      prisma.group.count({ where: { ...liveGroup, is_nsfw: true } }),
+      prisma.group.count({ where: { ...liveGroup, den_enabled: true } }),
+      prisma.group.groupBy({ by: ['type'], where: liveGroup, _count: { _all: true } }),
+      prisma.groupMember.count({ where: { group: liveGroup } }),
+      prisma.groupMember.count({ where: { group: liveGroup, joined_at: { gte: weekAgo } } }),
+      prisma.groupJoinRequest.count({ where: { group: liveGroup } }),
+      prisma.groupPost.count({ where: { group: liveGroup, post: { deleted_at: null } } }),
+      prisma.event.count({ where: { group: liveGroup } }),
+      prisma.event.count({ where: { group: liveGroup, starts_at: { gte: now } } }),
+      prisma.event.aggregate({ where: { group: liveGroup }, _sum: { attendee_count: true } }),
+      prisma.event.count({ where: { group: liveGroup, is_top: true } }),
+    ]);
+
+    // ── События: ближайшие по возрастанию, прошедшие — свежие сверху ──
+    const evFilter = opts.events === 'past' ? 'past' : opts.events === 'upcoming' ? 'upcoming' : 'all';
+    const evSelect = {
+      id: true, title: true, short_code: true, banner_url: true, location_name: true, starts_at: true, ends_at: true,
+      status: true, is_top: true, is_recurring: true, attendee_count: true,
+      group: { select: { name: true, slug: true, avatar_url: true } },
+      _count: { select: { subEvents: true, tickets: true } },
+    } as const;
+    const evBase = { group: liveGroup };
+    const [upcoming, past] = await Promise.all([
+      evFilter === 'past' ? [] : prisma.event.findMany({ where: { ...evBase, starts_at: { gte: now } }, orderBy: { starts_at: 'asc' }, take: 24, select: evSelect }),
+      evFilter === 'upcoming' ? [] : prisma.event.findMany({ where: { ...evBase, starts_at: { lt: now } }, orderBy: { starts_at: 'desc' }, take: evFilter === 'past' ? 24 : 12, select: evSelect }),
+    ]);
+    const eventList = [...upcoming, ...past];
+    const attendeeRows = eventList.length
+      ? await prisma.eventAttendee.groupBy({ by: ['event_id', 'status'], where: { event_id: { in: eventList.map(e => e.id) } }, _count: { _all: true } })
+      : [];
+    const attendeeMap = new Map<string, { going: number; maybe: number }>();
+    for (const a of attendeeRows) {
+      const cur = attendeeMap.get(a.event_id) ?? { going: 0, maybe: 0 };
+      if (a.status === 'going') cur.going = a._count._all;
+      else if (a.status === 'maybe') cur.maybe = a._count._all;
+      attendeeMap.set(a.event_id, cur);
+    }
 
     return {
-      groups: groups.map(g => ({ id: g.id, slug: g.slug, name: g.name, type: g.type, memberCount: Number(g.member_count) })),
-      events: events.map(e => ({
-        id: e.id, title: e.title, startsAt: e.starts_at, attendeeCount: e.attendee_count,
-        groupName: e.group.name, groupSlug: e.group.slug, isUpcoming: e.starts_at.getTime() >= now.getTime(),
+      stats: {
+        groups: { total: totalGroups, newWeek: newGroupsWeek, public: publicGroups, private: totalGroups - publicGroups, verified: verifiedGroups, nsfw: nsfwGroups, dealersDen: denGroups },
+        byType: byType.map(t => ({ type: t.type, count: t._count._all })).sort((a, b) => b.count - a.count),
+        members: { total: totalMembers, newWeek: newMembersWeek, avgPerGroup: totalGroups ? Math.round((totalMembers / totalGroups) * 10) / 10 : 0, pendingRequests },
+        posts: { total: groupPosts },
+        events: { total: totalEvents, upcoming: upcomingEvents, past: totalEvents - upcomingEvents, top: topEvents, attendees: attendeesAgg._sum.attendee_count ?? 0 },
+      },
+      groups: rows.map(g => ({
+        id: g.id, slug: g.slug, name: g.name, type: g.type, category: g.category, description: g.description,
+        avatarUrl: g.avatar_url, bannerUrl: g.banner_url, accentColor: g.accent_color,
+        isPublic: g.is_public, isNsfw: g.is_nsfw, isVerified: g.is_verified, dealersDen: g.den_enabled, donations: g.donations_enabled, business: g.business_enabled,
+        rating: Math.round(g.rating * 10) / 10, ratingCount: g.rating_count, createdAt: g.created_at,
+        owner: { id: g.owner_id, username: g.owner_username, displayName: g.owner_display_name, avatarUrl: g.owner_avatar_url },
+        memberCount: Number(g.members), newMembers: Number(g.new_members), subscribers: Number(g.subscribers), pendingRequests: Number(g.pending_requests),
+        posts: Number(g.posts), postsWeek: Number(g.posts_week),
+        eventsTotal: Number(g.events_total), eventsUpcoming: Number(g.events_upcoming), attendeesTotal: Number(g.attendees_total),
+        nextEvent: g.next_event_at ? { title: g.next_event_title, startsAt: g.next_event_at } : null,
+      })),
+      total, page, pages: Math.max(1, Math.ceil(total / limit)),
+      events: eventList.map(e => ({
+        id: e.id, title: e.title, shortCode: e.short_code, bannerUrl: e.banner_url, location: e.location_name,
+        startsAt: e.starts_at, endsAt: e.ends_at, status: e.status, isTop: e.is_top, isRecurring: e.is_recurring,
+        attendeeCount: e.attendee_count, going: attendeeMap.get(e.id)?.going ?? 0, maybe: attendeeMap.get(e.id)?.maybe ?? 0,
+        subEvents: e._count.subEvents, tickets: e._count.tickets,
+        groupName: e.group.name, groupSlug: e.group.slug, groupAvatar: e.group.avatar_url,
+        isUpcoming: e.starts_at.getTime() >= now.getTime(),
       })),
     };
   },
