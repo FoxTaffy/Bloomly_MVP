@@ -24,6 +24,7 @@ import type {
 } from './types.js';
 import { logError } from '../../lib/logger.js';
 import { debitWallet } from '../wallet/ledger.js';
+import { parseSearchQuery, textScore, trigramAvailable } from '../../lib/searchQuery.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 // Group role hierarchy: owner > admin > moderator > everyone else (member/dealer/volunteer/guest_of_honor).
@@ -1446,22 +1447,57 @@ export const groupService = {
 
   // ── Search (for maker picker + global search) ──────────────────────────────
   async searchGroups(q: string, limit = 8, page = 1) {
-    const query = q.trim();
-    if (!query) return [];
-    return prisma.group.findMany({
+    const parsed = parseSearchQuery(q);
+    if (!parsed.terms.length) return [];
+    const skip = (Math.max(1, page) - 1) * limit;
+    const overfetch = Math.min(200, Math.max((skip + limit) * 5, limit * 5));
+
+    let fuzzyIds: string[] = [];
+    if (parsed.phrase.length >= 3 && (await trigramAvailable())) {
+      const rows = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id::text AS id FROM "Group"
+        WHERE deleted_at IS NULL AND is_public = true AND similarity(name, ${parsed.phrase}) >= 0.35
+        ORDER BY similarity(name, ${parsed.phrase}) DESC
+        LIMIT 30
+      `.catch(() => []);
+      fuzzyIds = rows.map((r) => r.id);
+    }
+
+    const candidates = await prisma.group.findMany({
       where: {
         deleted_at: null,
         is_public: true,
         OR: [
-          { name: { contains: query, mode: 'insensitive' } },
-          { slug: { contains: query, mode: 'insensitive' } },
+          {
+            AND: parsed.terms.map((t) => ({
+              OR: [t.text, ...t.variants].flatMap((w) => [
+                { name: { contains: w, mode: 'insensitive' as const } },
+                { slug: { contains: w, mode: 'insensitive' as const } },
+              ]),
+            })),
+          },
+          ...(fuzzyIds.length ? [{ id: { in: fuzzyIds } }] : []),
         ],
       },
       select: { id: true, name: true, slug: true, avatar_url: true, type: true, members_count: true, is_verified: true },
       orderBy: [{ is_verified: 'desc' }, { members_count: 'desc' }],
-      skip: (Math.max(1, page) - 1) * limit,
-      take: limit,
+      take: overfetch,
     });
+
+    const fuzzySet = new Set(fuzzyIds);
+    const scored = candidates.map((g) => {
+      let score = 0;
+      for (const t of parsed.terms) {
+        let best = 0;
+        for (const w of [t.text, ...t.variants]) best = Math.max(best, textScore(g.name, w), textScore(g.slug, w) * 0.8);
+        score += best;
+      }
+      if (score === 0 && fuzzySet.has(g.id)) score = 3;
+      score += (g.is_verified ? 2 : 0) + Math.log1p(Math.max(0, g.members_count ?? 0)) * 0.4;
+      return { g, score };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(skip, skip + limit).map((x) => x.g);
   },
 
   // ── Discover ──────────────────────────────────────────────────────────────
