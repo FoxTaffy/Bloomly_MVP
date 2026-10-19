@@ -882,9 +882,11 @@
                           ? 'border-brand-accent bg-brand-accent/10'
                           : 'border-brand-border hover:border-white/20 bg-brand-bg'">
                         <!-- Mini avatar preview with frame -->
-                        <div class="w-10 h-10 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm shrink-0"
-                          :class="frame.style || ''">
-                          B
+                        <div class="w-10 h-10 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm shrink-0 overflow-hidden"
+                          :class="frame.style || ''"
+                          :style="id === 'rainbow' ? 'box-shadow:0 0 0 2px #f97316,0 0 0 4px #eab308,0 0 0 6px #22c55e' : ''">
+                          <img v-if="form.avatar_url" :src="form.avatar_url" class="w-full h-full object-cover" />
+                          <span v-else>{{ (form.display_name || form.username || 'B').charAt(0).toUpperCase() }}</span>
                         </div>
                         <span class="text-xs font-bold text-white">{{ frame.label }}</span>
                         <BIcon v-if="form.profile_frame === id && !form.profile_frame_id" name="Check" class="w-4 h-4 text-brand-accent ml-auto shrink-0" />
