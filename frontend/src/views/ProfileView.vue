@@ -2456,7 +2456,7 @@ import ReportModal from '@/components/ReportModal.vue'
 import api from '@/api'
 import { compressImageForUpload } from '@/lib/utils'
 import { FAVORITE_CATEGORIES, type FavoriteCategory } from '@/lib/interests'
-import { PROFILE_THEMES, PROFILE_FRAMES } from '@/lib/utils'
+import { PROFILE_THEMES, PROFILE_FRAMES, rainbowShadow } from '@/lib/utils'
 import { onAvatarError } from '@/composables/useAvatarFallback'
 import VerificationBadge from '@/components/VerificationBadge.vue'
 import { verTypeIconUrl } from '@/lib/verificationIcons'
@@ -2932,7 +2932,7 @@ const avatarRingStyle = computed(() => {
     default_ring: { outline: `2px solid ${accentColor}80`, outlineOffset: '2px' },
     gold:         { outline: '2px solid #fbbf24', outlineOffset: '2px' },
     neon:         { outline: '2px solid #ec4899', outlineOffset: '2px', boxShadow: '0 0 14px 3px rgba(236,72,153,0.65)' },
-    rainbow:      { outline: '2px solid transparent', outlineOffset: '2px', boxShadow: '0 0 0 2px #f97316, 0 0 0 4px #eab308, 0 0 0 6px #22c55e' },
+    rainbow:      { boxShadow: rainbowShadow(2) },
     silver:       { outline: '2px solid #cbd5e1', outlineOffset: '2px' },
     fire:         { outline: '2px solid #f97316', outlineOffset: '2px', boxShadow: '0 0 14px 3px rgba(249,115,22,0.65)' },
   }

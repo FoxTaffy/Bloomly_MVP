@@ -828,7 +828,7 @@
                         <div class="h-16 w-full" :style="`background:linear-gradient(135deg, ${previewTheme.accent}55, ${previewTheme.bg})`"></div>
                         <div class="px-5 pb-5 -mt-8 flex items-end gap-4">
                           <div class="relative w-[72px] h-[72px] shrink-0">
-                            <div class="w-full h-full rounded-2xl bg-white/10 overflow-hidden flex items-center justify-center text-white/60 font-bold text-xl"
+                            <div class="w-full h-full rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-white/60 font-bold text-xl"
                               :class="previewFrameClass" :style="previewFrameStyle">
                               <img v-if="form.avatar_url" :src="form.avatar_url" class="w-full h-full object-cover" />
                               <span v-else>{{ (form.display_name || form.username || '?').charAt(0).toUpperCase() }}</span>
@@ -884,7 +884,7 @@
                         <!-- Mini avatar preview with frame -->
                         <div class="w-10 h-10 rounded-full bg-brand-accent/20 flex items-center justify-center text-brand-accent font-bold text-sm shrink-0 overflow-hidden"
                           :class="frame.style || ''"
-                          :style="id === 'rainbow' ? 'box-shadow:0 0 0 2px #f97316,0 0 0 4px #eab308,0 0 0 6px #22c55e' : ''">
+                          :style="id === 'rainbow' ? { boxShadow: rainbowShadow(1) } : {}">
                           <img v-if="form.avatar_url" :src="form.avatar_url" class="w-full h-full object-cover" />
                           <span v-else>{{ (form.display_name || form.username || 'B').charAt(0).toUpperCase() }}</span>
                         </div>
@@ -1558,7 +1558,7 @@ import { speciesLabel as speciesLabelFor } from '@/lib/fursonaSpecies'
 import { FAVORITE_CATEGORIES } from '@/lib/interests'
 import { verTypeIconUrl } from '@/lib/verificationIcons'
 import api from '@/api'
-import { PROFILE_THEMES, PROFILE_FRAMES, readRawDataUrl, readScaledDataUrl } from '@/lib/utils'
+import { PROFILE_THEMES, PROFILE_FRAMES, rainbowShadow, readRawDataUrl, readScaledDataUrl } from '@/lib/utils'
 import { PAYMENT_REGIONS } from '@/lib/paymentRegions'
 import ImageCropModal from '@/components/shared/ImageCropModal.vue'
 import { useConfirm } from '@/composables/useConfirm'
@@ -1580,7 +1580,7 @@ const previewCustomFrame = computed(() => {
 })
 const previewFrameClass = computed(() => (form.profile_frame_id ? '' : PROFILE_FRAMES[form.profile_frame]?.style ?? ''))
 const previewFrameStyle = computed(() => form.profile_frame === 'rainbow' && !form.profile_frame_id
-  ? 'box-shadow:0 0 0 2px #f97316,0 0 0 4px #eab308,0 0 0 6px #22c55e' : '')
+  ? { boxShadow: rainbowShadow(1.5) } : {})
 const jobGroupNames = computed(() => [...new Set(groupsStore.myGroups.map(m => m.group.name))])
 const route       = useRoute()
 const router      = useRouter()

@@ -164,12 +164,18 @@ export const PROFILE_THEMES: Record<string, { label: string; bg: string; accent:
   },
 }
 
+/** Радужная рамка (флаг LGBT): шесть концентрических колец толщиной w px. */
+export function rainbowShadow(w = 1): string {
+  return ['#e40303', '#ff8c00', '#ffed00', '#008026', '#004dff', '#750787']
+    .map((c, i) => `0 0 0 ${(i + 1) * w}px ${c}`).join(',')
+}
+
 export const PROFILE_FRAMES: Record<string, { label: string; style: string }> = {
   none: { label: 'Нет', style: '' },
   default_ring: { label: 'Кольцо', style: 'ring-2 ring-brand-accent ring-offset-2 ring-offset-brand-bg' },
   gold: { label: 'Золото', style: 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-brand-bg' },
   neon: { label: 'Неон', style: 'ring-2 ring-pink-500 ring-offset-2 ring-offset-brand-bg shadow-[0_0_12px_2px_rgba(236,72,153,0.7)]' },
-  rainbow: { label: 'Радуга', style: 'ring-2 ring-offset-2 ring-offset-brand-bg' },
+  rainbow: { label: 'Радуга', style: '' },
   silver: { label: 'Серебро', style: 'ring-2 ring-slate-300 ring-offset-2 ring-offset-brand-bg' },
   fire: { label: 'Огонь', style: 'ring-2 ring-orange-500 ring-offset-2 ring-offset-brand-bg shadow-[0_0_12px_2px_rgba(249,115,22,0.7)]' },
 }
