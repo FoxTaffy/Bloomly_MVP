@@ -2,11 +2,13 @@
 import { onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useLangStore } from '@/stores/lang'
 import api from '@/api'
 
 const router = useRouter()
 const route  = useRoute()
 const auth   = useAuthStore()
+const langStore = useLangStore()
 
 onMounted(async () => {
   // Токены приходят во фрагменте (#token=…), он не уходит на сервер и не попадает в логи.
@@ -44,6 +46,7 @@ onMounted(async () => {
     })
     if (res.data?.success) {
       auth.loginWithToken(token, res.data.data.user, true)
+      await langStore.applySuggestedLang(params.get('locale'))
       router.replace({ name: 'home' })
     } else {
       throw new Error('profile fetch failed')

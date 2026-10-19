@@ -40,6 +40,8 @@ export interface OAuthUser {
   email: string | null
   name: string | null
   avatar: string | null
+  /** Язык аккаунта у провайдера (Google: «ru», «pt-BR»), если отдал */
+  locale?: string | null
 }
 
 const providers: Record<OAuthProvider, ProviderConfig> = {
@@ -55,7 +57,7 @@ const providers: Record<OAuthProvider, ProviderConfig> = {
       })
       const d = await r.json() as any
       // Email берём только подтверждённый: непроверенный адрес нельзя использовать для привязки
-      return { id: d.sub, email: d.email_verified === true ? (d.email ?? null) : null, name: d.name ?? null, avatar: d.picture ?? null }
+      return { id: d.sub, email: d.email_verified === true ? (d.email ?? null) : null, name: d.name ?? null, avatar: d.picture ?? null, locale: typeof d.locale === 'string' ? d.locale : null }
     },
   },
 

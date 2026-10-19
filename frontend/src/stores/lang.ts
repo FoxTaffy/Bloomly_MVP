@@ -7,6 +7,23 @@ export const LANG_TO_LOCALE: Record<Lang, string> = {
   RU: 'ru-RU', EN: 'en-US', JP: 'ja-JP', CN: 'zh-CN', DE: 'de-DE', FR: 'fr-FR', ES: 'es-ES', PT: 'pt-PT',
 }
 
+/** Код языка браузера/Google («ru», «pt-BR», «zh-TW», «ja») → язык интерфейса; незнакомый → null. */
+export function langFromLocaleCode(code?: string | null): Lang | null {
+  const base = (code ?? '').toLowerCase().split(/[-_]/)[0]
+  const map: Record<string, Lang> = { ru: 'RU', en: 'EN', ja: 'JP', zh: 'CN', de: 'DE', fr: 'FR', es: 'ES', pt: 'PT' }
+  return map[base] ?? null
+}
+
+/** Первый заход без выбора: язык браузера по приоритету; ни один не поддержан — английский. */
+function detectBrowserLang(): Lang {
+  const list = navigator.languages?.length ? navigator.languages : [navigator.language]
+  for (const code of list) {
+    const l = langFromLocaleCode(code)
+    if (l) return l
+  }
+  return list.filter(Boolean).length ? 'EN' : 'RU'
+}
+
 export type DateField = 'day' | 'month' | 'year'
 
 /** Field order + separator for numeric date entry (e.g. birth date), derived from each locale's own convention. */
@@ -25,7 +42,13 @@ export const DATE_FIELD_ORDER: Record<Lang, { order: DateField[]; separator: str
 
 export const useLangStore = defineStore('lang', () => {
   const saved = localStorage.getItem('bloomly_lang')
-  const currentLang = ref<Lang>(isLang(saved) ? saved : 'RU')
+  // Язык, выбранный не руками, а определённый автоматически, помечаем: Google-вход может его уточнить
+  const autoDetected = !isLang(saved)
+  const initial: Lang = isLang(saved) ? saved : detectBrowserLang()
+  if (autoDetected) {
+    try { localStorage.setItem('bloomly_lang', initial); localStorage.setItem('bloomly_lang_auto', '1') } catch { /* private mode */ }
+  }
+  const currentLang = ref<Lang>(initial)
   const autoTranslateEnabled = ref<boolean>(localStorage.getItem('bloomly_auto_translate') === '1')
   const savedAuto = localStorage.getItem('bloomly_auto_translate_lang')
   const autoTranslateLang = ref<Lang>(isLang(savedAuto) ? savedAuto : currentLang.value)
@@ -44,10 +67,19 @@ export const useLangStore = defineStore('lang', () => {
   const ready: Promise<void> = ensureLoaded(currentLang.value).catch(() => {})
 
   /** Язык переключается, когда его словарь уже загружен (без промежуточного русского). */
-  async function setLang(lang: Lang) {
+  async function setLang(lang: Lang, auto = false) {
     localStorage.setItem('bloomly_lang', lang)
+    if (auto) localStorage.setItem('bloomly_lang_auto', '1')
+    else localStorage.removeItem('bloomly_lang_auto')
     try { await ensureLoaded(lang) } catch { return }
     currentLang.value = lang
+  }
+
+  /** Язык аккаунта Google: применяем, только пока пользователь сам язык не выбирал. */
+  async function applySuggestedLang(code?: string | null) {
+    if (localStorage.getItem('bloomly_lang_auto') !== '1') return
+    const l = langFromLocaleCode(code)
+    if (l && l !== currentLang.value) await setLang(l, true)
   }
 
   function setAutoTranslate(enabled: boolean) {
@@ -60,5 +92,5 @@ export const useLangStore = defineStore('lang', () => {
     localStorage.setItem('bloomly_auto_translate_lang', lang)
   }
 
-  return { currentLang, t, ready, setLang, autoTranslateEnabled, autoTranslateLang, setAutoTranslate, setAutoTranslateLang }
+  return { currentLang, t, ready, setLang, applySuggestedLang, autoTranslateEnabled, autoTranslateLang, setAutoTranslate, setAutoTranslateLang }
 })

@@ -631,7 +631,8 @@ export const oauthCallbackHandler = async (
       return reply.redirect(`${target}?token=${token}&refreshToken=${refreshToken}`, 302);
     }
     // Токен во фрагменте: фрагмент не уходит на сервер и не попадает в access-лог nginx
-    return reply.redirect(`${FRONTEND_URL()}/auth/callback#token=${token}`, 302);
+    const localeParam = oauthUser.locale ? `&locale=${encodeURIComponent(oauthUser.locale.slice(0, 12))}` : '';
+    return reply.redirect(`${FRONTEND_URL()}/auth/callback#token=${token}${localeParam}`, 302);
   } catch (e) {
     logger.error({ err: e }, '[OAuth callback error]');
     return reply.redirect(`${FRONTEND_URL()}/auth?error=oauth_failed`, 302);
