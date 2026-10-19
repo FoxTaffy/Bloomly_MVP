@@ -13,6 +13,17 @@ export function regionLabel(id: string, locale: string, otherLabel: string): str
   }
 }
 
+/** Код флага (flag-icons), валюта и её символ для карточки региона. */
+export const REGION_VISUAL: Record<string, { flag: string | null; currency: string; symbol: string; color: string }> = {
+  RU:     { flag: 'ru', currency: 'RUB', symbol: '₽',  color: '#e14664' },
+  US:     { flag: 'us', currency: 'USD', symbol: '$',  color: '#66c770' },
+  EU:     { flag: 'eu', currency: 'EUR', symbol: '€',  color: '#4c67cf' },
+  CN:     { flag: 'cn', currency: 'CNY', symbol: '¥',  color: '#ffc01f' },
+  IN:     { flag: 'in', currency: 'INR', symbol: '₹',  color: '#e76f51' },
+  BR:     { flag: 'br', currency: 'BRL', symbol: 'R$', color: '#2fb36b' },
+  GLOBAL: { flag: null, currency: '',    symbol: '🌐', color: '#a1b4ff' },
+}
+
 export const PAYMENT_REGIONS: PaymentRegion[] = [
   { id: 'RU',     label: 'Россия / Russia' },
   { id: 'US',     label: 'США / United States' },

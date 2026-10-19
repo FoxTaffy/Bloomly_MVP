@@ -1434,13 +1434,27 @@
                   <div class="rounded-2xl border border-brand-border bg-brand-bg/40 p-4">
                     <p class="text-sm font-semibold text-white">{{ langStore.t.secLangRegionLabel }}</p>
                     <p class="text-xs text-white/40 mt-0.5 mb-3">{{ langStore.t.secLangRegionHint }}</p>
-                    <select
-                      :value="paymentRegion"
-                      @change="setPaymentRegion(($event.target as HTMLSelectElement).value)"
-                      class="field-input"
-                    >
-                      <option v-for="r in PAYMENT_REGIONS" :key="r.id" :value="r.id">{{ regionLabel(r.id, LANG_TO_LOCALE[langStore.currentLang], langStore.t.secRegionOther) }}</option>
-                    </select>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      <button v-for="r in PAYMENT_REGIONS" :key="r.id" type="button"
+                        @click="setPaymentRegion(r.id)"
+                        class="relative flex items-center gap-3 rounded-2xl border-2 px-3 py-2.5 text-left transition-all"
+                        :class="paymentRegion === r.id ? 'border-brand-accent bg-brand-accent/10' : 'border-brand-border bg-brand-bg hover:border-white/20'">
+                        <span class="relative shrink-0 w-10 h-10 rounded-full overflow-hidden flex items-center justify-center border border-white/10 bg-white/5">
+                          <span v-if="REGION_VISUAL[r.id].flag" :class="`fi fi-${REGION_VISUAL[r.id].flag} fis`" style="font-size:2.5rem;line-height:1"></span>
+                          <BIcon v-else name="Globe" class="w-5 h-5 text-white/70" />
+                        </span>
+                        <span class="min-w-0 flex-1">
+                          <span class="block text-xs font-bold text-white truncate">{{ regionLabel(r.id, LANG_TO_LOCALE[langStore.currentLang], langStore.t.secRegionOther) }}</span>
+                          <span v-if="REGION_VISUAL[r.id].currency" class="mt-0.5 inline-flex items-center gap-1 text-[10px] font-extrabold tracking-wide"
+                            :style="`color:${REGION_VISUAL[r.id].color}`">
+                            <span class="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full text-[9px] text-white" :style="`background:${REGION_VISUAL[r.id].color}`">{{ REGION_VISUAL[r.id].symbol }}</span>
+                            {{ REGION_VISUAL[r.id].currency }}
+                          </span>
+                          <span v-else class="mt-0.5 block text-[10px] font-bold text-white/35">$ € ₽ …</span>
+                        </span>
+                        <BIcon v-if="paymentRegion === r.id" name="Check" class="w-4 h-4 text-brand-accent shrink-0" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -1559,7 +1573,7 @@ import { FAVORITE_CATEGORIES } from '@/lib/interests'
 import { verTypeIconUrl } from '@/lib/verificationIcons'
 import api from '@/api'
 import { PROFILE_THEMES, PROFILE_FRAMES, rainbowShadow, readRawDataUrl, readScaledDataUrl } from '@/lib/utils'
-import { PAYMENT_REGIONS, regionLabel } from '@/lib/paymentRegions'
+import { PAYMENT_REGIONS, REGION_VISUAL, regionLabel } from '@/lib/paymentRegions'
 import ImageCropModal from '@/components/shared/ImageCropModal.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import AvatarFrameOverlay from '@/components/AvatarFrameOverlay.vue'
