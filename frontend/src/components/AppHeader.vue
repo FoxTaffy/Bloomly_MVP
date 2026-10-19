@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { apiErrorMessage } from '@/lib/apiError'
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useLangStore } from '@/stores/lang'
@@ -64,7 +64,34 @@ const toggleNsfw = () => {
 // ── Notifications ─────────────────────────────────────────────────────────────
 const { addToast } = useNotifToast()
 const showNotifications = ref(false)
-const notifications = ref<any[]>([])
+const rawNotifications = ref<any[]>([])
+// Likes from one person collapse into a single row (one post → preview text, several → "N публикаций").
+const notifications = computed(() => {
+  const out: any[] = []
+  const likeRows = new Map<string, any>()
+  for (const n of rawNotifications.value) {
+    const who = n.type === 'LIKE' ? (n.sender_group_id ?? n.sender_id) : null
+    if (!who) { out.push(n); continue }
+    const row = likeRows.get(who)
+    if (!row) {
+      const g = { ...n, _postIds: new Set([n.post_id]), _members: [n] }
+      likeRows.set(who, g)
+      out.push(g)
+    } else {
+      row._postIds.add(n.post_id)
+      row._members.push(n)
+      row.is_read = row.is_read && n.is_read
+    }
+  }
+  for (const g of likeRows.values()) g._likeCount = g._postIds.size
+  return out
+})
+const likeLabel = (n: any): string | null => {
+  if (n.type !== 'LIKE' || !(n._likeCount > 1)) return null
+  const c = n._likeCount, m10 = c % 10, m100 = c % 100
+  const word = m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'ваших публикации' : 'ваших публикаций'
+  return `лайкнул(а) ${c} ${word}`
+}
 const unreadCount = ref(0)
 let notifEventSource: EventSource | null = null
 
@@ -82,30 +109,43 @@ const fetchNotifications = async () => {
   try {
     const res = await api.get('/notifications')
     if (res.data.success) {
-      notifications.value = res.data.data.notifications.map(normalizeNotif)
-      unreadCount.value = notifications.value.filter((n: any) => !n.is_read).length
+      rawNotifications.value = res.data.data.notifications.map(normalizeNotif)
+      unreadCount.value = rawNotifications.value.filter((n: any) => !n.is_read).length
     }
   } catch {}
 }
 
+// Unread items stay highlighted for a few seconds after opening the bell
+const NOTIF_READ_DELAY_MS = 5000
+let markReadTimer: ReturnType<typeof setTimeout> | null = null
+
+const clearMarkReadTimer = () => {
+  if (markReadTimer) { clearTimeout(markReadTimer); markReadTimer = null }
+}
+
 const toggleNotifications = async () => {
   showNotifications.value = !showNotifications.value
+  clearMarkReadTimer()
   if (showNotifications.value) {
     await fetchNotifications()
-    // Immediately mark all unread as read — locally + API
-    const hasUnread = notifications.value.some((n: any) => !n.is_read)
-    if (hasUnread) {
-      notifications.value.forEach((n: any) => { n.is_read = true })
-      unreadCount.value = 0
-      try { await api.post('/notifications/read', {}) } catch {}
+    if (!showNotifications.value) return
+    if (rawNotifications.value.some((n: any) => !n.is_read)) {
+      markReadTimer = setTimeout(() => {
+        markReadTimer = null
+        if (showNotifications.value) markAllRead()
+      }, NOTIF_READ_DELAY_MS)
     }
   }
 }
 
+watch(showNotifications, (open) => { if (!open) clearMarkReadTimer() })
+
+onUnmounted(clearMarkReadTimer)
+
 const markAllRead = async () => {
   try {
     await api.post('/notifications/read', {})
-    notifications.value.forEach((n: any) => { n.is_read = true })
+    rawNotifications.value.forEach((n: any) => { n.is_read = true })
     unreadCount.value = 0
   } catch {}
 }
@@ -128,10 +168,10 @@ const connectNotifSSE = () => {
         if (data.type && data.type !== 'heartbeat') {
           const notif = data.data ?? data
           const normalized = normalizeNotif(notif)
-          const alreadyPresent = notifications.value.some((n: any) => String(n.id) === String(normalized.id))
+          const alreadyPresent = rawNotifications.value.some((n: any) => String(n.id) === String(normalized.id))
           if (alreadyPresent) return
 
-          notifications.value.unshift(normalized)
+          rawNotifications.value.unshift(normalized)
           unreadCount.value++
           addToast(notif)
         }
@@ -163,7 +203,7 @@ watch(() => auth.token, token => {
     notifEventSource = null
     connectedToken = null
     if (sseReconnectTimer) { clearTimeout(sseReconnectTimer); sseReconnectTimer = null }
-    notifications.value = []
+    rawNotifications.value = []
     unreadCount.value = 0
   }
 })
@@ -175,7 +215,7 @@ const notifTypeLabel = (type: string, pronouns?: string | null) => {
   const isFemale = p.startsWith('она')
 
   const genderMap: Record<string, { m: string; f: string; n: string }> = {
-    LIKE:    { m: 'поставил + вашей публикации',    f: 'поставила + вашей публикации',    n: 'поставил(а) + вашей публикации' },
+    LIKE:    { m: 'лайкнул вашу публикацию',    f: 'лайкнула вашу публикацию',    n: 'лайкнул(а) вашу публикацию' },
     COMMENT: { m: 'прокомментировал вашу публикацию', f: 'прокомментировала вашу публикацию', n: 'прокомментировал(а) вашу публикацию' },
     REPAW:   { m: 'поставил RePaw вашей публикации',  f: 'поставила RePaw вашей публикации',  n: 'поставил(а) RePaw вашей публикации' },
     FOLLOW:  { m: 'подписался на вас',                 f: 'подписалась на вас',                 n: 'подписался(ась) на вас' },
@@ -354,9 +394,12 @@ const onNotifClick = async (n: any) => {
   if (n.type === 'RELATIONSHIP_REQUEST' || n.type === 'STICKER_ACCESS_REQUEST') return
   // Mark this single notification as read
   if (!n.is_read) {
+    const members: any[] = n._members ?? [n]
+    const wasUnread = members.filter((m: any) => !m.is_read).length
+    members.forEach((m: any) => { m.is_read = true })
     n.is_read = true
-    unreadCount.value = Math.max(0, unreadCount.value - 1)
-    try { await api.post('/notifications/read', { ids: [n.id] }) } catch {}
+    unreadCount.value = Math.max(0, unreadCount.value - wasUnread)
+    try { await api.post('/notifications/read', { ids: members.map((m: any) => m.id) }) } catch {}
   }
   // Warning notifications open the violation detail modal built from `meta` —
   // never the post itself, since the reported post is very often already deleted
@@ -370,6 +413,12 @@ const onNotifClick = async (n: any) => {
   if (n.type === 'STICKER_ACCESS_APPROVED' && n.meta?.packId) {
     showNotifications.value = false
     router.push(`/stickers/${n.meta.packId}`)
+    return
+  }
+  // Several liked posts → no single post to open, go to the person instead
+  if (n.type === 'LIKE' && n._likeCount > 1) {
+    showNotifications.value = false
+    router.push(identityHref(n))
     return
   }
   // Open post modal
@@ -814,8 +863,9 @@ onUnmounted(() => {
                       </p>
                       <p v-else class="text-sm text-white leading-snug">
                         <router-link :to="identityHref(n)" @click.stop="showNotifications = false" class="font-semibold cursor-pointer hover:underline">{{ identityName(n) }}</router-link>
-                        {{ ' ' }}{{ notifTypeLabel(n.type, n.sender?.pronouns) }}
+                        {{ ' ' }}{{ likeLabel(n) ?? notifTypeLabel(n.type, n.sender?.pronouns) }}
                       </p>
+                      <p v-if="n.type === 'LIKE' && n._likeCount === 1 && (n.post?.title || n.post?.text)" class="text-xs text-white/45 mt-0.5 truncate">{{ n.post.title || n.post.text }}</p>
                       <p class="text-xs text-white/40 mt-0.5">{{ formatDate(n.created_at) }}</p>
                       <!-- Relationship request -->
                       <div v-if="n.type === 'RELATIONSHIP_REQUEST' && !n._relDone" class="flex gap-2 mt-2">
@@ -881,8 +931,9 @@ onUnmounted(() => {
                       </p>
                       <p v-else class="text-sm text-white/65 leading-snug">
                         <router-link :to="identityHref(n)" @click.stop="showNotifications = false" class="font-semibold text-white/80 cursor-pointer hover:underline">{{ identityName(n) }}</router-link>
-                        {{ ' ' }}{{ notifTypeLabel(n.type, n.sender?.pronouns) }}
+                        {{ ' ' }}{{ likeLabel(n) ?? notifTypeLabel(n.type, n.sender?.pronouns) }}
                       </p>
+                      <p v-if="n.type === 'LIKE' && n._likeCount === 1 && (n.post?.title || n.post?.text)" class="text-xs text-white/35 mt-0.5 truncate">{{ n.post.title || n.post.text }}</p>
                       <p class="text-xs text-white/30 mt-0.5">{{ formatDate(n.created_at) }}</p>
                       <!-- Relationship request -->
                       <div v-if="n.type === 'RELATIONSHIP_REQUEST' && !n._relDone" class="flex gap-2 mt-2">

@@ -118,7 +118,7 @@ export const notificationService = {
   },
 
   async getForUser(userId: string, limit = 50) {
-    return prisma.notification.findMany({
+    const notifs = await prisma.notification.findMany({
       where:   { receiver_id: userId, deleted_at: null },
       orderBy: { created_at: 'desc' },
       take:    limit,
@@ -127,6 +127,24 @@ export const notificationService = {
         senderGroup: { select: { id: true, slug: true, name: true, avatar_url: true } },
       },
     });
+
+    // Post preview for LIKE rows (the list shows what was liked when only one post is involved).
+    const likePostIds = [...new Set(notifs.filter(n => n.type === 'LIKE' && n.post_id).map(n => n.post_id as string))];
+    const posts = likePostIds.length
+      ? await prisma.post.findMany({
+          where:  { id: { in: likePostIds }, deleted_at: null },
+          select: { id: true, title: true, content: true, media_urls: true, is_nsfw: true, is_paid: true, subscriber_only: true },
+        })
+      : [];
+    const previewById = new Map(posts.map(p => [p.id, {
+      id:    p.id,
+      title: p.title,
+      text:  p.content.slice(0, 120),
+      // Never leak a thumbnail of gated or NSFW media into the list.
+      thumb: p.is_nsfw || p.is_paid || p.subscriber_only ? null : (p.media_urls[0] ?? null),
+    }]));
+
+    return notifs.map(n => (n.type === 'LIKE' && n.post_id ? { ...n, post: previewById.get(n.post_id) ?? null } : n));
   },
 
   async markRead(userId: string, ids?: string[]) {
