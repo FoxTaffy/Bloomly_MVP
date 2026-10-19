@@ -92,6 +92,12 @@
           rows="3"
           class="w-full bg-brand-card border border-brand-border rounded-lg px-3 py-2 text-sm text-white resize-none focus:border-brand-accent outline-hidden"
         ></textarea>
+          <PostEditExtras
+            v-model:tags="editTags"
+            v-model:is-nsfw="editNsfw"
+            v-model:is-ai-generated="editAi"
+            :existing-media-count="(post.media_urls || []).length"
+            @media="(urls, originals) => { editNewMedia = urls; editNewOriginals = originals }" />
         <div class="flex items-center gap-2 mt-2">
           <button @click="isEditing = false" class="px-3 py-1.5 text-xs text-white/55 hover:text-white transition">Отмена</button>
           <button @click="saveEdit" :disabled="isSaving"
@@ -238,6 +244,7 @@
 </template>
 
 <script setup lang="ts">
+import PostEditExtras from '@/components/PostEditExtras.vue'
 import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, computed } from 'vue'
@@ -294,6 +301,11 @@ const showMenu     = ref(false)
 const isExpanded   = ref(false)
 const isEditing    = ref(false)
 const editContent  = ref('')
+const editTags     = ref<string[]>([])
+const editNsfw     = ref(false)
+const editAi       = ref(false)
+const editNewMedia = ref<string[]>([])
+const editNewOriginals = ref<string[]>([])
 const isSaving     = ref(false)
 const isDeleting   = ref(false)
 const showLightboxUrl = ref<string | null>(null)
@@ -396,14 +408,26 @@ function openFullscreen() {
 function startEdit() {
   isEditing.value = true
   editContent.value = props.post.content
+  editTags.value = (props.post.tags || []).map((t: any) => t.tag?.name ?? t.name).filter(Boolean)
+  editNsfw.value = !!props.post.is_nsfw
+  editAi.value = !!props.post.is_ai_generated
+  editNewMedia.value = []
+  editNewOriginals.value = []
   showMenu.value = false
 }
 
 async function saveEdit() {
-  if (!editContent.value.trim() || isSaving.value) return
+  if ((!editContent.value.trim() && !(props.post.media_urls || []).length && !editNewMedia.value.length) || isSaving.value) return
   isSaving.value = true
   try {
-    const r = await api.patch(`/posts/${props.post.id}`, { content: editContent.value.trim() })
+    const r = await api.patch(`/posts/${props.post.id}`, {
+      content: editContent.value.trim(),
+      tags: editTags.value,
+      isNsfw: editNsfw.value,
+      isAiGenerated: editAi.value,
+      addMediaUrls: editNewMedia.value,
+      addMediaOriginalUrls: editNewOriginals.value,
+    })
     if (r.data.success) {
       emit('updated', r.data.data.post)
       isEditing.value = false

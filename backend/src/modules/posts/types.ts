@@ -46,3 +46,14 @@ export interface JwtUser {
   id: string;
   role: string;
 }
+
+export interface EditPostInput {
+  content?: string;
+  isNsfw?: boolean;
+  isAiGenerated?: boolean;
+  /** Full replacement of the post's tag list. */
+  tags?: string[];
+  /** New files appended after the existing ones (existing media is never replaced here). */
+  addMediaUrls?: string[];
+  addMediaOriginalUrls?: string[];
+}

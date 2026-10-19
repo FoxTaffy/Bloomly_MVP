@@ -14,7 +14,7 @@ import { parseSearchQuery, textScore } from '../../lib/searchQuery.js';
 import { resolveTagsForTerm } from '../../lib/tagSearch.js';
 import { muteKeywordsWhere, nsfwWhere, type NsfwMode } from '../../lib/contentFilters.js';
 import { analyzeContent } from '../automod/service.js';
-import type { CreatePostInput, GetPostsQuery } from './types.js';
+import type { CreatePostInput, EditPostInput, GetPostsQuery } from './types.js';
 import { errCode } from '../../lib/httpErrors.js';
 import { logError } from '../../lib/logger.js';
 
@@ -1444,22 +1444,64 @@ export const postService = {
     return updated;
   },
 
-  async editPost(userId: string, postId: string, content: string) {
+  async editPost(userId: string, postId: string, input: EditPostInput) {
     const post = await prisma.post.findUnique({ where: { id: postId, deleted_at: null } });
     if (!post) throw new Error('Post not found');
     if (post.author_id !== userId) throw new Error('Not authorized');
     if (Date.now() - post.created_at.getTime() > POST_EDIT_WINDOW_MS) {
       throw new Error('Edit window expired');
     }
-    return prisma.post.update({
-      where: { id: postId },
-      data: { content },
-      include: {
-        author: { select: AUTHOR_SELECT },
-        rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
-        tags: { include: { tag: true } },
-        _count: { select: { votes: true, repaws: true } },
-      },
+
+    const content = input.content !== undefined ? input.content.trim() : post.content;
+    const addMedia = (input.addMediaUrls ?? []).filter(Boolean);
+    const addOriginals = input.addMediaOriginalUrls?.length === addMedia.length ? input.addMediaOriginalUrls : [];
+    const mediaUrls = [...post.media_urls, ...addMedia];
+    if (!content && mediaUrls.length === 0) throw new Error('Content is required');
+    if (mediaUrls.length > MAX_MEDIA_PER_POST) {
+      throw Object.assign(new Error('TOO_MANY_MEDIA_FILES'), { statusCode: 422 });
+    }
+    if ([...addMedia, ...addOriginals].some((url) => !isTrustedMediaUrl(url))) {
+      throw Object.assign(new Error('INVALID_MEDIA_URL'), { statusCode: 422 });
+    }
+    for (const url of [...addMedia, ...addOriginals]) await assertOwnedMedia(url, userId);
+
+    // media_original_urls is index-aligned with media_urls: when the post already has originals, every new
+    // file needs one too (the file itself if the client sent no separate original).
+    const mediaOriginalUrls = post.media_original_urls.length > 0 && post.media_original_urls.length === post.media_urls.length
+      ? [...post.media_original_urls, ...(addOriginals.length > 0 ? addOriginals : addMedia)]
+      : addOriginals.length > 0 && post.media_urls.length === 0
+        ? addOriginals
+        : post.media_original_urls;
+
+    const tags = input.tags
+      ? Array.from(new Set(input.tags.map(normalizeTag).filter(Boolean)))
+      : null;
+
+    return prisma.$transaction(async (tx) => {
+      if (tags) {
+        const tagRecords = await Promise.all(
+          tags.map((name) => tx.tag.upsert({ where: { name }, update: {}, create: { name } })),
+        );
+        await tx.postTag.deleteMany({ where: { post_id: postId } });
+        if (tagRecords.length > 0) {
+          await tx.postTag.createMany({ data: tagRecords.map((tag) => ({ post_id: postId, tag_id: tag.id })) });
+        }
+      }
+      return tx.post.update({
+        where: { id: postId },
+        data: {
+          content,
+          ...(input.isNsfw !== undefined && { is_nsfw: input.isNsfw }),
+          ...(input.isAiGenerated !== undefined && { is_ai_generated: input.isAiGenerated }),
+          ...(addMedia.length > 0 && { media_urls: mediaUrls, media_original_urls: mediaOriginalUrls }),
+        },
+        include: {
+          author: { select: AUTHOR_SELECT },
+          rewardForUser: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+          tags: { include: { tag: true } },
+          _count: { select: { votes: true, repaws: true } },
+        },
+      });
     });
   },
 

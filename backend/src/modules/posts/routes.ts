@@ -22,6 +22,20 @@ const createPostSchema = {
   },
 };
 
+const editPostSchema = {
+  body: {
+    type: 'object',
+    properties: {
+      content: { type: 'string' },
+      isNsfw: { type: 'boolean' },
+      isAiGenerated: { type: 'boolean' },
+      tags: { type: 'array', items: { type: 'string' } },
+      addMediaUrls: { type: 'array', items: { type: 'string' } },
+      addMediaOriginalUrls: { type: 'array', items: { type: 'string' } },
+    },
+  },
+};
+
 const voteSchema = {
   params: {
     type: 'object',
@@ -104,7 +118,7 @@ export async function postsRoutes(fastify: FastifyInstance) {
   fastify.post<RouteGenericOf<typeof createPostHandler>>('/', { schema: createPostSchema, onRequest: [fastify.authenticate] }, createPostHandler);
   fastify.get<RouteGenericOf<typeof getPostByIdHandler>>('/:id', tryAuth, getPostByIdHandler);
   fastify.delete<RouteGenericOf<typeof deletePostHandler>>('/:id', auth, deletePostHandler);
-  fastify.patch<RouteGenericOf<typeof editPostHandler>>('/:id',  auth, editPostHandler);
+  fastify.patch<RouteGenericOf<typeof editPostHandler>>('/:id',  { ...auth, schema: editPostSchema }, editPostHandler);
   fastify.post<RouteGenericOf<typeof votePostHandler>>('/:id/vote',      { schema: voteSchema, onRequest: [fastify.authenticate], config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, votePostHandler);
   fastify.post<RouteGenericOf<typeof repawPostHandler>>('/:id/repaw',     { onRequest: [fastify.authenticate], config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, repawPostHandler);
   fastify.post<RouteGenericOf<typeof favouritePostHandler>>('/:id/favourite', auth, favouritePostHandler);

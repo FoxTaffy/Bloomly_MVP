@@ -247,6 +247,12 @@
             rows="3"
             class="w-full bg-brand-bg border border-brand-accent/50 rounded-2xl px-4 py-3 text-white text-[15px] leading-relaxed resize-none outline-hidden focus:border-brand-accent"
           ></textarea>
+          <PostEditExtras
+            v-model:tags="editTags"
+            v-model:is-nsfw="editNsfw"
+            v-model:is-ai-generated="editAi"
+            :existing-media-count="(post.media_urls || []).length"
+            @media="(urls, originals) => { editNewMedia = urls; editNewOriginals = originals }" />
           <div class="flex gap-2 mt-2 justify-end">
             <button @click="cancelEdit" class="px-4 py-1.5 text-sm text-white/55 hover:text-white hover:bg-white/5 rounded-xl">Отмена</button>
             <button @click="saveEdit" :disabled="isSaving"
@@ -684,6 +690,7 @@
 </template>
 
 <script setup lang="ts">
+import PostEditExtras from '@/components/PostEditExtras.vue'
 import { invalidateFriendsCache } from '@/stores/friends'
 import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, onDeactivated, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -849,6 +856,11 @@ onUnmounted(() => window.removeEventListener('scroll', closeMenuOnScroll, true))
 
 const isEditing   = ref(false)
 const editContent = ref('')
+const editTags = ref<string[]>([])
+const editNsfw = ref(false)
+const editAi = ref(false)
+const editNewMedia = ref<string[]>([])
+const editNewOriginals = ref<string[]>([])
 const isSaving    = ref(false)
 const isDeleting  = ref(false)
 const showReportModal = ref(false)
@@ -1191,6 +1203,11 @@ function openFullscreen() {
 function startEdit() {
   isEditing.value = true
   editContent.value = props.post.content
+  editTags.value = (props.post.tags || []).map((t: any) => t.tag?.name ?? t.name).filter(Boolean)
+  editNsfw.value = !!props.post.is_nsfw
+  editAi.value = !!props.post.is_ai_generated
+  editNewMedia.value = []
+  editNewOriginals.value = []
   showMenu.value = false
 }
 
@@ -1200,10 +1217,17 @@ function cancelEdit() {
 }
 
 async function saveEdit() {
-  if (!editContent.value.trim() || isSaving.value) return
+  if ((!editContent.value.trim() && !(props.post.media_urls || []).length && !editNewMedia.value.length) || isSaving.value) return
   isSaving.value = true
   try {
-    const r = await api.patch(`/posts/${props.post.id}`, { content: editContent.value.trim() })
+    const r = await api.patch(`/posts/${props.post.id}`, {
+      content: editContent.value.trim(),
+      tags: editTags.value,
+      isNsfw: editNsfw.value,
+      isAiGenerated: editAi.value,
+      addMediaUrls: editNewMedia.value,
+      addMediaOriginalUrls: editNewOriginals.value,
+    })
     if (r.data.success) {
       emit('updated', r.data.data.post)
       isEditing.value = false

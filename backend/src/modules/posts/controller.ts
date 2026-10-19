@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { postService } from './service.js';
-import type { CreatePostInput, JwtUser, GetPostsQuery, GetPersonalizedQuery } from './types.js';
+import type { CreatePostInput, EditPostInput, JwtUser, GetPostsQuery, GetPersonalizedQuery } from './types.js';
 import { moderatePost, moderateComment } from '../automod/service.js';
 import { isModerator, isAdmin } from '../../lib/roles.js';
 import { requestIsAdult } from '../../lib/age.js';
@@ -295,14 +295,14 @@ export const deletePostHandler = async (
 };
 
 export const editPostHandler = async (
-  request: FastifyRequest<{ Params: { id: string }; Body: { content: string } }>,
+  request: FastifyRequest<{ Params: { id: string }; Body: EditPostInput }>,
   reply: FastifyReply,
 ) => {
   try {
     const { id: userId } = request.user as JwtUser;
     const { id: postId } = request.params;
-    const { content } = request.body;
-    const post = await postService.editPost(userId, postId, content);
+    const { content, isNsfw, isAiGenerated, tags, addMediaUrls, addMediaOriginalUrls } = request.body;
+    const post = await postService.editPost(userId, postId, { content, isNsfw, isAiGenerated, tags, addMediaUrls, addMediaOriginalUrls });
     return reply.send({ success: true, data: { post }, error: null });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to edit post';
