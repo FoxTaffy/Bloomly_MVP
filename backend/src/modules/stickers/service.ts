@@ -100,7 +100,8 @@ async function downloadStickerUrl(token: string, fileId: string, ownerId: string
     // Импортированный стикер принадлежит тому, кто импортировал пак
     await recordMediaOwner(url, ownerId, 'stickers', buf.length);
     return url;
-  } catch {
+  } catch (err) {
+    console.error('[telegram-import] sticker download failed:', err);
     return null;
   }
 }
@@ -691,16 +692,27 @@ export const stickersService = {
       (s) => s.type === 'regular' && !s.is_animated && !s.is_video,
     );
 
+    if (candidates.length === 0) {
+      throw Object.assign(
+        new Error('В этом паке нет статичных стикеров: анимированные (.tgs) и видео-стикеры не поддерживаются. Попробуйте другой пак.'),
+        { code: 'NO_STATIC' },
+      );
+    }
+
     const limited = candidates.slice(0, Math.min(maxStickers, MAX_STICKERS_PER_PACK));
 
     // Download + upload in batches of 5
     const urls = await batchProcess(limited, 5, (s) => downloadStickerUrl(token, s.file_id, ownerId));
     const validUrls = urls.filter(Boolean) as string[];
+    if (validUrls.length === 0) {
+      throw Object.assign(new Error('Не удалось загрузить стикеры из Telegram. Попробуйте позже.'), { code: 'DOWNLOAD_FAILED' });
+    }
 
     return {
       title:        packInfo.title   as string,
       tg_name:      packInfo.name    as string,
       total:        candidates.length,
+      skipped:      (packInfo.stickers as any[]).length - candidates.length,
       imported:     validUrls.length,
       sticker_urls: validUrls,
     };

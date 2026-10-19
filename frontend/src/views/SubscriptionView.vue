@@ -2,7 +2,7 @@
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, computed } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, cacheUser } from '@/stores/auth'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
@@ -149,7 +149,7 @@ function onPaymentSuccess(planId: string, newExpiresAt: string | null) {
   if (auth.user) {
     ;auth.user.subscription_tier = planId
     auth.user.subscription_expires_at = newExpiresAt
-    sessionStorage.setItem('auth_user', JSON.stringify(auth.user))
+    cacheUser(auth.user)
   }
   auth.fetchMe()
 }

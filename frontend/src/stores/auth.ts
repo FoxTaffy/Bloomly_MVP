@@ -35,17 +35,31 @@ export interface User {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 // User profile cached in sessionStorage for faster display on reload (NOT for auth)
+// Роль и email в кэш не попадают: кэш правится в DevTools и читается с украденного ПК,
+// поэтому права берутся только из ответа сервера (/auth/refresh, /auth/me).
+function stripSensitive(u: User): User {
+  const { role: _role, email: _email, ...rest } = u
+  return { ...rest, role: 'user', email: '' } as User
+}
+
+export function cacheUser(u: User | null) {
+  try {
+    if (u) sessionStorage.setItem('auth_user', JSON.stringify(stripSensitive(u)))
+  } catch { /* storage недоступен */ }
+}
+
 function loadUser(): User | null {
   try {
     const raw = sessionStorage.getItem('auth_user')
-    return JSON.parse(raw ?? 'null')
+    const u = JSON.parse(raw ?? 'null')
+    return u && typeof u === 'object' ? stripSensitive(u as User) : null
   } catch {
     return null
   }
 }
 
 function saveUser(u: User) {
-  sessionStorage.setItem('auth_user', JSON.stringify(u))
+  cacheUser(u)
 }
 
 function clearUser() {

@@ -1,7 +1,7 @@
 import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useAuthStore } from './auth'
+import { useAuthStore, cacheUser } from './auth'
 import api from '@/api'
 
 // ── Static species list (must match backend FURSONA_SPECIES) ─────────────────
@@ -299,7 +299,7 @@ export const useUserStore = defineStore('user', () => {
         if (updated.display_name !== undefined) auth.user.display_name = updated.display_name
         if ((updated as any).is_adult !== undefined) auth.user.is_adult = (updated as any).is_adult
         // Persist to sessionStorage so sidebar / AppHeader update immediately
-        sessionStorage.setItem('auth_user', JSON.stringify(auth.user))
+        cacheUser(auth.user)
       }
     } catch (e) {
       error.value = apiErrorMessage(e) ?? (errorMessage(e) ?? 'Connection error')

@@ -2,11 +2,13 @@ import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { isModerator } from '@/lib/roles'
 
 // ── Расширяем RouteMeta ───────────────────────────────────────────────────────
 declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
+    requiresStaff?: boolean
   }
 }
 
@@ -112,7 +114,7 @@ const routes: RouteRecordRaw[] = [
     path: '/admin',
     name: 'admin',
     component: () => import('@/views/AdminView.vue'),
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, requiresStaff: true },
   },
   {
     path: '/post/:id',
@@ -292,6 +294,14 @@ router.beforeEach(async (to) => {
   // Защищённый маршрут без токена → редирект на /login
   if (to.meta.requiresAuth && !auth.token) {
     return { name: 'login' }
+  }
+
+  // Служебные разделы: роль сверяем с сервером (/auth/me), кэшу не верим.
+  // Не-персонал уходит на главную, чанк админки даже не загружается.
+  if (to.meta.requiresStaff) {
+    await auth.fetchMe()
+    if (!auth.token) return { name: 'login' }
+    if (!isModerator(auth.user?.role)) return { name: 'home' }
   }
 
   // Уже залогинен → не пускаем на /login повторно

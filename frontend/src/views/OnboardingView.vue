@@ -179,7 +179,7 @@ import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, cacheUser } from '@/stores/auth'
 import api from '@/api'
 import DateInput from '@/components/DateInput.vue'
 
@@ -283,8 +283,7 @@ async function saveProfile() {
     if (!data.success) throw new Error(langStore.t.onboardingSaveFailedError)
 
     auth.user = { ...auth.user!, ...data.data.user, onboarding_done: true }
-    const stored = localStorage.getItem('auth_user') ? localStorage : sessionStorage
-    stored.setItem('auth_user', JSON.stringify(auth.user))
+    cacheUser(auth.user)
 
     await new Promise((r) => setTimeout(r, 1200))
     router.push({ name: 'home' })
@@ -299,8 +298,7 @@ async function skipAll() {
   try {
     await api.patch('/users/me', { onboarding_done: true })
     auth.user = { ...auth.user!, onboarding_done: true }
-    const stored = localStorage.getItem('auth_user') ? localStorage : sessionStorage
-    stored.setItem('auth_user', JSON.stringify(auth.user))
+    cacheUser(auth.user)
   } catch { /* ignore */ }
   router.push({ name: 'home' })
 }

@@ -54,10 +54,11 @@ export interface VerificationCriteria {
 
 /**
  * Calculate profile completeness percentage.
- * Fields checked (each worth ~14.3%):
+ * Fields checked (each worth ~16.7%):
  *   1. Avatar, 2. Email, 3. Bio, 4. Fursona name, 5. Fursona species,
- *   6. Fursona gender, 7. Fursona description
- * 80% = at least 6 out of 7 filled.
+ *   6. Fursona likes/dislikes
+ * Gender is reported but not counted: the settings UI has no way to fill it.
+ * 80% = at least 5 out of 6 filled.
  */
 export async function getProfileCompleteness(userId: string): Promise<ProfileCompleteness> {
   const user = await prisma.user.findUnique({
@@ -88,8 +89,8 @@ export async function getProfileCompleteness(userId: string): Promise<ProfileCom
   const hasFursonaGender = !!user.fursona_gender && user.fursona_gender.trim().length > 0;
   const hasFursonaDescription = ((fursona?.likes?.length ?? 0) + (fursona?.dislikes?.length ?? 0)) > 0 || (!!user.fursona_description && user.fursona_description.trim().length > 0);
 
-  const filledCount = [hasAvatar, hasEmail, hasBio, hasFursonaName, hasFursonaSpecies, hasFursonaGender, hasFursonaDescription].filter(Boolean).length;
-  const percentage = Math.round((filledCount / 7) * 100);
+  const filledCount = [hasAvatar, hasEmail, hasBio, hasFursonaName, hasFursonaSpecies, hasFursonaDescription].filter(Boolean).length;
+  const percentage = Math.round((filledCount / 6) * 100);
   const canSubmit = percentage >= 80;
 
   return { hasAvatar, hasEmail, hasFursonaName, hasFursonaSpecies, hasFursonaGender, hasFursonaDescription, hasBio, percentage, canSubmit };

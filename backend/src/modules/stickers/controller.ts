@@ -339,6 +339,12 @@ export async function importTelegramHandler(req: FastifyRequest, reply: FastifyR
     if (errCode(err) === 'NO_TOKEN') {
       return reply.status(503).send({ error: errMessage(err) });
     }
+    if (errCode(err) === 'NO_STATIC') {
+      return reply.status(422).send({ error: errMessage(err) });
+    }
+    if (errCode(err) === 'DOWNLOAD_FAILED') {
+      return reply.status(502).send({ error: errMessage(err) });
+    }
     if (errCode(err) === 'BAD_INPUT') {
       return reply.status(400).send({ error: errMessage(err) });
     }
