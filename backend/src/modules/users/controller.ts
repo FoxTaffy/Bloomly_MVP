@@ -58,8 +58,10 @@ export async function searchUsersHandler(
 ) {
   const { q = '', limit, page } = request.query as any;
   const viewerId = (request.user as JwtPayload).id;
-  const found = (await usersService.searchUsers(q, limit ? parseInt(limit, 10) : 8, page ? parseInt(page, 10) : 1))
-    .map(withRedactedBirthDate);
+  const found = await usersService.maskHiddenProfiles(
+    (await usersService.searchUsers(q, limit ? parseInt(limit, 10) : 8, page ? parseInt(page, 10) : 1)).map(withRedactedBirthDate),
+    viewerId,
+  );
   // Без статуса подписки карточки в поиске всегда рисовали кнопку «Подписаться», даже для друзей и подписок
   const ids = found.map((u) => u.id);
   const [following, followers, visibility] = await Promise.all([
@@ -86,7 +88,10 @@ export async function getRecommendedUsersHandler(
   reply: FastifyReply,
 ) {
   const payload = request.user as JwtPayload;
-  const users = (await usersService.getRecommendedUsers(payload.id)).map(withRedactedBirthDate);
+  const users = await usersService.maskHiddenProfiles(
+    (await usersService.getRecommendedUsers(payload.id)).map(withRedactedBirthDate),
+    payload.id,
+  );
   return reply.send({ success: true, data: { users }, error: null });
 }
 

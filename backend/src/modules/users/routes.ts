@@ -92,7 +92,7 @@ export async function usersRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof getPublicKeyHandler>>('/:id/public-key', getPublicKeyHandler);
 
   // GET /api/users/:id/media-history — past avatars/banners (public)
-  fastify.get<RouteGenericOf<typeof getMediaHistoryHandler>>('/:id/media-history', getMediaHistoryHandler);
+  fastify.get<RouteGenericOf<typeof getMediaHistoryHandler>>('/:id/media-history', { onRequest: [fastify.tryAuthenticate], preHandler: async req => { await assertProfileReadable((req.params as { id: string }).id, req.user?.id); } }, getMediaHistoryHandler);
 
   // DELETE /api/users/me/avatar-history/:historyId — remove a historical avatar (owner only)
   fastify.delete<RouteGenericOf<typeof deleteAvatarHistoryHandler>>('/me/avatar-history/:historyId', auth, deleteAvatarHistoryHandler);

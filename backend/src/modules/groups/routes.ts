@@ -125,7 +125,7 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.post<RouteGenericOf<typeof resolveJoinRequestHandler>>('/:id/join-requests/:requestId', auth, resolveJoinRequestHandler);
 
   // ── Reviews / digest / categories / team ────────────────────────────────
-  fastify.get<RouteGenericOf<typeof listReviewsHandler>>('/:id/reviews', listReviewsHandler);
+  fastify.get<RouteGenericOf<typeof listReviewsHandler>>('/:id/reviews', { onRequest: [fastify.tryAuthenticate] }, listReviewsHandler);
   fastify.post<RouteGenericOf<typeof upsertReviewHandler>>('/:id/reviews', auth, upsertReviewHandler);
   fastify.get<RouteGenericOf<typeof canReviewHandler>>('/:id/reviews/can-review', auth, canReviewHandler);
   fastify.delete<RouteGenericOf<typeof deleteReviewHandler>>('/:id/reviews/:reviewId', auth, deleteReviewHandler);

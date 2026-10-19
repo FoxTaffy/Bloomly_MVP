@@ -1188,11 +1188,13 @@ export const listReviewsHandler = async (
   reply: FastifyReply,
 ) => {
   try {
+    await assertGroupReadable(request.params.id, request.user?.id);
+    if (!(await requireContentAccess(request, reply, request.params.id))) return;
     const page = Math.max(1, parseInt(request.query.page ?? '1', 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(request.query.limit ?? '20', 10) || 20));
     return ok(reply, await groupService.listReviews(request.params.id, page, limit));
   } catch (e) {
-    return fail(reply, 500, 'REVIEWS_ERROR', errMessage(e));
+    return fail(reply, errStatus(e) ?? 500, 'REVIEWS_ERROR', errMessage(e));
   }
 };
 

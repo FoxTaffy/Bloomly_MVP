@@ -481,6 +481,28 @@ export const usersService = {
     return scored.slice(skip, skip + limit).map((x) => x.u);
   },
 
+  /** Профили, закрытые настройкой приватности, превращаются в заглушку (имя, аватар, is_private). */
+  async maskHiddenProfiles<T extends { id: string }>(users: T[], viewerId: string): Promise<T[]> {
+    const ids = users.map((u) => u.id).filter((id) => id !== viewerId);
+    if (!ids.length) return users;
+    const [rows, following, followers] = await Promise.all([
+      prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, profile_visibility: true } }),
+      prisma.follow.findMany({ where: { follower_id: viewerId, following_id: { in: ids } }, select: { following_id: true } }),
+      prisma.follow.findMany({ where: { following_id: viewerId, follower_id: { in: ids } }, select: { follower_id: true } }),
+    ]);
+    const followingSet = new Set(following.map((r) => r.following_id));
+    const followersSet = new Set(followers.map((r) => r.follower_id));
+    const visibility = new Map(rows.map((r) => [r.id, r.profile_visibility]));
+    return users.map((u) => {
+      const level = visibility.get(u.id);
+      const open = u.id === viewerId || !level || level === 'everyone'
+        || (level === 'friends' && followingSet.has(u.id) && followersSet.has(u.id));
+      if (open) return u;
+      const { id, username, display_name, avatar_url, badge_type } = u as any;
+      return { id, username, display_name, avatar_url, badge_type, is_private: true } as unknown as T;
+    });
+  },
+
   async getRecommendedUsers(currentUserId: string, limit = 6) {
     // ── Build excluded set: self + already-following + blocked ───────────
     const [followingRows, blockedIds] = await Promise.all([
