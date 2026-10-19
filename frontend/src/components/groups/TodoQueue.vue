@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { apiErrorMessage, errorMessage } from '@/lib/apiError'
 import { useLangStore } from '@/stores/lang'
 const langStore = useLangStore()
 import { ref, computed, onMounted } from 'vue'
@@ -100,8 +101,12 @@ async function moveNext(item: ArtistQueueItem) {
 
 async function removeItem(id: string) {
   if (!(await confirmDialog('Удалить карточку?', { danger: true }))) return
-  await groupsStore.deleteTodoItem(props.groupId, id)
-  items.value = items.value.filter(i => i.id !== id)
+  try {
+    await groupsStore.deleteTodoItem(props.groupId, id)
+    items.value = items.value.filter(i => i.id !== id)
+  } catch (e) {
+    alert('Ошибка: ' + (apiErrorMessage(e) ?? errorMessage(e) ?? 'не удалось удалить'))
+  }
 }
 </script>
 

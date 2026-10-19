@@ -2,6 +2,7 @@ import prisma from '../../config/prisma.js';
 import { notificationService } from '../notifications/service.js';
 import { sanitizeDisplayText } from '../../lib/sanitizeText.js';
 import { ensureGroupThread } from '../../lib/groupThread.js';
+import { linkOrderToQueue } from '../../lib/orderQueue.js';
 import { messageService } from '../messages/service.js';
 import { sanitizeCharacters, resolveCharacters, type CharacterRef } from '../../lib/orderCharacters.js';
 
@@ -201,19 +202,8 @@ async function createOrderFromApplication(app: {
       },
       select: { id: true },
     });
-    // Заказ сразу встаёт в очередь работ группы (Todolist) и остаётся с ней синхронизирован
-    const todoLast = await tx.groupTodoItem.findFirst({
-      where: { group_id: app.group_id, deleted_at: null }, orderBy: { position: 'desc' }, select: { position: true },
-    });
-    await tx.groupTodoItem.create({
-      data: {
-        group_id: app.group_id,
-        title: app.listing.title.slice(0, 200),
-        status: 'WAITING',
-        position: (todoLast?.position ?? -1) + 1,
-        order_id: order.id,
-      },
-    });
+    // Заказ сразу встаёт в очередь работ группы
+    await linkOrderToQueue(tx, { id: order.id, group_id: app.group_id, title: app.listing.title, status: 'WAITING' });
     return order.id;
   });
 }

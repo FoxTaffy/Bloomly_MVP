@@ -11,6 +11,7 @@ import { isTrustedMediaUrl, deleteFileByUrl, assertOwnedMedia } from '../media/s
 import { notificationService } from '../notifications/service.js';
 import { resolveCharacters } from '../../lib/orderCharacters.js';
 import { ensureGroupThread } from '../../lib/groupThread.js';
+import { linkOrderToQueue } from '../../lib/orderQueue.js';
 import { messageService } from '../messages/service.js';
 import { requireSafeLink, sanitizeLinkRecord } from '../../lib/safeLink.js';
 import { normalizeTag } from '../../lib/tagRules.js';
@@ -2080,6 +2081,9 @@ export const groupService = {
   },
 
   async deleteTodoItem(groupId: string, itemId: string) {
+    // Пункт заказа нельзя удалить отдельно: иначе заказ и очередь разойдутся. Удаление заказа убирает пункт само.
+    const linked = await prisma.groupTodoItem.findFirst({ where: { id: itemId, group_id: groupId, order_id: { not: null }, deleted_at: null }, select: { id: true } });
+    if (linked) throw Object.assign(new Error('Пункт связан с заказом — его можно убрать только удалив заказ'), { statusCode: 400 });
     const result = await prisma.groupTodoItem.updateMany({
       where: { id: itemId, group_id: groupId, deleted_at: null },
       data: { deleted_at: new Date() },
@@ -2177,7 +2181,7 @@ export const groupService = {
       });
       // Чат по заказу — переписка заказчика с группой (вкладка «Группы»), а не личка с владельцем
       const conversationId = await ensureGroupThread(groupId, customerId, tx);
-      return tx.order.create({
+      const created = await tx.order.create({
         data: {
           group_id: groupId,
           customer_id: customerId,
@@ -2190,6 +2194,9 @@ export const groupService = {
         },
         include: { customer: { select: ORDER_CUSTOMER_SELECT } },
       });
+      // Заказ сразу встаёт в очередь работ группы
+      await linkOrderToQueue(tx, created);
+      return created;
     });
   },
 
