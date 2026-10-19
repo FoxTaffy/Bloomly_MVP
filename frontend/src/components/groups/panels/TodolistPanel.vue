@@ -445,7 +445,15 @@ onMounted(() => {
                 <template v-else>
                   <p class="text-[13px] font-semibold text-white leading-snug line-clamp-2">{{ item.title }}</p>
                   <p v-if="item.description && expandedId === item.id" class="text-xs text-white/40 mt-1 leading-relaxed">{{ item.description }}</p>
-                  <p class="text-[10px] text-white/30 mt-1.5">{{ fmtDate(item.created_at) }}</p>
+                  <router-link v-if="item.order_id && groupId" @click.stop
+                    :to="{ name: 'group-order', params: { slugOrId: groupId, orderId: item.order_id } }"
+                    class="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-brand-accent hover:underline">
+                    <BIcon name="Package" class="w-3 h-3" />
+                    Заказ · {{ item.order?.customer?.display_name || item.order?.customer?.username || 'заказчик' }}
+                  </router-link>
+                  <p class="text-[10px] text-white/30 mt-1.5">
+                    {{ fmtDate(item.created_at) }}<span v-if="item.order?.deadline_at"> · срок {{ fmtDate(item.order.deadline_at) }}</span>
+                  </p>
                 </template>
               </div>
 

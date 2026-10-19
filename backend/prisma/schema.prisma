@@ -1150,11 +1150,14 @@ model GroupTodoItem {
   description String?
   status      String    @default("WAITING") @db.VarChar(30) // key of a Group.todo_columns entry (or default stage)
   position    Int       @default(0)
+  /// Заказ, который стоит в очереди: статус пункта и этап заказа синхронизируются в обе стороны
+  order_id    String?   @unique @db.Uuid
   created_at  DateTime  @default(now())
   updated_at  DateTime  @updatedAt
   deleted_at  DateTime?
 
-  group Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  group Group  @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  order Order? @relation("OrderTodoItem", fields: [order_id], references: [id], onDelete: SetNull)
 
   @@index([group_id])
   @@index([group_id, deleted_at])
@@ -1178,6 +1181,7 @@ model Order {
   updated_at      DateTime   @updatedAt
   deleted_at      DateTime?
 
+  todoItem     GroupTodoItem? @relation("OrderTodoItem")
   group        Group         @relation(fields: [group_id], references: [id], onDelete: Cascade)
   customer     User          @relation("OrderCustomer", fields: [customer_id], references: [id], onDelete: Cascade)
   conversation Conversation? @relation("OrderConversation", fields: [conversation_id], references: [id], onDelete: SetNull)

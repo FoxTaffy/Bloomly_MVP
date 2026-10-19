@@ -238,6 +238,9 @@ export interface ArtistQueueItem {
   description: string | null
   status: string
   position: number
+  /** Заказ, стоящий в очереди: статус пункта и этап заказа синхронизированы */
+  order_id: string | null
+  order?: { id: string; deadline_at: string | null; customer: { id: string; username: string; display_name: string | null } } | null
   created_at: string
   updated_at: string
 }

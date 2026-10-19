@@ -201,6 +201,19 @@ async function createOrderFromApplication(app: {
       },
       select: { id: true },
     });
+    // Заказ сразу встаёт в очередь работ группы (Todolist) и остаётся с ней синхронизирован
+    const todoLast = await tx.groupTodoItem.findFirst({
+      where: { group_id: app.group_id, deleted_at: null }, orderBy: { position: 'desc' }, select: { position: true },
+    });
+    await tx.groupTodoItem.create({
+      data: {
+        group_id: app.group_id,
+        title: app.listing.title.slice(0, 200),
+        status: 'WAITING',
+        position: (todoLast?.position ?? -1) + 1,
+        order_id: order.id,
+      },
+    });
     return order.id;
   });
 }

@@ -340,6 +340,10 @@ const EVENT_SELECT = {
 // ── Group CRUD ────────────────────────────────────────────────────────────────
 const MIN_COMPLETION_SAMPLE = 5;
 
+const formatDay = (d: Date) => d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' });
+
+const ORDER_STAGES = ['WAITING', 'SKETCH', 'LINEART', 'COLORING', 'FINISHED'] as const;
+
 const ORDER_STAGE_LABEL: Record<string, string> = { WAITING: 'Ожидание', SKETCH: 'Скетч', LINEART: 'Лайнарт', COLORING: 'Раскраска', FINISHED: 'Готово' };
 
 /** Заказ + персонажи (с актуальными референсами из профилей) и референсы, добавленные художником. */
@@ -2020,6 +2024,9 @@ export const groupService = {
     return prisma.groupTodoItem.findMany({
       where: { group_id: groupId, deleted_at: null },
       orderBy: [{ position: 'asc' }, { created_at: 'asc' }],
+      include: {
+        order: { select: { id: true, deadline_at: true, customer: { select: ORDER_CUSTOMER_SELECT } } },
+      },
     });
   },
 
@@ -2047,10 +2054,15 @@ export const groupService = {
     });
   },
 
-  async updateTodoItem(groupId: string, itemId: string, data: { title?: string; description?: string; status?: string; position?: number }) {
+  async updateTodoItem(groupId: string, itemId: string, data: { title?: string; description?: string; status?: string; position?: number }, actorId?: string) {
     // Пункт ищем только внутри своей группы: владелец группы A не должен править пункты группы B
-    const owned = await prisma.groupTodoItem.findFirst({ where: { id: itemId, group_id: groupId, deleted_at: null }, select: { id: true } });
+    const owned = await prisma.groupTodoItem.findFirst({ where: { id: itemId, group_id: groupId, deleted_at: null }, select: { id: true, status: true, order_id: true } });
     if (!owned) throw Object.assign(new Error('Todo item not found'), { statusCode: 404 });
+
+    // Пункт заказа: смена колонки = смена этапа заказа (сам заказ синхронизирует пункт и пишет заказчику)
+    if (owned.order_id && data.status && data.status !== owned.status && (ORDER_STAGES as readonly string[]).includes(data.status) && actorId) {
+      await groupService.updateOrderStatus(owned.order_id, actorId, data.status as OrderStatus);
+    }
     const update: Prisma.GroupTodoItemUpdateInput = {};
     if (data.title !== undefined) {
       const title = sanitizeDisplayText(data.title ?? '', 200);
@@ -2181,6 +2193,22 @@ export const groupService = {
     });
   },
 
+  /**
+   * Сообщение заказчику от лица группы о любом изменении заказа: что поменялось и текущий этап.
+   * Без изменений ничего не отправляем.
+   */
+  async announceOrderChange(order: { id: string; title: string; status: OrderStatus; conversation_id: string | null; group_id: string }, changes: string[]) {
+    if (!changes.length || !order.conversation_id) return;
+    const owner = await prisma.group.findUnique({ where: { id: order.group_id }, select: { owner_id: true } });
+    const lines = [
+      `📝 Заказ «${order.title}» обновлён`,
+      ...changes.map(c => `• ${c}`),
+      `Текущий этап: ${ORDER_STAGE_LABEL[order.status]}`,
+    ];
+    await messageService.sendMessage({ conversationId: order.conversation_id, senderId: owner!.owner_id, content: lines.join('\n') })
+      .catch(logError('[order] change message'));
+  },
+
   async updateOrderStatus(orderId: string, requesterId: string, status: OrderStatus, deadlineAt?: string | null) {
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order || order.deleted_at) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
@@ -2218,6 +2246,14 @@ export const groupService = {
       include: { customer: { select: ORDER_CUSTOMER_SELECT } },
     });
 
+    const changes: string[] = [];
+    if (status !== order.status) changes.push(`Этап: ${ORDER_STAGE_LABEL[order.status]} → ${ORDER_STAGE_LABEL[status]}`);
+    if (!order.started_at && data.started_at) changes.push('Взято в работу');
+    if (data.deadline_at && (!order.deadline_at || (data.deadline_at as Date).getTime() !== order.deadline_at.getTime())) {
+      changes.push(`Срок: ${formatDay(data.deadline_at as Date)}`);
+    }
+    await this.announceOrderChange(updated, changes);
+
     // Заказчик получает уведомление о каждом этапе работы
     if (status !== order.status && status !== 'WAITING') {
       const group = await prisma.group.findUnique({ where: { id: order.group_id }, select: { slug: true } });
@@ -2230,15 +2266,10 @@ export const groupService = {
         refId: order.id,
         meta: { groupSlug: group?.slug, listingId: fd.listingId, orderId: order.id, orderTitle: order.title },
       });
-      // Этап — и в чат заказа, от лица группы: заказчик видит ход работы прямо в переписке
-      if (order.conversation_id) {
-        const owner = await prisma.group.findUnique({ where: { id: order.group_id }, select: { owner_id: true } });
-        const label = ORDER_STAGE_LABEL[status];
-        const text = status === 'FINISHED'
-          ? `🎉 Заказ «${order.title}» готов!`
-          : `Заказ «${order.title}» переведён на этап «${label}»`;
-        await messageService.sendMessage({ conversationId: order.conversation_id, senderId: owner!.owner_id, content: text }).catch(logError('[order] stage message'));
-      }
+    }
+    // Очередь работ отражает тот же этап
+    if (status !== order.status) {
+      await prisma.groupTodoItem.updateMany({ where: { order_id: orderId, deleted_at: null }, data: { status } });
     }
     return enrichOrder(updated);
   },
@@ -2273,6 +2304,25 @@ export const groupService = {
       data.form_data = { ...((order.form_data as object | null) ?? {}), references: input.references } as Prisma.InputJsonValue;
     }
     const updated = await prisma.order.update({ where: { id: orderId }, data, include: { customer: { select: ORDER_CUSTOMER_SELECT } } });
+
+    const changes: string[] = [];
+    if (data.deadline_at !== undefined) {
+      const before = order.deadline_at?.getTime() ?? null;
+      const after = (data.deadline_at as Date | null)?.getTime() ?? null;
+      if (before !== after) changes.push(after ? `Срок: ${formatDay(new Date(after))}` : 'Срок снят');
+    }
+    if (data.description !== undefined && (order.description ?? null) !== (updated.description ?? null)) {
+      changes.push('Описание изменено');
+    }
+    if (input.references !== undefined) {
+      const before = new Set(((order.form_data as { references?: string[] } | null)?.references) ?? []);
+      const after = new Set(input.references);
+      const added = [...after].filter(u => !before.has(u)).length;
+      const removed = [...before].filter(u => !after.has(u)).length;
+      if (added) changes.push(`Добавлено референсов: ${added}`);
+      if (removed) changes.push(`Убрано референсов: ${removed}`);
+    }
+    await this.announceOrderChange(updated, changes);
     return enrichOrder(updated);
   },
 
@@ -2282,6 +2332,8 @@ export const groupService = {
     if (!(await groupService.isOwnerOrAdmin(order.group_id, requesterId))) {
       throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
     }
+    // Удалённый заказ уходит и из очереди работ
+    await prisma.groupTodoItem.updateMany({ where: { order_id: orderId, deleted_at: null }, data: { deleted_at: new Date() } });
     return prisma.order.update({ where: { id: orderId }, data: { deleted_at: new Date() } });
   },
 

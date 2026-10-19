@@ -943,7 +943,8 @@ export const updateGroupTodoHandler = async (
 ) => {
   try {
     if (!(await requirePermission(request, reply, request.params.id, 'can_manage_settings'))) return;
-    const item = await groupService.updateTodoItem(request.params.id, request.params.itemId, request.body);
+    const { id: actorId } = request.user as JwtUser;
+    const item = await groupService.updateTodoItem(request.params.id, request.params.itemId, request.body, actorId);
     return ok(reply, { item });
   } catch (e) {
     return fail(reply, errStatus(e) ?? 500, 'UPDATE_TODO_ERROR', errMessage(e));
