@@ -240,6 +240,7 @@ export const ru = {
   notifDenOrderLineart: 'перевёл(а) заказ на этап «Лайнарт»',
   notifDenOrderColoring: 'перевёл(а) заказ на этап «Раскраска»',
   notifDenOrderFinished: 'завершил(а) ваш заказ 🎉',
+  notifDenOrderPaid: "отметил(а) оплату заказа — подтвердите начало работы",
   notifDenQueueMoved: 'продвинул вашу заявку в очереди',
   notifDenReview: 'оставил отзыв о вашей работе',
   notifDenTopWeek: 'попал в топ недели в Dealers’ Den',

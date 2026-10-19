@@ -1174,6 +1174,13 @@ model Order {
   status          TodoStatus @default(WAITING)
   position        Int        @default(0)
   deadline_at     DateTime?
+  /// Счёт заказчику: none — счёта нет (бесплатно/вручную), unpaid — выставлен, reported — заказчик отметил оплату, confirmed — художник подтвердил и начал работу
+  payment_status       String    @default("none") @db.VarChar(12)
+  invoice_amount       Decimal?  @db.Decimal(12, 2)
+  invoice_currency     String?   @db.VarChar(10)
+  invoice_message_id   String?   @db.Uuid // карточка счёта в чате заказа
+  paid_reported_at     DateTime?
+  payment_confirmed_at DateTime?
   started_at      DateTime? // когда исполнитель взял заказ в работу (и поставил дедлайн)
   finished_at     DateTime? // когда заказ перешёл в «Готово»
   conversation_id String?    @unique @db.Uuid

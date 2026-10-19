@@ -123,7 +123,7 @@ export const listingApplicationService = {
     const application = await prisma.listingApplication.findUnique({
       where: { id: applicationId },
       include: {
-        listing: { select: { id: true, title: true } },
+        listing: { select: { id: true, title: true, price: true, discount_percent: true, currency: true } },
         group: { select: { id: true, slug: true, owner_id: true } },
       },
     });
@@ -159,6 +159,18 @@ export const listingApplicationService = {
             metadata: { orderId, groupId: application.group_id },
             content: `Заявка на «${application.listing.title}» принята — заказ в очереди`,
           });
+          // Счёт от лица группы: заказчик оплачивает и отмечает оплату, художник подтверждает начало работы
+          const amount = invoiceAmount(application.listing.price, application.listing.discount_percent);
+          if (amount > 0) {
+            const invoice = await messageService.sendMessage({
+              conversationId: order.conversation_id,
+              senderId: application.group.owner_id,
+              type: 'payment_request',
+              metadata: { amount, currency: application.listing.currency, description: `Оплата заказа «${application.listing.title}»`, orderId },
+              content: '',
+            });
+            await prisma.order.update({ where: { id: orderId }, data: { invoice_message_id: invoice.id } });
+          }
         }
       } catch { /* не критично: заявка уже принята */ }
       return updated;
@@ -169,10 +181,31 @@ export const listingApplicationService = {
       data: { status, resolved_at: status === 'pending' ? null : new Date() },
       select: { id: true, status: true, resolved_at: true, order_id: true },
     });
-    if (status === 'declined') await notify('den_application_declined');
+    if (status === 'declined') {
+      await notify('den_application_declined');
+      // И карточкой в чат от лица группы, с переходом на лот
+      try {
+        const conversationId = await ensureGroupThread(application.group_id, application.applicant_id);
+        await messageService.sendMessage({
+          conversationId,
+          senderId: application.group.owner_id,
+          type: 'order_update',
+          metadata: { groupId: application.group_id, listingId: application.listing.id, headline: 'Заявка отклонена', title: application.listing.title, changes: [] },
+          content: `Заявка на «${application.listing.title}» отклонена`,
+        });
+      } catch { /* не критично */ }
+    }
     return updated;
   },
 };
+
+/** Сумма счёта: цена лота с учётом скидки, в копейках без хвостов. */
+function invoiceAmount(price: unknown, discountPercent: number): number {
+  const base = Number(price);
+  if (!Number.isFinite(base) || base <= 0) return 0;
+  const pct = Math.min(Math.max(discountPercent || 0, 0), 90);
+  return Math.round(base * (100 - pct)) / 100;
+}
 
 /**
  * Принятая заявка автоматически становится заказом в очереди группы («Ожидание»): персонажи
@@ -181,8 +214,9 @@ export const listingApplicationService = {
  */
 async function createOrderFromApplication(app: {
   id: string; group_id: string; applicant_id: string; message: string; characters: unknown;
-  listing: { id: string; title: string }; group: { owner_id: string };
+  listing: { id: string; title: string; price: unknown; discount_percent: number; currency: string }; group: { owner_id: string };
 }): Promise<string> {
+  const amount = invoiceAmount(app.listing.price, app.listing.discount_percent);
   return prisma.$transaction(async (tx) => {
     // Очередь заказов живёт во вкладке «Заказы»; у группы с Dealers Den она должна быть доступна
     await tx.group.updateMany({ where: { id: app.group_id, business_enabled: false }, data: { business_enabled: true } });
@@ -199,6 +233,8 @@ async function createOrderFromApplication(app: {
         form_data: { source: 'listing_application', applicationId: app.id, listingId: app.listing.id, characters: app.characters as CharacterRef[], references: [] } as any,
         position: (last?.position ?? -1) + 1,
         conversation_id: conversationId,
+        // Счёт выставляется сразу: заказчик платит, художник подтверждает и начинает работу
+        ...(amount > 0 ? { payment_status: 'unpaid', invoice_amount: amount, invoice_currency: app.listing.currency } : {}),
       },
       select: { id: true },
     });

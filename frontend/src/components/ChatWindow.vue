@@ -525,7 +525,7 @@
                   </span>
                   <span class="text-brand-accent text-[10px] font-bold tracking-wide uppercase">{{ langStore.t.chatPaymentRequestTitle }}</span>
                 </div>
-                <p class="text-2xl font-extrabold text-white mt-1.5 tracking-tight">{{ formatMoney(msg.metadata?.amount) }}</p>
+                <p class="text-2xl font-extrabold text-white mt-1.5 tracking-tight">{{ money(msg.metadata) }}</p>
                 <p v-if="msg.metadata?.description" class="text-xs text-white/70 mt-0.5 leading-snug">{{ msg.metadata.description }}</p>
               </div>
               <div v-if="msg.metadata?.prepaymentPercent || msg.metadata?.deadline"
@@ -544,7 +544,10 @@
               <div class="relative px-3.5 py-2.5 border-t border-white/10">
                 <div v-if="msg.metadata?.status === 'paid'" class="flex items-center gap-1.5 text-brand-success text-xs font-bold">
                   <BIcon name="CheckCircle2" class="w-3.5 h-3.5" />
-                  {{ langStore.t.chatPaidLabel }}
+                  <!-- Счёт по заказу: оплату отмечает заказчик, а начало работы подтверждает художник -->
+                  <template v-if="msg.metadata?.orderId && !msg.metadata?.confirmed">Оплата отмечена · ждём подтверждения художника</template>
+                  <template v-else-if="msg.metadata?.orderId">Оплата подтверждена, работа началась</template>
+                  <template v-else>{{ langStore.t.chatPaidLabel }}</template>
                 </div>
                 <button v-else-if="!isMine(msg)" type="button" @click="payOrder(msg)" :disabled="payingId === msg.id"
                   class="w-full py-1.5 rounded-xl bg-brand-accent hover:bg-brand-accent-plus text-white text-xs font-bold transition-all active:scale-95 disabled:opacity-50 shadow-xs">
@@ -584,6 +587,10 @@
             <!-- ── Shared post card ── -->
             <SharedPostCard v-else-if="msg.type === 'post_share' && msg.metadata?.postId"
               :post-id="msg.metadata.postId" :is-mine="isMine(msg)" />
+
+            <!-- ── Order update card (любое изменение заказа/заявки от лица группы) ── -->
+            <OrderUpdateCard v-else-if="msg.type === 'order_update' && msg.metadata?.groupId"
+              :meta="msg.metadata as any" :is-mine="isMine(msg)" />
 
             <!-- ── Order card (принятая заявка / заказ группы) ── -->
             <OrderCard v-else-if="msg.type === 'order_card' && msg.metadata?.orderId"
@@ -686,7 +693,7 @@
             </div>
 
             <!-- Text bubble (not shown for pure sticker, order cards, emoji-only, or story reply with text already shown in card) -->
-            <div v-else-if="!['sticker', 'payment_request', 'payment_confirmation', 'tip', 'order_card'].includes(msg.type) && !parseStoryReply(msg) && !/^\[story_reply:/u.test(msg.text || '') && (msg.text || !msg.file_url)"
+            <div v-else-if="!['sticker', 'payment_request', 'payment_confirmation', 'tip', 'order_card', 'order_update'].includes(msg.type) && !parseStoryReply(msg) && !/^\[story_reply:/u.test(msg.text || '') && (msg.text || !msg.file_url)"
               @click="tappedMsgId = tappedMsgId === msg.id ? null : msg.id"
               :class="[
                 'relative px-3 py-[7px] rounded-2xl text-sm leading-relaxed wrap-break-word min-w-[60px] transition-shadow',
@@ -1360,6 +1367,8 @@ import PostLightbox from '@/components/PostLightbox.vue'
 import SharedPostCard from '@/components/SharedPostCard.vue'
 import GroupShareCard from '@/components/GroupShareCard.vue'
 import OrderCard from '@/components/chat/OrderCard.vue'
+import OrderUpdateCard from '@/components/chat/OrderUpdateCard.vue'
+import { formatPriceNative } from '@/lib/format'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import StickerPanel from '@/components/StickerPanel.vue'
 import UserBadges from '@/components/UserBadges.vue'
@@ -1554,6 +1563,12 @@ const myRole = computed(() => props.conv?.my_participant?.role ?? 'member')
 // A regular member's personal thread with a group. Staff (admin/owner/moderator,
 // opened via the group's inbox) aren't the thread's ConversationParticipant — any
 // message they send is shown to the member as coming from the group, not from them.
+// Счёт по заказу выставлен в валюте лота; обычные счета в чате — в рублях
+function money(meta: { amount?: number; currency?: string } | null | undefined): string {
+  if (meta?.amount === undefined) return ''
+  return meta.currency ? formatPriceNative(meta.amount, meta.currency) : formatMoney(meta.amount)
+}
+
 const isGroupDm = computed(() => props.conv?.type === 'community' && !!props.conv?.group_dm_user_id)
 const amGroupDmCustomer = computed(() => isGroupDm.value && props.conv?.group_dm_user_id === auth.user?.id)
 
@@ -1750,6 +1765,7 @@ function forwardMsgPreview(msg: Message): string {
   if (msg.type === 'post_share') return langStore.t.chatPostPreview
   if (msg.type === 'group_share') return langStore.t.chatGroupInvitePreview
   if (msg.type === 'order_card') return '📦 Заказ'
+  if (msg.type === 'order_update') return '📝 Заказ обновлён'
   if (msg.type === 'album') return `${langStore.t.chatAlbumPreviewPrefix} · ${getAlbumFiles(msg).length}`
   if (msg.text && isEncrypted(msg.text)) return langStore.t.encryptedMessagePreview
   if (msg.encrypted_text && !msg.text) return langStore.t.encryptedMessagePreview

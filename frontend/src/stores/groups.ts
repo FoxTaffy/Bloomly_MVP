@@ -267,6 +267,12 @@ export interface Order {
   deadline_at: string | null
   started_at: string | null
   finished_at: string | null
+  /** Счёт: none — нет, unpaid — выставлен, reported — заказчик отметил оплату, confirmed — подтверждено художником */
+  payment_status?: 'none' | 'unpaid' | 'reported' | 'confirmed'
+  invoice_amount?: string | number | null
+  invoice_currency?: string | null
+  invoice_message_id?: string | null
+  payment_confirmed_at?: string | null
   conversation_id: string | null
   /** Персонажи из принятой заявки (референсы подтянуты из профилей) и референсы, добавленные художником */
   characters?: import('./listingApplications').ResolvedCharacter[]
@@ -795,6 +801,12 @@ export const useGroupsStore = defineStore('groups', () => {
     return data.data.order as OrderDetail
   }
 
+  /** Художник подтверждает оплату и начинает работу (срок обязателен): заказ уходит «В процессе» */
+  async function confirmOrderPayment(groupId: string, orderId: string, deadlineAt: string): Promise<Order> {
+    const { data } = await api.post(`/groups/${groupId}/orders/${orderId}/confirm-payment`, { deadlineAt })
+    return data.data.order as Order
+  }
+
   async function updateOrder(groupId: string, orderId: string, payload: { deadlineAt?: string | null; description?: string | null; references?: string[] }): Promise<Order> {
     const { data } = await api.patch(`/groups/${groupId}/orders/${orderId}`, payload)
     return data.data.order as Order
@@ -899,7 +911,7 @@ export const useGroupsStore = defineStore('groups', () => {
     fetchMembers, changeMemberRole, removeMember,
     fetchTodoColumns, updateTodoColumns,
     fetchTodoItems, createTodoItem, updateTodoItem, deleteTodoItem, reorderTodoItems,
-    fetchOrders, fetchOrderDetail, createOrder, updateOrderStatus, updateOrder, deleteOrder, fetchBusinessStats, getOrderConversation,
+    fetchOrders, fetchOrderDetail, createOrder, updateOrderStatus, confirmOrderPayment, updateOrder, deleteOrder, fetchBusinessStats, getOrderConversation,
     donateToGroup, getGroupBalance,
     fetchCustomRoles, createCustomRole, updateCustomRole, deleteCustomRole,
   }

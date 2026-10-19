@@ -65,6 +65,7 @@ import {
   updateOrderStatusHandler,
   updateOrderHandler,
   getOrderDetailHandler,
+  confirmOrderPaymentHandler,
   deleteOrderHandler,
   getBusinessStatsHandler,
   donateToGroupHandler,
@@ -211,6 +212,7 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof getOrdersHandler>>('/:id/orders', auth, getOrdersHandler);
   fastify.post<RouteGenericOf<typeof createOrderHandler>>('/:id/orders', auth, createOrderHandler);
   fastify.patch<RouteGenericOf<typeof updateOrderStatusHandler>>('/:id/orders/:orderId/status', auth, updateOrderStatusHandler);
+  fastify.post<RouteGenericOf<typeof confirmOrderPaymentHandler>>('/:id/orders/:orderId/confirm-payment', auth, confirmOrderPaymentHandler);
   fastify.get<RouteGenericOf<typeof getOrderDetailHandler>>('/:id/orders/:orderId', auth, getOrderDetailHandler);
   fastify.patch<RouteGenericOf<typeof updateOrderHandler>>('/:id/orders/:orderId', auth, updateOrderHandler);
   fastify.delete<RouteGenericOf<typeof deleteOrderHandler>>('/:id/orders/:orderId', auth, deleteOrderHandler);

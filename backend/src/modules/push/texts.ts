@@ -23,6 +23,7 @@ const DEN: Record<string, string> = {
   den_order_sketch: 'Заказ: художник начал скетч',
   den_order_lineart: 'Заказ: готов скетч, идёт лайнарт',
   den_order_coloring: 'Заказ: идёт раскраска',
+  den_order_paid: 'Заказчик отметил оплату — подтвердите начало работы',
   den_order_finished: 'Ваш заказ готов!',
   den_lot_application: 'Новая заявка на лот вашей группы',
   den_commission_booked: 'Ваша комиссия забронирована',

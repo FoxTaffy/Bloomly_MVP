@@ -6,6 +6,7 @@ import { deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import type { SendMessageInput, GetMessagesQuery } from './types.js';
 import { logError } from '../../lib/logger.js';
 import { pushService } from '../push/service.js';
+import { notificationService } from '../notifications/service.js';
 
 // Group roles that answer the group's inbox (group DMs) on its behalf.
 import { ensureGroupThread } from '../../lib/groupThread.js';
@@ -84,13 +85,24 @@ async function enrichWithForwardedSenders<T extends { forwarded_from_sender_id?:
 }
 
 /** Validates and normalizes the metadata payload for card-style messages. */
-function validateCardMetadata(type: 'payment_request' | 'tip' | 'post_share' | 'group_share' | 'order_card', metadata: unknown): Record<string, unknown> {
+function validateCardMetadata(type: 'payment_request' | 'tip' | 'post_share' | 'group_share' | 'order_card' | 'order_update', metadata: unknown): Record<string, unknown> {
   const meta = (metadata ?? {}) as Record<string, unknown>;
   if (type === 'post_share') {
     if (typeof meta.postId !== 'string' || !meta.postId) {
       throw Object.assign(new Error('postId is required'), { statusCode: 400 });
     }
     return { postId: meta.postId };
+  }
+  if (type === 'order_update') {
+    // Карточка «заказ/заявка обновлены»: что изменилось и куда вести по кнопке «Подробнее»
+    if (typeof meta.groupId !== 'string' || !meta.groupId) throw Object.assign(new Error('groupId is required'), { statusCode: 400 });
+    const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+    const changes = Array.isArray(meta.changes) ? meta.changes.filter((c): c is string => typeof c === 'string').slice(0, 8).map((c) => c.slice(0, 200)) : [];
+    const out: Record<string, unknown> = { groupId: meta.groupId, headline: str(meta.headline, 120) || 'Заказ обновлён', title: str(meta.title, 200), changes };
+    if (typeof meta.orderId === 'string' && meta.orderId) out.orderId = meta.orderId;
+    if (typeof meta.listingId === 'string' && meta.listingId) out.listingId = meta.listingId;
+    if (typeof meta.stage === 'string' && ['WAITING', 'SKETCH', 'LINEART', 'COLORING', 'FINISHED'].includes(meta.stage)) out.stage = meta.stage;
+    return out;
   }
   if (type === 'order_card') {
     if (typeof meta.orderId !== 'string' || !meta.orderId || typeof meta.groupId !== 'string' || !meta.groupId) {
@@ -111,6 +123,9 @@ function validateCardMetadata(type: 'payment_request' | 'tip' | 'post_share' | '
   if (type === 'payment_request') {
     const description = typeof meta.description === 'string' ? meta.description.trim().slice(0, 300) : '';
     const out: Record<string, unknown> = { amount, description, status: 'pending' };
+    // Счёт по заказу: связь с заказом ставит только сервер (оплату проверяем по order.invoice_message_id)
+    if (typeof meta.orderId === 'string' && meta.orderId) out.orderId = meta.orderId;
+    if (typeof meta.currency === 'string' && /^[A-Z]{3}$/.test(meta.currency)) out.currency = meta.currency;
     if (meta.prepaymentPercent != null) {
       const pct = Number(meta.prepaymentPercent);
       if (Number.isFinite(pct) && pct > 0 && pct <= 100) out.prepaymentPercent = pct;
@@ -425,7 +440,7 @@ export const messageService = {
 
     const text = content?.trim() ?? '';
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-    const isCard = type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share' || type === 'order_card';
+    const isCard = type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share' || type === 'order_card' || type === 'order_update';
     if (!text && !encrypted_text && !file_url && !isCard && !hasAttachments) {
       throw Object.assign(new Error('Message must have text or media'), { statusCode: 400 });
     }
@@ -440,7 +455,7 @@ export const messageService = {
       }
       const files = attachments!.map((a) => ({ url: a.url, type: inferFileType(a.url, a.media_type) }));
       data = { ...base, type: 'album', metadata: { files } };
-    } else if (type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share' || type === 'order_card') {
+    } else if (type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share' || type === 'order_card' || type === 'order_update') {
       // Card-style messages carry a structured metadata payload instead of a file.
       data = { ...base, type, metadata: await this._validatedCardMetadata(type, metadata) };
     } else {
@@ -504,7 +519,7 @@ export const messageService = {
   },
 
   /** Validates a card message payload and that the shared post / group exists. */
-  async _validatedCardMetadata(type: 'payment_request' | 'tip' | 'post_share' | 'group_share' | 'order_card', metadata: unknown) {
+  async _validatedCardMetadata(type: 'payment_request' | 'tip' | 'post_share' | 'group_share' | 'order_card' | 'order_update', metadata: unknown) {
     const meta = validateCardMetadata(type, metadata);
     if (type === 'post_share') {
       const post = await prisma.post.findUnique({ where: { id: meta.postId as string, deleted_at: null }, select: { id: true } });
@@ -683,7 +698,56 @@ export const messageService = {
     }
     await this._broadcastNewMessage(request.conversation_id, confirmation);
 
+    // Счёт по заказу: оплату отметил заказчик — художник увидит и подтвердит начало работы
+    if (typeof meta.orderId === 'string') await this._reportOrderPaid(meta.orderId, messageId, userId).catch(logError('[order] paid report'));
+
     return { request: updatedRequest, confirmation };
+  },
+
+  /** Отмечает оплату на заказе и зовёт владельца группы подтвердить начало работы. Только для счёта, который выставил сам заказ. */
+  async _reportOrderPaid(orderId: string, invoiceMessageId: string, payerId: string) {
+    const claimed = await prisma.order.updateMany({
+      where: { id: orderId, invoice_message_id: invoiceMessageId, customer_id: payerId, payment_status: 'unpaid', deleted_at: null },
+      data: { payment_status: 'reported', paid_reported_at: new Date() },
+    });
+    if (claimed.count === 0) return;
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, title: true, group: { select: { slug: true, owner_id: true } } },
+    });
+    if (!order) return;
+    await notificationService.create({
+      receiverId: order.group.owner_id,
+      senderId: payerId,
+      type: 'den_order_paid',
+      refId: order.id,
+      meta: { groupSlug: order.group.slug, orderId: order.id, orderTitle: order.title },
+    });
+  },
+
+  /** Обновляет метаданные карточки (например, «оплата подтверждена») и рассылает обновление участникам и персоналу группы. */
+  async patchCardMetadata(messageId: string, patch: Record<string, unknown>) {
+    const current = await prisma.message.findUnique({ where: { id: messageId }, select: { metadata: true, conversation_id: true } });
+    if (!current) return null;
+    const updated = await prisma.message.update({
+      where: { id: messageId },
+      data: { metadata: { ...((current.metadata as Record<string, unknown>) ?? {}), ...patch } as any },
+      include: messageInclude,
+    });
+    const [parts, conv] = await Promise.all([
+      prisma.conversationParticipant.findMany({ where: { conversation_id: current.conversation_id }, select: { user_id: true } }),
+      prisma.conversation.findUnique({ where: { id: current.conversation_id }, select: { group_id: true, group_dm_user_id: true } }),
+    ]);
+    const recipients = new Set(parts.map((p) => p.user_id));
+    if (conv?.group_id && conv.group_dm_user_id) {
+      const staff = await prisma.groupMember.findMany({
+        where: { group_id: conv.group_id, role: { in: ['owner', 'admin', 'moderator'] } },
+        select: { user_id: true },
+      });
+      for (const s of staff) recipients.add(s.user_id);
+    }
+    for (const user_id of recipients) messageSubscriptions.push(user_id, { type: 'message_updated', data: updated });
+    return updated;
   },
 
   /**

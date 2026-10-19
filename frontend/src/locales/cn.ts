@@ -242,6 +242,7 @@ export const cn: Translation = {
   notifDenOrderLineart: '已将订单推进到线稿阶段',
   notifDenOrderColoring: '已将订单推进到上色阶段',
   notifDenOrderFinished: '已完成你的订单 🎉',
+  notifDenOrderPaid: "已标记订单为已付款，请确认开始工作",
   notifDenQueueMoved: '你的委托在队列中前进了',
   notifDenReview: '留下了对你作品的评价',
   notifDenTopWeek: '进入了 Dealers’ Den 周榜',

@@ -62,7 +62,11 @@ async function confirmStart(deadlineAt: string) {
   startBusy.value = true
   startError.value = ''
   try {
-    const updated = await groupsStore.updateOrderStatus(props.groupId, order.id, STATUSES[STATUSES.indexOf(order.status) + 1], deadlineAt)
+    // Оплачиваемый заказ стартует через подтверждение оплаты (сразу «В процессе»)
+    const needsPayment = order.payment_status === 'unpaid' || order.payment_status === 'reported'
+    const updated = needsPayment
+      ? await groupsStore.confirmOrderPayment(props.groupId, order.id, deadlineAt)
+      : await groupsStore.updateOrderStatus(props.groupId, order.id, STATUSES[STATUSES.indexOf(order.status) + 1], deadlineAt)
     emit('moved', updated)
     starting.value = null
   } catch (e) {
@@ -153,7 +157,7 @@ async function removeOrder(id: string) {
         </div>
       </div>
     </div>
-    <OrderStartModal v-if="starting" :order="starting" :avg-days="avgDays ?? null" :busy="startBusy" :error="startError"
+    <OrderStartModal v-if="starting" :order="starting" :payment-confirm="starting.payment_status === 'unpaid' || starting.payment_status === 'reported'" :avg-days="avgDays ?? null" :busy="startBusy" :error="startError"
       @close="starting = null" @confirm="confirmStart" />
     <OrderEditModal v-if="editing" :group-id="groupId" :order="editing"
       @close="editing = null" @saved="(o) => { emit('moved', o); editing = null }" />

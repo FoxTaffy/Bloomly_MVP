@@ -238,6 +238,7 @@ export const es: Translation = {
   notifDenOrderLineart: 'pasó tu pedido a «Lineart»',
   notifDenOrderColoring: 'pasó tu pedido a «Color»',
   notifDenOrderFinished: 'terminó tu pedido 🎉',
+  notifDenOrderPaid: "marcó el pedido como pagado: confirma para empezar",
   notifDenQueueMoved: 'avanzó tu solicitud en la cola',
   notifDenReview: 'dejó una reseña de tu trabajo',
   notifDenTopWeek: 'entró al top semanal de Dealers’ Den',

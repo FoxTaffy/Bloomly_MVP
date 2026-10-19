@@ -34,3 +34,15 @@ export const DEADLINE_TONE_CLASS: Record<'ok' | 'soon' | 'late' | 'none', string
   late: 'text-brand-error bg-brand-error/10 border-brand-error/25',
   none: 'text-white/45 bg-white/5 border-white/10',
 }
+
+/**
+ * Общий статус заказа для заказчика и художника: пока не оплачен — «Ожидает оплаты», после подтверждения
+ * оплаты и до готовности — «В процессе» (с конкретным этапом рядом), в конце — «Готово».
+ */
+export function orderStatePill(o: { status: OrderStatus; payment_status?: string }): { label: string; color: string } {
+  if (o.status === 'FINISHED') return { label: 'Готово', color: ORDER_STAGE_COLOR.FINISHED }
+  if (o.status !== 'WAITING') return { label: 'В процессе', color: '#f59e0b' }
+  if (o.payment_status === 'unpaid') return { label: 'Ожидает оплаты', color: '#f59e0b' }
+  if (o.payment_status === 'reported') return { label: 'Оплата отмечена', color: '#60a5fa' }
+  return { label: 'В очереди', color: ORDER_STAGE_COLOR.WAITING }
+}

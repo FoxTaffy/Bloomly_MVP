@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import BIcon from '@/components/BIcon.vue'
 import { useGroupsStore, type OrderDetail } from '@/stores/groups'
-import { ORDER_STAGES, ORDER_STAGE_LABEL, ORDER_STAGE_COLOR, deadlineText, DEADLINE_TONE_CLASS } from '@/lib/orderStages'
+import { ORDER_STAGES, ORDER_STAGE_LABEL, ORDER_STAGE_COLOR, deadlineText, DEADLINE_TONE_CLASS, orderStatePill } from '@/lib/orderStages'
 
 // Карточка заказа в переписке группы: живой статус, открывается на странице заказа
 const props = defineProps<{ orderId: string; groupId?: string; isMine?: boolean }>()
@@ -27,6 +27,7 @@ onMounted(async () => {
 })
 
 const stageIndex = computed(() => order.value ? ORDER_STAGES.indexOf(order.value.status) : 0)
+const statePill = computed(() => order.value ? orderStatePill(order.value) : null)
 const deadline = computed(() => order.value ? deadlineText(order.value.deadline_at, order.value.status === 'FINISHED') : null)
 
 function open() {
@@ -60,8 +61,8 @@ function open() {
           <p class="text-[12px] font-extrabold text-white truncate">{{ order.title }}</p>
         </div>
         <span class="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-md border"
-          :style="{ color: ORDER_STAGE_COLOR[order.status], borderColor: ORDER_STAGE_COLOR[order.status] + '40', background: ORDER_STAGE_COLOR[order.status] + '1f' }">
-          {{ ORDER_STAGE_LABEL[order.status] }}
+          :style="{ color: statePill!.color, borderColor: statePill!.color + '40', background: statePill!.color + '1f' }">
+          {{ statePill!.label }}
         </span>
       </div>
 

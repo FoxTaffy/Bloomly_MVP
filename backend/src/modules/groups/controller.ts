@@ -1035,6 +1035,19 @@ export const getOrderDetailHandler = async (
   }
 };
 
+export const confirmOrderPaymentHandler = async (
+  request: FastifyRequest<{ Params: { id: string; orderId: string }; Body: { deadlineAt?: string | null } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const order = await groupService.confirmOrderPayment(request.params.orderId, userId, request.body?.deadlineAt);
+    return ok(reply, { order });
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'CONFIRM_PAYMENT_ERROR', errMessage(e));
+  }
+};
+
 export const updateOrderHandler = async (
   request: FastifyRequest<{ Params: { id: string; orderId: string }; Body: { deadlineAt?: string | null; description?: string | null; references?: string[] } }>,
   reply: FastifyReply,

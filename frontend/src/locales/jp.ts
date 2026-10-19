@@ -242,6 +242,7 @@ export const jp: Translation = {
   notifDenOrderLineart: 'が依頼を線画段階に進めました',
   notifDenOrderColoring: 'が依頼を着色段階に進めました',
   notifDenOrderFinished: 'があなたの依頼を完成させました 🎉',
+  notifDenOrderPaid: "が依頼の支払いを報告しました。作業開始を承認してください",
   notifDenQueueMoved: '依頼がキューで進みました',
   notifDenReview: '作品にレビューを残しました',
   notifDenTopWeek: 'Dealers’ Denの今週のトップに入りました',

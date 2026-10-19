@@ -12,7 +12,7 @@ import { useMessagesStore } from '@/stores/messages'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 import { errorMessage } from '@/lib/apiError'
 import { formatPrice } from '@/lib/format'
-import { ORDER_STAGES, ORDER_STAGE_LABEL, ORDER_STAGE_COLOR, deadlineText, DEADLINE_TONE_CLASS } from '@/lib/orderStages'
+import { ORDER_STAGES, ORDER_STAGE_LABEL, ORDER_STAGE_COLOR, deadlineText, DEADLINE_TONE_CLASS, orderStatePill } from '@/lib/orderStages'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,12 +33,18 @@ const showEdit = ref(false)
 const stageIndex = computed(() => order.value ? ORDER_STAGES.indexOf(order.value.status) : 0)
 const isFinished = computed(() => order.value?.status === 'FINISHED')
 const deadline = computed(() => order.value ? deadlineText(order.value.deadline_at, isFinished.value) : null)
+const statePill = computed(() => order.value ? orderStatePill(order.value) : null)
+// Счёт выставлен, но оплата ещё не подтверждена художником: работа начнётся только после подтверждения
+const needsPayment = computed(() => order.value?.payment_status === 'unpaid' || order.value?.payment_status === 'reported')
+const hasInvoice = computed(() => !!order.value?.payment_status && order.value.payment_status !== 'none')
+const payBusy = ref(false)
 const nextStatus = computed<OrderStatus | null>(() => {
   if (!order.value || isFinished.value) return null
   return ORDER_STAGES[stageIndex.value + 1] ?? null
 })
 const nextLabel = computed(() => {
   if (!order.value) return ''
+  if (needsPayment.value && order.value.status === 'WAITING') return 'Подтвердить оплату и начать'
   if (order.value.status === 'WAITING' && !order.value.started_at) return 'Начать работу'
   return nextStatus.value ? `Перевести: ${ORDER_STAGE_LABEL[nextStatus.value]}` : ''
 })
@@ -94,6 +100,36 @@ async function moveTo(status: OrderStatus, deadlineAt?: string) {
     actionError.value = errorMessage(e) ?? 'Не удалось изменить этап'
   } finally {
     busy.value = false
+  }
+}
+
+async function confirmPayment(deadlineAt: string) {
+  if (!order.value?.group) return
+  busy.value = true
+  actionError.value = ''
+  try {
+    await groupsStore.confirmOrderPayment(order.value.group.id, order.value.id, deadlineAt)
+    showStart.value = false
+    await reload()
+  } catch (e) {
+    actionError.value = errorMessage(e) ?? 'Не удалось подтвердить оплату'
+  } finally {
+    busy.value = false
+  }
+}
+
+// Заказчик отмечает оплату счёта — художнику приходит уведомление
+async function markPaid() {
+  if (!order.value?.invoice_message_id) return
+  payBusy.value = true
+  actionError.value = ''
+  try {
+    await messages.payRequest(order.value.invoice_message_id)
+    await reload()
+  } catch (e) {
+    actionError.value = errorMessage(e) ?? 'Не удалось отметить оплату'
+  } finally {
+    payBusy.value = false
   }
 }
 
@@ -170,8 +206,8 @@ onMounted(load)
               </div>
               <div class="flex flex-col items-end gap-2 shrink-0">
                 <span class="text-xs font-extrabold px-3 py-1.5 rounded-xl border"
-                  :style="{ color: ORDER_STAGE_COLOR[order.status], borderColor: ORDER_STAGE_COLOR[order.status] + '45', background: ORDER_STAGE_COLOR[order.status] + '1f' }">
-                  {{ ORDER_STAGE_LABEL[order.status] }}
+                  :style="{ color: statePill!.color, borderColor: statePill!.color + '45', background: statePill!.color + '1f' }">
+                  {{ statePill!.label }}<template v-if="statePill!.label === 'В процессе'"> · {{ ORDER_STAGE_LABEL[order.status] }}</template>
                 </span>
                 <span class="text-[11px] font-bold px-2.5 py-1 rounded-lg border" :class="DEADLINE_TONE_CLASS[deadline!.tone]">{{ deadline!.text }}</span>
               </div>
@@ -263,6 +299,32 @@ onMounted(load)
 
             <!-- Правая колонка: хронология, лот, контакты -->
             <aside class="stack-y-5 min-w-0">
+              <!-- Оплата: счёт выставляется при принятии заявки -->
+              <section v-if="hasInvoice" class="rounded-3xl border p-5"
+                :class="order.payment_status === 'confirmed' ? 'border-brand-success/30 bg-brand-success/5' : 'border-brand-accent/30 bg-brand-card'">
+                <h2 class="text-[11px] font-bold text-white/45 uppercase tracking-widest mb-2">Оплата</h2>
+                <p class="text-2xl font-extrabold text-white tabular-nums">{{ formatPrice(order.invoice_amount ?? 0, order.invoice_currency || 'RUB') }}</p>
+                <p class="text-xs mt-1.5 leading-relaxed"
+                  :class="order.payment_status === 'confirmed' ? 'text-brand-success font-bold' : 'text-white/55'">
+                  <template v-if="order.payment_status === 'confirmed'">Оплата подтверждена — работа идёт</template>
+                  <template v-else-if="order.payment_status === 'reported'">
+                    {{ order.canManage ? 'Заказчик отметил оплату. Проверьте поступление и подтвердите начало работы.' : 'Вы отметили оплату — ждём подтверждения художника, после этого работа начнётся.' }}
+                  </template>
+                  <template v-else>
+                    {{ order.canManage ? 'Счёт выставлен, ждём оплату от заказчика.' : 'Оплатите счёт и отметьте оплату — художник подтвердит и начнёт работу.' }}
+                  </template>
+                </p>
+                <button v-if="order.payment_status === 'unpaid' && !order.canManage && order.invoice_message_id" @click="markPaid" :disabled="payBusy"
+                  class="w-full mt-3 py-2.5 rounded-xl text-white font-extrabold text-sm hover:opacity-90 disabled:opacity-40 transition-all"
+                  style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
+                  {{ payBusy ? 'Отмечаем…' : 'Я оплатил(а)' }}
+                </button>
+                <button v-if="needsPayment && order.canManage" @click="showStart = true" :disabled="busy"
+                  class="w-full mt-3 py-2.5 rounded-xl border border-brand-success/40 bg-brand-success/10 text-brand-success font-extrabold text-sm hover:bg-brand-success/15 disabled:opacity-40 transition-all">
+                  Подтвердить оплату и начать работу
+                </button>
+              </section>
+
               <section class="rounded-3xl border border-brand-border bg-brand-card p-5">
                 <h2 class="text-[11px] font-bold text-white/45 uppercase tracking-widest mb-3">Хронология</h2>
                 <ol class="relative stack-y-4 pl-5">
@@ -302,8 +364,8 @@ onMounted(load)
             </aside>
           </div>
 
-          <OrderStartModal v-if="showStart && order" :order="order" :avg-days="null" :busy="busy" :error="actionError"
-            @close="showStart = false" @confirm="(d: string) => nextStatus && moveTo(nextStatus, d)" />
+          <OrderStartModal v-if="showStart && order" :order="order" :avg-days="null" :busy="busy" :error="actionError" :payment-confirm="needsPayment"
+            @close="showStart = false" @confirm="(d: string) => needsPayment ? confirmPayment(d) : (nextStatus && moveTo(nextStatus, d))" />
           <OrderEditModal v-if="showEdit && order && order.group" :group-id="order.group.id" :order="order"
             @close="showEdit = false" @saved="async () => { showEdit = false; await reload() }" />
         </template>

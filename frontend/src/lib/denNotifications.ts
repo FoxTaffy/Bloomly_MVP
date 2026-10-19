@@ -23,6 +23,7 @@ export const DEN_NOTIFICATION_ICONS: Record<string, string> = {
   den_order_lineart: 'PenTool',
   den_order_coloring: 'Palette',
   den_order_finished: 'PartyPopper',
+  den_order_paid: 'CreditCard',
   den_queue_moved: 'ListOrdered',
   den_dispute_auto_resolved: 'AlertTriangle',
   den_dispute_resolved: 'AlertTriangle',

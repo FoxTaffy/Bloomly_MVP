@@ -2207,20 +2207,27 @@ export const groupService = {
   async announceOrderChange(order: { id: string; title: string; status: OrderStatus; conversation_id: string | null; group_id: string }, changes: string[]) {
     if (!changes.length || !order.conversation_id) return;
     const owner = await prisma.group.findUnique({ where: { id: order.group_id }, select: { owner_id: true } });
-    const lines = [
-      `📝 Заказ «${order.title}» обновлён`,
-      ...changes.map(c => `• ${c}`),
-      `Текущий этап: ${ORDER_STAGE_LABEL[order.status]}`,
-    ];
-    await messageService.sendMessage({ conversationId: order.conversation_id, senderId: owner!.owner_id, content: lines.join('\n') })
-      .catch(logError('[order] change message'));
+    // Карточка от лица группы с кнопкой «Подробнее»; текст — запасной вариант для превью и push
+    const fallback = [`📝 Заказ «${order.title}» обновлён`, ...changes.map(c => `• ${c}`), `Текущий этап: ${ORDER_STAGE_LABEL[order.status]}`].join('\n');
+    await messageService.sendMessage({
+      conversationId: order.conversation_id,
+      senderId: owner!.owner_id,
+      type: 'order_update',
+      metadata: { orderId: order.id, groupId: order.group_id, headline: 'Заказ обновлён', title: order.title, changes, stage: order.status },
+      content: fallback,
+    }).catch(logError('[order] change message'));
   },
 
-  async updateOrderStatus(orderId: string, requesterId: string, status: OrderStatus, deadlineAt?: string | null) {
+  async updateOrderStatus(orderId: string, requesterId: string, status: OrderStatus, deadlineAt?: string | null, opts: { paymentConfirmed?: boolean } = {}) {
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order || order.deleted_at) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
     if (!(await groupService.isOwnerOrAdmin(order.group_id, requesterId))) {
       throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
+    }
+
+    // Работа по оплачиваемому заказу начинается только после подтверждения оплаты художником
+    if (!order.started_at && status !== 'WAITING' && ['unpaid', 'reported'].includes(order.payment_status) && !opts.paymentConfirmed) {
+      throw Object.assign(new Error('Сначала подтвердите оплату заказа — после этого работа начнётся'), { statusCode: 400 });
     }
 
     const data: Prisma.OrderUpdateInput = { status };
@@ -2254,6 +2261,7 @@ export const groupService = {
     });
 
     const changes: string[] = [];
+    if (opts.paymentConfirmed) changes.push('Оплата подтверждена, работа началась');
     if (status !== order.status) changes.push(`Этап: ${ORDER_STAGE_LABEL[order.status]} → ${ORDER_STAGE_LABEL[status]}`);
     if (!order.started_at && data.started_at) changes.push('Взято в работу');
     if (data.deadline_at && (!order.deadline_at || (data.deadline_at as Date).getTime() !== order.deadline_at.getTime())) {
@@ -2279,6 +2287,32 @@ export const groupService = {
       await prisma.groupTodoItem.updateMany({ where: { order_id: orderId, deleted_at: null }, data: { status } });
     }
     return enrichOrder(updated);
+  },
+
+  /**
+   * Художник видит оплату и подтверждает начало работы: заказ сразу уходит из «Ожидания» в работу («В процессе»),
+   * срок задаётся здесь же. Подтвердить можно и пока заказчик не отметил оплату сам — если деньги пришли иначе.
+   */
+  async confirmOrderPayment(orderId: string, requesterId: string, deadlineAt?: string | null) {
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order || order.deleted_at) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
+    if (!(await groupService.isOwnerOrAdmin(order.group_id, requesterId))) {
+      throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
+    }
+    if (!['unpaid', 'reported'].includes(order.payment_status)) {
+      throw Object.assign(new Error('Оплата по заказу уже подтверждена или счёта нет'), { statusCode: 400 });
+    }
+    // Старт (со сроком) проверяется внутри: без срока ничего не меняется
+    await groupService.updateOrderStatus(orderId, requesterId, order.status === 'WAITING' ? 'SKETCH' : order.status, deadlineAt, { paymentConfirmed: true });
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { payment_status: 'confirmed', payment_confirmed_at: new Date(), paid_reported_at: order.paid_reported_at ?? new Date() },
+    });
+    if (order.invoice_message_id) {
+      await messageService.patchCardMetadata(order.invoice_message_id, { status: 'paid', confirmed: true }).catch(logError('[order] invoice patch'));
+    }
+    const fresh = await prisma.order.findUniqueOrThrow({ where: { id: orderId }, include: { customer: { select: ORDER_CUSTOMER_SELECT } } });
+    return enrichOrder(fresh);
   },
 
   /** Художник правит заказ: срок, описание и референсы (в том числе добавляет свои). */

@@ -14,7 +14,7 @@
             <BIcon name="Clock" class="w-5 h-5 text-white" />
           </div>
           <div class="min-w-0">
-            <h2 class="text-xl font-extrabold text-white leading-tight">Начать работу</h2>
+            <h2 class="text-xl font-extrabold text-white leading-tight">{{ paymentConfirm ? 'Подтвердить оплату' : 'Начать работу' }}</h2>
             <p class="text-white/40 text-xs truncate">{{ order.title }}</p>
           </div>
         </div>
@@ -49,7 +49,7 @@
             style="background: linear-gradient(135deg, #4C67CF, #7c3aed)" :disabled="!date || busy" @click="submit">
             <span v-if="busy" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             <BIcon v-else name="Play" class="w-4 h-4" />
-            Начать
+            {{ paymentConfirm ? 'Подтвердить и начать' : 'Начать' }}
           </button>
         </div>
       </div>
@@ -62,7 +62,7 @@ import { ref } from 'vue'
 import BIcon from '@/components/BIcon.vue'
 import type { Order } from '@/stores/groups'
 
-const props = defineProps<{ order: Order; avgDays: number | null; busy?: boolean; error?: string }>()
+const props = defineProps<{ order: Order; avgDays: number | null; busy?: boolean; error?: string; paymentConfirm?: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'confirm', deadlineAt: string): void }>()
 
 const quick = [3, 7, 14, 30]

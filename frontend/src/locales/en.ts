@@ -242,6 +242,7 @@ export const en: Translation = {
   notifDenOrderLineart: 'moved your order to "Lineart"',
   notifDenOrderColoring: 'moved your order to "Coloring"',
   notifDenOrderFinished: 'finished your order 🎉',
+  notifDenOrderPaid: "marked the order as paid — confirm to start the work",
   notifDenQueueMoved: 'moved your request up the queue',
   notifDenReview: 'left a review of your work',
   notifDenTopWeek: 'made the weekly top in Dealers’ Den',

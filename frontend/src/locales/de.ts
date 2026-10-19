@@ -238,6 +238,7 @@ export const de: Translation = {
   notifDenOrderLineart: 'hat deinen Auftrag auf „Lineart“ gesetzt',
   notifDenOrderColoring: 'hat deinen Auftrag auf „Kolorierung“ gesetzt',
   notifDenOrderFinished: 'hat deinen Auftrag abgeschlossen 🎉',
+  notifDenOrderPaid: "hat den Auftrag als bezahlt markiert – bestätige den Arbeitsbeginn",
   notifDenQueueMoved: 'hat deine Anfrage in der Warteschlange vorgerückt',
   notifDenReview: 'hat eine Bewertung zu deiner Arbeit hinterlassen',
   notifDenTopWeek: 'hat es in die Wochen-Top-Liste von Dealers’ Den geschafft',
