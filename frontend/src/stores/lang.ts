@@ -11,6 +11,8 @@ export const LANG_TO_LOCALE: Record<Lang, string> = {
 export function langFromLocaleCode(code?: string | null): Lang | null {
   const base = (code ?? '').toLowerCase().split(/[-_]/)[0]
   const map: Record<string, Lang> = { ru: 'RU', en: 'EN', ja: 'JP', zh: 'CN', de: 'DE', fr: 'FR', es: 'ES', pt: 'PT' }
+  // Языки бывшего СССР: своего перевода нет, русский понятнее английского
+  for (const c of ['kk', 'uz', 'ky', 'tg', 'tk', 'be', 'uk', 'hy', 'az', 'ka', 'mo', 'tt', 'ba', 'ce']) map[c] = 'RU'
   return map[base] ?? null
 }
 
