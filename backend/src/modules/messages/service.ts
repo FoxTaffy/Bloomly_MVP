@@ -270,7 +270,7 @@ export const messageService = {
     `;
     const unreadByConv = new Map(unreadRows.map((r) => [r.conversation_id, Number(r.count)]));
 
-    return participants.map((p: any) => ({
+    const mapped = participants.map((p: any) => ({
       ...p.conversation,
       pinned_message: p.conversation.pinnedMessage ?? null,
       my_participant: {
@@ -291,6 +291,55 @@ export const messageService = {
         .filter((cp: any) => cp.user_id !== userId)
         .map((cp: any) => ({ user_id: cp.user_id, user: cp.user, last_read_at: cp.last_read_at ?? null })),
     }));
+
+    // Персонал группы видит переписку заказчиков с группой в своём списке (он не участник такого чата,
+    // поэтому его нет в выборке участий). Только в основном списке, не в архиве и не в ярлыках.
+    if (archived !== undefined || label) return mapped;
+    const staffGroupIds = (await prisma.groupMember.findMany({
+      where: { user_id: userId, role: { in: ['owner', 'admin', 'moderator'] }, group: { deleted_at: null } },
+      select: { group_id: true },
+    })).map((g) => g.group_id);
+    if (!staffGroupIds.length) return mapped;
+
+    const threads = await prisma.conversation.findMany({
+      where: {
+        type: 'community',
+        group_id: { in: staffGroupIds },
+        group_dm_user_id: { not: null },
+        deleted_at: null,
+        participants: { none: { user_id: userId } },
+      },
+      include: {
+        group_dm_user: { select: senderSelect },
+        messages: {
+          where: { deleted_at: null },
+          orderBy: { created_at: 'desc' },
+          take: 1,
+          include: { sender: { select: senderSelect } },
+        },
+        _count: { select: { participants: true } },
+      },
+      orderBy: { updated_at: 'desc' },
+      take: 100,
+    });
+    const staffRows = threads.map((t: any) => {
+      const customer = t.group_dm_user;
+      const customerName = customer?.display_name || customer?.username || 'заказчик';
+      return {
+        ...t,
+        name: `${t.name ?? 'Группа'} · ${customerName}`,
+        pinned_message: null,
+        // Персонал не участник: состояние прочтения и ярлыки у него не ведутся
+        my_participant: { archived: false, hidden_at: null, last_read_at: null, label: 'staff', role: 'member', personal_pinned_message_id: null, muted_until: null, sound_muted: false },
+        last_message: t.messages[0] ?? null,
+        participants_count: t._count.participants,
+        unread_count: 0,
+        group_dm_user_id: t.group_dm_user_id,
+        other_participants: customer ? [{ user_id: customer.id, user: customer, last_read_at: null }] : [],
+      };
+    });
+    return [...mapped, ...staffRows].sort((a: any, b: any) =>
+      new Date(b.last_message?.created_at ?? b.updated_at).getTime() - new Date(a.last_message?.created_at ?? a.updated_at).getTime());
   },
 
   /**

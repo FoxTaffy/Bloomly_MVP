@@ -94,9 +94,14 @@ async function saveInline() {
 async function moveNext(item: ArtistQueueItem) {
   const idx = STATUSES.indexOf(asTodoStatus(item.status))
   if (idx >= STATUSES.length - 1) return
-  const updated = await groupsStore.updateTodoItem(props.groupId, item.id, { status: STATUSES[idx + 1] })
-  const i = items.value.findIndex(x => x.id === item.id)
-  if (i !== -1) items.value[i] = updated
+  try {
+    const updated = await groupsStore.updateTodoItem(props.groupId, item.id, { status: STATUSES[idx + 1] })
+    const i = items.value.findIndex(x => x.id === item.id)
+    if (i !== -1) items.value[i] = updated
+  } catch (e) {
+    // Сервер отказывает, например, если заказ ещё не начат и не назначен срок
+    alert('Не удалось перенести: ' + (apiErrorMessage(e) ?? errorMessage(e) ?? 'ошибка'))
+  }
 }
 
 async function removeItem(id: string) {
