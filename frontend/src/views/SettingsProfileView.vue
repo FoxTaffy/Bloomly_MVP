@@ -814,7 +814,7 @@
                   <div>
                     <div class="flex items-center justify-between mb-3">
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.profileThemeLabel }}</label>
-                      <span class="text-[10px] text-amber-400 font-bold bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">Lite+</span>
+                      <span class="text-[10px] text-amber-400 font-bold bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">Lite</span>
                     </div>
                     <div v-if="['free'].includes(authStore.user?.subscription_tier ?? 'free')"
                       class="rounded-2xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 flex items-center gap-3">
@@ -852,9 +852,9 @@
                         <button v-for="(theme, id) in PROFILE_THEMES" :key="id" type="button"
                           @click="form.profile_theme = id"
                           class="group flex flex-col items-center gap-2">
-                          <span class="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 transition-all flex items-center justify-center"
-                            :class="form.profile_theme === id ? 'border-white/90 scale-105 shadow-lg' : 'border-white/10 group-hover:border-white/30'"
-                            :style="`background:linear-gradient(135deg, ${theme.accent} 0%, ${theme.cardBg} 55%, ${theme.bg} 100%)`">
+                          <span class="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden transition-all flex items-center justify-center ring-2 ring-offset-2 ring-offset-[#12141f]"
+                            :class="form.profile_theme === id ? 'ring-white scale-105 shadow-lg' : 'ring-white/10 group-hover:ring-white/30'"
+                            :style="`background:radial-gradient(circle at 30% 28%, ${theme.accent} 0%, ${theme.accent}99 38%, ${theme.cardBg} 100%)`">
                             <BIcon v-if="form.profile_theme === id" name="Check" class="w-6 h-6 text-white drop-shadow" />
                           </span>
                           <span class="text-xs font-semibold" :class="form.profile_theme === id ? 'text-white' : 'text-white/55'">{{ theme.label }}</span>
@@ -867,7 +867,7 @@
                   <div>
                     <div class="flex items-center justify-between mb-3">
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.avatarFrameLabel }}</label>
-                      <span class="text-[10px] text-brand-accent font-bold bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Pro+</span>
+                      <span class="text-[10px] text-brand-accent font-bold bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Pro</span>
                     </div>
                     <div v-if="!['pro', 'business'].includes(authStore.user?.subscription_tier ?? 'free')"
                       class="rounded-2xl border border-brand-accent/20 bg-brand-accent/5 px-4 py-3 flex items-center gap-3">
@@ -951,7 +951,7 @@
                   <div>
                     <div class="flex items-center justify-between mb-3">
                       <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.profileBgLabel }}</label>
-                      <span class="text-[10px] text-brand-accent font-bold bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Pro+</span>
+                      <span class="text-[10px] text-brand-accent font-bold bg-brand-accent/10 px-2 py-0.5 rounded-full border border-brand-accent/20">Pro</span>
                     </div>
                     <div v-if="!['pro', 'business'].includes(authStore.user?.subscription_tier ?? 'free')"
                       class="rounded-2xl border border-brand-accent/20 bg-brand-accent/5 px-4 py-3 flex items-center gap-3">
