@@ -155,11 +155,3 @@ Dealers’ Den — творческая ярмарка внутри Bloomly. З�
   <a href="https://bloomly.fun/"><img src="assets/join.svg" alt="Открыть Bloomly" width="264" height="60" /></a>
   <p><sub>Новости, обновления и обратная связь — на GitHub Bloomly.</sub></p>
 </div>
-
-
-<details>
-<summary>Для разработчиков</summary>
-
-[Техническая документация проекта](README_DEVELOPMENT.md)
-
-</details>

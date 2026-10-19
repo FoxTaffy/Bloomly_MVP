@@ -1,6 +1,0 @@
--- AlterTable
-ALTER TABLE "User" ADD COLUMN "fav_food" VARCHAR(80);
-ALTER TABLE "User" ADD COLUMN "fav_animal" VARCHAR(80);
-ALTER TABLE "User" ADD COLUMN "fav_music" VARCHAR(80);
-ALTER TABLE "User" ADD COLUMN "fav_artist" VARCHAR(80);
-ALTER TABLE "User" ADD COLUMN "fav_film" VARCHAR(80);

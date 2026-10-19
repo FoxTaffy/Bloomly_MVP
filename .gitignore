@@ -1,8 +1,0 @@
-node_modules/
-.env
-.next/
-dist/
-*.log
-tmpclaude-*
-.claude/
-.vscode/
