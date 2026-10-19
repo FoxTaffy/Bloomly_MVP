@@ -2,6 +2,7 @@ import { apiErrorMessage, apiErrorStatus, errorMessage } from '@/lib/apiError'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api, { setupApiAuth } from '../api'
+import { claimAttribution } from '@/lib/attribution'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface User {
@@ -122,6 +123,7 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = data.data.token
       user.value  = data.data.user
       saveUser(data.data.user)
+      void claimAttribution()
     } catch (e) {
       error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
@@ -162,6 +164,7 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = data.data.token
       user.value  = data.data.user
       saveUser(data.data.user)
+      void claimAttribution()
     } catch (e) {
       error.value = apiErrorMessage(e) || errorMessage(e) || 'Connection error'
       throw e
@@ -188,6 +191,7 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = jwtToken
     user.value  = savedUser
     saveUser(savedUser)
+    void claimAttribution()
   }
 
   /** Экспорт своих данных — доступен даже забаненным/замороженным аккаунтам */

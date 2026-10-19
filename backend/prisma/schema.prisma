@@ -2187,3 +2187,79 @@ model PushSubscription {
 
   @@index([user_id])
 }
+
+/// Рекламные ссылки (админка → «Трафик»). Короткая ссылка /api/t/:code пишет клик на сервере
+/// и ведёт на target_path с UTM-метками, поэтому клик не теряется, даже если метки срежет посредник.
+model TrackingLink {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code         String   @unique @db.VarChar(40)
+  name         String   @db.VarChar(120)
+  target_path  String   @db.VarChar(300)
+  utm_source   String   @db.VarChar(60)
+  utm_medium   String   @db.VarChar(60)
+  utm_campaign String   @db.VarChar(100)
+  utm_content  String?  @db.VarChar(100)
+  utm_term     String?  @db.VarChar(100)
+  is_active    Boolean  @default(true)
+  created_by   String?  @db.Uuid
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  clicks TrackingClick[]
+  visits TrackingVisit[]
+
+  @@index([created_at])
+}
+
+/// Переход по короткой ссылке. Боты (превью мессенджеров, краулеры) и повторы с того же устройства
+/// помечаются и в «уникальные» не попадают.
+model TrackingClick {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  link_id      String       @db.Uuid
+  link         TrackingLink @relation(fields: [link_id], references: [id], onDelete: Cascade)
+  ip_hash      String       @db.VarChar(64)
+  user_agent   String?      @db.VarChar(200)
+  referrer     String?      @db.VarChar(300)
+  is_bot       Boolean      @default(false)
+  is_duplicate Boolean      @default(false)
+  created_at   DateTime     @default(now())
+
+  @@index([link_id, created_at])
+  @@index([link_id, ip_hash, created_at])
+}
+
+/// Открытие сайта с меткой (JS на лендинге). Сравнение с кликами показывает, сколько трафика потерялось по дороге.
+model TrackingVisit {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  link_id      String?       @db.Uuid
+  link         TrackingLink? @relation(fields: [link_id], references: [id], onDelete: Cascade)
+  click_id     String?       @db.Uuid
+  visitor_id   String        @db.VarChar(64)
+  utm_source   String?       @db.VarChar(60)
+  utm_medium   String?       @db.VarChar(60)
+  utm_campaign String?       @db.VarChar(100)
+  utm_content  String?       @db.VarChar(100)
+  landing_path String?       @db.VarChar(300)
+  created_at   DateTime      @default(now())
+
+  @@index([link_id, created_at])
+  @@index([visitor_id, created_at])
+  @@index([utm_campaign, created_at])
+}
+
+/// Откуда пришёл зарегистрировавшийся. Первое касание и последнее хранятся раздельно: если человек
+/// успел побывать на двух рекламах, регистрация не достаётся «победителю» случайно, а конфликт виден в отчёте.
+model UserAttribution {
+  user_id       String    @id @db.Uuid
+  visitor_id    String    @db.VarChar(64)
+  first_link_id String?   @db.Uuid
+  last_link_id  String?   @db.Uuid
+  first_utm     Json?
+  last_utm      Json?
+  first_seen_at DateTime?
+  created_at    DateTime  @default(now())
+
+  @@index([first_link_id])
+  @@index([last_link_id])
+  @@index([created_at])
+}

@@ -7,6 +7,10 @@ import 'flag-icons/css/flag-icons.min.css'
 import App from './App.vue'
 import router from './router'
 import { clickOutside } from './directives/clickOutside'
+import { captureAttribution } from './lib/attribution'
+
+// Метки рекламы читаем до роутера: редиректы внутри приложения не должны их терять
+captureAttribution()
 
 const app = createApp(App)
 const head = createHead()

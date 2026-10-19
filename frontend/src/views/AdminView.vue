@@ -22,6 +22,7 @@ import AdminDenTab from '@/components/admin/AdminDenTab.vue'
 import AdminGroupsTab from '@/components/admin/AdminGroupsTab.vue'
 import AdminFinanceTab from '@/components/admin/AdminFinanceTab.vue'
 import AdminSettingsTab from '@/components/admin/AdminSettingsTab.vue'
+import AdminTrafficTab from '@/components/admin/AdminTrafficTab.vue'
 import AdminNavList from '@/components/admin/AdminNavList.vue'
 
 const langStore = useLangStore()
@@ -69,6 +70,7 @@ const TAB_COMPONENTS: Record<AdminTab, Component> = {
   groups: AdminGroupsTab,
   shop: AdminShopTab,
   den: AdminDenTab,
+  traffic: AdminTrafficTab,
   finance: AdminFinanceTab,
   settings: AdminSettingsTab,
 }
@@ -83,6 +85,7 @@ const navItems = computed(() => [
   { tab: 'tags'         as const, label: 'Синонимы тегов',                    icon: 'Hash',            color: '#94a3b8', group: langStore.t.adminGroupContent,    badge: null, minRole: 'moderator' },
   { tab: 'verification' as const, label: langStore.t.secVerification,        icon: 'BadgeCheck',      color: '#2dd4bf', group: langStore.t.adminGroupContent,    badge: badges.verification || null, minRole: 'moderator' },
   { tab: 'ads'          as const, label: langStore.t.adLabel,                icon: 'Megaphone',       color: '#f97316', group: langStore.t.adminGroupContent,    badge: badges.ads || null, minRole: 'admin' },
+  { tab: 'traffic'      as const, label: 'Трафик и реклама',                  icon: 'Link2',           color: '#2dd4bf', group: langStore.t.adminGroupContent,    badge: null, minRole: 'admin' },
   { tab: 'updates'      as const, label: langStore.t.adminNavBroadcasts,     icon: 'Send',            color: '#4C67CF', group: langStore.t.adminGroupContent,    badge: null, minRole: 'admin' },
   { tab: 'groups'       as const, label: langStore.t.adminNavGroupsEvents,   icon: 'LayoutGrid',      color: '#4C67CF', group: langStore.t.adminGroupPlatform,   badge: null, minRole: 'moderator' },
   { tab: 'shop'         as const, label: 'Bloomly Shop',                      icon: 'ShoppingBag',     color: '#f59e0b', group: langStore.t.adminGroupPlatform,   badge: badges.shop || null, minRole: 'admin' },
@@ -118,6 +121,7 @@ const tabSubtitle = computed<Record<string, string>>(() => ({
   updates: langStore.t.adminTabSubBroadcasts,
   groups: langStore.t.adminTabSubGroups,
   shop: 'Каталог товаров, паки стикеров, покупки и заявки на доступ',
+  traffic: 'Рекламные ссылки с UTM, клики и воронка до оплаты',
   den: 'Лоты, споры, ярмарки, заявки на рамки и группы-продавцы',
   finance: langStore.t.adminTabSubFinance,
   settings: langStore.t.adminTabSubSettings,
