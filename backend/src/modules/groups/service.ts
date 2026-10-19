@@ -9,6 +9,7 @@ import { getGroupBadgeLevel } from '../../lib/badges.js';
 import { isAllowedByPrivacy } from '../../lib/privacy.js';
 import { isTrustedMediaUrl, deleteFileByUrl, assertOwnedMedia } from '../media/service.js';
 import { notificationService } from '../notifications/service.js';
+import { resolveCharacters } from '../../lib/orderCharacters.js';
 import { requireSafeLink, sanitizeLinkRecord } from '../../lib/safeLink.js';
 import { normalizeTag } from '../../lib/tagRules.js';
 import type {
@@ -260,6 +261,7 @@ const GROUP_SELECT = {
   bank_card_masked: true,
   support_tiers: true,
   business_enabled: true,
+  den_enabled: true,
   welcome_msg_enabled: true,
   welcome_msg_text: true,
   _count: { select: { members: true, events: true, posts: { where: { post: { deleted_at: null } } } } },
@@ -334,6 +336,14 @@ const EVENT_SELECT = {
 };
 
 // ── Group CRUD ────────────────────────────────────────────────────────────────
+const MIN_COMPLETION_SAMPLE = 5;
+
+/** Заказ + персонажи (с актуальными референсами из профилей) и референсы, добавленные художником. */
+async function enrichOrder<T extends { form_data: unknown }>(o: T) {
+  const fd = (o.form_data ?? {}) as { characters?: unknown; references?: string[] };
+  return { ...o, characters: await resolveCharacters(fd.characters), references: Array.isArray(fd.references) ? fd.references : [] };
+}
+
 export const groupService = {
   // ── list groups ───────────────────────────────────────────────────────────
   async list(query: GetGroupsQuery, viewerId?: string) {
@@ -550,7 +560,12 @@ export const groupService = {
     if (input.rulesText !== undefined) data.rules_text = input.rulesText;
     if (input.faq !== undefined) data.faq = input.faq;
     if (input.contactPhone !== undefined) data.contact_phone = input.contactPhone;
-    if (input.contactEmail !== undefined) data.contact_email = input.contactEmail;
+    if (input.contactEmail !== undefined) {
+      if (input.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.contactEmail)) {
+        throw httpError('Некорректный контактный email', 400);
+      }
+      data.contact_email = input.contactEmail;
+    }
     if (input.aboutText !== undefined) data.about_text = input.aboutText;
     if (input.schedule !== undefined) data.schedule = input.schedule;
     if (input.whatToBring !== undefined) data.what_to_bring = input.whatToBring;
@@ -1558,11 +1573,6 @@ export const groupService = {
       });
       if (!deal) return { status: 403, message: 'Отзыв можно оставить только после выполненного или закрытого заказа' };
     }
-  },
-
-  async deleteReview(groupId: string, reviewId: string, actorId: string) {
-    const review = await prisma.groupReview.findFirst({ where: { id: reviewId, group_id: groupId } });
-    if (!review) throw httpError('Review not found', 404);
     return null;
   },
 
@@ -1583,6 +1593,11 @@ export const groupService = {
       update: { rating, text: clean },
       create: { group_id: groupId, user_id: userId, rating, text: clean },
     });
+  },
+
+  async deleteReview(groupId: string, reviewId: string, actorId: string) {
+    const review = await prisma.groupReview.findFirst({ where: { id: reviewId, group_id: groupId } });
+    if (!review) throw httpError('Review not found', 404);
     if (review.user_id !== actorId && !(await groupService.isAtLeastModerator(groupId, actorId))) {
       throw httpError('Not authorized', 403);
     }
@@ -2074,7 +2089,7 @@ export const groupService = {
   // ── Orders (Business tab) ──────────────────────────────────────────────────
   async getOrders(groupId: string, requesterId: string) {
     const isAdmin = await groupService.isOwnerOrAdmin(groupId, requesterId);
-    return prisma.order.findMany({
+    const orders = await prisma.order.findMany({
       where: {
         group_id: groupId,
         deleted_at: null,
@@ -2083,6 +2098,8 @@ export const groupService = {
       include: { customer: { select: ORDER_CUSTOMER_SELECT } },
       orderBy: [{ position: 'asc' }, { created_at: 'asc' }],
     });
+    // Персонажи заказа (из принятой заявки) достраиваем актуальными профилями и референсами
+    return Promise.all(orders.map(enrichOrder));
   },
 
   async createOrder(groupId: string, customerId: string, input: CreateOrderInput) {
@@ -2132,17 +2149,90 @@ export const groupService = {
     });
   },
 
-  async updateOrderStatus(orderId: string, requesterId: string, status: OrderStatus) {
+  async updateOrderStatus(orderId: string, requesterId: string, status: OrderStatus, deadlineAt?: string | null) {
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order || order.deleted_at) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
     if (!(await groupService.isOwnerOrAdmin(order.group_id, requesterId))) {
       throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
     }
-    return prisma.order.update({
+
+    const data: Prisma.OrderUpdateInput = { status };
+    if (status === 'WAITING') {
+      data.started_at = null;
+      data.finished_at = null;
+    } else if (!order.started_at) {
+      // Старт работы: дедлайн исполнитель ставит сам (или подтверждает пожелание заказчика)
+      const deadline = deadlineAt ? new Date(deadlineAt) : order.deadline_at;
+      if (!deadline || Number.isNaN(deadline.getTime())) {
+        throw Object.assign(new Error('Укажите дедлайн, чтобы начать работу'), { statusCode: 400 });
+      }
+      if (deadline.getTime() < Date.now() - 60_000) {
+        throw Object.assign(new Error('Дедлайн не может быть в прошлом'), { statusCode: 400 });
+      }
+      data.deadline_at = deadline;
+      data.started_at = new Date();
+    }
+    // Дедлайн можно уточнить и в процессе работы
+    if (status !== 'WAITING' && order.started_at && deadlineAt) {
+      const d = new Date(deadlineAt);
+      if (!Number.isNaN(d.getTime())) data.deadline_at = d;
+    }
+    if (status === 'FINISHED') data.finished_at = order.finished_at ?? new Date();
+    else if (status !== 'WAITING') data.finished_at = null;
+
+    const updated = await prisma.order.update({
       where: { id: orderId },
-      data: { status },
+      data,
       include: { customer: { select: ORDER_CUSTOMER_SELECT } },
     });
+
+    // Заказчик получает уведомление о каждом этапе работы
+    if (status !== order.status && status !== 'WAITING') {
+      const group = await prisma.group.findUnique({ where: { id: order.group_id }, select: { slug: true } });
+      const fd = (order.form_data ?? {}) as { listingId?: string };
+      await notificationService.create({
+        receiverId: order.customer_id,
+        senderId: requesterId,
+        senderGroupId: order.group_id,
+        type: `den_order_${status.toLowerCase()}`,
+        refId: order.id,
+        meta: { groupSlug: group?.slug, listingId: fd.listingId, orderTitle: order.title },
+      });
+    }
+    return enrichOrder(updated);
+  },
+
+  /** Художник правит заказ: срок, описание и референсы (в том числе добавляет свои). */
+  async updateOrder(orderId: string, requesterId: string, input: { deadlineAt?: string | null; description?: string | null; references?: string[] }) {
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order || order.deleted_at) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
+    if (!(await groupService.isOwnerOrAdmin(order.group_id, requesterId))) {
+      throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
+    }
+    const data: Prisma.OrderUpdateInput = {};
+    if (input.deadlineAt !== undefined) {
+      if (input.deadlineAt === null) {
+        if (order.started_at) throw Object.assign(new Error('У заказа в работе должен быть дедлайн'), { statusCode: 400 });
+        data.deadline_at = null;
+      } else {
+        const d = new Date(input.deadlineAt);
+        if (Number.isNaN(d.getTime())) throw Object.assign(new Error('Некорректный дедлайн'), { statusCode: 400 });
+        data.deadline_at = d;
+      }
+    }
+    if (input.description !== undefined) {
+      data.description = input.description ? sanitizeDisplayText(input.description, 2000) || null : null;
+    }
+    if (input.references !== undefined) {
+      if (!Array.isArray(input.references) || input.references.length > 20) {
+        throw Object.assign(new Error('Не больше 20 референсов'), { statusCode: 400 });
+      }
+      const current = new Set(((order.form_data as { references?: string[] } | null)?.references) ?? []);
+      for (const url of input.references) if (!current.has(url)) await assertOwnedMedia(url, requesterId);
+      data.form_data = { ...((order.form_data as object | null) ?? {}), references: input.references } as Prisma.InputJsonValue;
+    }
+    const updated = await prisma.order.update({ where: { id: orderId }, data, include: { customer: { select: ORDER_CUSTOMER_SELECT } } });
+    return enrichOrder(updated);
   },
 
   async deleteOrder(orderId: string, requesterId: string) {
@@ -2152,6 +2242,31 @@ export const groupService = {
       throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
     }
     return prisma.order.update({ where: { id: orderId }, data: { deleted_at: new Date() } });
+  },
+
+  /**
+   * Реальная скорость работы: среднее время от старта до «Готово» по завершённым заказам.
+   * Показывается только после MIN_COMPLETION_SAMPLE работ и пересчитывается с каждой новой готовой.
+   */
+  async getCompletionStats(groupId: string) {
+    const finished = await prisma.order.findMany({
+      where: { group_id: groupId, deleted_at: null, status: 'FINISHED', started_at: { not: null }, finished_at: { not: null } },
+      select: { started_at: true, finished_at: true, deadline_at: true },
+      orderBy: { finished_at: 'desc' },
+      take: 200,
+    });
+    const count = finished.length;
+    if (count < MIN_COMPLETION_SAMPLE) return { count, required: MIN_COMPLETION_SAMPLE, avgDays: null, onTimePercent: null };
+    const durations = finished.map(o => Math.max(0, o.finished_at!.getTime() - o.started_at!.getTime()));
+    const avgMs = durations.reduce((a, b) => a + b, 0) / count;
+    const withDeadline = finished.filter(o => o.deadline_at);
+    const onTime = withDeadline.filter(o => o.finished_at!.getTime() <= o.deadline_at!.getTime()).length;
+    return {
+      count,
+      required: MIN_COMPLETION_SAMPLE,
+      avgDays: Math.round((avgMs / 86_400_000) * 10) / 10,
+      onTimePercent: withDeadline.length ? Math.round((onTime / withDeadline.length) * 100) : null,
+    };
   },
 
   async getBusinessStats(groupId: string) {
@@ -2164,7 +2279,7 @@ export const groupService = {
     for (const row of statusCounts as unknown as { status: OrderStatus; _count: number }[]) {
       ordersByStatus[row.status] = row._count;
     }
-    return { postsCount, messagesCount, ordersByStatus };
+    return { postsCount, messagesCount, ordersByStatus, completion: await groupService.getCompletionStats(groupId) };
   },
 
   // ── Group balance (funded by member donations from their Wallet) ──────────

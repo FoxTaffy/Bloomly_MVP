@@ -36,8 +36,9 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 
 const deadlineList = computed(() =>
   orders.value
-    .filter(o => o.deadline_at && o.status !== 'FINISHED')
-    .sort((a, b) => new Date(a.deadline_at!).getTime() - new Date(b.deadline_at!).getTime()),
+    // Принятые заявки попадают сюда сразу, даже пока срок не назначен (он ставится при старте работы)
+    .filter(o => o.status !== 'FINISHED' && (o.deadline_at || (o.form_data as { source?: string } | null)?.source === 'listing_application'))
+    .sort((a, b) => (a.deadline_at ? new Date(a.deadline_at).getTime() : Infinity) - (b.deadline_at ? new Date(b.deadline_at).getTime() : Infinity)),
 )
 
 function deadlineState(order: Order): 'overdue' | 'soon' | null {
@@ -151,7 +152,7 @@ async function submitOrder() {
           </div>
 
           <!-- Stats strip -->
-          <div v-if="stats" class="grid grid-cols-3 gap-3 mb-5">
+          <div v-if="stats" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
             <div class="bg-brand-card border border-brand-border rounded-2xl px-4 py-3">
               <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Посты</p>
               <p class="text-xl font-bold text-white mt-0.5">{{ stats.postsCount }}</p>
@@ -164,9 +165,20 @@ async function submitOrder() {
               <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Заказы</p>
               <p class="text-xl font-bold text-white mt-0.5">{{ orders.length }}</p>
             </div>
+            <div class="bg-brand-card border border-brand-border rounded-2xl px-4 py-3">
+          <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Средний срок</p>
+          <template v-if="stats.completion.avgDays !== null">
+            <p class="text-xl font-bold text-white mt-0.5">{{ stats.completion.avgDays }} дн.</p>
+            <p class="text-[10px] text-white/35 mt-0.5">по {{ stats.completion.count }} работам<span v-if="stats.completion.onTimePercent !== null"> · в срок {{ stats.completion.onTimePercent }}%</span></p>
+          </template>
+          <template v-else>
+            <p class="text-sm font-bold text-white/50 mt-1">{{ stats.completion.count }} из {{ stats.completion.required }}</p>
+            <div class="h-1 rounded-full bg-white/8 mt-1.5 overflow-hidden"><div class="h-full bg-brand-accent rounded-full" :style="{ width: Math.min(100, stats.completion.count / stats.completion.required * 100) + '%' }" /></div>
+          </template>
+        </div>
           </div>
 
-          <OrderQueue :group-id="group.id" :is-admin="true" :orders="orders"
+          <OrderQueue :group-id="group.id" :is-admin="true" :orders="orders" :avg-days="stats?.completion.avgDays ?? null"
             @open-chat="openChat" @moved="onOrderMoved" @removed="onOrderRemoved" />
 
           <!-- Deadlines -->
@@ -185,7 +197,7 @@ async function submitOrder() {
                     'bg-amber-500/15 text-amber-400': deadlineState(order) === 'soon',
                     'bg-white/5 text-white/50': !deadlineState(order),
                   }">
-                  {{ new Date(order.deadline_at!).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) }}
+                  {{ order.deadline_at ? new Date(order.deadline_at!).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : 'срок не задан' }}
                 </span>
               </div>
             </div>

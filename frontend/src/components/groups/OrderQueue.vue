@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useGroupsStore, type Order, type OrderStatus } from '@/stores/groups'
 import { useConfirm } from '@/composables/useConfirm'
 import BIcon from '@/components/BIcon.vue'
+import OrderEditModal from '@/components/groups/OrderEditModal.vue'
+import OrderStartModal from '@/components/groups/OrderStartModal.vue'
+import { errorMessage } from '@/lib/apiError'
 import * as fmt from '@/lib/format'
 
-const props = defineProps<{ groupId: string; isAdmin: boolean; orders: Order[] }>()
+const props = defineProps<{ groupId: string; isAdmin: boolean; orders: Order[]; avgDays?: number | null }>()
 const emit = defineEmits<{
   (e: 'open-chat', order: Order): void
   (e: 'moved', order: Order): void
@@ -39,11 +42,34 @@ function deadlineState(order: Order): 'overdue' | 'soon' | null {
 
 const formatDeadline = (iso: string) => fmt.formatDate(iso, 'short', 'ru-RU')
 
+const editing = ref<Order | null>(null)
+const starting = ref<Order | null>(null)
+const startBusy = ref(false)
+const startError = ref('')
+
 async function moveNext(order: Order) {
   const idx = STATUSES.indexOf(order.status)
   if (idx >= STATUSES.length - 1) return
+  // Старт работы: исполнитель сам ставит дедлайн
+  if (!order.started_at) { startError.value = ''; starting.value = order; return }
   const updated = await groupsStore.updateOrderStatus(props.groupId, order.id, STATUSES[idx + 1])
   emit('moved', updated)
+}
+
+async function confirmStart(deadlineAt: string) {
+  const order = starting.value
+  if (!order) return
+  startBusy.value = true
+  startError.value = ''
+  try {
+    const updated = await groupsStore.updateOrderStatus(props.groupId, order.id, STATUSES[STATUSES.indexOf(order.status) + 1], deadlineAt)
+    emit('moved', updated)
+    starting.value = null
+  } catch (e) {
+    startError.value = errorMessage(e) ?? 'Не удалось начать работу'
+  } finally {
+    startBusy.value = false
+  }
 }
 
 async function removeOrder(id: string) {
@@ -87,6 +113,14 @@ async function removeOrder(id: string) {
             <p class="text-[10px] text-white/40 mt-0.5">{{ order.customer.display_name || order.customer.username }}</p>
             <p v-if="order.description" class="text-[10px] text-white/40 mt-1 leading-relaxed line-clamp-2">{{ order.description }}</p>
 
+            <div v-if="order.characters?.length || order.references?.length" class="flex items-center gap-1 mt-1.5">
+              <template v-for="(c, i) in (order.characters ?? []).slice(0, 3)" :key="i">
+                <img v-if="c.images[0] || c.extraImages[0]" :src="c.images[0]?.url || c.extraImages[0]" class="w-7 h-7 rounded-md object-cover border border-white/10" />
+                <img v-else-if="c.user.avatar_url" :src="c.user.avatar_url" class="w-7 h-7 rounded-full object-cover border border-white/10" />
+              </template>
+              <span v-if="order.references?.length" class="text-[9px] text-white/40 flex items-center gap-0.5"><BIcon name="Image" class="w-2.5 h-2.5" /> {{ order.references.length }}</span>
+            </div>
+
             <div v-if="order.deadline_at" class="mt-1.5 inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md"
               :class="{
                 'bg-brand-error/15 text-brand-error': deadlineState(order) === 'overdue',
@@ -100,6 +134,10 @@ async function removeOrder(id: string) {
               <button @click.stop="emit('open-chat', order)"
                 class="text-[9px] flex items-center gap-0.5 px-2 py-0.5 rounded-md bg-white/5 text-white/45 hover:bg-white/10 hover:text-white transition-all">
                 <BIcon name="MessageCircle" class="w-2.5 h-2.5" /> Чат
+              </button>
+              <button v-if="isAdmin" @click.stop="editing = order"
+                class="text-[9px] flex items-center gap-0.5 px-2 py-0.5 rounded-md bg-white/5 text-white/45 hover:bg-white/10 hover:text-white transition-all">
+                <BIcon name="Pencil" class="w-2.5 h-2.5" /> Изменить
               </button>
               <button v-if="isAdmin && STATUSES.indexOf(status) < STATUSES.length - 1"
                 @click.stop="moveNext(order)"
@@ -115,5 +153,9 @@ async function removeOrder(id: string) {
         </div>
       </div>
     </div>
+    <OrderStartModal v-if="starting" :order="starting" :avg-days="avgDays ?? null" :busy="startBusy" :error="startError"
+      @close="starting = null" @confirm="confirmStart" />
+    <OrderEditModal v-if="editing" :group-id="groupId" :order="editing"
+      @close="editing = null" @saved="(o) => { emit('moved', o); editing = null }" />
   </div>
 </template>

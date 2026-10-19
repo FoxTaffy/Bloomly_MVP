@@ -13,6 +13,8 @@ import {
   getAllDisputesHandler, resolveDisputeHandler, getSellerPageHandler,
   getCurrentFairHandler, getFairHandler, applyToFairHandler,
   listFairsAdminHandler, createFairAdminHandler, updateFairParticipantAdminHandler,
+  createApplicationHandler, getMyApplicationHandler, listGroupApplicationsHandler,
+  groupApplicationsCountHandler, updateApplicationHandler, applicationCharacterOptionsHandler,
 } from './controller.js';
 import { requireAdminRole } from '../../lib/authHooks.js';
 
@@ -31,6 +33,14 @@ export async function dealersDenRoutes(fastify: FastifyInstance) {
   fastify.post<RouteGenericOf<typeof createListingHandler>>('/',     auth,   createListingHandler);
   fastify.patch<RouteGenericOf<typeof updateListingHandler>>('/:id', { onRequest: [fastify.authenticate], config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, updateListingHandler);
   fastify.delete<RouteGenericOf<typeof deleteListingHandler>>('/:id', auth,  deleteListingHandler);
+
+  // ── Applications: заявка на лот уходит только в группу-продавца ──
+  fastify.post('/:listingId/application', { onRequest: [fastify.authenticate], config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, createApplicationHandler);
+  fastify.get('/application-characters', auth, applicationCharacterOptionsHandler);
+  fastify.get('/:listingId/application/mine', auth, getMyApplicationHandler);
+  fastify.get('/groups/:groupId/applications', auth, listGroupApplicationsHandler);
+  fastify.get('/groups/:groupId/applications/count', auth, groupApplicationsCountHandler);
+  fastify.patch('/applications/:applicationId', auth, updateApplicationHandler);
 
   // ── Auction / Raffle ──
   fastify.post<RouteGenericOf<typeof placeBidHandler>>('/:id/bid',    auth, placeBidHandler);

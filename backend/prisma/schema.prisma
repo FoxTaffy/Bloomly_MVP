@@ -131,6 +131,7 @@ model User {
   groupReviews                   GroupReview[]
   groupJoinRequests              GroupJoinRequest[]
   dealerListings                 DealerListing[]
+  listingApplications            ListingApplication[]
   dealerBids                     DealerBid[]
   dealerListingComments          DealerListingComment[]
   stickerPacks                   StickerPack[]
@@ -1065,6 +1066,7 @@ model Group {
   sentNotifications Notification[]     @relation("NotificationSenderGroup")
   scheduledPosts    ScheduledPost[]
   dealerListings    DealerListing[]
+  listingApplications ListingApplication[]
 
   @@index([owner_id])
   @@index([type])
@@ -1169,6 +1171,8 @@ model Order {
   status          TodoStatus @default(WAITING)
   position        Int        @default(0)
   deadline_at     DateTime?
+  started_at      DateTime? // когда исполнитель взял заказ в работу (и поставил дедлайн)
+  finished_at     DateTime? // когда заказ перешёл в «Готово»
   conversation_id String?    @unique @db.Uuid
   created_at      DateTime   @default(now())
   updated_at      DateTime   @updatedAt
@@ -1475,6 +1479,7 @@ model DealerListing {
   wishlistItems    DenWishlist[]
   raffleTickets    DenRaffleTicket[]
   bookings         CommissionBooking[]
+  applications     ListingApplication[]
   disputes         DenDispute[]
   fairParticipants DenFairParticipant[]
   avatarFrame      AvatarFrame?
@@ -1486,6 +1491,31 @@ model DealerListing {
   @@index([listing_kind])
   @@index([auction_ends_at])
   @@index([created_at(sort: Desc)])
+}
+
+// Заявка покупателя на лот Dealers' Den. Уходит только в группу-продавца (не в личные сообщения):
+// группа сама пишет заявителю первой. Одна заявка на пользователя и лот.
+model ListingApplication {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  listing_id   String    @db.Uuid
+  group_id     String    @db.Uuid
+  applicant_id String    @db.Uuid
+  message      String    @db.VarChar(1000)
+  /// Персонажи в заявке: [{ userId, fursonaId?, extraImages[] }] — референсы подтягиваются из профилей на лету
+  characters   Json      @default("[]")
+  /// Заказ в очереди группы, созданный при принятии заявки
+  order_id     String?   @db.Uuid
+  status       String    @default("pending") @db.VarChar(20) // pending | contacted | accepted | declined
+  created_at   DateTime  @default(now()) @db.Timestamp(6)
+  resolved_at  DateTime? @db.Timestamp(6)
+
+  listing   DealerListing @relation(fields: [listing_id], references: [id], onDelete: Cascade)
+  group     Group         @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  applicant User          @relation(fields: [applicant_id], references: [id], onDelete: Cascade)
+
+  @@unique([listing_id, applicant_id])
+  @@index([group_id, status, created_at(sort: Desc)])
+  @@index([applicant_id])
 }
 
 // ── Avatar Frames ─────────────────────────────────────────────────────────────

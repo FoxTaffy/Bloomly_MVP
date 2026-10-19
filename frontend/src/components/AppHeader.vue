@@ -409,6 +409,18 @@ const onNotifClick = async (n: any) => {
     warningModal.open(n)
     return
   }
+  // Заявитель: принятие/отклонение заявки и этапы заказа → страница лота со статусом
+  if ((n.type.startsWith('den_application_') || n.type.startsWith('den_order_')) && n.meta?.listingId) {
+    showNotifications.value = false
+    router.push(`/dealers-den/${n.meta.listingId}`)
+    return
+  }
+  // Заявка на лот → вкладка заявок в инструментах группы
+  if (n.type === 'den_lot_application' && n.meta?.groupSlug) {
+    showNotifications.value = false
+    router.push({ name: 'group-admin-tools', params: { slugOrId: n.meta.groupSlug }, query: { tab: 'lot-applications' } })
+    return
+  }
   // Одобренный доступ открывает пак в библиотеке
   if (n.type === 'STICKER_ACCESS_APPROVED' && n.meta?.packId) {
     showNotifications.value = false

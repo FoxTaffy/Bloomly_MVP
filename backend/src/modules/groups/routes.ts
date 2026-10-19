@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply, RouteShorthandOptions } from 'fastify';
 import type { RouteGenericOf } from '../../lib/routeTypes.js';
+import { updateGroupSchema } from './schemas.js';
 import {
   listGroupsHandler,
   getGroupHandler,
@@ -61,6 +62,7 @@ import {
   getOrdersHandler,
   createOrderHandler,
   updateOrderStatusHandler,
+  updateOrderHandler,
   deleteOrderHandler,
   getBusinessStatsHandler,
   donateToGroupHandler,
@@ -77,8 +79,8 @@ import {
   listJoinRequestsHandler,
   resolveJoinRequestHandler,
   listReviewsHandler,
-  upsertReviewHandler,
   canReviewHandler,
+  upsertReviewHandler,
   deleteReviewHandler,
   getDigestHandler,
   getCategoriesHandler,
@@ -104,7 +106,7 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   });
   fastify.get<RouteGenericOf<typeof getGroupHandler>>('/:slugOrId', { onRequest: [fastify.tryAuthenticate] }, getGroupHandler);
   fastify.post<RouteGenericOf<typeof createGroupHandler>>('/', auth, createGroupHandler);
-  fastify.patch<RouteGenericOf<typeof updateGroupHandler>>('/:id', auth, updateGroupHandler);
+  fastify.patch<RouteGenericOf<typeof updateGroupHandler>>('/:id', { ...auth, schema: updateGroupSchema }, updateGroupHandler);
   fastify.delete<RouteGenericOf<typeof deleteGroupHandler>>('/:id', auth, deleteGroupHandler);
 
   // ── Membership ────────────────────────────────────────────────────────────
@@ -126,8 +128,8 @@ export async function groupsRoutes(fastify: FastifyInstance) {
 
   // ── Reviews / digest / categories / team ────────────────────────────────
   fastify.get<RouteGenericOf<typeof listReviewsHandler>>('/:id/reviews', { onRequest: [fastify.tryAuthenticate] }, listReviewsHandler);
-  fastify.post<RouteGenericOf<typeof upsertReviewHandler>>('/:id/reviews', auth, upsertReviewHandler);
   fastify.get<RouteGenericOf<typeof canReviewHandler>>('/:id/reviews/can-review', auth, canReviewHandler);
+  fastify.post<RouteGenericOf<typeof upsertReviewHandler>>('/:id/reviews', auth, upsertReviewHandler);
   fastify.delete<RouteGenericOf<typeof deleteReviewHandler>>('/:id/reviews/:reviewId', auth, deleteReviewHandler);
   fastify.get<RouteGenericOf<typeof getDigestHandler>>('/:id/digest', { onRequest: [fastify.tryAuthenticate] }, getDigestHandler);
   fastify.get<RouteGenericOf<typeof getCategoriesHandler>>('/:id/categories', { onRequest: [fastify.tryAuthenticate] }, getCategoriesHandler);
@@ -206,6 +208,7 @@ export async function groupsRoutes(fastify: FastifyInstance) {
   fastify.get<RouteGenericOf<typeof getOrdersHandler>>('/:id/orders', auth, getOrdersHandler);
   fastify.post<RouteGenericOf<typeof createOrderHandler>>('/:id/orders', auth, createOrderHandler);
   fastify.patch<RouteGenericOf<typeof updateOrderStatusHandler>>('/:id/orders/:orderId/status', auth, updateOrderStatusHandler);
+  fastify.patch<RouteGenericOf<typeof updateOrderHandler>>('/:id/orders/:orderId', auth, updateOrderHandler);
   fastify.delete<RouteGenericOf<typeof deleteOrderHandler>>('/:id/orders/:orderId', auth, deleteOrderHandler);
   fastify.get<RouteGenericOf<typeof getBusinessStatsHandler>>('/:id/orders-stats', auth, getBusinessStatsHandler);
   fastify.get<RouteGenericOf<typeof getOrderConversationHandler>>('/:id/orders/:orderId/conversation', auth, getOrderConversationHandler);

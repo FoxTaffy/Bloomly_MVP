@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useListingApplicationsStore } from '@/stores/listingApplications'
 import { vStickyBottom } from '@/lib/stickyBottom'
 import LinkifiedText from '@/components/LinkifiedText.vue'
 import { apiErrorMessage, apiErrorStatus, errorMessage } from '@/lib/apiError'
@@ -704,7 +705,10 @@ async function load() {
     loadMyRsvp()
   }
   if (isAdmin.value && group.value) messagesStore.fetchGroupInboxCount(group.value.id)
+  if (isAdmin.value && group.value?.den_enabled) lotApplicationsStore.fetchPendingCount(group.value.id)
 }
+const lotApplicationsStore = useListingApplicationsStore()
+const lotPendingCount = computed(() => (group.value ? lotApplicationsStore.pendingByGroup[group.value.id] ?? 0 : 0))
 const inboxCount = computed(() => (group.value ? messagesStore.groupInboxCounts[group.value.id] ?? 0 : 0))
 const showScrollTop = ref(false)
 function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }) }
@@ -1095,6 +1099,18 @@ const vClickOutside = {
                       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-brand-border bg-brand-bg text-white/55 text-sm font-bold hover:border-brand-accent/60 hover:text-brand-accent transition-all disabled:opacity-50">
                       <BIcon name="MessageCircle" class="w-4 h-4" />
                       {{ dmLoading ? langStore.t.groupDetailOpeningEllipsis : langStore.t.groupDetailMessageGroupBtn }}
+                    </button>
+                    <button v-if="isAdmin && group.den_enabled"
+                      @click="router.push({ name: 'group-admin-tools', params: { slugOrId: group.slug || group.id }, query: { tab: 'lot-applications' } })"
+                      :class="['relative inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-bold transition-all',
+                        lotPendingCount > 0
+                          ? 'border-brand-accent/50 bg-brand-accent/10 text-brand-accent hover:bg-brand-accent/15'
+                          : 'border-brand-border bg-brand-bg text-white/55 hover:border-brand-accent/60 hover:text-brand-accent']">
+                      <BIcon name="Send" class="w-4 h-4" /> Заявки на лоты
+                      <span v-if="lotPendingCount > 0"
+                        class="flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-brand-error text-white text-[11px] font-extrabold leading-none">
+                        {{ lotPendingCount > 99 ? '99+' : lotPendingCount }}
+                      </span>
                     </button>
                     <button v-if="isOwner"
                       @click="router.push({ name: 'group-settings', params: { slugOrId: group!.slug } })"

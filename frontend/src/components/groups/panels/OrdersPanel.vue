@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import BIcon from '@/components/BIcon.vue'
 import OrderQueue from '@/components/groups/OrderQueue.vue'
-import { useGroupsStore, type Order, type OrderStatus } from '@/stores/groups'
+import { useGroupsStore, type Order, type OrderStatus, type BusinessStats } from '@/stores/groups'
 import { useMessagesStore } from '@/stores/messages'
 
 const props = defineProps<{
@@ -18,7 +18,7 @@ const messagesStore = useMessagesStore()
 
 const loading = ref(false)
 const orders = ref<Order[]>([])
-const stats = ref<{ postsCount: number; messagesCount: number; ordersByStatus: Record<OrderStatus, number> } | null>(null)
+const stats = ref<BusinessStats | null>(null)
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   WAITING: 'Ожидание', SKETCH: 'Скетч', LINEART: 'Лайнарт', COLORING: 'Раскраска', FINISHED: 'Готово',
@@ -26,8 +26,9 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
 
 const deadlineList = computed(() =>
   orders.value
-    .filter(o => o.deadline_at && o.status !== 'FINISHED')
-    .sort((a, b) => new Date(a.deadline_at!).getTime() - new Date(b.deadline_at!).getTime()),
+    // Принятые заявки попадают сюда сразу, даже пока срок не назначен (он ставится при старте работы)
+    .filter(o => o.status !== 'FINISHED' && (o.deadline_at || (o.form_data as { source?: string } | null)?.source === 'listing_application'))
+    .sort((a, b) => (a.deadline_at ? new Date(a.deadline_at).getTime() : Infinity) - (b.deadline_at ? new Date(b.deadline_at).getTime() : Infinity)),
 )
 
 function deadlineState(order: Order): 'overdue' | 'soon' | null {
@@ -95,7 +96,7 @@ onMounted(load)
 
     <div v-else class="p-6">
       <!-- Stats strip -->
-      <div v-if="stats" class="grid grid-cols-3 gap-3 mb-5">
+      <div v-if="stats" class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
           <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Посты</p>
           <p class="text-xl font-bold text-white mt-0.5">{{ stats.postsCount }}</p>
@@ -108,9 +109,20 @@ onMounted(load)
           <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Заказы</p>
           <p class="text-xl font-bold text-white mt-0.5">{{ orders.length }}</p>
         </div>
+        <div class="bg-brand-bg border border-brand-border rounded-2xl px-4 py-3">
+          <p class="text-[10px] text-white/40 uppercase tracking-wide font-bold">Средний срок</p>
+          <template v-if="stats.completion.avgDays !== null">
+            <p class="text-xl font-bold text-white mt-0.5">{{ stats.completion.avgDays }} дн.</p>
+            <p class="text-[10px] text-white/35 mt-0.5">по {{ stats.completion.count }} работам<span v-if="stats.completion.onTimePercent !== null"> · в срок {{ stats.completion.onTimePercent }}%</span></p>
+          </template>
+          <template v-else>
+            <p class="text-sm font-bold text-white/50 mt-1">{{ stats.completion.count }} из {{ stats.completion.required }}</p>
+            <div class="h-1 rounded-full bg-white/8 mt-1.5 overflow-hidden"><div class="h-full bg-brand-accent rounded-full" :style="{ width: Math.min(100, stats.completion.count / stats.completion.required * 100) + '%' }" /></div>
+          </template>
+        </div>
       </div>
 
-      <OrderQueue :group-id="groupId" :is-admin="true" :orders="orders"
+      <OrderQueue :group-id="groupId" :is-admin="true" :orders="orders" :avg-days="stats?.completion.avgDays ?? null"
         @open-chat="openChat" @moved="onOrderMoved" @removed="onOrderRemoved" />
 
       <!-- Deadlines -->
@@ -129,7 +141,7 @@ onMounted(load)
                 'bg-amber-500/15 text-amber-400': deadlineState(order) === 'soon',
                 'bg-white/5 text-white/50': !deadlineState(order),
               }">
-              {{ new Date(order.deadline_at!).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) }}
+              {{ order.deadline_at ? new Date(order.deadline_at!).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : 'срок не задан' }}
             </span>
           </div>
         </div>

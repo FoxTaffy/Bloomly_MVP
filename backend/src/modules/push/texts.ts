@@ -18,6 +18,13 @@ const SOCIAL: Record<string, string> = {
 
 const DEN: Record<string, string> = {
   den_auction_won: 'Вы выиграли аукцион в Dealers\' Den',
+  den_application_accepted: 'Ваша заявка принята — заказ в очереди',
+  den_application_declined: 'Заявка отклонена',
+  den_order_sketch: 'Заказ: художник начал скетч',
+  den_order_lineart: 'Заказ: готов скетч, идёт лайнарт',
+  den_order_coloring: 'Заказ: идёт раскраска',
+  den_order_finished: 'Ваш заказ готов!',
+  den_lot_application: 'Новая заявка на лот вашей группы',
   den_commission_booked: 'Ваша комиссия забронирована',
   den_dispute_resolved: 'Спор по заказу решён',
   den_dispute_auto_resolved: 'Спор по заказу решён автоматически',

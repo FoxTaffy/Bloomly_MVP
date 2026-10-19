@@ -19,6 +19,7 @@ import CommissionInfoBlocks from '@/components/CommissionInfoBlocks.vue'
 import CommissionReviews   from '@/components/CommissionReviews.vue'
 import ListingPanelHead    from '@/components/ListingPanelHead.vue'
 import ListingApplicationModal from '@/components/ListingApplicationModal.vue'
+import { useListingApplicationsStore } from '@/stores/listingApplications'
 import ListingSpecs        from '@/components/ListingSpecs.vue'
 import DenDiscountPrice from '@/components/DenDiscountPrice.vue'
 import DenDiscountField from '@/components/DenDiscountField.vue'
@@ -65,6 +66,9 @@ onMounted(async () => {
       isWishlisted.value  = listing.value.is_wishlisted ?? false
       wishlistCount.value = listing.value.wishlist_count ?? 0
       if (listing.value.category === 'avatar_frame') await loadOwnedFrames()
+      if (auth.user && auth.user.id !== listing.value.seller_id) {
+        try { myApplication.value = await applicationsStore.getMine(listing.value.id) } catch { /* не критично */ }
+      }
     }
   } catch (err) {
     console.error('[DealerListingView] load error:', errorMessage(err))
@@ -330,6 +334,9 @@ async function claimFrame() {
 // ── Edit ─────────────────────────────────────────────────────────────────────
 const showEditModal = ref(false)
 const showApplyModal = ref(false)
+const applicationsStore = useListingApplicationsStore()
+const myApplication = ref<{ status: string; orderStage?: string | null; deadlineAt?: string | null } | null>(null)
+const STAGE_LABEL: Record<string, string> = { WAITING: 'в очереди', SKETCH: 'скетч', LINEART: 'лайнарт', COLORING: 'раскраска', FINISHED: 'готово' }
 const editDetails   = ref(emptyDraft())
 const isUpdating    = ref(false)
 const editForm = ref({
@@ -1126,7 +1133,28 @@ async function submitReport() {
                       <p v-if="claimFrameError" class="text-xs text-brand-error mt-2">{{ claimFrameError }}</p>
                     </template>
                     <template v-else>
-                      <button v-if="auth.user && auth.user.id !== listing.seller_id"
+                      <div v-if="auth.user && auth.user.id !== listing.seller_id && myApplication"
+                        class="flex items-start gap-2.5 rounded-2xl bg-brand-success/8 border border-brand-success/20 px-4 py-3">
+                        <BIcon :name="myApplication.status === 'declined' ? 'XCircle' : myApplication.status === 'accepted' ? 'Sparkles' : 'CheckCircle2'"
+                          :class="['w-4 h-4 shrink-0 mt-0.5', myApplication.status === 'declined' ? 'text-white/40' : 'text-brand-success']" />
+                        <div class="min-w-0">
+                          <p class="text-xs font-extrabold text-white">
+                            {{ myApplication.status === 'declined' ? 'Заявка отклонена группой'
+                              : myApplication.status === 'accepted' ? 'Заявка принята — заказ в работе'
+                              : 'Заявка отправлена в группу' }}
+                          </p>
+                          <p class="text-[11px] text-white/40 leading-relaxed mt-0.5">
+                            <template v-if="myApplication.status === 'accepted'">
+                              Этап: <b class="text-white/70">{{ STAGE_LABEL[myApplication.orderStage ?? 'WAITING'] ?? '—' }}</b>
+                              <template v-if="myApplication.deadlineAt"> · срок до {{ new Date(myApplication.deadlineAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) }}</template>.
+                              О каждом этапе придёт уведомление.
+                            </template>
+                            <template v-else-if="myApplication.status === 'declined'">Повторно подать заявку на этот лот нельзя.</template>
+                            <template v-else>Группа сама напишет вам — остаётся дождаться ответа.</template>
+                          </p>
+                        </div>
+                      </div>
+                      <button v-else-if="auth.user && auth.user.id !== listing.seller_id && listing.group"
                         @click="showApplyModal = true"
                         class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm"
                         style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
@@ -1330,7 +1358,7 @@ async function submitReport() {
       </main>
     </div>
 
-    <ListingApplicationModal v-if="showApplyModal && listing" :listing="listing" :seller-id="listing.seller_id" @close="showApplyModal = false" />
+    <ListingApplicationModal v-if="showApplyModal && listing" :listing="listing" @sent="myApplication = { status: 'pending' }" @close="showApplyModal = false" />
 
     <!-- ═══════════════════════════════════════════════════════════
          EDIT MODAL

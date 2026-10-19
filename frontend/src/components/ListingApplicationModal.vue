@@ -9,20 +9,16 @@
         </button>
 
         <!-- Sent -->
-        <div v-if="sentConvId" class="text-center py-6 stack-y-3">
+        <div v-if="sent" class="text-center py-6 stack-y-3">
           <div class="w-14 h-14 rounded-full bg-brand-success/15 flex items-center justify-center mx-auto">
             <BIcon name="CheckCircle2" class="w-8 h-8 text-brand-success" />
           </div>
           <h2 class="text-xl font-extrabold text-white">Заявка отправлена</h2>
-          <p class="text-white/40 text-xs">Продавец увидит её в личных сообщениях и ответит в чате.</p>
-          <div class="flex gap-3 pt-2">
-            <button class="flex-1 px-5 py-3 rounded-2xl bg-brand-bg border border-brand-border text-white/60 font-bold text-sm hover:bg-brand-border/50 transition-colors"
-              @click="emit('close')">Закрыть</button>
-            <button class="flex-1 py-3 rounded-2xl bg-brand-accent text-white font-bold text-sm hover:bg-brand-accent-plus transition-colors shadow-accent"
-              @click="router.push({ name: 'messages', query: { userId: sellerId } })">
-              <BIcon name="MessageCircle" class="w-4 h-4 inline mr-1.5 -mt-0.5" /> Открыть чат
-            </button>
-          </div>
+          <p class="text-white/45 text-xs leading-relaxed max-w-xs mx-auto">
+            Её увидит {{ groupName }}. Теперь остаётся ждать: группа сама напишет вам, когда ответит на заявку.
+          </p>
+          <button class="w-full mt-2 py-3 rounded-2xl bg-brand-accent text-white font-bold text-sm hover:bg-brand-accent-plus transition-colors shadow-accent"
+            @click="emit('close')">Понятно</button>
         </div>
 
         <template v-else>
@@ -34,7 +30,7 @@
             </div>
             <div class="min-w-0">
               <h2 class="text-xl font-extrabold text-white leading-tight">Отправить заявку</h2>
-              <p class="text-white/40 text-xs">Продавец ответит вам в личных сообщениях</p>
+              <p class="text-white/40 text-xs">Заявка уйдёт в группу-продавца</p>
             </div>
           </div>
 
@@ -51,6 +47,7 @@
                 <p class="text-[10px] font-bold text-white/35 uppercase tracking-widest mb-0.5">Лот</p>
                 <p class="text-sm font-extrabold text-white truncate">{{ listing.title }}</p>
                 <p class="text-base font-black text-brand-yellow tabular-nums leading-tight">{{ formatPrice(listing.price, listing.currency) }}</p>
+                <p v-if="listing.group" class="text-[11px] text-white/40 truncate mt-0.5">Продавец: {{ listing.group.name }}</p>
               </div>
             </div>
 
@@ -70,16 +67,26 @@
                 class="w-full bg-brand-bg border border-brand-border rounded-2xl px-4 py-3 text-white text-sm placeholder-white/25 focus:border-brand-accent focus:outline-hidden resize-none transition-colors" />
             </div>
 
-            <!-- Contact -->
+            <!-- Characters -->
+            <CharacterPicker v-model="characters" />
+
+            <!-- Contact: заявитель контакт не вводит — для связи используется его аккаунт -->
             <div class="stack-y-2">
-              <label class="text-[10px] font-bold text-white/40 uppercase tracking-widest block">
-                Контакты для связи <span class="normal-case tracking-normal font-medium text-white/25">· необязательно</span>
-              </label>
-              <div class="relative">
-                <BIcon name="AtSign" class="w-4 h-4 text-white/30 absolute left-4 top-1/2 -translate-y-1/2" />
-                <input v-model="contact" maxlength="120" placeholder="Telegram, Discord…"
-                  class="w-full bg-brand-bg border border-brand-border rounded-2xl pl-11 pr-4 py-3 text-white text-sm placeholder-white/25 focus:border-brand-accent focus:outline-hidden transition-colors" />
+              <label class="text-[10px] font-bold text-white/40 uppercase tracking-widest block">Контакт для связи</label>
+              <div class="flex items-center gap-3 rounded-2xl border border-brand-border bg-brand-bg px-3.5 py-3">
+                <img v-if="me?.avatar_url" :src="me.avatar_url" class="w-10 h-10 rounded-xl object-cover shrink-0" />
+                <div v-else class="w-10 h-10 rounded-xl bg-brand-accent/20 flex items-center justify-center text-sm font-extrabold text-brand-accent shrink-0">
+                  {{ (me?.display_name || me?.username || '?')[0].toUpperCase() }}
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-bold text-white truncate">{{ me?.display_name || me?.username }}</p>
+                  <p class="text-xs text-white/40 truncate">@{{ me?.username }}</p>
+                </div>
+                <span class="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold text-brand-success bg-brand-success/10 border border-brand-success/20 rounded-full px-2 py-1">
+                  <BIcon name="ShieldCheck" class="w-3 h-3" /> Ваш аккаунт
+                </span>
               </div>
+              <p class="text-[11px] text-white/35 leading-relaxed">Группа увидит, от кого заявка, и свяжется с вами через этот аккаунт — отдельно указывать контакты не нужно.</p>
             </div>
 
             <p v-if="error" class="text-xs text-brand-error bg-brand-error/8 border border-brand-error/15 rounded-xl px-4 py-2.5">{{ error }}</p>
@@ -105,46 +112,40 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useNsfwMode } from '@/composables/useNsfwMode'
-import { useRouter } from 'vue-router'
 import BIcon from '@/components/BIcon.vue'
-import { useMessagesStore } from '@/stores/messages'
-import api from '@/api'
+import CharacterPicker from '@/components/CharacterPicker.vue'
+import { useAuthStore } from '@/stores/auth'
+import { useListingApplicationsStore, type CharacterDraft } from '@/stores/listingApplications'
 import { errorMessage } from '@/lib/apiError'
 import { formatPrice } from '@/lib/format'
 import type { DealerListing } from '@/stores/dealersDen'
 
-const props = defineProps<{ listing: DealerListing; sellerId: string }>()
-const emit  = defineEmits<{ (e: 'close'): void }>()
+const props = defineProps<{ listing: DealerListing }>()
+const emit  = defineEmits<{ (e: 'close'): void; (e: 'sent'): void }>()
 
-const router = useRouter()
-const messages = useMessagesStore()
+const auth = useAuthStore()
+const applications = useListingApplicationsStore()
+const me = computed(() => auth.user)
 
 const nsfw = useNsfwMode().nsfwEnabled
 const hidePreview = computed(() => props.listing.is_nsfw && !nsfw.value)
+const groupName = computed(() => props.listing.group ? `группа «${props.listing.group.name}»` : 'группа-продавец')
 const templates = ['Хочу купить. Расскажите, как оформить?', 'Есть вопрос по лоту.', 'Можно обсудить цену?']
 
 const text = ref('')
-const contact = ref('')
+const characters = ref<CharacterDraft[]>([])
 const sending = ref(false)
 const error = ref('')
-const sentConvId = ref('')
+const sent = ref(false)
 
 async function submit() {
   if (!text.value.trim() || sending.value) return
   sending.value = true
   error.value = ''
   try {
-    const convId = await messages.openConversation(props.sellerId)
-    const lines = [
-      `📩 Заявка на лот «${props.listing.title}» (${formatPrice(props.listing.price, props.listing.currency)})`,
-      `${window.location.origin}/dealers-den/${props.listing.id}`,
-      '',
-      text.value.trim(),
-    ]
-    if (contact.value.trim()) lines.push('', `Контакты: ${contact.value.trim()}`)
-    // Direct REST call (not store.sendMessage, which swallows failures) so errors reach the form.
-    await api.post(`/messages/conversations/${convId}/messages`, { content: lines.join('\n') })
-    sentConvId.value = convId
+    await applications.submit(props.listing.id, text.value.trim(), characters.value)
+    sent.value = true
+    emit('sent')
   } catch (e) {
     error.value = errorMessage(e) ?? 'Не удалось отправить заявку'
   } finally {

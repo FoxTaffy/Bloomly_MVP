@@ -992,17 +992,31 @@ export const createOrderHandler = async (
 };
 
 export const updateOrderStatusHandler = async (
-  request: FastifyRequest<{ Params: { id: string; orderId: string }; Body: { status: string } }>,
+  request: FastifyRequest<{ Params: { id: string; orderId: string }; Body: { status: string; deadlineAt?: string | null } }>,
   reply: FastifyReply,
 ) => {
   try {
     const { id: userId } = request.user as JwtUser;
-    const { status } = request.body;
+    const { status, deadlineAt } = request.body;
     if (!isOrderStatus(status)) return fail(reply, 400, 'INVALID_STATUS', 'Unknown order status');
-    const order = await groupService.updateOrderStatus(request.params.orderId, userId, status);
+    const order = await groupService.updateOrderStatus(request.params.orderId, userId, status, deadlineAt);
     return ok(reply, { order });
   } catch (e) {
     return fail(reply, errStatus(e) ?? 400, 'UPDATE_ORDER_STATUS_ERROR', errMessage(e));
+  }
+};
+
+export const updateOrderHandler = async (
+  request: FastifyRequest<{ Params: { id: string; orderId: string }; Body: { deadlineAt?: string | null; description?: string | null; references?: string[] } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const { deadlineAt, description, references } = request.body ?? {};
+    const order = await groupService.updateOrder(request.params.orderId, userId, { deadlineAt, description, references });
+    return ok(reply, { order });
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 400, 'UPDATE_ORDER_ERROR', errMessage(e));
   }
 };
 

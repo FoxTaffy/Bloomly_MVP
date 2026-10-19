@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import BIcon from '@/components/BIcon.vue'
+import LotApplicationsPanel from '@/components/groups/panels/LotApplicationsPanel.vue'
 import ApplicationsPanel from '@/components/groups/panels/ApplicationsPanel.vue'
 import TicketsPanel from '@/components/groups/panels/TicketsPanel.vue'
 import TodolistPanel from '@/components/groups/panels/TodolistPanel.vue'
@@ -15,6 +16,7 @@ import ScheduledPanel from '@/components/groups/panels/ScheduledPanel.vue'
 import { useGroupsStore } from '@/stores/groups'
 import { useAuthStore } from '@/stores/auth'
 import { useMessagesStore } from '@/stores/messages'
+import { useListingApplicationsStore } from '@/stores/listingApplications'
 import { useNsfwMode } from '@/composables/useNsfwMode'
 
 const route = useRoute()
@@ -22,6 +24,7 @@ const router = useRouter()
 const groupsStore = useGroupsStore()
 const authStore = useAuthStore()
 const messagesStore = useMessagesStore()
+const lotApplications = useListingApplicationsStore()
 const nsfwMode = useNsfwMode().nsfwEnabled
 
 const loading = ref(true)
@@ -37,7 +40,7 @@ interface ToolTab {
   key: string
   label: string
   icon: string
-  kind: 'overview' | 'applications' | 'tickets' | 'todolist' | 'orders' | 'balance' | 'inbox' | 'scheduled' | 'settings'
+  kind: 'overview' | 'lot-applications' | 'applications' | 'tickets' | 'todolist' | 'orders' | 'balance' | 'inbox' | 'scheduled' | 'settings'
   settingsSection?: string
   settingsDesc?: string
 }
@@ -45,9 +48,17 @@ interface ToolTab {
 const OVERVIEW_TAB: ToolTab = { key: 'overview', label: 'Обзор', icon: 'BarChart3', kind: 'overview' }
 const BALANCE_TAB: ToolTab = { key: 'balance', label: 'Баланс', icon: 'Wallet', kind: 'balance' }
 const INBOX_TAB: ToolTab = { key: 'inbox', label: 'Обращения', icon: 'Inbox', kind: 'inbox' }
+const LOT_APPLICATIONS_TAB: ToolTab = { key: 'lot-applications', label: 'Заявки на лоты', icon: 'Send', kind: 'lot-applications' }
 const SCHEDULED_TAB: ToolTab = { key: 'scheduled', label: 'Отложенные', icon: 'CalendarClock', kind: 'scheduled' }
 
 const toolTabs = computed<ToolTab[]>(() => {
+  const base = baseToolTabs.value
+  // Вкладка заявок на лоты — только у групп с подключённым Dealers Den, сразу после «Обзора»
+  if (!group.value?.den_enabled) return base
+  return [base[0], LOT_APPLICATIONS_TAB, ...base.slice(1)]
+})
+
+const baseToolTabs = computed<ToolTab[]>(() => {
   const t: string | undefined = group.value?.type
 
   if (t === 'event') return [
@@ -126,6 +137,7 @@ const activeTab = computed<string>({
 })
 
 const activeToolTab = computed(() => toolTabs.value.find(t => t.key === activeTab.value) ?? null)
+const lotPendingCount = computed(() => (group.value ? lotApplications.pendingByGroup[group.value.id] ?? 0 : 0))
 const inboxCount = computed(() => (group.value ? messagesStore.groupInboxCounts[group.value.id] ?? 0 : 0))
 
 function openSettingsSection(tab: ToolTab) {
@@ -141,6 +153,7 @@ async function load() {
   try {
     await groupsStore.loadGroup(route.params.slugOrId as string)
     if (authStore.user && !groupsStore.myGroups.length) await groupsStore.loadMyGroups()
+    if (isAdmin.value && group.value?.den_enabled) lotApplications.fetchPendingCount(group.value.id)
     if (isAdmin.value && group.value && toolTabs.value.some(t => t.kind === 'inbox')) {
       messagesStore.fetchGroupInboxCount(group.value.id)
     }
@@ -193,6 +206,10 @@ watch(() => route.params.slugOrId, load)
                   : 'bg-brand-card border-brand-border text-white/55 hover:text-white hover:border-white/20'
               ]">
               <BIcon :name="tab.icon" class="w-3.5 h-3.5" /> {{ tab.label }}
+              <span v-if="tab.kind === 'lot-applications' && lotPendingCount > 0"
+                class="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-error text-white text-[10px] font-extrabold leading-none">
+                {{ lotPendingCount > 99 ? '99+' : lotPendingCount }}
+              </span>
               <span v-if="tab.kind === 'inbox' && inboxCount > 0"
                 class="flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-error text-white text-[10px] font-extrabold leading-none">
                 {{ inboxCount > 99 ? '99+' : inboxCount }}
@@ -204,6 +221,9 @@ watch(() => route.params.slugOrId, load)
           <Transition name="tool-tab" mode="out-in">
             <div v-if="activeToolTab" :key="activeToolTab.key">
               <OverviewPanel v-if="activeToolTab.kind === 'overview'"
+                :group-id="group.id" />
+
+              <LotApplicationsPanel v-else-if="activeToolTab.kind === 'lot-applications'"
                 :group-id="group.id" />
 
               <ApplicationsPanel v-else-if="activeToolTab.kind === 'applications'"

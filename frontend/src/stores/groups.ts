@@ -79,6 +79,7 @@ export interface Group {
   hide_admins: boolean
   hidden_member_ids: string
   business_enabled: boolean
+  den_enabled?: boolean
   created_at: string
   owner: GroupOwner
   _count: { members: number; events: number; posts: number }
@@ -261,7 +262,12 @@ export interface Order {
   status: OrderStatus
   position: number
   deadline_at: string | null
+  started_at: string | null
+  finished_at: string | null
   conversation_id: string | null
+  /** Персонажи из принятой заявки (референсы подтянуты из профилей) и референсы, добавленные художником */
+  characters?: import('./listingApplications').ResolvedCharacter[]
+  references?: string[]
   created_at: string
   updated_at: string
   customer: { id: string; username: string; display_name: string | null; avatar_url: string | null }
@@ -271,6 +277,8 @@ export interface BusinessStats {
   postsCount: number
   messagesCount: number
   ordersByStatus: Record<OrderStatus, number>
+  /** Реальная скорость: avgDays/onTimePercent приходят только после `required` завершённых работ */
+  completion: { count: number; required: number; avgDays: number | null; onTimePercent: number | null }
 }
 
 // ── Group balance (donations) ───────────────────────────────────────────────
@@ -763,8 +771,13 @@ export const useGroupsStore = defineStore('groups', () => {
     return data.data.order as Order
   }
 
-  async function updateOrderStatus(groupId: string, orderId: string, status: OrderStatus): Promise<Order> {
-    const { data } = await api.patch(`/groups/${groupId}/orders/${orderId}/status`, { status })
+  async function updateOrderStatus(groupId: string, orderId: string, status: OrderStatus, deadlineAt?: string): Promise<Order> {
+    const { data } = await api.patch(`/groups/${groupId}/orders/${orderId}/status`, { status, ...(deadlineAt ? { deadlineAt } : {}) })
+    return data.data.order as Order
+  }
+
+  async function updateOrder(groupId: string, orderId: string, payload: { deadlineAt?: string | null; description?: string | null; references?: string[] }): Promise<Order> {
+    const { data } = await api.patch(`/groups/${groupId}/orders/${orderId}`, payload)
     return data.data.order as Order
   }
 
@@ -867,7 +880,7 @@ export const useGroupsStore = defineStore('groups', () => {
     fetchMembers, changeMemberRole, removeMember,
     fetchTodoColumns, updateTodoColumns,
     fetchTodoItems, createTodoItem, updateTodoItem, deleteTodoItem, reorderTodoItems,
-    fetchOrders, createOrder, updateOrderStatus, deleteOrder, fetchBusinessStats, getOrderConversation,
+    fetchOrders, createOrder, updateOrderStatus, updateOrder, deleteOrder, fetchBusinessStats, getOrderConversation,
     donateToGroup, getGroupBalance,
     fetchCustomRoles, createCustomRole, updateCustomRole, deleteCustomRole,
   }

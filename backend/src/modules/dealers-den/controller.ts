@@ -2,6 +2,8 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { getSellerAccess, connectGroupToDen, getGroupDenStatus } from './access.js';
 import { dealersDenService } from './service.js';
 import { fairService } from './fair.service.js';
+import { listingApplicationService } from './applications.service.js';
+import { characterOptions } from '../../lib/orderCharacters.js';
 import type {
   GetListingsQuery, CreateListingInput, UpdateListingInput, PlaceBidInput,
   CreateReviewInput, CreateBookingInput, UpdateBookingInput,
@@ -601,5 +603,94 @@ export async function updateFairParticipantAdminHandler(req: FastifyRequest, rep
   } catch (err) {
     req.log.error(err);
     return reply.status(500).send({ success: false, error: 'Failed to update participant' });
+  }
+}
+
+// ── Listing applications (заявки на лот — только в группу) ─────────────────────
+
+export async function createApplicationHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { listingId } = req.params as { listingId: string };
+  const { message, characters } = (req.body ?? {}) as { message?: unknown; characters?: unknown };
+  if (!UUID_RE.test(listingId)) return reply.status(404).send({ success: false, error: 'Лот не найден' });
+  try {
+    const application = await listingApplicationService.create(listingId, req.user.id, message, characters);
+    return reply.status(201).send({ success: true, data: { application } });
+  } catch (err) {
+    const msg: string = errMessage(err) ?? '';
+    if (msg === 'EMPTY_MESSAGE')     return reply.status(422).send({ success: false, error: 'Напишите сообщение к заявке' });
+    if (msg === 'LISTING_NOT_FOUND') return reply.status(404).send({ success: false, error: 'Лот не найден или недоступен' });
+    if (msg === 'NO_GROUP')          return reply.status(409).send({ success: false, error: 'У лота нет группы-продавца' });
+    if (msg === 'OWN_LISTING')       return reply.status(403).send({ success: false, error: 'Нельзя подать заявку на свой лот' });
+    if (msg === 'DEN_FROZEN')        return reply.status(403).send({ success: false, error: 'Ваш аккаунт заморожен' });
+    if (msg === 'INVALID_CHARACTERS' || msg === 'TOO_MANY_CHARACTERS') return reply.status(422).send({ success: false, error: 'Некорректный список персонажей (до 5, по 4 доп. референса)' });
+    if (msg === 'CHARACTER_NOT_FRIEND') return reply.status(403).send({ success: false, error: 'Персонажей можно выбирать только из себя и своих друзей' });
+    if (msg === 'ALREADY_APPLIED')   return reply.status(409).send({ success: false, error: 'Вы уже подавали заявку на этот лот' });
+    req.log.error(err);
+    return reply.status(500).send({ success: false, error: 'Не удалось отправить заявку' });
+  }
+}
+
+export async function getMyApplicationHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { listingId } = req.params as { listingId: string };
+  if (!UUID_RE.test(listingId)) return reply.send({ success: true, data: { application: null } });
+  try {
+    const application = await listingApplicationService.getMine(listingId, req.user.id);
+    return reply.send({ success: true, data: { application } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ success: false, error: 'Failed to load application' });
+  }
+}
+
+export async function listGroupApplicationsHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { groupId } = req.params as { groupId: string };
+  const { status } = req.query as { status?: string };
+  if (!UUID_RE.test(groupId)) return reply.status(404).send({ success: false, error: 'Группа не найдена' });
+  try {
+    const data = await listingApplicationService.listForGroup(groupId, req.user.id, status);
+    return reply.send({ success: true, data });
+  } catch (err) {
+    if (errMessage(err) === 'FORBIDDEN') return reply.status(403).send({ success: false, error: 'Нет доступа' });
+    req.log.error(err);
+    return reply.status(500).send({ success: false, error: 'Failed to load applications' });
+  }
+}
+
+export async function groupApplicationsCountHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { groupId } = req.params as { groupId: string };
+  if (!UUID_RE.test(groupId)) return reply.send({ success: true, data: { pending: 0 } });
+  try {
+    const pending = await listingApplicationService.pendingCount(groupId, req.user.id);
+    return reply.send({ success: true, data: { pending } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ success: false, error: 'Failed to load count' });
+  }
+}
+
+export async function updateApplicationHandler(req: FastifyRequest, reply: FastifyReply) {
+  const { applicationId } = req.params as { applicationId: string };
+  const { status } = (req.body ?? {}) as { status?: string };
+  if (!UUID_RE.test(applicationId)) return reply.status(404).send({ success: false, error: 'Заявка не найдена' });
+  try {
+    const application = await listingApplicationService.setStatus(applicationId, req.user.id, String(status));
+    return reply.send({ success: true, data: { application } });
+  } catch (err) {
+    const msg: string = errMessage(err) ?? '';
+    if (msg === 'ALREADY_ACCEPTED') return reply.status(409).send({ success: false, error: 'Заявка принята — дальше работайте с ней в очереди заказов' });
+    if (msg === 'INVALID_STATUS') return reply.status(422).send({ success: false, error: 'Неверный статус' });
+    if (msg === 'NOT_FOUND')      return reply.status(404).send({ success: false, error: 'Заявка не найдена' });
+    if (msg === 'FORBIDDEN')      return reply.status(403).send({ success: false, error: 'Нет доступа' });
+    req.log.error(err);
+    return reply.status(500).send({ success: false, error: 'Failed to update application' });
+  }
+}
+
+export async function applicationCharacterOptionsHandler(req: FastifyRequest, reply: FastifyReply) {
+  try {
+    return reply.send({ success: true, data: { options: await characterOptions(req.user.id) } });
+  } catch (err) {
+    req.log.error(err);
+    return reply.status(500).send({ success: false, error: 'Failed to load characters' });
   }
 }

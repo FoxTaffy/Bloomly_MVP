@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { apiErrorMessage } from '@/lib/apiError'
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '@/api'
 import AppHeader from '@/components/AppHeader.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
@@ -173,6 +174,8 @@ const notifHref = (n: any): string | null => {
   return null
 }
 
+const router = useRouter()
+
 const onClick = async (n: any) => {
   if (!n.is_read) {
     const members: any[] = n._members ?? [n]
@@ -180,6 +183,12 @@ const onClick = async (n: any) => {
     try { await api.post('/notifications/read', { ids: members.map((m: any) => m.id) }) } catch {}
   }
   if (n.type === 'automod_warn') warningModal.open(n)
+  if ((n.type.startsWith('den_application_') || n.type.startsWith('den_order_')) && n.meta?.listingId) {
+    router.push(`/dealers-den/${n.meta.listingId}`)
+  }
+  if (n.type === 'den_lot_application' && n.meta?.groupSlug) {
+    router.push({ name: 'group-admin-tools', params: { slugOrId: n.meta.groupSlug }, query: { tab: 'lot-applications' } })
+  }
 }
 
 // ── Tabs + sections ───────────────────────────────────────────────────────────
