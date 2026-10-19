@@ -40,6 +40,19 @@ async function drainQueue() {
   }
 }
 
+function isAlreadyTargetLang(text: string, target: string): boolean {
+  const clean = text.replace(/@\w+(?:-\w+)*|#[\p{L}\p{N}_]+|https?:\/\/\S+/gu, '')
+  const cyr = (clean.match(/[\u0400-\u04FF]/g) ?? []).length
+  const lat = (clean.match(/[A-Za-z]/g) ?? []).length
+  const cjk = (clean.match(/[\u3040-\u30FF\u4E00-\u9FFF]/g) ?? []).length
+  const letters = cyr + lat + cjk
+  if (!letters) return true // nothing translatable (emoji, digits, tags only)
+  if (target === 'ru') return cyr / letters > 0.5
+  if (target === 'ja' || target === 'zh-CN') return cjk / letters > 0.5
+  // Latin-script targets: Cyrillic/CJK text is definitely foreign, Latin is ambiguous
+  return false
+}
+
 /**
  * Translate `text` to the target language using the free MyMemory API.
  * Returns null if translation failed or is same as original.
@@ -61,12 +74,9 @@ export async function translateText(text: string, targetLang: Lang): Promise<str
   const trimmed = textForApi.trim().slice(0, 500)
   if (!trimmed) return null
 
-  // If target is Russian and text is already mostly Cyrillic — skip
-  // (use original text for the Cyrillic ratio — placeholders would skew it)
-  if (target === 'ru') {
-    const cyrillicRatio = (text.match(/[\u0400-\u04FF]/g) ?? []).length / text.length
-    if (cyrillicRatio > 0.3) return null
-  }
+  // Skip when the text is already in the target language (by script, letters only —
+  // emoji, digits, tags and mentions must not skew the ratio)
+  if (isAlreadyTargetLang(text, target)) return null
 
   const INVALID_PREFIXES = ["'AUTO' IS AN INVALID", 'MYMEMORY WARNING', 'PLEASE NOTE']
 
@@ -135,6 +145,11 @@ export function useAutoTranslate(getId: () => string, getText: () => string) {
       return
     }
 
+    if (isAlreadyTargetLang(text, LANG_TO_API[lang])) {
+      showTranslation.value = false
+      return
+    }
+
     isTranslating.value = true
     showTranslation.value = true
 
@@ -147,9 +162,11 @@ export function useAutoTranslate(getId: () => string, getText: () => string) {
             translatedText.value = result
           } else {
             translatedText.value = null
+            showTranslation.value = false
           }
         } catch {
           translatedText.value = null
+          showTranslation.value = false
         } finally {
           isTranslating.value = false
           resolve()
