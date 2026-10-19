@@ -3,6 +3,7 @@
 // между экранами задаются параметрами (локаль, пресет, суффиксы).
 
 import { utcToZonedParts } from '@/lib/timezone'
+import { convertForDisplay } from './displayCurrency'
 
 type DateInput = string | number | Date
 
@@ -85,12 +86,25 @@ export function formatCompactNumber(n: number): string {
  * без него дробная часть выводится как есть.
  */
 export function formatPrice(price: string | number, currency: string, fractionDigits?: number): string {
-  const n = parseFloat(String(price))
+  const n0 = parseFloat(String(price))
+  const conv = n0 > 0 ? convertForDisplay(n0, currency) : null
+  if (conv) {
+    // Приблизительная сумма в валюте региона: рубли/йены целыми, остальное с копейками
+    const frac = conv.currency === 'RUB' || conv.currency === 'INR' ? 0 : 2
+    return `≈ ${formatMoney(conv.amount, conv.currency, { minimumFractionDigits: frac, maximumFractionDigits: frac })}`
+  }
   const opts: Intl.NumberFormatOptions = fractionDigits === undefined
     ? {}
     : { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }
+  return formatMoney(n0, currency, opts)
+}
+
+function formatMoney(n: number, currency: string, opts: Intl.NumberFormatOptions): string {
   if (currency === 'RUB') return `${n.toLocaleString('ru-RU', opts)} ₽`
   if (currency === 'USD') return `$${n.toLocaleString('en-US', opts)}`
   if (currency === 'EUR') return `€${n.toLocaleString('de-DE', opts)}`
+  if (currency === 'CNY') return `¥${n.toLocaleString('zh-CN', opts)}`
+  if (currency === 'INR') return `₹${n.toLocaleString('en-IN', opts)}`
+  if (currency === 'BRL') return `R$ ${n.toLocaleString('pt-BR', opts)}`
   return `${n.toLocaleString(undefined, opts)} ${currency}`
 }

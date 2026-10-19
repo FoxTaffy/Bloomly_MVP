@@ -38,3 +38,31 @@ export async function refreshBlmRate(): Promise<number | null> {
     return null;
   }
 }
+
+// ── Курсы для отображения цен в валюте региона пользователя ──────────────────
+// Только показ: списание идёт в валюте самого товара. Источник тот же — ЦБ РФ.
+const DISPLAY_CURRENCIES = ['USD', 'EUR', 'CNY', 'INR', 'BRL'] as const;
+const DISPLAY_CACHE_MS = 60 * 60_000;
+let displayCache: { rates: Record<string, number>; at: number } | null = null;
+
+/** ₽ за 1 единицу каждой валюты (RUB = 1). */
+export async function getDisplayRates(): Promise<Record<string, number>> {
+  if (displayCache && Date.now() - displayCache.at < DISPLAY_CACHE_MS) return displayCache.rates;
+  try {
+    const res = await fetch(CBR_URL, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = (await res.json()) as { Valute?: Record<string, { Value?: number; Nominal?: number }> };
+    const rates: Record<string, number> = { RUB: 1 };
+    for (const code of DISPLAY_CURRENCIES) {
+      const v = json.Valute?.[code];
+      if (v?.Value && v.Nominal) rates[code] = v.Value / v.Nominal;
+    }
+    if (!rates.USD) throw new Error('no USD in response');
+    displayCache = { rates, at: Date.now() };
+    return rates;
+  } catch (err) {
+    logger.error({ err }, '[display-rates] update failed');
+    if (displayCache) return displayCache.rates;
+    return { RUB: 1, USD: await getBlmRate() };
+  }
+}

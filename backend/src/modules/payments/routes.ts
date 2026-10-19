@@ -5,6 +5,7 @@ import type { YookassaNotification } from './yookassa.js';
 import { isAdmin } from '../../lib/roles.js';
 import { errMessage, errStatus } from '../../lib/httpErrors.js';
 import { logger } from '../../lib/logger.js';
+import { getDisplayRates } from './rate.js';
 
 const ok = (data: unknown) => ({ success: true, data, error: null });
 const err = (code: string, msg: string) => ({ success: false, data: null, error: { code, message: msg } });
@@ -24,6 +25,12 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
     onRequest: [fastify.authenticate],
     config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
   } as RouteShorthandOptions;
+
+  // GET /api/payments/display-rates — ₽ за 1 единицу валюты, для показа цен в валюте региона
+  fastify.get('/display-rates', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } } as RouteShorthandOptions,
+    async (_req: FastifyRequest, reply: FastifyReply) => {
+      reply.header('Cache-Control', 'public, max-age=3600').send(ok({ base: 'RUB', rates: await getDisplayRates() }));
+    });
 
   // GET /api/payments/config — включена ли оплата, цены для этого пользователя, лимиты пополнения
   fastify.get('/config', auth, async (req: FastifyRequest, reply: FastifyReply) => {
