@@ -16,8 +16,8 @@
 
 <p align="center">
   <a href="https://t.me/Bloomly_news"><img src="assets/nav-telegram.svg" alt="Канал Bloomly в Telegram" width="156" height="59" /></a>
-  <a href="https://github.com/FoxTaffy/Bloomly_MVP/issues?q=is%3Aissue%20label%3Anews"><img src="assets/nav-news.svg" alt="Новости Bloomly" width="156" height="59" /></a>
-  <a href="https://github.com/FoxTaffy/Bloomly_MVP/issues?q=is%3Aissue%20label%3Aupdates"><img src="assets/nav-updates.svg" alt="Обновления Bloomly" width="156" height="59" /></a>
+  <a href="https://github.com/FoxTaffy/Bloomly_MVP/discussions?discussions_q=label%3Anews"><img src="assets/nav-news.svg" alt="Новости Bloomly" width="156" height="59" /></a>
+  <a href="https://github.com/FoxTaffy/Bloomly_MVP/discussions?discussions_q=label%3Aupdates"><img src="assets/nav-updates.svg" alt="Обновления Bloomly" width="156" height="59" /></a>
   <a href="https://github.com/FoxTaffy/Bloomly_MVP/issues/new?template=bug_report.yml"><img src="assets/nav-bugs.svg" alt="Сообщить об ошибке" width="156" height="59" /></a>
 </p>
 
@@ -119,14 +119,14 @@ Dealers’ Den — творческая ярмарка внутри Bloomly. З�
     <td width="50%" valign="top">
       <h3>Жизнь сообщества</h3>
       <p>Важные объявления, события и всё, чем хочется поделиться с людьми Bloomly.</p>
-      <p><a href="https://github.com/FoxTaffy/Bloomly_MVP/issues/21">Остаёмся на связи</a></p>
-      <p><a href="https://github.com/FoxTaffy/Bloomly_MVP/issues?q=is%3Aissue%20label%3Anews"><img src="assets/nav-news.svg" alt="Все новости →" width="156" height="59" /></a></p>
+      <p><a href="https://github.com/FoxTaffy/Bloomly_MVP/discussions/23">Остаёмся на связи</a></p>
+      <p><a href="https://github.com/FoxTaffy/Bloomly_MVP/discussions?discussions_q=label%3Anews"><img src="assets/nav-news.svg" alt="Все новости →" width="156" height="59" /></a></p>
     </td>
     <td width="50%" valign="top">
       <h3>Что стало лучше</h3>
       <p>Новые возможности, изменения и исправления — с объяснением, что это даёт тебе.</p>
-      <p><a href="https://github.com/FoxTaffy/Bloomly_MVP/issues/22">Знакомься с новым хабом</a></p>
-      <p><a href="https://github.com/FoxTaffy/Bloomly_MVP/issues?q=is%3Aissue%20label%3Aupdates"><img src="assets/nav-updates.svg" alt="Все обновления →" width="156" height="59" /></a></p>
+      <p><a href="https://github.com/FoxTaffy/Bloomly_MVP/discussions/24">Знакомься с новым хабом</a></p>
+      <p><a href="https://github.com/FoxTaffy/Bloomly_MVP/discussions?discussions_q=label%3Aupdates"><img src="assets/nav-updates.svg" alt="Все обновления →" width="156" height="59" /></a></p>
     </td>
   </tr>
 </table>

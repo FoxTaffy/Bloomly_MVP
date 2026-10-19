@@ -27,7 +27,7 @@
 ## Где следить за проектом
 
 - [Telegram](https://t.me/Bloomly_news) — короткие анонсы.
-- [Новости](https://github.com/FoxTaffy/Bloomly_MVP/issues?q=is%3Aissue%20label%3Anews) — объявления и жизнь сообщества.
-- [Обновления](https://github.com/FoxTaffy/Bloomly_MVP/issues?q=is%3Aissue%20label%3Aupdates) — новые возможности и исправления.
+- [Новости](https://github.com/FoxTaffy/Bloomly_MVP/discussions?discussions_q=label%3Anews) — объявления и жизнь сообщества.
+- [Обновления](https://github.com/FoxTaffy/Bloomly_MVP/discussions?discussions_q=label%3Aupdates) — новые возможности и исправления.
 
 [Вернуться в хаб →](README.md)
