@@ -62,7 +62,7 @@ export const useListingApplicationsStore = defineStore('listingApplications', ()
   async function getMine(listingId: string) {
     const { data } = await api.get(`/dealers-den/${listingId}/application/mine`)
     return (data.data.application ?? null) as
-      { id: string; status: ApplicationStatus; created_at: string; orderStage: 'WAITING' | 'SKETCH' | 'LINEART' | 'COLORING' | 'FINISHED' | null; deadlineAt: string | null } | null
+      { id: string; status: ApplicationStatus; created_at: string; orderId: string | null; orderStage: 'WAITING' | 'SKETCH' | 'LINEART' | 'COLORING' | 'FINISHED' | null; deadlineAt: string | null } | null
   }
 
   async function fetchForGroup(groupId: string, status?: ApplicationStatus) {

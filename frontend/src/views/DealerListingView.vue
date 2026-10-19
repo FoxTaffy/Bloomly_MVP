@@ -332,7 +332,7 @@ async function claimFrame() {
 const showEditModal = ref(false)
 const showApplyModal = ref(false)
 const applicationsStore = useListingApplicationsStore()
-const myApplication = ref<{ status: string; orderStage?: string | null; deadlineAt?: string | null } | null>(null)
+const myApplication = ref<{ status: string; orderId?: string | null; orderStage?: string | null; deadlineAt?: string | null } | null>(null)
 // Пока статус заявки не загружен, кнопку «Отправить заявку» не показываем — иначе после F5 успеваешь открыть окно повторно
 const applicationReady = ref(false)
 
@@ -1165,6 +1165,12 @@ async function submitReport() {
                       </div>
                       <div v-else-if="auth.user && auth.user.id !== listing.seller_id && !applicationReady"
                         class="w-full h-[50px] rounded-2xl bg-white/5 border border-brand-border animate-pulse" />
+                      <button v-if="myApplication?.status === 'accepted' && myApplication.orderId && listing.group"
+                        @click="router.push(`/groups/${listing.group.slug}/orders/${myApplication.orderId}`)"
+                        class="w-full mt-2 flex items-center justify-center gap-2 py-3 rounded-2xl text-white font-extrabold text-sm hover:opacity-90 active:scale-[0.98] transition-all"
+                        style="background: linear-gradient(135deg, #4C67CF, #7c3aed)">
+                        <BIcon name="Package" class="w-4 h-4" /> Открыть заказ
+                      </button>
                       <button v-else-if="auth.user && auth.user.id !== listing.seller_id && listing.group"
                         @click="showApplyModal = true"
                         class="w-full flex items-center justify-center gap-2 py-3.5 text-white font-extrabold rounded-2xl transition-all shadow-lg hover:opacity-90 active:scale-[0.98] text-sm"

@@ -585,6 +585,10 @@
             <SharedPostCard v-else-if="msg.type === 'post_share' && msg.metadata?.postId"
               :post-id="msg.metadata.postId" :is-mine="isMine(msg)" />
 
+            <!-- ── Order card (принятая заявка / заказ группы) ── -->
+            <OrderCard v-else-if="msg.type === 'order_card' && msg.metadata?.orderId"
+              :order-id="msg.metadata.orderId" :group-id="msg.metadata.groupId" :is-mine="isMine(msg)" />
+
             <!-- ── Group invite card ── -->
             <GroupShareCard v-else-if="msg.type === 'group_share' && msg.metadata?.groupId"
               :group-id="msg.metadata.groupId" :is-mine="isMine(msg)" />
@@ -682,7 +686,7 @@
             </div>
 
             <!-- Text bubble (not shown for pure sticker, order cards, emoji-only, or story reply with text already shown in card) -->
-            <div v-else-if="!['sticker', 'payment_request', 'payment_confirmation', 'tip'].includes(msg.type) && !parseStoryReply(msg) && !/^\[story_reply:/u.test(msg.text || '') && (msg.text || !msg.file_url)"
+            <div v-else-if="!['sticker', 'payment_request', 'payment_confirmation', 'tip', 'order_card'].includes(msg.type) && !parseStoryReply(msg) && !/^\[story_reply:/u.test(msg.text || '') && (msg.text || !msg.file_url)"
               @click="tappedMsgId = tappedMsgId === msg.id ? null : msg.id"
               :class="[
                 'relative px-3 py-[7px] rounded-2xl text-sm leading-relaxed wrap-break-word min-w-[60px] transition-shadow',
@@ -1355,6 +1359,7 @@ import { onAvatarError } from '@/composables/useAvatarFallback'
 import PostLightbox from '@/components/PostLightbox.vue'
 import SharedPostCard from '@/components/SharedPostCard.vue'
 import GroupShareCard from '@/components/GroupShareCard.vue'
+import OrderCard from '@/components/chat/OrderCard.vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import StickerPanel from '@/components/StickerPanel.vue'
 import UserBadges from '@/components/UserBadges.vue'
@@ -1744,6 +1749,7 @@ function forwardMsgPreview(msg: Message): string {
   if (msg.type === 'audio') return langStore.t.chatAudioPreview
   if (msg.type === 'post_share') return langStore.t.chatPostPreview
   if (msg.type === 'group_share') return langStore.t.chatGroupInvitePreview
+  if (msg.type === 'order_card') return '📦 Заказ'
   if (msg.type === 'album') return `${langStore.t.chatAlbumPreviewPrefix} · ${getAlbumFiles(msg).length}`
   if (msg.text && isEncrypted(msg.text)) return langStore.t.encryptedMessagePreview
   if (msg.encrypted_text && !msg.text) return langStore.t.encryptedMessagePreview

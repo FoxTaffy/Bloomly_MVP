@@ -84,13 +84,19 @@ async function enrichWithForwardedSenders<T extends { forwarded_from_sender_id?:
 }
 
 /** Validates and normalizes the metadata payload for card-style messages. */
-function validateCardMetadata(type: 'payment_request' | 'tip' | 'post_share' | 'group_share', metadata: unknown): Record<string, unknown> {
+function validateCardMetadata(type: 'payment_request' | 'tip' | 'post_share' | 'group_share' | 'order_card', metadata: unknown): Record<string, unknown> {
   const meta = (metadata ?? {}) as Record<string, unknown>;
   if (type === 'post_share') {
     if (typeof meta.postId !== 'string' || !meta.postId) {
       throw Object.assign(new Error('postId is required'), { statusCode: 400 });
     }
     return { postId: meta.postId };
+  }
+  if (type === 'order_card') {
+    if (typeof meta.orderId !== 'string' || !meta.orderId || typeof meta.groupId !== 'string' || !meta.groupId) {
+      throw Object.assign(new Error('orderId and groupId are required'), { statusCode: 400 });
+    }
+    return { orderId: meta.orderId, groupId: meta.groupId };
   }
   if (type === 'group_share') {
     if (typeof meta.groupId !== 'string' || !meta.groupId) {
@@ -370,7 +376,7 @@ export const messageService = {
 
     const text = content?.trim() ?? '';
     const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-    const isCard = type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share';
+    const isCard = type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share' || type === 'order_card';
     if (!text && !encrypted_text && !file_url && !isCard && !hasAttachments) {
       throw Object.assign(new Error('Message must have text or media'), { statusCode: 400 });
     }
@@ -385,7 +391,7 @@ export const messageService = {
       }
       const files = attachments!.map((a) => ({ url: a.url, type: inferFileType(a.url, a.media_type) }));
       data = { ...base, type: 'album', metadata: { files } };
-    } else if (type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share') {
+    } else if (type === 'payment_request' || type === 'tip' || type === 'post_share' || type === 'group_share' || type === 'order_card') {
       // Card-style messages carry a structured metadata payload instead of a file.
       data = { ...base, type, metadata: await this._validatedCardMetadata(type, metadata) };
     } else {
@@ -449,7 +455,7 @@ export const messageService = {
   },
 
   /** Validates a card message payload and that the shared post / group exists. */
-  async _validatedCardMetadata(type: 'payment_request' | 'tip' | 'post_share' | 'group_share', metadata: unknown) {
+  async _validatedCardMetadata(type: 'payment_request' | 'tip' | 'post_share' | 'group_share' | 'order_card', metadata: unknown) {
     const meta = validateCardMetadata(type, metadata);
     if (type === 'post_share') {
       const post = await prisma.post.findUnique({ where: { id: meta.postId as string, deleted_at: null }, select: { id: true } });
@@ -458,6 +464,13 @@ export const messageService = {
     if (type === 'group_share') {
       const group = await prisma.group.findUnique({ where: { id: meta.groupId as string }, select: { id: true } });
       if (!group) throw Object.assign(new Error('Group not found'), { statusCode: 404 });
+    }
+    if (type === 'order_card') {
+      const order = await prisma.order.findFirst({
+        where: { id: meta.orderId as string, group_id: meta.groupId as string, deleted_at: null },
+        select: { id: true },
+      });
+      if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
     }
     return meta as Prisma.InputJsonValue;
   },

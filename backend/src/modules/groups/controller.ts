@@ -1021,6 +1021,19 @@ export const updateOrderStatusHandler = async (
   }
 };
 
+export const getOrderDetailHandler = async (
+  request: FastifyRequest<{ Params: { id: string; orderId: string } }>,
+  reply: FastifyReply,
+) => {
+  try {
+    const { id: userId } = request.user as JwtUser;
+    const order = await groupService.getOrderDetail(request.params.id, request.params.orderId, userId);
+    return ok(reply, { order });
+  } catch (e) {
+    return fail(reply, errStatus(e) ?? 500, 'GET_ORDER_ERROR', errMessage(e));
+  }
+};
+
 export const updateOrderHandler = async (
   request: FastifyRequest<{ Params: { id: string; orderId: string }; Body: { deadlineAt?: string | null; description?: string | null; references?: string[] } }>,
   reply: FastifyReply,

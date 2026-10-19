@@ -167,6 +167,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/groups/:slugOrId/orders/:orderId',
+    name: 'group-order',
+    component: () => import('@/views/GroupOrderView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/groups/:slugOrId/admin',
     name: 'group-admin-tools',
     component: () => import('@/views/GroupAdminToolsView.vue'),

@@ -410,9 +410,12 @@ const onNotifClick = async (n: any) => {
     return
   }
   // Заявитель: принятие/отклонение заявки и этапы заказа → страница лота со статусом
-  if ((n.type.startsWith('den_application_') || n.type.startsWith('den_order_')) && n.meta?.listingId) {
+  // Заказ (принят / этап / готов) → страница заказа; иначе — страница лота
+  if ((n.type.startsWith('den_application_') || n.type.startsWith('den_order_')) && (n.meta?.orderId || n.meta?.listingId)) {
     showNotifications.value = false
-    router.push(`/dealers-den/${n.meta.listingId}`)
+    router.push(n.meta?.orderId && n.meta?.groupSlug
+      ? `/groups/${n.meta.groupSlug}/orders/${n.meta.orderId}`
+      : `/dealers-den/${n.meta.listingId}`)
     return
   }
   // Заявка на лот → вкладка заявок в инструментах группы

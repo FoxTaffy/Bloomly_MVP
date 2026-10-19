@@ -833,6 +833,7 @@ function lastMessagePreview(msg: Conversation['last_message']): string {
   if (msg.type === 'tip') return `🎉 Чаевые · ${formatMoneyPreview(msg.metadata?.amount)}`
   if (msg.type === 'post_share') return '📎 Поделился(-ась) постом'
   if (msg.type === 'group_share') return '👥 Приглашение в группу'
+  if (msg.type === 'order_card') return '📦 Заказ'
   // encrypted_text field (new schema)
   if (!msg.text && msg.encrypted_text) return t.encryptedMessagePreview
   // legacy: ciphertext stored in text field (ECDH E2E)

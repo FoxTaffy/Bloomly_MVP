@@ -273,6 +273,17 @@ export interface Order {
   customer: { id: string; username: string; display_name: string | null; avatar_url: string | null }
 }
 
+/** Полная карточка заказа для страницы заказа и карточки в чате */
+export interface OrderDetail extends Order {
+  group: { id: string; slug: string; name: string; avatar_url: string | null } | null
+  listing: { id: string; title: string; price: number | string; currency: string; discount_percent: number; images: string[]; is_nsfw: boolean; status: string } | null
+  application: { message: string; created_at: string } | null
+  characters: import('./listingApplications').ResolvedCharacter[]
+  references: string[]
+  fromApplication: boolean
+  canManage: boolean
+}
+
 export interface BusinessStats {
   postsCount: number
   messagesCount: number
@@ -776,6 +787,11 @@ export const useGroupsStore = defineStore('groups', () => {
     return data.data.order as Order
   }
 
+  async function fetchOrderDetail(groupId: string, orderId: string): Promise<OrderDetail> {
+    const { data } = await api.get(`/groups/${groupId}/orders/${orderId}`)
+    return data.data.order as OrderDetail
+  }
+
   async function updateOrder(groupId: string, orderId: string, payload: { deadlineAt?: string | null; description?: string | null; references?: string[] }): Promise<Order> {
     const { data } = await api.patch(`/groups/${groupId}/orders/${orderId}`, payload)
     return data.data.order as Order
@@ -880,7 +896,7 @@ export const useGroupsStore = defineStore('groups', () => {
     fetchMembers, changeMemberRole, removeMember,
     fetchTodoColumns, updateTodoColumns,
     fetchTodoItems, createTodoItem, updateTodoItem, deleteTodoItem, reorderTodoItems,
-    fetchOrders, createOrder, updateOrderStatus, updateOrder, deleteOrder, fetchBusinessStats, getOrderConversation,
+    fetchOrders, fetchOrderDetail, createOrder, updateOrderStatus, updateOrder, deleteOrder, fetchBusinessStats, getOrderConversation,
     donateToGroup, getGroupBalance,
     fetchCustomRoles, createCustomRole, updateCustomRole, deleteCustomRole,
   }

@@ -86,7 +86,7 @@ export const listingApplicationService = {
       ? await prisma.order.findFirst({ where: { id: app.order_id, deleted_at: null }, select: { status: true, deadline_at: true } })
       : null;
     const { order_id: _o, ...rest } = app;
-    return { ...rest, orderStage: order?.status ?? null, deadlineAt: order?.deadline_at ?? null };
+    return { ...rest, orderId: app.order_id, orderStage: order?.status ?? null, deadlineAt: order?.deadline_at ?? null };
   },
 
   async listForGroup(groupId: string, userId: string, status?: string) {
@@ -134,9 +134,9 @@ export const listingApplicationService = {
       throw new Error('ALREADY_ACCEPTED');
     }
 
-    const notify = (type: string) => notificationService.create({
+    const notify = (type: string, extra: Record<string, string> = {}) => notificationService.create({
       receiverId: application.applicant_id, senderId: userId, senderGroupId: application.group_id, type, refId: application.id,
-      meta: { groupSlug: application.group.slug, listingId: application.listing.id, listingTitle: application.listing.title },
+      meta: { groupSlug: application.group.slug, listingId: application.listing.id, listingTitle: application.listing.title, ...extra },
     });
 
     if (status === 'accepted') {
@@ -146,15 +146,17 @@ export const listingApplicationService = {
         data: { status, resolved_at: new Date(), order_id: orderId },
         select: { id: true, status: true, resolved_at: true, order_id: true },
       });
-      await notify('den_application_accepted');
-      // Первое сообщение от лица группы: чат появляется у заявителя во вкладке «Группы»
+      await notify('den_application_accepted', { orderId });
+      // Карточка заказа — первым сообщением в чате от лица группы
       try {
-        const order = await prisma.order.findUnique({ where: { id: orderId }, select: { conversation_id: true } });
+        const order = await prisma.order.findUnique({ where: { id: orderId }, select: { conversation_id: true, title: true } });
         if (order?.conversation_id) {
           await messageService.sendMessage({
             conversationId: order.conversation_id,
             senderId: application.group.owner_id,
-            content: `Заявка на «${application.listing.title}» принята — заказ в очереди. Здесь мы будем обсуждать детали и сообщать о ходе работы.`,
+            type: 'order_card',
+            metadata: { orderId, groupId: application.group_id },
+            content: `Заявка на «${application.listing.title}» принята — заказ в очереди`,
           });
         }
       } catch { /* не критично: заявка уже принята */ }

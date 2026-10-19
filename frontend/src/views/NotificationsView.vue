@@ -183,8 +183,10 @@ const onClick = async (n: any) => {
     try { await api.post('/notifications/read', { ids: members.map((m: any) => m.id) }) } catch {}
   }
   if (n.type === 'automod_warn') warningModal.open(n)
-  if ((n.type.startsWith('den_application_') || n.type.startsWith('den_order_')) && n.meta?.listingId) {
-    router.push(`/dealers-den/${n.meta.listingId}`)
+  if ((n.type.startsWith('den_application_') || n.type.startsWith('den_order_')) && (n.meta?.orderId || n.meta?.listingId)) {
+    router.push(n.meta?.orderId && n.meta?.groupSlug
+      ? `/groups/${n.meta.groupSlug}/orders/${n.meta.orderId}`
+      : `/dealers-den/${n.meta.listingId}`)
   }
   if (n.type === 'den_lot_application' && n.meta?.groupSlug) {
     router.push({ name: 'group-admin-tools', params: { slugOrId: n.meta.groupSlug }, query: { tab: 'lot-applications' } })

@@ -11,6 +11,7 @@ import { isTrustedMediaUrl, deleteFileByUrl, assertOwnedMedia } from '../media/s
 import { notificationService } from '../notifications/service.js';
 import { resolveCharacters } from '../../lib/orderCharacters.js';
 import { ensureGroupThread } from '../../lib/groupThread.js';
+import { messageService } from '../messages/service.js';
 import { requireSafeLink, sanitizeLinkRecord } from '../../lib/safeLink.js';
 import { normalizeTag } from '../../lib/tagRules.js';
 import type {
@@ -338,6 +339,8 @@ const EVENT_SELECT = {
 
 // ── Group CRUD ────────────────────────────────────────────────────────────────
 const MIN_COMPLETION_SAMPLE = 5;
+
+const ORDER_STAGE_LABEL: Record<string, string> = { WAITING: 'Ожидание', SKETCH: 'Скетч', LINEART: 'Лайнарт', COLORING: 'Раскраска', FINISHED: 'Готово' };
 
 /** Заказ + персонажи (с актуальными референсами из профилей) и референсы, добавленные художником. */
 async function enrichOrder<T extends { form_data: unknown }>(o: T) {
@@ -2103,6 +2106,43 @@ export const groupService = {
     return Promise.all(orders.map(enrichOrder));
   },
 
+  /** Страница заказа: видят персонал группы и сам заказчик (даже если он не участник группы). */
+  async getOrderDetail(groupId: string, orderId: string, requesterId: string) {
+    const order = await prisma.order.findFirst({
+      where: { id: orderId, group_id: groupId, deleted_at: null },
+      include: { customer: { select: ORDER_CUSTOMER_SELECT } },
+    });
+    if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
+    const isStaff = await groupService.isOwnerOrAdmin(groupId, requesterId);
+    if (!isStaff && order.customer_id !== requesterId) throw Object.assign(new Error('Forbidden'), { statusCode: 403 });
+
+    const fd = (order.form_data ?? {}) as { source?: string; listingId?: string; applicationId?: string; characters?: unknown; references?: string[] };
+    const [group, listing, application, characters] = await Promise.all([
+      prisma.group.findUnique({ where: { id: groupId }, select: { id: true, slug: true, name: true, avatar_url: true } }),
+      fd.listingId
+        ? prisma.dealerListing.findFirst({
+          where: { id: fd.listingId },
+          select: { id: true, title: true, price: true, currency: true, discount_percent: true, images: true, is_nsfw: true, status: true },
+        })
+        : null,
+      fd.applicationId
+        ? prisma.listingApplication.findUnique({ where: { id: fd.applicationId }, select: { message: true, created_at: true } })
+        : null,
+      resolveCharacters(fd.characters),
+    ]);
+    const { form_data: _fd, ...rest } = order;
+    return {
+      ...rest,
+      group,
+      listing,
+      application,
+      characters,
+      references: Array.isArray(fd.references) ? fd.references : [],
+      fromApplication: fd.source === 'listing_application',
+      canManage: isStaff,
+    };
+  },
+
   async createOrder(groupId: string, customerId: string, input: CreateOrderInput) {
     const group = await prisma.group.findUnique({
       where: { id: groupId },
@@ -2188,8 +2228,17 @@ export const groupService = {
         senderGroupId: order.group_id,
         type: `den_order_${status.toLowerCase()}`,
         refId: order.id,
-        meta: { groupSlug: group?.slug, listingId: fd.listingId, orderTitle: order.title },
+        meta: { groupSlug: group?.slug, listingId: fd.listingId, orderId: order.id, orderTitle: order.title },
       });
+      // Этап — и в чат заказа, от лица группы: заказчик видит ход работы прямо в переписке
+      if (order.conversation_id) {
+        const owner = await prisma.group.findUnique({ where: { id: order.group_id }, select: { owner_id: true } });
+        const label = ORDER_STAGE_LABEL[status];
+        const text = status === 'FINISHED'
+          ? `🎉 Заказ «${order.title}» готов!`
+          : `Заказ «${order.title}» переведён на этап «${label}»`;
+        await messageService.sendMessage({ conversationId: order.conversation_id, senderId: owner!.owner_id, content: text }).catch(logError('[order] stage message'));
+      }
     }
     return enrichOrder(updated);
   },
