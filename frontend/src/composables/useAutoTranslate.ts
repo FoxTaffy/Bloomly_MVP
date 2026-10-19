@@ -14,20 +14,30 @@ export const LANG_TO_API: Record<Lang, string> = {
   PT: 'pt',
 }
 
-// Global queue to prevent hammering the free MyMemory API
+// Global queue to prevent hammering the free MyMemory API (limited concurrency)
 const translateQueue: Array<() => Promise<void>> = []
-let translateRunning = false
+const MAX_CONCURRENT = 3
+let activeWorkers = 0
+
+// Circuit breaker: when MyMemory quota is exhausted, stop calling it for a while
+// so posts don't spin forever waiting on requests that are going to fail.
+let blockedUntil = 0
 
 async function drainQueue() {
-  if (translateRunning) return
-  translateRunning = true
-  while (translateQueue.length) {
-    const task = translateQueue.shift()!
-    await task()
-    // Small delay between requests to respect rate limits
-    await new Promise((r) => setTimeout(r, 150))
+  while (activeWorkers < MAX_CONCURRENT && translateQueue.length) {
+    activeWorkers++
+    void (async () => {
+      try {
+        while (translateQueue.length) {
+          const task = translateQueue.shift()!
+          try { await task() } catch { /* task handles its own errors */ }
+          await new Promise((r) => setTimeout(r, 100))
+        }
+      } finally {
+        activeWorkers--
+      }
+    })()
   }
-  translateRunning = false
 }
 
 /**
@@ -61,10 +71,17 @@ export async function translateText(text: string, targetLang: Lang): Promise<str
   const INVALID_PREFIXES = ["'AUTO' IS AN INVALID", 'MYMEMORY WARNING', 'PLEASE NOTE']
 
   const tryFetch = async (src: string): Promise<string | null> => {
+    if (Date.now() < blockedUntil) return null
     try {
       const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(trimmed)}&langpair=${src}|${target}`
-      const res = await fetch(url, { signal: AbortSignal.timeout(8000) })
+      const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
+      if (res.status === 429) { blockedUntil = Date.now() + 10 * 60_000; return null }
       const data = await res.json()
+      const raw = String(data?.responseData?.translatedText ?? '')
+      if (data?.responseStatus === 429 || raw.startsWith('MYMEMORY WARNING')) {
+        blockedUntil = Date.now() + 10 * 60_000
+        return null
+      }
       if (data?.responseStatus === 200) {
         const t = data?.responseData?.translatedText as string | undefined
         if (
@@ -80,9 +97,9 @@ export async function translateText(text: string, targetLang: Lang): Promise<str
 
   // Try Russian source first (most content on this platform is Russian),
   // then English as fallback, then the same code as target language (detect)
-  const sources = ['ru', 'en', target === 'ru' ? 'en' : target]
+  const sources = ['ru', 'en'].filter((src) => src !== target)
   for (const src of sources) {
-    if (src === target) continue
+    if (Date.now() < blockedUntil) break
     const result = await tryFetch(src)
     if (result) return restoreMentions(result)
   }
