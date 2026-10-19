@@ -312,7 +312,7 @@
           </p>
           <!-- Translate button -->
           <button
-            v-if="!isEditing"
+            v-if="!isEditing && postCanTranslate"
             @click.stop="togglePostTranslate"
             class="mt-1.5 flex items-center gap-1 text-[11px] text-white/35 hover:text-brand-accent transition-colors"
           >
@@ -804,6 +804,7 @@ const {
   isTranslating: postTranslating,
   showTranslation: postShowTranslation,
   toggle: togglePostTranslate,
+  canTranslate: postCanTranslate,
 } = useAutoTranslate(
   () => props.post.id,
   () => props.post.content ?? '',

@@ -198,6 +198,9 @@ export function useAutoTranslate(getId: () => string, getText: () => string) {
     if (langStore.autoTranslateEnabled) translate()
   })
 
+  // False when the text is already in the target language: no translate button needed
+  const canTranslate = computed(() => !isAlreadyTargetLang(getText(), LANG_TO_API[langStore.autoTranslateLang]))
+
   const displayText = computed(() => {
     if (showTranslation.value && translatedText.value) return translatedText.value
     return getText()
@@ -210,6 +213,7 @@ export function useAutoTranslate(getId: () => string, getText: () => string) {
     translate,
     toggle,
     displayText,
+    canTranslate,
   }
 }
 
