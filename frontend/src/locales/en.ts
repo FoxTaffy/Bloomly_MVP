@@ -559,7 +559,7 @@ export const en: Translation = {
   displayNameLabel: 'Display Name',
   statusFieldLabel: 'Status',
   aboutLabel: 'About me',
-  jobLabel: 'Job / Occupation',
+  jobLabel: 'Work',
   pronounsLabel: 'Pronouns',
   birthdayLabel: 'Date of Birth',
   nsfwBirthdayHint: 'Used to verify access to NSFW content',

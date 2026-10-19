@@ -557,7 +557,7 @@ export const ru = {
   displayNameLabel: 'Отображаемое имя',
   statusFieldLabel: 'Статус',
   aboutLabel: 'О себе',
-  jobLabel: 'Должность / Занятие',
+  jobLabel: 'Работа',
   pronounsLabel: 'Местоимения',
   birthdayLabel: 'Дата рождения',
   nsfwBirthdayHint: 'Используется для проверки доступа к NSFW-контенту',

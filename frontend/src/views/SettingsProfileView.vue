@@ -443,11 +443,12 @@
                     <div>
                       <div class="flex items-center justify-between mb-2">
                         <label class="text-xs font-bold text-white/55 uppercase tracking-wider">{{ langStore.t.jobLabel }}</label>
-                        <span class="text-[11px] tabular-nums" :class="(form.job_title?.length??0) > 70 ? 'text-brand-error/80' : 'text-white/35'">
-                          {{ form.job_title?.length ?? 0 }}<span class="opacity-50">/80</span>
-                        </span>
                       </div>
-                      <input v-model="form.job_title" type="text" maxlength="80" :placeholder="langStore.t.jobTitlePlaceholder" class="field-input"/>
+                      <select v-model="form.job_title" class="field-input">
+                        <option value="">—</option>
+                        <option v-if="form.job_title && !jobGroupNames.includes(form.job_title)" :value="form.job_title">{{ form.job_title }}</option>
+                        <option v-for="n in jobGroupNames" :key="n" :value="n">{{ n }}</option>
+                      </select>
                       <p v-if="savedForm.job_title" class="text-[11px] text-white/35 mt-1.5 truncate">
                         {{ langStore.t.currentlyPrefix }} <span class="text-white/35 font-semibold">{{ savedForm.job_title }}</span>
                       </p>
@@ -820,24 +821,45 @@
                       <BIcon name="Lock" class="w-4 h-4 text-amber-400 shrink-0" />
                       <p class="text-xs text-white/55">{{ langStore.t.profileThemeLiteSub }} <router-link to="/subscriptions" class="text-amber-400 hover:underline font-bold">Lite</router-link>.</p>
                     </div>
-                    <div v-else class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <button v-for="(theme, id) in PROFILE_THEMES" :key="id" type="button"
-                        @click="form.profile_theme = id"
-                        class="relative rounded-2xl p-3 border-2 transition-all text-left overflow-hidden"
-                        :class="form.profile_theme === id
-                          ? 'border-brand-accent shadow-lg shadow-brand-accent/20'
-                          : 'border-brand-border hover:border-white/20'"
-                        :style="`background:${theme.bg}`">
-                        <!-- Accent dot -->
-                        <div class="w-5 h-5 rounded-full mb-2 border-2 border-white/10"
-                          :style="`background:${theme.accent}`" />
-                        <p class="text-xs font-bold text-white">{{ theme.label }}</p>
-                        <!-- Checkmark -->
-                        <div v-if="form.profile_theme === id"
-                          class="absolute top-2 right-2 w-5 h-5 rounded-full bg-brand-accent flex items-center justify-center">
-                          <BIcon name="Check" class="w-3 h-3 text-white" />
+                    <div v-else>
+                      <!-- Live preview: ваш аватар, рамка и выбранная тема -->
+                      <div class="rounded-2xl overflow-hidden border border-brand-border mb-5 transition-colors"
+                        :style="`background:${previewTheme.bg}`">
+                        <div class="h-16 w-full" :style="`background:linear-gradient(135deg, ${previewTheme.accent}55, ${previewTheme.bg})`"></div>
+                        <div class="px-5 pb-5 -mt-8 flex items-end gap-4">
+                          <div class="relative w-[72px] h-[72px] shrink-0">
+                            <div class="w-full h-full rounded-2xl bg-white/10 overflow-hidden flex items-center justify-center text-white/60 font-bold text-xl"
+                              :class="previewFrameClass" :style="previewFrameStyle">
+                              <img v-if="form.avatar_url" :src="form.avatar_url" class="w-full h-full object-cover" />
+                              <span v-else>{{ (form.display_name || form.username || '?').charAt(0).toUpperCase() }}</span>
+                            </div>
+                            <AvatarFrameOverlay v-if="previewCustomFrame" :frame="previewCustomFrame" />
+                          </div>
+                          <div class="min-w-0 pb-1">
+                            <p class="text-sm font-extrabold text-white truncate">{{ form.display_name || form.username }}</p>
+                            <p class="text-[11px] text-white/45 truncate">@{{ form.username }}</p>
+                          </div>
+                          <span class="ml-auto mb-1 text-[10px] font-bold px-2.5 py-1 rounded-full text-white shrink-0"
+                            :style="`background:${previewTheme.accent}`">{{ previewTheme.label }}</span>
                         </div>
-                      </button>
+                        <div class="px-5 pb-5 grid grid-cols-3 gap-2">
+                          <div v-for="i in 3" :key="i" class="h-10 rounded-xl border border-white/5" :style="`background:${previewTheme.cardBg}`"></div>
+                        </div>
+                      </div>
+
+                      <!-- Theme swatches -->
+                      <div class="rounded-2xl bg-brand-bg/60 border border-brand-border p-5 grid grid-cols-3 sm:grid-cols-4 gap-x-3 gap-y-5">
+                        <button v-for="(theme, id) in PROFILE_THEMES" :key="id" type="button"
+                          @click="form.profile_theme = id"
+                          class="group flex flex-col items-center gap-2">
+                          <span class="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 transition-all flex items-center justify-center"
+                            :class="form.profile_theme === id ? 'border-white/90 scale-105 shadow-lg' : 'border-white/10 group-hover:border-white/30'"
+                            :style="`background:linear-gradient(135deg, ${theme.accent} 0%, ${theme.cardBg} 55%, ${theme.bg} 100%)`">
+                            <BIcon v-if="form.profile_theme === id" name="Check" class="w-6 h-6 text-white drop-shadow" />
+                          </span>
+                          <span class="text-xs font-semibold" :class="form.profile_theme === id ? 'text-white' : 'text-white/55'">{{ theme.label }}</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -1519,7 +1541,7 @@ import { apiErrorMessage } from '@/lib/apiError'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, cacheUser } from '@/stores/auth'
 import { useLangStore, LANG_TO_LOCALE } from '@/stores/lang'
 import type { Lang } from '@/locales/translations'
 import { useGroupsStore, type EventItem } from '@/stores/groups'
@@ -1549,6 +1571,15 @@ const userStore   = useUserStore()
 const authStore   = useAuthStore()
 const langStore   = useLangStore()
 const groupsStore = useGroupsStore()
+const previewTheme = computed(() => PROFILE_THEMES[form.profile_theme] ?? PROFILE_THEMES.default)
+const previewCustomFrame = computed(() => {
+  const mf = myFrames.value.find(f => f.id === form.profile_frame_id)
+  return mf ? { image_url: mf.image_url, offset_x: mf.offset_x, offset_y: mf.offset_y, scale: mf.scale, rotation: mf.rotation } : null
+})
+const previewFrameClass = computed(() => (form.profile_frame_id ? '' : PROFILE_FRAMES[form.profile_frame]?.style ?? ''))
+const previewFrameStyle = computed(() => form.profile_frame === 'rainbow' && !form.profile_frame_id
+  ? 'box-shadow:0 0 0 2px #f97316,0 0 0 4px #eab308,0 0 0 6px #22c55e' : '')
+const jobGroupNames = computed(() => [...new Set(groupsStore.myGroups.map(m => m.group.name))])
 const route       = useRoute()
 const router      = useRouter()
 const { confirmDialog } = useConfirm()
@@ -2022,6 +2053,7 @@ async function saveFrameCalibration() {
 }
 
 onMounted(async () => {
+  groupsStore.loadMyGroups().catch(() => {})
   await userStore.fetchMyProfile()
   denStore.getMyAvatarFrames().then(frames => { myFrames.value = frames }).catch(() => {})
   const p = userStore.profile
@@ -2366,7 +2398,7 @@ async function handleSubmit() {
       const res = await api.patch('/users/me/username', { username: form.username })
       if (res.data.success && authStore.user) {
         authStore.user.username = res.data.data.user.username
-        sessionStorage.setItem('auth_user', JSON.stringify(authStore.user))
+        cacheUser(authStore.user)
         savedForm.username = res.data.data.user.username
         form.username = res.data.data.user.username
       }
@@ -2607,7 +2639,9 @@ const completenessFields = computed(() => {
     { key: 'avatar', label: t.complAvatarLabel, met: c.hasAvatar },
     { key: 'email', label: 'Email', met: c.hasEmail },
     { key: 'bio', label: t.complBioLabel, met: c.hasBio },
+    { key: 'fursonaName', label: t.complFursonaNameLabel, met: c.hasFursonaName },
     { key: 'fursonaSpecies', label: t.complFursonaSpeciesLabel, met: c.hasFursonaSpecies },
+    { key: 'fursonaDesc', label: t.complFursonaDescLabel, met: c.hasFursonaDescription },
   ]
 })
 
